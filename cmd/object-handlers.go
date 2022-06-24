@@ -420,6 +420,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
+		if isErrPreconditionFailed(err) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
 		var (
 			reader *GetObjectReader
 			proxy  proxyResult
@@ -1426,10 +1431,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// If we see legacy source, metadataOnly we have to overwrite the content.
 	if srcInfo.Legacy {
 		srcInfo.metadataOnly = false
-	}
-
-	if srcInfo.metadataOnly {
-		gr.Close() // We are not interested in the reader stream at this point close it.
 	}
 
 	// Check if x-amz-metadata-directive or x-amz-tagging-directive was not set to REPLACE and source,
@@ -2622,7 +2623,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		copy(objectEncryptionKey[:], key)
 
 		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-		encReader, err := sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.CipherSuitesDARE()})
+		encReader, err := sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -2885,7 +2886,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			// We add a buffer on bigger files to reduce the number of syscalls upstream.
 			in = bufio.NewReaderSize(hashReader, encryptBufferSize)
 		}
-		reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.CipherSuitesDARE()})
+		reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return

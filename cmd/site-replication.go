@@ -2094,7 +2094,7 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	if err != nil {
 		return nil, err
 	}
-	client.SetCustomTransport(NewRemoteTargetHTTPTransport())
+	client.SetCustomTransport(globalRemoteTargetTransport)
 	return client, nil
 }
 
@@ -2106,7 +2106,7 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 	return minioClient.New(ep.Host, &minioClient.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",
-		Transport: NewRemoteTargetHTTPTransport(),
+		Transport: globalRemoteTargetTransport,
 	})
 }
 

@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"time"
 
@@ -325,25 +324,16 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 	sys.targetsMap[bucket.Name] = cfg.Targets
 }
 
-// getRemoteTargetInstanceTransport contains a singleton roundtripper.
-var (
-	getRemoteTargetInstanceTransport     http.RoundTripper
-	getRemoteTargetInstanceTransportOnce sync.Once
-)
-
 // Returns a minio-go Client configured to access remote host described in replication target config.
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*TargetClient, error) {
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
-	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = NewRemoteTargetHTTPTransport()
-	})
 
 	api, err := minio.New(tcfg.Endpoint, &miniogo.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
 		Region:    tcfg.Region,
-		Transport: getRemoteTargetInstanceTransport,
+		Transport: globalRemoteTargetTransport,
 	})
 	if err != nil {
 		return nil, err

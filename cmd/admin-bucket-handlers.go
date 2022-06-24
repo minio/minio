@@ -804,7 +804,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 	for _, file := range zr.File {
 		reader, err := file.Open()
 		if err != nil {
-			writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
+			writeErrorResponse(ctx, w, importError(ctx, err, file.Name, ""), r.URL)
 			return
 		}
 		sz := file.FileInfo().Size()

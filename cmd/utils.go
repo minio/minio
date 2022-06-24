@@ -561,9 +561,8 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
-		MaxConnsPerHost:       1024,
-		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
-		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
+		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
+		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Minute, // Set larger timeouts for proxied requests.
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -587,10 +586,10 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
-		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
+		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
+		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		ResponseHeaderTimeout: 3 * time.Minute,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
@@ -666,7 +665,7 @@ func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
-func NewRemoteTargetHTTPTransport() *http.Transport {
+func NewRemoteTargetHTTPTransport() func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
@@ -676,8 +675,8 @@ func NewRemoteTargetHTTPTransport() *http.Transport {
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       16 << 10, // 16KiB moving up from 4KiB default
-		ReadBufferSize:        16 << 10, // 16KiB moving up from 4KiB default
+		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
+		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 5 * time.Second,
@@ -690,7 +689,9 @@ func NewRemoteTargetHTTPTransport() *http.Transport {
 		// in raw stream.
 		DisableCompression: true,
 	}
-	return tr
+	return func() *http.Transport {
+		return tr
+	}
 }
 
 // Load the json (typically from disk file).
@@ -1067,17 +1068,12 @@ func newTLSConfig(getCert certs.GetCertificateFunc) *tls.Config {
 		tlsConfig.ClientAuth = tls.RequestClientCert
 	}
 
-	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
-	if secureCiphers || fips.Enabled {
-		// Hardened ciphers
-		tlsConfig.CipherSuites = fips.CipherSuitesTLS()
-		tlsConfig.CurvePreferences = fips.EllipticCurvesTLS()
+	if secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn; secureCiphers {
+		tlsConfig.CipherSuites = fips.TLSCiphers()
 	} else {
-		// Default ciphers while excluding those with security issues
-		for _, cipher := range tls.CipherSuites() {
-			tlsConfig.CipherSuites = append(tlsConfig.CipherSuites, cipher.ID)
-		}
+		tlsConfig.CipherSuites = fips.TLSCiphersBackwardCompatible()
 	}
+	tlsConfig.CurvePreferences = fips.TLSCurveIDs()
 	return tlsConfig
 }
 

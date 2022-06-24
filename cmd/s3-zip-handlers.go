@@ -140,21 +140,10 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	var zipInfo []byte
-
-	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
-		if globalIsErasure {
-			zipInfo = []byte(z)
-		} else {
-			zipInfo, err = base64.StdEncoding.DecodeString(z)
-			logger.LogIf(ctx, err)
-			// Will attempt to re-read...
-		}
-	}
+	zipInfo := zipObjInfo.ArchiveInfo()
 	if len(zipInfo) == 0 {
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
-
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -247,15 +236,11 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 		return ListObjectsV2Info{}, nil
 	}
 
-	var zipInfo []byte
-
-	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
-		zipInfo = []byte(z)
-	} else {
+	zipInfo := zipObjInfo.ArchiveInfo()
+	if len(zipInfo) == 0 {
 		// Always update the latest version
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, ObjectOptions{})
 	}
-
 	if err != nil {
 		return ListObjectsV2Info{}, err
 	}
@@ -332,11 +317,10 @@ func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucke
 			return nil, ObjectInfo{}, err
 		}
 		b, err := ioutil.ReadAll(gr)
+		gr.Close()
 		if err != nil {
-			gr.Close()
 			return nil, ObjectInfo{}, err
 		}
-		gr.Close()
 		if size > len(b) {
 			size = len(b)
 		}
@@ -439,11 +423,8 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
-	var zipInfo []byte
-
-	if z, ok := zipObjInfo.UserDefined[archiveInfoMetadataKey]; ok {
-		zipInfo = []byte(z)
-	} else {
+	zipInfo := zipObjInfo.ArchiveInfo()
+	if len(zipInfo) == 0 {
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
@@ -498,20 +479,34 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	}
 
 	srcInfo.UserDefined[archiveTypeMetadataKey] = archiveType
-	if globalIsErasure {
-		srcInfo.UserDefined[archiveInfoMetadataKey] = string(zipInfo)
+	var zipInfoStr string
+	if globalIsGateway {
+		zipInfoStr = base64.StdEncoding.EncodeToString(zipInfo)
 	} else {
-		srcInfo.UserDefined[archiveInfoMetadataKey] = base64.StdEncoding.EncodeToString(zipInfo)
+		zipInfoStr = string(zipInfo)
 	}
-	srcInfo.metadataOnly = true
 
-	// Always update the same version id & modtime
+	if globalIsGateway {
+		srcInfo.UserDefined[archiveInfoMetadataKey] = zipInfoStr
 
-	// Passing opts twice as source & destination options will update the metadata
-	// of the same object version to avoid creating a new version.
-	_, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, opts, opts)
-	if err != nil {
-		return nil, err
+		// Use CopyObject API only for Gateway mode.
+		if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, opts, opts); err != nil {
+			return nil, err
+		}
+	} else {
+		popts := ObjectOptions{
+			MTime:     srcInfo.ModTime,
+			VersionID: srcInfo.VersionID,
+			EvalMetadataFn: func(oi ObjectInfo) error {
+				oi.UserDefined[archiveTypeMetadataKey] = archiveType
+				oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
+				return nil
+			},
+		}
+		// For all other modes use in-place update to update metadata on a specific version.
+		if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
+			return nil, err
+		}
 	}
 
 	return zipInfo, nil

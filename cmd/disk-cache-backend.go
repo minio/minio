@@ -803,7 +803,7 @@ func newCacheEncryptReader(content io.Reader, bucket, object string, metadata ma
 		return nil, err
 	}
 
-	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey, MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
+	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey, MinVersion: sio.Version20, CipherSuites: fips.DARECiphers()})
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey
 	}
@@ -1454,7 +1454,7 @@ func newCachePartEncryptReader(ctx context.Context, bucket, object string, partI
 		return nil, err
 	}
 
-	reader, err := sio.EncryptReader(content, sio.Config{Key: partEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.CipherSuitesDARE()})
+	reader, err := sio.EncryptReader(content, sio.Config{Key: partEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.DARECiphers()})
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey
 	}
