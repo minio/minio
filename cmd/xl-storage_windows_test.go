@@ -70,7 +70,7 @@ func TestUNCPaths(t *testing.T) {
 			} else if err == nil && !test.pass {
 				t.Error(err)
 			}
-			fs.Delete(context.Background(), "voldir", test.objName, false)
+			fs.Delete(context.Background(), "voldir", test.objName, false, false)
 		})
 	}
 }

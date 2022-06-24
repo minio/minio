@@ -933,14 +933,14 @@ func TestXLStorageListDir(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errVolumeAccessDenied {
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false, false); err != errVolumeAccessDenied {
 			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
 		}
 	}
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false)
+	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false, false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -1029,7 +1029,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = xlStorage.Delete(context.Background(), testCase.srcVol, testCase.srcPath, false); err != testCase.expectedErr {
+		if err = xlStorage.Delete(context.Background(), testCase.srcVol, testCase.srcPath, false, false); err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -1054,7 +1054,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errVolumeAccessDenied {
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false, false); err != errVolumeAccessDenied {
 			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
 		}
 	}
@@ -1072,7 +1072,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false)
+	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false, false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -1907,7 +1907,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal("expected to fail bitrot check")
 	}
 
-	if err := storage.Delete(context.Background(), volName, fileName, false); err != nil {
+	if err := storage.Delete(context.Background(), volName, fileName, false, false); err != nil {
 		t.Fatal(err)
 	}
 

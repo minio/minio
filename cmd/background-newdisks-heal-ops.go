@@ -163,7 +163,9 @@ func (h *healingTracker) save(ctx context.Context) error {
 func (h *healingTracker) delete(ctx context.Context) error {
 	return h.disk.Delete(ctx, minioMetaBucket,
 		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
-		false)
+		false,
+		false,
+	)
 }
 
 func (h *healingTracker) isHealed(bucket string) bool {

@@ -1367,8 +1367,8 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 			// Deletes
 			// - The prefix and its children
 			// - The prefix__XLDIR__
-			defer disks[index].Delete(ctx, bucket, dirPrefix, true)
-			return disks[index].Delete(ctx, bucket, prefix, true)
+			defer disks[index].Delete(ctx, bucket, dirPrefix, true, true)
+			return disks[index].Delete(ctx, bucket, prefix, true, true)
 		}, index)
 	}
 	for _, err := range g.Wait() {

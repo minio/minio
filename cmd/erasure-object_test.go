@@ -528,7 +528,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		files, _ := disk.ListDir(ctx, bucket, object, -1)
 		for _, file := range files {
 			if file != "xl.meta" {
-				disk.Delete(ctx, bucket, pathJoin(object, file), true)
+				disk.Delete(ctx, bucket, pathJoin(object, file), true, false)
 			}
 		}
 	}
@@ -629,7 +629,7 @@ func TestHeadObjectNoQuorum(t *testing.T) {
 		files, _ := disk.ListDir(ctx, bucket, object, -1)
 		for _, file := range files {
 			if file != "xl.meta" {
-				disk.Delete(ctx, bucket, pathJoin(object, file), true)
+				disk.Delete(ctx, bucket, pathJoin(object, file), true, false)
 			}
 		}
 	}
