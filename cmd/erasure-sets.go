@@ -92,8 +92,6 @@ type erasureSets struct {
 	distributionAlgo string
 	deploymentID     [16]byte
 
-	disksStorageInfoCache timedValue
-
 	lastConnectDisksOpTime time.Time
 }
 
@@ -627,47 +625,6 @@ func (s *erasureSets) SetDriveCount() int {
 // coding objects
 func (s *erasureSets) ParityCount() int {
 	return s.defaultParityCount
-}
-
-// StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
-// This only returns disk usage info for ServerPools to perform placement decision, this call
-// is not implemented in Object interface and is not meant to be used by other object
-// layer implementations.
-func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
-	storageUsageInfo := func() StorageInfo {
-		var storageInfo StorageInfo
-		storageInfos := make([]StorageInfo, len(s.sets))
-		storageInfo.Backend.Type = madmin.Erasure
-
-		g := errgroup.WithNErrs(len(s.sets))
-		for index := range s.sets {
-			index := index
-			g.Go(func() error {
-				// ignoring errors on purpose
-				storageInfos[index], _ = s.sets[index].StorageInfo(ctx)
-				return nil
-			}, index)
-		}
-
-		// Wait for the go routines.
-		g.Wait()
-
-		for _, lstorageInfo := range storageInfos {
-			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		}
-
-		return storageInfo
-	}
-
-	s.disksStorageInfoCache.Once.Do(func() {
-		s.disksStorageInfoCache.TTL = time.Second
-		s.disksStorageInfoCache.Update = func() (interface{}, error) {
-			return storageUsageInfo(), nil
-		}
-	})
-
-	v, _ := s.disksStorageInfoCache.Get()
-	return v.(StorageInfo)
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
