@@ -643,7 +643,7 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 		}, index)
 	}
 
-	writeQuorum := getWriteQuorum(len(storageDisks))
+	writeQuorum := (len(storageDisks) + 1/2)
 	// Wait for the routines to finish.
 	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
 }
@@ -805,26 +805,13 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 	return getFormatErasureInQuorum(formats)
 }
 
-func getDefaultParityBlocks(drive int) int {
-	switch drive {
-	case 3, 2:
-		return 1
-	case 4, 5:
-		return 2
-	case 6, 7:
-		return 3
-	default:
-		return 4
-	}
-}
-
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
 func ecDrivesNoConfig(setDriveCount int) int {
 	sc, _ := storageclass.LookupConfig(config.KVS{}, setDriveCount)
 	ecDrives := sc.GetParityForSC(storageclass.STANDARD)
-	if ecDrives <= 0 {
-		ecDrives = getDefaultParityBlocks(setDriveCount)
+	if ecDrives < 0 {
+		ecDrives = storageclass.DefaultParityBlocks(setDriveCount)
 	}
 	return ecDrives
 }

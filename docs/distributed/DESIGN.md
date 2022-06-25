@@ -41,7 +41,7 @@ Expansion of ellipses and choice of erasure sets based on this expansion is an a
 
 - Erasure coding used by MinIO is [Reed-Solomon](https://github.com/klauspost/reedsolomon) erasure coding scheme, which has a total shard maximum of 256 i.e 128 data and 128 parity. MinIO design goes beyond this limitation by doing some practical architecture choices.
 
-- Erasure set is a single erasure coding unit within a MinIO deployment. An object is sharded within an erasure set. Erasure set size is automatically calculated based on the number of disks. MinIO supports unlimited number of disks but each erasure set can be upto 16 disks and a minimum of 4 disks.
+- Erasure set is a single erasure coding unit within a MinIO deployment. An object is sharded within an erasure set. Erasure set size is automatically calculated based on the number of disks. MinIO supports unlimited number of disks but each erasure set can be upto 16 disks and a minimum of 2 disks.
 
 - We limited the number of drives to 16 for erasure set because, erasure code shards more than 16 can become chatty and do not have any performance advantages. Additionally since 16 drive erasure set gives you tolerance of 8 disks per object by default which is plenty in any practical scenario.
 

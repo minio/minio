@@ -9,8 +9,8 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 | Maximum number of servers per cluster                           | no-limit      |
 | Maximum number of federated clusters                            | no-limit      |
 | Minimum number of servers                                       | 02            |
-| Minimum number of drives per server when server count is 1      | 04            |
-| Minimum number of drives per server when server count is 2 or 3 | 02            |
+| Minimum number of drives per server when server count is 1      | 02            |
+| Minimum number of drives per server when server count is 2 or 3 | 01            |
 | Minimum number of drives per server when server count is 4      | 01            |
 | Maximum number of drives per server                             | no-limit      |
 | Read quorum                                                     | N/2           |
@@ -53,7 +53,7 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 ## Object name restrictions on MinIO
 
 - Object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special charaters. **This list is non exhaustive, it depends on the operating system and filesystem under use - please consult your operating system vendor**. MinIO recommends using Linux based deployments for production workloads.
-- Objects should not have conflicting objects as parents, applications using this behavior should change their behavior and use proper unique keys, for example situations such as following conflicting key patterns are not supported.
+- Objects should not have conflicting objects as parent objects, applications using this behavior should change their behavior and use proper unique keys, for example situations such as following conflicting key patterns are not supported.
 
 ```
 PUT <bucketname>/a/b/1.txt

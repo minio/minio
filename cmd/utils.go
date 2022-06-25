@@ -121,15 +121,6 @@ func path2BucketObject(s string) (bucket, prefix string) {
 	return path2BucketObjectWithBasePath("", s)
 }
 
-func getWriteQuorum(drive int) int {
-	parity := getDefaultParityBlocks(drive)
-	quorum := drive - parity
-	if quorum == parity {
-		quorum++
-	}
-	return quorum
-}
-
 // CloneMSS is an exposed function of cloneMSS for gateway usage.
 var CloneMSS = cloneMSS
 
