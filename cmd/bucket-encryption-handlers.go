@@ -108,7 +108,8 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	}
 
 	// Store the bucket encryption configuration in the object layer
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -122,6 +123,7 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 		Type:      madmin.SRBucketMetaTypeSSEConfig,
 		Bucket:    bucket,
 		SSEConfig: &cfgStr,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -202,7 +204,8 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	}
 
 	// Delete bucket encryption config from object layer
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -212,6 +215,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 		Type:      madmin.SRBucketMetaTypeSSEConfig,
 		Bucket:    bucket,
 		SSEConfig: nil,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

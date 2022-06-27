@@ -214,7 +214,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.SRBucketMetaTypePolicy:
 		if item.Policy == nil {
-			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
+			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil, item.UpdatedAt)
 		} else {
 			bktPolicy, berr := policy.ParseConfig(bytes.NewReader(item.Policy), item.Bucket)
 			if berr != nil {
@@ -222,33 +222,33 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 				return
 			}
 			if bktPolicy.IsEmpty() {
-				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil)
+				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil, item.UpdatedAt)
 			} else {
-				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, bktPolicy)
+				err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, bktPolicy, item.UpdatedAt)
 			}
 		}
 	case madmin.SRBucketMetaTypeQuotaConfig:
 		if item.Quota == nil {
-			err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, nil)
+			err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, nil, item.UpdatedAt)
 		} else {
 			quotaConfig, err := parseBucketQuota(item.Bucket, item.Quota)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
-			if err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, quotaConfig); err != nil {
+			if err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, quotaConfig, item.UpdatedAt); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
 		}
 	case madmin.SRBucketMetaTypeVersionConfig:
-		err = globalSiteReplicationSys.PeerBucketVersioningHandler(ctx, item.Bucket, item.Versioning)
+		err = globalSiteReplicationSys.PeerBucketVersioningHandler(ctx, item.Bucket, item.Versioning, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeTags:
-		err = globalSiteReplicationSys.PeerBucketTaggingHandler(ctx, item.Bucket, item.Tags)
+		err = globalSiteReplicationSys.PeerBucketTaggingHandler(ctx, item.Bucket, item.Tags, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeObjectLockConfig:
-		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig)
+		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeSSEConfig:
-		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig)
+		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)

@@ -1385,7 +1385,8 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1399,6 +1400,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		Type:             madmin.SRBucketMetaTypeObjectLockConfig,
 		Bucket:           bucket,
 		ObjectLockConfig: &cfgStr,
+		UpdatedAt:        updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1490,7 +1492,8 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1501,9 +1504,10 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
 	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-		Type:   madmin.SRBucketMetaTypeTags,
-		Bucket: bucket,
-		Tags:   &cfgStr,
+		Type:      madmin.SRBucketMetaTypeTags,
+		Bucket:    bucket,
+		Tags:      &cfgStr,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1572,14 +1576,16 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	if err := globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-		Type:   madmin.SRBucketMetaTypeTags,
-		Bucket: bucket,
+		Type:      madmin.SRBucketMetaTypeTags,
+		Bucket:    bucket,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
