@@ -275,7 +275,8 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
+	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
@@ -290,6 +291,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 				SessionToken: cred.SessionToken,
 				ParentUser:   cred.ParentUser,
 			},
+			UpdatedAt: updatedAt,
 		}); err != nil {
 			logger.LogIf(ctx, err)
 		}
@@ -469,7 +471,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName); err != nil {
+	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
+	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
@@ -484,6 +487,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			ParentUser:          cred.ParentUser,
 			ParentPolicyMapping: policyName,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
@@ -639,7 +643,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups
 	// mapping.
-	if err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, ""); err != nil {
+	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
 	}
@@ -653,6 +658,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			SessionToken: cred.SessionToken,
 			ParentUser:   cred.ParentUser,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
@@ -797,7 +803,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 
 	tmpCredentials.ParentUser = parentUser
 	policyName := certificate.Subject.CommonName
-	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
+	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
@@ -813,6 +819,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			ParentUser:          tmpCredentials.ParentUser,
 			ParentPolicyMapping: policyName,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
@@ -918,7 +925,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, "")
+	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
@@ -933,6 +940,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 			SessionToken: tmpCredentials.SessionToken,
 			ParentUser:   tmpCredentials.ParentUser,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

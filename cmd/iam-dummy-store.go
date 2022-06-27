@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"sync"
-
-	"github.com/minio/minio/internal/auth"
 )
 
 type iamDummyStore struct {
@@ -79,7 +77,7 @@ func (ids *iamDummyStore) loadPolicyDocs(ctx context.Context, m map[string]Polic
 	return nil
 }
 
-func (ids *iamDummyStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error {
+func (ids *iamDummyStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
 	u, ok := ids.iamUsersMap[user]
 	if !ok {
 		return errNoSuchUser
@@ -88,7 +86,7 @@ func (ids *iamDummyStore) loadUser(ctx context.Context, user string, userType IA
 	return nil
 }
 
-func (ids *iamDummyStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
+func (ids *iamDummyStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
 	for k, v := range ids.iamUsersMap {
 		m[k] = v
 	}

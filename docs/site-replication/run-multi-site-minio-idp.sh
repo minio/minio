@@ -285,13 +285,43 @@ if [ "${val}" != "val1" ]; then
     echo "expected bucket tag to have replicated, exiting..."
     exit_1;
 fi
+# Create user with policy consoleAdmin on minio1
+./mc admin user add minio1 foobarx foobar123
+if [ $? -ne 0 ]; then
+    echo "adding user failed, exiting.."
+    exit_1;
+fi
+./mc admin policy set minio1 consoleAdmin user=foobarx
+if [ $? -ne 0 ]; then
+    echo "adding policy mapping failed, exiting.."
+    exit_1;
+fi
+sleep 10
+
+# unset policy for foobarx in minio2
+./mc admin policy unset minio2 consoleAdmin user=foobarx
+if [ $? -ne 0 ]; then
+    echo "unset policy mapping failed, exiting.."
+    exit_1;
+fi
+
+sleep 10
+
+# Test whether policy unset replicated to minio1
+policy=$(./mc admin user info minio1 foobarx --json | jq -r .policyName)
+if [ "${policy}" != "null" ]; then
+    echo "expected policy unset to have replicated, exiting..."
+    exit_1;
+fi
 
 kill -9 ${site1_pid}
 # Update tag on minio2/newbucket when minio1 is down
 ./mc tag set minio2/newbucket "key=val2"
+
 # Restart minio1 instance
 minio server --config-dir /tmp/minio-internal --address ":9001" /tmp/minio-internal-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
-sleep 10
+sleep 15
+
 # Test whether most recent tag update on minio2 is replicated to minio1
 val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key )
 if [ "${val}" != "val2" ]; then
