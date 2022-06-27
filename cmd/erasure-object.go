@@ -944,7 +944,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partsMetadata := make([]FileInfo, len(storageDisks))
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
-	fi.WrittenByVersion = globalVersionUnix
 	fi.VersionID = opts.VersionID
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()
