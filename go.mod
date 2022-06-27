@@ -35,11 +35,11 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.1
-	github.com/klauspost/cpuid/v2 v2.0.11
+	github.com/klauspost/compress v1.15.6
+	github.com/klauspost/cpuid/v2 v2.0.14
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
-	github.com/klauspost/reedsolomon v1.9.15
+	github.com/klauspost/reedsolomon v1.10.0
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
