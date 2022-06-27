@@ -364,7 +364,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.SubnetSubSys:
-		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
+		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], nil); err != nil {
 			return err
 		}
 	case config.CallhomeSubSys:
@@ -599,7 +599,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
-	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
+	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
