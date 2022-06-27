@@ -297,6 +297,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	switch minioErr.Code {
+	case "PreconditionFailed":
+		err = PreConditionFailed{}
+	case "InvalidRange":
+		err = InvalidRange{}
 	case "BucketAlreadyOwnedByYou":
 		err = BucketAlreadyOwnedByYou{}
 	case "BucketNotEmpty":
