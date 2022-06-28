@@ -290,7 +290,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	onlineDisks := er.getDisks()
 	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
-	if parityDrives <= 0 {
+	if parityDrives < 0 {
 		parityDrives = er.defaultParityCount
 	}
 

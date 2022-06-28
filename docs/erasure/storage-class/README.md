@@ -62,9 +62,7 @@ For more complete documentation on Erasure Set sizing, see the [MinIO Documentat
 - Less than N/2, if `STANDARD` parity is not set.
 - Less than `STANDARD` Parity, if it is set.
 
-As parity below 2 is not recommended, `REDUCED_REDUNDANCY` storage class is not supported for 4 disks erasure coding setup.
-
-Default value for `REDUCED_REDUNDANCY` storage class is `2`.
+Default value for `REDUCED_REDUNDANCY` storage class is `1`.
 
 ## Get started with Storage Class
 

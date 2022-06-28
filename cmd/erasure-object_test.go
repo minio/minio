@@ -893,6 +893,14 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 
 	// Object for test case 1 - No StorageClass defined, no MetaData in PutObject
 	object1 := "object1"
+	globalStorageClass = storageclass.Config{
+		RRS: storageclass.StorageClass{
+			Parity: 2,
+		},
+		Standard: storageclass.StorageClass{
+			Parity: 4,
+		},
+	}
 	_, err = obj.PutObject(ctx, bucket, object1, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
@@ -964,17 +972,16 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	}
 
 	parts5, errs5 := readAllFileInfo(ctx, erasureDisks, bucket, object5, "", false)
-	parts5SC := storageclass.Config{
-		RRS: storageclass.StorageClass{
-			Parity: 2,
-		},
-	}
+	parts5SC := globalStorageClass
 
 	// Object for test case 6 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting Standard Storage Class
 	object6 := "object6"
 	metadata6 := make(map[string]string)
 	metadata6["x-amz-storage-class"] = storageclass.STANDARD
 	globalStorageClass = storageclass.Config{
+		Standard: storageclass.StorageClass{
+			Parity: 4,
+		},
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
@@ -1035,7 +1042,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		tt := tt
 		t.(*testing.T).Run("", func(t *testing.T) {
 			globalStorageClass = tt.storageClassCfg
-			actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(ctx, tt.parts, tt.errs, getDefaultParityBlocks(len(erasureDisks)))
+			actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(ctx, tt.parts, tt.errs, storageclass.DefaultParityBlocks(len(erasureDisks)))
 			if tt.expectedError != nil && err == nil {
 				t.Errorf("Expected %s, got %s", tt.expectedError, err)
 			}

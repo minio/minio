@@ -58,7 +58,7 @@ var (
 	ErrInvalidErasureSetSize = newErrFn(
 		"Invalid erasure set size",
 		"Please check the passed value",
-		"Erasure set can only accept any of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] values",
+		"Erasure set can only accept any of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] values",
 	)
 
 	ErrInvalidWormValue = newErrFn(
@@ -177,7 +177,7 @@ var (
 
 	ErrInvalidNumberOfErasureEndpoints = newErrFn(
 		"Invalid total number of endpoints for erasure mode",
-		"Please provide an even number of endpoints greater or equal to 4",
+		"Please provide number of endpoints greater or equal to 2",
 		"For more information, please refer to https://docs.min.io/docs/minio-erasure-code-quickstart-guide",
 	)
 
