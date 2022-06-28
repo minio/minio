@@ -525,7 +525,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	b.Type = madmin.Erasure
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity <= 0 {
+	if scParity < 0 {
 		scParity = z.serverPools[0].defaultParityCount
 	}
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)

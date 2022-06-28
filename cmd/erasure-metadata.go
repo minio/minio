@@ -417,7 +417,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	}
 
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
-	if parityBlocks <= 0 {
+	if parityBlocks < 0 {
 		parityBlocks = defaultParityCount
 	}
 

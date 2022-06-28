@@ -290,7 +290,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	onlineDisks := er.getDisks()
 	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
-	if parityDrives <= 0 {
+	if parityDrives < 0 {
 		parityDrives = er.defaultParityCount
 	}
 
@@ -326,6 +326,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	partsMetadata := make([]FileInfo, len(onlineDisks))
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
+	fi.WrittenByVersion = globalVersionUnix
 	fi.VersionID = opts.VersionID
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()

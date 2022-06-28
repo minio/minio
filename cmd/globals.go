@@ -374,6 +374,9 @@ var (
 	globalObjectPerfBucket       = "minio-perf-test-tmp-bucket"
 	globalObjectPerfUserMetadata = "X-Amz-Meta-Minio-Object-Perf" // Clients can set this to bypass S3 API service freeze. Used by object pref tests.
 
+	// MinIO version unix timestamp
+	globalVersionUnix uint64
+
 	// Add new variable global values here.
 )
 

@@ -18,6 +18,10 @@
 package subnet
 
 import (
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
@@ -49,10 +53,13 @@ type Config struct {
 
 	// The HTTP(S) proxy URL to use for connecting to SUBNET
 	ProxyURL *xnet.URL `json:"proxy_url"`
+
+	// Transport configured with proxy_url if set optionally.
+	transport *http.Transport
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.
-func LookupConfig(kvs config.KVS) (cfg Config, err error) {
+func LookupConfig(kvs config.KVS, transport http.RoundTripper) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.SubnetSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -63,10 +70,24 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		if err != nil {
 			return cfg, err
 		}
+
 	}
 
-	cfg.License = env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License))
-	cfg.APIKey = env.Get(config.EnvMinIOSubnetAPIKey, kvs.Get(config.APIKey))
+	cfg.License = strings.TrimSpace(env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License)))
+	cfg.APIKey = strings.TrimSpace(env.Get(config.EnvMinIOSubnetAPIKey, kvs.Get(config.APIKey)))
+
+	if transport == nil {
+		// when transport is nil, it means we are just validating the
+		// inputs not performing any network calls.
+		return cfg, nil
+	}
+
+	// Make sure to clone the transport before editing the ProxyURL
+	ctransport := transport.(*http.Transport).Clone()
+	if cfg.ProxyURL != nil {
+		ctransport.Proxy = http.ProxyURL((*url.URL)(cfg.ProxyURL))
+	}
+	cfg.transport = ctransport
 
 	return cfg, nil
 }

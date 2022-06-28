@@ -736,7 +736,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	storageDisks := er.getDisks()
 	// Get parity and data drive count based on storage class metadata
 	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
-	if parityDrives <= 0 {
+	if parityDrives < 0 {
 		parityDrives = er.defaultParityCount
 	}
 	dataDrives := len(storageDisks) - parityDrives
@@ -885,7 +885,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if !opts.MaxParity {
 		// Get parity and data drive count based on storage class metadata
 		parityDrives = globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
-		if parityDrives <= 0 {
+		if parityDrives < 0 {
 			parityDrives = er.defaultParityCount
 		}
 
@@ -944,6 +944,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partsMetadata := make([]FileInfo, len(storageDisks))
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
+	fi.WrittenByVersion = globalVersionUnix
 	fi.VersionID = opts.VersionID
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()

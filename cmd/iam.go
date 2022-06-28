@@ -372,7 +372,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.printIAMRoles()
 
 	now := time.Now()
-	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs to load data).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
+	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
 }
 
 func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {

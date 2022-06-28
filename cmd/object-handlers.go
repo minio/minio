@@ -420,11 +420,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
-		if isErrPreconditionFailed(err) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-
 		var (
 			reader *GetObjectReader
 			proxy  proxyResult
@@ -434,9 +429,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		if !proxytgts.Empty() {
 			// proxy to replication target if active-active replication is in place.
 			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
-			if perr != nil && !isErrObjectNotFound(ErrorRespToObjectError(perr, bucket, object)) &&
-				!isErrVersionNotFound(ErrorRespToObjectError(perr, bucket, object)) {
-				logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+			if perr != nil {
+				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
+				if !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
+					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
+					logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+				}
 			}
 			if reader != nil && proxy.Proxy && perr == nil {
 				gr = reader
@@ -1446,9 +1444,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var objInfo ObjectInfo
+	remoteCallRequired := isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
 
-	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
+	var objInfo ObjectInfo
+	var os *objSweeper
+	if remoteCallRequired {
 		var dstRecords []dns.SrvRecord
 		dstRecords, err = globalDNSConfig.Get(dstBucket)
 		if err != nil {
@@ -1484,8 +1484,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		objInfo.ETag = remoteObjInfo.ETag
 		objInfo.ModTime = remoteObjInfo.LastModified
 	} else {
-
-		os := newObjSweeper(dstBucket, dstObject).WithVersioning(dstOpts.Versioned, dstOpts.VersionSuspended)
+		os = newObjSweeper(dstBucket, dstObject).WithVersioning(dstOpts.Versioned, dstOpts.VersionSuspended)
 		// Get appropriate object info to identify the remote object to delete
 		if !srcInfo.metadataOnly {
 			goiOpts := os.GetOpts()
@@ -1507,11 +1506,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
-		}
-
-		// Remove the transitioned object whose object version is being overwritten.
-		if !globalTierConfigMgr.Empty() {
-			logger.LogIf(ctx, os.Sweep())
 		}
 	}
 
@@ -1544,9 +1538,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
-	if !globalTierConfigMgr.Empty() {
+
+	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		enqueueTransitionImmediate(objInfo)
+		// Remove the transitioned object whose object version is being overwritten.
+		logger.LogIf(ctx, os.Sweep())
 	}
 }
 

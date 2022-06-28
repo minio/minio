@@ -35,11 +35,11 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.1
-	github.com/klauspost/cpuid/v2 v2.0.11
+	github.com/klauspost/compress v1.15.6
+	github.com/klauspost/cpuid/v2 v2.0.14
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
-	github.com/klauspost/reedsolomon v1.9.15
+	github.com/klauspost/reedsolomon v1.10.0
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
@@ -49,7 +49,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
 	github.com/minio/madmin-go v1.3.19
-	github.com/minio/minio-go/v7 v7.0.30-0.20220623010642-40b13d984ae3
+	github.com/minio/minio-go/v7 v7.0.30
 	github.com/minio/pkg v1.1.26
 	github.com/minio/selfupdate v0.4.0
 	github.com/minio/sha256-simd v1.0.0
@@ -221,8 +221,8 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
 
-replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220623085923-83c70de1c4cf
+replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220628081301-5a1fffe4779f
 
-replace github.com/minio/mc => github.com/klauspost/mc v0.0.0-20220623171845-4dea9f64c9d8
+replace github.com/minio/mc => github.com/klauspost/mc v0.0.0-20220628081748-72532e5bb302
 
 replace github.com/minio/console => github.com/klauspost/console v0.10.5-0.20220623134424-77131fbe82a8

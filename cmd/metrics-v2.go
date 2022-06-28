@@ -264,18 +264,7 @@ func (m *Metric) copyMetric() Metric {
 // once the TTL expires "read()" registered function is called
 // to return the new values and updated.
 func (g *MetricsGroup) Get() (metrics []Metric) {
-	var c interface{}
-	var err error
-	if g.cacheInterval <= 0 {
-		c, err = g.metricsCache.Update()
-	} else {
-		c, err = g.metricsCache.Get()
-	}
-
-	if err != nil {
-		return []Metric{}
-	}
-
+	c, _ := g.metricsCache.Get()
 	m, ok := c.([]Metric)
 	if !ok {
 		return []Metric{}

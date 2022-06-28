@@ -248,11 +248,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				out <- metaCacheEntry{name: pop}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
-					forward = ""
-					if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
-						forward = strings.TrimPrefix(opts.ForwardTo, pop)
-					}
-
 					err := scanDir(pop)
 					if err != nil && !IsErrIgnored(err, context.Canceled) {
 						logger.LogIf(ctx, err)

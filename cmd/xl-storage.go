@@ -583,22 +583,19 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
 			diskID, err := s.GetDiskID()
-			if errors.Is(err, errUnformattedDisk) {
-				// if we found an unformatted disk then
-				// healing is automatically true.
-				dcinfo.Healing = true
-			} else {
-				// Check if the disk is being healed if GetDiskID
-				// returned any error other than fresh disk
-				dcinfo.Healing = s.Healing() != nil
-			}
+			// Healing is 'true' when
+			// - if we found an unformatted disk (no 'format.json')
+			// - if we found healing tracker 'healing.bin'
+			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
 	})
 
 	v, err := s.diskInfoCache.Get()
-	info = v.(DiskInfo)
+	if v != nil {
+		info = v.(DiskInfo)
+	}
 	return info, err
 }
 

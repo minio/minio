@@ -102,6 +102,11 @@ func init() {
 		PersistOnFailure: false,
 	}
 
+	t, _ := minioVersionToReleaseTime(Version)
+	if !t.IsZero() {
+		globalVersionUnix = uint64(t.Unix())
+	}
+
 	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
 	containers := IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile()
