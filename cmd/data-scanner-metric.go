@@ -281,7 +281,7 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	for i := scannerMetric(0); i < scannerMetricLastRealtime; i++ {
 		lm := p.lastMinute(i)
 		if lm.N > 0 {
-			m.LastMinute.Actions[i.String()] = madmin.TimedAction{Count: uint64(lm.N), AccTime: uint64(lm.Total), Bytes: uint64(lm.Size)}
+			m.LastMinute.Actions[i.String()] = lm.asTimedAction()
 		}
 	}
 	if len(m.LastMinute.Actions) == 0 {

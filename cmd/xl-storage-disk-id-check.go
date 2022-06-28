@@ -82,11 +82,11 @@ type xlStorageDiskIDCheck struct {
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	diskMetric := DiskMetrics{
-		APILatencies: make(map[string]uint64),
+		APILatencies: make(map[string]AccElem),
 		APICalls:     make(map[string]uint64),
 	}
 	for i, v := range p.apiLatencies {
-		diskMetric.APILatencies[storageMetric(i).String()] = uint64(v.avgLatency())
+		diskMetric.APILatencies[storageMetric(i).String()] = v.total()
 	}
 	for i := range p.apiCalls {
 		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])

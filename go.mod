@@ -221,7 +221,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
 
-replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220628081301-5a1fffe4779f
+replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220628112026-5aaced896de6
 
 replace github.com/minio/mc => github.com/klauspost/mc v0.0.0-20220628081748-72532e5bb302
 

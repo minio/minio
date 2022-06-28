@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/minio/madmin-go"
 )
@@ -36,6 +37,9 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m 
 		metrics := globalScannerMetrics.report()
 		m.Aggregated.Scanner = &metrics
 	}
+	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
+		m.Aggregated.Disk = collectDiskMetrics()
+	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
@@ -43,6 +47,50 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m 
 	m.Hosts = append(m.Hosts, globalMinioAddr)
 
 	return m
+}
+
+func collectDiskMetrics() *madmin.DiskMetric {
+	objLayer := newObjectLayerFn()
+	disks := madmin.DiskMetric{
+		CollectedAt: time.Now(),
+	}
+
+	if objLayer == nil {
+		return nil
+	}
+	// only need Disks information in server mode.
+	storageInfo, errs := objLayer.LocalStorageInfo(GlobalContext)
+	for _, err := range errs {
+		if err != nil {
+			disks.Merge(&madmin.DiskMetric{NDisks: 1, Offline: 1})
+		}
+	}
+	for i, disk := range storageInfo.Disks {
+		if errs[i] != nil {
+			continue
+		}
+		var d madmin.DiskMetric
+		d.NDisks = 1
+		if disk.Healing {
+			d.Healing++
+		}
+		if disk.Metrics != nil {
+			d.LifeTimeOps = make(map[string]uint64, len(disk.Metrics.APICalls))
+			for k, v := range disk.Metrics.APICalls {
+				if v != 0 {
+					d.LifeTimeOps[k] = v
+				}
+			}
+			d.LastMinute.Operations = make(map[string]madmin.TimedAction, len(disk.Metrics.APICalls))
+			for k, v := range disk.Metrics.APILatencies {
+				if v.Count != 0 {
+					d.LastMinute.Operations[k] = v
+				}
+			}
+		}
+		disks.Merge(&d)
+	}
+	return &disks
 }
 
 func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, hosts map[string]struct{}) (m madmin.RealtimeMetrics) {

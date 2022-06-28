@@ -21,6 +21,8 @@ package cmd
 
 import (
 	"time"
+
+	"github.com/minio/madmin-go"
 )
 
 const (
@@ -111,6 +113,11 @@ func (a AccElem) avg() time.Duration {
 		return time.Duration(a.Total / a.N)
 	}
 	return 0
+}
+
+// asTimedAction returns the element as a madmin.TimedAction.
+func (a AccElem) asTimedAction() madmin.TimedAction {
+	return madmin.TimedAction{AccTime: uint64(a.Total), Count: uint64(a.N), Bytes: uint64(a.Size)}
 }
 
 // lastMinuteLatency keeps track of last minute latency.
