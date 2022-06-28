@@ -27,6 +27,12 @@ import (
 
 // Prints the formatted startup message.
 func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
+	if len(globalSubnetConfig.APIKey) == 0 {
+		var builder strings.Builder
+		startupBanner(&builder)
+		logger.Info("\n" + builder.String())
+	}
+
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints, globalMinioHost)
 	// If cache layer is enabled, print cache capacity.
 	cacheAPI := newCachedObjectLayerFn()
