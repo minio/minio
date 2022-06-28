@@ -97,13 +97,14 @@ func getOpName(name string) (op string) {
 	op = strings.TrimSuffix(op, "Handler-fm")
 	op = strings.Replace(op, "objectAPIHandlers", "s3", 1)
 	op = strings.Replace(op, "adminAPIHandlers", "admin", 1)
-	op = strings.Replace(op, "(*webAPIHandlers)", "web", 1)
-	op = strings.Replace(op, "(*storageRESTServer)", "internal", 1)
-	op = strings.Replace(op, "(*peerRESTServer)", "internal", 1)
-	op = strings.Replace(op, "(*lockRESTServer)", "internal", 1)
+	op = strings.Replace(op, "(*storageRESTServer)", "storageR", 1)
+	op = strings.Replace(op, "(*peerRESTServer)", "peer", 1)
+	op = strings.Replace(op, "(*lockRESTServer)", "lockR", 1)
 	op = strings.Replace(op, "(*stsAPIHandlers)", "sts", 1)
-	op = strings.Replace(op, "LivenessCheckHandler", "healthcheck", 1)
-	op = strings.Replace(op, "ReadinessCheckHandler", "healthcheck", 1)
+	op = strings.Replace(op, "ClusterCheckHandler", "health.Cluster", 1)
+	op = strings.Replace(op, "ClusterReadCheckHandler", "health.ClusterRead", 1)
+	op = strings.Replace(op, "LivenessCheckHandler", "health.Liveness", 1)
+	op = strings.Replace(op, "ReadinessCheckHandler", "health.Readiness", 1)
 	op = strings.Replace(op, "-fm", "", 1)
 	return op
 }
@@ -163,7 +164,7 @@ func httpTracer(h http.Handler) http.Handler {
 
 		// Calculate node name
 		nodeName := r.Host
-		if nodeName == "" || globalIsDistErasure {
+		if globalIsDistErasure {
 			nodeName = globalLocalNodeName
 		}
 		if host, port, err := net.SplitHostPort(nodeName); err == nil {

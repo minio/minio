@@ -97,12 +97,25 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 // Limits body and header to specific allowed maximum limits as per S3/MinIO API requirements.
 func setRequestLimitHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		// Reject unsupported reserved metadata first before validation.
 		if containsReservedMetadata(r.Header) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
 			return
 		}
+
 		if isHTTPHeaderSizeTooLarge(r.Header) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
 			return
@@ -373,7 +386,14 @@ func hasMultipleAuth(r *http.Request) bool {
 // any malicious requests.
 func setRequestValidityHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		if err := hasBadHost(r.Host); err != nil {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (%s)", invalidReq.Description, err)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -383,6 +403,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 
 		// Check for bad components in URL path.
 		if hasBadPathComponent(r.URL.Path) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
@@ -391,6 +416,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		for _, vv := range r.Form {
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
+					if ok {
+						tc.funcName = "handler.ValidRequest"
+						tc.responseRecorder.LogErrBody = true
+					}
+
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 					return
@@ -398,6 +428,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			}
 		}
 		if hasMultipleAuth(r) {
+			if ok {
+				tc.funcName = "handler.Auth"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (request has multiple authentication types, please use one)", invalidReq.Description)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -408,6 +443,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		bucketName, _ := request2BucketObjectName(r)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
 			}
@@ -415,8 +455,18 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// Deny SSE-C requests if not made over TLS
 		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 			if r.Method == http.MethodHead {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = false
+				}
+
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
 			}
 			return
