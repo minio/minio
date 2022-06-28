@@ -82,7 +82,7 @@ func collectDiskMetrics() *madmin.DiskMetric {
 				}
 			}
 			d.LastMinute.Operations = make(map[string]madmin.TimedAction, len(disk.Metrics.APICalls))
-			for k, v := range disk.Metrics.APILatencies {
+			for k, v := range disk.Metrics.LastMinute {
 				if v.Count != 0 {
 					d.LastMinute.Operations[k] = v
 				}

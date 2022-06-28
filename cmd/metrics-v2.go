@@ -1861,7 +1861,7 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 			if disk.Metrics == nil {
 				continue
 			}
-			for apiName, latency := range disk.Metrics.APILatencies {
+			for apiName, latency := range disk.Metrics.LastMinute {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDiskAPILatencyMD(),
 					Value:          float64(latency.Avg().Microseconds()),
