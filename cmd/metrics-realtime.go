@@ -34,12 +34,12 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m 
 	}
 	if types.Contains(madmin.MetricsScanner) {
 		metrics := globalScannerMetrics.report()
-		m.Total.Scanner = &metrics
+		m.Aggregated.Scanner = &metrics
 	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
-	m.ByHost = map[string]madmin.Metrics{globalMinioAddr: m.Total}
+	m.ByHost = map[string]madmin.Metrics{globalMinioAddr: m.Aggregated}
 	m.Hosts = append(m.Hosts, globalMinioAddr)
 
 	return m
