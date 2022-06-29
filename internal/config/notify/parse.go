@@ -950,6 +950,10 @@ var (
 			Value: "0",
 		},
 		config.KV{
+			Key:   target.NATSJetStream,
+			Value: config.EnableOff,
+		},
+		config.KV{
 			Key:   target.NATSStreaming,
 			Value: config.EnableOff,
 		},
@@ -1073,6 +1077,11 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			clientKeyEnv = clientKeyEnv + config.Default + k
 		}
 
+		jetStreamEnableEnv := target.EnvNATSJetStream
+		if k != config.Default {
+			jetStreamEnableEnv = jetStreamEnableEnv + config.Default + k
+		}
+
 		natsArgs := target.NATSArgs{
 			Enable:        true,
 			Address:       *address,
@@ -1090,6 +1099,7 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			QueueLimit:    queueLimit,
 			RootCAs:       rootCAs,
 		}
+		natsArgs.JetStream.Enable = env.Get(jetStreamEnableEnv, kv.Get(target.NATSJetStream)) == config.EnableOn
 
 		streamingEnableEnv := target.EnvNATSStreaming
 		if k != config.Default {
