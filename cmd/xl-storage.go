@@ -1855,7 +1855,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	}
 
 	defer func() {
-		disk.Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
+		Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
 		w.Close()
 	}()
 

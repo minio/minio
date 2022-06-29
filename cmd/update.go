@@ -95,7 +95,7 @@ func getModTime(path string) (t time.Time, err error) {
 
 	// Version is minio non-standard, we will use minio binary's
 	// ModTime as release time.
-	fi, err := os.Stat(absPath)
+	fi, err := Stat(absPath)
 	if err != nil {
 		return t, fmt.Errorf("Unable to get ModTime of %s. %w", absPath, err)
 	}

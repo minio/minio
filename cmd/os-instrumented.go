@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/disk"
+	ioutilx "github.com/minio/minio/internal/ioutil"
 )
 
 //go:generate stringer -type=osMetric -trimprefix=osMetric $GOFILE
@@ -42,12 +43,23 @@ const (
 	osMetricRemove
 	osMetricStat
 	osMetricAccess
+	osMetricCreate
+	osMetricReadDirent
+	osMetricFdatasync
+	osMetricSync
 	// .... add more
 
 	osMetricLast
 )
 
 var globalOSMetrics osMetrics
+
+func init() {
+	// Inject metrics.
+	ioutilx.OsOpenFile = OpenFile
+	ioutilx.OpenFileDirectIO = OpenFileDirectIO
+	ioutilx.OsOpen = Open
+}
 
 type osMetrics struct {
 	// All fields must be accessed atomically and aligned.
@@ -156,6 +168,22 @@ func Remove(deletePath string) error {
 func Stat(name string) (os.FileInfo, error) {
 	defer updateOSMetrics(osMetricStat, name)()
 	return os.Stat(name)
+}
+
+// Create captures time taken to call os.Create
+func Create(name string) (*os.File, error) {
+	defer updateOSMetrics(osMetricCreate, name)()
+	return os.Create(name)
+}
+
+// Fdatasync captures time taken to call Fdatasync
+func Fdatasync(f *os.File) error {
+	fn := ""
+	if f != nil {
+		fn = f.Name()
+	}
+	defer updateOSMetrics(osMetricFdatasync, fn)()
+	return disk.Fdatasync(f)
 }
 
 // report returns all os metrics.

@@ -122,7 +122,9 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 	for {
 		if boff >= nbuf {
 			boff = 0
+			stop := globalOSMetrics.time(osMetricReadDirent)
 			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
+			stop()
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return nil
@@ -150,7 +152,7 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 		// support Dirent.Type and have DT_UNKNOWN (0) there
 		// instead.
 		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
-			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			fi, err := Stat(pathJoin(dirPath, string(name)))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -203,7 +205,9 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 	for count != 0 {
 		if boff >= nbuf {
 			boff = 0
+			stop := globalOSMetrics.time(osMetricReadDirent)
 			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
+			stop()
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return nil, errFileNotFound
@@ -266,5 +270,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 }
 
 func globalSync() {
+	defer globalOSMetrics.time(osMetricSync)
 	syscall.Sync()
 }
