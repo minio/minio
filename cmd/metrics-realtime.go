@@ -40,6 +40,10 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m 
 	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
 		m.Aggregated.Disk = collectDiskMetrics()
 	}
+	if types.Contains(madmin.MetricsOS) {
+		metrics := globalOSMetrics.report()
+		m.Aggregated.OS = &metrics
+	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.

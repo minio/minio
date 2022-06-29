@@ -664,18 +664,9 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	atomic.StoreInt64(&p.health.lastStarted, time.Now().UnixNano())
 	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess})
 	si := p.updateStorageMetrics(s, paths...)
-	t := time.Now()
 	var once sync.Once
 	return ctx, func(errp *error) {
 		once.Do(func() {
-			if false {
-				var ers string
-				if errp != nil {
-					err := *errp
-					ers = fmt.Sprint(err)
-				}
-				fmt.Println(time.Now().Format(time.RFC3339), "op", s, "took", time.Since(t), "result:", ers, "disk:", p.storage.String(), "path:", strings.Join(paths, "/"))
-			}
 			p.health.tokens <- struct{}{}
 			if errp != nil {
 				err := *errp
