@@ -103,16 +103,18 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// Call site replication hook.
 	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-		Type:   madmin.SRBucketMetaTypePolicy,
-		Bucket: bucket,
-		Policy: bucketPolicyBytes,
+		Type:      madmin.SRBucketMetaTypePolicy,
+		Bucket:    bucket,
+		Policy:    bucketPolicyBytes,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -148,15 +150,17 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	// Call site replication hook.
 	if err := globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-		Type:   madmin.SRBucketMetaTypePolicy,
-		Bucket: bucket,
+		Type:      madmin.SRBucketMetaTypePolicy,
+		Bucket:    bucket,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

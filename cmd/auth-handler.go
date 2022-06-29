@@ -500,11 +500,18 @@ func isSupportedS3AuthType(aType authType) bool {
 func setAuthHandler(h http.Handler) http.Handler {
 	// handler for validating incoming authorization headers.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		aType := getRequestAuthType(r)
 		if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
 			// Verify if date headers are set, if not reject the request
 			amzDate, errCode := parseAmzDateHeader(r)
 			if errCode != ErrNone {
+				if ok {
+					tc.funcName = "handler.Auth"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				// All our internal APIs are sensitive towards Date
 				// header, for all requests where Date header is not
 				// present we will reject such clients.
@@ -516,6 +523,11 @@ func setAuthHandler(h http.Handler) http.Handler {
 			// or in the future, reject request otherwise.
 			curTime := UTCNow()
 			if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
+				if ok {
+					tc.funcName = "handler.Auth"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrRequestTimeTooSkewed), r.URL)
 				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
 				return
@@ -525,6 +537,12 @@ func setAuthHandler(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+
+		if ok {
+			tc.funcName = "handler.Auth"
+			tc.responseRecorder.LogErrBody = true
+		}
+
 		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL)
 		atomic.AddUint64(&globalHTTPStats.rejectedRequestsAuth, 1)
 	})

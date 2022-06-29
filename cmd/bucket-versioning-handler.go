@@ -97,7 +97,8 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -111,6 +112,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		Type:       madmin.SRBucketMetaTypeVersionConfig,
 		Bucket:     bucket,
 		Versioning: &cfgStr,
+		UpdatedAt:  updatedAt,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

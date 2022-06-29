@@ -92,15 +92,17 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data); err != nil {
+	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	bucketMeta := madmin.SRBucketMeta{
-		Type:   madmin.SRBucketMetaTypeQuotaConfig,
-		Bucket: bucket,
-		Quota:  data,
+		Type:      madmin.SRBucketMetaTypeQuotaConfig,
+		Bucket:    bucket,
+		Quota:     data,
+		UpdatedAt: updatedAt,
 	}
 	if quotaConfig.Quota == 0 {
 		bucketMeta.Quota = nil
@@ -267,7 +269,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+	if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -362,7 +364,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+	if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -707,7 +709,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData); err != nil {
+			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData)
+			if err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -721,6 +724,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Type:             madmin.SRBucketMetaTypeObjectLockConfig,
 				Bucket:           bucket,
 				ObjectLockConfig: &cfgStr,
+				UpdatedAt:        updatedAt,
 			}); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
@@ -794,7 +798,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
+			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -846,7 +850,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketNotificationConfig, configData); err != nil {
+			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketNotificationConfig, configData); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -883,15 +887,17 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData); err != nil {
+			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData)
+			if err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 			// Call site replication hook.
 			if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-				Type:   madmin.SRBucketMetaTypePolicy,
-				Bucket: bucket,
-				Policy: bucketPolicyBytes,
+				Type:      madmin.SRBucketMetaTypePolicy,
+				Bucket:    bucket,
+				Policy:    bucketPolicyBytes,
+				UpdatedAt: updatedAt,
 			}); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
@@ -922,7 +928,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
+			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -965,7 +971,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 
 			// Store the bucket encryption configuration in the object layer
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData); err != nil {
+			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData)
+			if err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -979,6 +986,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Type:      madmin.SRBucketMetaTypeSSEConfig,
 				Bucket:    bucket,
 				SSEConfig: &cfgStr,
+				UpdatedAt: updatedAt,
 			}); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
@@ -998,7 +1006,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData); err != nil {
+			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData)
+			if err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
@@ -1008,9 +1017,10 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			// errors.
 			cfgStr := base64.StdEncoding.EncodeToString(configData)
 			if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
-				Type:   madmin.SRBucketMetaTypeTags,
-				Bucket: bucket,
-				Tags:   &cfgStr,
+				Type:      madmin.SRBucketMetaTypeTags,
+				Bucket:    bucket,
+				Tags:      &cfgStr,
+				UpdatedAt: updatedAt,
 			}); err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
@@ -1033,15 +1043,17 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 
-			if err = globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data); err != nil {
+			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
+			if err != nil {
 				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
 				return
 			}
 
 			bucketMeta := madmin.SRBucketMeta{
-				Type:   madmin.SRBucketMetaTypeQuotaConfig,
-				Bucket: bucket,
-				Quota:  data,
+				Type:      madmin.SRBucketMetaTypeQuotaConfig,
+				Bucket:    bucket,
+				Quota:     data,
+				UpdatedAt: updatedAt,
 			}
 			if quotaConfig.Quota == 0 {
 				bucketMeta.Quota = nil

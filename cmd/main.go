@@ -19,10 +19,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/internal/color"
@@ -163,11 +165,21 @@ func newApp(name string) *cli.App {
 	return app
 }
 
+func startupBanner(banner io.Writer) {
+	fmt.Fprintln(banner, color.Blue("Runtime:")+color.Bold(" %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH))
+	fmt.Fprintln(banner, color.Blue("License:")+color.Bold(" GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"))
+	fmt.Fprintln(banner, color.Blue("Copyright:")+color.Bold(" 2015-%s MinIO, Inc.", CopyrightYear))
+}
+
+func versionBanner(c *cli.Context) io.Reader {
+	banner := &strings.Builder{}
+	fmt.Fprintln(banner, color.Bold("%s version %s (commit-id=%s)", c.App.Name, c.App.Version, CommitID))
+	startupBanner(banner)
+	return strings.NewReader(banner.String())
+}
+
 func printMinIOVersion(c *cli.Context) {
-	fmt.Fprintln(c.App.Writer, color.Greenf("%s version %s (commit-id=%s)", c.App.Name, c.App.Version, CommitID))
-	fmt.Fprintln(c.App.Writer, color.Greenf("Runtime: %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH))
-	fmt.Fprintln(c.App.Writer, color.Greenf("Copyright (c) 2015-%s MinIO, Inc.", CopyrightYear))
-	fmt.Fprintln(c.App.Writer, color.Red("Licence GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"))
+	io.Copy(c.App.Writer, versionBanner(c))
 }
 
 // Main main for minio server.

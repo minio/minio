@@ -51,8 +51,9 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	}
 
 	if len(globalSubnetConfig.APIKey) == 0 && err == nil {
-		logger.Info(color.Blue("\nLicense:") + " GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>")
-		logger.Info(color.Yellow("Detected a deployment not registered with SUBNET. Please register your deployment via 'mc support register ALIAS'\n"))
+		var builder strings.Builder
+		startupBanner(&builder)
+		logger.Info("\n" + builder.String())
 	}
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
