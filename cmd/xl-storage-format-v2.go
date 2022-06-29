@@ -1189,6 +1189,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				ModTime:   fi.ModTime.UnixNano(),
 				MetaSys:   make(map[string][]byte),
 			},
+			WrittenByVersion: globalVersionUnix,
 		}
 		if !ventry.Valid() {
 			return "", errors.New("internal error: invalid version entry generated")
@@ -1432,7 +1433,7 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 	}
 
 	ventry := xlMetaV2Version{
-		WrittenByVersion: fi.WrittenByVersion,
+		WrittenByVersion: globalVersionUnix,
 	}
 
 	if fi.Deleted {
@@ -1598,7 +1599,7 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 	}
 	m.VersionID = nullVersionID
 
-	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
+	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType, WrittenByVersion: globalVersionUnix})
 }
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
