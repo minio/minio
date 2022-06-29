@@ -44,6 +44,7 @@ func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
 
 // Prints the formatted startup message.
 func printStartupMessage(apiEndpoints []string, err error) {
+	logger.Info(color.Bold("MinIO Object Storage Server"))
 	if err != nil {
 		if globalConsoleSys != nil {
 			globalConsoleSys.Send(fmt.Sprintf("Server startup failed with '%v', some features may be missing", err), string(logger.All))
@@ -53,7 +54,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	if len(globalSubnetConfig.APIKey) == 0 && err == nil {
 		var builder strings.Builder
 		startupBanner(&builder)
-		logger.Info("\n" + builder.String())
+		logger.Info(builder.String())
 	}
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)

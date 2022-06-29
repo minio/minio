@@ -197,8 +197,17 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		seenClientIDs          = set.NewStringSet()
 	)
 
-	// remove this since we have removed support for this already.
 	deprecatedKeys := []string{JwksURL}
+
+	// remove this since we have removed support for this already.
+	for k := range s[config.IdentityOpenIDSubSys] {
+		for _, dk := range deprecatedKeys {
+			kvs := s[config.IdentityOpenIDSubSys][k]
+			kvs.Delete(dk)
+			s[config.IdentityOpenIDSubSys][k] = kvs
+		}
+	}
+
 	if err := s.CheckValidKeys(config.IdentityOpenIDSubSys, deprecatedKeys); err != nil {
 		return c, err
 	}

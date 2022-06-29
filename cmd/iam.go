@@ -223,8 +223,6 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
-	iamInitStart := time.Now()
-
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -297,8 +295,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
-	iamLoadStart := time.Now()
-
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx); err != nil {
@@ -370,9 +366,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	sys.printIAMRoles()
-
-	now := time.Now()
-	logger.Info("Finished loading IAM sub-system (took %.1fs of %.1fs).", now.Sub(iamLoadStart).Seconds(), now.Sub(iamInitStart).Seconds())
 }
 
 func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
