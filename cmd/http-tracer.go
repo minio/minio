@@ -148,6 +148,14 @@ func httpTracer(h http.Handler) http.Handler {
 		h.ServeHTTP(respRecorder, r)
 		reqEndTime := time.Now().UTC()
 
+		tt := madmin.TraceInternal
+		if strings.HasPrefix(tc.funcName, "s3") {
+			tt = madmin.TraceS3
+		}
+		// No need to continue if no subscribers for actual type...
+		if globalTrace.NumSubscribers(tt) == 0 {
+			return
+		}
 		// Calculate input body size with headers
 		reqHeaders := r.Header.Clone()
 		reqHeaders.Set("Host", r.Host)
@@ -185,7 +193,7 @@ func httpTracer(h http.Handler) http.Handler {
 		}
 
 		t := madmin.TraceInfo{
-			TraceType: madmin.TraceS3,
+			TraceType: tt,
 			FuncName:  funcName,
 			NodeName:  nodeName,
 			Time:      reqStartTime,
