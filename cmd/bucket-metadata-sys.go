@@ -75,28 +75,28 @@ func (sys *BucketMetadataSys) Set(bucket string, meta BucketMetadata) {
 
 // Update update bucket metadata for the specified config file.
 // The configData data should not be modified after being sent here.
-func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configFile string, configData []byte) error {
+func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configFile string, configData []byte) (updatedAt time.Time, err error) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		return errServerNotInitialized
+		return updatedAt, errServerNotInitialized
 	}
 
 	if globalIsGateway && globalGatewayName != NASBackendGateway {
 		if configFile == bucketPolicyConfig {
 			if configData == nil {
-				return objAPI.DeleteBucketPolicy(ctx, bucket)
+				return updatedAt, objAPI.DeleteBucketPolicy(ctx, bucket)
 			}
 			config, err := policy.ParseConfig(bytes.NewReader(configData), bucket)
 			if err != nil {
-				return err
+				return updatedAt, err
 			}
-			return objAPI.SetBucketPolicy(ctx, bucket, config)
+			return updatedAt, objAPI.SetBucketPolicy(ctx, bucket, config)
 		}
-		return NotImplemented{}
+		return updatedAt, NotImplemented{}
 	}
 
 	if bucket == minioMetaBucket {
-		return errInvalidArgument
+		return updatedAt, errInvalidArgument
 	}
 
 	meta, err := loadBucketMetadata(ctx, objAPI, bucket)
@@ -105,56 +105,56 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 			// Only single drive mode needs this fallback.
 			meta = newBucketMetadata(bucket)
 		} else {
-			return err
+			return updatedAt, err
 		}
 	}
-
+	updatedAt = UTCNow()
 	switch configFile {
 	case bucketPolicyConfig:
 		meta.PolicyConfigJSON = configData
-		meta.PolicyConfigUpdatedAt = UTCNow()
+		meta.PolicyConfigUpdatedAt = updatedAt
 	case bucketNotificationConfig:
 		meta.NotificationConfigXML = configData
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
 	case bucketSSEConfig:
 		meta.EncryptionConfigXML = configData
-		meta.EncryptionConfigUpdatedAt = UTCNow()
+		meta.EncryptionConfigUpdatedAt = updatedAt
 	case bucketTaggingConfig:
 		meta.TaggingConfigXML = configData
-		meta.TaggingConfigUpdatedAt = UTCNow()
+		meta.TaggingConfigUpdatedAt = updatedAt
 	case bucketQuotaConfigFile:
 		meta.QuotaConfigJSON = configData
-		meta.QuotaConfigUpdatedAt = UTCNow()
+		meta.QuotaConfigUpdatedAt = updatedAt
 	case objectLockConfig:
 		meta.ObjectLockConfigXML = configData
-		meta.ObjectLockConfigUpdatedAt = UTCNow()
+		meta.ObjectLockConfigUpdatedAt = updatedAt
 	case bucketVersioningConfig:
 		meta.VersioningConfigXML = configData
-		meta.VersioningConfigUpdatedAt = UTCNow()
+		meta.VersioningConfigUpdatedAt = updatedAt
 	case bucketReplicationConfig:
 		meta.ReplicationConfigXML = configData
-		meta.ReplicationConfigUpdatedAt = UTCNow()
+		meta.ReplicationConfigUpdatedAt = updatedAt
 	case bucketTargetsFile:
 		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(meta.Name, configData, kms.Context{
 			bucket:            meta.Name,
 			bucketTargetsFile: bucketTargetsFile,
 		})
 		if err != nil {
-			return fmt.Errorf("Error encrypting bucket target metadata %w", err)
+			return updatedAt, fmt.Errorf("Error encrypting bucket target metadata %w", err)
 		}
 	default:
-		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
+		return updatedAt, fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
 
 	if err := meta.Save(ctx, objAPI); err != nil {
-		return err
+		return updatedAt, err
 	}
 
 	sys.Set(bucket, meta)
 	globalNotificationSys.LoadBucketMetadata(bgContext(ctx), bucket) // Do not use caller context here
 
-	return nil
+	return updatedAt, nil
 }
 
 // Get metadata for a bucket.

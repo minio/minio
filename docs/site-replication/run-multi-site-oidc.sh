@@ -35,12 +35,14 @@ export MINIO_IDENTITY_OPENID_SCOPES="openid,groups"
 
 export MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:10000/oauth_callback"
 minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4} >/tmp/minio1_1.log 2>&1 &
-
+site1_pid=$!
 export MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:11000/oauth_callback"
 minio server --address ":9002" --console-address ":11000" /tmp/minio2/{1...4} >/tmp/minio2_1.log 2>&1 &
+site2_pid=$!
 
 export MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:12000/oauth_callback"
 minio server --address ":9003" --console-address ":12000" /tmp/minio3/{1...4} >/tmp/minio3_1.log 2>&1 &
+site3_pid=$!
 
 if [ ! -f ./mc ]; then
     wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
@@ -220,5 +222,32 @@ fi
 
 if [ "${enabled_minio1}" != "Enabled" ]; then
     echo "expected bucket to be mirrored with object-lock enabled, exiting..."
+    exit_1;
+fi
+
+# "Test if most recent tag update is replicated"
+./mc tag set minio2/newbucket "key=val1"
+if [ $? -ne 0 ]; then
+    echo "expecting tag set to be successful. exiting.."
+    exit_1;
+fi
+sleep 5
+
+val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key)
+if [ "${val}" != "val1" ]; then
+    echo "expected bucket tag to have replicated, exiting..."
+    exit_1;
+fi
+# stop minio1 instance
+kill -9 ${site1_pid}
+# Update tag on minio2/newbucket when minio1 is down
+./mc tag set minio2/newbucket "key=val2"
+# Restart minio1 instance
+minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4} >/tmp/minio1_1.log 2>&1 &
+sleep 10
+# Test whether most recent tag update on minio2 is replicated to minio1
+val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key )
+if [ "${val}" != "val2" ]; then
+    echo "expected bucket tag to have replicated, exiting..."
     exit_1;
 fi
