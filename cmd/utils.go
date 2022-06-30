@@ -792,6 +792,8 @@ func likelyUnescapeGeneric(p string, escapeFn func(string) (string, error)) stri
 func updateReqContext(ctx context.Context, objects ...ObjectV) context.Context {
 	req := logger.GetReqInfo(ctx)
 	if req != nil {
+		req.Lock()
+		defer req.Unlock()
 		req.Objects = make([]logger.ObjectVersion, 0, len(objects))
 		for _, ov := range objects {
 			req.Objects = append(req.Objects, logger.ObjectVersion{
