@@ -41,6 +41,7 @@ type ObjectVersion struct {
 }
 
 // ReqInfo stores the request info.
+// Reading/writing directly to struct requires appropriate R/W lock.
 type ReqInfo struct {
 	RemoteHost   string          // Client Host/IP
 	Host         string          // Node Host/IP
@@ -111,7 +112,7 @@ func (r *ReqInfo) GetTags() []KeyVal {
 	}
 	r.RLock()
 	defer r.RUnlock()
-	return append([]KeyVal(nil), r.tags...)
+	return append(make([]KeyVal, 0, len(r.tags)), r.tags...)
 }
 
 // GetTagsMap - returns the user defined tags in a map structure
@@ -145,7 +146,6 @@ func GetReqInfo(ctx context.Context) *ReqInfo {
 			return r
 		}
 		r = &ReqInfo{}
-		SetReqInfo(ctx, r)
 		return r
 	}
 	return nil

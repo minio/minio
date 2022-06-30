@@ -149,7 +149,6 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 			DeploymentID: xhttp.GlobalDeploymentID,
 			Time:         time.Now().UTC(),
 		}
-		SetAuditEntry(ctx, r)
 		return r
 	}
 	return nil
@@ -168,6 +167,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		if reqInfo == nil {
 			return
 		}
+		reqInfo.RLock()
+		defer reqInfo.RUnlock()
 
 		entry = audit.ToEntry(w, r, reqClaims, xhttp.GlobalDeploymentID)
 		// indicates all requests for this API call are inbound
