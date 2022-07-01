@@ -63,11 +63,11 @@ func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (st
 func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt time.Time) (string, error) {
 	serverCred := globalActiveCred
 	if serverCred.AccessKey != credentials.AccessKey {
-		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(context.TODO(), credentials.AccessKey)
+		u, ok := globalIAMSys.GetUser(context.TODO(), credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
+		serverCred = u.Credentials
 	}
 
 	if !serverCred.Equal(credentials) {
@@ -145,10 +145,11 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 		if claims.AccessKey == globalActiveCred.AccessKey {
 			return []byte(globalActiveCred.SecretKey), nil
 		}
-		cred, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
+		u, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
 		if !ok {
 			return nil, errInvalidAccessKeyID
 		}
+		cred := u.Credentials
 		return []byte(cred.SecretKey), nil
 	}); err != nil {
 		return claims, nil, false, errAuthentication
@@ -157,11 +158,11 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 	var groups []string
 	if globalActiveCred.AccessKey != claims.AccessKey {
 		// Check if the access key is part of users credentials.
-		ucred, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
+		u, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
 		if !ok {
 			return nil, nil, false, errInvalidAccessKeyID
 		}
-
+		ucred := u.Credentials
 		// get embedded claims
 		eclaims, s3Err := checkClaimsFromToken(req, ucred)
 		if s3Err != ErrNone {

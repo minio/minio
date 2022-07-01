@@ -336,7 +336,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]Policy
 	return nil
 }
 
-func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
+func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]UserIdentity, basePrefix string) error {
 	var u UserIdentity
 	err := getIAMConfig(&u, userkv.Value, string(userkv.Key))
 	if err != nil {
@@ -349,7 +349,7 @@ func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue,
 	return ies.addUser(ctx, user, userType, u, m)
 }
 
-func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]auth.Credentials) error {
+func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]UserIdentity) error {
 	if u.Credentials.IsExpired() {
 		// Delete expired identity.
 		deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
@@ -359,11 +359,11 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
 	}
-	m[user] = u.Credentials
+	m[user] = u
 	return nil
 }
 
-func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error {
+func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
 	var u UserIdentity
 	err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
@@ -375,7 +375,7 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 	return ies.addUser(ctx, user, userType, u, m)
 }
 
-func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
+func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
 	var basePrefix string
 	switch userType {
 	case svcUser:
