@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -84,10 +85,49 @@ func MkdirAll(dirPath string, mode os.FileMode) error {
 	return os.MkdirAll(dirPath, mode)
 }
 
+// Copy the src file to dst.
+// Any existing file will be overwritten
+// and will not copy file attributes.
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
+}
+
+// isDirectory determines if a file represented
+// by `path` is a directory or not
+func isDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.IsDir(), err
+}
+
 // Rename captures time taken to call os.Rename
 func Rename(src, dst string) error {
 	defer updateOSMetrics(osMetricRename, src, dst)()
-	return os.Rename(src, dst)
+	res, _ := isDirectory(dst)
+	if !res {
+		Copy(src, dst)
+		return os.Remove(src)
+	} else {
+		return os.Rename(src, dst)
+	}
 }
 
 // OpenFile captures time taken to call os.OpenFile
