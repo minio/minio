@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -149,8 +150,10 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 
 	idx := globalEndpoints.GetPoolIdx(v)
 	if idx == -1 {
+		apiErr := toAdminAPIErr(ctx, errInvalidArgument)
+		apiErr.Description = fmt.Sprintf("specified pool '%s' not found, please specify a valid pool", v)
 		// We didn't find any matching pools, invalid input
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
+		writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 		return
 	}
 

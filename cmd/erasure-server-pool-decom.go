@@ -921,7 +921,7 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 
 	pi, err := z.getDecommissionPoolSpaceInfo(idx)
 	if err != nil {
-		return PoolStatus{}, errInvalidArgument
+		return PoolStatus{}, err
 	}
 
 	poolInfo := z.poolMeta.Pools[idx]
