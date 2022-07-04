@@ -41,6 +41,10 @@ test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@CGO_ENABLED=0 go test -tags kqueue ./...
 
+test-decom: install
+	@echo "Running minio decom tests"
+	@env bash $(PWD)/docs/distributed/decom.sh
+
 test-upgrade: build
 	@echo "Running minio upgrade tests"
 	@(env bash $(PWD)/buildscripts/minio-upgrade.sh)
