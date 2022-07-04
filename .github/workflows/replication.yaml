@@ -1,4 +1,4 @@
-name: Multi-site replication tests
+name: MinIO advanced tests
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   replication-test:
-    name: Replication Tests with Go ${{ matrix.go-version }}
+    name: Advanced Tests with Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -37,11 +37,18 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.go-version }}-go-
+      - name: Test Decom
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-decom
+
       - name: Test Replication
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-replication
+
       - name: Test MinIO IDP for automatic site replication
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
