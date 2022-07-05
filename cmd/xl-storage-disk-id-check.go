@@ -87,7 +87,7 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 		p.metricsCache.Update = func() (interface{}, error) {
 			diskMetric := DiskMetrics{
 				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),
-				APICalls:     make(map[string]uint64, len(p.apiCalls)),
+				APICalls:   make(map[string]uint64, len(p.apiCalls)),
 			}
 			for i, v := range p.apiLatencies {
 				diskMetric.LastMinute[storageMetric(i).String()] = v.total()
