@@ -21,6 +21,13 @@ import (
 	"time"
 )
 
+// DeleteOptions represents the disk level delete options available for the APIs
+//msgp:ignore DeleteOptions
+type DeleteOptions struct {
+	Recursive bool
+	Force     bool
+}
+
 //go:generate msgp -file=$GOFILE
 
 // DiskInfo is an extended type which returns current

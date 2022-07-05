@@ -581,12 +581,12 @@ func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath st
 }
 
 // DeleteFile - deletes a file.
-func (client *storageRESTClient) Delete(ctx context.Context, volume string, path string, recursive, force bool) error {
+func (client *storageRESTClient) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	values.Set(storageRESTForceDelete, strconv.FormatBool(force))
+	values.Set(storageRESTRecursive, strconv.FormatBool(deleteOpts.Recursive))
+	values.Set(storageRESTForceDelete, strconv.FormatBool(deleteOpts.Force))
 
 	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
 	defer xhttp.DrainBody(respBody)

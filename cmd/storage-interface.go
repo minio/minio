@@ -95,7 +95,7 @@ type StorageAPI interface {
 	ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
-	Delete(ctx context.Context, volume string, path string, recursive, force bool) (err error)
+	Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 	StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error)
 
@@ -223,7 +223,7 @@ func (p *unrecognizedDisk) CheckParts(ctx context.Context, volume string, path s
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) Delete(ctx context.Context, volume string, path string, recursive, force bool) (err error) {
+func (p *unrecognizedDisk) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	return errDiskNotFound
 }
 

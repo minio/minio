@@ -1321,8 +1321,14 @@ func (es *erasureSingle) DeleteObjects(ctx context.Context, bucket string, objec
 
 func (es *erasureSingle) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	dirPrefix := encodeDirObject(prefix)
-	defer es.disk.Delete(ctx, bucket, dirPrefix, true, true)
-	return es.disk.Delete(ctx, bucket, prefix, true, true)
+	defer es.disk.Delete(ctx, bucket, dirPrefix, DeleteOptions{
+		Recursive: true,
+		Force:     true,
+	})
+	return es.disk.Delete(ctx, bucket, prefix, DeleteOptions{
+		Recursive: true,
+		Force:     true,
+	})
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply
@@ -1916,7 +1922,10 @@ func (es *erasureSingle) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.meta is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, false, false)
+			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
 			return nil
 		}, index)
 	}
@@ -1954,7 +1963,10 @@ func (es *erasureSingle) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		}
 		wait := es.deletedCleanupSleeper.Timer(ctx)
 		if now.Sub(vi.Created) > expiry {
-			disk.Delete(ctx, minioMetaTmpBucket, tmpDir, true, false)
+			disk.Delete(ctx, minioMetaTmpBucket, tmpDir, DeleteOptions{
+				Recursive: true,
+				Force:     false,
+			})
 		}
 		wait()
 		return nil

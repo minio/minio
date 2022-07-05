@@ -657,7 +657,10 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
-	err = s.storage.Delete(r.Context(), volume, filePath, recursive, force)
+	err = s.storage.Delete(r.Context(), volume, filePath, DeleteOptions{
+		Recursive: recursive,
+		Force:     force,
+	})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}

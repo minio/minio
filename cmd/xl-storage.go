@@ -1011,7 +1011,10 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) error {
 // will force creating a new `xl.meta` to create a new delete marker
 func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
 	if HasSuffix(path, SlashSeparator) {
-		return s.Delete(ctx, volume, path, false, false)
+		return s.Delete(ctx, volume, path, DeleteOptions{
+			Recursive: false,
+			Force:     false,
+		})
 	}
 
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
@@ -2080,7 +2083,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force boo
 }
 
 // DeleteFile - delete a file at path.
-func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recursive, force bool) (err error) {
+func (s *xlStorage) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -2106,7 +2109,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, recu
 	}
 
 	// Delete file and delete parent directory as well if it's empty.
-	return s.deleteFile(volumeDir, filePath, recursive, force)
+	return s.deleteFile(volumeDir, filePath, deleteOpts.Recursive, deleteOpts.Force)
 }
 
 func skipAccessChecks(volume string) (ok bool) {

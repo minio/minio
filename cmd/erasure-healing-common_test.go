@@ -218,7 +218,10 @@ func TestListOnlineDisks(t *testing.T) {
 					// and check if that disk
 					// appears in outDatedDisks.
 					tamperedIndex = index
-					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false, false)
+					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
+						Recursive: false,
+						Force:     false,
+					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", filepath.Join(object, "part.1"), dErr)
 					}
@@ -395,7 +398,10 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					// and check if that disk
 					// appears in outDatedDisks.
 					tamperedIndex = index
-					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false, false)
+					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+						Recursive: false,
+						Force:     false,
+					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", pathJoin(object, xlStorageFormatFile), dErr)
 					}

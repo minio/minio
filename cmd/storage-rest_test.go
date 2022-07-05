@@ -383,7 +383,10 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.Delete(context.Background(), testCase.volumeName, testCase.objectName, false, false)
+		err := storage.Delete(context.Background(), testCase.volumeName, testCase.objectName, DeleteOptions{
+			Recursive: false,
+			Force:     false,
+		})
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
