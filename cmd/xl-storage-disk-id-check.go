@@ -78,20 +78,28 @@ type xlStorageDiskIDCheck struct {
 	diskID       string
 	storage      *xlStorage
 	health       *diskHealthTracker
+	metricsCache timedValue
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
-	diskMetric := DiskMetrics{
-		APILatencies: make(map[string]uint64),
-		APICalls:     make(map[string]uint64),
-	}
-	for i, v := range p.apiLatencies {
-		diskMetric.APILatencies[storageMetric(i).String()] = v.value()
-	}
-	for i := range p.apiCalls {
-		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
-	}
-	return diskMetric
+	p.metricsCache.Once.Do(func() {
+		p.metricsCache.TTL = 100 * time.Millisecond
+		p.metricsCache.Update = func() (interface{}, error) {
+			diskMetric := DiskMetrics{
+				APILatencies: make(map[string]uint64, len(p.apiLatencies)),
+				APICalls:     make(map[string]uint64, len(p.apiCalls)),
+			}
+			for i, v := range p.apiLatencies {
+				diskMetric.APILatencies[storageMetric(i).String()] = v.value()
+			}
+			for i := range p.apiCalls {
+				diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
+			}
+			return diskMetric, nil
+		}
+	})
+	m, _ := p.metricsCache.Get()
+	return m.(DiskMetrics)
 }
 
 type lockedLastMinuteLatency struct {
