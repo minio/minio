@@ -689,6 +689,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							VersionID:         version.VersionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
+							DeleteMarker:      true, // make sure we create a delete marker
 						})
 					var failure bool
 					if err != nil {
@@ -698,10 +699,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					z.poolMetaMutex.Lock()
 					z.poolMeta.CountItem(idx, 0, failure)
 					z.poolMetaMutex.Unlock()
-					if failure {
-						break // break out on first error
+					if !failure {
+						// Success keep a count.
+						decommissionedCount++
 					}
-					decommissionedCount++
 					continue
 				}
 
