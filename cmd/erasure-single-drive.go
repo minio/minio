@@ -184,6 +184,10 @@ func (es *erasureSingle) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (es *erasureSingle) SetDriveCounts() []int {
+	return []int{1}
+}
+
 func (es *erasureSingle) BackendInfo() (b madmin.BackendInfo) {
 	b.Type = madmin.Erasure
 
