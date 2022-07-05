@@ -43,12 +43,12 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.19.0
+	github.com/minio/console v0.19.1-0.20220705203612-63e2793272dd
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.19.2
-	github.com/minio/madmin-go v1.3.20
+	github.com/minio/madmin-go v1.4.3
 	github.com/minio/minio-go/v7 v7.0.30
 	github.com/minio/pkg v1.1.26
 	github.com/minio/selfupdate v0.4.0
@@ -67,6 +67,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
+	github.com/prometheus/common v0.34.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/rs/cors v1.7.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
@@ -163,7 +164,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/minio/colorjson v1.0.2 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220512134321-aa60a8db1e4d // indirect
+	github.com/minio/mc v0.0.0-20220705180830-01b87ecc02ff // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -183,7 +184,6 @@ require (
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
-	github.com/prometheus/common v0.34.0 // indirect
 	github.com/prometheus/prom2json v1.3.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rivo/tview v0.0.0-20220216162559-96063d6082f3 // indirect
@@ -220,9 +220,3 @@ require (
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
-
-replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220629143821-264b6bae287a
-
-replace github.com/minio/mc => github.com/klauspost/mc v0.0.0-20220628081748-72532e5bb302
-
-replace github.com/minio/console => github.com/klauspost/console v0.10.5-0.20220623134424-77131fbe82a8
