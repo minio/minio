@@ -386,6 +386,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	}
 	done := ctx.Done()
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	for n > 0 {

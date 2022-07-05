@@ -150,7 +150,7 @@ func httpTracer(h http.Handler) http.Handler {
 		reqEndTime := time.Now().UTC()
 
 		tt := madmin.TraceInternal
-		if strings.HasPrefix(tc.funcName, "s3") {
+		if strings.HasPrefix(tc.funcName, "s3.") {
 			tt = madmin.TraceS3
 		}
 		// No need to continue if no subscribers for actual type...
