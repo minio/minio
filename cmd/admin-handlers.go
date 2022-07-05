@@ -1189,7 +1189,7 @@ func deleteObjectPerfBucket(objectAPI ObjectLayer) {
 func validateObjPerfOptions(ctx context.Context, objectAPI ObjectLayer, concurrent int, size int, autotune bool) (sufficientCapacity bool, canAutotune bool, capacityErrMsg string) {
 	storageInfo, _ := objectAPI.StorageInfo(ctx)
 	capacityNeeded := uint64(concurrent * size)
-	capacity := uint64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo))
+	capacity := GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo)
 
 	if capacity < capacityNeeded {
 		return false, false, fmt.Sprintf("not enough usable space available to perform speedtest - expected %s, got %s",

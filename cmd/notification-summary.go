@@ -30,17 +30,14 @@ func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 }
 
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
-// This value is not an accurate representation of total usable in a multi-tenant deployment.
-func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity float64) {
-	raw := GetTotalCapacity(diskInfo)
-	var approxDataBlocks float64
-	var actualDisks float64
-	for _, scData := range s.Backend.StandardSCData {
-		approxDataBlocks += float64(scData)
-		actualDisks += float64(scData + s.Backend.StandardSCParity)
+func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
+	for _, disk := range diskInfo {
+		// Ignore parity disks
+		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {
+			capacity += disk.TotalSpace
+		}
 	}
-	ratio := approxDataBlocks / actualDisks
-	return float64(raw) * ratio
+	return
 }
 
 // GetTotalCapacityFree gets the total capacity free in the cluster.
@@ -52,15 +49,12 @@ func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 }
 
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
-// This value is not an accurate representation of total free in a multi-tenant deployment.
-func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity float64) {
-	raw := GetTotalCapacityFree(diskInfo)
-	var approxDataBlocks float64
-	var actualDisks float64
-	for _, scData := range s.Backend.StandardSCData {
-		approxDataBlocks += float64(scData)
-		actualDisks += float64(scData + s.Backend.StandardSCParity)
+func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
+	for _, disk := range diskInfo {
+		// Ignore parity disks
+		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {
+			capacity += disk.AvailableSpace
+		}
 	}
-	ratio := approxDataBlocks / actualDisks
-	return float64(raw) * ratio
+	return
 }
