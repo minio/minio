@@ -31,8 +31,8 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/procfs"
 )
 
@@ -2129,55 +2129,89 @@ func metricsServerHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
 	// Report all other metrics
-	err := registry.Register(clusterCollector)
-	if err != nil {
-		logger.CriticalIf(GlobalContext, err)
-	}
+	logger.CriticalIf(GlobalContext, registry.Register(clusterCollector))
 
 	// DefaultGatherers include golang metrics and process metrics.
 	gatherers := prometheus.Gatherers{
 		registry,
 	}
 
-	// Delegate http serving to Prometheus client library, which will call collector.Collect.
-	return promhttp.InstrumentMetricHandler(
-		registry,
-		promhttp.HandlerFor(gatherers,
-			promhttp.HandlerOpts{
-				ErrorHandling: promhttp.ContinueOnError,
-			}),
-	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		if ok {
+			tc.funcName = "handler.MetricsCluster"
+			tc.responseRecorder.LogErrBody = true
+		}
+
+		mfs, err := gatherers.Gather()
+		if err != nil {
+			if len(mfs) == 0 {
+				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+				return
+			}
+		}
+
+		contentType := expfmt.Negotiate(r.Header)
+		w.Header().Set("Content-Type", string(contentType))
+
+		enc := expfmt.NewEncoder(w, contentType)
+		for _, mf := range mfs {
+			if err := enc.Encode(mf); err != nil {
+				logger.LogIf(r.Context(), err)
+				return
+			}
+		}
+		if closer, ok := enc.(expfmt.Closer); ok {
+			closer.Close()
+		}
+	})
 }
 
 func metricsNodeHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
-	err := registry.Register(nodeCollector)
-	if err != nil {
-		logger.CriticalIf(GlobalContext, err)
-	}
-	err = registry.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
+	logger.CriticalIf(GlobalContext, registry.Register(nodeCollector))
+	if err := registry.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
 		Namespace:    minioNamespace,
 		ReportErrors: true,
-	}))
-	if err != nil {
+	})); err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
-	err = registry.Register(prometheus.NewGoCollector())
-	if err != nil {
+	if err := registry.Register(prometheus.NewGoCollector()); err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
 	gatherers := prometheus.Gatherers{
 		registry,
 	}
-	// Delegate http serving to Prometheus client library, which will call collector.Collect.
-	return promhttp.InstrumentMetricHandler(
-		registry,
-		promhttp.HandlerFor(gatherers,
-			promhttp.HandlerOpts{
-				ErrorHandling: promhttp.ContinueOnError,
-			}),
-	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		if ok {
+			tc.funcName = "handler.MetricsNode"
+			tc.responseRecorder.LogErrBody = true
+		}
+
+		mfs, err := gatherers.Gather()
+		if err != nil {
+			if len(mfs) == 0 {
+				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+				return
+			}
+		}
+
+		contentType := expfmt.Negotiate(r.Header)
+		w.Header().Set("Content-Type", string(contentType))
+
+		enc := expfmt.NewEncoder(w, contentType)
+		for _, mf := range mfs {
+			if err := enc.Encode(mf); err != nil {
+				logger.LogIf(r.Context(), err)
+				return
+			}
+		}
+		if closer, ok := enc.(expfmt.Closer); ok {
+			closer.Close()
+		}
+	})
 }
 
 func toSnake(camel string) (snake string) {

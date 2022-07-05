@@ -1055,10 +1055,10 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 
 func getEnvVarName(subSys, target, param string) string {
 	if target == Default {
-		return fmt.Sprintf("%s%s_%s", EnvPrefix, strings.ToUpper(subSys), strings.ToUpper(param))
+		return fmt.Sprintf("%s%s%s%s", EnvPrefix, strings.ToUpper(subSys), Default, strings.ToUpper(param))
 	}
 
-	return fmt.Sprintf("%s%s_%s_%s", EnvPrefix, strings.ToUpper(subSys), strings.ToUpper(param), target)
+	return fmt.Sprintf("%s%s%s%s%s%s", EnvPrefix, strings.ToUpper(subSys), Default, strings.ToUpper(param), Default, target)
 }
 
 var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys)

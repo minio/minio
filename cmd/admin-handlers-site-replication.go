@@ -160,7 +160,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.SRIAMItemPolicy:
 		if item.Policy == nil {
-			err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil)
+			err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil, item.UpdatedAt)
 		} else {
 			policy, perr := iampolicy.ParseConfig(bytes.NewReader(item.Policy))
 			if perr != nil {
@@ -168,21 +168,21 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 				return
 			}
 			if policy.IsEmpty() {
-				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil)
+				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil, item.UpdatedAt)
 			} else {
-				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, policy)
+				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, policy, item.UpdatedAt)
 			}
 		}
 	case madmin.SRIAMItemSvcAcc:
-		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, item.SvcAccChange)
+		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, item.SvcAccChange, item.UpdatedAt)
 	case madmin.SRIAMItemPolicyMapping:
-		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, item.PolicyMapping)
+		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, item.PolicyMapping, item.UpdatedAt)
 	case madmin.SRIAMItemSTSAcc:
-		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, item.STSCredential)
+		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, item.STSCredential, item.UpdatedAt)
 	case madmin.SRIAMItemIAMUser:
-		err = globalSiteReplicationSys.PeerIAMUserChangeHandler(ctx, item.IAMUser)
+		err = globalSiteReplicationSys.PeerIAMUserChangeHandler(ctx, item.IAMUser, item.UpdatedAt)
 	case madmin.SRIAMItemGroupInfo:
-		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo)
+		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)

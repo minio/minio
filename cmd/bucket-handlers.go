@@ -525,7 +525,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			VersionSuspended: vc.Suspended(),
 		}
 
-		if replicateDeletes || hasLockEnabled || !globalTierConfigMgr.Empty() {
+		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
 			if !globalTierConfigMgr.Empty() && object.VersionID == "" && opts.VersionSuspended {
 				opts.VersionID = nullVersionID
 			}
@@ -554,7 +554,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				object.ReplicateDecisionStr = dsc.String()
 			}
 		}
-		if hasLockEnabled {
+		if object.VersionID != "" && hasLockEnabled {
 			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
 				apiErr := errorCodes.ToAPIErr(apiErrCode)
 				deleteResults[index].errInfo = DeleteError{
