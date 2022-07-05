@@ -220,3 +220,6 @@ require (
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
+
+// replace github.com/minio/console => ../console
+replace github.com/minio/console => github.com/minio/console v0.19.2-0.20220722194038-f26786c904d0
