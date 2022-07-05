@@ -54,6 +54,7 @@ import (
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	ioutilx "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/rest"
@@ -305,7 +306,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		fn := filepath.Join(dirPath, "cpu.out")
-		f, err := os.Create(fn)
+		f, err := Create(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -319,8 +320,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer os.RemoveAll(dirPath)
-			return ioutil.ReadFile(fn)
+			defer RemoveAll(dirPath)
+			return ioutilx.ReadFile(fn)
 		}
 	case madmin.ProfilerCPUIO:
 		// at 10k or more goroutines fgprof is likely to become
@@ -335,7 +336,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		fn := filepath.Join(dirPath, "cpuio.out")
-		f, err := os.Create(fn)
+		f, err := Create(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -349,8 +350,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer os.RemoveAll(dirPath)
-			return ioutil.ReadFile(fn)
+			defer RemoveAll(dirPath)
+			return ioutilx.ReadFile(fn)
 		}
 	case madmin.ProfilerMEM:
 		runtime.GC()
@@ -400,7 +401,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		fn := filepath.Join(dirPath, "trace.out")
-		f, err := os.Create(fn)
+		f, err := Create(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -415,8 +416,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer os.RemoveAll(dirPath)
-			return ioutil.ReadFile(fn)
+			defer RemoveAll(dirPath)
+			return ioutilx.ReadFile(fn)
 		}
 	default:
 		return nil, errors.New("profiler type unknown")

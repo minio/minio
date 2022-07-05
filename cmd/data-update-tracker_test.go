@@ -63,7 +63,7 @@ func (t *testingLogger) Type() types.TargetType {
 	return types.TargetHTTP
 }
 
-func (t *testingLogger) Send(entry interface{}, errKind string) error {
+func (t *testingLogger) Send(entry interface{}) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.t == nil {
@@ -75,7 +75,7 @@ func (t *testingLogger) Send(entry interface{}, errKind string) error {
 	}
 
 	t.t.Helper()
-	t.t.Log(e.Level, ":", errKind, e.Message)
+	t.t.Log(e.Level, ":", e.Message)
 	return nil
 }
 

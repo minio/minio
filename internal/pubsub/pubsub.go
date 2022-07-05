@@ -25,27 +25,31 @@ import (
 
 // Sub - subscriber entity.
 type Sub struct {
-	ch     chan interface{}
-	filter func(entry interface{}) bool
+	ch     chan Maskable
+	types  Mask
+	filter func(entry Maskable) bool
 }
 
 // PubSub holds publishers and subscribers
 type PubSub struct {
-	subs           []*Sub
+	// atomics, keep at top:
+	types          uint64
 	numSubscribers int32
 	maxSubscribers int32
+
+	// not atomics:
+	subs []*Sub
 	sync.RWMutex
 }
 
 // Publish message to the subscribers.
 // Note that publish is always nob-blocking send so that we don't block on slow receivers.
 // Hence receivers should use buffered channel so as not to miss the published events.
-func (ps *PubSub) Publish(item interface{}) {
+func (ps *PubSub) Publish(item Maskable) {
 	ps.RLock()
 	defer ps.RUnlock()
-
 	for _, sub := range ps.subs {
-		if sub.filter == nil || sub.filter(item) {
+		if sub.types.Contains(Mask(item.Mask())) && (sub.filter == nil || sub.filter(item)) {
 			select {
 			case sub.ch <- item:
 			default:
@@ -55,38 +59,54 @@ func (ps *PubSub) Publish(item interface{}) {
 }
 
 // Subscribe - Adds a subscriber to pubsub system
-func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filter func(entry interface{}) bool) error {
+func (ps *PubSub) Subscribe(mask Mask, subCh chan Maskable, doneCh <-chan struct{}, filter func(entry Maskable) bool) error {
 	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
 	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
 		atomic.AddInt32(&ps.numSubscribers, -1)
 		return fmt.Errorf("the limit of `%d` subscribers is reached", ps.maxSubscribers)
 	}
-
 	ps.Lock()
 	defer ps.Unlock()
 
-	sub := &Sub{subCh, filter}
+	sub := &Sub{ch: subCh, types: mask, filter: filter}
 	ps.subs = append(ps.subs, sub)
+
+	// We hold a lock, so we are safe to update
+	combined := Mask(atomic.LoadUint64(&ps.types))
+	combined.Merge(mask)
+	atomic.StoreUint64(&ps.types, uint64(combined))
 
 	go func() {
 		<-doneCh
 
 		ps.Lock()
 		defer ps.Unlock()
-
+		var remainTypes Mask
 		for i, s := range ps.subs {
 			if s == sub {
 				ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
+			} else {
+				remainTypes.Merge(s.types)
 			}
 		}
+		atomic.StoreUint64(&ps.types, uint64(remainTypes))
 		atomic.AddInt32(&ps.numSubscribers, -1)
 	}()
 
 	return nil
 }
 
-// NumSubscribers returns the number of current subscribers
-func (ps *PubSub) NumSubscribers() int32 {
+// NumSubscribers returns the number of current subscribers,
+// If t is non-nil, the type is checked against the active subscribed types,
+// and 0 will be returned if nobody is subscribed for the type,
+// otherwise the *total* number of subscribers is returned.
+func (ps *PubSub) NumSubscribers(m Maskable) int32 {
+	if m != nil {
+		types := Mask(atomic.LoadUint64(&ps.types))
+		if !types.Overlaps(Mask(m.Mask())) {
+			return 0
+		}
+	}
 	return atomic.LoadInt32(&ps.numSubscribers)
 }
 

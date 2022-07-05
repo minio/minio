@@ -20,6 +20,8 @@ package log
 import (
 	"strings"
 	"time"
+
+	"github.com/minio/madmin-go"
 )
 
 // ObjectVersion object version key/versionId
@@ -52,17 +54,17 @@ type API struct {
 
 // Entry - defines fields and values of each log entry.
 type Entry struct {
-	DeploymentID string    `json:"deploymentid,omitempty"`
-	Level        string    `json:"level"`
-	LogKind      string    `json:"errKind"`
-	Time         time.Time `json:"time"`
-	API          *API      `json:"api,omitempty"`
-	RemoteHost   string    `json:"remotehost,omitempty"`
-	Host         string    `json:"host,omitempty"`
-	RequestID    string    `json:"requestID,omitempty"`
-	UserAgent    string    `json:"userAgent,omitempty"`
-	Message      string    `json:"message,omitempty"`
-	Trace        *Trace    `json:"error,omitempty"`
+	DeploymentID string         `json:"deploymentid,omitempty"`
+	Level        string         `json:"level"`
+	LogKind      madmin.LogKind `json:"errKind"`
+	Time         time.Time      `json:"time"`
+	API          *API           `json:"api,omitempty"`
+	RemoteHost   string         `json:"remotehost,omitempty"`
+	Host         string         `json:"host,omitempty"`
+	RequestID    string         `json:"requestID,omitempty"`
+	UserAgent    string         `json:"userAgent,omitempty"`
+	Message      string         `json:"message,omitempty"`
+	Trace        *Trace         `json:"error,omitempty"`
 }
 
 // Info holds console log messages
@@ -73,9 +75,15 @@ type Info struct {
 	Err        error  `json:"-"`
 }
 
+// Mask returns the mask based on the error level.
+func (l Info) Mask() uint64 {
+	return l.LogKind.LogMask().Mask()
+}
+
 // SendLog returns true if log pertains to node specified in args.
-func (l Info) SendLog(node, logKind string) bool {
-	nodeFltr := (node == "" || strings.EqualFold(node, l.NodeName))
-	typeFltr := strings.EqualFold(logKind, "all") || strings.EqualFold(l.LogKind, logKind)
-	return nodeFltr && typeFltr
+func (l Info) SendLog(node string, logKind madmin.LogMask) bool {
+	if logKind.Contains(l.LogKind.LogMask()) {
+		return node == "" || strings.EqualFold(node, l.NodeName)
+	}
+	return false
 }

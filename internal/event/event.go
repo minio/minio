@@ -17,6 +17,10 @@
 
 package event
 
+import (
+	"github.com/minio/madmin-go"
+)
+
 const (
 	// NamespaceFormat - namespace log format used in some event targets.
 	NamespaceFormat = "namespace"
@@ -79,6 +83,12 @@ type Event struct {
 	ResponseElements  map[string]string `json:"responseElements"`
 	S3                Metadata          `json:"s3"`
 	Source            Source            `json:"source"`
+	Type              madmin.TraceType  `json:"-"`
+}
+
+// Mask returns the type as mask.
+func (e Event) Mask() uint64 {
+	return e.EventName.Mask()
 }
 
 // Log represents event information for some event targets.

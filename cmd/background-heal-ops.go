@@ -22,6 +22,7 @@ import (
 	"runtime"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/pubsub"
 )
 
 // healTask represents what to heal along with options
@@ -49,10 +50,10 @@ type healRoutine struct {
 	workers int
 }
 
-func systemIO() int {
+func activeListeners() int {
 	// Bucket notification and http trace are not costly, it is okay to ignore them
 	// while counting the number of concurrent connections
-	return int(globalHTTPListen.NumSubscribers()) + int(globalTrace.NumSubscribers())
+	return int(globalHTTPListen.NumSubscribers(pubsub.MaskAll)) + int(globalTrace.NumSubscribers(pubsub.MaskAll))
 }
 
 func waitForLowHTTPReq() {
@@ -61,7 +62,7 @@ func waitForLowHTTPReq() {
 		currentIO = httpServer.GetRequestCount
 	}
 
-	globalHealConfig.Wait(currentIO, systemIO)
+	globalHealConfig.Wait(currentIO, activeListeners)
 }
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {

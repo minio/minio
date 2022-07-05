@@ -48,7 +48,7 @@ type Target struct {
 }
 
 // Send log message 'e' to kafka target.
-func (h *Target) Send(entry interface{}, errKind string) error {
+func (h *Target) Send(entry interface{}) error {
 	select {
 	case <-h.doneCh:
 		return nil

@@ -230,6 +230,7 @@ var (
 	globalTrace = pubsub.New(8)
 
 	// global Listen system to send S3 API events to registered listeners
+	// Objects are expected to be event.Event
 	globalHTTPListen = pubsub.New(0)
 
 	// global console system to send console logs to

@@ -35,7 +35,7 @@ func access(name string) error {
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
 func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
-	f, err := os.Open(dirPath)
+	f, err := Open(dirPath)
 	if err != nil {
 		if osErrToFileErr(err) == errFileNotFound {
 			return nil
@@ -116,7 +116,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 
 // Return N entries at the directory dirPath.
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := os.Open(dirPath)
+	f, err := Open(dirPath)
 	if err != nil {
 		return nil, osErrToFileErr(err)
 	}
