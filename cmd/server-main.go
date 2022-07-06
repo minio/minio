@@ -63,6 +63,7 @@ var ServerFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "console-address",
+		Value:  ":" + GlobalConsoleDefaultPort,
 		Usage:  "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
 		EnvVar: "MINIO_CONSOLE_ADDRESS",
 	},

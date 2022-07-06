@@ -421,25 +421,16 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Fetch console address option
 	consoleAddr := ctx.GlobalString("console-address")
-	if consoleAddr == "" {
+	if consoleAddr == "" || addr == ":"+GlobalConsoleDefaultPort {
 		consoleAddr = ctx.String("console-address")
-	}
-
-	if consoleAddr == "" {
-		p, err := xnet.GetFreePort()
-		if err != nil {
-			logger.FatalIf(err, "Unable to get free port for console on the host")
-		}
-		globalMinioConsolePortAuto = true
-		consoleAddr = net.JoinHostPort("", p.String())
-	}
-
-	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
-		logger.FatalIf(err, "Unable to start listening on console port")
 	}
 
 	if consoleAddr == addr {
 		logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
+	}
+
+	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
+		logger.FatalIf(err, "Unable to start listening on console port")
 	}
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)

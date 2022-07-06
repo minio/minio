@@ -58,7 +58,8 @@ import (
 
 // minio configuration related constants.
 const (
-	GlobalMinioDefaultPort = "9000"
+	GlobalMinioDefaultPort   = "9000"
+	GlobalConsoleDefaultPort = "9001"
 
 	globalMinioDefaultRegion = ""
 	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
@@ -173,9 +174,8 @@ var (
 	globalMinioAddr = ""
 
 	// MinIO default port, can be changed through command line.
-	globalMinioPort            = GlobalMinioDefaultPort
-	globalMinioConsolePort     = "13333"
-	globalMinioConsolePortAuto = false
+	globalMinioPort        = GlobalMinioDefaultPort
+	globalMinioConsolePort = GlobalConsoleDefaultPort
 
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
