@@ -178,6 +178,13 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// Import IAM info
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(httpTraceHdrs(adminAPI.ImportIAM))
 
+		// IDentity Provider configuration APIs
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg))).Queries("type", "{type:.*}")
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+
+		// -- END IAM APIs --
+
 		// GetBucketQuotaConfig
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler))).Queries("bucket", "{bucket:.*}")
