@@ -52,6 +52,7 @@ var (
 		config.HelpKV{
 			Key:         ClientSecret,
 			Description: `secret for the unique public identifier for apps` + defaultHelpPostfix(ClientSecret),
+			Sensitive:   true,
 			Type:        "string",
 		},
 		config.HelpKV{

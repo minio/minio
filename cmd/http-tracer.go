@@ -125,7 +125,7 @@ type traceCtxt struct {
 // otherwise, generate a trace event with request information but no response.
 func httpTracer(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalTrace.NumSubscribers() == 0 {
+		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
 			h.ServeHTTP(w, r)
 			return
 		}
@@ -149,6 +149,14 @@ func httpTracer(h http.Handler) http.Handler {
 		h.ServeHTTP(respRecorder, r)
 		reqEndTime := time.Now().UTC()
 
+		tt := madmin.TraceInternal
+		if strings.HasPrefix(tc.funcName, "s3.") {
+			tt = madmin.TraceS3
+		}
+		// No need to continue if no subscribers for actual type...
+		if globalTrace.NumSubscribers(tt) == 0 {
+			return
+		}
 		// Calculate input body size with headers
 		reqHeaders := r.Header.Clone()
 		reqHeaders.Set("Host", r.Host)
@@ -185,39 +193,37 @@ func httpTracer(h http.Handler) http.Handler {
 			funcName = "<unknown>"
 		}
 
-		rq := madmin.TraceRequestInfo{
-			Time:     reqStartTime,
-			Proto:    r.Proto,
-			Method:   r.Method,
-			RawQuery: redactLDAPPwd(r.URL.RawQuery),
-			Client:   handlers.GetSourceIP(r),
-			Headers:  reqHeaders,
-			Path:     reqPath,
-			Body:     reqRecorder.Data(),
-		}
-
-		rs := madmin.TraceResponseInfo{
-			Time:       reqEndTime,
-			Headers:    respRecorder.Header().Clone(),
-			StatusCode: respRecorder.StatusCode,
-			Body:       respRecorder.Body(),
-		}
-
-		cs := madmin.TraceCallStats{
-			Latency:         rs.Time.Sub(respRecorder.StartTime),
-			InputBytes:      inputBytes,
-			OutputBytes:     respRecorder.Size(),
-			TimeToFirstByte: respRecorder.TimeToFirstByte,
-		}
-
 		t := madmin.TraceInfo{
-			TraceType: madmin.TraceHTTP,
+			TraceType: tt,
 			FuncName:  funcName,
 			NodeName:  nodeName,
 			Time:      reqStartTime,
-			ReqInfo:   rq,
-			RespInfo:  rs,
-			CallStats: cs,
+			Duration:  reqEndTime.Sub(respRecorder.StartTime),
+			Path:      reqPath,
+			HTTP: &madmin.TraceHTTPStats{
+				ReqInfo: madmin.TraceRequestInfo{
+					Time:     reqStartTime,
+					Proto:    r.Proto,
+					Method:   r.Method,
+					RawQuery: redactLDAPPwd(r.URL.RawQuery),
+					Client:   handlers.GetSourceIP(r),
+					Headers:  reqHeaders,
+					Path:     reqPath,
+					Body:     reqRecorder.Data(),
+				},
+				RespInfo: madmin.TraceResponseInfo{
+					Time:       reqEndTime,
+					Headers:    respRecorder.Header().Clone(),
+					StatusCode: respRecorder.StatusCode,
+					Body:       respRecorder.Body(),
+				},
+				CallStats: madmin.TraceCallStats{
+					Latency:         reqEndTime.Sub(respRecorder.StartTime),
+					InputBytes:      inputBytes,
+					OutputBytes:     respRecorder.Size(),
+					TimeToFirstByte: respRecorder.TimeToFirstByte,
+				},
+			},
 		}
 
 		globalTrace.Publish(t)

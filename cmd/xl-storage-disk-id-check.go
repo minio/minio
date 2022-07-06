@@ -78,20 +78,28 @@ type xlStorageDiskIDCheck struct {
 	diskID       string
 	storage      *xlStorage
 	health       *diskHealthTracker
+	metricsCache timedValue
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
-	diskMetric := DiskMetrics{
-		APILatencies: make(map[string]uint64),
-		APICalls:     make(map[string]uint64),
-	}
-	for i, v := range p.apiLatencies {
-		diskMetric.APILatencies[storageMetric(i).String()] = v.value()
-	}
-	for i := range p.apiCalls {
-		diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
-	}
-	return diskMetric
+	p.metricsCache.Once.Do(func() {
+		p.metricsCache.TTL = 100 * time.Millisecond
+		p.metricsCache.Update = func() (interface{}, error) {
+			diskMetric := DiskMetrics{
+				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),
+				APICalls:   make(map[string]uint64, len(p.apiCalls)),
+			}
+			for i, v := range p.apiLatencies {
+				diskMetric.LastMinute[storageMetric(i).String()] = v.total()
+			}
+			for i := range p.apiCalls {
+				diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
+			}
+			return diskMetric, nil
+		}
+	})
+	m, _ := p.metricsCache.Get()
+	return m.(DiskMetrics)
 }
 
 type lockedLastMinuteLatency struct {
@@ -105,10 +113,18 @@ func (e *lockedLastMinuteLatency) add(value time.Duration) {
 	e.lastMinuteLatency.add(value)
 }
 
-func (e *lockedLastMinuteLatency) value() uint64 {
+// addSize will add a duration and size.
+func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 	e.Lock()
 	defer e.Unlock()
-	return e.lastMinuteLatency.getAvgData().avg()
+	e.lastMinuteLatency.addSize(value, sz)
+}
+
+// total returns the total call count and latency for the last minute.
+func (e *lockedLastMinuteLatency) total() AccElem {
+	e.Lock()
+	defer e.Unlock()
+	return e.lastMinuteLatency.getTotal()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
@@ -500,17 +516,26 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "storage." + s.String(),
-		StorageStats: madmin.TraceStorageStats{
-			Duration: duration,
-			Path:     path,
-		},
+		Duration:  duration,
+		Path:      path,
+	}
+}
+
+func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceScanner,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  "scanner." + s.String(),
+		Duration:  duration,
+		Path:      path,
 	}
 }
 
 // Update storage metrics
 func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...string) func(err *error) {
 	startTime := time.Now()
-	trace := globalTrace.NumSubscribers() > 0
+	trace := globalTrace.NumSubscribers(madmin.TraceStorage) > 0
 	return func(err *error) {
 		duration := time.Since(startTime)
 
@@ -647,18 +672,9 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	atomic.StoreInt64(&p.health.lastStarted, time.Now().UnixNano())
 	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess})
 	si := p.updateStorageMetrics(s, paths...)
-	t := time.Now()
 	var once sync.Once
 	return ctx, func(errp *error) {
 		once.Do(func() {
-			if false {
-				var ers string
-				if errp != nil {
-					err := *errp
-					ers = fmt.Sprint(err)
-				}
-				fmt.Println(time.Now().Format(time.RFC3339), "op", s, "took", time.Since(t), "result:", ers, "disk:", p.storage.String(), "path:", strings.Join(paths, "/"))
-			}
 			p.health.tokens <- struct{}{}
 			if errp != nil {
 				err := *errp

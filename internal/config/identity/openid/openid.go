@@ -24,6 +24,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -389,6 +390,107 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 	c.Enabled = true
 
 	return c, nil
+}
+
+// ErrProviderConfigNotFound - represents a non-existing provider error.
+var ErrProviderConfigNotFound = errors.New("provider configuration not found")
+
+// GetConfigInfo - returns configuration and related info for the given IDP
+// provider.
+func (r *Config) GetConfigInfo(s config.Config, cfgName string) ([]madmin.IDPCfgInfo, error) {
+	openIDConfigs, err := s.GetAvailableTargets(config.IdentityOpenIDSubSys)
+	if err != nil {
+		return nil, err
+	}
+
+	present := false
+	for _, cfg := range openIDConfigs {
+		if cfg == cfgName {
+			present = true
+			break
+		}
+	}
+
+	if !present {
+		return nil, ErrProviderConfigNotFound
+	}
+
+	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityOpenIDSubSys, cfgName)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]madmin.IDPCfgInfo, 0, len(kvsrcs)+1)
+	for _, kvsrc := range kvsrcs {
+		// skip default values.
+		if kvsrc.Src == config.ValueSourceDef {
+			if kvsrc.Key != madmin.EnableKey {
+				continue
+			}
+			// set an explicit on/off from live configuration.
+			kvsrc.Value = "off"
+			if _, ok := r.ProviderCfgs[cfgName]; ok {
+				if r.Enabled {
+					kvsrc.Value = "on"
+				}
+			}
+		}
+		res = append(res, madmin.IDPCfgInfo{
+			Key:   kvsrc.Key,
+			Value: kvsrc.Value,
+			IsCfg: true,
+			IsEnv: kvsrc.Src == config.ValueSourceEnv,
+		})
+	}
+
+	if provCfg, exists := r.ProviderCfgs[cfgName]; exists && provCfg.RolePolicy != "" {
+		// Append roleARN
+		res = append(res, madmin.IDPCfgInfo{
+			Key:   "roleARN",
+			Value: provCfg.roleArn.String(),
+			IsCfg: false,
+		})
+	}
+
+	// sort the structs by the key
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Key < res[j].Key
+	})
+
+	return res, nil
+}
+
+// GetConfigList - list openID configurations
+func (r *Config) GetConfigList(s config.Config) ([]madmin.IDPListItem, error) {
+	openIDConfigs, err := s.GetAvailableTargets(config.IdentityOpenIDSubSys)
+	if err != nil {
+		return nil, err
+	}
+
+	var res []madmin.IDPListItem
+	for _, cfg := range openIDConfigs {
+		pcfg, ok := r.ProviderCfgs[cfg]
+		if !ok {
+			res = append(res, madmin.IDPListItem{
+				Type:    "openid",
+				Name:    cfg,
+				Enabled: false,
+			})
+		} else {
+			var roleARN string
+			if pcfg.RolePolicy != "" {
+				roleARN = pcfg.roleArn.String()
+			}
+			res = append(res, madmin.IDPListItem{
+				Type:    "openid",
+				Name:    cfg,
+				Enabled: r.Enabled,
+				RoleARN: roleARN,
+			})
+		}
+	}
+
+	return res, nil
 }
 
 // Enabled returns if configURL is enabled.

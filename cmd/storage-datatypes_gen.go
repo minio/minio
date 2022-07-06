@@ -291,35 +291,35 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "APILatencies":
+		case "LastMinute":
 			var zb0002 uint32
 			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
-				err = msgp.WrapError(err, "APILatencies")
+				err = msgp.WrapError(err, "LastMinute")
 				return
 			}
-			if z.APILatencies == nil {
-				z.APILatencies = make(map[string]uint64, zb0002)
-			} else if len(z.APILatencies) > 0 {
-				for key := range z.APILatencies {
-					delete(z.APILatencies, key)
+			if z.LastMinute == nil {
+				z.LastMinute = make(map[string]AccElem, zb0002)
+			} else if len(z.LastMinute) > 0 {
+				for key := range z.LastMinute {
+					delete(z.LastMinute, key)
 				}
 			}
 			for zb0002 > 0 {
 				zb0002--
 				var za0001 string
-				var za0002 uint64
+				var za0002 AccElem
 				za0001, err = dc.ReadString()
 				if err != nil {
-					err = msgp.WrapError(err, "APILatencies")
+					err = msgp.WrapError(err, "LastMinute")
 					return
 				}
-				za0002, err = dc.ReadUint64()
+				err = za0002.DecodeMsg(dc)
 				if err != nil {
-					err = msgp.WrapError(err, "APILatencies", za0001)
+					err = msgp.WrapError(err, "LastMinute", za0001)
 					return
 				}
-				z.APILatencies[za0001] = za0002
+				z.LastMinute[za0001] = za0002
 			}
 		case "APICalls":
 			var zb0003 uint32
@@ -365,25 +365,25 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "APILatencies"
-	err = en.Append(0x82, 0xac, 0x41, 0x50, 0x49, 0x4c, 0x61, 0x74, 0x65, 0x6e, 0x63, 0x69, 0x65, 0x73)
+	// write "LastMinute"
+	err = en.Append(0x82, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
 	if err != nil {
 		return
 	}
-	err = en.WriteMapHeader(uint32(len(z.APILatencies)))
+	err = en.WriteMapHeader(uint32(len(z.LastMinute)))
 	if err != nil {
-		err = msgp.WrapError(err, "APILatencies")
+		err = msgp.WrapError(err, "LastMinute")
 		return
 	}
-	for za0001, za0002 := range z.APILatencies {
+	for za0001, za0002 := range z.LastMinute {
 		err = en.WriteString(za0001)
 		if err != nil {
-			err = msgp.WrapError(err, "APILatencies")
+			err = msgp.WrapError(err, "LastMinute")
 			return
 		}
-		err = en.WriteUint64(za0002)
+		err = za0002.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, "APILatencies", za0001)
+			err = msgp.WrapError(err, "LastMinute", za0001)
 			return
 		}
 	}
@@ -416,12 +416,16 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "APILatencies"
-	o = append(o, 0x82, 0xac, 0x41, 0x50, 0x49, 0x4c, 0x61, 0x74, 0x65, 0x6e, 0x63, 0x69, 0x65, 0x73)
-	o = msgp.AppendMapHeader(o, uint32(len(z.APILatencies)))
-	for za0001, za0002 := range z.APILatencies {
+	// string "LastMinute"
+	o = append(o, 0x82, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
+	o = msgp.AppendMapHeader(o, uint32(len(z.LastMinute)))
+	for za0001, za0002 := range z.LastMinute {
 		o = msgp.AppendString(o, za0001)
-		o = msgp.AppendUint64(o, za0002)
+		o, err = za0002.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "LastMinute", za0001)
+			return
+		}
 	}
 	// string "APICalls"
 	o = append(o, 0xa8, 0x41, 0x50, 0x49, 0x43, 0x61, 0x6c, 0x6c, 0x73)
@@ -451,35 +455,35 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "APILatencies":
+		case "LastMinute":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "APILatencies")
+				err = msgp.WrapError(err, "LastMinute")
 				return
 			}
-			if z.APILatencies == nil {
-				z.APILatencies = make(map[string]uint64, zb0002)
-			} else if len(z.APILatencies) > 0 {
-				for key := range z.APILatencies {
-					delete(z.APILatencies, key)
+			if z.LastMinute == nil {
+				z.LastMinute = make(map[string]AccElem, zb0002)
+			} else if len(z.LastMinute) > 0 {
+				for key := range z.LastMinute {
+					delete(z.LastMinute, key)
 				}
 			}
 			for zb0002 > 0 {
 				var za0001 string
-				var za0002 uint64
+				var za0002 AccElem
 				zb0002--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "APILatencies")
+					err = msgp.WrapError(err, "LastMinute")
 					return
 				}
-				za0002, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = za0002.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "APILatencies", za0001)
+					err = msgp.WrapError(err, "LastMinute", za0001)
 					return
 				}
-				z.APILatencies[za0001] = za0002
+				z.LastMinute[za0001] = za0002
 			}
 		case "APICalls":
 			var zb0003 uint32
@@ -525,11 +529,11 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DiskMetrics) Msgsize() (s int) {
-	s = 1 + 13 + msgp.MapHeaderSize
-	if z.APILatencies != nil {
-		for za0001, za0002 := range z.APILatencies {
+	s = 1 + 11 + msgp.MapHeaderSize
+	if z.LastMinute != nil {
+		for za0001, za0002 := range z.LastMinute {
 			_ = za0002
-			s += msgp.StringPrefixSize + len(za0001) + msgp.Uint64Size
+			s += msgp.StringPrefixSize + len(za0001) + za0002.Msgsize()
 		}
 	}
 	s += 9 + msgp.MapHeaderSize

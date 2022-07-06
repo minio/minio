@@ -929,6 +929,38 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 	return reply
 }
 
+// GetMetrics - Get metrics from all peers.
+func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, hosts map[string]struct{}) []madmin.RealtimeMetrics {
+	reply := make([]madmin.RealtimeMetrics, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		host := client.host.String()
+		if len(hosts) > 0 {
+			if _, ok := hosts[host]; !ok {
+				continue
+			}
+		}
+
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			reply[index].Errors = []string{err.Error()}
+		}
+	}
+	return reply
+}
+
 // GetSysConfig - Get information about system config
 // (only the config that are of concern to minio)
 func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig {
@@ -1288,8 +1320,7 @@ func sendEvent(args eventArgs) {
 	if globalNotificationSys == nil {
 		return
 	}
-
-	if globalHTTPListen.NumSubscribers() > 0 {
+	if globalHTTPListen.NumSubscribers(args.EventName) > 0 {
 		globalHTTPListen.Publish(args.ToEvent(false))
 	}
 

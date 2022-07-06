@@ -25,7 +25,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
-	policy "github.com/minio/pkg/bucket/policy"
+	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/pkg/bucket/policy"
 )
 
 func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,13 +101,14 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	pattern := event.NewPattern(prefix, suffix)
 
 	var eventNames []event.Name
+	var mask pubsub.Mask
 	for _, s := range values[peerRESTListenEvents] {
 		eventName, err := event.ParseName(s)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-
+		mask.MergeMaskable(eventName)
 		eventNames = append(eventNames, eventName)
 	}
 
@@ -123,11 +125,11 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 
 	// Listen Publisher and peer-listen-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	listenCh := make(chan interface{}, 4000)
+	listenCh := make(chan pubsub.Maskable, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	listenFn := func(evI interface{}) bool {
+	err := globalHTTPListen.Subscribe(mask, listenCh, ctx.Done(), func(evI pubsub.Maskable) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -138,14 +140,11 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
-	}
-
-	err := globalHTTPListen.Subscribe(listenCh, ctx.Done(), listenFn)
+	})
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
 		return
 	}
-
 	if bucketName != "" {
 		values.Set(peerRESTListenBucket, bucketName)
 	}
@@ -173,7 +172,10 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 					return
 				}
 			}
-			w.(http.Flusher).Flush()
+			if len(listenCh) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
 		case <-keepAliveTicker.C:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return

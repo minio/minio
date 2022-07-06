@@ -90,7 +90,7 @@ func newErasureSingle(ctx context.Context, storageDisk StorageAPI, format *forma
 		format:                format,
 		nsMutex:               newNSLock(false),
 		bp:                    bp,
-		deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
+		deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
 	}
 
 	// start cleanup stale uploads go-routine.

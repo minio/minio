@@ -30,6 +30,12 @@ func (z *AccElem) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Total")
 				return
 			}
+		case "Size":
+			z.Size, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "Size")
+				return
+			}
 		case "N":
 			z.N, err = dc.ReadInt64()
 			if err != nil {
@@ -49,15 +55,25 @@ func (z *AccElem) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z AccElem) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+	// map header, size 3
 	// write "Total"
-	err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	err = en.Append(0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 	if err != nil {
 		return
 	}
 	err = en.WriteInt64(z.Total)
 	if err != nil {
 		err = msgp.WrapError(err, "Total")
+		return
+	}
+	// write "Size"
+	err = en.Append(0xa4, 0x53, 0x69, 0x7a, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.Size)
+	if err != nil {
+		err = msgp.WrapError(err, "Size")
 		return
 	}
 	// write "N"
@@ -76,10 +92,13 @@ func (z AccElem) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z AccElem) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
 	// string "Total"
-	o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	o = append(o, 0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 	o = msgp.AppendInt64(o, z.Total)
+	// string "Size"
+	o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.Size)
 	// string "N"
 	o = append(o, 0xa1, 0x4e)
 	o = msgp.AppendInt64(o, z.N)
@@ -110,6 +129,12 @@ func (z *AccElem) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Total")
 				return
 			}
+		case "Size":
+			z.Size, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Size")
+				return
+			}
 		case "N":
 			z.N, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
@@ -130,12 +155,12 @@ func (z *AccElem) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z AccElem) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Int64Size + 2 + msgp.Int64Size
+	s = 1 + 6 + msgp.Int64Size + 5 + msgp.Int64Size + 2 + msgp.Int64Size
 	return
 }
 
 // DecodeMsg implements msgp.Decodable
-func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *LastMinuteHistogram) DecodeMsg(dc *msgp.Reader) (err error) {
 	var zb0001 uint32
 	zb0001, err = dc.ReadArrayHeader()
 	if err != nil {
@@ -195,6 +220,12 @@ func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
 								err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
 								return
 							}
+						case "Size":
+							z[za0001].Totals[za0002].Size, err = dc.ReadInt64()
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "Size")
+								return
+							}
 						case "N":
 							z[za0001].Totals[za0002].N, err = dc.ReadInt64()
 							if err != nil {
@@ -229,7 +260,7 @@ func (z *LastMinuteLatencies) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *LastMinuteHistogram) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteArrayHeader(uint32(sizeLastElemMarker))
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -248,15 +279,25 @@ func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 		for za0002 := range z[za0001].Totals {
-			// map header, size 2
+			// map header, size 3
 			// write "Total"
-			err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+			err = en.Append(0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 			if err != nil {
 				return
 			}
 			err = en.WriteInt64(z[za0001].Totals[za0002].Total)
 			if err != nil {
 				err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
+				return
+			}
+			// write "Size"
+			err = en.Append(0xa4, 0x53, 0x69, 0x7a, 0x65)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt64(z[za0001].Totals[za0002].Size)
+			if err != nil {
+				err = msgp.WrapError(err, za0001, "Totals", za0002, "Size")
 				return
 			}
 			// write "N"
@@ -285,7 +326,7 @@ func (z *LastMinuteLatencies) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *LastMinuteHistogram) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(sizeLastElemMarker))
 	for za0001 := range z {
@@ -294,10 +335,13 @@ func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
 		o = msgp.AppendArrayHeader(o, uint32(60))
 		for za0002 := range z[za0001].Totals {
-			// map header, size 2
+			// map header, size 3
 			// string "Total"
-			o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+			o = append(o, 0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 			o = msgp.AppendInt64(o, z[za0001].Totals[za0002].Total)
+			// string "Size"
+			o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+			o = msgp.AppendInt64(o, z[za0001].Totals[za0002].Size)
 			// string "N"
 			o = append(o, 0xa1, 0x4e)
 			o = msgp.AppendInt64(o, z[za0001].Totals[za0002].N)
@@ -310,7 +354,7 @@ func (z *LastMinuteLatencies) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *LastMinuteHistogram) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0001 uint32
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
@@ -370,6 +414,12 @@ func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, za0001, "Totals", za0002, "Total")
 								return
 							}
+						case "Size":
+							z[za0001].Totals[za0002].Size, bts, err = msgp.ReadInt64Bytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, za0001, "Totals", za0002, "Size")
+								return
+							}
 						case "N":
 							z[za0001].Totals[za0002].N, bts, err = msgp.ReadInt64Bytes(bts)
 							if err != nil {
@@ -405,8 +455,8 @@ func (z *LastMinuteLatencies) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *LastMinuteLatencies) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize + (sizeLastElemMarker * (16 + (60 * (9 + msgp.Int64Size + msgp.Int64Size)) + msgp.Int64Size))
+func (z *LastMinuteHistogram) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (sizeLastElemMarker * (16 + (60 * (14 + msgp.Int64Size + msgp.Int64Size + msgp.Int64Size)) + msgp.Int64Size))
 	return
 }
 
@@ -460,6 +510,12 @@ func (z *lastMinuteLatency) DecodeMsg(dc *msgp.Reader) (err error) {
 							err = msgp.WrapError(err, "Totals", za0001, "Total")
 							return
 						}
+					case "Size":
+						z.Totals[za0001].Size, err = dc.ReadInt64()
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001, "Size")
+							return
+						}
 					case "N":
 						z.Totals[za0001].N, err = dc.ReadInt64()
 						if err != nil {
@@ -506,15 +562,25 @@ func (z *lastMinuteLatency) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for za0001 := range z.Totals {
-		// map header, size 2
+		// map header, size 3
 		// write "Total"
-		err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+		err = en.Append(0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 		if err != nil {
 			return
 		}
 		err = en.WriteInt64(z.Totals[za0001].Total)
 		if err != nil {
 			err = msgp.WrapError(err, "Totals", za0001, "Total")
+			return
+		}
+		// write "Size"
+		err = en.Append(0xa4, 0x53, 0x69, 0x7a, 0x65)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.Totals[za0001].Size)
+		if err != nil {
+			err = msgp.WrapError(err, "Totals", za0001, "Size")
 			return
 		}
 		// write "N"
@@ -549,10 +615,13 @@ func (z *lastMinuteLatency) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0x82, 0xa6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(60))
 	for za0001 := range z.Totals {
-		// map header, size 2
+		// map header, size 3
 		// string "Total"
-		o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+		o = append(o, 0x83, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 		o = msgp.AppendInt64(o, z.Totals[za0001].Total)
+		// string "Size"
+		o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+		o = msgp.AppendInt64(o, z.Totals[za0001].Size)
 		// string "N"
 		o = append(o, 0xa1, 0x4e)
 		o = msgp.AppendInt64(o, z.Totals[za0001].N)
@@ -613,6 +682,12 @@ func (z *lastMinuteLatency) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Totals", za0001, "Total")
 							return
 						}
+					case "Size":
+						z.Totals[za0001].Size, bts, err = msgp.ReadInt64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Totals", za0001, "Size")
+							return
+						}
 					case "N":
 						z.Totals[za0001].N, bts, err = msgp.ReadInt64Bytes(bts)
 						if err != nil {
@@ -648,6 +723,6 @@ func (z *lastMinuteLatency) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *lastMinuteLatency) Msgsize() (s int) {
-	s = 1 + 7 + msgp.ArrayHeaderSize + (60 * (9 + msgp.Int64Size + msgp.Int64Size)) + 8 + msgp.Int64Size
+	s = 1 + 7 + msgp.ArrayHeaderSize + (60 * (14 + msgp.Int64Size + msgp.Int64Size + msgp.Int64Size)) + 8 + msgp.Int64Size
 	return
 }

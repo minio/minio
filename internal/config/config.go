@@ -1100,6 +1100,10 @@ func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value strin
 	}
 
 	defValue, isFound := defKVS.Lookup(cfgParam)
+	// Comments usually are absent from `defKVS`, so we handle it specially.
+	if cfgParam == Comment {
+		defValue, isFound = "", true
+	}
 	if !isFound {
 		return
 	}
@@ -1133,4 +1137,55 @@ func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value strin
 	value = defValue
 	cs = ValueSourceDef
 	return
+}
+
+// KVSrc represents a configuration parameter key and value along with the
+// source of the value.
+type KVSrc struct {
+	Key   string
+	Value string
+	Src   ValueSource
+}
+
+// GetResolvedConfigParams returns all applicable config parameters with their
+// value sources.
+func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) {
+	// Initially only support OpenID
+	if !resolvableSubsystems.Contains(subSys) {
+		return nil, fmt.Errorf("unsupported subsystem: %s", subSys)
+	}
+
+	// Check if config param requested is valid.
+	defKVS, ok := DefaultKVS[subSys]
+	if !ok {
+		return nil, fmt.Errorf("unknown subsystem: %s", subSys)
+	}
+
+	r := make([]KVSrc, 0, len(defKVS)+1)
+	for _, kv := range defKVS {
+		v, vs := c.ResolveConfigParam(subSys, target, kv.Key)
+
+		// Fix `vs` when default.
+		if v == kv.Value {
+			vs = ValueSourceDef
+		}
+
+		r = append(r, KVSrc{
+			Key:   kv.Key,
+			Value: v,
+			Src:   vs,
+		})
+	}
+
+	// Add the comment key as well if non-empty.
+	v, vs := c.ResolveConfigParam(subSys, target, Comment)
+	if vs != ValueSourceDef {
+		r = append(r, KVSrc{
+			Key:   Comment,
+			Value: v,
+			Src:   vs,
+		})
+	}
+
+	return r, nil
 }

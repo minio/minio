@@ -25,12 +25,21 @@ import (
 	"github.com/minio/minio/internal/disk"
 )
 
+var (
+	// OpenFileDirectIO allows overriding default function.
+	OpenFileDirectIO = disk.OpenFileDirectIO
+	// OsOpen allows overriding default function.
+	OsOpen = os.Open
+	// OsOpenFile allows overriding default function.
+	OsOpenFile = os.OpenFile
+)
+
 // ReadFileWithFileInfo reads the named file and returns the contents.
 // A successful call returns err == nil, not err == EOF.
 // Because ReadFile reads the whole file, it does not treat an EOF from Read
 // as an error to be reported, additionall returns os.FileInfo
 func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
-	f, err := os.Open(name)
+	f, err := OsOpen(name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,11 +62,11 @@ func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
 //
 // passes NOATIME flag for reads on Unix systems to avoid atime updates.
 func ReadFile(name string) ([]byte, error) {
-	f, err := disk.OpenFileDirectIO(name, readMode, 0o666)
+	f, err := OpenFileDirectIO(name, readMode, 0o666)
 	if err != nil {
 		// fallback if there is an error to read
 		// 'name' with O_DIRECT
-		f, err = os.OpenFile(name, readMode, 0o666)
+		f, err = OsOpenFile(name, readMode, 0o666)
 		if err != nil {
 			return nil, err
 		}

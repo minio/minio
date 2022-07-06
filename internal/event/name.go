@@ -30,12 +30,12 @@ type Name int
 
 // Values of event Name
 const (
-	ObjectAccessedAll Name = 1 + iota
-	ObjectAccessedGet
+	// Single event types (does not require expansion)
+
+	ObjectAccessedGet Name = 1 + iota
 	ObjectAccessedGetRetention
 	ObjectAccessedGetLegalHold
 	ObjectAccessedHead
-	ObjectCreatedAll
 	ObjectCreatedCompleteMultipartUpload
 	ObjectCreatedCopy
 	ObjectCreatedPost
@@ -44,12 +44,10 @@ const (
 	ObjectCreatedPutLegalHold
 	ObjectCreatedPutTagging
 	ObjectCreatedDeleteTagging
-	ObjectRemovedAll
 	ObjectRemovedDelete
 	ObjectRemovedDeleteMarkerCreated
 	BucketCreated
 	BucketRemoved
-	ObjectReplicationAll
 	ObjectReplicationFailed
 	ObjectReplicationComplete
 	ObjectReplicationMissedThreshold
@@ -57,19 +55,28 @@ const (
 	ObjectReplicationNotTracked
 	ObjectRestorePostInitiated
 	ObjectRestorePostCompleted
-	ObjectRestorePostAll
-	ObjectTransitionAll
 	ObjectTransitionFailed
 	ObjectTransitionComplete
+
+	objectSingleTypesEnd
+	// Start Compound types that require expansion:
+
+	ObjectAccessedAll
+	ObjectCreatedAll
+	ObjectRemovedAll
+	ObjectReplicationAll
+	ObjectRestorePostAll
+	ObjectTransitionAll
 )
+
+// The number of single names should not exceed 64.
+// This will break masking. Use bit 63 as extension.
+var _ = uint64(1 << objectSingleTypesEnd)
 
 // Expand - returns expanded values of abbreviated event type.
 func (name Name) Expand() []Name {
 	switch name {
-	case BucketCreated:
-		return []Name{BucketCreated}
-	case BucketRemoved:
-		return []Name{BucketRemoved}
+
 	case ObjectAccessedAll:
 		return []Name{
 			ObjectAccessedGet, ObjectAccessedHead,
@@ -108,6 +115,19 @@ func (name Name) Expand() []Name {
 	default:
 		return []Name{name}
 	}
+}
+
+// Mask returns the type as mask.
+// Compound "All" types are expanded.
+func (name Name) Mask() uint64 {
+	if name < objectSingleTypesEnd {
+		return 1 << (name - 1)
+	}
+	var mask uint64
+	for _, n := range name.Expand() {
+		mask |= 1 << (n - 1)
+	}
+	return mask
 }
 
 // String - returns string representation of event type.

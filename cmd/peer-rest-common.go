@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v22" // Add bulk GetBucketStats
+	peerRESTVersion       = "v23" // Added /metrics
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -70,30 +70,26 @@ const (
 	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
+	peerRESTMethodMetrics                     = "/metrics"
 )
 
 const (
-	peerRESTBucket         = "bucket"
-	peerRESTBuckets        = "buckets"
-	peerRESTUser           = "user"
-	peerRESTGroup          = "group"
-	peerRESTUserTemp       = "user-temp"
-	peerRESTPolicy         = "policy"
-	peerRESTUserOrGroup    = "user-or-group"
-	peerRESTIsGroup        = "is-group"
-	peerRESTSignal         = "signal"
-	peerRESTSubSys         = "sub-sys"
-	peerRESTProfiler       = "profiler"
-	peerRESTTraceErr       = "err"
-	peerRESTTraceInternal  = "internal"
-	peerRESTTraceStorage   = "storage"
-	peerRESTTraceS3        = "s3"
-	peerRESTTraceOS        = "os"
-	peerRESTTraceThreshold = "threshold"
-	peerRESTSize           = "size"
-	peerRESTConcurrent     = "concurrent"
-	peerRESTDuration       = "duration"
-	peerRESTStorageClass   = "storage-class"
+	peerRESTBucket       = "bucket"
+	peerRESTBuckets      = "buckets"
+	peerRESTUser         = "user"
+	peerRESTGroup        = "group"
+	peerRESTUserTemp     = "user-temp"
+	peerRESTPolicy       = "policy"
+	peerRESTUserOrGroup  = "user-or-group"
+	peerRESTIsGroup      = "is-group"
+	peerRESTSignal       = "signal"
+	peerRESTSubSys       = "sub-sys"
+	peerRESTProfiler     = "profiler"
+	peerRESTSize         = "size"
+	peerRESTConcurrent   = "concurrent"
+	peerRESTDuration     = "duration"
+	peerRESTStorageClass = "storage-class"
+	peerRESTTypes        = "types"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

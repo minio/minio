@@ -541,7 +541,7 @@ type IncompleteBody GenericError
 
 // Error returns string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
-	return e.Bucket + "/" + e.Object + "has incomplete body"
+	return e.Bucket + "/" + e.Object + " has incomplete body"
 }
 
 // InvalidRange - invalid range typed error.

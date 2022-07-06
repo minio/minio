@@ -28,13 +28,20 @@ export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 ./mc admin policy set myminio/ lake,rw user=minio12345
 
 ./mc mb -l myminio/versioned
+
+./mc mirror internal myminio/versioned/ --quiet >/dev/null
+
+## Soft delete (creates delete markers)
+./mc rm -r --force myminio/versioned >/dev/null
+
+## mirror again to create another set of version on top
 ./mc mirror internal myminio/versioned/ --quiet >/dev/null
 
 user_count=$(./mc admin user list myminio/ | wc -l)
 policy_count=$(./mc admin policy list myminio/ | wc -l)
 
 kill $pid
-(minio server /tmp/xl/{1...10}/disk{0...1} /tmp/xl/{11...30}/disk{0...3} 2>&1 >/dev/null) &
+(minio server /tmp/xl/{1...10}/disk{0...1} /tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded.log) &
 pid=$!
 
 sleep 2
@@ -60,7 +67,9 @@ if [ $ret -ne 0 ]; then
 fi
 
 ./mc mirror cmd myminio/versioned/ --quiet >/dev/null
+
 ./mc ls -r myminio/versioned/ > expanded_ns.txt
+./mc ls -r --versions myminio/versioned/ > expanded_ns_versions.txt
 
 ./mc admin decom start myminio/ /tmp/xl/{1...10}/disk{0...1}
 
@@ -98,8 +107,15 @@ if [ $ret -ne 0 ]; then
 fi
 
 ./mc ls -r myminio/versioned > decommissioned_ns.txt
+./mc ls -r --versions myminio/versioned > decommissioned_ns_versions.txt
 
 out=$(diff -qpruN expanded_ns.txt decommissioned_ns.txt)
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "BUG: expected no missing entries after decommission: $out"
+fi
+
+out=$(diff -qpruN expanded_ns_versions.txt decommissioned_ns_versions.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
     echo "BUG: expected no missing entries after decommission: $out"
