@@ -480,30 +480,6 @@ var (
 			Type:        "duration",
 		},
 		config.HelpKV{
-			Key:         target.NATSStreaming,
-			Description: "set to 'on', to use streaming NATS server",
-			Optional:    true,
-			Type:        "on|off",
-		},
-		config.HelpKV{
-			Key:         target.NATSStreamingAsync,
-			Description: "set to 'on', to enable asynchronous publish",
-			Optional:    true,
-			Type:        "on|off",
-		},
-		config.HelpKV{
-			Key:         target.NATSStreamingMaxPubAcksInFlight,
-			Description: "number of messages to publish without waiting for ACKs",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         target.NATSStreamingClusterID,
-			Description: "unique ID for NATS streaming cluster",
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
 			Key:         target.NATSCertAuthority,
 			Description: "path to certificate chain of the target NATS server",
 			Optional:    true,
@@ -525,6 +501,12 @@ var (
 			Sensitive:   true,
 		},
 		config.HelpKV{
+			Key:         target.NATSJetStream,
+			Description: "enable JetStream support",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
 			Key:         target.NATSQueueDir,
 			Description: queueDirComment,
 			Optional:    true,
@@ -535,6 +517,30 @@ var (
 			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         target.NATSStreaming,
+			Description: "[DEPRECATED] set to 'on', to use streaming NATS server",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         target.NATSStreamingAsync,
+			Description: "[DEPRECATED] set to 'on', to enable asynchronous publish",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         target.NATSStreamingMaxPubAcksInFlight,
+			Description: "[DEPRECATED] number of messages to publish without waiting for ACKs",
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         target.NATSStreamingClusterID,
+			Description: "[DEPRECATED] unique ID for NATS streaming cluster",
+			Optional:    true,
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
