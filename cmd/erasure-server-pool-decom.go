@@ -791,7 +791,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					wg.Add(1)
 					go decommissionEntry(entry)
 				},
-				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+				partial: func(entries metaCacheEntries, _ []error) {
 					entry, ok := entries.resolve(&resolver)
 					if ok {
 						parallelWorkers <- struct{}{}
