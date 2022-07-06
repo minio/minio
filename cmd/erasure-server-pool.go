@@ -238,6 +238,7 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 	return nil
 }
 
+// Return the count of disks in each pool
 func (z *erasureServerPools) SetDriveCounts() []int {
 	setDriveCounts := make([]int, len(z.serverPools))
 	for i := range z.serverPools {
