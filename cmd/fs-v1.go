@@ -210,7 +210,13 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 
 // BackendInfo - returns backend information
 func (fs *FSObjects) BackendInfo() madmin.BackendInfo {
-	return madmin.BackendInfo{Type: madmin.FS}
+	return madmin.BackendInfo{
+		Type:             madmin.FS,
+		StandardSCData:   []int{1},
+		StandardSCParity: 0,
+		RRSCData:         []int{1},
+		RRSCParity:       0,
+	}
 }
 
 // LocalStorageInfo - returns underlying storage statistics.
@@ -235,7 +241,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 			},
 		},
 	}
-	storageInfo.Backend.Type = madmin.FS
+	storageInfo.Backend = fs.BackendInfo()
 	return storageInfo, nil
 }
 
