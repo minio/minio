@@ -187,6 +187,11 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 	}
 
 	connOpts := []stan.Option{stan.NatsURL(addressURL)}
+
+	if n.TLS && !n.TLSSkipVerify {
+		connOpts = append(connOpts, stan.NatsOptions(nats.Secure(&tls.Config{RootCAs: n.RootCAs})))
+	}
+
 	if n.Streaming.MaxPubAcksInflight > 0 {
 		connOpts = append(connOpts, stan.MaxPubAcksInflight(n.Streaming.MaxPubAcksInflight))
 	}
