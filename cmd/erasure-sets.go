@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -549,27 +548,11 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 	}
 }
 
-const objectErasureMapKey = "objectErasureMap"
-
 type auditObjectOp struct {
+	Name  string   `json:"name"`
 	Pool  int      `json:"poolId"`
 	Set   int      `json:"setId"`
 	Disks []string `json:"disks"`
-}
-
-type auditObjectErasureMap struct {
-	sync.Map
-}
-
-// Define how to marshal auditObjectErasureMap so it can be
-// printed in the audit webhook notification request.
-func (a *auditObjectErasureMap) MarshalJSON() ([]byte, error) {
-	mapCopy := make(map[string]auditObjectOp)
-	a.Range(func(k, v interface{}) bool {
-		mapCopy[k.(string)] = v.(auditObjectOp)
-		return true
-	})
-	return json.Marshal(mapCopy)
 }
 
 // Add erasure set information to the current context
@@ -579,33 +562,20 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 	}
 
 	object = decodeDirObject(object)
-
-	var disksEndpoints []string
-	for _, endpoint := range set.getEndpoints() {
+	endpoints := set.getEndpoints()
+	disksEndpoints := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
 		disksEndpoints = append(disksEndpoints, endpoint.String())
 	}
 
 	op := auditObjectOp{
+		Name:  object,
 		Pool:  set.poolIndex + 1,
 		Set:   set.setIndex + 1,
 		Disks: disksEndpoints,
 	}
 
-	var objectErasureSetTag *auditObjectErasureMap
-	reqInfo := logger.GetReqInfo(ctx)
-	for _, kv := range reqInfo.GetTags() {
-		if kv.Key == objectErasureMapKey {
-			objectErasureSetTag = kv.Val.(*auditObjectErasureMap)
-			break
-		}
-	}
-
-	if objectErasureSetTag == nil {
-		objectErasureSetTag = &auditObjectErasureMap{}
-	}
-
-	objectErasureSetTag.Store(object, op)
-	reqInfo.SetTags(objectErasureMapKey, objectErasureSetTag)
+	logger.GetReqInfo(ctx).AppendTags("objectLocation", op)
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
