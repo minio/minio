@@ -166,7 +166,7 @@ func (p *scannerMetrics) currentPathUpdater(disk, initial string) (update func(p
 // getCurrentPaths returns the paths currently being processed.
 func (p *scannerMetrics) getCurrentPaths() []string {
 	var res []string
-	prefix := globalMinioAddr + "/"
+	prefix := globalLocalNodeName + "/"
 	p.currentPaths.Range(func(key, value interface{}) bool {
 		// We are a bit paranoid, but better miss an entry than crash.
 		name, ok := key.(string)
@@ -179,7 +179,7 @@ func (p *scannerMetrics) getCurrentPaths() []string {
 		}
 		strptr := (*string)(atomic.LoadPointer(obj.name))
 		if strptr != nil {
-			res = append(res, prefix+name+"/"+*strptr)
+			res = append(res, pathJoin(prefix, name, *strptr))
 		}
 		return true
 	})
