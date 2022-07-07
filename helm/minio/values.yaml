@@ -313,11 +313,16 @@ users:
   ## Add new policies as explained here https://docs.min.io/docs/minio-multi-user-quickstart-guide.html
   ## NOTE: this will fail if LDAP is enabled in your MinIO deployment
   ## make sure to disable this if you are using LDAP.
+  ## Accesskeyisbase64 and secretkeyisbase64 are added to prevent special characters from causing shell execution errors.
+  ## Special characters such as:{,},',',",",<,>
   - accessKey: console
+    accessKeyIsbase64: false
     secretKey: console123
+    secretKeyIsbase64: false
     policy: consoleAdmin
   # Or you can refer to specific secret
   #- accessKey: externalSecret
+  #  accessKeyIsbase64: false
   #  existingSecret: my-secret
   #  existingSecretKey: password
   #  policy: readonly

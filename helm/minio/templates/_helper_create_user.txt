@@ -39,7 +39,12 @@ connectToMinio() {
 # Check if the user exists, by using the exit code of `mc admin user info`
 checkUserExists() {
   USER=$1
-  CMD=$(${MC} admin user info myminio $USER > /dev/null 2>&1)
+  ACCESSKEY_IS_BASE64=$2
+  if [[ "Xtrue" == "X$ACCESSKEY_IS_BASE64" ]]; then
+    CMD=$(${MC} admin user info myminio $(echo $USER|base64 -d) > /dev/null 2>&1)
+  else
+    CMD=$(${MC} admin user info myminio $USER > /dev/null 2>&1)
+  fi
   return $?
 }
 
@@ -48,11 +53,21 @@ createUser() {
   USER=$1
   PASS=$2
   POLICY=$3
+  ACCESSKEY_IS_BASE64=$4
+  SECRETKEY_IS_BASE64=$5
 
   # Create the user if it does not exist
-  if ! checkUserExists $USER ; then
+  if ! checkUserExists $USER $ACCESSKEY_IS_BASE64 ; then
     echo "Creating user '$USER'"
-    ${MC} admin user add myminio $USER $PASS
+    if [[ "Xtrue" == "X$ACCESSKEY_IS_BASE64" && "Xtrue" == "X$SECRETKEY_IS_BASE64" ]] ; then
+        ${MC} admin user add myminio $(echo $USER|base64 -d) $(echo $PASS|base64 -d)
+    elif [[ "Xtrue" != "X$ACCESSKEY_IS_BASE64" && "Xtrue" != "X$SECRETKEY_IS_BASE64" ]];then
+        ${MC} admin user add myminio $USER $PASS
+    elif [[ "Xtrue" == "X$ACCESSKEY_IS_BASE64" && "Xtrue" != "X$SECRETKEY_IS_BASE64" ]];then
+        ${MC} admin user add myminio $(echo $USER|base64 -d) $PASS
+    else
+        ${MC} admin user add myminio $USER $(echo $PASS|base64 -d)
+    fi
   else
     echo "User '$USER' already exists."
   fi
@@ -80,9 +95,10 @@ connectToMinio $scheme
 # Create the users
 {{- range .Values.users }}
 {{- if .existingSecret }}
-createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}) {{ .policy }}
+#base64 accessKey by default,prevent shell execution failures caused by special characters.
+createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}|base64) {{ .policy }} {{ .accessKeyIsbase64 }} true
 {{ else }}
-createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }}
+createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }} {{ .accessKeyIsbase64 }} {{ .secretKeyIsbase64 }}
 {{- end }}
 {{- end }}
 {{- end }}
