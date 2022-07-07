@@ -132,7 +132,7 @@ type ObjectPartInfo struct {
 	Number     int    `json:"number"`
 	Size       int64  `json:"size"`
 	ActualSize int64  `json:"actualSize"`
-	Index      []byte `json:"index,omitempty"`
+	Index      []byte `json:"index,omitempty" msg:"index,omitempty"`
 }
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.

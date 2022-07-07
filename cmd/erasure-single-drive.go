@@ -2671,6 +2671,7 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			Number:     part.PartNumber,
 			Size:       currentFI.Parts[partIdx].Size,
 			ActualSize: currentFI.Parts[partIdx].ActualSize,
+			Index:      currentFI.Parts[partIdx].Index,
 		}
 	}
 

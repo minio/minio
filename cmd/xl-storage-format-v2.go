@@ -575,6 +575,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 			fi.Parts[i].ETag = j.PartETags[i]
 		}
 		fi.Parts[i].ActualSize = j.PartActualSizes[i]
+		if len(j.PartIndices) > 0 {
+			fi.Parts[i].Index = j.PartIndices[i]
+		}
 	}
 	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
 	for i := range fi.Parts {

@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -513,12 +514,12 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int) {
+func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
-	if len(objectInfo.Parts) > 0 {
-		for i, part := range objectInfo.Parts {
+	if len(oi.Parts) > 0 {
+		for i, part := range oi.Parts {
 			cumulativeActualSize += part.ActualSize
 			if cumulativeActualSize <= offset {
 				compressedOffset += part.Size
@@ -529,8 +530,25 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 			}
 		}
 	}
+	partSkip = offset - skipLength
 
-	return compressedOffset, offset - skipLength, firstPartIdx
+	// Load index and skip more if feasible.
+	if partSkip > 0 && len(oi.Parts) > firstPartIdx && len(oi.Parts[firstPartIdx].Index) > 0 {
+		// FIXME: We should be able to do this while encrypted.
+		if _, isEncrypted := crypto.IsEncrypted(oi.UserDefined); !isEncrypted {
+			var idx s2.Index
+			_, err := idx.Load(restoreIndexHeaders(oi.Parts[firstPartIdx].Index))
+			if err == nil {
+				compOff, uCompOff, err := idx.Find(partSkip)
+				if err == nil {
+					compressedOffset += compOff
+					partSkip -= uCompOff
+				}
+			}
+		}
+	}
+
+	return compressedOffset, partSkip, firstPartIdx
 }
 
 // GetObjectReader is a type that wraps a reader with a lock to
@@ -629,7 +647,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 
 			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff, firstPart = getCompressedOffsets(oi, off)
-
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.
@@ -657,7 +674,12 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				oi.Size = decLength
 			}
 			// Decompression reader.
-			s2Reader := s2.NewReader(inputReader)
+			var dopts []s2.ReaderOption
+			if off > 0 {
+				// We are not starting at the beginning, so ignore stream identifiers.
+				dopts = append(dopts, s2.ReaderIgnoreStreamIdentifier())
+			}
+			s2Reader := s2.NewReader(inputReader, dopts...)
 			// Apply the skipLen and limit on the decompressed stream.
 			if decOff > 0 {
 				if err = s2Reader.Skip(decOff); err != nil {
@@ -909,12 +931,16 @@ func newS2CompressReader(r io.Reader, on int64) (rc io.ReadCloser, idx func() []
 			return
 		}
 		// Close the stream.
-		// If more than 1MB was written, generate index.
-		if cn > 1<<20 {
+		// If more than 8MB was written, generate index.
+		if cn > 8<<20 {
 			idx, err := comp.CloseIndex()
+			idx = removeIndexHeaders(idx)
+			fmt.Println("Returning index, len", len(idx))
 			indexCh <- idx
 			pw.CloseWithError(err)
+			return
 		}
+		fmt.Println("No index, size:", cn)
 		pw.CloseWithError(comp.Close())
 	}()
 	var gotIdx []byte
@@ -1027,4 +1053,63 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 	// wantLeft is how much space there at least must be left.
 	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
 	return available > wantLeft
+}
+
+// removeIndexHeaders will trim all headers and trailers from a given index.
+// This is expected to save 20 bytes.
+// These can be restored using RestoreIndexHeaders.
+// This removes a layer of security, but is the most compact representation.
+// Returns nil if headers contains errors.
+// The returned slice references the provided slice.
+func removeIndexHeaders(b []byte) []byte {
+	const save = 4 + len(s2.S2IndexHeader) + len(s2.S2IndexTrailer) + 4
+	if len(b) <= save {
+		return nil
+	}
+	if b[0] != s2.ChunkTypeIndex {
+		return nil
+	}
+	chunkLen := int(b[1]) | int(b[2])<<8 | int(b[3])<<16
+	b = b[4:]
+
+	// Validate we have enough...
+	if len(b) < chunkLen {
+		return nil
+	}
+	b = b[:chunkLen]
+
+	if !bytes.Equal(b[:len(s2.S2IndexHeader)], []byte(s2.S2IndexHeader)) {
+		return nil
+	}
+	b = b[len(s2.S2IndexHeader):]
+	if !bytes.HasSuffix(b, []byte(s2.S2IndexTrailer)) {
+		return nil
+	}
+	b = bytes.TrimSuffix(b, []byte(s2.S2IndexTrailer))
+
+	if len(b) < 4 {
+		return nil
+	}
+	return b[:len(b)-4]
+}
+
+// restoreIndexHeaders will index restore headers removed by RemoveIndexHeaders.
+// No error checking is performed on the input.
+func restoreIndexHeaders(in []byte) []byte {
+	b := make([]byte, 0, 4+len(s2.S2IndexHeader)+len(in)+len(s2.S2IndexTrailer)+4)
+	b = append(b, s2.ChunkTypeIndex, 0, 0, 0)
+	b = append(b, []byte(s2.S2IndexHeader)...)
+	b = append(b, in...)
+
+	var tmp [4]byte
+	binary.LittleEndian.PutUint32(tmp[:], uint32(len(b)+4+len(s2.S2IndexTrailer)))
+	b = append(b, tmp[:4]...)
+	// Trailer
+	b = append(b, []byte(s2.S2IndexTrailer)...)
+
+	chunkLen := len(b) - 4 /*skippableFrameHeader*/
+	b[1] = uint8(chunkLen >> 0)
+	b[2] = uint8(chunkLen >> 8)
+	b[3] = uint8(chunkLen >> 16)
+	return b
 }
