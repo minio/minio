@@ -95,7 +95,7 @@ connectToMinio $scheme
 # Create the users
 {{- range .Values.users }}
 {{- if .existingSecret }}
-#base64 accessKey by default,prevent shell execution failures caused by special characters.
+#base64 secretKey by default,prevent shell execution failures caused by special characters.
 createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}|base64) {{ .policy }} {{ .accessKeyIsbase64 }} true
 {{ else }}
 createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }} {{ .accessKeyIsbase64 }} {{ .secretKeyIsbase64 }}
