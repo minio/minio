@@ -536,7 +536,7 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 							default:
 								if configRetriableErrors(err) {
 									logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
-									time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+									time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
 									continue
 								}
 								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
