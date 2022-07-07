@@ -1195,8 +1195,12 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 		// Do nothing
 		return
 	}
-	infos, _ := getHealDiskInfos(storageDisks, errs)
+	infos, ierrs := getHealDiskInfos(storageDisks, errs)
 	for i := range storageDisks {
+		if ierrs[i] != nil && ierrs[i] != errUnformattedDisk {
+			storageDisks[i] = nil
+			continue
+		}
 		if storageDisks[i] != nil && infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
