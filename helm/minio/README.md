@@ -213,9 +213,7 @@ helm install --set users[0].accessKey=accessKey,users[0].secretKey=secretKey,use
 Description of the configuration parameters used above -
 
 - `users[].accessKey` - accessKey of user
-- `users[].accessKeyIsbase64` - whether the accessKey has passed Base64
 - `users[].secretKey` - secretKey of usersecretRef
-- `users[].secretKeyIsbase64` - whether the secretKey has passed Base64
 - `users[].existingSecret` - secret name that contains the secretKey of user
 - `users[].existingSecretKey` - data key in existingSecret secret containing the secretKey
 - `users[].policy` - name of the policy to assign to user
