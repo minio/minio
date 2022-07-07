@@ -1903,12 +1903,12 @@ func getClusterStorageMetrics() *MetricsGroup {
 
 		metrics = append(metrics, Metric{
 			Description: getClusterCapacityUsageBytesMD(),
-			Value:       GetTotalUsableCapacity(storageInfo.Disks, storageInfo),
+			Value:       float64(GetTotalUsableCapacity(storageInfo.Disks, storageInfo)),
 		})
 
 		metrics = append(metrics, Metric{
 			Description: getClusterCapacityUsageFreeBytesMD(),
-			Value:       GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo),
+			Value:       float64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo)),
 		})
 
 		metrics = append(metrics, Metric{

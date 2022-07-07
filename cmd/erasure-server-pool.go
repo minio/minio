@@ -238,6 +238,7 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 	return nil
 }
 
+// Return the count of disks in each pool
 func (z *erasureServerPools) SetDriveCounts() []int {
 	setDriveCounts := make([]int, len(z.serverPools))
 	for i := range z.serverPools {
@@ -1003,7 +1004,6 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return objInfo, err
@@ -1053,7 +1053,9 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		j := j
 		obj := obj
 		eg.Go(func() error {
-			idx, err := z.getPoolIdxExistingNoLock(ctx, bucket, obj.ObjectName)
+			idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
+				NoLock: true,
+			})
 			if err != nil {
 				derrs[j] = err
 				return nil
@@ -2208,7 +2210,6 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2225,7 +2226,6 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2241,7 +2241,6 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2273,7 +2272,7 @@ func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, objec
 		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
+	opts.Mutate = true // Avoid transitioning an object from a pool being decommissioned.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
@@ -2289,7 +2288,7 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
+	opts.Mutate = true // Avoid restoring object from a pool being decommissioned.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
