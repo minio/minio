@@ -617,7 +617,7 @@ func TestS2CompressReader(t *testing.T) {
 	}{
 		{name: "empty", data: nil},
 		{name: "small", data: []byte("hello, world!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")},
-		{name: "large", data: bytes.Repeat([]byte("hello, world"), 100000), wantIdx: true},
+		{name: "large", data: bytes.Repeat([]byte("hello, world"), 1000000), wantIdx: true},
 	}
 
 	for _, tt := range tests {
@@ -642,10 +642,12 @@ func TestS2CompressReader(t *testing.T) {
 					t.Errorf("no index returned")
 				}
 				var index s2.Index
-				_, err = index.Load(idx)
+				_, err = index.Load(restoreIndexHeaders(idx))
 				if err != nil {
 					t.Errorf("error loading index: %v", err)
 				}
+				t.Log("size:", len(idx))
+				t.Log(string(index.JSON()))
 				if index.TotalUncompressed != int64(len(tt.data)) {
 					t.Errorf("Expected size %d, got %d", len(tt.data), index.TotalUncompressed)
 				}

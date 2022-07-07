@@ -935,12 +935,10 @@ func newS2CompressReader(r io.Reader, on int64) (rc io.ReadCloser, idx func() []
 		if cn > 8<<20 {
 			idx, err := comp.CloseIndex()
 			idx = removeIndexHeaders(idx)
-			fmt.Println("Returning index, len", len(idx))
 			indexCh <- idx
 			pw.CloseWithError(err)
 			return
 		}
-		fmt.Println("No index, size:", cn)
 		pw.CloseWithError(comp.Close())
 	}()
 	var gotIdx []byte
@@ -1096,6 +1094,9 @@ func removeIndexHeaders(b []byte) []byte {
 // restoreIndexHeaders will index restore headers removed by RemoveIndexHeaders.
 // No error checking is performed on the input.
 func restoreIndexHeaders(in []byte) []byte {
+	if len(in) == 0 {
+		return nil
+	}
 	b := make([]byte, 0, 4+len(s2.S2IndexHeader)+len(in)+len(s2.S2IndexTrailer)+4)
 	b = append(b, s2.ChunkTypeIndex, 0, 0, 0)
 	b = append(b, []byte(s2.S2IndexHeader)...)
