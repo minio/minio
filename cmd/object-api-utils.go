@@ -888,11 +888,13 @@ func init() {
 // input 'on' is always recommended such that this function works
 // properly, because we do not wish to create an object even if
 // client closed the stream prematurely.
-func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
+func newS2CompressReader(r io.Reader, on int64) (rc io.ReadCloser, idx func() []byte) {
 	pr, pw := io.Pipe()
 	// Copy input to compressor
+	comp := s2.NewWriter(pw, compressOpts...)
+	indexCh := make(chan []byte, 1)
 	go func() {
-		comp := s2.NewWriter(pw, compressOpts...)
+		defer close(indexCh)
 		cn, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
@@ -907,9 +909,23 @@ func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 			return
 		}
 		// Close the stream.
+		// If more than 1MB was written, generate index.
+		if cn > 1<<20 {
+			idx, err := comp.CloseIndex()
+			indexCh <- idx
+			pw.CloseWithError(err)
+		}
 		pw.CloseWithError(comp.Close())
 	}()
-	return pr
+	var gotIdx []byte
+	return pr, func() []byte {
+		if gotIdx != nil {
+			return gotIdx
+		}
+		// Will get index or nil if closed.
+		gotIdx = <-indexCh
+		return gotIdx
+	}
 }
 
 // compressSelfTest performs a self-test to ensure that compression
@@ -933,7 +949,7 @@ func compressSelfTest() {
 		}
 	}
 	const skip = 2<<20 + 511
-	r := newS2CompressReader(bytes.NewBuffer(data), int64(len(data)))
+	r, _ := newS2CompressReader(bytes.NewBuffer(data), int64(len(data)))
 	b, err := io.ReadAll(r)
 	failOnErr(err)
 	failOnErr(r.Close())
