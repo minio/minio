@@ -256,10 +256,12 @@ func (target *NATSTarget) IsActive() (bool, error) {
 
 	if target.natsConn != nil && target.args.JetStream.Enable {
 		target.jstream, connErr = target.natsConn.JetStream()
-		if connErr.Error() == nats.ErrNoServers.Error() {
-			return false, errNotConnected
+		if connErr != nil {
+			if connErr.Error() == nats.ErrNoServers.Error() {
+				return false, errNotConnected
+			}
+			return false, connErr
 		}
-		return false, connErr
 	}
 
 	return true, nil
