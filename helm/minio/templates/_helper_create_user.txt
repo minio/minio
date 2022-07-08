@@ -8,7 +8,7 @@ MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
 MC="/usr/bin/mc --insecure"
 {{- end }}
 
-# AccessKey and secretkey temporary files are added to prevent shell execution errors caused by special characters.
+# AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
 # Special characters for example : ',",<,>,{,}
 MINIO_ACCESSKEY_SECRETKEY_TMP="/config/accessKey_and_secretKey_tmp"
 
@@ -51,22 +51,22 @@ createUser() {
   POLICY=$1
   #check accessKey_and_secretKey_tmp file
   if [[ ! -f $MINIO_ACCESSKEY_SECRETKEY_TMP ]];then
-    echo "not find tmp file."
+    echo "credentials file does not exist"
     return 1
   fi
   if [[ $(cat $MINIO_ACCESSKEY_SECRETKEY_TMP|wc -l) -ne 2 ]];then
-    echo "tmp file is invalidate."
+    echo "credentials file is invalid"
     rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
     return 1
   fi
   # Create the user if it does not exist
   if ! checkUserExists ; then
     echo "Creating user '$USER'"
-    ${MC} admin user add myminio $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) $(tail -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
+    cat $MINIO_ACCESSKEY_SECRETKEY_TMP | ${MC} admin user add myminio
   else
     echo "User '$USER' already exists."
   fi
-  #clean up temporary files.
+  #clean up credentials files.
   rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
 
   # set policy for user
@@ -92,7 +92,7 @@ connectToMinio $scheme
 {{- range .Values.users }}
 echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
-cat /config/secrets/{{ tpl .accessKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+cat /config/secrets/{{ tpl .secretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 createUser {{ .policy }}
 {{ else }}
 echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
