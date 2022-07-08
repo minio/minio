@@ -931,6 +931,10 @@ type timedValue struct {
 	// Should be set before calling Get().
 	TTL time.Duration
 
+	// When set to true, return the last cached value
+	// even if updating the value errors out
+	Relax bool
+
 	// Once can be used to initialize values for lazy initialization.
 	// Should be set before calling Get().
 	Once sync.Once
@@ -951,13 +955,16 @@ func (t *timedValue) Get() (interface{}, error) {
 
 	v, err := t.Update()
 	if err != nil {
-		// if update fails, return current
-		// cached value along with error.
-		//
-		// Let the caller decide if they want
-		// to use the returned value based
-		// on error.
-		v = t.get(0)
+		if t.Relax {
+			// if update fails, return current
+			// cached value along with error.
+			//
+			// Let the caller decide if they want
+			// to use the returned value based
+			// on error.
+			v = t.get(0)
+			return v, err
+		}
 		return v, err
 	}
 
