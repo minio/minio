@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -44,12 +45,15 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/wildcard"
+	"github.com/minio/sio"
 )
 
 const (
@@ -514,7 +518,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int, decryptSkip int64, seqNum uint32) {
+func getCompressedOffsets(oi ObjectInfo, offset int64, decrypt func([]byte) ([]byte, error)) (compressedOffset int64, partSkip int64, firstPart int, decryptSkip int64, seqNum uint32) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
@@ -534,30 +538,41 @@ func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, 
 
 	// Load index and skip more if feasible.
 	if partSkip > 0 && len(oi.Parts) > firstPartIdx && len(oi.Parts[firstPartIdx].Index) > 0 {
+		_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
+		if isEncrypted {
+			dec, err := decrypt(oi.Parts[firstPartIdx].Index)
+			if err == nil {
+				// Load Index
+				var idx s2.Index
+				_, err := idx.Load(restoreIndexHeaders(dec))
 
-		// Load Index
-		var idx s2.Index
-		_, err := idx.Load(restoreIndexHeaders(oi.Parts[firstPartIdx].Index))
+				// Find compressed/uncompressed offsets of our partskip
+				compOff, uCompOff, err2 := idx.Find(partSkip)
 
-		// Find compressed/uncompressed offsets of our partskip
-		compOff, uCompOff, err2 := idx.Find(partSkip)
-		if err == nil && err2 == nil && compOff > 0 {
-			_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
-			if isEncrypted {
-				// Encrypted.
-				const sseDAREEncPackageBlockSize = SSEDAREPackageBlockSize + SSEDAREPackageMetaSize
-				// Number of full blocks in skipped area
-				seqNum = uint32(compOff / SSEDAREPackageBlockSize)
-				// Skip this many inside a decrypted block to get to compression block start
-				decryptSkip = compOff % SSEDAREPackageBlockSize
-				// Skip this number of full blocks.
-				skipEnc := compOff / SSEDAREPackageBlockSize
-				skipEnc *= sseDAREEncPackageBlockSize
-				compressedOffset += skipEnc
-				// Skip this number of uncompressed bytes.
-				partSkip -= uCompOff
-			} else {
-				// Not encrypted
+				if err == nil && err2 == nil && compOff > 0 {
+					// Encrypted.
+					const sseDAREEncPackageBlockSize = SSEDAREPackageBlockSize + SSEDAREPackageMetaSize
+					// Number of full blocks in skipped area
+					seqNum = uint32(compOff / SSEDAREPackageBlockSize)
+					// Skip this many inside a decrypted block to get to compression block start
+					decryptSkip = compOff % SSEDAREPackageBlockSize
+					// Skip this number of full blocks.
+					skipEnc := compOff / SSEDAREPackageBlockSize
+					skipEnc *= sseDAREEncPackageBlockSize
+					compressedOffset += skipEnc
+					// Skip this number of uncompressed bytes.
+					partSkip -= uCompOff
+				}
+			}
+		} else {
+			// Not encrypted
+			var idx s2.Index
+			_, err := idx.Load(restoreIndexHeaders(oi.Parts[firstPartIdx].Index))
+
+			// Find compressed/uncompressed offsets of our partskip
+			compOff, uCompOff, err2 := idx.Find(partSkip)
+
+			if err == nil && err2 == nil && compOff > 0 {
 				compressedOffset += compOff
 				partSkip -= uCompOff
 			}
@@ -662,9 +677,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if err != nil {
 				return nil, 0, 0, err
 			}
-
+			decrypt := func(b []byte) ([]byte, error) {
+				return b, nil
+			}
+			if isEncrypted {
+				decrypt = oi.compressionIndexDecrypt
+			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off)
+			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off, decrypt)
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.
@@ -819,6 +839,41 @@ func (g *GetObjectReader) Close() error {
 		}
 	})
 	return nil
+}
+
+func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func() []byte {
+	var data []byte
+	var fetched bool
+	return func() []byte {
+		if !fetched {
+			data = input()
+			fetched = true
+		}
+		if len(data) == 0 {
+			return data
+		}
+		var buffer bytes.Buffer
+		mac := hmac.New(sha256.New, key[:])
+		mac.Write([]byte("compression-index"))
+		if _, err := sio.Encrypt(&buffer, bytes.NewReader(data), sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()}); err != nil {
+			logger.CriticalIf(context.Background(), errors.New("unable to encrypt compression index using object key"))
+		}
+		return buffer.Bytes()
+	}
+}
+
+func (oi *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
+	if len(input) == 0 {
+		return input, nil
+	}
+
+	key, err := decryptObjectInfo(nil, oi.Bucket, oi.Name, oi.UserDefined)
+	if err != nil {
+		return nil, err
+	}
+	mac := hmac.New(sha256.New, key[:])
+	mac.Write([]byte("compression-index"))
+	return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
 }
 
 // SealMD5CurrFn seals md5sum with object encryption key and returns sealed

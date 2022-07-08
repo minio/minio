@@ -1309,6 +1309,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
+				if dstOpts.IndexCB != nil {
+					dstOpts.IndexCB = compressionIndexEncrypter(objEncKey, dstOpts.IndexCB)
+				}
 			}
 		}
 	}
@@ -1818,6 +1821,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
+			}
 		}
 	}
 
@@ -2160,6 +2166,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				if err != nil {
 					return err
 				}
+			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
 		}
 
@@ -2654,6 +2663,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if dstOpts.IndexCB != nil {
+			dstOpts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, dstOpts.IndexCB)
+		}
 	}
 
 	srcInfo.PutObjReader = pReader
@@ -2916,6 +2928,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
+		}
+		if idxCb != nil {
+			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
 		}
 	}
 	opts.IndexCB = idxCb
