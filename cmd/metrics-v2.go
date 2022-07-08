@@ -232,6 +232,7 @@ type MetricsGroup struct {
 // to populate new values upon cache invalidation.
 func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 	g.metricsCache.Once.Do(func() {
+		g.metricsCache.Relax = true
 		g.metricsCache.TTL = g.cacheInterval
 		g.metricsCache.Update = func() (interface{}, error) {
 			return read(GlobalContext), nil
