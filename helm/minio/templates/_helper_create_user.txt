@@ -8,6 +8,8 @@ MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
 MC="/usr/bin/mc --insecure"
 {{- end }}
 
+# AccessKey and secretkey temporary files are added to prevent shell execution errors caused by special characters.
+# Special characters for example : ',",<,>,{,}
 MINIO_ACCESSKEY_SECRETKEY_TMP="/config/accessKey_and_secretKey_tmp"
 
 # connectToMinio
