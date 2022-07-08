@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -91,8 +90,6 @@ type erasureSets struct {
 	// Distribution algorithm of choice.
 	distributionAlgo string
 	deploymentID     [16]byte
-
-	disksStorageInfoCache timedValue
 
 	lastConnectDisksOpTime time.Time
 }
@@ -468,7 +465,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				getDisks:              s.GetDisks(i),
 				getLockers:            s.GetLockers(i),
 				getEndpoints:          s.GetEndpoints(i),
-				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
+				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
 				nsMutex:               mutex,
 				bp:                    bp,
 				bpOld:                 bpOld,
@@ -551,27 +548,11 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 	}
 }
 
-const objectErasureMapKey = "objectErasureMap"
-
 type auditObjectOp struct {
+	Name  string   `json:"name"`
 	Pool  int      `json:"poolId"`
 	Set   int      `json:"setId"`
 	Disks []string `json:"disks"`
-}
-
-type auditObjectErasureMap struct {
-	sync.Map
-}
-
-// Define how to marshal auditObjectErasureMap so it can be
-// printed in the audit webhook notification request.
-func (a *auditObjectErasureMap) MarshalJSON() ([]byte, error) {
-	mapCopy := make(map[string]auditObjectOp)
-	a.Range(func(k, v interface{}) bool {
-		mapCopy[k.(string)] = v.(auditObjectOp)
-		return true
-	})
-	return json.Marshal(mapCopy)
 }
 
 // Add erasure set information to the current context
@@ -581,33 +562,20 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 	}
 
 	object = decodeDirObject(object)
-
-	var disksEndpoints []string
-	for _, endpoint := range set.getEndpoints() {
+	endpoints := set.getEndpoints()
+	disksEndpoints := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
 		disksEndpoints = append(disksEndpoints, endpoint.String())
 	}
 
 	op := auditObjectOp{
+		Name:  object,
 		Pool:  set.poolIndex + 1,
 		Set:   set.setIndex + 1,
 		Disks: disksEndpoints,
 	}
 
-	var objectErasureSetTag *auditObjectErasureMap
-	reqInfo := logger.GetReqInfo(ctx)
-	for _, kv := range reqInfo.GetTags() {
-		if kv.Key == objectErasureMapKey {
-			objectErasureSetTag = kv.Val.(*auditObjectErasureMap)
-			break
-		}
-	}
-
-	if objectErasureSetTag == nil {
-		objectErasureSetTag = &auditObjectErasureMap{}
-	}
-
-	objectErasureSetTag.Store(object, op)
-	reqInfo.SetTags(objectErasureMapKey, objectErasureSetTag)
+	logger.GetReqInfo(ctx).AppendTags("objectLocation", op)
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -627,47 +595,6 @@ func (s *erasureSets) SetDriveCount() int {
 // coding objects
 func (s *erasureSets) ParityCount() int {
 	return s.defaultParityCount
-}
-
-// StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
-// This only returns disk usage info for ServerPools to perform placement decision, this call
-// is not implemented in Object interface and is not meant to be used by other object
-// layer implementations.
-func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
-	storageUsageInfo := func() StorageInfo {
-		var storageInfo StorageInfo
-		storageInfos := make([]StorageInfo, len(s.sets))
-		storageInfo.Backend.Type = madmin.Erasure
-
-		g := errgroup.WithNErrs(len(s.sets))
-		for index := range s.sets {
-			index := index
-			g.Go(func() error {
-				// ignoring errors on purpose
-				storageInfos[index], _ = s.sets[index].StorageInfo(ctx)
-				return nil
-			}, index)
-		}
-
-		// Wait for the go routines.
-		g.Wait()
-
-		for _, lstorageInfo := range storageInfos {
-			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		}
-
-		return storageInfo
-	}
-
-	s.disksStorageInfoCache.Once.Do(func() {
-		s.disksStorageInfoCache.TTL = time.Second
-		s.disksStorageInfoCache.Update = func() (interface{}, error) {
-			return storageUsageInfo(), nil
-		}
-	})
-
-	v, _ := s.disksStorageInfoCache.Get()
-	return v.(StorageInfo)
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
@@ -1047,11 +974,13 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 		// Version ID is set for the destination and source == destination version ID.
 		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
+			srcInfo.Reader.Close() // We are not interested in the reader stream at this point close it.
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		// Destination is not versioned and source version ID is empty
 		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			srcInfo.Reader.Close() // We are not interested in the reader stream at this point close it.
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		// CopyObject optimization where we don't create an entire copy
@@ -1060,6 +989,7 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 		// that we actually create a new dataDir for legacy objects.
 		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
 			srcInfo.versionOnly = true
+			srcInfo.Reader.Close() // We are not interested in the reader stream at this point close it.
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
@@ -1235,8 +1165,12 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 		// Do nothing
 		return
 	}
-	infos, _ := getHealDiskInfos(storageDisks, errs)
+	infos, ierrs := getHealDiskInfos(storageDisks, errs)
 	for i := range storageDisks {
+		if ierrs[i] != nil && ierrs[i] != errUnformattedDisk {
+			storageDisks[i] = nil
+			continue
+		}
 		if storageDisks[i] != nil && infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.

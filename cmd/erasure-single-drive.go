@@ -90,7 +90,7 @@ func newErasureSingle(ctx context.Context, storageDisk StorageAPI, format *forma
 		format:                format,
 		nsMutex:               newNSLock(false),
 		bp:                    bp,
-		deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second),
+		deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
 	}
 
 	// start cleanup stale uploads go-routine.
@@ -182,6 +182,10 @@ func (es *erasureSingle) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(es.disk)
 	return nil
+}
+
+func (es *erasureSingle) SetDriveCounts() []int {
+	return []int{1}
 }
 
 func (es *erasureSingle) BackendInfo() (b madmin.BackendInfo) {
@@ -1203,7 +1207,14 @@ func (es *erasureSingle) DeleteObjects(ctx context.Context, bucket string, objec
 		// VersionID is not set means delete is not specific about
 		// any version, look for if the bucket is versioned or not.
 		if objects[i].VersionID == "" {
-			if opts.Versioned || opts.VersionSuspended {
+			// MinIO extension to bucket version configuration
+			suspended := opts.VersionSuspended
+			versioned := opts.Versioned
+			if opts.PrefixEnabledFn != nil {
+				versioned = opts.PrefixEnabledFn(objects[i].ObjectName)
+			}
+
+			if versioned || suspended {
 				// Bucket is versioned and no version was explicitly
 				// mentioned for deletes, create a delete marker instead.
 				vr.ModTime = UTCNow()
@@ -1211,7 +1222,7 @@ func (es *erasureSingle) DeleteObjects(ctx context.Context, bucket string, objec
 				// Versioning suspended means that we add a `null` version
 				// delete marker, if not add a new version for this delete
 				// marker.
-				if opts.Versioned {
+				if versioned {
 					vr.VersionID = mustGetUUID()
 				}
 			}
@@ -2973,7 +2984,7 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 				minDisks:       1,
 				reportNotFound: false,
 				agreed:         loadEntry,
-				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+				partial: func(entries metaCacheEntries, _ []error) {
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						// check if we can get one entry atleast
@@ -3288,4 +3299,40 @@ func (es *erasureSingle) NSScanner(ctx context.Context, bf *bloomFilter, updates
 		}
 	}
 	return firstErr
+}
+
+// GetRawData will return all files with a given raw path to the callback.
+// Errors are ignored, only errors from the callback are returned.
+// For now only direct file paths are supported.
+func (es *erasureSingle) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error {
+	found := 0
+	stats, err := es.disk.StatInfoFile(ctx, volume, file, true)
+	if err != nil {
+		return err
+	}
+	for _, si := range stats {
+		found++
+		var r io.ReadCloser
+		if !si.Dir {
+			r, err = es.disk.ReadFileStream(ctx, volume, si.Name, 0, si.Size)
+			if err != nil {
+				continue
+			}
+		} else {
+			r = io.NopCloser(bytes.NewBuffer([]byte{}))
+		}
+		// Keep disk path instead of ID, to ensure that the downloaded zip file can be
+		// easily automated with `minio server hostname{1...n}/disk{1...m}`.
+		err = fn(r, es.disk.Hostname(), es.disk.Endpoint().Path, pathJoin(volume, si.Name), si)
+		r.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	if found == 0 {
+		return errFileNotFound
+	}
+
+	return nil
 }

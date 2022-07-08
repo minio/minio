@@ -31,11 +31,11 @@ var (
 		return !color.NoColor
 	}
 
-	Bold = func() func(a ...interface{}) string {
+	Bold = func() func(format string, a ...interface{}) string {
 		if IsTerminal() {
-			return color.New(color.Bold).SprintFunc()
+			return color.New(color.Bold).SprintfFunc()
 		}
-		return fmt.Sprint
+		return fmt.Sprintf
 	}()
 
 	RedBold = func() func(format string, a ...interface{}) string {
@@ -71,6 +71,13 @@ var (
 			return color.New(color.FgGreen).SprintFunc()
 		}
 		return fmt.Sprint
+	}()
+
+	Greenf = func() func(format string, a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgGreen).SprintfFunc()
+		}
+		return fmt.Sprintf
 	}()
 
 	GreenBold = func() func(a ...interface{}) string {

@@ -119,7 +119,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 
 		if deploymentID == "" {
-			// all zones should have same deployment ID
+			// all pools should have same deployment ID
 			deploymentID = formats[i].ID
 		}
 
@@ -238,6 +238,7 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 	return nil
 }
 
+// Return the count of disks in each pool
 func (z *erasureServerPools) SetDriveCounts() []int {
 	setDriveCounts := make([]int, len(z.serverPools))
 	for i := range z.serverPools {
@@ -457,7 +458,7 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 // If the object exists, but the latest version is a delete marker, the index with it is still returned.
 // If the object does not exist ObjectNotFound error is returned.
 // If any other error is found, it is returned.
-// The check is skipped if there is only one zone, and 0, nil is always returned in that case.
+// The check is skipped if there is only one pool, and 0, nil is always returned in that case.
 func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucket, object string) (idx int, err error) {
 	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
 		NoLock: true,
@@ -525,7 +526,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	b.Type = madmin.Erasure
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity <= 0 {
+	if scParity < 0 {
 		scParity = z.serverPools[0].defaultParityCount
 	}
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
@@ -881,7 +882,7 @@ func (z *erasureServerPools) getLatestObjectInfoWithIdx(ctx context.Context, buc
 	sort.Slice(results, func(i, j int) bool {
 		a, b := results[i], results[j]
 		if a.oi.ModTime.Equal(b.oi.ModTime) {
-			// On tiebreak, select the lowest zone index.
+			// On tiebreak, select the lowest pool index.
 			return a.zIdx < b.zIdx
 		}
 		return a.oi.ModTime.After(b.oi.ModTime)
@@ -975,12 +976,12 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 }
 
 func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
-	for idx, zone := range z.serverPools {
+	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
 			logger.LogIf(ctx, fmt.Errorf("pool %d is suspended, all writes are suspended", idx+1))
 			continue
 		}
-		_, err := zone.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
+		_, err := pool.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
 		if err != nil {
 			return err
 		}
@@ -1003,7 +1004,6 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return objInfo, err
@@ -1053,7 +1053,9 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		j := j
 		obj := obj
 		eg.Go(func() error {
-			idx, err := z.getPoolIdxExistingNoLock(ctx, bucket, obj.ObjectName)
+			idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
+				NoLock: true,
+			})
 			if err != nil {
 				derrs[j] = err
 				return nil
@@ -1820,7 +1822,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						minDisks:       1,
 						reportNotFound: false,
 						agreed:         loadEntry,
-						partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+						partial: func(entries metaCacheEntries, _ []error) {
 							entry, ok := entries.resolve(&resolver)
 							if !ok {
 								// check if we can get one entry atleast
@@ -1887,7 +1889,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 				cancel()
 			}
 		},
-		partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+		partial: func(entries metaCacheEntries, _ []error) {
 			entry, ok := entries.resolve(&resolver)
 			if !ok {
 				// check if we can get one entry atleast
@@ -1939,7 +1941,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		}
 
 		for _, version := range fivs.Versions {
-			if err := healObjectFn(bucket, version.Name, version.VersionID); err != nil {
+			err := healObjectFn(bucket, version.Name, version.VersionID)
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				return err
 			}
 		}
@@ -2000,18 +2003,21 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 	}
 	wg.Wait()
 
-	for _, err := range errs {
-		if err != nil {
-			return madmin.HealResultItem{}, err
+	// Return the first nil error
+	for idx, err := range errs {
+		if err == nil {
+			return results[idx], nil
 		}
 	}
 
-	for _, result := range results {
-		if result.Object != "" {
-			return result, nil
+	// No pool returned a nil error, return the first non 'not found' error
+	for idx, err := range errs {
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return results[idx], err
 		}
 	}
 
+	// At this stage, all errors are 'not found'
 	if versionID != "" {
 		return madmin.HealResultItem{}, VersionNotFound{
 			Bucket:    bucket,
@@ -2082,11 +2088,14 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 	}
 
 	b := z.BackendInfo()
-	readQuorum := b.StandardSCData[0]
+	poolReadQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolReadQuorums[i] = data
+	}
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolReadQuorums[poolIdx] {
 				return false
 			}
 		}
@@ -2123,9 +2132,12 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData[0]
-	if writeQuorum == b.StandardSCParity {
-		writeQuorum++
+	poolWriteQuorums := make([]int, len(b.StandardSCData))
+	for i, data := range b.StandardSCData {
+		poolWriteQuorums[i] = data
+		if data == b.StandardSCParity {
+			poolWriteQuorums[i] = data + 1
+		}
 	}
 
 	var aggHealStateResult madmin.BgHealState
@@ -2149,18 +2161,28 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < writeQuorum {
+			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, writeQuorum))
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
 				return HealthResult{
 					Healthy:       false,
 					HealingDrives: len(aggHealStateResult.HealDisks),
 					PoolID:        poolIdx,
 					SetID:         setIdx,
-					WriteQuorum:   writeQuorum,
+					WriteQuorum:   poolWriteQuorums[poolIdx],
 				}
 			}
+		}
+	}
+
+	var maximumWriteQuorum int
+	for _, writeQuorum := range poolWriteQuorums {
+		if maximumWriteQuorum == 0 {
+			maximumWriteQuorum = writeQuorum
+		}
+		if writeQuorum > maximumWriteQuorum {
+			maximumWriteQuorum = writeQuorum
 		}
 	}
 
@@ -2169,14 +2191,14 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	if !opts.Maintenance {
 		return HealthResult{
 			Healthy:     true,
-			WriteQuorum: writeQuorum,
+			WriteQuorum: maximumWriteQuorum,
 		}
 	}
 
 	return HealthResult{
 		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
-		WriteQuorum:   writeQuorum,
+		WriteQuorum:   maximumWriteQuorum,
 	}
 }
 
@@ -2188,7 +2210,6 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2205,7 +2226,6 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2221,7 +2241,6 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2253,7 +2272,7 @@ func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, objec
 		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
+	opts.Mutate = true // Avoid transitioning an object from a pool being decommissioned.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
@@ -2269,7 +2288,7 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true
+	opts.Mutate = true // Avoid restoring object from a pool being decommissioned.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err

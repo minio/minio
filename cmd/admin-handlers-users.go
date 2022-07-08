@@ -24,9 +24,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
@@ -69,6 +72,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 			AccessKey:   accessKey,
 			IsDeleteReq: true,
 		},
+		UpdatedAt: UTCNow(),
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -237,9 +241,9 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
-
+	var updatedAt time.Time
 	if updReq.IsRemove {
-		err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
+		updatedAt, err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
 	} else {
 		// Check if group already exists
 		if _, gerr := globalIAMSys.GetGroupDescription(updReq.Group); gerr != nil {
@@ -250,7 +254,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-		err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+		updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -262,6 +266,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		GroupInfo: &madmin.SRGroupInfo{
 			UpdateReq: updReq,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -338,12 +343,15 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 	group := vars["group"]
 	status := vars["status"]
 
-	var err error
+	var (
+		err       error
+		updatedAt time.Time
+	)
 	switch status {
 	case statusEnabled:
-		err = globalIAMSys.SetGroupStatus(ctx, group, true)
+		updatedAt, err = globalIAMSys.SetGroupStatus(ctx, group, true)
 	case statusDisabled:
-		err = globalIAMSys.SetGroupStatus(ctx, group, false)
+		updatedAt, err = globalIAMSys.SetGroupStatus(ctx, group, false)
 	default:
 		err = errInvalidArgument
 	}
@@ -361,6 +369,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 				IsRemove: false,
 			},
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -388,7 +397,8 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status)); err != nil {
+	updatedAt, err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status))
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -402,6 +412,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 				Status: madmin.AccountStatus(status),
 			},
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -436,8 +447,8 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userCred, exists := globalIAMSys.GetUser(ctx, accessKey)
-	if exists && (userCred.IsTemp() || userCred.IsServiceAccount()) {
+	user, exists := globalIAMSys.GetUser(ctx, accessKey)
+	if exists && (user.Credentials.IsTemp() || user.Credentials.IsServiceAccount()) {
 		// Updating STS credential is not allowed, and this API does not
 		// support updating service accounts.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
@@ -498,7 +509,8 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
+	updatedAt, err := globalIAMSys.CreateUser(ctx, accessKey, ureq)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -510,6 +522,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			IsDeleteReq: false,
 			UserReq:     &ureq,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -629,7 +642,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			opts.claims[k] = v
 		}
 	} else {
-		// Need permission if we are creating a service acccount for a
+		// Need permission if we are creating a service account for a
 		// user <> to the request sender
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     requestorUser,
@@ -671,7 +684,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	opts.sessionPolicy = sp
-	newCred, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
+	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -714,6 +727,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					Status:        auth.AccountOn,
 				},
 			},
+			UpdatedAt: updatedAt,
 		})
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -797,7 +811,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		status:        updateReq.NewStatus,
 		sessionPolicy: sp,
 	}
-	err = globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
+	updatedAt, err := globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -815,6 +829,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					SessionPolicy: updateReq.NewPolicy,
 				},
 			},
+			UpdatedAt: updatedAt,
 		})
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1054,6 +1069,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 					AccessKey: serviceAccount,
 				},
 			},
+			UpdatedAt: UTCNow(),
 		}); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -1392,8 +1408,9 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	// Call cluster-replication policy creation hook to replicate policy deletion to
 	// other minio clusters.
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemPolicy,
-		Name: policyName,
+		Type:      madmin.SRIAMItemPolicy,
+		Name:      policyName,
+		UpdatedAt: UTCNow(),
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1450,7 +1467,8 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = globalIAMSys.SetPolicy(ctx, policyName, *iamPolicy); err != nil {
+	updatedAt, err := globalIAMSys.SetPolicy(ctx, policyName, *iamPolicy)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1458,9 +1476,10 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	// Call cluster-replication policy creation hook to replicate policy to
 	// other minio clusters.
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type:   madmin.SRIAMItemPolicy,
-		Name:   policyName,
-		Policy: iamPolicyBytes,
+		Type:      madmin.SRIAMItemPolicy,
+		Name:      policyName,
+		Policy:    iamPolicyBytes,
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1495,7 +1514,8 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, isGroup); err != nil {
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, isGroup)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1507,8 +1527,683 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			IsGroup:     isGroup,
 			Policy:      policyName,
 		},
+		UpdatedAt: updatedAt,
 	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
+	}
+}
+
+const (
+	allPoliciesFile            = "policies.json"
+	allUsersFile               = "users.json"
+	allGroupsFile              = "groups.json"
+	allSvcAcctsFile            = "svcaccts.json"
+	userPolicyMappingsFile     = "user_mappings.json"
+	groupPolicyMappingsFile    = "group_mappings.json"
+	stsUserPolicyMappingsFile  = "stsuser_mappings.json"
+	stsGroupPolicyMappingsFile = "stsgroup_mappings.json"
+)
+
+// ExportIAMHandler - exports all iam info as a zipped file
+func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ExportIAM")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Get current object layer instance.
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportIAMAction)
+	if objectAPI == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	// Initialize a zip writer which will provide a zipped content
+	// of bucket metadata
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+	rawDataFn := func(r io.Reader, filename string, sz int) error {
+		header, zerr := zip.FileInfoHeader(dummyFileInfo{
+			name:    filename,
+			size:    int64(sz),
+			mode:    0o600,
+			modTime: time.Now(),
+			isDir:   false,
+			sys:     nil,
+		})
+		if zerr != nil {
+			logger.LogIf(ctx, zerr)
+			return nil
+		}
+		header.Method = zip.Deflate
+		zwriter, zerr := zipWriter.CreateHeader(header)
+		if zerr != nil {
+			logger.LogIf(ctx, zerr)
+			return nil
+		}
+		if _, err := io.Copy(zwriter, r); err != nil {
+			logger.LogIf(ctx, err)
+		}
+		return nil
+	}
+
+	iamFiles := []string{
+		allPoliciesFile,
+		allUsersFile,
+		allGroupsFile,
+		allSvcAcctsFile,
+		userPolicyMappingsFile,
+		groupPolicyMappingsFile,
+		stsUserPolicyMappingsFile,
+		stsGroupPolicyMappingsFile,
+	}
+	for _, iamFile := range iamFiles {
+		switch iamFile {
+		case allPoliciesFile:
+			allPolicies, err := globalIAMSys.ListPolicies(ctx, "")
+			if err != nil {
+				logger.LogIf(ctx, err)
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			policiesData, err := json.Marshal(allPolicies)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			if err = rawDataFn(bytes.NewReader(policiesData), iamFile, len(policiesData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case allUsersFile:
+			userIdentities := make(map[string]UserIdentity)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadUsers(ctx, regUser, userIdentities)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			userAccounts := make(map[string]madmin.AddOrUpdateUserReq)
+			for u, uid := range userIdentities {
+				status := madmin.AccountDisabled
+				if uid.Credentials.IsValid() {
+					status = madmin.AccountEnabled
+				}
+				userAccounts[u] = madmin.AddOrUpdateUserReq{
+					SecretKey: uid.Credentials.SecretKey,
+					Status:    status,
+				}
+			}
+			userData, err := json.Marshal(userAccounts)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			if err = rawDataFn(bytes.NewReader(userData), iamFile, len(userData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case allGroupsFile:
+			groups := make(map[string]GroupInfo)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadGroups(ctx, groups)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			groupData, err := json.Marshal(groups)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			if err = rawDataFn(bytes.NewReader(groupData), iamFile, len(groupData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case allSvcAcctsFile:
+			serviceAccounts := make(map[string]UserIdentity)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadUsers(ctx, svcUser, serviceAccounts)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			svcAccts := make(map[string]madmin.SRSvcAccCreate)
+			for user, acc := range serviceAccounts {
+				if user == siteReplicatorSvcAcc {
+					// skip the site replicate svc account as it should be created automatically if
+					// site replication is enabled.
+					continue
+				}
+				claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.Credentials.AccessKey)
+				if err != nil {
+					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+					return
+				}
+				_, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
+				if err != nil {
+					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+					return
+				}
+
+				var policyJSON []byte
+				if policy != nil {
+					policyJSON, err = json.Marshal(policy)
+					if err != nil {
+						writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+						return
+					}
+				}
+				svcAccts[user] = madmin.SRSvcAccCreate{
+					Parent:        acc.Credentials.ParentUser,
+					AccessKey:     user,
+					SecretKey:     acc.Credentials.SecretKey,
+					Groups:        acc.Credentials.Groups,
+					Claims:        claims,
+					SessionPolicy: json.RawMessage(policyJSON),
+					Status:        acc.Credentials.Status,
+				}
+			}
+
+			svcAccData, err := json.Marshal(svcAccts)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			if err = rawDataFn(bytes.NewReader(svcAccData), iamFile, len(svcAccData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case userPolicyMappingsFile:
+			userPolicyMap := make(map[string]MappedPolicy)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			userPolData, err := json.Marshal(userPolicyMap)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			if err = rawDataFn(bytes.NewReader(userPolData), iamFile, len(userPolData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case groupPolicyMappingsFile:
+			groupPolicyMap := make(map[string]MappedPolicy)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			grpPolData, err := json.Marshal(groupPolicyMap)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+
+			if err = rawDataFn(bytes.NewReader(grpPolData), iamFile, len(grpPolData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case stsUserPolicyMappingsFile:
+			userPolicyMap := make(map[string]MappedPolicy)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			userPolData, err := json.Marshal(userPolicyMap)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			if err = rawDataFn(bytes.NewReader(userPolData), iamFile, len(userPolData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		case stsGroupPolicyMappingsFile:
+			groupPolicyMap := make(map[string]MappedPolicy)
+			globalIAMSys.store.rlock()
+			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
+			globalIAMSys.store.runlock()
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			grpPolData, err := json.Marshal(groupPolicyMap)
+			if err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+			if err = rawDataFn(bytes.NewReader(grpPolData), iamFile, len(grpPolData)); err != nil {
+				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
+				return
+			}
+		}
+	}
+}
+
+// ImportIAM - imports all IAM info into MinIO
+func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ImportIAM")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+	reader := bytes.NewReader(data)
+	zr, err := zip.NewReader(reader, int64(len(data)))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+	// import policies first
+	{
+		f, err := zr.Open(allPoliciesFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allPoliciesFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var allPolicies map[string]iampolicy.Policy
+			data, err = ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allPoliciesFile, ""), r.URL)
+				return
+			}
+			err = json.Unmarshal(data, &allPolicies)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allPoliciesFile, ""), r.URL)
+				return
+			}
+			for policyName, policy := range allPolicies {
+				if policy.IsEmpty() {
+					err = globalIAMSys.DeletePolicy(ctx, policyName, true)
+				} else {
+					_, err = globalIAMSys.SetPolicy(ctx, policyName, policy)
+				}
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, allPoliciesFile, policyName), r.URL)
+					return
+				}
+			}
+		}
+	}
+
+	// import users
+	{
+		f, err := zr.Open(allUsersFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allUsersFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var userAccts map[string]madmin.AddOrUpdateUserReq
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allUsersFile, ""), r.URL)
+				return
+			}
+			err = json.Unmarshal(data, &userAccts)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allUsersFile, ""), r.URL)
+				return
+			}
+			for accessKey, ureq := range userAccts {
+				// Not allowed to add a user with same access key as root credential
+				if owner && accessKey == cred.AccessKey {
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAddUserInvalidArgument, err, allUsersFile, accessKey), r.URL)
+					return
+				}
+
+				user, exists := globalIAMSys.GetUser(ctx, accessKey)
+				if exists && (user.Credentials.IsTemp() || user.Credentials.IsServiceAccount()) {
+					// Updating STS credential is not allowed, and this API does not
+					// support updating service accounts.
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAddUserInvalidArgument, err, allUsersFile, accessKey), r.URL)
+					return
+				}
+
+				if (cred.IsTemp() || cred.IsServiceAccount()) && cred.ParentUser == accessKey {
+					// Incoming access key matches parent user then we should
+					// reject password change requests.
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAddUserInvalidArgument, err, allUsersFile, accessKey), r.URL)
+					return
+				}
+
+				// Check if accessKey has beginning and end space characters, this only applies to new users.
+				if !exists && hasSpaceBE(accessKey) {
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, err, allUsersFile, accessKey), r.URL)
+					return
+				}
+
+				checkDenyOnly := false
+				if accessKey == cred.AccessKey {
+					// Check that there is no explicit deny - otherwise it's allowed
+					// to change one's own password.
+					checkDenyOnly = true
+				}
+
+				if !globalIAMSys.IsAllowed(iampolicy.Args{
+					AccountName:     cred.AccessKey,
+					Groups:          cred.Groups,
+					Action:          iampolicy.CreateUserAdminAction,
+					ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+					IsOwner:         owner,
+					Claims:          claims,
+					DenyOnly:        checkDenyOnly,
+				}) {
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAccessDenied, err, allUsersFile, accessKey), r.URL)
+					return
+				}
+				if _, err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, toAdminAPIErrCode(ctx, err), err, allUsersFile, accessKey), r.URL)
+					return
+				}
+
+			}
+		}
+	}
+
+	// import groups
+	{
+		f, err := zr.Open(allGroupsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allGroupsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var grpInfos map[string]GroupInfo
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allGroupsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &grpInfos); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allGroupsFile, ""), r.URL)
+				return
+			}
+			for group, grpInfo := range grpInfos {
+				// Check if group already exists
+				if _, gerr := globalIAMSys.GetGroupDescription(group); gerr != nil {
+					// If group does not exist, then check if the group has beginning and end space characters
+					// we will reject such group names.
+					if errors.Is(gerr, errNoSuchGroup) && hasSpaceBE(group) {
+						writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, err, allGroupsFile, group), r.URL)
+						return
+					}
+				}
+				if _, gerr := globalIAMSys.AddUsersToGroup(ctx, group, grpInfo.Members); gerr != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, allGroupsFile, group), r.URL)
+					return
+				}
+			}
+		}
+	}
+
+	// import service accounts
+	{
+		f, err := zr.Open(allSvcAcctsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allSvcAcctsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var serviceAcctReqs map[string]madmin.SRSvcAccCreate
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allSvcAcctsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &serviceAcctReqs); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allSvcAcctsFile, ""), r.URL)
+				return
+			}
+			for user, svcAcctReq := range serviceAcctReqs {
+				var sp *iampolicy.Policy
+				var err error
+				if len(svcAcctReq.SessionPolicy) > 0 {
+					sp, err = iampolicy.ParseConfig(bytes.NewReader(svcAcctReq.SessionPolicy))
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						return
+					}
+				}
+				// service account access key cannot have space characters beginning and end of the string.
+				if hasSpaceBE(svcAcctReq.AccessKey) {
+					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+					return
+				}
+				if !globalIAMSys.IsAllowed(iampolicy.Args{
+					AccountName:     svcAcctReq.AccessKey,
+					Groups:          svcAcctReq.Groups,
+					Action:          iampolicy.CreateServiceAccountAdminAction,
+					ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+					IsOwner:         owner,
+					Claims:          claims,
+				}) {
+					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAccessDenied, err, allSvcAcctsFile, user), r.URL)
+					return
+				}
+				updateReq := true
+				_, _, err = globalIAMSys.GetServiceAccount(ctx, svcAcctReq.AccessKey)
+				if err != nil {
+					if !errors.Is(err, errNoSuchServiceAccount) {
+						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						return
+					}
+					updateReq = false
+				}
+				if updateReq {
+					opts := updateServiceAccountOpts{
+						secretKey:     svcAcctReq.SecretKey,
+						status:        svcAcctReq.Status,
+						sessionPolicy: sp,
+					}
+					_, err = globalIAMSys.UpdateServiceAccount(ctx, svcAcctReq.AccessKey, opts)
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						return
+					}
+					continue
+				}
+				opts := newServiceAccountOpts{
+					accessKey:     user,
+					secretKey:     svcAcctReq.SecretKey,
+					sessionPolicy: sp,
+					claims:        svcAcctReq.Claims,
+				}
+
+				// In case of LDAP we need to resolve the targetUser to a DN and
+				// query their groups:
+				if globalLDAPConfig.Enabled {
+					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
+					targetUser, _, err := globalLDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						return
+					}
+					opts.claims[ldapUser] = targetUser // username DN
+				}
+
+				if _, _, err = globalIAMSys.NewServiceAccount(ctx, svcAcctReq.Parent, svcAcctReq.Groups, opts); err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+					return
+				}
+
+			}
+		}
+	}
+
+	// import user policy mappings
+	{
+		f, err := zr.Open(userPolicyMappingsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, userPolicyMappingsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var userPolicyMap map[string]MappedPolicy
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, userPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &userPolicyMap); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, userPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			for u, pm := range userPolicyMap {
+				// disallow setting policy mapping if user is a temporary user
+				ok, _, err := globalIAMSys.IsTempUser(u)
+				if err != nil && err != errNoSuchUser {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, userPolicyMappingsFile, u), r.URL)
+					return
+				}
+				if ok {
+					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, userPolicyMappingsFile, u), r.URL)
+					return
+				}
+				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, false); err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, userPolicyMappingsFile, u), r.URL)
+					return
+				}
+			}
+		}
+	}
+
+	// import group policy mappings
+	{
+		f, err := zr.Open(groupPolicyMappingsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, groupPolicyMappingsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var grpPolicyMap map[string]MappedPolicy
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, groupPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &grpPolicyMap); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, groupPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			for g, pm := range grpPolicyMap {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, true); err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
+					return
+				}
+			}
+		}
+	}
+
+	// import sts user policy mappings
+	{
+		f, err := zr.Open(stsUserPolicyMappingsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsUserPolicyMappingsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var userPolicyMap map[string]MappedPolicy
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsUserPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &userPolicyMap); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsUserPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			for u, pm := range userPolicyMap {
+				// disallow setting policy mapping if user is a temporary user
+				ok, _, err := globalIAMSys.IsTempUser(u)
+				if err != nil && err != errNoSuchUser {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
+					return
+				}
+				if ok {
+					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, stsUserPolicyMappingsFile, u), r.URL)
+					return
+				}
+				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, false); err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
+					return
+				}
+			}
+		}
+	}
+
+	// import sts group policy mappings
+	{
+		f, err := zr.Open(stsGroupPolicyMappingsFile)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
+			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
+			return
+		default:
+			defer f.Close()
+			var grpPolicyMap map[string]MappedPolicy
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			if err = json.Unmarshal(data, &grpPolicyMap); err != nil {
+				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsGroupPolicyMappingsFile, ""), r.URL)
+				return
+			}
+			for g, pm := range grpPolicyMap {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, true); err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsGroupPolicyMappingsFile, g), r.URL)
+					return
+				}
+			}
+		}
 	}
 }

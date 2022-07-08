@@ -230,6 +230,7 @@ var (
 	globalTrace = pubsub.New(8)
 
 	// global Listen system to send S3 API events to registered listeners
+	// Objects are expected to be event.Event
 	globalHTTPListen = pubsub.New(0)
 
 	// global console system to send console logs to
@@ -254,6 +255,9 @@ var (
 
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
+
+	// Global bucket network statistics
+	globalBucketConnStats = newBucketConnStats()
 
 	// Time when the server is started
 	globalBootTime = UTCNow()
@@ -335,6 +339,8 @@ var (
 
 	globalProxyTransport http.RoundTripper
 
+	globalRemoteTargetTransport http.RoundTripper
+
 	globalDNSCache = &dnscache.Resolver{
 		Timeout: 5 * time.Second,
 	}
@@ -367,6 +373,9 @@ var (
 	globalNetPerfRX              netPerfRX
 	globalObjectPerfBucket       = "minio-perf-test-tmp-bucket"
 	globalObjectPerfUserMetadata = "X-Amz-Meta-Minio-Object-Perf" // Clients can set this to bypass S3 API service freeze. Used by object pref tests.
+
+	// MinIO version unix timestamp
+	globalVersionUnix uint64
 
 	// Add new variable global values here.
 )

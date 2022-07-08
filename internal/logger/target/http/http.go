@@ -203,7 +203,7 @@ func New(config Config) *Target {
 }
 
 // Send log message 'e' to http target.
-func (h *Target) Send(entry interface{}, errKind string) error {
+func (h *Target) Send(entry interface{}) error {
 	select {
 	case <-h.doneCh:
 		return nil

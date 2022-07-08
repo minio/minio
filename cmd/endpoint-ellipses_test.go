@@ -202,24 +202,24 @@ func TestGetSetIndexes(t *testing.T) {
 	}{
 		// Invalid inputs.
 		{
-			[]string{"data{1...3}"},
-			[]uint64{3},
-			nil,
-			false,
-		},
-		{
-			[]string{"data/controller1/export{1...2}, data/controller2/export{1...4}, data/controller3/export{1...8}"},
-			[]uint64{2, 4, 8},
-			nil,
-			false,
-		},
-		{
 			[]string{"data{1...17}/export{1...52}"},
 			[]uint64{14144},
 			nil,
 			false,
 		},
 		// Valid inputs.
+		{
+			[]string{"data{1...3}"},
+			[]uint64{3},
+			[][]uint64{{3}},
+			true,
+		},
+		{
+			[]string{"data/controller1/export{1...2}, data/controller2/export{1...4}, data/controller3/export{1...8}"},
+			[]uint64{2, 4, 8},
+			[][]uint64{{2}, {2, 2}, {2, 2, 2, 2}},
+			true,
+		},
 		{
 			[]string{"data{1...27}"},
 			[]uint64{27},

@@ -47,8 +47,8 @@ type DiskInfo struct {
 // the number of calls of each API and the moving average of
 // the duration of each API.
 type DiskMetrics struct {
-	APILatencies map[string]uint64 `json:"apiLatencies,omitempty"`
-	APICalls     map[string]uint64 `json:"apiCalls,omitempty"`
+	LastMinute map[string]AccElem `json:"apiLatencies,omitempty"`
+	APICalls   map[string]uint64  `json:"apiCalls,omitempty"`
 }
 
 // VolsInfo is a collection of volume(bucket) information
@@ -175,6 +175,10 @@ type FileInfo struct {
 
 	// File mode bits.
 	Mode uint32 `msg:"m"`
+
+	// WrittenByVersion is the unix time stamp of the MinIO
+	// version that created this version of the object.
+	WrittenByVersion uint64 `msg:"wv"`
 
 	// File metadata
 	Metadata map[string]string `msg:"meta"`

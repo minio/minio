@@ -338,7 +338,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			etcdClnt.Close()
 		}
 	case config.IdentityOpenIDSubSys:
-		if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys],
+		if _, err := openid.LookupConfig(s,
 			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 			return err
 		}
@@ -364,7 +364,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.SubnetSubSys:
-		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
+		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], nil); err != nil {
 			return err
 		}
 	case config.CallhomeSubSys:
@@ -560,7 +560,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
-	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys],
+	globalOpenIDConfig, err = openid.LookupConfig(s,
 		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
@@ -599,7 +599,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
-	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
+	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}

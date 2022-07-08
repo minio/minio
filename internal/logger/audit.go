@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzhttp"
+	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/message/audit"
 )
@@ -149,7 +150,6 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 			DeploymentID: xhttp.GlobalDeploymentID,
 			Time:         time.Now().UTC(),
 		}
-		SetAuditEntry(ctx, r)
 		return r
 	}
 	return nil
@@ -168,6 +168,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		if reqInfo == nil {
 			return
 		}
+		reqInfo.RLock()
+		defer reqInfo.RUnlock()
 
 		entry = audit.ToEntry(w, r, reqClaims, xhttp.GlobalDeploymentID)
 		// indicates all requests for this API call are inbound
@@ -233,8 +235,8 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
-		if err := t.Send(entry, string(All)); err != nil {
-			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), All)
+		if err := t.Send(entry); err != nil {
+			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), madmin.LogKindAll)
 		}
 	}
 }

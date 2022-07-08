@@ -32,7 +32,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -477,8 +476,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			// if no xl.meta/xl.json found, skip the file.
 			return sizeSummary{}, errSkipFile
 		}
+		stopFn := globalScannerMetrics.log(scannerMetricScanObject, s.diskPath, PathJoin(item.bucket, item.objectPath()))
+		defer stopFn()
 
+		doneSz := globalScannerMetrics.timeSize(scannerMetricReadMetadata)
 		buf, err := s.readMetadata(ctx, item.Path)
+		doneSz(len(buf))
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -502,8 +505,11 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
 			sizeS.tiers = make(map[string]tierStats)
 		}
-		atomic.AddUint64(&globalScannerStats.accTotalObjects, 1)
+
+		done := globalScannerMetrics.time(scannerMetricApplyAll)
 		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		done()
+
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)
@@ -514,9 +520,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
 
 		for _, version := range fivs.Versions {
-			atomic.AddUint64(&globalScannerStats.accTotalVersions, 1)
 			oi := version.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
+			done()
 			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
 			}
@@ -528,7 +535,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			//    tracking deleted transitioned objects
 			switch {
 			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
-
 				continue
 			}
 			tier := minioHotTier
@@ -541,7 +547,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// apply tier sweep action on free versions
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
 			item.applyTierObjSweep(ctx, objAPI, oi)
+			done()
 		}
 		return sizeS, nil
 	}, scanMode)
@@ -575,22 +583,19 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
 			diskID, err := s.GetDiskID()
-			if errors.Is(err, errUnformattedDisk) {
-				// if we found an unformatted disk then
-				// healing is automatically true.
-				dcinfo.Healing = true
-			} else {
-				// Check if the disk is being healed if GetDiskID
-				// returned any error other than fresh disk
-				dcinfo.Healing = s.Healing() != nil
-			}
+			// Healing is 'true' when
+			// - if we found an unformatted disk (no 'format.json')
+			// - if we found healing tracker 'healing.bin'
+			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
 	})
 
 	v, err := s.diskInfoCache.Get()
-	info = v.(DiskInfo)
+	if v != nil {
+		info = v.(DiskInfo)
+	}
 	return info, err
 }
 
@@ -1850,7 +1855,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	}
 
 	defer func() {
-		disk.Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
+		Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
 		w.Close()
 	}()
 

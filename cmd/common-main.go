@@ -102,6 +102,11 @@ func init() {
 		PersistOnFailure: false,
 	}
 
+	t, _ := minioVersionToReleaseTime(Version)
+	if !t.IsZero() {
+		globalVersionUnix = uint64(t.Unix())
+	}
+
 	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
 	containers := IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile()
@@ -490,6 +495,12 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 			Skip: true,
 		}, nil
 	}
+	if strings.HasPrefix(envEntry, "#") {
+		// Skip commented lines
+		return envKV{
+			Skip: true,
+		}, nil
+	}
 	const envSeparator = "="
 	envTokens := strings.SplitN(strings.TrimSpace(strings.TrimPrefix(envEntry, "export")), envSeparator, 2)
 	if len(envTokens) != 2 {
@@ -498,13 +509,6 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 
 	key := envTokens[0]
 	val := envTokens[1]
-
-	if strings.HasPrefix(key, "#") {
-		// Skip commented lines
-		return envKV{
-			Skip: true,
-		}, nil
-	}
 
 	// Remove quotes from the value if found
 	if len(val) >= 2 {
@@ -526,9 +530,6 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 func minioEnvironFromFile(envConfigFile string) ([]envKV, error) {
 	f, err := os.Open(envConfigFile)
 	if err != nil {
-		if os.IsNotExist(err) { // ignore if file doesn't exist.
-			return nil, nil
-		}
 		return nil, err
 	}
 	defer f.Close()
@@ -624,7 +625,7 @@ func loadEnvVarsFromFiles() {
 
 	if env.IsSet(config.EnvConfigEnvFile) {
 		ekvs, err := minioEnvironFromFile(env.Get(config.EnvConfigEnvFile, ""))
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			logger.Fatal(err, "Unable to read the config environment file")
 		}
 		for _, ekv := range ekvs {
@@ -787,17 +788,22 @@ func handleCommonEnvVars() {
 		}
 		globalActiveCred = cred
 	}
+}
 
+// Initialize KMS global variable after valiadating and loading the configuration.
+// It depends on KMS env variables and global cli flags.
+func handleKMSConfig() {
 	switch {
 	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
 	}
 
 	if env.IsSet(config.EnvKMSSecretKey) {
-		GlobalKMS, err = kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
+		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
+		GlobalKMS = KMS
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
 		var endpoints []string

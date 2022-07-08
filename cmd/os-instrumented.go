@@ -20,10 +20,12 @@ package cmd
 import (
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/disk"
+	ioutilx "github.com/minio/minio/internal/ioutil"
 )
 
 //go:generate stringer -type=osMetric -trimprefix=osMetric $GOFILE
@@ -41,10 +43,46 @@ const (
 	osMetricRemove
 	osMetricStat
 	osMetricAccess
+	osMetricCreate
+	osMetricReadDirent
+	osMetricFdatasync
+	osMetricSync
 	// .... add more
 
 	osMetricLast
 )
+
+var globalOSMetrics osMetrics
+
+func init() {
+	// Inject metrics.
+	ioutilx.OsOpenFile = OpenFile
+	ioutilx.OpenFileDirectIO = OpenFileDirectIO
+	ioutilx.OsOpen = Open
+}
+
+type osMetrics struct {
+	// All fields must be accessed atomically and aligned.
+	operations [osMetricLast]uint64
+	latency    [osMetricLast]lockedLastMinuteLatency
+}
+
+// time an os action.
+func (o *osMetrics) time(s osMetric) func() {
+	startTime := time.Now()
+	return func() {
+		duration := time.Since(startTime)
+
+		atomic.AddUint64(&o.operations[s], 1)
+		o.latency[s].add(duration)
+	}
+}
+
+// incTime will increment time on metric s with a specific duration.
+func (o *osMetrics) incTime(s osMetric, d time.Duration) {
+	atomic.AddUint64(&o.operations[s], 1)
+	o.latency[s].add(d)
+}
 
 func osTrace(s osMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
 	return madmin.TraceInfo{
@@ -52,22 +90,20 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "os." + s.String(),
-		OSStats: madmin.TraceOSStats{
-			Duration: duration,
-			Path:     path,
-		},
+		Duration:  duration,
+		Path:      path,
 	}
 }
 
 func updateOSMetrics(s osMetric, paths ...string) func() {
-	if globalTrace.NumSubscribers() == 0 {
-		return func() {}
+	if globalTrace.NumSubscribers(madmin.TraceOS) == 0 {
+		return globalOSMetrics.time(s)
 	}
 
 	startTime := time.Now()
 	return func() {
 		duration := time.Since(startTime)
-
+		globalOSMetrics.incTime(s, duration)
 		globalTrace.Publish(osTrace(s, startTime, duration, strings.Join(paths, " -> ")))
 	}
 }
@@ -132,4 +168,48 @@ func Remove(deletePath string) error {
 func Stat(name string) (os.FileInfo, error) {
 	defer updateOSMetrics(osMetricStat, name)()
 	return os.Stat(name)
+}
+
+// Create captures time taken to call os.Create
+func Create(name string) (*os.File, error) {
+	defer updateOSMetrics(osMetricCreate, name)()
+	return os.Create(name)
+}
+
+// Fdatasync captures time taken to call Fdatasync
+func Fdatasync(f *os.File) error {
+	fn := ""
+	if f != nil {
+		fn = f.Name()
+	}
+	defer updateOSMetrics(osMetricFdatasync, fn)()
+	return disk.Fdatasync(f)
+}
+
+// report returns all os metrics.
+func (o *osMetrics) report() madmin.OSMetrics {
+	var m madmin.OSMetrics
+	m.CollectedAt = time.Now()
+	m.LifeTimeOps = make(map[string]uint64, osMetricLast)
+	for i := osMetric(0); i < osMetricLast; i++ {
+		if n := atomic.LoadUint64(&o.operations[i]); n > 0 {
+			m.LifeTimeOps[i.String()] = n
+		}
+	}
+	if len(m.LifeTimeOps) == 0 {
+		m.LifeTimeOps = nil
+	}
+
+	m.LastMinute.Operations = make(map[string]madmin.TimedAction, osMetricLast)
+	for i := osMetric(0); i < osMetricLast; i++ {
+		lm := o.latency[i].total()
+		if lm.N > 0 {
+			m.LastMinute.Operations[i.String()] = lm.asTimedAction()
+		}
+	}
+	if len(m.LastMinute.Operations) == 0 {
+		m.LastMinute.Operations = nil
+	}
+
+	return m
 }

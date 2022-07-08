@@ -19,13 +19,12 @@ package cmd
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -273,17 +272,20 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 	}
 	sys.Lock()
 	defer sys.Unlock()
-	if tgts == nil || tgts.Empty() {
-		// remove target and arn association
-		if tgts, ok := sys.targetsMap[bucket]; ok {
-			for _, t := range tgts {
-				if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
-					tgt.healthCancelFn()
-				}
-				delete(sys.arnRemotesMap, t.Arn)
+
+	// Remove existingtarget and arn association
+	if tgts, ok := sys.targetsMap[bucket]; ok {
+		for _, t := range tgts {
+			if tgt, ok := sys.arnRemotesMap[t.Arn]; ok && tgt.healthCancelFn != nil {
+				tgt.healthCancelFn()
 			}
+			delete(sys.arnRemotesMap, t.Arn)
 		}
 		delete(sys.targetsMap, bucket)
+	}
+
+	// No need for more if not adding anything
+	if tgts == nil || tgts.Empty() {
 		sys.updateBandwidthLimit(bucket, 0)
 		return
 	}
@@ -325,25 +327,16 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 	sys.targetsMap[bucket.Name] = cfg.Targets
 }
 
-// getRemoteTargetInstanceTransport contains a singleton roundtripper.
-var (
-	getRemoteTargetInstanceTransport     http.RoundTripper
-	getRemoteTargetInstanceTransportOnce sync.Once
-)
-
 // Returns a minio-go Client configured to access remote host described in replication target config.
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*TargetClient, error) {
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
-	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = NewRemoteTargetHTTPTransport()
-	})
 
 	api, err := minio.New(tcfg.Endpoint, &miniogo.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
 		Region:    tcfg.Region,
-		Transport: getRemoteTargetInstanceTransport,
+		Transport: globalRemoteTargetTransport,
 	})
 	if err != nil {
 		return nil, err

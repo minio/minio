@@ -66,6 +66,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.StorageInfoHandler)))
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.DataUsageInfoHandler)))
+		// Metrics operation
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/metrics").HandlerFunc(gz(httpTraceAll(adminAPI.MetricsHandler)))
 
 		if globalIsDistErasure || globalIsErasure {
 			// Heal operations
@@ -170,6 +172,19 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// Set Group Status
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetGroupStatus))).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
 
+		// Export IAM info to zipped file
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-iam").HandlerFunc(httpTraceHdrs(adminAPI.ExportIAM))
+
+		// Import IAM info
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(httpTraceHdrs(adminAPI.ImportIAM))
+
+		// IDentity Provider configuration APIs
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg))).Queries("type", "{type:.*}")
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+
+		// -- END IAM APIs --
+
 		// GetBucketQuotaConfig
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler))).Queries("bucket", "{bucket:.*}")
@@ -187,6 +202,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// RemoveRemoteTargetHandler
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler))).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
+
+		// Bucket migration operations
+		// ExportBucketMetaHandler
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-bucket-metadata").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ExportBucketMetadataHandler)))
+		// ImportBucketMetaHandler
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-bucket-metadata").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ImportBucketMetadataHandler)))
 
 		// Remote Tier management operations
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/tier").HandlerFunc(gz(httpTraceHdrs(adminAPI.AddTierHandler)))

@@ -136,6 +136,7 @@ export MINIO_ROOT_PASSWORD=minio123`,
 		},
 		{
 			`
+# simple comment
 # MINIO_ROOT_USER=minioadmin
 # MINIO_ROOT_PASSWORD=minioadmin
 MINIO_ROOT_USER=minio

@@ -28,6 +28,7 @@ import (
 	"hash/crc32"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -38,7 +39,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -51,6 +51,7 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/minio/internal/pubsub"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
@@ -275,6 +276,8 @@ type ServerConnStats struct {
 	Throughput       uint64 `json:"throughput,omitempty"`
 	S3InputBytes     uint64 `json:"transferredS3"`
 	S3OutputBytes    uint64 `json:"receivedS3"`
+	AdminInputBytes  uint64 `json:"transferredAdmin"`
+	AdminOutputBytes uint64 `json:"receivedAdmin"`
 }
 
 // ServerHTTPAPIStats holds total number of HTTP operations from/to the server,
@@ -291,6 +294,8 @@ type ServerHTTPStats struct {
 	CurrentS3Requests      ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests        ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors          ServerHTTPAPIStats `json:"totalS3Errors"`
+	TotalS35xxErrors       ServerHTTPAPIStats `json:"totalS35xxErrors"`
+	TotalS34xxErrors       ServerHTTPAPIStats `json:"totalS34xxErrors"`
 	TotalS3Canceled        ServerHTTPAPIStats `json:"totalS3Canceled"`
 	TotalS3RejectedAuth    uint64             `json:"totalS3RejectedAuth"`
 	TotalS3RejectedTime    uint64             `json:"totalS3RejectedTime"`
@@ -338,6 +343,92 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// MetricsHandler - GET /minio/admin/v3/metrics
+// ----------
+// Get realtime server metrics
+func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "Metrics")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+	const defaultMetricsInterval = time.Second
+
+	interval, err := time.ParseDuration(r.Form.Get("interval"))
+	if err != nil || interval < time.Second {
+		interval = defaultMetricsInterval
+	}
+	n, err := strconv.Atoi(r.Form.Get("n"))
+	if err != nil || n <= 0 {
+		n = math.MaxInt32
+	}
+	var types madmin.MetricType
+	if t, _ := strconv.ParseUint(r.Form.Get("types"), 10, 64); t != 0 {
+		types = madmin.MetricType(t)
+	} else {
+		types = madmin.MetricsAll
+	}
+	hosts := strings.Split(r.Form.Get("hosts"), ",")
+	byhost := strings.EqualFold(r.Form.Get("by-host"), "true")
+	var hostMap map[string]struct{}
+	if len(hosts) > 0 && hosts[0] != "" {
+		hostMap = make(map[string]struct{}, len(hosts))
+		for _, k := range hosts {
+			if k != "" {
+				hostMap[k] = struct{}{}
+			}
+		}
+	}
+	done := ctx.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+
+	for n > 0 {
+		var m madmin.RealtimeMetrics
+		mLocal := collectLocalMetrics(types, hostMap)
+		m.Merge(&mLocal)
+
+		// Allow half the interval for collecting remote...
+		cctx, cancel := context.WithTimeout(ctx, interval/2)
+		mRemote := collectRemoteMetrics(cctx, types, hostMap)
+		cancel()
+		m.Merge(&mRemote)
+		if !byhost {
+			m.ByHost = nil
+		}
+
+		m.Final = n <= 1
+		// Marshal API response
+		jsonBytes, err := json.Marshal(m)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		_, err = w.Write(jsonBytes)
+		if err != nil {
+			n = 0
+		}
+
+		n--
+		if n <= 0 {
+			break
+		}
+
+		// Flush before waiting for next...
+		w.(http.Flusher).Flush()
+
+		select {
+		case <-ticker.C:
+		case <-done:
+			return
+		}
+	}
 }
 
 // DataUsageInfoHandler - GET /minio/admin/v3/datausage
@@ -1108,7 +1199,6 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	}
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
-
 	if !sufficientCapacity {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
 			Code:       "XMinioSpeedtestInsufficientCapacity",
@@ -1187,7 +1277,7 @@ func deleteObjectPerfBucket(objectAPI ObjectLayer) {
 func validateObjPerfOptions(ctx context.Context, objectAPI ObjectLayer, concurrent int, size int, autotune bool) (sufficientCapacity bool, canAutotune bool, capacityErrMsg string) {
 	storageInfo, _ := objectAPI.StorageInfo(ctx)
 	capacityNeeded := uint64(concurrent * size)
-	capacity := uint64(GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo))
+	capacity := GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo)
 
 	if capacity < capacityNeeded {
 		return false, false, fmt.Sprintf("not enough usable space available to perform speedtest - expected %s, got %s",
@@ -1261,43 +1351,29 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
-	enc := json.NewEncoder(w)
 	ch := globalNotificationSys.DriveSpeedTest(ctx, opts)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// local driveSpeedTest
-	go func() {
-		defer wg.Done()
-		enc.Encode(driveSpeedTest(ctx, opts))
-		if wf, ok := w.(http.Flusher); ok {
-			wf.Flush()
-		}
-	}()
-
+	enc := json.NewEncoder(w)
 	for {
 		select {
 		case <-ctx.Done():
-			goto endloop
+			return
 		case <-keepAliveTicker.C:
 			// Write a blank entry to prevent client from disconnecting
 			if err := enc.Encode(madmin.DriveSpeedTestResult{}); err != nil {
-				goto endloop
+				return
 			}
 			w.(http.Flusher).Flush()
 		case result, ok := <-ch:
 			if !ok {
-				goto endloop
+				return
 			}
 			if err := enc.Encode(result); err != nil {
-				goto endloop
+				return
 			}
 			w.(http.Flusher).Flush()
 		}
 	}
-endloop:
-	wg.Wait()
 }
 
 // Admin API errors
@@ -1312,72 +1388,45 @@ const (
 // - input entry is not of the type *madmin.TraceInfo*
 // - errOnly entries are to be traced, not status code 2xx, 3xx.
 // - madmin.TraceInfo type is asked by opts
-func mustTrace(entry interface{}, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
-	trcInfo, ok := entry.(madmin.TraceInfo)
-	if !ok {
+func shouldTrace(trcInfo madmin.TraceInfo, opts madmin.ServiceTraceOpts) (shouldTrace bool) {
+	// Reject all unwanted types.
+	want := opts.TraceTypes()
+	if !want.Contains(trcInfo.TraceType) {
 		return false
 	}
 
-	// Override shouldTrace decision with errOnly filtering
-	defer func() {
-		if shouldTrace && opts.OnlyErrors {
-			shouldTrace = trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
-		}
-	}()
+	isHTTP := trcInfo.TraceType.Overlaps(madmin.TraceInternal|madmin.TraceS3) && trcInfo.HTTP != nil
 
-	if opts.Threshold > 0 {
-		var latency time.Duration
-		switch trcInfo.TraceType {
-		case madmin.TraceOS:
-			latency = trcInfo.OSStats.Duration
-		case madmin.TraceStorage:
-			latency = trcInfo.StorageStats.Duration
-		case madmin.TraceHTTP:
-			latency = trcInfo.CallStats.Latency
-		}
-		if latency < opts.Threshold {
-			return false
-		}
+	// Check latency...
+	if opts.Threshold > 0 && trcInfo.Duration < opts.Threshold {
+		return false
 	}
 
-	if opts.Internal && trcInfo.TraceType == madmin.TraceHTTP && HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
-		return true
+	// Check internal path
+	isInternal := isHTTP && HasPrefix(trcInfo.HTTP.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
+	if isInternal && !opts.Internal {
+		return false
 	}
 
-	if opts.S3 && trcInfo.TraceType == madmin.TraceHTTP && !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator) {
-		return true
+	// Filter non-errors.
+	if isHTTP && opts.OnlyErrors && trcInfo.HTTP.RespInfo.StatusCode < http.StatusBadRequest {
+		return false
 	}
 
-	if opts.Storage && trcInfo.TraceType == madmin.TraceStorage {
-		return true
-	}
-
-	return opts.OS && trcInfo.TraceType == madmin.TraceOS
+	return true
 }
 
 func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err error) {
-	q := r.Form
-
-	opts.OnlyErrors = q.Get("err") == "true"
-	opts.S3 = q.Get("s3") == "true"
-	opts.Internal = q.Get("internal") == "true"
-	opts.Storage = q.Get("storage") == "true"
-	opts.OS = q.Get("os") == "true"
-
+	if err := opts.ParseParams(r); err != nil {
+		return opts, err
+	}
 	// Support deprecated 'all' query
-	if q.Get("all") == "true" {
+	if r.Form.Get("all") == "true" {
 		opts.S3 = true
 		opts.Internal = true
 		opts.Storage = true
 		opts.OS = true
-	}
-
-	if t := q.Get("threshold"); t != "" {
-		d, err := time.ParseDuration(t)
-		if err != nil {
-			return opts, err
-		}
-		opts.Threshold = d
+		// Older mc - cannot deal with more types...
 	}
 	return
 }
@@ -1400,20 +1449,21 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
-
 	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan interface{}, 4000)
+	traceCh := make(chan pubsub.Maskable, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
+	mask := pubsub.MaskFromMaskable(traceOpts.TraceTypes())
 
-	traceFn := func(entry interface{}) bool {
-		return mustTrace(entry, traceOpts)
-	}
-
-	err = globalTrace.Subscribe(traceCh, ctx.Done(), traceFn)
+	err = globalTrace.Subscribe(mask, traceCh, ctx.Done(), func(entry pubsub.Maskable) bool {
+		if e, ok := entry.(madmin.TraceInfo); ok {
+			return shouldTrace(e, traceOpts)
+		}
+		return false
+	})
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
 		return
@@ -1454,7 +1504,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// The handler sends console logs to the connected HTTP client.
+// The ConsoleLogHandler handler sends console logs to the connected HTTP client.
 func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ConsoleLog")
 
@@ -1472,11 +1522,10 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 		limitLines = 10
 	}
 
-	logKind := r.Form.Get("logType")
-	if logKind == "" {
-		logKind = string(logger.All)
+	logKind := madmin.LogKind(strings.ToUpper(r.Form.Get("logType"))).LogMask()
+	if logKind == 0 {
+		logKind = madmin.LogMaskAll
 	}
-	logKind = strings.ToUpper(logKind)
 
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
@@ -1485,7 +1534,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	setEventStreamHeaders(w)
 
-	logCh := make(chan interface{}, 4000)
+	logCh := make(chan pubsub.Maskable, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
@@ -1872,6 +1921,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
 	defer healthCancel()
 
+	// Freeze all incoming S3 API calls before running speedtest.
+	globalNotificationSys.ServiceFreeze(ctx, true)
+
+	// unfreeze all incoming S3 API calls after speedtest.
+	defer globalNotificationSys.ServiceFreeze(ctx, false)
+
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
 	anonAddr := func(addr string) string {
@@ -2109,11 +2164,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteDrivePerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfDrive)) == "true" {
-			// Freeze all incoming S3 API calls before running speedtest.
-			globalNotificationSys.ServiceFreeze(ctx, true)
-			// unfreeze all incoming S3 API calls after speedtest.
-			defer globalNotificationSys.ServiceFreeze(ctx, false)
-
 			opts := madmin.DriveSpeedTestOpts{
 				Serial:    false,
 				BlockSize: 4 * humanize.MiByte,
@@ -2134,6 +2184,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	getAndWriteObjPerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
 			concurrent := 32
+			if runtime.GOMAXPROCS(0) < concurrent {
+				concurrent = runtime.GOMAXPROCS(0)
+			}
+
 			size := 64 * humanize.MiByte
 			autotune := true
 
@@ -2160,12 +2214,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				defer deleteObjectPerfBucket(objectAPI)
 			}
 
-			// Freeze all incoming S3 API calls before running speedtest.
-			globalNotificationSys.ServiceFreeze(ctx, true)
-
-			// unfreeze all incoming S3 API calls after speedtest.
-			defer globalNotificationSys.ServiceFreeze(ctx, false)
-
 			opts := speedTestOpts{
 				throughputSize:   size,
 				concurrencyStart: concurrent,
@@ -2187,19 +2235,12 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				return
 			}
 
-			nsLock := objectAPI.NewNSLock(minioMetaBucket, "netperf")
-			lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
-			if err != nil {
-				healthInfo.Perf.Error = "Could not acquire lock for netperf: " + err.Error()
-			} else {
-				defer nsLock.Unlock(lkctx.Cancel)
-
-				netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
-				for _, np := range netPerf {
-					np.Endpoint = anonAddr(np.Endpoint)
-					healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
-				}
+			netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
+			for _, np := range netPerf {
+				np.Endpoint = anonAddr(np.Endpoint)
+				healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
 			}
+
 			partialWrite(healthInfo)
 		}
 	}

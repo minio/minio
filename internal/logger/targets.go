@@ -33,7 +33,7 @@ type Target interface {
 	Endpoint() string
 	Init() error
 	Cancel()
-	Send(entry interface{}, errKind string) error
+	Send(entry interface{}) error
 	Type() types.TargetType
 }
 

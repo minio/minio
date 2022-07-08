@@ -97,12 +97,25 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 // Limits body and header to specific allowed maximum limits as per S3/MinIO API requirements.
 func setRequestLimitHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		// Reject unsupported reserved metadata first before validation.
 		if containsReservedMetadata(r.Header) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
 			return
 		}
+
 		if isHTTPHeaderSizeTooLarge(r.Header) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
 			return
@@ -115,9 +128,11 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 // Reserved bucket.
 const (
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = SlashSeparator + minioReservedBucket
-	loginPathPrefix         = SlashSeparator + "login"
+	minioReservedBucket              = "minio"
+	minioReservedBucketPath          = SlashSeparator + minioReservedBucket
+	minioReservedBucketPathWithSlash = SlashSeparator + minioReservedBucket + SlashSeparator
+
+	loginPathPrefix = SlashSeparator + "login"
 )
 
 func guessIsBrowserReq(r *http.Request) bool {
@@ -269,6 +284,22 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
+// splitStr splits a string into n parts, empty strings are added
+// if we are not able to reach n elements
+func splitStr(path, sep string, n int) []string {
+	splits := strings.SplitN(path, sep, n)
+	// Add empty strings if we found elements less than nr
+	for i := n - len(splits); i > 0; i-- {
+		splits = append(splits, "")
+	}
+	return splits
+}
+
+func url2Bucket(p string) (bucket string) {
+	tokens := splitStr(p, SlashSeparator, 3)
+	return tokens[1]
+}
+
 // setHttpStatsHandler sets a http Stats handler to gather HTTP statistics
 func setHTTPStatsHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -280,12 +311,28 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 		r.Body = meteredRequest
 		h.ServeHTTP(meteredResponse, r)
 
-		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
 			globalConnStats.incInputBytes(meteredRequest.BytesRead())
 			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
-		} else {
-			globalConnStats.incS3InputBytes(meteredRequest.BytesRead())
-			globalConnStats.incS3OutputBytes(meteredResponse.BytesWritten())
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+			globalConnStats.incAdminInputBytes(meteredRequest.BytesRead())
+			globalConnStats.incAdminOutputBytes(meteredResponse.BytesWritten())
+			return
+		}
+
+		globalConnStats.incS3InputBytes(meteredRequest.BytesRead())
+		globalConnStats.incS3OutputBytes(meteredResponse.BytesWritten())
+
+		if r.URL != nil {
+			bucket := url2Bucket(r.URL.Path)
+			if bucket != "" && bucket != minioReservedBucket {
+				globalBucketConnStats.incS3InputBytes(bucket, meteredRequest.BytesRead())
+				globalBucketConnStats.incS3OutputBytes(bucket, meteredResponse.BytesWritten())
+			}
 		}
 	})
 }
@@ -339,7 +386,14 @@ func hasMultipleAuth(r *http.Request) bool {
 // any malicious requests.
 func setRequestValidityHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		if err := hasBadHost(r.Host); err != nil {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (%s)", invalidReq.Description, err)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -349,6 +403,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 
 		// Check for bad components in URL path.
 		if hasBadPathComponent(r.URL.Path) {
+			if ok {
+				tc.funcName = "handler.ValidRequest"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
@@ -357,6 +416,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		for _, vv := range r.Form {
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
+					if ok {
+						tc.funcName = "handler.ValidRequest"
+						tc.responseRecorder.LogErrBody = true
+					}
+
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 					return
@@ -364,6 +428,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			}
 		}
 		if hasMultipleAuth(r) {
+			if ok {
+				tc.funcName = "handler.Auth"
+				tc.responseRecorder.LogErrBody = true
+			}
+
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (request has multiple authentication types, please use one)", invalidReq.Description)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -374,6 +443,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		bucketName, _ := request2BucketObjectName(r)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
 			}
@@ -381,8 +455,18 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// Deny SSE-C requests if not made over TLS
 		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 			if r.Method == http.MethodHead {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = false
+				}
+
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {
+				if ok {
+					tc.funcName = "handler.ValidRequest"
+					tc.responseRecorder.LogErrBody = true
+				}
+
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
 			}
 			return

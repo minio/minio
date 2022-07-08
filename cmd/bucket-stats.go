@@ -26,7 +26,7 @@ import (
 // ReplicationLatency holds information of bucket operations latency, such us uploads
 type ReplicationLatency struct {
 	// Single & Multipart PUTs latency
-	UploadHistogram LastMinuteLatencies
+	UploadHistogram LastMinuteHistogram
 }
 
 // Merge two replication latency into a new one
@@ -41,7 +41,7 @@ func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
 	avg := rl.UploadHistogram.GetAvgData()
 	for k, v := range avg {
 		// Convert nanoseconds to milliseconds
-		ret[sizeTagToString(k)] = v.avg() / uint64(time.Millisecond)
+		ret[sizeTagToString(k)] = uint64(v.avg() / time.Millisecond)
 	}
 	return
 }

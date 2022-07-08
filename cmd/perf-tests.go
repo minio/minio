@@ -87,7 +87,7 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 		uploadsCancel()
 	}()
 
-	objNamePrefix := uuid.New().String() + "/"
+	objNamePrefix := uuid.New().String() + SlashSeparator
 
 	userMetadata := make(map[string]string)
 	userMetadata[globalObjectPerfUserMetadata] = "true"
@@ -98,7 +98,12 @@ func selfSpeedtest(ctx context.Context, size, concurrent int, duration time.Dura
 			defer wg.Done()
 			for {
 				reader := newRandomReader(size)
-				info, err := client.PutObject(uploadsCtx, globalObjectPerfBucket, fmt.Sprintf("%s%d.%d", objNamePrefix, i, objCountPerThread[i]), reader, int64(size), minio.PutObjectOptions{UserMetadata: userMetadata, DisableMultipart: true}) // Bypass S3 API freeze
+				tmpObjName := fmt.Sprintf("%s%d.%d", objNamePrefix, i, objCountPerThread[i])
+				info, err := client.PutObject(uploadsCtx, globalObjectPerfBucket, tmpObjName, reader, int64(size), minio.PutObjectOptions{
+					UserMetadata:         userMetadata,
+					DisableContentSha256: true,
+					DisableMultipart:     true,
+				}) // Bypass S3 API freeze
 				if err != nil {
 					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {

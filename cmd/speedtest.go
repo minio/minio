@@ -19,6 +19,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"sort"
 	"time"
 
@@ -60,6 +62,17 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				if throughputHighestResults[i].Error != "" {
 					errStr = throughputHighestResults[i].Error
 				}
+
+				// if the default concurrency yields zero results, throw an error.
+				if throughputHighestResults[i].Downloads == 0 && opts.concurrencyStart == concurrency {
+					errStr = fmt.Sprintf("no results for downloads upon first attempt, concurrency %d and duration %s", opts.concurrencyStart, opts.duration)
+				}
+
+				// if the default concurrency yields zero results, throw an error.
+				if throughputHighestResults[i].Uploads == 0 && opts.concurrencyStart == concurrency {
+					errStr = fmt.Sprintf("no results for uploads upon first attempt, concurrency %d and duration %s", opts.concurrencyStart, opts.duration)
+				}
+
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Uploads / uint64(durationSecs),
@@ -171,9 +184,19 @@ func driveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) madmin.
 		return tmpPaths
 	}()
 
+	scheme := "http"
+	if globalIsTLS {
+		scheme = "https"
+	}
+
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   globalLocalNodeName,
+	}
+
 	perfs, err := perf.Run(ctx, paths...)
 	return madmin.DriveSpeedTestResult{
-		Endpoint: globalLocalNodeName,
+		Endpoint: u.String(),
 		Version:  Version,
 		DrivePerf: func() (results []madmin.DrivePerf) {
 			for idx, r := range perfs {

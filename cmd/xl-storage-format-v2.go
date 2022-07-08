@@ -178,10 +178,11 @@ type xlMetaV2Object struct {
 // on what Type field carries, it is imperative for the caller
 // to verify which journal type first before accessing rest of the fields.
 type xlMetaV2Version struct {
-	Type         VersionType           `json:"Type" msg:"Type"`
-	ObjectV1     *xlMetaV1Object       `json:"V1Obj,omitempty" msg:"V1Obj,omitempty"`
-	ObjectV2     *xlMetaV2Object       `json:"V2Obj,omitempty" msg:"V2Obj,omitempty"`
-	DeleteMarker *xlMetaV2DeleteMarker `json:"DelObj,omitempty" msg:"DelObj,omitempty"`
+	Type             VersionType           `json:"Type" msg:"Type"`
+	ObjectV1         *xlMetaV1Object       `json:"V1Obj,omitempty" msg:"V1Obj,omitempty"`
+	ObjectV2         *xlMetaV2Object       `json:"V2Obj,omitempty" msg:"V2Obj,omitempty"`
+	DeleteMarker     *xlMetaV2DeleteMarker `json:"DelObj,omitempty" msg:"DelObj,omitempty"`
+	WrittenByVersion uint64                `msg:"v"` // Tracks written by MinIO version
 }
 
 // xlFlags contains flags on the object.
@@ -409,16 +410,22 @@ func (j xlMetaV2Version) getVersionID() [16]byte {
 }
 
 // ToFileInfo returns FileInfo of the underlying type.
-func (j *xlMetaV2Version) ToFileInfo(volume, path string) (FileInfo, error) {
+func (j *xlMetaV2Version) ToFileInfo(volume, path string) (fi FileInfo, err error) {
+	if j == nil {
+		return fi, errFileNotFound
+	}
 	switch j.Type {
 	case ObjectType:
-		return j.ObjectV2.ToFileInfo(volume, path)
+		fi, err = j.ObjectV2.ToFileInfo(volume, path)
 	case DeleteType:
-		return j.DeleteMarker.ToFileInfo(volume, path)
+		fi, err = j.DeleteMarker.ToFileInfo(volume, path)
 	case LegacyType:
-		return j.ObjectV1.ToFileInfo(volume, path)
+		fi, err = j.ObjectV1.ToFileInfo(volume, path)
+	default:
+		return fi, errFileNotFound
 	}
-	return FileInfo{}, errFileNotFound
+	fi.WrittenByVersion = j.WrittenByVersion
+	return fi, err
 }
 
 const (
@@ -1182,6 +1189,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				ModTime:   fi.ModTime.UnixNano(),
 				MetaSys:   make(map[string][]byte),
 			},
+			WrittenByVersion: globalVersionUnix,
 		}
 		if !ventry.Valid() {
 			return "", errors.New("internal error: invalid version entry generated")
@@ -1424,7 +1432,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 	}
 
-	ventry := xlMetaV2Version{}
+	ventry := xlMetaV2Version{
+		WrittenByVersion: globalVersionUnix,
+	}
 
 	if fi.Deleted {
 		ventry.Type = DeleteType
@@ -1589,7 +1599,7 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 	}
 	m.VersionID = nullVersionID
 
-	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType})
+	return x.addVersion(xlMetaV2Version{ObjectV1: m, Type: LegacyType, WrittenByVersion: globalVersionUnix})
 }
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure

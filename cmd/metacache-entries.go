@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"sort"
 	"strings"
@@ -330,7 +331,9 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		// shallow decode.
 		xl, err := entry.xlmeta()
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			if !errors.Is(err, errFileNotFound) {
+				logger.LogIf(GlobalContext, err)
+			}
 			continue
 		}
 		objsValid++

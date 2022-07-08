@@ -267,6 +267,8 @@ const (
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
+	ErrAdminNoSuchConfigTarget
+	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
@@ -1240,9 +1242,19 @@ var errorCodes = errorCodeMap{
 			maxEConfigJSONSize),
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoSuchConfigTarget: {
+		Code:           "XMinioAdminNoSuchConfigTarget",
+		Description:    "No such named configuration target exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminConfigBadJSON: {
 		Code:           "XMinioAdminConfigBadJSON",
 		Description:    "JSON configuration provided is of incorrect format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigEnvOverridden: {
+		Code:           "XMinioAdminConfigEnvOverridden",
+		Description:    "Unable to update config via Admin API due to environment variable override",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigDuplicateKeys: {
@@ -2231,7 +2243,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case crypto.Error:
 			apiErr = APIError{
-				Code:           "XMinIOEncryptionError",
+				Code:           "XMinioEncryptionError",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

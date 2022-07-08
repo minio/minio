@@ -152,16 +152,16 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 	cred := globalActiveCred
 	if cred.AccessKey != accessKey {
 		// Check if the access key is part of users credentials.
-		ucred, ok := globalIAMSys.GetUser(r.Context(), accessKey)
+		u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
 		if !ok {
 			// Credentials will be invalid but and disabled
 			// return a different error in such a scenario.
-			if ucred.Status == auth.AccountOff {
+			if u.Credentials.Status == auth.AccountOff {
 				return cred, false, ErrAccessKeyDisabled
 			}
 			return cred, false, ErrInvalidAccessKeyID
 		}
-		cred = ucred
+		cred = u.Credentials
 	}
 
 	claims, s3Err := checkClaimsFromToken(r, cred)

@@ -77,7 +77,7 @@ func (c *Target) Send(e interface{}, logKind string) error {
 			if tagString != "" {
 				tagString += ", "
 			}
-			tagString += fmt.Sprintf("%s=%v", key, value)
+			tagString += fmt.Sprintf("%s=%#v", key, value)
 		}
 	}
 

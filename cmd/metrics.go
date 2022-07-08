@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -110,7 +110,7 @@ func nodeHealthMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	nodesUp, nodesDown := GetPeerOnlineCount()
+	nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "nodes", "online"),
@@ -577,7 +577,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		GetTotalUsableCapacity(server.Disks, s),
+		float64(GetTotalUsableCapacity(server.Disks, s)),
 	)
 	// Report total usable capacity free
 	ch <- prometheus.MustNewConstMetric(
@@ -586,7 +586,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total free usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		GetTotalUsableCapacityFree(server.Disks, s),
+		float64(GetTotalUsableCapacityFree(server.Disks, s)),
 	)
 
 	// MinIO Offline Disks per node
@@ -648,35 +648,59 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 func metricsHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
-	err := registry.Register(minioVersionInfo)
-	logger.LogIf(GlobalContext, err)
+	logger.CriticalIf(GlobalContext, registry.Register(minioVersionInfo))
 
-	err = registry.Register(httpRequestsDuration)
-	logger.LogIf(GlobalContext, err)
-
-	err = registry.Register(newMinioCollector())
-	logger.LogIf(GlobalContext, err)
+	logger.CriticalIf(GlobalContext, registry.Register(newMinioCollector()))
 
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,
 		registry,
 	}
-	// Delegate http serving to Prometheus client library, which will call collector.Collect.
-	return promhttp.InstrumentMetricHandler(
-		registry,
-		promhttp.HandlerFor(gatherers,
-			promhttp.HandlerOpts{
-				ErrorHandling: promhttp.ContinueOnError,
-			}),
-	)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		if ok {
+			tc.funcName = "handler.MetricsLegacy"
+			tc.responseRecorder.LogErrBody = true
+		}
+
+		mfs, err := gatherers.Gather()
+		if err != nil {
+			if len(mfs) == 0 {
+				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+				return
+			}
+		}
+
+		contentType := expfmt.Negotiate(r.Header)
+		w.Header().Set("Content-Type", string(contentType))
+
+		enc := expfmt.NewEncoder(w, contentType)
+		for _, mf := range mfs {
+			if err := enc.Encode(mf); err != nil {
+				logger.LogIf(r.Context(), err)
+				return
+			}
+		}
+		if closer, ok := enc.(expfmt.Closer); ok {
+			closer.Close()
+		}
+	})
 }
 
 // AuthMiddleware checks if the bearer token is valid and authorized.
 func AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+
 		claims, groups, owner, authErr := metricsRequestAuthenticate(r)
 		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
-			w.WriteHeader(http.StatusForbidden)
+			if ok {
+				tc.funcName = "handler.MetricsAuth"
+				tc.responseRecorder.LogErrBody = true
+			}
+
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), errAuthentication), r.URL)
 			return
 		}
 		// For authenticated users apply IAM policy.
@@ -688,7 +712,12 @@ func AuthMiddleware(h http.Handler) http.Handler {
 			IsOwner:         owner,
 			Claims:          claims.Map(),
 		}) {
-			w.WriteHeader(http.StatusForbidden)
+			if ok {
+				tc.funcName = "handler.MetricsAuth"
+				tc.responseRecorder.LogErrBody = true
+			}
+
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), errAuthentication), r.URL)
 			return
 		}
 		h.ServeHTTP(w, r)
