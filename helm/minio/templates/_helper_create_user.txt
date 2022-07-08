@@ -8,6 +8,10 @@ MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
 MC="/usr/bin/mc --insecure"
 {{- end }}
 
+# AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
+# Special characters for example : ',",<,>,{,}
+MINIO_ACCESSKEY_SECRETKEY_TMP="/config/accessKey_and_secretKey_tmp"
+
 # connectToMinio
 # Use a check-sleep-check loop to wait for MinIO service to be available
 connectToMinio() {
@@ -35,28 +39,35 @@ connectToMinio() {
   return 0
 }
 
-# checkUserExists ($username)
+# checkUserExists ()
 # Check if the user exists, by using the exit code of `mc admin user info`
 checkUserExists() {
-  USER=$1
-  CMD=$(${MC} admin user info myminio $USER > /dev/null 2>&1)
+  CMD=$(${MC} admin user info myminio $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) > /dev/null 2>&1)
   return $?
 }
 
-# createUser ($username, $password, $policy)
+# createUser ($policy)
 createUser() {
-  USER=$1
-  PASS=$2
-  POLICY=$3
-
+  POLICY=$1
+  #check accessKey_and_secretKey_tmp file
+  if [[ ! -f $MINIO_ACCESSKEY_SECRETKEY_TMP ]];then
+    echo "credentials file does not exist"
+    return 1
+  fi
+  if [[ $(cat $MINIO_ACCESSKEY_SECRETKEY_TMP|wc -l) -ne 2 ]];then
+    echo "credentials file is invalid"
+    rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
+    return 1
+  fi
   # Create the user if it does not exist
-  if ! checkUserExists $USER ; then
+  if ! checkUserExists ; then
     echo "Creating user '$USER'"
-    ${MC} admin user add myminio $USER $PASS
+    cat $MINIO_ACCESSKEY_SECRETKEY_TMP | ${MC} admin user add myminio
   else
     echo "User '$USER' already exists."
   fi
-
+  #clean up credentials files.
+  rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
 
   # set policy for user
   if [ ! -z $POLICY -a $POLICY != " " ] ; then
@@ -79,10 +90,13 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the users
 {{- range .Values.users }}
+echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
-createUser {{ tpl .accessKey $global }} $(cat /config/secrets/{{ tpl .accessKey $global }}) {{ .policy }}
+cat /config/secrets/{{ tpl .secretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+createUser {{ .policy }}
 {{ else }}
-createUser {{ tpl .accessKey $global }} {{ .secretKey }} {{ .policy }}
+echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+createUser {{ .policy }}
 {{- end }}
 {{- end }}
 {{- end }}
