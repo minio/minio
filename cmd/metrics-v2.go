@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/kes"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
@@ -49,6 +50,7 @@ func init() {
 		getNodeHealthMetrics(),
 		getClusterStorageMetrics(),
 		getClusterTierMetrics(),
+		getKMSMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -63,6 +65,7 @@ func init() {
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
 		getIAMNodeMetrics(),
+		getKMSNodeMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -80,7 +83,6 @@ func init() {
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
 	})
-
 	clusterCollector = newMinioClusterCollector(allMetricsGroups)
 }
 
@@ -123,6 +125,7 @@ const (
 	ilmSubsystem              MetricSubsystem = "ilm"
 	scannerSubsystem          MetricSubsystem = "scanner"
 	iamSubsystem              MetricSubsystem = "iam"
+	kmsSubsystem              MetricSubsystem = "kms"
 )
 
 // MetricName are the individual names for the metric.
@@ -188,6 +191,12 @@ const (
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
 	transitionedVersions MetricName = "transitioned_versions"
+
+	kmsOnline          = "online"
+	kmsRequestsSuccess = "request_success"
+	kmsRequestsError   = "request_error"
+	kmsRequestsFail    = "request_failure"
+	kmsUptime          = "uptime"
 )
 
 const (
@@ -1927,6 +1936,107 @@ func getClusterStorageMetrics() *MetricsGroup {
 			Value:       float64(totalDisks.Sum()),
 		})
 		return
+	})
+	return mg
+}
+
+func getKMSNodeMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+			return
+		}
+
+		const (
+			Online  = 1
+			Offline = 0
+		)
+		desc := MetricDescription{
+			Namespace: clusterMetricNamespace,
+			Subsystem: kmsSubsystem,
+			Name:      kmsOnline,
+			Help:      "Reports whether the KMS is online (1) or offline (0)",
+			Type:      gaugeMetric,
+		}
+		_, err := GlobalKMS.Metrics(ctx)
+		if _, ok := kes.IsConnError(err); ok {
+			return []Metric{{
+				Description: desc,
+				Value:       float64(Offline),
+			}}
+		}
+		return []Metric{{
+			Description: desc,
+			Value:       float64(Online),
+		}}
+	})
+	return mg
+}
+
+func getKMSMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+			return []Metric{}
+		}
+
+		metrics := make([]Metric, 0, 4)
+		metric, err := GlobalKMS.Metrics(ctx)
+		if err != nil {
+			return metrics
+		}
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: clusterMetricNamespace,
+				Subsystem: kmsSubsystem,
+				Name:      kmsRequestsSuccess,
+				Help:      "Number of KMS requests that succeeded",
+				Type:      counterMetric,
+			},
+			Value: float64(metric.RequestOK),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: clusterMetricNamespace,
+				Subsystem: kmsSubsystem,
+				Name:      kmsRequestsError,
+				Help:      "Number of KMS requests that failed due to some error. (HTTP 4xx status code)",
+				Type:      counterMetric,
+			},
+			Value: float64(metric.RequestErr),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: clusterMetricNamespace,
+				Subsystem: kmsSubsystem,
+				Name:      kmsRequestsFail,
+				Help:      "Number of KMS requests that failed due to some internal failure. (HTTP 5xx status code)",
+				Type:      counterMetric,
+			},
+			Value: float64(metric.RequestFail),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: clusterMetricNamespace,
+				Subsystem: kmsSubsystem,
+				Name:      kmsUptime,
+				Help:      "The time the KMS has been up and running in seconds.",
+				Type:      counterMetric,
+			},
+			Value: metric.UpTime.Seconds(),
+		})
+
+		return metrics
 	})
 	return mg
 }
