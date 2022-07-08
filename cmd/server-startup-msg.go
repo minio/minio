@@ -142,10 +142,6 @@ func printServerCommonMsg(apiEndpoints []string) {
 	}
 	printEventNotifiers()
 
-	if globalMinioConsolePortAuto && globalBrowserEnabled {
-		logger.Info(color.RedBold("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
-			globalMinioConsolePort))
-	}
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
