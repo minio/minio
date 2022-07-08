@@ -162,7 +162,6 @@ persistence:
 service:
   type: ClusterIP
   clusterIP: ~
-  ## Make sure to match it to minioAPIPort
   port: "9000"
   nodePort: 32000
 
@@ -194,7 +193,6 @@ ingress:
 consoleService:
   type: ClusterIP
   clusterIP: ~
-  ## Make sure to match it to minioConsolePort
   port: "9001"
   nodePort: 32001
 
