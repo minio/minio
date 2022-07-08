@@ -514,7 +514,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int) {
+func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int, decryptSkip int64, seqNum uint32) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
@@ -534,21 +534,37 @@ func getCompressedOffsets(oi ObjectInfo, offset int64) (compressedOffset int64, 
 
 	// Load index and skip more if feasible.
 	if partSkip > 0 && len(oi.Parts) > firstPartIdx && len(oi.Parts[firstPartIdx].Index) > 0 {
-		// FIXME: We should be able to do this while encrypted.
-		if _, isEncrypted := crypto.IsEncrypted(oi.UserDefined); !isEncrypted {
-			var idx s2.Index
-			_, err := idx.Load(restoreIndexHeaders(oi.Parts[firstPartIdx].Index))
-			if err == nil {
-				compOff, uCompOff, err := idx.Find(partSkip)
-				if err == nil {
-					compressedOffset += compOff
-					partSkip -= uCompOff
-				}
+
+		// Load Index
+		var idx s2.Index
+		_, err := idx.Load(restoreIndexHeaders(oi.Parts[firstPartIdx].Index))
+
+		// Find compressed/uncompressed offsets of our partskip
+		compOff, uCompOff, err2 := idx.Find(partSkip)
+		if err == nil && err2 == nil && compOff > 0 {
+			_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
+			if isEncrypted {
+				// Encrypted.
+				const sseDAREEncPackageBlockSize = SSEDAREPackageBlockSize + SSEDAREPackageMetaSize
+				// Number of full blocks in skipped area
+				seqNum = uint32(compOff / SSEDAREPackageBlockSize)
+				// Skip this many inside a decrypted block to get to compression block start
+				decryptSkip = compOff % SSEDAREPackageBlockSize
+				// Skip this number of full blocks.
+				skipEnc := compOff / SSEDAREPackageBlockSize
+				skipEnc *= sseDAREEncPackageBlockSize
+				compressedOffset += skipEnc
+				// Skip this number of uncompressed bytes.
+				partSkip -= uCompOff
+			} else {
+				// Not encrypted
+				compressedOffset += compOff
+				partSkip -= uCompOff
 			}
 		}
 	}
 
-	return compressedOffset, partSkip, firstPartIdx
+	return compressedOffset, partSkip, firstPartIdx, decryptSkip, seqNum
 }
 
 // GetObjectReader is a type that wraps a reader with a lock to
@@ -636,6 +652,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
+		var decryptSkip int64
+		var seqNum uint32
 
 		off, length = int64(0), oi.Size
 		decOff, decLength := int64(0), actualSize
@@ -646,7 +664,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			}
 
 			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff, firstPart = getCompressedOffsets(oi, off)
+			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off)
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.
@@ -663,13 +681,16 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
-				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
+				inputReader, err = DecryptBlocksRequestR(inputReader, h, seqNum, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
 					}
 					return nil, err
+				}
+				if decryptSkip > 0 {
+					inputReader = ioutil.NewSkipReader(inputReader, decryptSkip)
 				}
 				oi.Size = decLength
 			}
