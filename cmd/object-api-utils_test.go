@@ -593,7 +593,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		startOffset, snappyStartOffset, firstPart := getCompressedOffsets(test.objInfo, test.offset)
+		startOffset, snappyStartOffset, firstPart, _, _ := getCompressedOffsets(test.objInfo, test.offset)
 		if startOffset != test.startOffset {
 			t.Errorf("Test %d - expected startOffset %d but received %d",
 				i, test.startOffset, startOffset)

@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
@@ -523,14 +524,26 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 			}
 			if globalEndpoints[idx].Endpoints[0].IsLocal {
 				go func(pool PoolStatus) {
-					switch err := z.Decommission(ctx, pool.ID); err {
-					case nil:
-						// we already started decommission
-					case errDecommissionAlreadyRunning:
-						// A previous decommission running found restart it.
-						z.doDecommissionInRoutine(ctx, idx)
-					default:
-						logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+					r := rand.New(rand.NewSource(time.Now().UnixNano()))
+					for {
+						if err := z.Decommission(ctx, pool.ID); err != nil {
+							switch err {
+							// we already started decommission
+							case errDecommissionAlreadyRunning:
+								// A previous decommission running found restart it.
+								z.doDecommissionInRoutine(ctx, idx)
+								return
+							default:
+								if configRetriableErrors(err) {
+									logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
+									time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
+									continue
+								}
+								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+								return
+							}
+						}
+						break
 					}
 				}(pool)
 			}
@@ -791,7 +804,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					wg.Add(1)
 					go decommissionEntry(entry)
 				},
-				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+				partial: func(entries metaCacheEntries, _ []error) {
 					entry, ok := entries.resolve(&resolver)
 					if ok {
 						parallelWorkers <- struct{}{}
@@ -984,7 +997,9 @@ func (z *erasureServerPools) DecommissionCancel(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionCancel(idx) {
-		defer z.decommissionCancelers[idx]() // cancel any active thread.
+		if fn := z.decommissionCancelers[idx]; fn != nil {
+			defer fn() // cancel any active thread.
+		}
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
@@ -1006,7 +1021,9 @@ func (z *erasureServerPools) DecommissionFailed(ctx context.Context, idx int) (e
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionFailed(idx) {
-		defer z.decommissionCancelers[idx]() // cancel any active thread.
+		if fn := z.decommissionCancelers[idx]; fn != nil {
+			defer fn() // cancel any active thread.
+		}
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
@@ -1028,7 +1045,9 @@ func (z *erasureServerPools) CompleteDecommission(ctx context.Context, idx int) 
 	defer z.poolMetaMutex.Unlock()
 
 	if z.poolMeta.DecommissionComplete(idx) {
-		defer z.decommissionCancelers[idx]() // cancel any active thread.
+		if fn := z.decommissionCancelers[idx]; fn != nil {
+			defer fn() // cancel any active thread.
+		}
 		if err = z.poolMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}

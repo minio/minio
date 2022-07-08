@@ -760,7 +760,7 @@ func (es *erasureSingle) listPathInner(ctx context.Context, o listPathOptions, r
 			case results <- entry:
 			}
 		},
-		partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+		partial: func(entries metaCacheEntries, errs []error) {
 			// Results Disagree :-(
 			entry, ok := entries.resolve(&resolver)
 			if ok {
@@ -829,7 +829,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 			case results <- entry:
 			}
 		},
-		partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+		partial: func(entries metaCacheEntries, errs []error) {
 			// Results Disagree :-(
 			entry, ok := entries.resolve(&resolver)
 			if ok {
@@ -1145,7 +1145,7 @@ type listPathRawOptions struct {
 	// partial will be called when there is disagreement between disks.
 	// if disk did not return any result, but also haven't errored
 	// the entry will be empty and errs will
-	partial func(entries metaCacheEntries, nAgreed int, errs []error)
+	partial func(entries metaCacheEntries, errs []error)
 
 	// finished will be called when all streams have finished and
 	// more than one disk returned an error.
@@ -1362,7 +1362,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			continue
 		}
 		if opts.partial != nil {
-			opts.partial(topEntries, agree, errs)
+			opts.partial(topEntries, errs)
 		}
 		// Skip the inputs we used.
 		for i, r := range readers {
