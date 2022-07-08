@@ -74,10 +74,6 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 
 	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
 		j.diskPath = diskPath
-		if err := os.MkdirAll(filepath.Dir(j.ReadOnlyPath()), os.FileMode(0o700)); err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
 
 		go j.deletePending(ctx)  // for existing journal entries from previous MinIO versions
 		go j.processEntries(ctx) // for newer journal entries circa free-versions
