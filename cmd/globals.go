@@ -173,9 +173,8 @@ var (
 	globalMinioAddr = ""
 
 	// MinIO default port, can be changed through command line.
-	globalMinioPort            = GlobalMinioDefaultPort
-	globalMinioConsolePort     = "13333"
-	globalMinioConsolePortAuto = false
+	globalMinioPort        = GlobalMinioDefaultPort
+	globalMinioConsolePort = "13333"
 
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
