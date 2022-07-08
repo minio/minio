@@ -862,16 +862,16 @@ func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func()
 	}
 }
 
-func (oi *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
+func (o *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
 	if len(input) == 0 {
 		return input, nil
 	}
 
-	key, err := decryptObjectInfo(nil, oi.Bucket, oi.Name, oi.UserDefined)
+	key, err := decryptObjectInfo(nil, o.Bucket, o.Name, o.UserDefined)
 	if err != nil {
 		return nil, err
 	}
-	mac := hmac.New(sha256.New, key[:])
+	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte("compression-index"))
 	return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
 }
