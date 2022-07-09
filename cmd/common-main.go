@@ -430,7 +430,6 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		if err != nil {
 			logger.FatalIf(err, "Unable to get free port for console on the host")
 		}
-		globalMinioConsolePortAuto = true
 		consoleAddr = net.JoinHostPort("", p.String())
 	}
 
