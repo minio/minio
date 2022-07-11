@@ -221,11 +221,11 @@ func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string
 	return d.disk.CheckParts(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
+func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.Delete(ctx, volume, path, recursive)
+	return d.disk.Delete(ctx, volume, path, deleteOpts)
 }
 
 func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error {

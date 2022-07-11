@@ -610,7 +610,10 @@ func TestHealCorrectQuorum(t *testing.T) {
 		}
 
 		for i := 0; i < nfi.Erasure.ParityBlocks; i++ {
-			erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+			erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
 		}
 
 		// Try healing now, it should heal the content properly.
@@ -634,7 +637,10 @@ func TestHealCorrectQuorum(t *testing.T) {
 		}
 
 		for i := 0; i < nfi.Erasure.ParityBlocks; i++ {
-			erasureDisks[i].Delete(context.Background(), minioMetaBucket, pathJoin(cfgFile, xlStorageFormatFile), false)
+			erasureDisks[i].Delete(context.Background(), minioMetaBucket, pathJoin(cfgFile, xlStorageFormatFile), DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
 		}
 
 		// Try healing now, it should heal the content properly.
@@ -714,7 +720,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	er := set.sets[0]
 	erasureDisks := er.getDisks()
 	firstDisk := erasureDisks[0]
-	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+		Recursive: false,
+		Force:     false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -734,7 +743,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 		t.Errorf("Expected xl.meta file to be present but stat failed - %v", err)
 	}
 
-	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
+		Recursive: false,
+		Force:     false,
+	})
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
@@ -761,7 +773,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 		t.Fatalf("FileInfo not equal after healing: %v != %v", fi, nfi)
 	}
 
-	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
+		Recursive: false,
+		Force:     false,
+	})
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
@@ -792,7 +807,10 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	// Test 4: checks if HealObject returns an error when xl.meta is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
 	for i := 0; i <= nfi.Erasure.DataBlocks; i++ {
-		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+			Recursive: false,
+			Force:     false,
+		})
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
@@ -884,7 +902,10 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
 	}
 
-	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+		Recursive: false,
+		Force:     false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -936,7 +957,10 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 	// Test 3: checks if HealObject returns an error when xl.meta is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
 	for i := 0; i <= nfi2.Erasure.DataBlocks; i++ {
-		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+			Recursive: false,
+			Force:     false,
+		})
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
@@ -1033,7 +1057,10 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 	}
 
 	// Test 1, remove part.1
-	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
+		Recursive: false,
+		Force:     false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -1078,7 +1105,10 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 		t.Fatalf("Failed to write a file - %v", err)
 	}
 
-	err = secondDisk.Delete(context.Background(), bucket, object, true)
+	err = secondDisk.Delete(context.Background(), bucket, object, DeleteOptions{
+		Recursive: true,
+		Force:     false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -1166,7 +1196,10 @@ func TestHealObjectErasure(t *testing.T) {
 	}
 
 	// Delete the whole object folder
-	err = firstDisk.Delete(context.Background(), bucket, object, true)
+	err = firstDisk.Delete(context.Background(), bucket, object, DeleteOptions{
+		Recursive: true,
+		Force:     false,
+	})
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
