@@ -2165,6 +2165,9 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 	for _, b := range buckets {
 		config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, b.Name)
 		if err != nil {
+			if errors.Is(err, BucketReplicationConfigNotFound{Bucket: b.Name}) {
+				continue
+			}
 			return err
 		}
 		var nRules []sreplication.Rule
@@ -2190,6 +2193,9 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 	}
 	for arn, t := range m {
 		if err := globalBucketTargetSys.RemoveTarget(ctx, t.SourceBucket, arn); err != nil {
+			if errors.Is(err, BucketRemoteTargetNotFound{Bucket: t.SourceBucket}) {
+				continue
+			}
 			return err
 		}
 	}
