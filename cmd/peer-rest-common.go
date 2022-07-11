@@ -63,7 +63,7 @@ const (
 	peerRESTMethodUpdateMetacacheListing      = "/updatemetacache"
 	peerRESTMethodGetPeerMetrics              = "/peermetrics"
 	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
-	peerRESTMethodSpeedtest                   = "/speedtest"
+	peerRESTMethodSpeedTest                   = "/speedtest"
 	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
 	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
 	peerRESTMethodReloadPoolMeta              = "/reloadpoolmeta"

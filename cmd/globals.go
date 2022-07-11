@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/console/restapi"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
@@ -375,6 +376,9 @@ var (
 
 	// MinIO version unix timestamp
 	globalVersionUnix uint64
+
+	// MinIO client
+	globalMinioClient *minio.Client
 
 	// Add new variable global values here.
 )

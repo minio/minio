@@ -1125,7 +1125,7 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
+func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
 		return
@@ -1141,6 +1141,7 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
 	storageClass := r.Form.Get(peerRESTStorageClass)
+	bucketName := r.Form.Get(peerRESTBucket)
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1159,7 +1160,13 @@ func (s *peerRESTServer) SpeedtestHandler(w http.ResponseWriter, r *http.Request
 
 	done := keepHTTPResponseAlive(w)
 
-	result, err := selfSpeedtest(r.Context(), size, concurrent, duration, storageClass)
+	result, err := selfSpeedTest(r.Context(), speedTestOpts{
+		objectSize:   size,
+		concurrency:  concurrent,
+		duration:     duration,
+		storageClass: storageClass,
+		bucketName:   bucketName,
+	})
 	if err != nil {
 		result.Error = err.Error()
 	}
@@ -1312,7 +1319,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(httpTraceHdrs(server.UpdateMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(httpTraceHdrs(server.GetPeerMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(httpTraceHdrs(server.LoadTransitionTierConfigHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedtest).HandlerFunc(httpTraceHdrs(server.SpeedtestHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedTest).HandlerFunc(httpTraceHdrs(server.SpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDriveSpeedTest).HandlerFunc(httpTraceHdrs(server.DriveSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetperf).HandlerFunc(httpTraceHdrs(server.NetSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDevNull).HandlerFunc(httpTraceHdrs(server.DevNull))
