@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/kes"
 )
 
 // KMS is the generic interface that abstracts over
@@ -30,6 +31,9 @@ import (
 type KMS interface {
 	// Stat returns the current KMS status.
 	Stat() (Status, error)
+
+	// Metrics returns a KMS metric snapshot.
+	Metrics(ctx context.Context) (kes.Metric, error)
 
 	// CreateKey creates a new key at the KMS with the given key ID.
 	CreateKey(keyID string) error

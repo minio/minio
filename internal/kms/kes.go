@@ -115,6 +115,10 @@ func (c *kesClient) Stat() (Status, error) {
 	}, nil
 }
 
+func (c *kesClient) Metrics(ctx context.Context) (kes.Metric, error) {
+	return c.client.Metrics(ctx)
+}
+
 // CreateKey tries to create a new key at the KMS with the
 // given key ID.
 //

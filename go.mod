@@ -47,7 +47,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
-	github.com/minio/kes v0.19.2
+	github.com/minio/kes v0.20.0
 	github.com/minio/madmin-go v1.4.3
 	github.com/minio/minio-go/v7 v7.0.30
 	github.com/minio/pkg v1.1.26
@@ -65,7 +65,7 @@ require (
 	github.com/philhofer/fwd v1.1.2-0.20210722190033-5c56ac6d0bb9
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.12.1
+	github.com/prometheus/client_golang v1.12.2
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.34.0
 	github.com/prometheus/procfs v0.7.3
