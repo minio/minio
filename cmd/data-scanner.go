@@ -48,12 +48,13 @@ import (
 )
 
 const (
-	dataScannerSleepPerFolder     = time.Millisecond                 // Time to wait between folders.
-	dataUsageUpdateDirCycles      = 16                               // Visit all folders every n cycles.
-	dataScannerCompactLeastObject = 500                              // Compact when there is less than this many objects in a branch.
-	dataScannerCompactAtChildren  = 10000                            // Compact when there are this many children in a branch.
-	dataScannerCompactAtFolders   = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerStartDelay         = 1 * time.Minute                  // Time to wait on startup and between cycles.
+	dataScannerSleepPerFolder        = time.Millisecond                 // Time to wait between folders.
+	dataUsageUpdateDirCycles         = 16                               // Visit all folders every n cycles.
+	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
+	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
+	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
+	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
@@ -566,9 +567,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		}
 
 		// If we have many subfolders, compact ourself.
-		if !into.Compacted &&
-			f.newCache.Info.Name != folder.name &&
-			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders {
+		shouldCompact := f.newCache.Info.Name != folder.name &&
+			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders ||
+			len(existingFolders)+len(newFolders) >= dataScannerForceCompactAtFolders
+
+		if !into.Compacted && shouldCompact {
 			into.Compacted = true
 			newFolders = append(newFolders, existingFolders...)
 			existingFolders = nil
