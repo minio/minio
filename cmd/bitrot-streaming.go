@@ -152,10 +152,10 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		if len(b.data) == 0 && b.tillOffset != streamOffset {
 			b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
-			if err != nil {
+			if err != nil && err != errDiskNotFound {
 				logger.LogIf(GlobalContext,
-					fmt.Errorf("Error(%w) reading erasure shards at (%s: %s/%s), will attempt to reconstruct if we have quorum",
-						err, b.disk, b.volume, b.filePath))
+					fmt.Errorf("Reading erasure shards at (%s: %s/%s) returned '%w', will attempt to reconstruct if we have quorum",
+						b.disk, b.volume, b.filePath, err))
 			}
 		} else {
 			b.rc = io.NewSectionReader(bytes.NewReader(b.data), streamOffset, b.tillOffset-streamOffset)
