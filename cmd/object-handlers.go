@@ -83,6 +83,9 @@ const (
 	encryptBufferThreshold = 1 << 20
 	// add an input buffer of this size.
 	encryptBufferSize = 1 << 20
+
+	// minCompressibleSize is the minimum size at which we enable compression.
+	minCompressibleSize = 4096
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
@@ -1156,6 +1159,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := objectAPI.IsCompressionSupported() &&
 		isCompressible(r.Header, dstObject) &&
+		length > minCompressibleSize &&
 		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame && !objectEncryption
 	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
@@ -1720,7 +1724,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	actualSize := size
 	var idxCb func() []byte
-	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > minCompressibleSize {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
@@ -2073,7 +2077,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 		actualSize := size
 		var idxCb func() []byte
-		if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+		if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > minCompressibleSize {
 			// Storing the compression metadata.
 			metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 			metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
