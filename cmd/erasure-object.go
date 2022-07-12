@@ -815,6 +815,10 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	if n < data.Size() {
 		return ObjectInfo{}, IncompleteBody{Bucket: minioMetaBucket, Object: key}
 	}
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
 
 	for i, w := range writers {
 		if w == nil {
@@ -823,7 +827,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1071,6 +1075,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
+	var compIndex []byte
+	if opts.IndexCB != nil {
+		compIndex = opts.IndexCB()
+	}
 	if !opts.NoLock {
 		lk := er.NewNSLock(bucket, object)
 		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -1091,7 +1099,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), compIndex)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,

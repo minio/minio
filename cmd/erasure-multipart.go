@@ -653,9 +653,13 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	fi.ModTime = UTCNow()
 
 	md5hex := r.MD5CurrentHexString()
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
 
 	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize())
+	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -947,6 +951,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			Number:     part.PartNumber,
 			Size:       currentFI.Parts[partIdx].Size,
 			ActualSize: currentFI.Parts[partIdx].ActualSize,
+			Index:      currentFI.Parts[partIdx].Index,
 		}
 	}
 

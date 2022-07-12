@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 const ActualSize = 1000
@@ -58,7 +58,7 @@ func TestAddObjectPart(t *testing.T) {
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
 			partNumString := strconv.Itoa(testCase.partNum)
-			fi.AddObjectPart(testCase.partNum, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+			fi.AddObjectPart(testCase.partNum, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize, nil)
 		}
 
 		if index := objectPartIndex(fi.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -91,7 +91,7 @@ func TestObjectPartIndex(t *testing.T) {
 	// Add some parts for testing.
 	for _, testCase := range testCases {
 		partNumString := strconv.Itoa(testCase.partNum)
-		fi.AddObjectPart(testCase.partNum, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+		fi.AddObjectPart(testCase.partNum, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize, nil)
 	}
 
 	// Add failure test case.
@@ -121,7 +121,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
 		partNumString := strconv.Itoa(partNum)
-		fi.AddObjectPart(partNum, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize)
+		fi.AddObjectPart(partNum, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize, nil)
 	}
 
 	testCases := []struct {
@@ -160,7 +160,7 @@ func TestObjectToPartOffset(t *testing.T) {
 func TestFindFileInfoInQuorum(t *testing.T) {
 	getNFInfo := func(n int, quorum int, t int64, dataDir string) []FileInfo {
 		fi := newFileInfo("test", 8, 8)
-		fi.AddObjectPart(1, "etag", 100, 100)
+		fi.AddObjectPart(1, "etag", 100, 100, nil)
 		fi.ModTime = time.Unix(t, 0)
 		fi.DataDir = dataDir
 		fis := make([]FileInfo, n)

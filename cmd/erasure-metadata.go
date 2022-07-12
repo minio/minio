@@ -237,12 +237,13 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
+func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, actualSize int64, idx []byte) {
 	partInfo := ObjectPartInfo{
 		Number:     partNumber,
 		ETag:       partETag,
 		Size:       partSize,
 		ActualSize: actualSize,
+		Index:      idx,
 	}
 
 	// Update part info if it already exists.

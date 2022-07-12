@@ -1164,7 +1164,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
 		reader = etag.NewReader(reader, nil)
-		s2c := newS2CompressReader(reader, actualSize)
+		s2c, cb := newS2CompressReader(reader, actualSize)
+		dstOpts.IndexCB = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
@@ -1307,6 +1308,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				if err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
+				}
+				if dstOpts.IndexCB != nil {
+					dstOpts.IndexCB = compressionIndexEncrypter(objEncKey, dstOpts.IndexCB)
 				}
 			}
 		}
@@ -1715,6 +1719,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	actualSize := size
+	var idxCb func() []byte
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -1727,8 +1732,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// Set compression metrics.
-		s2c := newS2CompressReader(actualReader, actualSize)
+		var s2c io.ReadCloser
+		s2c, idxCb = newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
+
 		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
@@ -1751,6 +1758,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	opts.IndexCB = idxCb
 
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
@@ -1812,6 +1820,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
+			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
 		}
 	}
@@ -2061,6 +2072,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 
 		actualSize := size
+		var idxCb func() []byte
 		if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 			// Storing the compression metadata.
 			metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -2072,8 +2084,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			}
 
 			// Set compression metrics.
-			s2c := newS2CompressReader(actualReader, actualSize)
+			s2c, cb := newS2CompressReader(actualReader, actualSize)
 			defer s2c.Close()
+			idxCb = cb
 			reader = etag.Wrap(s2c, actualReader)
 			size = -1 // Since compressed size is un-predictable.
 		}
@@ -2100,6 +2113,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return err
 		}
 		opts.MTime = info.ModTime()
+		opts.IndexCB = idxCb
 
 		retentionMode, retentionDate, legalHold, s3err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
 		if s3err == ErrNone && retentionMode.Valid() {
@@ -2152,6 +2166,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				if err != nil {
 					return err
 				}
+			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
 		}
 
@@ -2571,8 +2588,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 	// Compress only if the compression is enabled during initial multipart.
+	var idxCb func() []byte
 	if isCompressed {
-		s2c := newS2CompressReader(reader, actualPartSize)
+		s2c, cb := newS2CompressReader(reader, actualPartSize)
+		idxCb = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
@@ -2589,6 +2608,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	dstOpts.IndexCB = idxCb
 
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader)
@@ -2642,6 +2662,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
+		}
+		if dstOpts.IndexCB != nil {
+			dstOpts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, dstOpts.IndexCB)
 		}
 	}
 
@@ -2821,6 +2844,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 
+	var idxCb func() []byte
 	if objectAPI.IsCompressionSupported() && isCompressed {
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
@@ -2829,7 +2853,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		s2c := newS2CompressReader(actualReader, actualSize)
+		s2c, cb := newS2CompressReader(actualReader, actualSize)
+		idxCb = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
@@ -2904,7 +2929,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if idxCb != nil {
+			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+		}
 	}
+	opts.IndexCB = idxCb
 
 	putObjectPart := objectAPI.PutObjectPart
 	if api.CacheAPI() != nil {
