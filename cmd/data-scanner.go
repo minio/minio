@@ -1278,12 +1278,14 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 
 	switch oi.ReplicationStatus {
 	case replication.Pending, replication.Failed:
+		roi.EventType = ReplicateHeal
 		globalReplicationPool.queueReplicaTask(roi)
 		return
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
 	}
 	if roi.ExistingObjResync.mustResync() {
+		roi.EventType = ReplicateExisting
 		globalReplicationPool.queueReplicaTask(roi)
 	}
 }
@@ -1309,11 +1311,13 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 				DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
 				DeleteMarker:          roi.DeleteMarker,
 			},
-			Bucket: roi.Bucket,
-			OpType: replication.HealReplicationType,
+			Bucket:    roi.Bucket,
+			OpType:    replication.HealReplicationType,
+			EventType: ReplicateHealDelete,
 		}
 		if roi.ExistingObjResync.mustResync() {
 			doi.OpType = replication.ExistingObjectReplicationType
+			doi.EventType = ReplicateExistingDelete
 			queueReplicateDeletesWrapper(doi, roi.ExistingObjResync)
 			return
 		}
@@ -1476,9 +1480,9 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string) {
 	var apiName string
-	switch trigger {
+	switch event {
 	case ILMExpiry:
 		apiName = "ILMExpiry"
 	case ILMFreeVersionDelete:
@@ -1487,7 +1491,7 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
 		apiName = "ILMTransition"
 	}
 	auditLogInternal(ctx, oi.Bucket, oi.Name, AuditLogOptions{
-		Trigger:   trigger,
+		Event:     event,
 		APIName:   apiName,
 		VersionID: oi.VersionID,
 	})

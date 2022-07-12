@@ -262,6 +262,7 @@ func (o ObjectInfo) tierStats() tierStats {
 type ReplicateObjectInfo struct {
 	ObjectInfo
 	OpType            replication.Type
+	EventType         string
 	RetryCount        uint32
 	ResetID           string
 	Dsc               ReplicateDecision

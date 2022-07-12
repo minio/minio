@@ -649,6 +649,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			dv := DeletedObjectReplicationInfo{
 				DeletedObject: dobj,
 				Bucket:        bucket,
+				EventType:     ReplicateIncomingDelete,
 			}
 			scheduleReplicationDelete(ctx, dv, objectAPI)
 		}
