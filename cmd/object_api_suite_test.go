@@ -77,7 +77,7 @@ func TestMakeBucket(t *testing.T) {
 
 // Tests validate bucket creation.
 func testMakeBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket-unknown", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket-unknown", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -91,7 +91,7 @@ func TestMultipartObjectCreation(t *testing.T) {
 // Tests validate creation of part files during Multipart operation.
 func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	var opts ObjectOptions
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -135,7 +135,7 @@ func TestMultipartObjectAbort(t *testing.T) {
 // Tests validate abortion of Multipart operation.
 func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	var opts ObjectOptions
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -181,7 +181,7 @@ func TestMultipleObjectCreation(t *testing.T) {
 func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	objects := make(map[string][]byte)
 	var opts ObjectOptions
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -236,7 +236,7 @@ func TestPaging(t *testing.T) {
 
 // Tests validate creation of objects and the order of listing using various filters for ListObjects operation.
 func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	result, err := obj.ListObjects(context.Background(), "bucket", "", "", "", 0)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
@@ -440,7 +440,7 @@ func TestObjectOverwriteWorks(t *testing.T) {
 
 // Tests validate overwriting of an existing object.
 func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -494,11 +494,11 @@ func TestBucketRecreateFails(t *testing.T) {
 
 // Tests validate that recreation of the bucket fails.
 func testBucketRecreateFails(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "string", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "string", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.MakeBucketWithLocation(context.Background(), "string", BucketOptions{})
+	err = obj.MakeBucketWithLocation(context.Background(), "string", MakeBucketOptions{})
 	if err == nil {
 		t.Fatalf("%s: Expected error but found nil.", instanceType)
 	}
@@ -599,7 +599,7 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	length := int64(len(content))
 	readerEOF := newTestReaderEOF(content)
 	readerNoEOF := newTestReaderNoEOF(content)
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -639,7 +639,7 @@ func TestPutObjectInSubdir(t *testing.T) {
 
 // Tests validate PutObject with subdirectory prefix.
 func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -672,7 +672,7 @@ func TestListBuckets(t *testing.T) {
 // Tests validate ListBuckets.
 func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// test empty list.
-	buckets, err := obj.ListBuckets(context.Background())
+	buckets, err := obj.ListBuckets(context.Background(), BucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -681,12 +681,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add one and test exists.
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket1", BucketOptions{})
+	err = obj.MakeBucketWithLocation(context.Background(), "bucket1", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets(context.Background())
+	buckets, err = obj.ListBuckets(context.Background(), BucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -695,12 +695,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add two and test exists.
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket2", BucketOptions{})
+	err = obj.MakeBucketWithLocation(context.Background(), "bucket2", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets(context.Background())
+	buckets, err = obj.ListBuckets(context.Background(), BucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -709,12 +709,12 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// add three and test exists + prefix.
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket22", BucketOptions{})
+	err = obj.MakeBucketWithLocation(context.Background(), "bucket22", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	buckets, err = obj.ListBuckets(context.Background())
+	buckets, err = obj.ListBuckets(context.Background(), BucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -733,15 +733,15 @@ func testListBucketsOrder(obj ObjectLayer, instanceType string, t TestErrHandler
 	// if implementation contains a map, order of map keys will vary.
 	// this ensures they return in the same order each time.
 	// add one and test exists.
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket1", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket1", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket2", BucketOptions{})
+	err = obj.MakeBucketWithLocation(context.Background(), "bucket2", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	buckets, err := obj.ListBuckets(context.Background())
+	buckets, err := obj.ListBuckets(context.Background(), BucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -786,7 +786,7 @@ func TestNonExistantObjectInBucket(t *testing.T) {
 
 // Tests validate that GetObject fails on a non-existent bucket as expected.
 func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -814,7 +814,7 @@ func TestGetDirectoryReturnsObjectNotFound(t *testing.T) {
 // Tests validate that GetObject on an existing directory fails as expected.
 func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bucketName := "bucket"
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -856,7 +856,7 @@ func TestContentType(t *testing.T) {
 
 // Test content-type.
 func testContentType(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	err := obj.MakeBucketWithLocation(context.Background(), "bucket", BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}

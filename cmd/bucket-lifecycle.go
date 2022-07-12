@@ -560,7 +560,7 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 	}
 	// Check if bucket exists.
 	if !r.OutputLocation.IsEmpty() {
-		if _, err := objAPI.GetBucketInfo(ctx, r.OutputLocation.S3.BucketName); err != nil {
+		if _, err := objAPI.GetBucketInfo(ctx, r.OutputLocation.S3.BucketName, BucketOptions{}); err != nil {
 			return err
 		}
 		if r.OutputLocation.S3.Prefix == "" {

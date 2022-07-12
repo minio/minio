@@ -325,7 +325,7 @@ func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []
 }
 
 // MakeBucket creates a new container on S3 backend.
-func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
+func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.MakeBucketOptions) error {
 	if opts.LockEnabled || opts.VersioningEnabled {
 		return minio.NotImplemented{}
 	}
@@ -348,7 +348,7 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket string, o
 }
 
 // GetBucketInfo gets bucket metadata..
-func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
+func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string, opts minio.BucketOptions) (bi minio.BucketInfo, e error) {
 	buckets, err := l.Client.ListBuckets(ctx)
 	if err != nil {
 		// Listbuckets may be disallowed, proceed to check if
@@ -381,7 +381,7 @@ func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.
 }
 
 // ListBuckets lists all S3 buckets
-func (l *s3Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error) {
+func (l *s3Objects) ListBuckets(ctx context.Context, opts minio.BucketOptions) ([]minio.BucketInfo, error) {
 	buckets, err := l.Client.ListBuckets(ctx)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)

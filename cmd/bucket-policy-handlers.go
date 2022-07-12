@@ -61,7 +61,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Check if bucket exists.
-	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -145,7 +145,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	// Check if bucket exists.
-	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -191,7 +191,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Check if bucket exists.
-	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

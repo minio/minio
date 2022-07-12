@@ -1272,7 +1272,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 }
 
 func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName string) (bucketExists bool, err error) {
-	if err = objectAPI.MakeBucketWithLocation(ctx, bucketName, BucketOptions{}); err != nil {
+	if err = objectAPI.MakeBucketWithLocation(ctx, bucketName, MakeBucketOptions{}); err != nil {
 		if _, ok := err.(BucketExists); !ok {
 			// Only BucketExists error can be ignored.
 			return false, err
@@ -1286,6 +1286,7 @@ func deleteObjectPerfBucket(objectAPI ObjectLayer) {
 	objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
 		Force:      true,
 		NoRecreate: true,
+		SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 	})
 }
 

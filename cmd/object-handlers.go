@@ -922,7 +922,7 @@ func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer
 		return false
 	}
 	if globalBucketFederation {
-		_, err := objAPI.GetBucketInfo(ctx, bucket)
+		_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 		return err == toObjectErr(errVolumeNotFound, bucket)
 	}
 	return false
@@ -2758,7 +2758,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2918,7 +2918,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

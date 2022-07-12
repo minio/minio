@@ -305,6 +305,9 @@ if [ $? -ne 0 ]; then
     exit_1;
 fi
 
+# create a bucket bucket2 on minio1.
+./mc mb minio1/bucket2
+
 sleep 10
 
 # Test whether policy unset replicated to minio1
@@ -319,6 +322,9 @@ kill -9 ${site1_pid}
 ./mc tag set minio2/newbucket "key=val2"
 # create a new bucket on minio2. This should replicate to minio1 after it comes online.
 ./mc mb minio2/newbucket2
+
+# delete bucket2 on minio2. This should replicate to minio1 after it comes online.
+./mc rb minio2/bucket2
 # Restart minio1 instance
 minio server --config-dir /tmp/minio-internal --address ":9001" /tmp/minio-internal-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
 sleep 15
@@ -329,9 +335,9 @@ if [ "${val}" != "val2" ]; then
     echo "expected bucket tag to have replicated, exiting..."
     exit_1;
 fi
-# Test if bucket created when minio1 is down healed
-diff -q <(./mc ls minio1 | awk '{print $3}') <(./mc ls minio2 | awk '{print $3}') 1>/dev/null
+# Test if bucket created/deleted when minio1 is down healed
+diff -q <(./mc ls minio1)  <(./mc ls minio2) 1>/dev/null
 if  [ $? -ne 0 ]; then
-    echo "expected bucket to have replicated, exiting..."
+    echo "expected `bucket2` delete and `newbucket2` creation to have replicated, exiting..."
     exit_1;
 fi

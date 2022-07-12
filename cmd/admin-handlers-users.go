@@ -1177,7 +1177,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return buckets[i].Name < buckets[j].Name
 		})
 	} else {
-		buckets, err = objectAPI.ListBuckets(ctx)
+		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{})
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
