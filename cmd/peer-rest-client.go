@@ -803,26 +803,25 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	return ch, nil
 }
 
-func (client *peerRESTClient) Speedtest(ctx context.Context, size,
-	concurrent int, duration time.Duration, storageClass string,
-) (SpeedtestResult, error) {
+func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, error) {
 	values := make(url.Values)
-	values.Set(peerRESTSize, strconv.Itoa(size))
-	values.Set(peerRESTConcurrent, strconv.Itoa(concurrent))
-	values.Set(peerRESTDuration, duration.String())
-	values.Set(peerRESTStorageClass, storageClass)
+	values.Set(peerRESTSize, strconv.Itoa(opts.objectSize))
+	values.Set(peerRESTConcurrent, strconv.Itoa(opts.concurrency))
+	values.Set(peerRESTDuration, opts.duration.String())
+	values.Set(peerRESTStorageClass, opts.storageClass)
+	values.Set(peerRESTBucket, opts.bucketName)
 
-	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedtest, values, nil, -1)
+	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedTest, values, nil, -1)
 	if err != nil {
-		return SpeedtestResult{}, err
+		return SpeedTestResult{}, err
 	}
 	defer http.DrainBody(respBody)
 	waitReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return SpeedtestResult{}, err
+		return SpeedTestResult{}, err
 	}
 
-	var result SpeedtestResult
+	var result SpeedTestResult
 	err = gob.NewDecoder(waitReader).Decode(&result)
 	if err != nil {
 		return result, err

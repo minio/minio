@@ -28,12 +28,16 @@ import (
 	"github.com/minio/madmin-go"
 )
 
+const speedTest = "speedtest"
+
 type speedTestOpts struct {
-	throughputSize   int
+	objectSize       int
 	concurrencyStart int
+	concurrency      int
 	duration         time.Duration
 	autotune         bool
 	storageClass     string
+	bucketName       string
 }
 
 // Get the max throughput and iops numbers.
@@ -46,7 +50,7 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 
 		throughputHighestGet := uint64(0)
 		throughputHighestPut := uint64(0)
-		var throughputHighestResults []SpeedtestResult
+		var throughputHighestResults []SpeedTestResult
 
 		sendResult := func() {
 			var result madmin.SpeedTestResult
@@ -54,9 +58,9 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			durationSecs := opts.duration.Seconds()
 
 			result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
-			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.throughputSize) / uint64(durationSecs)
+			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.objectSize) / uint64(durationSecs)
 			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
-			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.throughputSize) / uint64(durationSecs)
+			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.objectSize) / uint64(durationSecs)
 			for i := 0; i < len(throughputHighestResults); i++ {
 				errStr := ""
 				if throughputHighestResults[i].Error != "" {
@@ -76,18 +80,18 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Uploads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.throughputSize) / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.throughputSize) / uint64(durationSecs),
+					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
 			}
 
-			result.Size = opts.throughputSize
+			result.Size = opts.objectSize
 			result.Disks = globalEndpoints.NEndpoints()
 			result.Servers = len(globalNotificationSys.peerClients) + 1
 			result.Version = Version
@@ -104,9 +108,15 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			default:
 			}
 
-			results := globalNotificationSys.Speedtest(ctx,
-				opts.throughputSize, concurrency,
-				opts.duration, opts.storageClass)
+			sopts := speedTestOpts{
+				objectSize:   opts.objectSize,
+				concurrency:  concurrency,
+				duration:     opts.duration,
+				storageClass: opts.storageClass,
+				bucketName:   opts.bucketName,
+			}
+
+			results := globalNotificationSys.SpeedTest(ctx, sopts)
 			sort.Slice(results, func(i, j int) bool {
 				return results[i].Endpoint < results[j].Endpoint
 			})

@@ -1512,17 +1512,15 @@ func (sys *NotificationSys) Netperf(ctx context.Context, duration time.Duration)
 	return results
 }
 
-// Speedtest run GET/PUT tests at input concurrency for requested object size,
+// SpeedTest run GET/PUT tests at input concurrency for requested object size,
 // optionally you can extend the tests longer with time.Duration.
-func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
-	concurrent int, duration time.Duration, storageClass string,
-) []SpeedtestResult {
+func (sys *NotificationSys) SpeedTest(ctx context.Context, sopts speedTestOpts) []SpeedTestResult {
 	length := len(sys.allPeerClients)
 	if length == 0 {
 		// For single node erasure setup.
 		length = 1
 	}
-	results := make([]SpeedtestResult, length)
+	results := make([]SpeedTestResult, length)
 
 	scheme := "http"
 	if globalIsTLS {
@@ -1537,8 +1535,7 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			r, err := sys.peerClients[index].Speedtest(ctx, size,
-				concurrent, duration, storageClass)
+			r, err := sys.peerClients[index].SpeedTest(ctx, sopts)
 			u := &url.URL{
 				Scheme: scheme,
 				Host:   sys.peerClients[index].host.String(),
@@ -1555,7 +1552,7 @@ func (sys *NotificationSys) Speedtest(ctx context.Context, size int,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		r, err := selfSpeedtest(ctx, size, concurrent, duration, storageClass)
+		r, err := selfSpeedTest(ctx, sopts)
 		u := &url.URL{
 			Scheme: scheme,
 			Host:   globalLocalNodeName,

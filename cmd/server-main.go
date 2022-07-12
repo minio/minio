@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
@@ -639,6 +641,18 @@ func serverMain(ctx *cli.Context) {
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)
 	}()
+
+	region := globalSite.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+	globalMinioClient, err = minio.New(globalLocalNodeName, &minio.Options{
+		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
+		Secure:    globalIsTLS,
+		Transport: globalProxyTransport,
+		Region:    region,
+	})
+	logger.FatalIf(err, "Unable to initialize MinIO client")
 
 	if serverDebugLog {
 		logger.Info("== DEBUG Mode enabled ==")
