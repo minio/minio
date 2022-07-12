@@ -3567,7 +3567,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				DeleteMarker:          objInfo.DeleteMarker,
 				ReplicationState:      objInfo.getReplicationState(dsc.String(), opts.VersionID, false),
 			},
-			Bucket: bucket,
+			Bucket:    bucket,
+			EventType: ReplicateIncomingDelete,
 		}
 		scheduleReplicationDelete(ctx, dobj, objectAPI)
 	}

@@ -40,8 +40,11 @@ type Entry struct {
 	Version      string    `json:"version"`
 	DeploymentID string    `json:"deploymentid,omitempty"`
 	Time         time.Time `json:"time"`
-	Trigger      string    `json:"trigger"`
-	API          struct {
+	Event        string    `json:"event"`
+	// deprecated replaced by 'Event', kept here for some
+	// time for backward compatibility with k8s Operator.
+	Trigger string `json:"trigger"`
+	API     struct {
 		Name            string          `json:"name,omitempty"`
 		Bucket          string          `json:"bucket,omitempty"`
 		Object          string          `json:"object,omitempty"`
