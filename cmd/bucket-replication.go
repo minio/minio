@@ -2214,18 +2214,21 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 	for index := range buckets {
 		meta, err := loadBucketResyncMetadata(ctx, buckets[index].Name, objAPI)
 		if err != nil {
-			if errors.Is(err, errVolumeNotFound) {
-				meta = newBucketResyncStatus(buckets[index].Name)
-			} else {
+			if !errors.Is(err, errVolumeNotFound) {
 				logger.LogIf(ctx, err)
-				continue
 			}
+			continue
 		}
+		p.resyncState.Lock()
 		p.resyncState.statusMap[buckets[index].Name] = meta
+		p.resyncState.Unlock()
 	}
 	for index := range buckets {
 		bucket := buckets[index].Name
+		p.resyncState.RLock()
 		m, ok := p.resyncState.statusMap[bucket]
+		p.resyncState.RUnlock()
+
 		if ok {
 			for arn, st := range m.TargetsMap {
 				if st.ResyncStatus == ResyncFailed || st.ResyncStatus == ResyncStarted {
