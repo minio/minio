@@ -71,6 +71,11 @@ func IsRequested(h http.Header) (Type, bool) {
 	}
 }
 
+// Requested returns whether any type of encryption is requested.
+func Requested(h http.Header) bool {
+	return S3.IsRequested(h) || S3KMS.IsRequested(h) || SSEC.IsRequested(h)
+}
+
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using the SSE-Copy client key of the HTTP headers
 // and returns the decrypted object key.

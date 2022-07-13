@@ -74,6 +74,10 @@ const (
 	compReadAheadBuffers = 5
 	// Size of each buffer.
 	compReadAheadBufSize = 1 << 20
+	// Pad Encrypted+Compressed files to a multiple of this.
+	compPadEncrypted = 256
+	// Disable compressed file indices below this size
+	compMinIndexSize = 8 << 20
 )
 
 // isMinioBucket returns true if given bucket is a MinIO internal
@@ -436,8 +440,7 @@ func isCompressible(header http.Header, object string) bool {
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
 
-	_, ok := crypto.IsRequested(header)
-	if !cfg.Enabled || (ok && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
+	if !cfg.Enabled || (crypto.Requested(header) && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
 		return false
 	}
 	return true
@@ -985,10 +988,17 @@ func init() {
 // input 'on' is always recommended such that this function works
 // properly, because we do not wish to create an object even if
 // client closed the stream prematurely.
-func newS2CompressReader(r io.Reader, on int64) (rc io.ReadCloser, idx func() []byte) {
+func newS2CompressReader(r io.Reader, on int64, encrypted bool) (rc io.ReadCloser, idx func() []byte) {
 	pr, pw := io.Pipe()
 	// Copy input to compressor
-	comp := s2.NewWriter(pw, compressOpts...)
+	opts := compressOpts
+	if encrypted {
+		// The values used for padding are not a security concern,
+		// but we choose pseudo-random numbers instead of just zeros.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		opts = append([]s2.WriterOption{s2.WriterPadding(compPadEncrypted), s2.WriterPaddingSrc(rng)}, compressOpts...)
+	}
+	comp := s2.NewWriter(pw, opts...)
 	indexCh := make(chan []byte, 1)
 	go func() {
 		defer close(indexCh)
@@ -1006,8 +1016,8 @@ func newS2CompressReader(r io.Reader, on int64) (rc io.ReadCloser, idx func() []
 			return
 		}
 		// Close the stream.
-		// If more than 8MB was written, generate index.
-		if cn > 8<<20 {
+		// If more than compMinIndexSize was written, generate index.
+		if cn > compMinIndexSize {
 			idx, err := comp.CloseIndex()
 			idx = s2.RemoveIndexHeaders(idx)
 			indexCh <- idx
@@ -1048,7 +1058,7 @@ func compressSelfTest() {
 		}
 	}
 	const skip = 2<<20 + 511
-	r, _ := newS2CompressReader(bytes.NewBuffer(data), int64(len(data)))
+	r, _ := newS2CompressReader(bytes.NewBuffer(data), int64(len(data)), true)
 	b, err := io.ReadAll(r)
 	failOnErr(err)
 	failOnErr(r.Close())
