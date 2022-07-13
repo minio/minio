@@ -27,7 +27,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"net/url"
 	"regexp"
 	"strings"
 
@@ -195,16 +194,6 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 		}
 	}
 	return nil
-}
-
-// The Query string for the redirect URL the client is
-// redirected on successful upload.
-func getRedirectPostRawQuery(objInfo ObjectInfo) string {
-	redirectValues := make(url.Values)
-	redirectValues.Set("bucket", objInfo.Bucket)
-	redirectValues.Set("key", objInfo.Name)
-	redirectValues.Set("etag", "\""+objInfo.ETag+"\"")
-	return redirectValues.Encode()
 }
 
 // Returns access credentials in the request Authorization header.
