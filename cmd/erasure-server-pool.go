@@ -1652,7 +1652,10 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketI
 	if z.SinglePool() {
 		buckets, err = z.serverPools[0].ListBuckets(ctx)
 	} else {
-		for _, pool := range z.serverPools {
+		for idx, pool := range z.serverPools {
+			if z.IsSuspended(idx) {
+				continue
+			}
 			buckets, err = pool.ListBuckets(ctx)
 			if err != nil {
 				logger.LogIf(ctx, err)
