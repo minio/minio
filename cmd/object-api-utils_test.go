@@ -642,7 +642,7 @@ func TestS2CompressReader(t *testing.T) {
 					t.Errorf("no index returned")
 				}
 				var index s2.Index
-				_, err = index.Load(restoreIndexHeaders(idx))
+				_, err = index.Load(s2.RestoreIndexHeaders(idx))
 				if err != nil {
 					t.Errorf("error loading index: %v", err)
 				}
