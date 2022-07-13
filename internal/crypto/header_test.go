@@ -29,6 +29,10 @@ import (
 func TestIsRequested(t *testing.T) {
 	for i, test := range kmsIsRequestedTests {
 		_, got := IsRequested(test.Header)
+		if Requested(test.Header) != got {
+			// Test if result matches.
+			t.Errorf("Requested mismatch, want %v, got %v", Requested(test.Header), got)
+		}
 		got = got && S3KMS.IsRequested(test.Header)
 		if got != test.Expected {
 			t.Errorf("SSE-KMS: Test %d: Wanted %v but got %v", i, test.Expected, got)
@@ -36,6 +40,10 @@ func TestIsRequested(t *testing.T) {
 	}
 	for i, test := range s3IsRequestedTests {
 		_, got := IsRequested(test.Header)
+		if Requested(test.Header) != got {
+			// Test if result matches.
+			t.Errorf("Requested mismatch, want %v, got %v", Requested(test.Header), got)
+		}
 		got = got && S3.IsRequested(test.Header)
 		if got != test.Expected {
 			t.Errorf("SSE-S3: Test %d: Wanted %v but got %v", i, test.Expected, got)
@@ -43,6 +51,10 @@ func TestIsRequested(t *testing.T) {
 	}
 	for i, test := range ssecIsRequestedTests {
 		_, got := IsRequested(test.Header)
+		if Requested(test.Header) != got {
+			// Test if result matches.
+			t.Errorf("Requested mismatch, want %v, got %v", Requested(test.Header), got)
+		}
 		got = got && SSEC.IsRequested(test.Header)
 		if got != test.Expected {
 			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
