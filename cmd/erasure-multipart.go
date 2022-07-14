@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -48,7 +49,7 @@ func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
 func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) (err error) {
 	defer func() {
-		if err == errFileNotFound {
+		if errors.Is(err, errFileNotFound) || errors.Is(err, errVolumeNotFound) {
 			err = errUploadIDNotFound
 		}
 	}()
@@ -208,10 +209,10 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 	for _, disk = range er.getLoadBalancedDisks(true) {
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
-			if err == errDiskNotFound {
+			if errors.Is(err, errDiskNotFound) {
 				continue
 			}
-			if err == errFileNotFound {
+			if errors.Is(err, errFileNotFound) || errors.Is(err, errVolumeNotFound) {
 				return result, nil
 			}
 			logger.LogIf(ctx, err)
