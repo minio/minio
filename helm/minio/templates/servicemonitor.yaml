@@ -21,6 +21,12 @@ spec:
     {{- if .Values.tls.enabled }}
     - port: https
       scheme: https
+      tlsConfig:
+        ca:
+          secret:
+            name: {{ .Values.tls.certSecret }}
+            key: {{ .Values.tls.publicCrt }}
+        serverName: {{ template "minio.fullname" . }}
     {{ else }}
     - port: http
       scheme: http
