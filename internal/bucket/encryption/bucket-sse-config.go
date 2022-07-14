@@ -128,7 +128,7 @@ type ApplyOptions struct {
 // set minimal SSE-KMS headers if autoEncrypt is true and the BucketSSEConfig
 // is nil.
 func (b *BucketSSEConfig) Apply(headers http.Header, opts ApplyOptions) {
-	if _, ok := crypto.IsRequested(headers); ok {
+	if crypto.Requested(headers) {
 		return
 	}
 	if b == nil {

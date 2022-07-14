@@ -33,6 +33,7 @@ import (
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
 
+	"github.com/minio/kes"
 	"github.com/minio/minio/internal/hash/sha256"
 )
 
@@ -87,6 +88,10 @@ func (kms secretKey) Stat() (Status, error) {
 		Name:       "SecretKey",
 		DefaultKey: kms.keyID,
 	}, nil
+}
+
+func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
+	return kes.Metric{}, errors.New("kms: metrics are not supported")
 }
 
 func (secretKey) CreateKey(string) error {

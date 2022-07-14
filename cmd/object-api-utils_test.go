@@ -593,7 +593,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		startOffset, snappyStartOffset, firstPart := getCompressedOffsets(test.objInfo, test.offset)
+		startOffset, snappyStartOffset, firstPart, _, _ := getCompressedOffsets(test.objInfo, test.offset, nil)
 		if startOffset != test.startOffset {
 			t.Errorf("Test %d - expected startOffset %d but received %d",
 				i, test.startOffset, startOffset)
@@ -611,19 +611,20 @@ func TestGetCompressedOffsets(t *testing.T) {
 
 func TestS2CompressReader(t *testing.T) {
 	tests := []struct {
-		name string
-		data []byte
+		name    string
+		data    []byte
+		wantIdx bool
 	}{
 		{name: "empty", data: nil},
-		{name: "small", data: []byte("hello, world")},
-		{name: "large", data: bytes.Repeat([]byte("hello, world"), 1000)},
+		{name: "small", data: []byte("hello, world!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")},
+		{name: "large", data: bytes.Repeat([]byte("hello, world"), 1000000), wantIdx: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := make([]byte, 100) // make small buffer to ensure multiple reads are required for large case
 
-			r := newS2CompressReader(bytes.NewReader(tt.data), int64(len(tt.data)))
+			r, idxCB := newS2CompressReader(bytes.NewReader(tt.data), int64(len(tt.data)), false)
 			defer r.Close()
 
 			var rdrBuf bytes.Buffer
@@ -631,7 +632,26 @@ func TestS2CompressReader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
+			r.Close()
+			idx := idxCB()
+			if !tt.wantIdx && len(idx) > 0 {
+				t.Errorf("index returned above threshold")
+			}
+			if tt.wantIdx {
+				if idx == nil {
+					t.Errorf("no index returned")
+				}
+				var index s2.Index
+				_, err = index.Load(s2.RestoreIndexHeaders(idx))
+				if err != nil {
+					t.Errorf("error loading index: %v", err)
+				}
+				t.Log("size:", len(idx))
+				t.Log(string(index.JSON()))
+				if index.TotalUncompressed != int64(len(tt.data)) {
+					t.Errorf("Expected size %d, got %d", len(tt.data), index.TotalUncompressed)
+				}
+			}
 			var stdBuf bytes.Buffer
 			w := s2.NewWriter(&stdBuf)
 			_, err = io.CopyBuffer(w, bytes.NewReader(tt.data), buf)

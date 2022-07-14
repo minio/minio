@@ -31,6 +31,7 @@ spec:
     - name: {{ $scheme }}
       port: {{ .Values.service.port }}
       protocol: TCP
+      targetPort: {{ .Values.minioAPIPort }}
   selector:
     app: {{ template "minio.name" . }}
     release: {{ .Release.Name }}

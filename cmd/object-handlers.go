@@ -83,6 +83,9 @@ const (
 	encryptBufferThreshold = 1 << 20
 	// add an input buffer of this size.
 	encryptBufferSize = 1 << 20
+
+	// minCompressibleSize is the minimum size at which we enable compression.
+	minCompressibleSize = 4096
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
@@ -116,7 +119,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok && !objectAPI.IsEncryptionSupported() {
+	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 		return
 	}
@@ -327,7 +330,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 		return
 	}
-	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
+	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 		return
 	}
@@ -608,7 +611,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
 		return
 	}
-	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
+	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 		return
 	}
@@ -948,7 +951,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok {
+	if crypto.Requested(r.Header) {
 		if globalIsGateway {
 			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -1148,7 +1151,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Check if either the source is encrypted or the destination will be encrypted.
-	_, objectEncryption := crypto.IsRequested(r.Header)
+	objectEncryption := crypto.Requested(r.Header)
 	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
 
 	var compressMetadata map[string]string
@@ -1156,6 +1159,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := objectAPI.IsCompressionSupported() &&
 		isCompressible(r.Header, dstObject) &&
+		length > minCompressibleSize &&
 		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame && !objectEncryption
 	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
@@ -1164,7 +1168,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
 		reader = etag.NewReader(reader, nil)
-		s2c := newS2CompressReader(reader, actualSize)
+		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		s2c, cb := newS2CompressReader(reader, actualSize, wantEncryption)
+		dstOpts.IndexCB = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
@@ -1307,6 +1313,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				if err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
+				}
+				if dstOpts.IndexCB != nil {
+					dstOpts.IndexCB = compressionIndexEncrypter(objEncKey, dstOpts.IndexCB)
 				}
 			}
 		}
@@ -1565,7 +1574,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok {
+	if crypto.Requested(r.Header) {
 		if globalIsGateway {
 			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -1715,7 +1724,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	actualSize := size
-	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+	var idxCb func() []byte
+	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > minCompressibleSize {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
@@ -1727,8 +1737,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// Set compression metrics.
-		s2c := newS2CompressReader(actualReader, actualSize)
+		var s2c io.ReadCloser
+		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		s2c, idxCb = newS2CompressReader(actualReader, actualSize, wantEncryption)
 		defer s2c.Close()
+
 		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
@@ -1751,6 +1764,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	opts.IndexCB = idxCb
 
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
@@ -1784,7 +1798,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() {
-		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.Requested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
 				return
@@ -1812,6 +1826,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
+			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
 		}
 	}
@@ -1914,7 +1931,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok {
+	if crypto.Requested(r.Header) {
 		if globalIsGateway {
 			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -2061,7 +2078,8 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 
 		actualSize := size
-		if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
+		var idxCb func() []byte
+		if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > minCompressibleSize {
 			// Storing the compression metadata.
 			metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 			metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
@@ -2072,8 +2090,10 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			}
 
 			// Set compression metrics.
-			s2c := newS2CompressReader(actualReader, actualSize)
+			wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+			s2c, cb := newS2CompressReader(actualReader, actualSize, wantEncryption)
 			defer s2c.Close()
+			idxCb = cb
 			reader = etag.Wrap(s2c, actualReader)
 			size = -1 // Since compressed size is un-predictable.
 		}
@@ -2100,6 +2120,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return err
 		}
 		opts.MTime = info.ModTime()
+		opts.IndexCB = idxCb
 
 		retentionMode, retentionDate, legalHold, s3err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
 		if s3err == ErrNone && retentionMode.Valid() {
@@ -2126,7 +2147,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 		var objectEncryptionKey crypto.ObjectKey
 		if objectAPI.IsEncryptionSupported() {
-			if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+			if crypto.Requested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 				if crypto.SSECopy.IsRequested(r.Header) {
 					return errInvalidEncryptionParameters
 				}
@@ -2152,6 +2173,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				if err != nil {
 					return err
 				}
+			}
+			if opts.IndexCB != nil {
+				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
 		}
 
@@ -2213,7 +2237,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok {
+	if crypto.Requested(r.Header) {
 		if globalIsGateway {
 			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -2258,7 +2282,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	encMetadata := map[string]string{}
 
 	if objectAPI.IsEncryptionSupported() {
-		if _, ok := crypto.IsRequested(r.Header); ok {
+		if crypto.Requested(r.Header) {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
@@ -2356,7 +2380,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
+	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -2571,8 +2595,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 	// Compress only if the compression is enabled during initial multipart.
+	var idxCb func() []byte
 	if isCompressed {
-		s2c := newS2CompressReader(reader, actualPartSize)
+		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		s2c, cb := newS2CompressReader(reader, actualPartSize, wantEncryption)
+		idxCb = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
@@ -2589,6 +2616,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	dstOpts.IndexCB = idxCb
 
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader)
@@ -2643,6 +2671,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if dstOpts.IndexCB != nil {
+			dstOpts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, dstOpts.IndexCB)
+		}
 	}
 
 	srcInfo.PutObjReader = pReader
@@ -2682,7 +2713,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if _, ok := crypto.IsRequested(r.Header); ok {
+	if crypto.Requested(r.Header) {
 		if globalIsGateway {
 			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -2821,6 +2852,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 
+	var idxCb func() []byte
 	if objectAPI.IsCompressionSupported() && isCompressed {
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
@@ -2829,7 +2861,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		s2c := newS2CompressReader(actualReader, actualSize)
+		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		s2c, cb := newS2CompressReader(actualReader, actualSize, wantEncryption)
+		idxCb = cb
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
@@ -2904,7 +2938,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if idxCb != nil {
+			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+		}
 	}
+	opts.IndexCB = idxCb
 
 	putObjectPart := objectAPI.PutObjectPart
 	if api.CacheAPI() != nil {
@@ -3534,7 +3572,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				DeleteMarker:          objInfo.DeleteMarker,
 				ReplicationState:      objInfo.getReplicationState(dsc.String(), opts.VersionID, false),
 			},
-			Bucket: bucket,
+			Bucket:    bucket,
+			EventType: ReplicateIncomingDelete,
 		}
 		scheduleReplicationDelete(ctx, dobj, objectAPI)
 	}

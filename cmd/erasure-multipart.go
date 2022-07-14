@@ -91,7 +91,10 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.meta is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, false)
+			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
 			return nil
 		}, index)
 	}
@@ -138,7 +141,10 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 		wg.Add(1)
 		go func(disk StorageAPI) {
 			defer wg.Done()
-			disk.Delete(ctx, bucket, prefix, true)
+			disk.Delete(ctx, bucket, prefix, DeleteOptions{
+				Recursive: true,
+				Force:     false,
+			})
 		}(disk)
 	}
 	wg.Wait()
@@ -647,9 +653,13 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	fi.ModTime = UTCNow()
 
 	md5hex := r.MD5CurrentHexString()
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
 
 	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize())
+	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -941,6 +951,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			Number:     part.PartNumber,
 			Size:       currentFI.Parts[partIdx].Size,
 			ActualSize: currentFI.Parts[partIdx].ActualSize,
+			Index:      currentFI.Parts[partIdx].Index,
 		}
 	}
 

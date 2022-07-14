@@ -1149,17 +1149,17 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// SpeedtestHandler - Deprecated. See ObjectSpeedtestHandler
-func (a adminAPIHandlers) SpeedtestHandler(w http.ResponseWriter, r *http.Request) {
-	a.ObjectSpeedtestHandler(w, r)
+// SpeedtestHandler - Deprecated. See ObjectSpeedTestHandler
+func (a adminAPIHandlers) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
+	a.ObjectSpeedTestHandler(w, r)
 }
 
-// ObjectSpeedtestHandler - reports maximum speed of a cluster by performing PUT and
+// ObjectSpeedTestHandler - reports maximum speed of a cluster by performing PUT and
 // GET operations on the server, supports auto tuning by default by automatically
 // increasing concurrency and stopping when we have reached the limits on the
 // system.
-func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ObjectSpeedtestHandler")
+func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ObjectSpeedTestHandler")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -1176,8 +1176,9 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	sizeStr := r.Form.Get(peerRESTSize)
 	durationStr := r.Form.Get(peerRESTDuration)
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
+	storageClass := strings.TrimSpace(r.Form.Get(peerRESTStorageClass))
+	customBucket := strings.TrimSpace(r.Form.Get(peerRESTBucket))
 	autotune := r.Form.Get("autotune") == "true"
-	storageClass := r.Form.Get("storage-class")
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1212,15 +1213,23 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 		autotune = false
 	}
 
-	bucketExists, err := makeObjectPerfBucket(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		return
+	if customBucket == "" {
+		customBucket = globalObjectPerfBucket
+
+		bucketExists, err := makeObjectPerfBucket(ctx, objectAPI, customBucket)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		if !bucketExists {
+			defer deleteObjectPerfBucket(objectAPI)
+		}
 	}
 
-	if !bucketExists {
-		defer deleteObjectPerfBucket(objectAPI)
-	}
+	defer objectAPI.DeleteObject(ctx, customBucket, speedTest+SlashSeparator, ObjectOptions{
+		DeletePrefix: true,
+	})
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
@@ -1232,7 +1241,14 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
-	ch := objectSpeedTest(ctx, speedTestOpts{size, concurrent, duration, autotune, storageClass})
+	ch := objectSpeedTest(ctx, speedTestOpts{
+		objectSize:       size,
+		concurrencyStart: concurrent,
+		duration:         duration,
+		autotune:         autotune,
+		storageClass:     storageClass,
+		bucketName:       customBucket,
+	})
 	for {
 		select {
 		case <-ctx.Done():
@@ -1255,9 +1271,8 @@ func (a adminAPIHandlers) ObjectSpeedtestHandler(w http.ResponseWriter, r *http.
 	}
 }
 
-func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer) (bucketExists bool, err error) {
-	err = objectAPI.MakeBucketWithLocation(ctx, globalObjectPerfBucket, BucketOptions{})
-	if err != nil {
+func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName string) (bucketExists bool, err error) {
+	if err = objectAPI.MakeBucketWithLocation(ctx, bucketName, BucketOptions{}); err != nil {
 		if _, ok := err.(BucketExists); !ok {
 			// Only BucketExists error can be ignored.
 			return false, err
@@ -2203,9 +2218,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				autotune = false
 			}
 
-			bucketExists, err := makeObjectPerfBucket(ctx, objectAPI)
+			bucketExists, err := makeObjectPerfBucket(ctx, objectAPI, globalObjectPerfBucket)
 			if err != nil {
-				healthInfo.Perf.Error = "Could not make object perf bucket: " + err.Error()
+				healthInfo.Perf.Error = "Unable to create bucket: " + err.Error()
 				partialWrite(healthInfo)
 				return
 			}
@@ -2215,7 +2230,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			}
 
 			opts := speedTestOpts{
-				throughputSize:   size,
+				objectSize:       size,
 				concurrencyStart: concurrent,
 				duration:         10 * time.Second,
 				autotune:         autotune,

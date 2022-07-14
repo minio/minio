@@ -35,7 +35,7 @@ spec:
 {{- if (and (eq .Values.consoleService.type "NodePort") ( .Values.consoleService.nodePort)) }}
       nodePort: {{ .Values.consoleService.nodePort }}
 {{- else }}
-      targetPort: {{ .Values.consoleService.port }}
+      targetPort: {{ .Values.minioConsolePort }}
 {{- end}}
 {{- if .Values.consoleService.externalIPs }}
   externalIPs:

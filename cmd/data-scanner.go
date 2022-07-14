@@ -48,12 +48,13 @@ import (
 )
 
 const (
-	dataScannerSleepPerFolder     = time.Millisecond                 // Time to wait between folders.
-	dataUsageUpdateDirCycles      = 16                               // Visit all folders every n cycles.
-	dataScannerCompactLeastObject = 500                              // Compact when there is less than this many objects in a branch.
-	dataScannerCompactAtChildren  = 10000                            // Compact when there are this many children in a branch.
-	dataScannerCompactAtFolders   = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerStartDelay         = 1 * time.Minute                  // Time to wait on startup and between cycles.
+	dataScannerSleepPerFolder        = time.Millisecond                 // Time to wait between folders.
+	dataUsageUpdateDirCycles         = 16                               // Visit all folders every n cycles.
+	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
+	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
+	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
+	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
@@ -566,9 +567,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		}
 
 		// If we have many subfolders, compact ourself.
-		if !into.Compacted &&
-			f.newCache.Info.Name != folder.name &&
-			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders {
+		shouldCompact := f.newCache.Info.Name != folder.name &&
+			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders ||
+			len(existingFolders)+len(newFolders) >= dataScannerForceCompactAtFolders
+
+		if !into.Compacted && shouldCompact {
 			into.Compacted = true
 			newFolders = append(newFolders, existingFolders...)
 			existingFolders = nil
@@ -1275,12 +1278,14 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 
 	switch oi.ReplicationStatus {
 	case replication.Pending, replication.Failed:
+		roi.EventType = ReplicateHeal
 		globalReplicationPool.queueReplicaTask(roi)
 		return
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
 	}
 	if roi.ExistingObjResync.mustResync() {
+		roi.EventType = ReplicateExisting
 		globalReplicationPool.queueReplicaTask(roi)
 	}
 }
@@ -1306,11 +1311,13 @@ func (i *scannerItem) healReplicationDeletes(ctx context.Context, o ObjectLayer,
 				DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
 				DeleteMarker:          roi.DeleteMarker,
 			},
-			Bucket: roi.Bucket,
-			OpType: replication.HealReplicationType,
+			Bucket:    roi.Bucket,
+			OpType:    replication.HealReplicationType,
+			EventType: ReplicateHealDelete,
 		}
 		if roi.ExistingObjResync.mustResync() {
 			doi.OpType = replication.ExistingObjectReplicationType
+			doi.EventType = ReplicateExistingDelete
 			queueReplicateDeletesWrapper(doi, roi.ExistingObjResync)
 			return
 		}
@@ -1473,9 +1480,9 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string) {
 	var apiName string
-	switch trigger {
+	switch event {
 	case ILMExpiry:
 		apiName = "ILMExpiry"
 	case ILMFreeVersionDelete:
@@ -1484,7 +1491,7 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, trigger string) {
 		apiName = "ILMTransition"
 	}
 	auditLogInternal(ctx, oi.Bucket, oi.Name, AuditLogOptions{
-		Trigger:   trigger,
+		Event:     event,
 		APIName:   apiName,
 		VersionID: oi.VersionID,
 	})

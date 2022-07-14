@@ -447,7 +447,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	targetObj := keyName + "/upload.txt"
 
 	// The url of success_action_redirect field
-	redirectURL, err := url.Parse("http://www.google.com")
+	redirectURL, err := url.Parse("http://www.google.com?query=value")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,9 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 		t.Error("Unexpected error: ", err)
 	}
 
-	redirectURL.RawQuery = getRedirectPostRawQuery(info)
+	redirectURL.Query().Add("bucket", info.Bucket)
+	redirectURL.Query().Add("key", info.Name)
+	redirectURL.Query().Add("etag", "\""+info.ETag+"\"")
 	expectedLocation := redirectURL.String()
 
 	// Check the new location url

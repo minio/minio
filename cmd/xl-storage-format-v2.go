@@ -167,6 +167,7 @@ type xlMetaV2Object struct {
 	PartETags          []string          `json:"PartETags" msg:"PartETags,allownil"`             // Part ETags
 	PartSizes          []int64           `json:"PartSizes" msg:"PartSizes"`                      // Part Sizes
 	PartActualSizes    []int64           `json:"PartASizes,omitempty" msg:"PartASizes,allownil"` // Part ActualSizes (compression)
+	PartIndices        [][]byte          `json:"PartIndices,omitempty" msg:"PartIdx,omitempty"`  // Part Indexes (compression)
 	Size               int64             `json:"Size" msg:"Size"`                                // Object version size
 	ModTime            int64             `json:"MTime" msg:"MTime"`                              // Object version modified time
 	MetaSys            map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,allownil"`       // Object version internal metadata
@@ -574,6 +575,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 			fi.Parts[i].ETag = j.PartETags[i]
 		}
 		fi.Parts[i].ActualSize = j.PartActualSizes[i]
+		if len(j.PartIndices) > 0 {
+			fi.Parts[i].Index = j.PartIndices[i]
+		}
 	}
 	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
 	for i := range fi.Parts {
@@ -1471,6 +1475,13 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 				break
 			}
 		}
+		for i := range fi.Parts {
+			// Only add indices if any.
+			if len(fi.Parts[i].Index) > 0 {
+				ventry.ObjectV2.PartIndices = make([][]byte, len(fi.Parts))
+				break
+			}
+		}
 		for i := range fi.Erasure.Distribution {
 			ventry.ObjectV2.ErasureDist[i] = uint8(fi.Erasure.Distribution[i])
 		}
@@ -1482,6 +1493,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			}
 			ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
 			ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
+			if len(ventry.ObjectV2.PartIndices) > 0 {
+				ventry.ObjectV2.PartIndices[i] = fi.Parts[i].Index
+			}
 		}
 
 		tierFVIDKey := ReservedMetadataPrefixLower + tierFVID

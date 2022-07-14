@@ -667,8 +667,11 @@ func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle,
 		action := evalActionFromLifecycle(ctx, lc, lr, objInfo, false)
 		switch action {
 		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-			fallthrough
+			globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
+			// Skip this entry.
+			continue
 		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+			globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
 			// Skip this entry.
 			continue
 		}

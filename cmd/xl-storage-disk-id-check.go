@@ -382,14 +382,14 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	return p.storage.CheckParts(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
+func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricDelete, volume, path)
 	if err != nil {
 		return err
 	}
 	defer done(&err)
 
-	return p.storage.Delete(ctx, volume, path, recursive)
+	return p.storage.Delete(ctx, volume, path, deleteOpts)
 }
 
 // DeleteVersions deletes slice of versions, it can be same object
@@ -768,7 +768,10 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 		if err != nil || len(b) != 10001 {
 			continue
 		}
-		err = p.storage.Delete(context.Background(), minioMetaTmpBucket, fn, false)
+		err = p.storage.Delete(context.Background(), minioMetaTmpBucket, fn, DeleteOptions{
+			Recursive: false,
+			Force:     false,
+		})
 		if err == nil {
 			logger.Info("Able to read+write, bringing disk %s online.", p.storage.String())
 			atomic.StoreInt32(&p.health.status, diskHealthOK)

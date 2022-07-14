@@ -849,6 +849,11 @@ func (es *erasureSingle) putMetacacheObject(ctx context.Context, key string, r *
 		return ObjectInfo{}, IncompleteBody{Bucket: minioMetaBucket, Object: key}
 	}
 
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
+
 	for i, w := range writers {
 		if w == nil {
 			// Make sure to avoid writing to disks which we couldn't complete in erasure.Encode()
@@ -856,7 +861,7 @@ func (es *erasureSingle) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1082,6 +1087,11 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		defer lk.Unlock(lkctx.Cancel)
 	}
 
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1092,7 +1102,7 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1321,8 +1331,14 @@ func (es *erasureSingle) DeleteObjects(ctx context.Context, bucket string, objec
 
 func (es *erasureSingle) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	dirPrefix := encodeDirObject(prefix)
-	defer es.disk.Delete(ctx, bucket, dirPrefix, true)
-	return es.disk.Delete(ctx, bucket, prefix, true)
+	defer es.disk.Delete(ctx, bucket, dirPrefix, DeleteOptions{
+		Recursive: true,
+		Force:     true,
+	})
+	return es.disk.Delete(ctx, bucket, prefix, DeleteOptions{
+		Recursive: true,
+		Force:     true,
+	})
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply
@@ -1916,7 +1932,10 @@ func (es *erasureSingle) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.meta is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, false)
+			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
 			return nil
 		}, index)
 	}
@@ -1954,7 +1973,10 @@ func (es *erasureSingle) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		}
 		wait := es.deletedCleanupSleeper.Timer(ctx)
 		if now.Sub(vi.Created) > expiry {
-			disk.Delete(ctx, minioMetaTmpBucket, tmpDir, true)
+			disk.Delete(ctx, minioMetaTmpBucket, tmpDir, DeleteOptions{
+				Recursive: true,
+				Force:     false,
+			})
 		}
 		wait()
 		return nil
@@ -2357,8 +2379,13 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	md5hex := r.MD5CurrentHexString()
 
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
+
 	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize())
+	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -2656,6 +2683,7 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			Number:     part.PartNumber,
 			Size:       currentFI.Parts[partIdx].Size,
 			ActualSize: currentFI.Parts[partIdx].ActualSize,
+			Index:      currentFI.Parts[partIdx].Index,
 		}
 	}
 

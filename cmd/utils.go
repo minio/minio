@@ -1036,7 +1036,7 @@ func totalNodeCount() uint64 {
 
 // AuditLogOptions takes options for audit logging subsystem activity
 type AuditLogOptions struct {
-	Trigger   string
+	Event     string
 	APIName   string
 	Status    string
 	VersionID string
@@ -1046,7 +1046,8 @@ type AuditLogOptions struct {
 // sends audit logs for internal subsystem activity
 func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
 	entry := audit.NewEntry(globalDeploymentID)
-	entry.Trigger = opts.Trigger
+	entry.Trigger = opts.Event
+	entry.Event = opts.Event
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = bucket

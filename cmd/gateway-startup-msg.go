@@ -48,12 +48,6 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 
 	// Prints documentation message.
 	printObjectAPIMsg()
-
-	if globalMinioConsolePortAuto && globalBrowserEnabled {
-		msg := fmt.Sprintf("\nWARNING: Console endpoint is listening on a dynamic port (%s), please use --console-address \":PORT\" to choose a static port.",
-			globalMinioConsolePort)
-		logger.Info(color.RedBold(msg))
-	}
 }
 
 // Prints common server startup message. Prints credential, region and browser access.

@@ -815,6 +815,10 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	if n < data.Size() {
 		return ObjectInfo{}, IncompleteBody{Bucket: minioMetaBucket, Object: key}
 	}
+	var index []byte
+	if opts.IndexCB != nil {
+		index = opts.IndexCB()
+	}
 
 	for i, w := range writers {
 		if w == nil {
@@ -823,7 +827,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -972,14 +976,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
-	case size == -1:
-		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			buffer = make([]byte, data.ActualSize()+256, data.ActualSize()*2+512)
-		} else {
-			buffer = er.bp.Get()
-			defer er.bp.Put(buffer)
-		}
-	case size >= fi.Erasure.BlockSize:
+	case size >= fi.Erasure.BlockSize || size == -1:
 		buffer = er.bp.Get()
 		defer er.bp.Put(buffer)
 	case size < fi.Erasure.BlockSize:
@@ -1071,6 +1068,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
+	var compIndex []byte
+	if opts.IndexCB != nil {
+		compIndex = opts.IndexCB()
+	}
 	if !opts.NoLock {
 		lk := er.NewNSLock(bucket, object)
 		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -1091,7 +1092,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), compIndex)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1367,8 +1368,14 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 			// Deletes
 			// - The prefix and its children
 			// - The prefix__XLDIR__
-			defer disks[index].Delete(ctx, bucket, dirPrefix, true)
-			return disks[index].Delete(ctx, bucket, prefix, true)
+			defer disks[index].Delete(ctx, bucket, dirPrefix, DeleteOptions{
+				Recursive: true,
+				Force:     true,
+			})
+			return disks[index].Delete(ctx, bucket, prefix, DeleteOptions{
+				Recursive: true,
+				Force:     true,
+			})
 		}, index)
 	}
 	for _, err := range g.Wait() {
