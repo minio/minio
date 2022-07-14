@@ -82,8 +82,8 @@ type Timeouts struct {
 // DefaultTimeouts contains default timeouts.
 var DefaultTimeouts = Timeouts{
 	Acquire:         drwMutexAcquireTimeout,
-	RefreshCall:     drwMutexUnlockCallTimeout,
-	UnlockCall:      drwMutexRefreshCallTimeout,
+	RefreshCall:     drwMutexRefreshCallTimeout,
+	UnlockCall:      drwMutexUnlockCallTimeout,
 	ForceUnlockCall: drwMutexForceUnlockCallTimeout,
 }
 
