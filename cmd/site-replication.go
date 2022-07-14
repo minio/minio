@@ -2814,7 +2814,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				if bi, ok := sris[dIdx].Buckets[s.Bucket]; ok {
 					hasBucket = !bi.CreatedAt.Equal(timeSentinel)
 				}
-				quotaCfgSet := hasBucket && *quotaCfgs[i] != madmin.BucketQuota{}
+				quotaCfgSet := hasBucket && quotaCfgs[i] != nil && *quotaCfgs[i] != madmin.BucketQuota{}
 				ss := madmin.SRBucketStatsSummary{
 					DeploymentID:             s.DeploymentID,
 					HasBucket:                hasBucket,
@@ -3556,20 +3556,13 @@ type srStatusInfo struct {
 }
 
 func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer) error {
-	buckets, err := c.listBuckets(ctx)
+	info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
+		Buckets: true,
+	})
 	if err != nil {
 		return err
 	}
-	for _, bi := range buckets {
-		bucket := bi.Name
-		info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
-			Entity:      madmin.SRBucketEntity,
-			EntityValue: bucket,
-		})
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
+	for bucket := range info.BucketStats {
 		c.healCreateMissingBucket(ctx, objAPI, bucket, info)
 		c.healVersioningMetadata(ctx, objAPI, bucket, info)
 		c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
