@@ -38,13 +38,13 @@ func TestParseAndValidateReplicationConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: errInvalidDeleteMarkerReplicationStatus,
 		},
-		// 2 Invalid delete replication status in replication config
+		// 2 No delete replication status in replication config
 		{
 			inputConfig:           `<ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Role>arn:aws:iam::AcctID:role/role-name</Role><Rule><Status>Enabled</Status><DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication><Prefix>key-prefix</Prefix><Destination><Bucket>arn:aws:s3:::destinationbucket</Bucket></Destination></Rule></ReplicationConfiguration>`,
 			destBucket:            "destinationbucket",
 			sameTarget:            false,
 			expectedParsingErr:    nil,
-			expectedValidationErr: errDeleteReplicationMissing,
+			expectedValidationErr: nil,
 		},
 		// 3 valid replication config
 		{

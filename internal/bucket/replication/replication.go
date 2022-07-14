@@ -62,6 +62,12 @@ func ParseConfig(reader io.Reader) (*Config, error) {
 				},
 			}
 		}
+		// Default DeleteReplication to disabled if unset.
+		if len(config.Rules[i].DeleteReplication.Status) == 0 {
+			config.Rules[i].DeleteReplication = DeleteReplication{
+				Status: Disabled,
+			}
+		}
 	}
 	return &config, nil
 }
