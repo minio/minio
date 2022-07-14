@@ -1170,8 +1170,8 @@ github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/juicedata/godaemon v0.0.0-20210629045518-3da5144a127d/go.mod h1:dlxKkLh3qAIPtgr2U/RVzsZJDuXA1ffg+Njikfmhvgw=
-github.com/juicedata/juicefs v1.0.0-rc2.0.20220624095303-f21f86b5f616 h1:duulENlqGUzzPZgtcAnvT9HNiYY8a2XvfXvIuY6FI5Q=
-github.com/juicedata/juicefs v1.0.0-rc2.0.20220624095303-f21f86b5f616/go.mod h1:lur31wPIaJk4RKCK9mb3Qfm53jUi3xCX+TSLnK+lOLI=
+github.com/juicedata/juicefs v1.0.0-rc3 h1:ZIFqKkpjiesmG9coHx26B7f+MDmcPwMEFGSEJd5uPmI=
+github.com/juicedata/juicefs v1.0.0-rc3/go.mod h1:lur31wPIaJk4RKCK9mb3Qfm53jUi3xCX+TSLnK+lOLI=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220411070607-092927ed0122 h1:2YZ6nb3kO38/WIG5L5dwrlrElXtCNKRIdrXm2c9meOk=
 github.com/juicedata/mpb/v7 v7.0.4-0.20220411070607-092927ed0122/go.mod h1:NXGsfPGx6G2JssqvEcULtDqUrxuuYs4llpv8W6ZUpzk=
 github.com/juju/ratelimit v1.0.1 h1:+7AIFJVQ0EQgq/K9+0Krm7m530Du7tIz0METWzN0RgY=
