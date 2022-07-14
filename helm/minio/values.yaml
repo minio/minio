@@ -46,10 +46,12 @@ ignoreChartChecksums: false
 ## Additional arguments to pass to minio binary
 extraArgs: []
 
-## Port number for MinIO S3 API Access
+## Internal port number for MinIO S3 API container
+## Change service.port to change external port number
 minioAPIPort: "9000"
 
-## Port number for MinIO Browser COnsole Access
+## Internal port number for MinIO Browser Console container
+## Change consoleService.port to change external port number
 minioConsolePort: "9001"
 
 ## Update strategy for Deployments
@@ -162,7 +164,6 @@ persistence:
 service:
   type: ClusterIP
   clusterIP: ~
-  ## Make sure to match it to minioAPIPort
   port: "9000"
   nodePort: 32000
 
@@ -194,7 +195,6 @@ ingress:
 consoleService:
   type: ClusterIP
   clusterIP: ~
-  ## Make sure to match it to minioConsolePort
   port: "9001"
   nodePort: 32001
 

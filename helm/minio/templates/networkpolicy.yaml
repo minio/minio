@@ -16,8 +16,8 @@ spec:
       release: {{ .Release.Name }}
   ingress:
     - ports:
-        - port: {{ .Values.service.port }}
-        - port: {{ .Values.consoleService.port }}
+        - port: {{ .Values.minioAPIPort }}
+        - port: {{ .Values.minioConsolePort }}
       {{- if not .Values.networkPolicy.allowExternal }}
       from:
         - podSelector:
