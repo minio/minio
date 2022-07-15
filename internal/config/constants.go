@@ -80,7 +80,8 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
-	
-	//support users to specify time zone
-	EnvMinioTraceLogTimeZone = "MINIO_TRACE_LOG_TIME_ZONE"	
+
+	// support users to specify time zone
+	// Set the value to 'Local' to adapt to the current system time zone
+	EnvMinioTraceLogTimeZone = "MINIO_TRACE_LOG_TIME_ZONE"
 )
