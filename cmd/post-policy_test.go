@@ -499,9 +499,11 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 		t.Error("Unexpected error: ", err)
 	}
 
-	redirectURL.Query().Add("bucket", info.Bucket)
-	redirectURL.Query().Add("key", info.Name)
-	redirectURL.Query().Add("etag", "\""+info.ETag+"\"")
+	v := redirectURL.Query()
+	v.Add("bucket", info.Bucket)
+	v.Add("key", info.Name)
+	v.Add("etag", "\""+info.ETag+"\"")
+	redirectURL.RawQuery = v.Encode()
 	expectedLocation := redirectURL.String()
 
 	// Check the new location url
