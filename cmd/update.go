@@ -76,7 +76,7 @@ func releaseTimeToReleaseTag(releaseTime time.Time) string {
 // releaseTagToReleaseTime - reverse of `releaseTimeToReleaseTag()`
 func releaseTagToReleaseTime(releaseTag string) (releaseTime time.Time, err error) {
 	fields := strings.Split(releaseTag, ".")
-	if len(fields) < 2 || len(fields) > 3 {
+	if len(fields) < 2 || len(fields) > 4 {
 		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
 	}
 	if fields[0] != "RELEASE" {
