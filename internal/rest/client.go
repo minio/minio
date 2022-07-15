@@ -242,8 +242,10 @@ func (c *Client) MarkOffline() bool {
 				}
 				if c.HealthCheckFn() {
 					if atomic.CompareAndSwapInt32(&c.connected, offline, online) {
-						logger.Info("Client %s online", c.url.String())
-						atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
+						now := time.Now()
+						disconnected := now.Sub(c.LastConn())
+						logger.Info("Client '%s' re-connected in %s", c.url.String(), disconnected)
+						atomic.StoreInt64(&c.lastConn, now.UnixNano())
 					}
 					return
 				}
