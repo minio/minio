@@ -1117,9 +1117,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	})
 
 	if redirectURL != nil { // success_action_redirect is valid and set.
-		redirectURL.Query().Add("bucket", objInfo.Bucket)
-		redirectURL.Query().Add("key", objInfo.Name)
-		redirectURL.Query().Add("etag", "\""+objInfo.ETag+"\"")
+		v := redirectURL.Query()
+		v.Add("bucket", objInfo.Bucket)
+		v.Add("key", objInfo.Name)
+		v.Add("etag", "\""+objInfo.ETag+"\"")
+		redirectURL.RawQuery = v.Encode()
 		writeRedirectSeeOther(w, redirectURL.String())
 		return
 	}
