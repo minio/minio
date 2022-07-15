@@ -263,7 +263,7 @@ func getLogTime() time.Time {
 	timeZone := env.Get(config.EnvMinioTraceLogTimeZone, "")
 	local, err := time.LoadLocation(timeZone)
 	if err != nil {
-		logger.Error("env MINIO_TRACE_LOG_TIME_ZONE is invalid,will use default value.")
+		logger.Error("env MINIO_TRACE_LOG_TIME_ZONE is invalid, will use default value.")
 		local, _ = time.LoadLocation("")
 	}
 	return time.Now().In(local)
