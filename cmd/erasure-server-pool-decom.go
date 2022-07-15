@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -967,15 +968,9 @@ func (z *erasureServerPools) getDecommissionPoolSpaceInfo(idx int) (pi poolSpace
 	if idx+1 > len(z.serverPools) {
 		return pi, errInvalidArgument
 	}
+
 	info, _ := z.serverPools[idx].StorageInfo(context.Background())
 	info.Backend = z.BackendInfo()
-	for _, disk := range info.Disks {
-		if disk.Healing {
-			return pi, decomError{
-				Err: fmt.Sprintf("%s drive is healing, decommission will not be started", disk.Endpoint),
-			}
-		}
-	}
 
 	usableTotal := int64(GetTotalUsableCapacity(info.Disks, info))
 	usableFree := int64(GetTotalUsableCapacityFree(info.Disks, info))
@@ -1110,6 +1105,13 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 	buckets, err := z.ListBuckets(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Make sure to heal the buckets to ensure the new
+	// pool has the new buckets, this is to avoid
+	// failures later.
+	for _, bucket := range buckets {
+		z.HealBucket(ctx, bucket.Name, madmin.HealOpts{})
 	}
 
 	decomBuckets := make([]decomBucketInfo, len(buckets))
