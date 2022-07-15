@@ -66,21 +66,19 @@ var isValidSetSize = func(count uint64) bool {
 }
 
 func commonSetDriveCount(divisibleSize uint64, setCounts []uint64) (setSize uint64) {
-	// prefers setCounts to be sorted for optimal behavior.
-	if divisibleSize < setCounts[len(setCounts)-1] {
-		return divisibleSize
-	}
+	// Not necessarily needed but it ensures to the readers
+	// eyes that we prefer a sorted setCount slice for the
+	// subsequent function to figure out the right common
+	// divisor, it avoids loops.
+	sort.Slice(setCounts, func(i, j int) bool {
+		return setCounts[i] > setCounts[j]
+	})
 
 	// Figure out largest value of total_drives_in_erasure_set which results
 	// in least number of total_drives/total_drives_erasure_set ratio.
-	prevD := divisibleSize / setCounts[0]
 	for _, cnt := range setCounts {
 		if divisibleSize%cnt == 0 {
-			d := divisibleSize / cnt
-			if d <= prevD {
-				prevD = d
-				setSize = cnt
-			}
+			return cnt
 		}
 	}
 	return setSize
@@ -114,14 +112,6 @@ func possibleSetCountsWithSymmetry(setCounts []uint64, argPatterns []ellipses.Ar
 	for setCount := range newSetCounts {
 		setCounts = append(setCounts, setCount)
 	}
-
-	// Not necessarily needed but it ensures to the readers
-	// eyes that we prefer a sorted setCount slice for the
-	// subsequent function to figure out the right common
-	// divisor, it avoids loops.
-	sort.Slice(setCounts, func(i, j int) bool {
-		return setCounts[i] < setCounts[j]
-	})
 
 	return setCounts
 }
