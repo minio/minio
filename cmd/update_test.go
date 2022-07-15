@@ -72,6 +72,14 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 			time.Now().UTC(), "DEVELOPMENT.GOGET",
 			"DEVELOPMENT.GOGET is not a valid release tag",
 		},
+		{
+			time.Date(2017, time.August, 5, 0, 0, 53, 0, utcLoc),
+			"RELEASE.2017-08-05T00-00-53Z.hotfix", "",
+		},
+		{
+			time.Date(2017, time.August, 5, 0, 0, 53, 0, utcLoc),
+			"RELEASE.2017-08-05T00-00-53Z.hotfix.aaaa", "",
+		},
 	}
 	for i, testCase := range testCases {
 		if testCase.errStr != "" {
