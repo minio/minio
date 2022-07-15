@@ -976,13 +976,8 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 }
 
 func (z *erasureServerPools) deletePrefix(ctx context.Context, bucket string, prefix string) error {
-	for idx, pool := range z.serverPools {
-		if z.IsSuspended(idx) {
-			logger.LogIf(ctx, fmt.Errorf("pool %d is suspended, all writes are suspended", idx+1))
-			continue
-		}
-		_, err := pool.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true})
-		if err != nil {
+	for _, pool := range z.serverPools {
+		if _, err := pool.DeleteObject(ctx, bucket, prefix, ObjectOptions{DeletePrefix: true}); err != nil {
 			return err
 		}
 	}
@@ -1325,7 +1320,10 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 	poolResult.KeyMarker = keyMarker
 	poolResult.Prefix = prefix
 	poolResult.Delimiter = delimiter
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		result, err := pool.ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker,
 			delimiter, maxUploads)
 		if err != nil {
@@ -1350,6 +1348,9 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		result, err := pool.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return "", err
@@ -1392,7 +1393,10 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return pool.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
@@ -1421,7 +1425,10 @@ func (z *erasureServerPools) GetMultipartInfo(ctx context.Context, bucket, objec
 	if z.SinglePool() {
 		return z.serverPools[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 	}
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		mi, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return mi, nil
@@ -1450,7 +1457,10 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 	if z.SinglePool() {
 		return z.serverPools[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return pool.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
@@ -1478,7 +1488,10 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		return z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
@@ -1507,7 +1520,10 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
-	for _, pool := range z.serverPools {
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
 		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)

@@ -587,21 +587,21 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 			UserDefined: objInfo.UserDefined,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("decommissionObject: NewMultipartUpload() %w", err)
 		}
 		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, uploadID, ObjectOptions{})
 		parts := make([]CompletePart, len(objInfo.Parts))
 		for i, part := range objInfo.Parts {
 			hr, err := hash.NewReader(gr, part.Size, "", "", part.Size)
 			if err != nil {
-				return err
+				return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 			}
 			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, uploadID,
 				part.Number,
 				NewPutObjReader(hr),
 				ObjectOptions{})
 			if err != nil {
-				return err
+				return fmt.Errorf("decommissionObject: PutObjectPart() %w", err)
 			}
 			parts[i] = CompletePart{
 				ETag:       pi.ETag,
@@ -611,11 +611,14 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		_, err = z.CompleteMultipartUpload(ctx, bucket, objInfo.Name, uploadID, parts, ObjectOptions{
 			MTime: objInfo.ModTime,
 		})
+		if err != nil {
+			err = fmt.Errorf("decommissionObject: CompleteMultipartUpload() %w", err)
+		}
 		return err
 	}
 	hr, err := hash.NewReader(gr, objInfo.Size, "", "", objInfo.Size)
 	if err != nil {
-		return err
+		return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 	}
 	_, err = z.PutObject(ctx,
 		bucket,
@@ -626,6 +629,9 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 			MTime:       objInfo.ModTime,
 			UserDefined: objInfo.UserDefined,
 		})
+	if err != nil {
+		err = fmt.Errorf("decommissionObject: PutObject() %w", err)
+	}
 	return err
 }
 

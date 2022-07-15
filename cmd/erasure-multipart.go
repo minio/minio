@@ -237,7 +237,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		}
 		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
 		if err != nil {
-			return result, toObjectErr(err, bucket, object)
+			return result, toObjectErr(err, bucket, object, uploadID)
 		}
 		populatedUploadIds.Add(uploadID)
 		uploads = append(uploads, MultipartInfo{
