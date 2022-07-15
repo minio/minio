@@ -20,6 +20,8 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/pkg/env"
 	"io"
 	"net"
 	"net/http"
@@ -145,9 +147,9 @@ func httpTracer(h http.Handler) http.Handler {
 		// Execute call.
 		r.Body = reqRecorder
 
-		reqStartTime := time.Now().UTC()
+		reqStartTime := getLogTime()
 		h.ServeHTTP(respRecorder, r)
-		reqEndTime := time.Now().UTC()
+		reqEndTime := getLogTime()
 
 		tt := madmin.TraceInternal
 		if strings.HasPrefix(tc.funcName, "s3.") {
@@ -254,4 +256,15 @@ func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 
 func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return httpTrace(f, false)
+}
+
+// Allow users to customize the time zone for trace log printing
+func getLogTime() time.Time {
+	timeZone := env.Get(config.EnvMinioTraceLogTimeZone, "")
+	local, err := time.LoadLocation(timeZone)
+	if err != nil {
+		logger.Error("env MINIO_TRACE_LOG_TIME_ZONE is invalid,will use default value.")
+		local, _ = time.LoadLocation("")
+	}
+	return time.Now().In(local)
 }
