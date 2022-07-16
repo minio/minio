@@ -59,6 +59,8 @@ type ObjectOptions struct {
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
 
+	NoDecryption                        bool      // indicates if the stream must be decrypted.
+	PreserveETag                        string    // preserves this etag during a PUT call.
 	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
 	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
 	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
@@ -73,10 +75,11 @@ type ObjectOptions struct {
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
 
-	// Mutate set to 'true' if the call is namespace mutation call
-	Mutate        bool
-	WalkAscending bool // return Walk results in ascending order of versions
+	// SkipDecommissioned set to 'true' if the call requires skipping the pool being decommissioned.
+	// mainly set for certain WRITE operations.
+	SkipDecommissioned bool
 
+	WalkAscending   bool                     // return Walk results in ascending order of versions
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
 	// IndexCB will return any index created but the compression.

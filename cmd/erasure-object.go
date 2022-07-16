@@ -1099,8 +1099,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			Hash:       bitrotWriterSum(w),
 		})
 	}
+
 	if userDefined["etag"] == "" {
 		userDefined["etag"] = r.MD5CurrentHexString()
+		if opts.PreserveETag != "" {
+			userDefined["etag"] = opts.PreserveETag
+		}
 	}
 
 	// Guess content-type from the extension if possible.

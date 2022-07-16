@@ -658,6 +658,9 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	fi.ModTime = UTCNow()
 
 	md5hex := r.MD5CurrentHexString()
+	if opts.PreserveETag != "" {
+		md5hex = opts.PreserveETag
+	}
 	var index []byte
 	if opts.IndexCB != nil {
 		index = opts.IndexCB()
