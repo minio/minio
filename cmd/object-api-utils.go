@@ -440,10 +440,7 @@ func isCompressible(header http.Header, object string) bool {
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
 
-	if !cfg.Enabled || (crypto.Requested(header) && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
-		return false
-	}
-	return true
+	return !excludeForCompression(header, object, cfg)
 }
 
 // Eliminate the non-compressible objects.
@@ -451,6 +448,10 @@ func excludeForCompression(header http.Header, object string, cfg compress.Confi
 	objStr := object
 	contentType := header.Get(xhttp.ContentType)
 	if !cfg.Enabled {
+		return true
+	}
+
+	if crypto.Requested(header) && !cfg.AllowEncrypted {
 		return true
 	}
 

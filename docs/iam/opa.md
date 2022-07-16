@@ -1,4 +1,5 @@
 # OPA Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+
 OPA is a lightweight general-purpose policy engine that can be co-located with MinIO server, in this document we talk about how to use OPA HTTP API to authorize requests. It can be used with any type of credentials (STS based like OpenID or LDAP, regular IAM users or service accounts).
 
 OPA is enabled through MinIO's Access Management Plugin feature.
@@ -21,6 +22,7 @@ podman run -it \
 ### 2. Create a sample OPA Policy
 
 In another terminal, create a policy that allows root user all access and for all other users denies `PutObject`:
+
 ```sh
 cat > example.rego <<EOF
 package httpapi.authz
@@ -43,6 +45,7 @@ EOF
 ```
 
 Then load the policy via OPA's REST API.
+
 ```
 curl -X PUT --data-binary @example.rego \
   localhost:8181/v1/policies/putobject
@@ -78,4 +81,3 @@ mc cat foo/test/issue
 # 3. Attempt to upload an object as user `foo` - this will fail with a permissions error.
 mc cp /etc/issue myminio/test/issue2
 ```
-
