@@ -237,7 +237,11 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		}
 		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
 		if err != nil {
-			return result, toObjectErr(err, bucket, object, uploadID)
+			if !IsErrIgnored(err, errFileNotFound, errDiskNotFound) {
+				logger.LogIf(ctx, err)
+			}
+			// Ignore this invalid upload-id since we are listing here
+			continue
 		}
 		populatedUploadIds.Add(uploadID)
 		uploads = append(uploads, MultipartInfo{
