@@ -46,6 +46,7 @@ test-decom: install
 	@env bash $(PWD)/docs/distributed/decom.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
+	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
 
 test-upgrade: build
 	@echo "Running minio upgrade tests"

@@ -10,7 +10,6 @@ By default, the temporary security credentials created by AssumeRoleWithWebIdent
 
 ## Configuring OpenID identity provider on MinIO
 
-
 Configuration can be performed via MinIO's standard configuration API (i.e. using `mc admin config set/get` commands) or equivalently via environment variables. For brevity we show only environment variables here:
 
 ```

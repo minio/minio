@@ -27,4 +27,4 @@ jobs:
         npm install -g markdownlint-cli
         markdownlint --fix '**/*.md' \
           --config /home/runner/work/minio/minio/.github/markdown-lint-cfg.yaml \
-          --disable MD013 MD040
+          --disable MD013 MD040 MD051

@@ -64,12 +64,15 @@ Similarly to suspend versioning set the configuration with Status set to `Suspen
 ```
 
 ## MinIO extension to Bucket Versioning
+
 ### Motivation
-**PLEASE READ: This feature is meant for advanced usecases only where the setup is using bucket versioning or with replicated buckets, use this feature to optimize versioning behavior for some specific applications. MinIO experts will evaluate and guide on the benefits for your application, please reach out to us on https://subnet.min.io.**
+
+**PLEASE READ: This feature is meant for advanced usecases only where the setup is using bucket versioning or with replicated buckets, use this feature to optimize versioning behavior for some specific applications. MinIO experts will evaluate and guide on the benefits for your application, please reach out to us on <https://subnet.min.io>.**
 
 Spark/Hadoop workloads which use Hadoop MR Committer v1/v2 algorithm upload objects to a temporary prefix in a bucket. These objects are 'renamed' to a different prefix on Job commit. Object storage admins are forced to configure separate ILM policies to expire these objects and their versions to reclaim space.
 
 ### Solution
+
 To exclude objects under a list of prefix (glob) patterns from being versioned, you can send the following versioning configuration with Status set to `Enabled`.
 
 ```
@@ -92,6 +95,7 @@ To exclude objects under a list of prefix (glob) patterns from being versioned, 
 ```
 
 ### Features
+
 - Objects matching these prefixes will behave as though versioning were suspended. These objects **will not** be replicated if bucket has replication configured.
 - Objects matching these prefixes will also not leave `null` delete markers, dramatically reduces namespace pollution while keeping the benefits of replication.
 - Users with explicit permissions or the root credential can configure the versioning state of any bucket.
