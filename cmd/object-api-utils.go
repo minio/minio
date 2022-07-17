@@ -646,8 +646,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		return nil, 0, 0, err
 	}
 
-	// if object is encrypted and it is a restore request, fetch content without decrypting.
-	if opts.Transition.RestoreRequest != nil {
+	// if object is encrypted and it is a restore request or if NoDecryption
+	// was requested, fetch content without decrypting.
+	if opts.Transition.RestoreRequest != nil || opts.NoDecryption {
 		isEncrypted = false
 		isCompressed = false
 	}
