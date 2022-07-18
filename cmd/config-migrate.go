@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -2510,7 +2511,7 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 
 	if !utf8.Valid(data) {
 		if GlobalKMS != nil {
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			data, err = config.DecryptBytes(context.Background(), GlobalKMS, data, kms.Context{
 				minioMetaBucket: path.Join(minioMetaBucket, configFile),
 			})
 			if err != nil {

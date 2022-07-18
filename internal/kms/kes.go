@@ -155,12 +155,12 @@ func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Con
 // DecryptKey decrypts the ciphertext with the key at the KES
 // server referenced by the key ID. The context must match the
 // context value used to generate the ciphertext.
-func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]byte, error) {
-	ctxBytes, err := ctx.MarshalText()
+func (c *kesClient) DecryptKey(ctx context.Context, keyID string, ciphertext []byte, kmsCtx Context) ([]byte, error) {
+	ctxBytes, err := kmsCtx.MarshalText()
 	if err != nil {
 		return nil, err
 	}
-	return c.client.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
+	return c.client.Decrypt(ctx, keyID, ciphertext, ctxBytes)
 }
 
 func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
@@ -189,7 +189,7 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 
 	plaintexts := make([][]byte, 0, len(ciphertexts))
 	for i := range ciphertexts {
-		plaintext, err := c.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		plaintext, err := c.DecryptKey(ctx, keyID, ciphertexts[i], contexts[i])
 		if err != nil {
 			return nil, err
 		}

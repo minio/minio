@@ -521,7 +521,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(oi ObjectInfo, offset int64, decrypt func([]byte) ([]byte, error)) (compressedOffset int64, partSkip int64, firstPart int, decryptSkip int64, seqNum uint32) {
+func getCompressedOffsets(ctx context.Context, oi ObjectInfo, offset int64, decrypt func(context.Context, []byte) ([]byte, error)) (compressedOffset int64, partSkip int64, firstPart int, decryptSkip int64, seqNum uint32) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
@@ -543,7 +543,7 @@ func getCompressedOffsets(oi ObjectInfo, offset int64, decrypt func([]byte) ([]b
 	if partSkip > 0 && len(oi.Parts) > firstPartIdx && len(oi.Parts[firstPartIdx].Index) > 0 {
 		_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
 		if isEncrypted {
-			dec, err := decrypt(oi.Parts[firstPartIdx].Index)
+			dec, err := decrypt(ctx, oi.Parts[firstPartIdx].Index)
 			if err == nil {
 				// Load Index
 				var idx s2.Index
@@ -681,14 +681,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if err != nil {
 				return nil, 0, 0, err
 			}
-			decrypt := func(b []byte) ([]byte, error) {
+			decrypt := func(_ context.Context, b []byte) ([]byte, error) {
 				return b, nil
 			}
 			if isEncrypted {
 				decrypt = oi.compressionIndexDecrypt
 			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off, decrypt)
+			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(context.Background(), oi, off, decrypt)
 			decLength = length
 			length = oi.Size - off
 			// For negative length we read everything.
@@ -705,7 +705,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
-				inputReader, err = DecryptBlocksRequestR(inputReader, h, seqNum, firstPart, oi, copySource)
+				inputReader, err = DecryptBlocksRequestR(context.Background(), inputReader, h, seqNum, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
@@ -787,7 +787,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 
 			// Attach decrypter on inputReader
 			var decReader io.Reader
-			decReader, err = DecryptBlocksRequestR(inputReader, h, seqNumber, partStart, oi, copySource)
+			decReader, err = DecryptBlocksRequestR(context.Background(), inputReader, h, seqNumber, partStart, oi, copySource)
 			if err != nil {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {
@@ -796,7 +796,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return nil, err
 			}
 
-			oi.ETag = getDecryptedETag(h, oi, false)
+			oi.ETag = getDecryptedETag(context.Background(), h, oi, false)
 
 			// Apply the skipLen and limit on the
 			// decrypted stream
@@ -866,12 +866,12 @@ func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func()
 	}
 }
 
-func (o *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
+func (o *ObjectInfo) compressionIndexDecrypt(ctx context.Context, input []byte) ([]byte, error) {
 	if len(input) == 0 {
 		return input, nil
 	}
 
-	key, err := decryptObjectInfo(nil, o.Bucket, o.Name, o.UserDefined)
+	key, err := decryptObjectInfo(ctx, nil, o.Bucket, o.Name, o.UserDefined)
 	if err != nil {
 		return nil, err
 	}

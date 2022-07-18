@@ -1515,7 +1515,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
+	objInfo.ETag = getDecryptedETag(ctx, r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 
@@ -2492,7 +2492,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		key, err = decryptObjectInfo(key, dstBucket, dstObject, mi.UserDefined)
+		key, err = decryptObjectInfo(ctx, key, dstBucket, dstObject, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -2552,8 +2552,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
-
-// Delete objectAPIHandlers
 
 // DeleteObjectHandler - delete an object
 func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {

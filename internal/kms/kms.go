@@ -55,7 +55,7 @@ type KMS interface {
 	// DecryptKey decrypts the ciphertext with the key referenced
 	// by the key ID. The context must match the context value
 	// used to generate the ciphertext.
-	DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error)
+	DecryptKey(ctx context.Context, keyID string, ciphertext []byte, context Context) ([]byte, error)
 
 	// DecryptAll decrypts all ciphertexts with the key referenced
 	// by the key ID. The contexts must match the context value

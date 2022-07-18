@@ -79,7 +79,7 @@ func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket,
 	if err != nil {
 		return key, err
 	}
-	unsealKey, err := KMS.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
+	unsealKey, err := KMS.DecryptKey(context.Background(), keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
 	if err != nil {
 		return key, err
 	}

@@ -68,7 +68,7 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData b
 					return nil, err
 				}
 				if GlobalKMS != nil {
-					data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+					data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 						obj.Bucket: path.Join(obj.Bucket, obj.Name),
 					})
 					if err != nil {
@@ -111,7 +111,7 @@ func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV str
 	}
 
 	if GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, historyFile),
 		})
 	}
@@ -124,7 +124,7 @@ func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte)
 
 	if GlobalKMS != nil {
 		var err error
-		kv, err = config.EncryptBytes(GlobalKMS, kv, kms.Context{
+		kv, err = config.EncryptBytes(ctx, GlobalKMS, kv, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, historyFile),
 		})
 		if err != nil {
@@ -142,7 +142,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	if GlobalKMS != nil {
-		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.EncryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, configFile),
 		})
 		if err != nil {
@@ -165,7 +165,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	}
 
 	if GlobalKMS != nil && !utf8.Valid(data) {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, configFile),
 		})
 		if err != nil {

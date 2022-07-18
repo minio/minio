@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -593,7 +594,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		startOffset, snappyStartOffset, firstPart, _, _ := getCompressedOffsets(test.objInfo, test.offset, nil)
+		startOffset, snappyStartOffset, firstPart, _, _ := getCompressedOffsets(context.Background(), test.objInfo, test.offset, nil)
 		if startOffset != test.startOffset {
 			t.Errorf("Test %d - expected startOffset %d but received %d",
 				i, test.startOffset, startOffset)

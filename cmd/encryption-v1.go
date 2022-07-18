@@ -266,7 +266,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		if err != nil {
 			return err
 		}
-		oldKey, err := GlobalKMS.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
+		oldKey, err := GlobalKMS.DecryptKey(ctx, keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		if GlobalKMS == nil {
 			return errKMSNotConfigured
 		}
-		objectKey, err := crypto.S3KMS.UnsealObjectKey(GlobalKMS, metadata, bucket, object)
+		objectKey, err := crypto.S3KMS.UnsealObjectKey(ctx, GlobalKMS, metadata, bucket, object)
 		if err != nil {
 			return err
 		}
@@ -471,7 +471,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	return newEncryptReader(r.Context(), content, kind, keyID, key, bucket, object, metadata, ctx)
 }
 
-func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
+func decryptObjectInfo(ctx context.Context, key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch kind, _ := crypto.IsEncrypted(metadata); kind {
 	case crypto.S3:
 		var KMS kms.KMS = GlobalKMS
@@ -490,7 +490,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
 		}
-		objectKey, err := crypto.S3KMS.UnsealObjectKey(GlobalKMS, metadata, bucket, object)
+		objectKey, err := crypto.S3KMS.UnsealObjectKey(ctx, GlobalKMS, metadata, bucket, object)
 		if err != nil {
 			return nil, err
 		}
@@ -514,20 +514,20 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 
 // DecryptRequestWithSequenceNumberR - same as
 // DecryptRequestWithSequenceNumber but with a reader
-func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
+func DecryptRequestWithSequenceNumberR(ctx context.Context, client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
 	if crypto.SSEC.IsEncrypted(metadata) {
 		key, err := ParseSSECustomerHeader(h)
 		if err != nil {
 			return nil, err
 		}
-		return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
+		return newDecryptReader(ctx, client, key, bucket, object, seqNumber, metadata)
 	}
-	return newDecryptReader(client, nil, bucket, object, seqNumber, metadata)
+	return newDecryptReader(ctx, client, nil, bucket, object, seqNumber, metadata)
 }
 
 // DecryptCopyRequestR - same as DecryptCopyRequest, but with a
 // Reader
-func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
+func DecryptCopyRequestR(ctx context.Context, client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
 	var (
 		key []byte
 		err error
@@ -538,11 +538,11 @@ func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string,
 			return nil, err
 		}
 	}
-	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
+	return newDecryptReader(ctx, client, key, bucket, object, seqNumber, metadata)
 }
 
-func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	objectEncryptionKey, err := decryptObjectInfo(key, bucket, object, metadata)
+func newDecryptReader(ctx context.Context, client io.Reader, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
+	objectEncryptionKey, err := decryptObjectInfo(ctx, key, bucket, object, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -563,16 +563,16 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
-func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
+func DecryptBlocksRequestR(ctx context.Context, inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case
 	if !oi.isMultipart() {
 		var reader io.Reader
 		var err error
 		if copySource {
-			reader, err = DecryptCopyRequestR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
+			reader, err = DecryptCopyRequestR(ctx, inputReader, h, bucket, object, seqNumber, oi.UserDefined)
 		} else {
-			reader, err = DecryptRequestWithSequenceNumberR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
+			reader, err = DecryptRequestWithSequenceNumberR(ctx, inputReader, h, bucket, object, seqNumber, oi.UserDefined)
 		}
 		if err != nil {
 			return nil, err
@@ -654,7 +654,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 		return err
 	}
 
-	objectEncryptionKey, err := decryptObjectInfo(key, d.bucket, d.object, m)
+	objectEncryptionKey, err := decryptObjectInfo(context.Background(), key, d.bucket, d.object, m)
 	if err != nil {
 		return err
 	}
@@ -791,7 +791,7 @@ func DecryptETag(key crypto.ObjectKey, object ObjectInfo) (string, error) {
 // For encrypted objects, the ETag sent by client if available
 // is stored in encrypted form in the backend. Decrypt the ETag
 // if ETag was previously encrypted.
-func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) (decryptedETag string) {
+func getDecryptedETag(ctx context.Context, headers http.Header, objInfo ObjectInfo, copySource bool) (decryptedETag string) {
 	var (
 		key [32]byte
 		err error
@@ -820,7 +820,7 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 		return objInfo.ETag[len(objInfo.ETag)-32:]
 	}
 
-	objectEncryptionKey, err := decryptObjectInfo(key[:], objInfo.Bucket, objInfo.Name, objInfo.UserDefined)
+	objectEncryptionKey, err := decryptObjectInfo(ctx, key[:], objInfo.Bucket, objInfo.Name, objInfo.UserDefined)
 	if err != nil {
 		return objInfo.ETag
 	}
@@ -1034,7 +1034,7 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 		}
 
 		if _, ok := crypto.IsEncrypted(info.UserDefined); ok && !crypto.IsMultiPart(info.UserDefined) {
-			info.ETag = getDecryptedETag(headers, *info, false)
+			info.ETag = getDecryptedETag(r.Context(), headers, *info, false)
 		}
 	}
 

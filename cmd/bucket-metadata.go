@@ -485,7 +485,7 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 	if err != nil {
 		return nil, err
 	}
-	extKey, err := GlobalKMS.DecryptKey(keyID, kmsKey, kmsContext)
+	extKey, err := GlobalKMS.DecryptKey(context.Background(), keyID, kmsKey, kmsContext)
 	if err != nil {
 		return nil, err
 	}

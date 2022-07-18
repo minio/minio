@@ -98,11 +98,11 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 			pdata, err := madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 			if err != nil {
 				if GlobalKMS != nil {
-					pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+					pdata, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 						minioMetaBucket: path.Join(minioMetaBucket, string(kv.Key)),
 					})
 					if err != nil {
-						pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+						pdata, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 							minioMetaBucket: string(kv.Key),
 						})
 						if err != nil {
@@ -115,7 +115,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		}
 
 		if GlobalKMS != nil {
-			data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+			data, err = config.EncryptBytes(ctx, GlobalKMS, data, kms.Context{
 				minioMetaBucket: path.Join(minioMetaBucket, string(kv.Key)),
 			})
 			if err != nil {
@@ -165,7 +165,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 				}
 			}
 			if GlobalKMS != nil {
-				data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+				data, err = config.EncryptBytes(context.Background(), GlobalKMS, data, kms.Context{
 					obj.Bucket: path.Join(obj.Bucket, obj.Name),
 				})
 				if err != nil {

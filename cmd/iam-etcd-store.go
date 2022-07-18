@@ -104,7 +104,7 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 		return err
 	}
 	if GlobalKMS != nil {
-		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.EncryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
 		})
 		if err != nil {
@@ -114,16 +114,16 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
 }
 
-func decryptData(data []byte, itemPath string) ([]byte, error) {
+func decryptData(ctx context.Context, data []byte, itemPath string) ([]byte, error) {
 	var err error
 	if !utf8.Valid(data) && GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
 		})
 		if err != nil {
 			// This fallback is needed because of a bug, in kms.Context{}
 			// construction during migration.
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 				minioMetaBucket: itemPath,
 			})
 			if err != nil {
@@ -135,7 +135,7 @@ func decryptData(data []byte, itemPath string) ([]byte, error) {
 }
 
 func getIAMConfig(item interface{}, data []byte, itemPath string) error {
-	data, err := decryptData(data, itemPath)
+	data, err := decryptData(context.Background(), data, itemPath)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (ies *IAMEtcdStore) loadIAMConfigBytes(ctx context.Context, path string) ([
 	if err != nil {
 		return nil, err
 	}
-	return decryptData(data, path)
+	return decryptData(ctx, data, path)
 }
 
 func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error {
@@ -298,7 +298,7 @@ func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map
 }
 
 func (ies *IAMEtcdStore) getPolicyDocKV(ctx context.Context, kvs *mvccpb.KeyValue, m map[string]PolicyDoc) error {
-	data, err := decryptData(kvs.Value, string(kvs.Key))
+	data, err := decryptData(ctx, kvs.Value, string(kvs.Key))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy

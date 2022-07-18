@@ -1705,7 +1705,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(ctx, key.KeyID, key.Ciphertext, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2563,7 +2563,7 @@ func fetchKMSStatus() madmin.KMS {
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	decryptedKey, err := GlobalKMS.DecryptKey(context.Background(), key.KeyID, key.Ciphertext, kmsContext)
 	switch {
 	case err != nil:
 		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)

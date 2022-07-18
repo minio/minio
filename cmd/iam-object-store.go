@@ -207,7 +207,7 @@ func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}
 		return err
 	}
 	if GlobalKMS != nil {
-		data, err = config.EncryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.EncryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, objPath),
 		})
 		if err != nil {
@@ -223,7 +223,7 @@ func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context,
 		return nil, meta, err
 	}
 	if !utf8.Valid(data) && GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+		data, err = config.DecryptBytes(ctx, GlobalKMS, data, kms.Context{
 			minioMetaBucket: path.Join(minioMetaBucket, objPath),
 		})
 		if err != nil {

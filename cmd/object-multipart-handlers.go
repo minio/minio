@@ -394,7 +394,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, mi.UserDefined)
+		key, err = decryptObjectInfo(ctx, key, bucket, object, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -813,7 +813,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
 		var objectEncryptionKey []byte
 		if kind == crypto.S3 {
-			objectEncryptionKey, err = decryptObjectInfo(nil, bucket, object, listPartsInfo.UserDefined)
+			objectEncryptionKey, err = decryptObjectInfo(ctx, nil, bucket, object, listPartsInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return

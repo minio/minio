@@ -176,7 +176,7 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 	}, nil
 }
 
-func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error) {
+func (kms secretKey) DecryptKey(_ context.Context, keyID string, ciphertext []byte, context Context) ([]byte, error) {
 	if keyID != kms.keyID {
 		return nil, fmt.Errorf("kms: key %q does not exist", keyID)
 	}
@@ -231,10 +231,10 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 	return plaintext, nil
 }
 
-func (kms secretKey) DecryptAll(_ context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
+func (kms secretKey) DecryptAll(ctx context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
 	plaintexts := make([][]byte, 0, len(ciphertexts))
 	for i := range ciphertexts {
-		plaintext, err := kms.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		plaintext, err := kms.DecryptKey(ctx, keyID, ciphertexts[i], contexts[i])
 		if err != nil {
 			return nil, err
 		}
