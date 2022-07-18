@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v46" // Added MinIO version to FileInfo
+	storageRESTVersion       = "v47" // Added ReadMultiple
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -53,6 +53,7 @@ const (
 	storageRESTMethodVerifyFile     = "/verifyfile"
 	storageRESTMethodWalkDir        = "/walkdir"
 	storageRESTMethodStatInfoFile   = "/statfile"
+	storageRESTMethodReadMultiple   = "/readmultiple"
 )
 
 const (

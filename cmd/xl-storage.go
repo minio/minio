@@ -2565,6 +2565,59 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 	return nil
 }
 
+// ReadMultiple will read multiple files and send each back as response.
+// Files are read and returned in the given order.
+// The resp channel is closed before the call returns.
+// Only a canceled context will return an error.
+func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
+	defer close(resp)
+
+	volumeDir := pathJoin(s.diskPath, req.Bucket)
+
+	for _, f := range req.Files {
+		if contextCanceled(ctx) {
+			return ctx.Err()
+		}
+		r := ReadMultipleResp{
+			Bucket: req.Bucket,
+			Prefix: req.Prefix,
+			File:   f,
+		}
+		var data []byte
+		var mt time.Time
+		var err error
+		fullPath := pathJoin(volumeDir, req.Prefix+f)
+		if req.MetadataOnly {
+			data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
+		} else {
+			data, mt, err = s.readAllData(ctx, volumeDir, fullPath)
+		}
+		switch err {
+		case errFileNotFound, errVolumeNotFound:
+			resp <- r
+			continue
+		case nil:
+			diskHealthCheckOK(ctx, nil)
+		default:
+			r.Exists = true
+			r.Error = err.Error()
+			resp <- r
+			continue
+		}
+		if req.MaxSize > 0 && int64(len(data)) > req.MaxSize {
+			r.Exists = true
+			r.Error = fmt.Sprintf("max size (%d) exceeded: %d", req.MaxSize, len(data))
+			resp <- r
+			continue
+		}
+		r.Exists = true
+		r.Data = data
+		r.Modtime = mt
+		resp <- r
+	}
+	return nil
+}
+
 func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {

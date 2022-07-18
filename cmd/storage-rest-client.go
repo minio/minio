@@ -718,6 +718,47 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	return stat, err
 }
 
+// ReadMultiple will read multiple files and send each back as response.
+// Files are read and returned in the given order.
+// The resp channel is closed before the call returns.
+// Only a canceled context or network errors returns an error.
+func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
+	defer close(resp)
+	body, err := req.MarshalMsg(nil)
+	if err != nil {
+		return err
+	}
+	respBody, err := client.call(ctx, storageRESTMethodReadMultiple, nil, bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	pr, pw := io.Pipe()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			var file ReadMultipleResp
+			err := msgp.Decode(pr, &file)
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				pr.CloseWithError(err)
+				return
+			}
+			resp <- file
+		}
+	}()
+	err = waitForHTTPStream(respBody, pw)
+	wg.Wait()
+	return pw.CloseWithError(err)
+}
+
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.restClient.Close()

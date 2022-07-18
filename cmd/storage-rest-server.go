@@ -1244,6 +1244,37 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// ReadMultiple returns multiple files
+func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	rw := streamHTTPResponse(w)
+	var req ReadMultipleReq
+	mr := msgpNewReader(r.Body)
+	err := req.DecodeMsg(mr)
+	if err != nil {
+		rw.CloseWithError(err)
+		return
+	}
+	responses := make(chan ReadMultipleResp, len(req.Files))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for resp := range responses {
+			err := msgp.Encode(rw, &resp)
+			if err != nil {
+				rw.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	err = s.storage.ReadMultiple(r.Context(), req, responses)
+	wg.Wait()
+	rw.CloseWithError(err)
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
 	storageDisks := make([][]*xlStorage, len(endpointServerPools))
@@ -1315,6 +1346,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(httpTraceHdrs(server.ReadMultiple))
 		}
 	}
 }
