@@ -59,9 +59,12 @@ createUser() {
     rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
     return 1
   fi
+
+  # Get username
+  USER=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
+
   # Create the user if it does not exist
   if ! checkUserExists ; then
-    USER=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
     echo "Creating user '$USER'"
     cat $MINIO_ACCESSKEY_SECRETKEY_TMP | ${MC} admin user add myminio
   else
