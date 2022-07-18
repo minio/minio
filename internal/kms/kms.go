@@ -30,13 +30,13 @@ import (
 // different KMS implementations.
 type KMS interface {
 	// Stat returns the current KMS status.
-	Stat() (Status, error)
+	Stat(cxt context.Context) (Status, error)
 
 	// Metrics returns a KMS metric snapshot.
 	Metrics(ctx context.Context) (kes.Metric, error)
 
 	// CreateKey creates a new key at the KMS with the given key ID.
-	CreateKey(keyID string) error
+	CreateKey(ctx context.Context, keyID string) error
 
 	// GenerateKey generates a new data encryption key using the
 	// key referenced by the key ID.
@@ -50,7 +50,7 @@ type KMS interface {
 	// should be decrypted. Therefore, it is the callers
 	// responsibility to remember the corresponding context for
 	// a particular DEK. The context may be nil.
-	GenerateKey(keyID string, context Context) (DEK, error)
+	GenerateKey(ctx context.Context, keyID string, context Context) (DEK, error)
 
 	// DecryptKey decrypts the ciphertext with the key referenced
 	// by the key ID. The context must match the context value

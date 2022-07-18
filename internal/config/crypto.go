@@ -19,6 +19,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -61,13 +62,13 @@ func DecryptBytes(KMS kms.KMS, ciphertext []byte, context kms.Context) ([]byte, 
 //
 // The same context must be provided when decrypting the
 // ciphertext.
-func Encrypt(KMS kms.KMS, plaintext io.Reader, context kms.Context) (io.Reader, error) {
+func Encrypt(KMS kms.KMS, plaintext io.Reader, ctx kms.Context) (io.Reader, error) {
 	algorithm := sio.AES_256_GCM
 	if !fips.Enabled && !sioutil.NativeAES() {
 		algorithm = sio.ChaCha20Poly1305
 	}
 
-	key, err := KMS.GenerateKey("", context)
+	key, err := KMS.GenerateKey(context.Background(), "", ctx)
 	if err != nil {
 		return nil, err
 	}

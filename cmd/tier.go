@@ -287,7 +287,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	// Encrypt json encoded tier configurations
 	metadata := make(map[string]string)
-	encBr, oek, err := newEncryptReader(hr, crypto.S3, "", nil, minioMetaBucket, tierConfigPath, metadata, kms.Context{})
+	encBr, oek, err := newEncryptReader(context.Background(), hr, crypto.S3, "", nil, minioMetaBucket, tierConfigPath, metadata, kms.Context{})
 	if err != nil {
 		return nil, nil, err
 	}

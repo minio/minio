@@ -953,7 +953,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			kmsKey := encConfig.KeyID()
 			if kmsKey != "" {
 				kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-				_, err := GlobalKMS.GenerateKey(kmsKey, kmsContext)
+				_, err := GlobalKMS.GenerateKey(ctx, kmsKey, kmsContext)
 				if err != nil {
 					if errors.Is(err, kes.ErrKeyNotFound) {
 						writeErrorResponse(ctx, w, importError(ctx, errKMSKeyNotFound, file.Name, bucket), r.URL)

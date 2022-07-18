@@ -70,7 +70,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 	}
 
 	if encrypted && GlobalKMS != nil {
-		stat, err := GlobalKMS.Stat()
+		stat, err := GlobalKMS.Stat(ctx)
 		if err != nil {
 			return err
 		}
@@ -139,7 +139,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 		return nil
 	}
 	if encrypted && GlobalKMS != nil {
-		stat, err := GlobalKMS.Stat()
+		stat, err := GlobalKMS.Stat(context.Background())
 		if err != nil {
 			return err
 		}
