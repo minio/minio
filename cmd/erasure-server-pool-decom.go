@@ -581,6 +581,11 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		auditLogDecom(ctx, "DecomCopyData", objInfo.Bucket, objInfo.Name, objInfo.VersionID, err)
 	}()
 
+	actualSize, err := objInfo.GetActualSize()
+	if err != nil {
+		return err
+	}
+
 	if objInfo.isMultipart() {
 		uploadID, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
 			VersionID:   objInfo.VersionID,
@@ -593,14 +598,19 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, uploadID, ObjectOptions{})
 		parts := make([]CompletePart, len(objInfo.Parts))
 		for i, part := range objInfo.Parts {
-			hr, err := hash.NewReader(gr, part.Size, "", "", part.Size)
+			hr, err := hash.NewReader(gr, part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 			}
 			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, uploadID,
 				part.Number,
 				NewPutObjReader(hr),
-				ObjectOptions{})
+				ObjectOptions{
+					PreserveETag: part.ETag, // Preserve original ETag to ensure same metadata.
+					IndexCB: func() []byte {
+						return part.Index // Preserve part Index to ensure decompression works.
+					},
+				})
 			if err != nil {
 				return fmt.Errorf("decommissionObject: PutObjectPart() %w", err)
 			}
@@ -617,7 +627,8 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		}
 		return err
 	}
-	hr, err := hash.NewReader(gr, objInfo.Size, "", "", objInfo.Size)
+
+	hr, err := hash.NewReader(gr, objInfo.Size, "", "", actualSize)
 	if err != nil {
 		return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 	}
@@ -626,9 +637,13 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		objInfo.Name,
 		NewPutObjReader(hr),
 		ObjectOptions{
-			VersionID:   objInfo.VersionID,
-			MTime:       objInfo.ModTime,
-			UserDefined: objInfo.UserDefined,
+			VersionID:    objInfo.VersionID,
+			MTime:        objInfo.ModTime,
+			UserDefined:  objInfo.UserDefined,
+			PreserveETag: objInfo.ETag, // Preserve original ETag to ensure same metadata.
+			IndexCB: func() []byte {
+				return objInfo.Parts[0].Index // Preserve part Index to ensure decompression works.
+			},
 		})
 	if err != nil {
 		err = fmt.Errorf("decommissionObject: PutObject() %w", err)
@@ -741,11 +756,12 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						bi.Name,
 						version.Name,
 						ObjectOptions{
-							Versioned:         vc.PrefixEnabled(version.Name),
-							VersionID:         version.VersionID,
-							MTime:             version.ModTime,
-							DeleteReplication: version.ReplicationState,
-							DeleteMarker:      true, // make sure we create a delete marker
+							Versioned:          vc.PrefixEnabled(version.Name),
+							VersionID:          version.VersionID,
+							MTime:              version.ModTime,
+							DeleteReplication:  version.ReplicationState,
+							DeleteMarker:       true, // make sure we create a delete marker
+							SkipDecommissioned: true, // make sure we skip the decommissioned pool
 						})
 					var failure bool
 					if err != nil {
@@ -772,7 +788,8 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						http.Header{},
 						noLock, // all mutations are blocked reads are safe without locks.
 						ObjectOptions{
-							VersionID: version.VersionID,
+							VersionID:    version.VersionID,
+							NoDecryption: true,
 						})
 					if isErrObjectNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.

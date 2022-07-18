@@ -440,10 +440,7 @@ func isCompressible(header http.Header, object string) bool {
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
 
-	if !cfg.Enabled || (crypto.Requested(header) && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
-		return false
-	}
-	return true
+	return !excludeForCompression(header, object, cfg)
 }
 
 // Eliminate the non-compressible objects.
@@ -451,6 +448,10 @@ func excludeForCompression(header http.Header, object string, cfg compress.Confi
 	objStr := object
 	contentType := header.Get(xhttp.ContentType)
 	if !cfg.Enabled {
+		return true
+	}
+
+	if crypto.Requested(header) && !cfg.AllowEncrypted {
 		return true
 	}
 
@@ -646,8 +647,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		return nil, 0, 0, err
 	}
 
-	// if object is encrypted and it is a restore request, fetch content without decrypting.
-	if opts.Transition.RestoreRequest != nil {
+	// if object is encrypted and it is a restore request or if NoDecryption
+	// was requested, fetch content without decrypting.
+	if opts.Transition.RestoreRequest != nil || opts.NoDecryption {
 		isEncrypted = false
 		isCompressed = false
 	}

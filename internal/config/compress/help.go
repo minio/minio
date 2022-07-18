@@ -46,6 +46,12 @@ var (
 			Type:        "csv",
 		},
 		config.HelpKV{
+			Key:         AllowEncrypted,
+			Description: `enable 'encryption' along with compression`,
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
