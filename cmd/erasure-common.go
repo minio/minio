@@ -152,21 +152,27 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 			File:   wantFile,
 		}
 		for i := range resps {
-			gotFile, ok := <-resps[i]
-			if !ok {
+			if disks[i] == nil {
 				continue
 			}
-			if gotFile.Error != "" || !gotFile.Exists {
-				continue
+			select {
+			case <-ctx.Done():
+			case gotFile, ok := <-resps[i]:
+				if !ok {
+					continue
+				}
+				if gotFile.Error != "" || !gotFile.Exists {
+					continue
+				}
+				if gotFile.File != wantFile || gotFile.Bucket != req.Bucket || gotFile.Prefix != req.Prefix {
+					continue
+				}
+				quorum++
+				if toAdd.Modtime.After(gotFile.Modtime) {
+					continue
+				}
+				toAdd = gotFile
 			}
-			if gotFile.File != wantFile || gotFile.Bucket != req.Bucket || gotFile.Prefix != req.Prefix {
-				continue
-			}
-			quorum++
-			if toAdd.Modtime.After(gotFile.Modtime) {
-				continue
-			}
-			toAdd = gotFile
 		}
 		if quorum < readQuorum {
 			toAdd.Exists = false

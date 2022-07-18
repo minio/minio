@@ -2586,24 +2586,25 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		var data []byte
 		var mt time.Time
 		var err error
-		fullPath := pathJoin(volumeDir, req.Prefix+f)
+		fullPath := pathJoin(volumeDir, req.Prefix, f)
 		if req.MetadataOnly {
 			data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
 		} else {
 			data, mt, err = s.readAllData(ctx, volumeDir, fullPath)
 		}
-		switch err {
-		case errFileNotFound, errVolumeNotFound:
-			resp <- r
-			continue
-		case nil:
-			diskHealthCheckOK(ctx, nil)
-		default:
-			r.Exists = true
-			r.Error = err.Error()
-			resp <- r
+		if err != nil {
+			if !IsErr(err, errFileNotFound, errVolumeNotFound) {
+				r.Exists = true
+				r.Error = err.Error()
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case resp <- r:
+			}
 			continue
 		}
+		diskHealthCheckOK(ctx, nil)
 		if req.MaxSize > 0 && int64(len(data)) > req.MaxSize {
 			r.Exists = true
 			r.Error = fmt.Sprintf("max size (%d) exceeded: %d", req.MaxSize, len(data))
