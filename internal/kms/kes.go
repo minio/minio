@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/minio/kes"
 )
@@ -100,9 +99,7 @@ var _ KMS = (*kesClient)(nil) // compiler check
 
 // Stat returns the current KES status containing a
 // list of KES endpoints and the default key ID.
-func (c *kesClient) Stat() (Status, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 	if _, err := c.client.Version(ctx); err != nil {
 		return Status{}, err
 	}
@@ -124,8 +121,8 @@ func (c *kesClient) Metrics(ctx context.Context) (kes.Metric, error) {
 //
 // If the a key with the same keyID already exists then
 // CreateKey returns kes.ErrKeyExists.
-func (c *kesClient) CreateKey(keyID string) error {
-	return c.client.CreateKey(context.Background(), keyID)
+func (c *kesClient) CreateKey(ctx context.Context, keyID string) error {
+	return c.client.CreateKey(ctx, keyID)
 }
 
 // GenerateKey generates a new data encryption key using
@@ -136,15 +133,15 @@ func (c *kesClient) CreateKey(keyID string) error {
 // The context is associated and tied to the generated DEK.
 // The same context must be provided when the generated
 // key should be decrypted.
-func (c *kesClient) GenerateKey(keyID string, ctx Context) (DEK, error) {
+func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Context) (DEK, error) {
 	if keyID == "" {
 		keyID = c.defaultKeyID
 	}
-	ctxBytes, err := ctx.MarshalText()
+	ctxBytes, err := cryptoCtx.MarshalText()
 	if err != nil {
 		return DEK{}, err
 	}
-	dek, err := c.client.GenerateKey(context.Background(), keyID, ctxBytes)
+	dek, err := c.client.GenerateKey(ctx, keyID, ctxBytes)
 	if err != nil {
 		return DEK{}, err
 	}

@@ -438,7 +438,7 @@ func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI Obje
 		return nil
 	}
 
-	encBytes, metaBytes, err := encryptBucketMetadata(b.Name, b.BucketTargetsConfigJSON, kms.Context{b.Name: b.Name, bucketTargetsFile: bucketTargetsFile})
+	encBytes, metaBytes, err := encryptBucketMetadata(ctx, b.Name, b.BucketTargetsConfigJSON, kms.Context{b.Name: b.Name, bucketTargetsFile: bucketTargetsFile})
 	if err != nil {
 		return err
 	}
@@ -449,14 +449,14 @@ func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI Obje
 }
 
 // encrypt bucket metadata if kms is configured.
-func encryptBucketMetadata(bucket string, input []byte, kmsContext kms.Context) (output, metabytes []byte, err error) {
+func encryptBucketMetadata(ctx context.Context, bucket string, input []byte, kmsContext kms.Context) (output, metabytes []byte, err error) {
 	if GlobalKMS == nil {
 		output = input
 		return
 	}
 
 	metadata := make(map[string]string)
-	key, err := GlobalKMS.GenerateKey("", kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, "", kmsContext)
 	if err != nil {
 		return
 	}

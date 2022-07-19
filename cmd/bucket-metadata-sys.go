@@ -136,7 +136,7 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 		meta.ReplicationConfigXML = configData
 		meta.ReplicationConfigUpdatedAt = updatedAt
 	case bucketTargetsFile:
-		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(meta.Name, configData, kms.Context{
+		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(ctx, meta.Name, configData, kms.Context{
 			bucket:            meta.Name,
 			bucketTargetsFile: bucketTargetsFile,
 		})

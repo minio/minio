@@ -868,7 +868,7 @@ func handleKMSConfig() {
 		// This implicitly checks that we can communicate to KES. We don't treat
 		// a policy error as failure condition since MinIO may not have the permission
 		// to create keys - just to generate/decrypt data encryption keys.
-		if err = KMS.CreateKey(defaultKeyID); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
+		if err = KMS.CreateKey(context.Background(), defaultKeyID); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
 		GlobalKMS = KMS
