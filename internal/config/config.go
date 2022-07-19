@@ -790,19 +790,20 @@ func (c Config) DelKVS(s string, defaultKVS map[string]KVS) error {
 
 	if len(inputs) == 2 {
 		currKVS := ck.Clone()
-		defKVS := defaultKVS[subSys].Clone()
+		defKVS := defaultKVS[subSys]
 		for _, delKey := range strings.Split(inputs[1], " ") {
 			_, ok := currKVS.Lookup(delKey)
 			if !ok {
 				return Errorf("key %s doesn't exist", delKey)
 			}
-			currKVS.Delete(delKey)
+			defVal, isDef := defKVS.Lookup(delKey)
+			if isDef {
+				currKVS.Set(delKey, defVal)
+			} else {
+				currKVS.Delete(delKey)
+			}
 		}
-		for _, kv := range currKVS {
-			// Copy non-default values to default KVS to preserve ordering.
-			defKVS.Set(kv.Key, kv.Value)
-		}
-		c[subSys][tgt] = defKVS
+		c[subSys][tgt] = currKVS
 	} else {
 		delete(c[subSys], tgt)
 	}
