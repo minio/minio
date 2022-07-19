@@ -398,7 +398,7 @@ func (c Config) DelFrom(r io.Reader) error {
 		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
-		if err := c.DelKVS(text); err != nil {
+		if err := c.DelKVS(text, DefaultKVS); err != nil {
 			return err
 		}
 	}
@@ -451,7 +451,7 @@ func (c Config) RedactSensitiveInfo() Config {
 	}
 
 	// Remove the server credentials altogether
-	nc.DelKVS(CredentialsSubSys)
+	nc.DelKVS(CredentialsSubSys, DefaultKVS)
 
 	return nc
 }
@@ -772,36 +772,40 @@ func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (Targets, error) {
 }
 
 // DelKVS - delete a specific key.
-func (c Config) DelKVS(s string) error {
-	if len(s) == 0 {
-		return Errorf("input arguments cannot be empty")
-	}
-	inputs := strings.Fields(s)
-	if len(inputs) > 1 {
-		return Errorf("invalid number of arguments %s", s)
-	}
-	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
-	if len(subSystemValue) == 0 {
-		return Errorf("invalid number of arguments %s", s)
-	}
-	if !SubSystems.Contains(subSystemValue[0]) {
+func (c Config) DelKVS(s string, defaultKVS map[string]KVS) error {
+	subSys, inputs, tgt, err := GetSubSys(s)
+	if !SubSystems.Contains(subSys) {
 		// Unknown sub-system found try to remove it anyways.
-		delete(c, subSystemValue[0])
+		delete(c, subSys)
 		return nil
 	}
-	tgt := Default
-	subSys := subSystemValue[0]
-	if len(subSystemValue) == 2 {
-		if len(subSystemValue[1]) == 0 {
-			return Errorf("sub-system target '%s' cannot be empty", s)
-		}
-		tgt = subSystemValue[1]
+	if err != nil {
+		return err
 	}
-	_, ok := c[subSys][tgt]
+
+	ck, ok := c[subSys][tgt]
 	if !ok {
-		return Errorf("sub-system %s already deleted", s)
+		return Errorf("sub-system %s already deleted", inputs[0])
 	}
-	delete(c[subSys], tgt)
+
+	if len(inputs) == 2 {
+		currKVS := ck.Clone()
+		defKVS := defaultKVS[subSys].Clone()
+		for _, delKey := range strings.Split(inputs[1], " ") {
+			_, ok := currKVS.Lookup(delKey)
+			if !ok {
+				return Errorf("key %s doesn't exist", delKey)
+			}
+			currKVS.Delete(delKey)
+		}
+		for _, kv := range currKVS {
+			// Copy non-default values to default KVS to preserve ordering.
+			defKVS.Set(kv.Key, kv.Value)
+		}
+		c[subSys][tgt] = defKVS
+	} else {
+		delete(c[subSys], tgt)
+	}
 	return nil
 }
 
