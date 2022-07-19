@@ -131,7 +131,7 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 		resps[i] = make(chan ReadMultipleResp, len(req.Files))
 	}
 	g := errgroup.WithNErrs(len(disks))
-	// Read `xl.meta` in parallel across disks.
+	// Read files in parallel across disks.
 	for index := range disks {
 		index := index
 		g.Go(func() (err error) {
@@ -143,7 +143,7 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 	}
 
 	dataArray := make([]ReadMultipleResp, 0, len(req.Files))
-	// Read `xl.meta` in parallel across disks.
+	// Merge results. They should come in order from each.
 	for _, wantFile := range req.Files {
 		quorum := 0
 		toAdd := ReadMultipleResp{
@@ -168,7 +168,8 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 					continue
 				}
 				quorum++
-				if toAdd.Modtime.After(gotFile.Modtime) {
+				if toAdd.Modtime.After(gotFile.Modtime) || len(gotFile.Data) > len(toAdd.Data) {
+					// Pick latest, or largest to avoid possible truncated entries.
 					continue
 				}
 				toAdd = gotFile

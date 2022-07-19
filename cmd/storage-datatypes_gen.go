@@ -1739,6 +1739,12 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "MetadataOnly")
 				return
 			}
+		case "AbortOn404":
+			z.AbortOn404, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "AbortOn404")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1752,9 +1758,9 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *ReadMultipleReq) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "Bucket"
-	err = en.Append(0x85, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	err = en.Append(0x86, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	if err != nil {
 		return
 	}
@@ -1810,15 +1816,25 @@ func (z *ReadMultipleReq) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "MetadataOnly")
 		return
 	}
+	// write "AbortOn404"
+	err = en.Append(0xaa, 0x41, 0x62, 0x6f, 0x72, 0x74, 0x4f, 0x6e, 0x34, 0x30, 0x34)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.AbortOn404)
+	if err != nil {
+		err = msgp.WrapError(err, "AbortOn404")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ReadMultipleReq) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "Bucket"
-	o = append(o, 0x85, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	o = append(o, 0x86, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	o = msgp.AppendString(o, z.Bucket)
 	// string "Prefix"
 	o = append(o, 0xa6, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78)
@@ -1835,6 +1851,9 @@ func (z *ReadMultipleReq) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "MetadataOnly"
 	o = append(o, 0xac, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x4f, 0x6e, 0x6c, 0x79)
 	o = msgp.AppendBool(o, z.MetadataOnly)
+	// string "AbortOn404"
+	o = append(o, 0xaa, 0x41, 0x62, 0x6f, 0x72, 0x74, 0x4f, 0x6e, 0x34, 0x30, 0x34)
+	o = msgp.AppendBool(o, z.AbortOn404)
 	return
 }
 
@@ -1899,6 +1918,12 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "MetadataOnly")
 				return
 			}
+		case "AbortOn404":
+			z.AbortOn404, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AbortOn404")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1917,7 +1942,7 @@ func (z *ReadMultipleReq) Msgsize() (s int) {
 	for za0001 := range z.Files {
 		s += msgp.StringPrefixSize + len(z.Files[za0001])
 	}
-	s += 8 + msgp.Int64Size + 13 + msgp.BoolSize
+	s += 8 + msgp.Int64Size + 13 + msgp.BoolSize + 11 + msgp.BoolSize
 	return
 }
 

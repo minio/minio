@@ -2592,6 +2592,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		} else {
 			data, mt, err = s.readAllData(ctx, volumeDir, fullPath)
 		}
+
 		if err != nil {
 			if !IsErr(err, errFileNotFound, errVolumeNotFound) {
 				r.Exists = true
@@ -2601,6 +2602,11 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			case <-ctx.Done():
 				return ctx.Err()
 			case resp <- r:
+			}
+			if req.AbortOn404 && !r.Exists {
+				// We stop at first file not found.
+				// We have already reported the error, return nil.
+				return nil
 			}
 			continue
 		}

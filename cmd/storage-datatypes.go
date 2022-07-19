@@ -284,6 +284,7 @@ type ReadMultipleReq struct {
 	Files        []string // Individual files to read.
 	MaxSize      int64    // Return error if size is exceed.
 	MetadataOnly bool     // Read as XL meta and truncate data.
+	AbortOn404   bool     // Stop reading after first file not found.
 }
 
 // ReadMultipleResp contains a single response from a ReadMultipleReq.

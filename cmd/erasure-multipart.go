@@ -487,7 +487,7 @@ func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, ds
 func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry string, b []byte, writeQuorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
 
-	// Rename file on all underlying storage disks.
+	// Write file to all underlying storage disks.
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -516,6 +516,7 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 				return disks[index].Delete(ctx, dstBucket, dstEntry, DeleteOptions{Force: true})
 			}, index)
 		}
+		// Ignore these errors.
 		g.WaitErr()
 	}
 
@@ -707,12 +708,11 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
+	// Write part metadata to all disks.
 	onlineDisks, err = writeAllDisks(ctx, onlineDisks, minioMetaMultipartBucket, partPath+".meta", fiMsg, writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
-
-	online = countOnlineDisks(onlineDisks)
 
 	// Return success.
 	return PartInfo{
@@ -836,7 +836,8 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		MaxSize: 1 << 20, // Each part should realistically not be > 1MiB.
 	}
 
-	for i := 0; i < maxPartsList; i++ {
+	// Parts are 1 based, so index 0 is part one, etc.
+	for i := 1; i <= maxPartsList; i++ {
 		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", i))
 	}
 
@@ -865,7 +866,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 
 	var partFI FileInfo
 	for i, part := range partInfoFiles {
-		if part.Error != "" {
+		if part.Error != "" || !part.Exists {
 			continue
 		}
 		_, err := partFI.UnmarshalMsg(part.Data)
@@ -882,7 +883,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 
 		addPart := partFI.Parts[0]
 		// Add the current part.
-		fi.AddObjectPart(i, addPart.ETag, addPart.Size, addPart.ActualSize, addPart.Index)
+		fi.AddObjectPart(i+1, addPart.ETag, addPart.Size, addPart.ActualSize, addPart.Index)
 	}
 
 	// Only parts with higher part numbers will be listed.
@@ -1051,7 +1052,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return oi, invp
 		}
 
-		// All parts except the last part has to be atleast 5MB.
+		// All parts except the last part has to be at least 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
