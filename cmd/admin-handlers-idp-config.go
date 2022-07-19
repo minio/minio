@@ -301,7 +301,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err = cfg.DelKVS(fmt.Sprintf("%s:%s", subSys, cfgName)); err != nil {
+	if err = cfg.DelKVS(fmt.Sprintf("%s:%s", subSys, cfgName), config.DefaultKVS); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
