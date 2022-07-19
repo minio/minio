@@ -229,7 +229,10 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 			rr.CloseWithError(err)
 			return cache, err
 		}
-		updates <- update
+		select {
+		case <-ctx.Done():
+		case updates <- update:
+		}
 	}
 	var newCache dataUsageCache
 	err = newCache.DecodeMsg(ms)
@@ -737,26 +740,25 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		return err
 	}
 	pr, pw := io.Pipe()
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		for {
-			var file ReadMultipleResp
-			err := msgp.Decode(pr, &file)
-			if err != nil {
-				if err == io.EOF {
-					err = nil
-				}
-				pr.CloseWithError(err)
-				return
-			}
-			resp <- file
-		}
+		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
-	err = waitForHTTPStream(respBody, pw)
-	wg.Wait()
-	return pw.CloseWithError(err)
+	mr := msgp.NewReader(pr)
+	for {
+		var file ReadMultipleResp
+		if err := file.DecodeMsg(mr); err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			pr.CloseWithError(err)
+			return err
+		}
+		select {
+		case <-ctx.Done():
+		case resp <- file:
+		}
+	}
+	return nil
 }
 
 // Close - marks the client as closed.
