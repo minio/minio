@@ -1543,6 +1543,7 @@ const (
 	groupPolicyMappingsFile    = "group_mappings.json"
 	stsUserPolicyMappingsFile  = "stsuser_mappings.json"
 	stsGroupPolicyMappingsFile = "stsgroup_mappings.json"
+	iamAssetsDir               = "iam-assets"
 )
 
 // ExportIAMHandler - exports all iam info as a zipped file
@@ -1595,8 +1596,9 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		stsUserPolicyMappingsFile,
 		stsGroupPolicyMappingsFile,
 	}
-	for _, iamFile := range iamFiles {
-		switch iamFile {
+	for _, f := range iamFiles {
+		iamFile := pathJoin(iamAssetsDir, f)
+		switch f {
 		case allPoliciesFile:
 			allPolicies, err := globalIAMSys.ListPolicies(ctx, "")
 			if err != nil {
@@ -1822,7 +1824,8 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 	}
 	// import policies first
 	{
-		f, err := zr.Open(allPoliciesFile)
+
+		f, err := zr.Open(pathJoin(iamAssetsDir, allPoliciesFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -1857,7 +1860,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import users
 	{
-		f, err := zr.Open(allUsersFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, allUsersFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -1934,7 +1937,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import groups
 	{
-		f, err := zr.Open(allGroupsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, allGroupsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -1972,7 +1975,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import service accounts
 	{
-		f, err := zr.Open(allSvcAcctsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, allSvcAcctsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -2068,7 +2071,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import user policy mappings
 	{
-		f, err := zr.Open(userPolicyMappingsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, userPolicyMappingsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -2107,7 +2110,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import group policy mappings
 	{
-		f, err := zr.Open(groupPolicyMappingsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, groupPolicyMappingsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -2136,7 +2139,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import sts user policy mappings
 	{
-		f, err := zr.Open(stsUserPolicyMappingsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, stsUserPolicyMappingsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
@@ -2175,7 +2178,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 	// import sts group policy mappings
 	{
-		f, err := zr.Open(stsGroupPolicyMappingsFile)
+		f, err := zr.Open(pathJoin(iamAssetsDir, stsGroupPolicyMappingsFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 		case err != nil:
