@@ -168,7 +168,7 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 					continue
 				}
 				quorum++
-				if toAdd.Modtime.After(gotFile.Modtime) || len(gotFile.Data) > len(toAdd.Data) {
+				if toAdd.Modtime.After(gotFile.Modtime) || len(gotFile.Data) < len(toAdd.Data) {
 					// Pick latest, or largest to avoid possible truncated entries.
 					continue
 				}

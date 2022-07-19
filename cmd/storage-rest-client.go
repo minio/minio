@@ -747,7 +747,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 	for {
 		var file ReadMultipleResp
 		if err := file.DecodeMsg(mr); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			pr.CloseWithError(err)
@@ -755,10 +755,10 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		}
 		select {
 		case <-ctx.Done():
+			return ctx.Err()
 		case resp <- file:
 		}
 	}
-	return nil
 }
 
 // Close - marks the client as closed.
