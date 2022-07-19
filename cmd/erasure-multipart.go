@@ -76,6 +76,30 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	return err
 }
 
+// Removes part.meta given by partName belonging to a mulitpart upload from minioMetaBucket
+func (er erasureObjects) removePartMeta(bucket, object, uploadID, dataDir string, partNumber int) {
+	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
+	curpartPath := pathJoin(uploadIDPath, dataDir, fmt.Sprintf("part.%d", partNumber))
+	storageDisks := er.getDisks()
+
+	g := errgroup.WithNErrs(len(storageDisks))
+	for index, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
+				Recursive: false,
+				Force:     false,
+			})
+
+			return nil
+		}, index)
+	}
+	g.Wait()
+}
+
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
 func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir string, partNumber int) {
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
@@ -1104,6 +1128,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			// N.B. 1st part is not present. This part should be removed from the storage.
 			er.removeObjectPart(bucket, object, uploadID, fi.DataDir, curpart.Number)
 		}
+	}
+
+	// Remove part.meta which is not needed anymore.
+	for _, part := range fi.Parts {
+		er.removePartMeta(bucket, object, uploadID, fi.DataDir, part.Number)
 	}
 
 	// Rename the multipart object to final location.
