@@ -96,7 +96,7 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 				Recursive: false,
 				Force:     false,
 			})
-			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".info", DeleteOptions{
+			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
 				Recursive: false,
 				Force:     false,
 			})
@@ -677,13 +677,13 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Add the current part.
 	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
 
-	// Save part info as partPath+".info"
+	// Save part info as partPath+".meta"
 	fiMsg, err := fi.MarshalMsg(nil)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
-	onlineDisks, err = writeAllDisks(ctx, onlineDisks, minioMetaMultipartBucket, partPath+".info", fiMsg, writeQuorum)
+	onlineDisks, err = writeAllDisks(ctx, onlineDisks, minioMetaMultipartBucket, partPath+".meta", fiMsg, writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
@@ -813,7 +813,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	}
 
 	for i := 0; i < maxPartsList; i++ {
-		req.Files = append(req.Files, fmt.Sprintf("part.%d.info", i))
+		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", i))
 	}
 
 	partInfoFiles, err := readMultipleFiles(ctx, onlineDisks, req, writeQuorum)
@@ -948,7 +948,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		MaxSize: 1 << 20, // Each part should realistically not be > 1MiB.
 	}
 	for _, part := range parts {
-		req.Files = append(req.Files, fmt.Sprintf("part.%d.info", part.PartNumber))
+		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", part.PartNumber))
 	}
 	partInfoFiles, err := readMultipleFiles(ctx, onlineDisks, req, writeQuorum)
 	if err != nil {
