@@ -797,8 +797,8 @@ func (c *diskCache) bitrotWriteToCache(cachePath, fileName string, reader io.Rea
 	return bytesWritten, base64.StdEncoding.EncodeToString(md5sumCurr), nil
 }
 
-func newCacheEncryptReader(content io.Reader, bucket, object string, metadata map[string]string) (r io.Reader, err error) {
-	objectEncryptionKey, err := newCacheEncryptMetadata(bucket, object, metadata)
+func newCacheEncryptReader(ctx context.Context, content io.Reader, bucket, object string, metadata map[string]string) (r io.Reader, err error) {
+	objectEncryptionKey, err := newCacheEncryptMetadata(ctx, bucket, object, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -810,12 +810,12 @@ func newCacheEncryptReader(content io.Reader, bucket, object string, metadata ma
 	return reader, nil
 }
 
-func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) ([]byte, error) {
+func newCacheEncryptMetadata(ctx context.Context, bucket, object string, metadata map[string]string) ([]byte, error) {
 	var sealedKey crypto.SealedKey
 	if globalCacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, err := globalCacheKMS.GenerateKey("", kms.Context{bucket: pathJoin(bucket, object)})
+	key, err := globalCacheKMS.GenerateKey(ctx, "", kms.Context{bucket: pathJoin(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
@@ -891,7 +891,7 @@ func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Read
 	reader := data
 	actualSize := uint64(size)
 	if globalCacheKMS != nil {
-		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
+		reader, err = newCacheEncryptReader(ctx, data, bucket, object, metadata)
 		if err != nil {
 			removeAll(cachePath)
 			return oi, err
@@ -948,7 +948,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	// objSize is the actual size of object (with encryption overhead if any)
 	objSize := uint64(size)
 	if globalCacheKMS != nil {
-		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
+		reader, err = newCacheEncryptReader(ctx, data, bucket, object, metadata)
 		if err != nil {
 			return err
 		}
@@ -1301,7 +1301,7 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 	m.Stat.ModTime = UTCNow()
 	if globalCacheKMS != nil {
 		m.Meta[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
-		if _, err := newCacheEncryptMetadata(bucket, object, m.Meta); err != nil {
+		if _, err := newCacheEncryptMetadata(ctx, bucket, object, m.Meta); err != nil {
 			return uploadID, err
 		}
 	}
