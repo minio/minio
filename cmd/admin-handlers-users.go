@@ -1674,11 +1674,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 			svcAccts := make(map[string]madmin.SRSvcAccCreate)
 			for user, acc := range serviceAccounts {
-				if user == siteReplicatorSvcAcc {
-					// skip the site replicate svc account as it should be created automatically if
-					// site replication is enabled.
-					continue
-				}
 				claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.Credentials.AccessKey)
 				if err != nil {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
