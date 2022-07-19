@@ -276,3 +276,24 @@ func newFileInfo(object string, dataBlocks, parityBlocks int) (fi FileInfo) {
 	}
 	return fi
 }
+
+// ReadMultipleReq contains information of multiple files to read from disk.
+type ReadMultipleReq struct {
+	Bucket       string   // Bucket. Can be empty if multiple buckets.
+	Prefix       string   // Shared prefix of all files. Can be empty. Will be joined to filename without modification.
+	Files        []string // Individual files to read.
+	MaxSize      int64    // Return error if size is exceed.
+	MetadataOnly bool     // Read as XL meta and truncate data.
+	AbortOn404   bool     // Stop reading after first file not found.
+}
+
+// ReadMultipleResp contains a single response from a ReadMultipleReq.
+type ReadMultipleResp struct {
+	Bucket  string    // Bucket as given by request.
+	Prefix  string    // Prefix as given by request.
+	File    string    // File name as given in request.
+	Exists  bool      // Returns whether the file existed on disk.
+	Error   string    // Returns any error when reading.
+	Data    []byte    // Contains all data of file.
+	Modtime time.Time // Modtime of file on disk.
+}

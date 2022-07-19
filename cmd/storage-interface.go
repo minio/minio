@@ -98,6 +98,7 @@ type StorageAPI interface {
 	Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 	StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error)
+	ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error
 
 	// Write all data, syncs the data to disk.
 	// Should be used for smaller payloads.
@@ -272,4 +273,9 @@ func (p *unrecognizedDisk) ReadAll(ctx context.Context, volume string, path stri
 
 func (p *unrecognizedDisk) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
 	return nil, errDiskNotFound
+}
+
+func (p *unrecognizedDisk) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
+	close(resp)
+	return errDiskNotFound
 }

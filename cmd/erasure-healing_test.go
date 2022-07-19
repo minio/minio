@@ -580,7 +580,7 @@ func TestHealCorrectQuorum(t *testing.T) {
 
 	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
-		t.Fatalf("Failed to complete multipart upload - %v", err)
+		t.Fatalf("Failed to complete multipart upload - got: %v", err)
 	}
 
 	cfgFile := pathJoin(bucketMetaPrefix, bucket, ".test.bin")
