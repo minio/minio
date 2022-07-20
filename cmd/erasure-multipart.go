@@ -691,36 +691,38 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		md5hex = opts.PreserveETag
 	}
 
-	// Once part is successfully committed, proceed with saving erasure metadata for part.
-	fi.ModTime = UTCNow()
-
 	var index []byte
 	if opts.IndexCB != nil {
 		index = opts.IndexCB()
 	}
 
-	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
+	part := ObjectPartInfo{
+		Number:     partID,
+		ETag:       md5hex,
+		Size:       n,
+		ActualSize: data.ActualSize(),
+		ModTime:    UTCNow(),
+		Index:      index,
+	}
 
-	// Save part info as partPath+".meta"
-	fiMsg, err := fi.MarshalMsg(nil)
+	partMsg, err := part.MarshalMsg(nil)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
 	// Write part metadata to all disks.
-	onlineDisks, err = writeAllDisks(ctx, onlineDisks, minioMetaMultipartBucket, partPath+".meta", fiMsg, writeQuorum)
+	onlineDisks, err = writeAllDisks(ctx, onlineDisks, minioMetaMultipartBucket, partPath+".meta", partMsg, writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
 	// Return success.
 	return PartInfo{
-		PartNumber:   partID,
-		ETag:         md5hex,
-		LastModified: fi.ModTime,
-		Size:         n,
-		ActualSize:   data.ActualSize(),
+		PartNumber:   part.Number,
+		ETag:         part.ETag,
+		LastModified: part.ModTime,
+		Size:         part.Size,
+		ActualSize:   part.ActualSize,
 	}, nil
 }
 
@@ -864,26 +866,26 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		maxParts = maxPartsList
 	}
 
-	var partFI FileInfo
+	var partI ObjectPartInfo
 	for i, part := range partInfoFiles {
 		if part.Error != "" || !part.Exists {
 			continue
 		}
-		_, err := partFI.UnmarshalMsg(part.Data)
+
+		_, err := partI.UnmarshalMsg(part.Data)
 		if err != nil {
 			// Maybe crash or similar.
 			logger.LogIf(ctx, err)
 			continue
 		}
 
-		if len(partFI.Parts) != 1 {
-			logger.LogIf(ctx, fmt.Errorf("unexpected part count: %d", len(partFI.Parts)))
+		if i+1 != partI.Number {
+			logger.LogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", i+1, i+1, partI.Number))
 			continue
 		}
 
-		addPart := partFI.Parts[0]
 		// Add the current part.
-		fi.AddObjectPart(i+1, addPart.ETag, addPart.Size, addPart.ActualSize, addPart.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
 	}
 
 	// Only parts with higher part numbers will be listed.
@@ -893,11 +895,13 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		parts = fi.Parts[partIdx+1:]
 	}
 	count := maxParts
+	result.Parts = make([]PartInfo, 0, len(parts))
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
 			PartNumber:   part.Number,
 			ETag:         part.ETag,
-			LastModified: fi.ModTime,
+			LastModified: part.ModTime,
+			ActualSize:   part.ActualSize,
 			Size:         part.Size,
 		})
 		count--
@@ -971,6 +975,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		Bucket:  minioMetaMultipartBucket,
 		Prefix:  partPath,
 		MaxSize: 1 << 20, // Each part should realistically not be > 1MiB.
+		Files:   make([]string, 0, len(parts)),
 	}
 	for _, part := range parts {
 		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", part.PartNumber))
@@ -986,7 +991,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	var partFI FileInfo
+	var partI ObjectPartInfo
 	for i, part := range partInfoFiles {
 		partID := parts[i].PartNumber
 		if part.Error != "" || !part.Exists {
@@ -994,7 +999,8 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				PartNumber: partID,
 			}
 		}
-		_, err := partFI.UnmarshalMsg(part.Data)
+
+		_, err := partI.UnmarshalMsg(part.Data)
 		if err != nil {
 			// Maybe crash or similar.
 			logger.LogIf(ctx, err)
@@ -1002,15 +1008,16 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				PartNumber: partID,
 			}
 		}
-		if len(partFI.Parts) != 1 {
-			logger.LogIf(ctx, fmt.Errorf("unexpected part count: %d", len(partFI.Parts)))
+
+		if partID != partI.Number {
+			logger.LogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", partID, partID, partI.Number))
 			return oi, InvalidPart{
 				PartNumber: partID,
 			}
 		}
-		addPart := partFI.Parts[0]
+
 		// Add the current part.
-		fi.AddObjectPart(partID, addPart.ETag, addPart.Size, addPart.ActualSize, addPart.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
 	}
 
 	// Calculate full object size.
@@ -1072,6 +1079,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			Number:     part.PartNumber,
 			Size:       currentFI.Parts[partIdx].Size,
 			ActualSize: currentFI.Parts[partIdx].ActualSize,
+			ModTime:    currentFI.Parts[partIdx].ModTime,
 			Index:      currentFI.Parts[partIdx].Index,
 		}
 	}
