@@ -571,11 +571,11 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	for i := range fi.Parts {
 		fi.Parts[i].Number = j.PartNumbers[i]
 		fi.Parts[i].Size = j.PartSizes[i]
-		if len(j.PartETags) > 0 {
+		if len(j.PartETags) == len(fi.Parts) {
 			fi.Parts[i].ETag = j.PartETags[i]
 		}
 		fi.Parts[i].ActualSize = j.PartActualSizes[i]
-		if len(j.PartIndices) > 0 {
+		if len(j.PartIndices) == len(fi.Parts) {
 			fi.Parts[i].Index = j.PartIndices[i]
 		}
 	}

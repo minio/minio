@@ -820,12 +820,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		}
 		for i, p := range listPartsInfo.Parts {
 			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind != crypto.S3)
-			size, err := sio.DecryptedSize(uint64(p.Size))
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
-			listPartsInfo.Parts[i].Size = int64(size)
+			listPartsInfo.Parts[i].Size = p.ActualSize
 		}
 	}
 

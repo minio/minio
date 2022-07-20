@@ -820,6 +820,8 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		index = opts.IndexCB()
 	}
 
+	modTime := UTCNow()
+
 	for i, w := range writers {
 		if w == nil {
 			// Make sure to avoid writing to disks which we couldn't complete in erasure.Encode()
@@ -827,15 +829,13 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
 			Hash:       bitrotWriterSum(w),
 		})
 	}
-
-	modTime := UTCNow()
 
 	// Fill all the necessary metadata.
 	// Update `xl.meta` content on each disks.
@@ -1082,6 +1082,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		defer lk.Unlock(lkctx.Cancel)
 	}
 
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
+	}
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1092,7 +1097,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), compIndex)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1110,11 +1115,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Guess content-type from the extension if possible.
 	if userDefined["content-type"] == "" {
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
-	}
-
-	modTime := opts.MTime
-	if opts.MTime.IsZero() {
-		modTime = UTCNow()
 	}
 
 	// Fill all the necessary metadata.
