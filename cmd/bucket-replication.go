@@ -479,6 +479,10 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		eventName = event.ObjectReplicationFailed
 	}
 	drs := getReplicationState(rinfos, dobj.ReplicationState, dobj.VersionID)
+	if replicationStatus != prevStatus {
+		drs.ReplicationTimeStamp = UTCNow()
+	}
+
 	dobjInfo, err := objectAPI.DeleteObject(ctx, bucket, dobj.ObjectName, ObjectOptions{
 		VersionID:         versionID,
 		MTime:             dobj.DeleteMarkerMTime.Time,
@@ -2294,4 +2298,90 @@ func saveResyncStatus(ctx context.Context, bucket string, brs BucketReplicationR
 
 	configFile := path.Join(bucketMetaPrefix, bucket, replicationDir, resyncFileName)
 	return saveConfig(ctx, objectAPI, configFile, buf)
+}
+
+// getReplicationDiff returns unreplicated objects in a channel
+func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, opts madmin.ReplDiffOpts) (diffCh chan madmin.DiffInfo, err error) {
+	objInfoCh := make(chan ObjectInfo)
+	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, ObjectOptions{}); err != nil {
+		logger.LogIf(ctx, err)
+		return diffCh, err
+	}
+	cfg, err := getReplicationConfig(ctx, bucket)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return diffCh, err
+	}
+	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return diffCh, err
+	}
+	rcfg := replicationConfig{
+		Config:  cfg,
+		remotes: tgts,
+	}
+	diffCh = make(chan madmin.DiffInfo, 4000)
+	go func() {
+		defer close(diffCh)
+		for obj := range objInfoCh {
+			// Ignore object prefixes which are excluded
+			// from versioning via the MinIO bucket versioning extension.
+			if globalBucketVersioningSys.PrefixSuspended(bucket, obj.Name) {
+				continue
+			}
+			roi := getHealReplicateObjectInfo(obj, rcfg)
+			switch roi.ReplicationStatus {
+			case replication.Completed, replication.Replica:
+				if !opts.Verbose {
+					continue
+				}
+				fallthrough
+			default:
+				// ignore pre-existing objects that don't satisfy replication rule(s)
+				if roi.ReplicationStatus.Empty() && !roi.ExistingObjResync.mustResync() {
+					continue
+				}
+				tgtsMap := make(map[string]madmin.TgtDiffInfo)
+				for arn, st := range roi.TargetStatuses {
+					if opts.ARN == "" || opts.ARN == arn {
+						if !opts.Verbose && (st == replication.Completed || st == replication.Replica) {
+							continue
+						}
+						tgtsMap[arn] = madmin.TgtDiffInfo{
+							ReplicationStatus: st.String(),
+						}
+					}
+				}
+				for arn, st := range roi.TargetPurgeStatuses {
+					if opts.ARN == "" || opts.ARN == arn {
+						if !opts.Verbose && st == Complete {
+							continue
+						}
+						t, ok := tgtsMap[arn]
+						if !ok {
+							t = madmin.TgtDiffInfo{}
+						}
+						t.DeleteReplicationStatus = string(st)
+						tgtsMap[arn] = t
+					}
+				}
+				select {
+				case diffCh <- madmin.DiffInfo{
+					Object:                  obj.Name,
+					VersionID:               obj.VersionID,
+					LastModified:            obj.ModTime,
+					IsDeleteMarker:          obj.DeleteMarker,
+					ReplicationStatus:       string(roi.ReplicationStatus),
+					DeleteReplicationStatus: string(roi.VersionPurgeStatus),
+					ReplicationTimestamp:    roi.ReplicationTimestamp,
+					Targets:                 tgtsMap,
+				}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return diffCh, nil
 }
