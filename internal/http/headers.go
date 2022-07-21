@@ -113,6 +113,7 @@ const (
 	AmzCredential           = "X-Amz-Credential"
 	AmzSecurityToken        = "X-Amz-Security-Token"
 	AmzDecodedContentLength = "X-Amz-Decoded-Content-Length"
+	AmzTrailer              = "X-Amz-Trailer"
 
 	AmzMetaUnencryptedContentLength = "X-Amz-Meta-X-Amz-Unencrypted-Content-Length"
 	AmzMetaUnencryptedContentMD5    = "X-Amz-Meta-X-Amz-Unencrypted-Content-Md5"
@@ -143,6 +144,13 @@ const (
 
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
+
+	// Content Checksums
+	AmzChecksumAlgo   = "x-amz-sdk-checksum-algorithm"
+	AmzChecksumCRC32  = "x-amz-checksum-crc32"
+	AmzChecksumCRC32C = "x-amz-checksum-crc32c"
+	AmzChecksumSHA1   = "x-amz-checksum-sha1"
+	AmzChecksumSHA256 = "x-amz-checksum-sha256"
 
 	// Delete special flag to force delete a bucket or a prefix
 	MinIOForceDelete = "x-minio-force-delete"

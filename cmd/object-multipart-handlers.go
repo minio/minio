@@ -350,6 +350,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if err = actualReader.AddChecksum(r); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 
 		// Set compression metrics.
 		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
@@ -366,6 +370,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+	if size >= 0 {
+		if err := hashReader.AddChecksum(r); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
@@ -476,6 +486,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.
 	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
+	hash.TransferChecksumHeader(w, r)
 
 	writeSuccessResponseHeadersOnly(w)
 }
