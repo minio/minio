@@ -37,7 +37,7 @@ import (
 	"sync"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 	ioutilx "github.com/minio/minio/internal/ioutil"
