@@ -87,7 +87,7 @@ func (g *NAS) Name() string {
 // NewGatewayLayer returns nas gatewaylayer.
 func (g *NAS) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
 	var err error
-	newObject, err := minio.NewFSObjectLayer(g.path)
+	newObject, err := minio.NewFSObjectLayer(minio.GlobalContext, g.path)
 	if err != nil {
 		return nil, err
 	}
