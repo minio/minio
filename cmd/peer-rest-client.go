@@ -418,26 +418,34 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
-type serverUpdateInfo struct {
+type binaryInfo struct {
 	URL         *url.URL
 	Sha256Sum   []byte
-	Time        time.Time
 	ReleaseInfo string
 }
 
-// ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) error {
+// DownloadBinary - sends download binary message to remote peers.
+func (client *peerRESTClient) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
-	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfo{
+	if err := gob.NewEncoder(&reader).Encode(binaryInfo{
 		URL:         u,
 		Sha256Sum:   sha256Sum,
-		Time:        lrTime,
 		ReleaseInfo: releaseInfo,
 	}); err != nil {
 		return err
 	}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdate, values, &reader, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDownloadBinary, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// CommitBinary - sends commit binary message to remote peers.
+func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodCommitBinary, nil, nil, -1)
 	if err != nil {
 		return err
 	}

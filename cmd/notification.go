@@ -397,8 +397,8 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	return profilingDataFound
 }
 
-// ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) []NotificationPeerErr {
+// DownloadBinary - asks remote peers to download a new binary from the URL and to verify the checksum
+func (sys *NotificationSys) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -406,7 +406,22 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo)
+			return client.DownloadBinary(ctx, u, sha256Sum, releaseInfo)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// CommitBinary - asks remote peers to overwrite the old binary with the new one
+func (sys *NotificationSys) CommitBinary(ctx context.Context) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.CommitBinary(ctx)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
