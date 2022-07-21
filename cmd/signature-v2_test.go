@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -41,7 +42,10 @@ func TestResourceListSorting(t *testing.T) {
 
 // Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
-	obj, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +165,10 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 
 // TestValidateV2AuthHeader - Tests validate the logic of V2 Authorization header validator.
 func TestValidateV2AuthHeader(t *testing.T) {
-	obj, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +239,10 @@ func TestValidateV2AuthHeader(t *testing.T) {
 }
 
 func TestDoesPolicySignatureV2Match(t *testing.T) {
-	obj, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
@@ -242,11 +242,11 @@ func serverHandleEnvVars() {
 
 var globalHealStateLK sync.RWMutex
 
-func initAllSubsystems() {
+func initAllSubsystems(ctx context.Context) {
 	globalHealStateLK.Lock()
 	// New global heal state
-	globalAllHealState = newHealState(true)
-	globalBackgroundHealState = newHealState(false)
+	globalAllHealState = newHealState(ctx, true)
+	globalBackgroundHealState = newHealState(ctx, false)
 	globalHealStateLK.Unlock()
 
 	// Create new notification system and initialize notification peer targets
@@ -261,7 +261,7 @@ func initAllSubsystems() {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(GlobalContext, totalNodeCount())
+	globalBucketMonitor = bandwidth.NewMonitor(ctx, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -448,7 +448,7 @@ func serverMain(ctx *cli.Context) {
 	initHelp()
 
 	// Initialize all sub-systems
-	initAllSubsystems()
+	initAllSubsystems(GlobalContext)
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
@@ -682,7 +682,7 @@ func newObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools
 	// For FS only, directly use the disk.
 	if endpointServerPools.NEndpoints() == 1 {
 		// Initialize new FS object layer.
-		newObject, err = NewFSObjectLayer(endpointServerPools[0].Endpoints[0].Path)
+		newObject, err = NewFSObjectLayer(ctx, endpointServerPools[0].Endpoints[0].Path)
 		if err == nil {
 			return newObject, nil
 		}
