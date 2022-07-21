@@ -18,6 +18,7 @@
 package lock
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
@@ -529,8 +530,13 @@ func (l *ObjectLegalHold) IsEmpty() bool {
 
 // ParseObjectLegalHold decodes the XML into ObjectLegalHold
 func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
+	buf, err := io.ReadAll(io.LimitReader(reader, maxObjectLockConfigSize))
+	if err != nil {
+		return nil, err
+	}
+
 	hold = &ObjectLegalHold{}
-	if err = xml.NewDecoder(reader).Decode(hold); err != nil {
+	if err = xml.NewDecoder(bytes.NewReader(buf)).Decode(hold); err != nil {
 		return nil, err
 	}
 
