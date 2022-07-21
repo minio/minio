@@ -15,7 +15,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-func initializeSDK(configDir, allocid string) error {
+func initializeSDK(configDir, allocid string, nonce int64) error {
 	if configDir == "" {
 		var err error
 		configDir, err = getDefaultConfigDir()
@@ -77,7 +77,7 @@ func initializeSDK(configDir, allocid string) error {
 		return err
 	}
 
-	err = sdk.InitStorageSDK(string(walletBytes), cfg.BlockWorker, cfg.ChainID, cfg.SignatureScheme, cfg.PreferredBlobbers)
+	err = sdk.InitStorageSDK(string(walletBytes), cfg.BlockWorker, cfg.ChainID, cfg.SignatureScheme, cfg.PreferredBlobbers, nonce)
 	if err != nil {
 		return err
 	}

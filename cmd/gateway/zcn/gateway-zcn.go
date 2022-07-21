@@ -24,6 +24,7 @@ const (
 
 var configDir string
 var allocationID string
+var nonce int64
 
 var zFlags = []cli.Flag{
 	cli.StringFlag{
@@ -35,6 +36,11 @@ var zFlags = []cli.Flag{
 		Name:        "allocationId",
 		Usage:       "Allocation id of an allocation",
 		Destination: &allocationID,
+	},
+	cli.Int64Flag{
+		Name:        "nonce",
+		Usage:       "nonce to use in transaction",
+		Destination: &nonce,
 	},
 }
 
@@ -99,7 +105,7 @@ func (z *ZCN) Name() string {
 
 // NewGatewayLayer initializes 0chain gosdk and return zcnObjects
 func (z *ZCN) NewGatewayLayer(creds madmin.Credentials) (minio.ObjectLayer, error) {
-	err := initializeSDK(configDir, allocationID)
+	err := initializeSDK(configDir, allocationID, nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +234,9 @@ func (zob *zcnObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 	ref, err = getSingleRegularRef(zob.alloc, remotePath)
 	if err != nil {
 		if isPathNoExistError(err) {
+			if remotePath == rootPath {
+				return minio.BucketInfo{Name: rootBucketName}, nil
+			}
 			return bi, minio.BucketNotFound{Bucket: bucket}
 		}
 		return
@@ -318,6 +327,13 @@ func (zob *zcnObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 func (zob *zcnObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	rootRef, err := getSingleRegularRef(zob.alloc, rootPath)
 	if err != nil {
+		if isPathNoExistError(err) {
+			buckets = append(buckets, minio.BucketInfo{
+				Name:    rootBucketName,
+				Created: time.Now().Add(-time.Hour * 30),
+			})
+			return buckets, nil
+		}
 		return nil, err
 	}
 
@@ -428,6 +444,9 @@ func (zob *zcnObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 
 	refs, isTruncated, nextMarker, prefixes, err := listRegularRefs(zob.alloc, remotePath, marker, objFileType, maxKeys, isDelimited)
 	if err != nil {
+		if remotePath == rootPath && isPathNoExistError(err) {
+			return minio.ListObjectsInfo{}, nil
+		}
 		return minio.ListObjectsInfo{}, err
 	}
 

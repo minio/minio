@@ -11,7 +11,6 @@ import (
 	"time"
 
 	zerror "github.com/0chain/errors"
-	"github.com/0chain/gosdk/zboxcore/fileref"
 	"github.com/0chain/gosdk/zboxcore/sdk"
 	"github.com/mitchellh/go-homedir"
 )
@@ -52,6 +51,7 @@ func listRootDir(alloc *sdk.Allocation, fileType string) ([]sdk.ORef, error) {
 	for {
 		oResult, err := getRegularRefs(alloc, rootPath, offsetPath, fileType, pageLimit)
 		if err != nil {
+
 			return nil, err
 		}
 
@@ -187,7 +187,6 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 		errCh:  make(chan error, 1),
 	}
 
-	attrs := fileref.Attributes{} // default is owner pays
 	_, fileName := filepath.Split(remotePath)
 	fileMeta := sdk.FileMeta{
 		Path:       "",
@@ -195,7 +194,6 @@ func putFile(ctx context.Context, alloc *sdk.Allocation, remotePath, contentType
 		ActualSize: size,
 		MimeType:   contentType,
 		RemoteName: fileName,
-		Attributes: attrs,
 	}
 
 	workDir, err := homedir.Dir()
