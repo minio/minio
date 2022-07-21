@@ -23,7 +23,7 @@ func init() {
 	defer f.Close()
 
 	if err != nil {
-		log.Fatal("Error opening mantle config file. Hint: maybe config.json is missing?")
+		log.Fatal("Error opening mantle config file. Hint: maybe config-mantle.json is missing?")
 	}
 
 	b, err := io.ReadAll(f)
