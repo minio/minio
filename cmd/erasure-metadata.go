@@ -400,17 +400,17 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
-	if defaultParityCount == 0 {
-		return 1, 1, nil
-	}
-
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
-	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
+	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, defaultParityCount, errs)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	if latestFileInfo.Deleted {
+		// special case when parity is '0'
+		if defaultParityCount == 0 {
+			return len(partsMetaData), len(partsMetaData), nil
+		}
 		// For delete markers do not use 'defaultParityCount' as it is not expected to be the case.
 		// Use maximum allowed read quorum instead, writeQuorum+1 is returned for compatibility sake
 		// but there are no callers that shall be using this.
