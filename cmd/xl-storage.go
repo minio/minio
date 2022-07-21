@@ -2573,7 +2573,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 	defer close(resp)
 
 	volumeDir := pathJoin(s.diskPath, req.Bucket)
-
+	found := 0
 	for _, f := range req.Files {
 		if contextCanceled(ctx) {
 			return ctx.Err()
@@ -2617,10 +2617,14 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			resp <- r
 			continue
 		}
+		found++
 		r.Exists = true
 		r.Data = data
 		r.Modtime = mt
 		resp <- r
+		if req.MaxResults > 0 && found >= req.MaxResults {
+			return nil
+		}
 	}
 	return nil
 }

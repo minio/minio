@@ -792,6 +792,9 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	if maxParts == 0 {
+		return result, nil
+	}
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
 	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
@@ -830,16 +833,28 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		return result, err
 	}
 
+	if partNumberMarker < 0 {
+		partNumberMarker = 0
+	}
+
+	// Limit output to maxPartsList.
+	if maxParts > maxPartsList-partNumberMarker {
+		maxParts = maxPartsList - partNumberMarker
+	}
+
 	// Read Part info for all parts
 	partPath := pathJoin(uploadIDPath, fi.DataDir) + "/"
 	req := ReadMultipleReq{
-		Bucket:  minioMetaMultipartBucket,
-		Prefix:  partPath,
-		MaxSize: 1 << 20, // Each part should realistically not be > 1MiB.
+		Bucket:     minioMetaMultipartBucket,
+		Prefix:     partPath,
+		MaxSize:    1 << 20, // Each part should realistically not be > 1MiB.
+		MaxResults: maxParts + 1,
 	}
 
+	start := partNumberMarker + 1
+
 	// Parts are 1 based, so index 0 is part one, etc.
-	for i := 1; i <= maxPartsList; i++ {
+	for i := start; i <= maxParts; i++ {
 		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", i))
 	}
 
@@ -861,13 +876,9 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		return result, nil
 	}
 
-	// Limit output to maxPartsList.
-	if maxParts > maxPartsList {
-		maxParts = maxPartsList
-	}
-
 	var partI ObjectPartInfo
 	for i, part := range partInfoFiles {
+		partN := i + partNumberMarker + 1
 		if part.Error != "" || !part.Exists {
 			continue
 		}
@@ -879,7 +890,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 			continue
 		}
 
-		if i+1 != partI.Number {
+		if partN != partI.Number {
 			logger.LogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", i+1, i+1, partI.Number))
 			continue
 		}
@@ -894,6 +905,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	if partIdx != -1 {
 		parts = fi.Parts[partIdx+1:]
 	}
+
 	count := maxParts
 	result.Parts = make([]PartInfo, 0, len(parts))
 	for _, part := range parts {
@@ -909,6 +921,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 			break
 		}
 	}
+
 	// If listed entries are more than maxParts, we set IsTruncated as true.
 	if len(parts) > len(result.Parts) {
 		result.IsTruncated = true
@@ -972,10 +985,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Read Part info for all parts
 	partPath := pathJoin(uploadIDPath, fi.DataDir) + "/"
 	req := ReadMultipleReq{
-		Bucket:  minioMetaMultipartBucket,
-		Prefix:  partPath,
-		MaxSize: 1 << 20, // Each part should realistically not be > 1MiB.
-		Files:   make([]string, 0, len(parts)),
+		Bucket:     minioMetaMultipartBucket,
+		Prefix:     partPath,
+		MaxSize:    1 << 20, // Each part should realistically not be > 1MiB.
+		Files:      make([]string, 0, len(parts)),
+		AbortOn404: true,
 	}
 	for _, part := range parts {
 		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", part.PartNumber))
