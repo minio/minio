@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -29,10 +28,7 @@ import (
 
 // Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	objLayer, fsDir, err := prepareFS(ctx)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,9 +164,6 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 
 // Test if a config migration from v2 to v33 is successfully done
 func TestServerConfigMigrateV2toV33(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
@@ -179,7 +172,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 
 	globalConfigDir = &ConfigDir{path: rootPath}
 
-	objLayer, fsDir, err := prepareFS(ctx)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,17 +18,13 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"testing"
 )
 
 // Test printing Gateway common message.
 func TestPrintGatewayCommonMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,10 +39,7 @@ func TestPrintGatewayCommonMessage(t *testing.T) {
 
 // Test print gateway startup message.
 func TestPrintGatewayStartupMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}

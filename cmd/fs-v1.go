@@ -118,7 +118,8 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 }
 
 // NewFSObjectLayer - initialize new fs object layer.
-func NewFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error) {
+func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
+	ctx := GlobalContext
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}

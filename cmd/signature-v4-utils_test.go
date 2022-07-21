@@ -33,7 +33,7 @@ func TestCheckValid(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	objLayer, fsDir, err := prepareFS(ctx)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,8 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	initAllSubsystems(ctx)
+	initAllSubsystems()
+
 	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
