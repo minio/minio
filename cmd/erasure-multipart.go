@@ -792,9 +792,6 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
-	if maxParts == 0 {
-		return result, nil
-	}
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
 	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
 	if err != nil {
@@ -833,6 +830,10 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		return result, err
 	}
 
+	if maxParts == 0 {
+		return result, nil
+	}
+
 	if partNumberMarker < 0 {
 		partNumberMarker = 0
 	}
@@ -852,9 +853,10 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	}
 
 	start := partNumberMarker + 1
+	end := start + maxParts
 
 	// Parts are 1 based, so index 0 is part one, etc.
-	for i := start; i <= maxParts; i++ {
+	for i := start; i <= end; i++ {
 		req.Files = append(req.Files, fmt.Sprintf("part.%d.meta", i))
 	}
 
@@ -900,13 +902,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	}
 
 	// Only parts with higher part numbers will be listed.
-	partIdx := objectPartIndex(fi.Parts, partNumberMarker)
 	parts := fi.Parts
-	if partIdx != -1 {
-		parts = fi.Parts[partIdx+1:]
-	}
-
-	count := maxParts
 	result.Parts = make([]PartInfo, 0, len(parts))
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
@@ -916,8 +912,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 			ActualSize:   part.ActualSize,
 			Size:         part.Size,
 		})
-		count--
-		if count == 0 {
+		if len(result.Parts) >= maxParts {
 			break
 		}
 	}
