@@ -1554,7 +1554,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportIAMAction)
 	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 	// Initialize a zip writer which will provide a zipped content

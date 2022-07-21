@@ -202,6 +202,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// RemoveRemoteTargetHandler
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler))).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
+		// ReplicationDiff - MinIO extension API
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/replication/diff").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ReplicationDiffHandler))).Queries("bucket", "{bucket:.*}")
 
 		// Bucket migration operations
 		// ExportBucketMetaHandler

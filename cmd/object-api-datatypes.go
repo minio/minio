@@ -261,14 +261,16 @@ func (o ObjectInfo) tierStats() tierStats {
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
 	ObjectInfo
-	OpType            replication.Type
-	EventType         string
-	RetryCount        uint32
-	ResetID           string
-	Dsc               ReplicateDecision
-	ExistingObjResync ResyncDecision
-	TargetArn         string
-	TargetStatuses    map[string]replication.StatusType
+	OpType               replication.Type
+	EventType            string
+	RetryCount           uint32
+	ResetID              string
+	Dsc                  ReplicateDecision
+	ExistingObjResync    ResyncDecision
+	TargetArn            string
+	TargetStatuses       map[string]replication.StatusType
+	TargetPurgeStatuses  map[string]VersionPurgeStatusType
+	ReplicationTimestamp time.Time
 }
 
 // MultipartInfo captures metadata information about the uploadId
