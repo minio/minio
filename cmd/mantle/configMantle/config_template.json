@@ -1,4 +1,4 @@
 {
-  "SdsUrl":"http://develop.api.mantleblockchain.com/bunker",
+  "SdsUrl":"https://develop.sds.mantle.technology",
   "ApiKey":"test"
 }
