@@ -26,10 +26,7 @@ import (
 )
 
 func TestServerConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	objLayer, fsDir, err := prepareFS(ctx)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}

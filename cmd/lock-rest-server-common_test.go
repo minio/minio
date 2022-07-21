@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"reflect"
 	"sync"
@@ -28,8 +27,8 @@ import (
 )
 
 // Helper function to create a lock server for testing
-func createLockTestServer(ctx context.Context, t *testing.T) (string, *lockRESTServer, string) {
-	obj, fsDir, err := prepareFS(ctx)
+func createLockTestServer(t *testing.T) (string, *lockRESTServer, string) {
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,10 +52,7 @@ func createLockTestServer(ctx context.Context, t *testing.T) (string, *lockRESTS
 
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	testPath, locker, _ := createLockTestServer(ctx, t)
+	testPath, locker, _ := createLockTestServer(t)
 	defer os.RemoveAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{

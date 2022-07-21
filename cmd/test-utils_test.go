@@ -187,7 +187,7 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 	return streamLen
 }
 
-func prepareFS(ctx context.Context) (ObjectLayer, string, error) {
+func prepareFS() (ObjectLayer, string, error) {
 	nDisks := 1
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -198,9 +198,9 @@ func prepareFS(ctx context.Context) (ObjectLayer, string, error) {
 		return nil, "", err
 	}
 
-	initAllSubsystems(ctx)
+	initAllSubsystems()
 
-	globalIAMSys.Init(ctx, obj, globalEtcdClient, 2*time.Second)
+	globalIAMSys.Init(context.Background(), obj, globalEtcdClient, 2*time.Second)
 	return obj, fsDirs[0], nil
 }
 
@@ -234,7 +234,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
-	initAllSubsystems(GlobalContext)
+	initAllSubsystems()
 	return obj
 }
 
@@ -366,7 +366,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	initAllSubsystems(ctx)
+	initAllSubsystems()
 
 	globalEtcdClient = nil
 
@@ -445,7 +445,7 @@ func resetGlobalIsErasure() {
 func resetGlobalHealState() {
 	// Init global heal state
 	if globalAllHealState == nil {
-		globalAllHealState = newHealState(GlobalContext, false)
+		globalAllHealState = newHealState(false)
 	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
@@ -458,7 +458,7 @@ func resetGlobalHealState() {
 
 	// Init background heal state
 	if globalBackgroundHealState == nil {
-		globalBackgroundHealState = newHealState(GlobalContext, false)
+		globalBackgroundHealState = newHealState(false)
 	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {
@@ -1474,7 +1474,7 @@ func getRandomDisks(N int) ([]string, error) {
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (newObject ObjectLayer, err error) {
-	initAllSubsystems(ctx)
+	initAllSubsystems()
 
 	return newErasureServerPools(ctx, endpointServerPools)
 }
@@ -1518,7 +1518,7 @@ func removeDiskN(disks []string, n int) {
 // initialies the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
-	initAllSubsystems(ctx)
+	initAllSubsystems()
 
 	initConfigSubsystem(ctx, obj)
 
@@ -1556,7 +1556,7 @@ func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, 
 		return prepareErasure16(ctx)
 	default:
 		// return FS backend by default.
-		obj, disk, err := prepareFS(ctx)
+		obj, disk, err := prepareFS()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1725,7 +1725,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
 
-	objLayer, fsDir, err := prepareFS(ctx)
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
@@ -1793,12 +1793,13 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			localMetacacheMgr.deleteAll()
 		}
 
-		objLayer, fsDir, err := prepareFS(ctx)
+		objLayer, fsDir, err := prepareFS()
 		if err != nil {
 			t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 		}
 		setObjectLayer(objLayer)
-		initAllSubsystems(ctx)
+
+		initAllSubsystems()
 
 		// initialize the server and obtain the credentials and root.
 		// credentials are necessary to sign the HTTP request.
@@ -1824,7 +1825,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			localMetacacheMgr.deleteAll()
 		}
 
-		initAllSubsystems(ctx)
+		initAllSubsystems()
 		objLayer, fsDirs, err := prepareErasureSets32(ctx)
 		if err != nil {
 			t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)

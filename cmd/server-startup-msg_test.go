@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"reflect"
 	"strings"
@@ -72,10 +71,7 @@ func TestStripStandardPorts(t *testing.T) {
 
 // Test printing server common message.
 func TestPrintServerCommonMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,10 +86,7 @@ func TestPrintServerCommonMessage(t *testing.T) {
 
 // Tests print cli access message.
 func TestPrintCLIAccessMsg(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +101,7 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 
 // Test print startup message.
 func TestPrintStartupMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}

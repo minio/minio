@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"testing"
@@ -30,10 +29,7 @@ import (
 )
 
 func testAuthenticate(authType string, t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,10 +103,7 @@ func getTokenString(accessKey, secretKey string) (string, error) {
 
 // Tests web request authenticator.
 func TestWebRequestAuthenticate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +157,7 @@ func TestWebRequestAuthenticate(t *testing.T) {
 }
 
 func BenchmarkParseJWTStandardClaims(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -195,10 +185,7 @@ func BenchmarkParseJWTStandardClaims(b *testing.B) {
 }
 
 func BenchmarkParseJWTMapClaims(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -228,10 +215,7 @@ func BenchmarkParseJWTMapClaims(b *testing.B) {
 }
 
 func BenchmarkAuthenticateNode(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -260,10 +244,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 }
 
 func BenchmarkAuthenticateWeb(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	obj, fsDir, err := prepareFS(ctx)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
 		b.Fatal(err)
 	}
