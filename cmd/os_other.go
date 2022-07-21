@@ -31,6 +31,10 @@ func access(name string) error {
 	return err
 }
 
+func osMkdirAll(dirPath string, perm os.FileMode) error {
+	return os.MkdirAll(dirPath, perm)
+}
+
 // readDirFn applies the fn() function on each entries at dirPath, doesn't recurse into
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
