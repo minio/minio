@@ -398,7 +398,7 @@ func (c Config) DelFrom(r io.Reader) error {
 		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
-		if err := c.DelKVS(text, DefaultKVS); err != nil {
+		if err := c.DelKVS(text); err != nil {
 			return err
 		}
 	}
@@ -451,7 +451,7 @@ func (c Config) RedactSensitiveInfo() Config {
 	}
 
 	// Remove the server credentials altogether
-	nc.DelKVS(CredentialsSubSys, DefaultKVS)
+	nc.DelKVS(CredentialsSubSys)
 
 	return nc
 }
@@ -772,7 +772,7 @@ func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (Targets, error) {
 }
 
 // DelKVS - delete a specific key.
-func (c Config) DelKVS(s string, defaultKVS map[string]KVS) error {
+func (c Config) DelKVS(s string) error {
 	subSys, inputs, tgt, err := GetSubSys(s)
 	if err != nil {
 		if !SubSystems.Contains(subSys) && len(inputs) == 1 {
@@ -785,12 +785,12 @@ func (c Config) DelKVS(s string, defaultKVS map[string]KVS) error {
 
 	ck, ok := c[subSys][tgt]
 	if !ok {
-		return Errorf("sub-system %s already deleted", inputs[0])
+		return Errorf("sub-system %s:%s already deleted or does not exist", subSys, tgt)
 	}
 
 	if len(inputs) == 2 {
 		currKVS := ck.Clone()
-		defKVS := defaultKVS[subSys]
+		defKVS := DefaultKVS[subSys]
 		for _, delKey := range strings.Fields(inputs[1]) {
 			_, ok := currKVS.Lookup(delKey)
 			if !ok {
