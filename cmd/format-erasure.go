@@ -646,9 +646,8 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 		}, index)
 	}
 
-	writeQuorum := (len(storageDisks) + 1/2)
 	// Wait for the routines to finish.
-	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
+	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(storageDisks))
 }
 
 // relinquishes the underlying connection for all storage disks.
