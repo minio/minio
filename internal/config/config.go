@@ -773,35 +773,40 @@ func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (Targets, error) {
 
 // DelKVS - delete a specific key.
 func (c Config) DelKVS(s string) error {
-	if len(s) == 0 {
-		return Errorf("input arguments cannot be empty")
-	}
-	inputs := strings.Fields(s)
-	if len(inputs) > 1 {
-		return Errorf("invalid number of arguments %s", s)
-	}
-	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
-	if len(subSystemValue) == 0 {
-		return Errorf("invalid number of arguments %s", s)
-	}
-	if !SubSystems.Contains(subSystemValue[0]) {
-		// Unknown sub-system found try to remove it anyways.
-		delete(c, subSystemValue[0])
-		return nil
-	}
-	tgt := Default
-	subSys := subSystemValue[0]
-	if len(subSystemValue) == 2 {
-		if len(subSystemValue[1]) == 0 {
-			return Errorf("sub-system target '%s' cannot be empty", s)
+	subSys, inputs, tgt, err := GetSubSys(s)
+	if err != nil {
+		if !SubSystems.Contains(subSys) && len(inputs) == 1 {
+			// Unknown sub-system found try to remove it anyways.
+			delete(c, subSys)
+			return nil
 		}
-		tgt = subSystemValue[1]
+		return err
 	}
-	_, ok := c[subSys][tgt]
+
+	ck, ok := c[subSys][tgt]
 	if !ok {
-		return Errorf("sub-system %s already deleted", s)
+		return Errorf("sub-system %s:%s already deleted or does not exist", subSys, tgt)
 	}
-	delete(c[subSys], tgt)
+
+	if len(inputs) == 2 {
+		currKVS := ck.Clone()
+		defKVS := DefaultKVS[subSys]
+		for _, delKey := range strings.Fields(inputs[1]) {
+			_, ok := currKVS.Lookup(delKey)
+			if !ok {
+				return Errorf("key %s doesn't exist", delKey)
+			}
+			defVal, isDef := defKVS.Lookup(delKey)
+			if isDef {
+				currKVS.Set(delKey, defVal)
+			} else {
+				currKVS.Delete(delKey)
+			}
+		}
+		c[subSys][tgt] = currKVS
+	} else {
+		delete(c[subSys], tgt)
+	}
 	return nil
 }
 
