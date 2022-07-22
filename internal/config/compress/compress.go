@@ -39,10 +39,10 @@ const (
 	AllowEncrypted = "allow_encryption"
 	MimeTypes      = "mime_types"
 
-	EnvCompressState           = "MINIO_COMPRESS_ENABLE"
-	EnvCompressAllowEncryption = "MINIO_COMPRESS_ALLOW_ENCRYPTION"
-	EnvCompressExtensions      = "MINIO_COMPRESS_EXTENSIONS"
-	EnvCompressMimeTypes       = "MINIO_COMPRESS_MIME_TYPES"
+	EnvCompressState           = "MINIO_COMPRESSION_ENABLE"
+	EnvCompressAllowEncryption = "MINIO_COMPRESSION_ALLOW_ENCRYPTION"
+	EnvCompressExtensions      = "MINIO_COMPRESSION_EXTENSIONS"
+	EnvCompressMimeTypes       = "MINIO_COMPRESSION_MIME_TYPES"
 
 	// Include-list for compression.
 	DefaultExtensions = ".txt,.log,.csv,.json,.tar,.xml,.bin"
@@ -93,9 +93,9 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		return cfg, err
 	}
 
-	compress := env.Get(EnvCompress, "")
+	compress := env.Get(EnvCompressState, kvs.Get(config.Enable))
 	if compress == "" {
-		compress = env.Get(EnvCompressState, kvs.Get(config.Enable))
+		compress = env.Get(EnvCompress, "")
 	}
 	cfg.Enabled, err = config.ParseBool(compress)
 	if err != nil {
@@ -110,36 +110,58 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	}
 
 	allowEnc := env.Get(EnvCompressAllowEncryption, kvs.Get(AllowEncrypted))
+	if allowEnc == "" {
+		allowEnc = env.Get(EnvCompressAllowEncryptionLegacy, "")
+	}
+
 	cfg.AllowEncrypted, err = config.ParseBool(allowEnc)
 	if err != nil {
 		return cfg, err
 	}
 
 	compressExtensions := env.Get(EnvCompressExtensions, kvs.Get(Extensions))
+	compressExtensionsLegacy := env.Get(EnvCompressExtensionsLegacy, "")
 	compressMimeTypes := env.Get(EnvCompressMimeTypes, kvs.Get(MimeTypes))
-	compressMimeTypesLegacy := env.Get(EnvCompressMimeTypesLegacy, kvs.Get(MimeTypes))
-	if compressExtensions != "" || compressMimeTypes != "" || compressMimeTypesLegacy != "" {
-		if compressExtensions != "" {
-			extensions, err := parseCompressIncludes(compressExtensions)
-			if err != nil {
-				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_EXTENSIONS value (`%s`)", err, extensions)
-			}
-			cfg.Extensions = extensions
+	compressMimeTypesLegacy1 := env.Get(EnvCompressMimeTypesLegacy1, "")
+	compressMimeTypesLegacy2 := env.Get(EnvCompressMimeTypesLegacy2, "")
+	if compressExtensions != "" {
+		extensions, err := parseCompressIncludes(compressExtensions)
+		if err != nil {
+			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESSION_EXTENSIONS value (`%s`)", err, extensions)
 		}
-		if compressMimeTypes != "" {
-			mimeTypes, err := parseCompressIncludes(compressMimeTypes)
-			if err != nil {
-				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
-			}
-			cfg.MimeTypes = mimeTypes
+		cfg.Extensions = extensions
+	}
+
+	if compressExtensionsLegacy != "" {
+		extensions, err := parseCompressIncludes(compressExtensions)
+		if err != nil {
+			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_EXTENSIONS value (`%s`)", err, extensions)
 		}
-		if compressMimeTypesLegacy != "" {
-			mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy)
-			if err != nil {
-				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
-			}
-			cfg.MimeTypes = mimeTypes
+		cfg.Extensions = extensions
+	}
+
+	if compressMimeTypes != "" {
+		mimeTypes, err := parseCompressIncludes(compressMimeTypes)
+		if err != nil {
+			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESSION_MIME_TYPES value (`%s`)", err, mimeTypes)
 		}
+		cfg.MimeTypes = mimeTypes
+	}
+
+	if compressMimeTypesLegacy1 != "" {
+		mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy1)
+		if err != nil {
+			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", err, mimeTypes)
+		}
+		cfg.MimeTypes = mimeTypes
+	}
+
+	if compressMimeTypesLegacy2 != "" {
+		mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy2)
+		if err != nil {
+			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
+		}
+		cfg.MimeTypes = mimeTypes
 	}
 
 	return cfg, nil

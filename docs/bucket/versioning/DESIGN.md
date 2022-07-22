@@ -131,7 +131,7 @@ Inline data is optional. If no inline data is present, it is encoded as 0 bytes.
 | Entry               | Encoding                    | Content
 | --------------------|-----------------------------|----------------------------------------
 | xlMetaInlineDataVer | byte                        | version identifier
-| id -> data          | msgp map[string][]byte      | Map of string id -> byte content
+| id -> data          | msgp `map[string][]byte`      | Map of string id -> byte content
 
 Currently only xlMetaInlineDataVer == 1 exists.
 

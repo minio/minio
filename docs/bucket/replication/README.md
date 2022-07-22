@@ -244,6 +244,7 @@ Replication from a source bucket to multiple destination buckets is supported. F
 Note that on the source side, the `X-Amz-Replication-Status` changes from `PENDING` to `COMPLETED` after replication succeeds to each of the targets. On the destination side, a `X-Amz-Replication-Status` status of `REPLICA` indicates that the object was replicated successfully. Any replication failures are automatically re-attempted during a periodic disk scanner cycle.
 
 ### Interaction with extended Bucket Versioning configuration
+
 When Bucket Versioning with excluded prefixes are configured objects matching these prefixes are excluded from being versioned and replicated.
 
 ```
@@ -261,6 +262,7 @@ When Bucket Versioning with excluded prefixes are configured objects matching th
         <!-- .. up to 10 prefixes in all -->
 </VersioningConfiguration>
 ```
+
 In the above sample config, objects under prefixes matching any of the `ExcludedPrefixes` glob patterns will neither be versioned nor replicated.
 
 ## Explore Further

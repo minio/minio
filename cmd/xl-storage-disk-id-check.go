@@ -64,6 +64,7 @@ const (
 	storageMetricReadXL
 	storageMetricReadAll
 	storageMetricStatInfoFile
+	storageMetricReadMultiple
 
 	// .... add more
 
@@ -508,6 +509,21 @@ func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path st
 	defer done(&err)
 
 	return p.storage.StatInfoFile(ctx, volume, path, glob)
+}
+
+// ReadMultiple will read multiple files and send each back as response.
+// Files are read and returned in the given order.
+// The resp channel is closed before the call returns.
+// Only a canceled context will return an error.
+func (p *xlStorageDiskIDCheck) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadMultiple, req.Bucket, req.Prefix)
+	if err != nil {
+		close(resp)
+		return err
+	}
+	defer done(&err)
+
+	return p.storage.ReadMultiple(ctx, req, resp)
 }
 
 func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {

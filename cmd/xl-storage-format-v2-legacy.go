@@ -83,6 +83,10 @@ func (j *xlMetaV2Version) unmarshalV(v uint8, bts []byte) (o []byte, err error) 
 	switch v {
 	// We accept un-set as latest version.
 	case 0, xlMetaVersion:
+		// Clear omitempty fields:
+		if j.ObjectV2 != nil && len(j.ObjectV2.PartIndices) > 0 {
+			j.ObjectV2.PartIndices = j.ObjectV2.PartIndices[:0]
+		}
 		o, err = j.UnmarshalMsg(bts)
 
 		// Clean up PartEtags on v1

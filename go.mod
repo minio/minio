@@ -20,7 +20,7 @@ require (
 	github.com/djherbis/atime v1.0.0
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
-	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/elastic/go-elasticsearch/v7 v7.17.1
 	github.com/fatih/color v1.13.0
 	github.com/felixge/fgprof v0.9.2
@@ -43,7 +43,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.19.1-0.20220705203612-63e2793272dd
+	github.com/minio/console v0.19.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2

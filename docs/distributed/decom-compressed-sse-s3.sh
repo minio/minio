@@ -13,13 +13,18 @@ if [ ! -f ./mc ]; then
 fi
 
 export CI=true
+export MINIO_COMPRESSION_ENABLE="on"
+export MINIO_COMPRESSION_EXTENSIONS=".go"
+export MINIO_COMPRESSION_MIME_TYPES="application/*"
+export MINIO_COMPRESSION_ALLOW_ENCRYPTION="on"
+export MINIO_KMS_AUTO_ENCRYPTION=on
+export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
+export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 
 (minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null)&
 pid=$!
 
 sleep 2
-
-export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 
 ./mc admin user add myminio/ minio123 minio123
 ./mc admin user add myminio/ minio12345 minio12345
@@ -46,6 +51,7 @@ user_count=$(./mc admin user list myminio/ | wc -l)
 policy_count=$(./mc admin policy list myminio/ | wc -l)
 
 kill $pid
+
 (minio server /tmp/xl/{1...10}/disk{0...1} /tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded.log) &
 pid=$!
 
@@ -86,7 +92,7 @@ done
 
 kill $pid
 
-(minio server /tmp/xl/{11...30}/disk{0...3} 2>&1 >/dev/null)&
+(minio server /tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/removed.log)&
 pid=$!
 
 sleep 2
@@ -111,6 +117,12 @@ if [ $ret -ne 0 ]; then
     exit 1
 fi
 
+got_checksum=$(./mc cat myminio/versioned/dsync/drwmutex.go | md5sum)
+if [ "${expected_checksum}" != "${got_checksum}" ]; then
+    echo "BUG: decommission failed on encrypted objects: expected ${expected_checksum} got ${got_checksum}"
+    exit 1
+fi
+
 ./mc ls -r myminio/versioned > decommissioned_ns.txt
 ./mc ls -r --versions myminio/versioned > decommissioned_ns_versions.txt
 
@@ -128,10 +140,4 @@ if [ $ret -ne 0 ]; then
     exit 1
 fi
 
-got_checksum=$(./mc cat myminio/versioned/dsync/drwmutex.go | md5sum)
-if [ "${expected_checksum}" != "${got_checksum}" ]; then
-    echo "BUG: decommission failed on encrypted objects: expected ${expected_checksum} got ${got_checksum}"
-    exit 1
-fi
-
-kill $pid
+# kill $pid

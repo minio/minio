@@ -21,12 +21,14 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -503,6 +505,8 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 	}
 	var dsc ReplicateDecision
 	var tgtStatuses map[string]replication.StatusType
+	var purgeStatuses map[string]VersionPurgeStatusType
+
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		dsc = checkReplicateDelete(GlobalContext, oi.Bucket, ObjectToDelete{
 			ObjectV: ObjectV{
@@ -516,15 +520,17 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 		}, replication.HealReplicationType, ObjectOptions{}))
 	}
 	tgtStatuses = replicationStatusesMap(oi.ReplicationStatusInternal)
-
+	purgeStatuses = versionPurgeStatusesMap(oi.VersionPurgeStatusInternal)
 	existingObjResync := rcfg.Resync(GlobalContext, oi, &dsc, tgtStatuses)
-
+	tm, _ := time.Parse(time.RFC3339Nano, oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp])
 	return ReplicateObjectInfo{
-		ObjectInfo:        oi,
-		OpType:            replication.HealReplicationType,
-		Dsc:               dsc,
-		ExistingObjResync: existingObjResync,
-		TargetStatuses:    tgtStatuses,
+		ObjectInfo:           oi,
+		OpType:               replication.HealReplicationType,
+		Dsc:                  dsc,
+		ExistingObjResync:    existingObjResync,
+		TargetStatuses:       tgtStatuses,
+		TargetPurgeStatuses:  purgeStatuses,
+		ReplicationTimestamp: tm,
 	}
 }
 
@@ -723,4 +729,11 @@ func parseSizeFromContentRange(h http.Header) (sz int64, err error) {
 		return sz, err
 	}
 	return int64(usz), nil
+}
+
+func extractReplicateDiffOpts(q url.Values) (opts madmin.ReplDiffOpts) {
+	opts.Verbose = q.Get("verbose") == "true"
+	opts.ARN = q.Get("arn")
+	opts.Prefix = q.Get("prefix")
+	return
 }

@@ -322,6 +322,10 @@ func (es *erasureSingle) DeleteBucket(ctx context.Context, bucket string, opts D
 	defer NSUpdated(bucket, slashSeparator)
 
 	err := es.disk.DeleteVol(ctx, bucket, opts.Force)
+	// Purge the entire bucket metadata entirely.
+	deleteBucketMetadata(ctx, es, bucket)
+	globalBucketMetadataSys.Remove(bucket)
+
 	return toObjectErr(err, bucket)
 }
 
@@ -854,6 +858,8 @@ func (es *erasureSingle) putMetacacheObject(ctx context.Context, key string, r *
 		index = opts.IndexCB()
 	}
 
+	modTime := UTCNow()
+
 	for i, w := range writers {
 		if w == nil {
 			// Make sure to avoid writing to disks which we couldn't complete in erasure.Encode()
@@ -861,15 +867,13 @@ func (es *erasureSingle) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
 			Hash:       bitrotWriterSum(w),
 		})
 	}
-
-	modTime := UTCNow()
 
 	// Fill all the necessary metadata.
 	// Update `xl.meta` content on each disks.
@@ -1092,6 +1096,11 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		index = opts.IndexCB()
 	}
 
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
+	}
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1102,7 +1111,7 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1116,11 +1125,6 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 	// Guess content-type from the extension if possible.
 	if opts.UserDefined["content-type"] == "" {
 		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
-	}
-
-	modTime := opts.MTime
-	if opts.MTime.IsZero() {
-		modTime = UTCNow()
 	}
 
 	// Fill all the necessary metadata.
@@ -2385,7 +2389,7 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), index)
+	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), fi.ModTime, index)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {

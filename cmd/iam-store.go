@@ -900,7 +900,6 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 	mp := newMappedPolicy(policy)
 	for _, p := range mp.toSlice() {
 		if _, found := cache.iamPolicyDocsMap[p]; !found {
-			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, p))
 			return updatedAt, errNoSuchPolicy
 		}
 	}
@@ -1002,12 +1001,6 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 		}
 	}
 	if len(users) != 0 || len(groups) != 0 {
-		// error out when a policy could not be deleted as it was in use.
-		loggedErr := fmt.Errorf("policy could not be deleted as it is use (users=%s; groups=%s)",
-			fmt.Sprintf("[%s]", strings.Join(users, ",")),
-			fmt.Sprintf("[%s]", strings.Join(groups, ",")),
-		)
-		logger.LogIf(GlobalContext, loggedErr)
 		return errPolicyInUse
 	}
 

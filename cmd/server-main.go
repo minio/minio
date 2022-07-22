@@ -590,7 +590,8 @@ func serverMain(ctx *cli.Context) {
 		initBackgroundTransition(GlobalContext, newObject)
 
 		go func() {
-			if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
+			err := globalTierConfigMgr.Init(GlobalContext, newObject)
+			if err != nil {
 				logger.LogIf(GlobalContext, err)
 			}
 

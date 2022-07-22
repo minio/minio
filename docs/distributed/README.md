@@ -28,7 +28,6 @@ MinIO follows strict **read-after-write** and **list-after-write** consistency m
 
 **If MinIO distributed setup is using NFS volumes underneath it is not guaranteed MinIO will provide these consistency guarantees since NFS is not strictly consistent (If you must use NFS we recommend that you atleast use NFSv4 instead of NFSv3 for relatively better outcomes).**
 
-
 ## Get started
 
 If you're aware of stand-alone MinIO set up, the process remains largely the same. MinIO server automatically switches to stand-alone or distributed mode, depending on the command line parameters.

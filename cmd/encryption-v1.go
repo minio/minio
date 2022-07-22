@@ -255,7 +255,7 @@ func ParseSSECustomerHeader(header http.Header) (key []byte, err error) {
 }
 
 // This function rotates old to new key.
-func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object string, metadata map[string]string, ctx kms.Context) error {
+func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byte, bucket, object string, metadata map[string]string, cryptoCtx kms.Context) error {
 	kind, _ := crypto.IsEncrypted(metadata)
 	switch kind {
 	case crypto.S3:
@@ -275,7 +275,7 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 			return err
 		}
 
-		newKey, err := GlobalKMS.GenerateKey("", kms.Context{bucket: path.Join(bucket, object)})
+		newKey, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
@@ -291,8 +291,8 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 			return err
 		}
 
-		if len(ctx) == 0 {
-			_, _, _, ctx, err = crypto.S3KMS.ParseMetadata(metadata)
+		if len(cryptoCtx) == 0 {
+			_, _, _, cryptoCtx, err = crypto.S3KMS.ParseMetadata(metadata)
 			if err != nil {
 				return err
 			}
@@ -305,19 +305,19 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range ctx {
+		for k, v := range cryptoCtx {
 			kmsCtx[k] = v
 		}
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
-		newKey, err := GlobalKMS.GenerateKey(newKeyID, kmsCtx)
+		newKey, err := GlobalKMS.GenerateKey(ctx, newKeyID, kmsCtx)
 		if err != nil {
 			return err
 		}
 
 		sealedKey := objectKey.Seal(newKey.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3KMS.String(), bucket, object)
-		crypto.S3KMS.CreateMetadata(metadata, newKey.KeyID, newKey.Ciphertext, sealedKey, ctx)
+		crypto.S3KMS.CreateMetadata(metadata, newKey.KeyID, newKey.Ciphertext, sealedKey, cryptoCtx)
 		return nil
 	case crypto.SSEC:
 		sealedKey, err := crypto.SSEC.ParseMetadata(metadata)
@@ -344,14 +344,14 @@ func rotateKey(oldKey []byte, newKeyID string, newKey []byte, bucket, object str
 	}
 }
 
-func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, ctx kms.Context) (crypto.ObjectKey, error) {
+func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, cryptoCtx kms.Context) (crypto.ObjectKey, error) {
 	var sealedKey crypto.SealedKey
 	switch kind {
 	case crypto.S3:
 		if GlobalKMS == nil {
 			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
-		key, err := GlobalKMS.GenerateKey("", kms.Context{bucket: path.Join(bucket, object)})
+		key, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return crypto.ObjectKey{}, err
 		}
@@ -372,13 +372,13 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range ctx {
+		for k, v := range cryptoCtx {
 			kmsCtx[k] = v
 		}
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
-		key, err := GlobalKMS.GenerateKey(keyID, kmsCtx)
+		key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsCtx)
 		if err != nil {
 			if errors.Is(err, kes.ErrKeyNotFound) {
 				return crypto.ObjectKey{}, errKMSKeyNotFound
@@ -388,7 +388,7 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 
 		objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
 		sealedKey = objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3KMS.String(), bucket, object)
-		crypto.S3KMS.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey, ctx)
+		crypto.S3KMS.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey, cryptoCtx)
 		return objectKey, nil
 	case crypto.SSEC:
 		objectKey := crypto.GenerateKey(key, rand.Reader)
@@ -400,8 +400,8 @@ func newEncryptMetadata(kind crypto.Type, keyID string, key []byte, bucket, obje
 	}
 }
 
-func newEncryptReader(content io.Reader, kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, ctx kms.Context) (io.Reader, crypto.ObjectKey, error) {
-	objectEncryptionKey, err := newEncryptMetadata(kind, keyID, key, bucket, object, metadata, ctx)
+func newEncryptReader(ctx context.Context, content io.Reader, kind crypto.Type, keyID string, key []byte, bucket, object string, metadata map[string]string, cryptoCtx kms.Context) (io.Reader, crypto.ObjectKey, error) {
+	objectEncryptionKey, err := newEncryptMetadata(ctx, kind, keyID, key, bucket, object, metadata, cryptoCtx)
 	if err != nil {
 		return nil, crypto.ObjectKey{}, err
 	}
@@ -418,9 +418,9 @@ func newEncryptReader(content io.Reader, kind crypto.Type, keyID string, key []b
 // SSE-S3
 func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[string]string) (err error) {
 	var (
-		key   []byte
-		keyID string
-		ctx   kms.Context
+		key    []byte
+		keyID  string
+		kmsCtx kms.Context
 	)
 	kind, _ := crypto.IsRequested(r.Header)
 	switch kind {
@@ -430,12 +430,12 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 			return err
 		}
 	case crypto.S3KMS:
-		keyID, ctx, err = crypto.S3KMS.ParseHTTP(r.Header)
+		keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(r.Header)
 		if err != nil {
 			return err
 		}
 	}
-	_, err = newEncryptMetadata(kind, keyID, key, bucket, object, metadata, ctx)
+	_, err = newEncryptMetadata(r.Context(), kind, keyID, key, bucket, object, metadata, kmsCtx)
 	return
 }
 
@@ -468,7 +468,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 			return nil, crypto.ObjectKey{}, err
 		}
 	}
-	return newEncryptReader(content, kind, keyID, key, bucket, object, metadata, ctx)
+	return newEncryptReader(r.Context(), content, kind, keyID, key, bucket, object, metadata, ctx)
 }
 
 func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {

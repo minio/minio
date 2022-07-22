@@ -1,4 +1,4 @@
-# MinIO NAS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) 
+# MinIO NAS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 > NAS gateway is deprecated and will be removed in future, no more fresh deployments are supported.
 
@@ -96,7 +96,7 @@ NAS gateway implementation allows symlinks on regular files.
 
 ### Behavior
 
-- For reads symlinks resolve to the file the symlink points to. 
+- For reads symlinks resolve to the file the symlink points to.
 - For deletes
   - Deleting a symlink deletes the symlink but not the real file to which the symlink points.
   - Deleting the real file a symlink points to automatically makes the dangling symlink invisible.

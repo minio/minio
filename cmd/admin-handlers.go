@@ -1615,7 +1615,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(r.Form.Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(ctx, r.Form.Get("key-id")); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1637,7 +1637,7 @@ func (a adminAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	stat, err := GlobalKMS.Stat()
+	stat, err := GlobalKMS.Stat(ctx)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
@@ -1676,7 +1676,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	stat, err := GlobalKMS.Stat()
+	stat, err := GlobalKMS.Stat(ctx)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
@@ -1692,7 +1692,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsContext)
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2542,7 +2542,7 @@ func fetchKMSStatus() madmin.KMS {
 		return kmsStat
 	}
 
-	stat, err := GlobalKMS.Stat()
+	stat, err := GlobalKMS.Stat(context.Background())
 	if err != nil {
 		kmsStat.Status = string(madmin.ItemOffline)
 		return kmsStat
@@ -2555,7 +2555,7 @@ func fetchKMSStatus() madmin.KMS {
 
 	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey("", kmsContext)
+	key, err := GlobalKMS.GenerateKey(context.Background(), "", kmsContext)
 	if err != nil {
 		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 	} else {
