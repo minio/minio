@@ -515,7 +515,7 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 			hashedSecret = base64.RawURLEncoding.EncodeToString(bs)
 		}
 		if arn != DummyRoleARN {
-			if res.Roles != nil {
+			if res.Roles == nil {
 				res.Roles = make(map[string]madmin.OpenIDProviderSettings)
 			}
 			res.Roles[arn.String()] = madmin.OpenIDProviderSettings{
