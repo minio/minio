@@ -151,7 +151,7 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	if compressMimeTypesLegacy1 != "" {
 		mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy1)
 		if err != nil {
-			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", err, mimeTypes)
+			return cfg, fmt.Errorf("%w: Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", err, mimeTypes)
 		}
 		cfg.MimeTypes = mimeTypes
 	}
@@ -159,7 +159,7 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	if compressMimeTypesLegacy2 != "" {
 		mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy2)
 		if err != nil {
-			return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
+			return cfg, fmt.Errorf("%w: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
 		}
 		cfg.MimeTypes = mimeTypes
 	}
