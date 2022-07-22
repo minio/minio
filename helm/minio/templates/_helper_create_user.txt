@@ -93,7 +93,7 @@ connectToMinio $scheme
 {{- range .Values.users }}
 echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
-cat /config/secrets/{{ tpl .secretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+cat /config/secrets/{{ tpl .accessKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 createUser {{ .policy }}
 {{ else }}
 echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
