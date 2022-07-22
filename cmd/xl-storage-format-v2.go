@@ -448,8 +448,12 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		VersionID: versionID,
 		Deleted:   true,
 	}
-	fi.ReplicationState = GetInternalReplicationState(j.MetaSys)
+	fi.Metadata = make(map[string]string, len(j.MetaSys))
+	for k, v := range j.MetaSys {
+		fi.Metadata[k] = string(v)
+	}
 
+	fi.ReplicationState = GetInternalReplicationState(j.MetaSys)
 	if j.FreeVersion() {
 		fi.SetTierFreeVersion()
 		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
@@ -1220,10 +1224,10 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			switch fi.DeleteMarkerReplicationStatus() {
 			case replication.Replica:
 				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(time.RFC3339Nano))
 			default:
 				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(time.RFC3339Nano))
 			}
 		}
 		if !fi.VersionPurgeStatus().Empty() {

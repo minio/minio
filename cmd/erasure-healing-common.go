@@ -180,9 +180,15 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 }
 
 // Returns the latest updated FileInfo files and error in case of failure.
-func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error) (FileInfo, error) {
+func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultParityCount int, errs []error) (FileInfo, error) {
 	// There should be atleast half correct entries, if not return failure
-	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(partsMetadata)/2)
+	expectedRQuorum := len(partsMetadata) / 2
+	if defaultParityCount == 0 {
+		// if parity count is '0', we expected all entries to be present.
+		expectedRQuorum = len(partsMetadata)
+	}
+
+	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, expectedRQuorum)
 	if reducedErr != nil {
 		return FileInfo{}, reducedErr
 	}
