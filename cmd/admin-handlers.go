@@ -135,23 +135,6 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if lrTime.Sub(crTime) <= 0 {
-		updateStatus := madmin.ServerUpdateStatus{
-			CurrentVersion: Version,
-			UpdatedVersion: Version,
-		}
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(updateStatus)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		writeSuccessResponseJSON(w, jsonBytes)
-		return
-	}
-
 	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
 		if nerr.Err != nil {
 			err := AdminError{

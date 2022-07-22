@@ -102,7 +102,7 @@ verify-healing-inconsistent-versions: ## verify resolving inconsistent versions
 
 build: checks ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
-	@CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
