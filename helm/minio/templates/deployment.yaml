@@ -52,9 +52,12 @@ spec:
 {{ toYaml .Values.podAnnotations | trimSuffix "\n" | indent 8 }}
 {{- end }}
     spec:
-  {{- if .Values.priorityClassName }}
+      {{- if .Values.priorityClassName }}
       priorityClassName: "{{ .Values.priorityClassName }}"
-  {{- end }}
+      {{- end }}
+      {{- if .Values.runtimeClassName }}
+      runtimeClassName: "{{ .Values.runtimeClassName }}"
+      {{- end }}
 {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
       securityContext:
         runAsUser: {{ .Values.securityContext.runAsUser }}

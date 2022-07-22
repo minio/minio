@@ -69,6 +69,11 @@ StatefulSetUpdate:
 ##
 priorityClassName: ""
 
+## Pod runtime class name
+## ref https://kubernetes.io/docs/concepts/containers/runtime-class/
+##
+runtimeClassName: ""
+
 ## Set default rootUser, rootPassword
 ## AccessKey and secretKey is generated when not set
 ## Distributed MinIO ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
