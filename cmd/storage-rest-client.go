@@ -229,7 +229,10 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 			rr.CloseWithError(err)
 			return cache, err
 		}
-		updates <- update
+		select {
+		case <-ctx.Done():
+		case updates <- update:
+		}
 	}
 	var newCache dataUsageCache
 	err = newCache.DecodeMsg(ms)
@@ -716,6 +719,46 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	}
 
 	return stat, err
+}
+
+// ReadMultiple will read multiple files and send each back as response.
+// Files are read and returned in the given order.
+// The resp channel is closed before the call returns.
+// Only a canceled context or network errors returns an error.
+func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
+	defer close(resp)
+	body, err := req.MarshalMsg(nil)
+	if err != nil {
+		return err
+	}
+	respBody, err := client.call(ctx, storageRESTMethodReadMultiple, nil, bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	pr, pw := io.Pipe()
+	go func() {
+		pw.CloseWithError(waitForHTTPStream(respBody, pw))
+	}()
+	mr := msgp.NewReader(pr)
+	for {
+		var file ReadMultipleResp
+		if err := file.DecodeMsg(mr); err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			pr.CloseWithError(err)
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case resp <- file:
+		}
+	}
 }
 
 // Close - marks the client as closed.

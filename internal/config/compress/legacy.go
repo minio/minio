@@ -25,8 +25,14 @@ import (
 
 // Legacy envs.
 const (
-	EnvCompress                = "MINIO_COMPRESS"
-	EnvCompressMimeTypesLegacy = "MINIO_COMPRESS_MIMETYPES"
+	EnvCompress                 = "MINIO_COMPRESS"
+	EnvCompressMimeTypesLegacy1 = "MINIO_COMPRESS_MIMETYPES"
+
+	// These envs were wrong but we supported them for a long time
+	// so keep them here to support existing deployments.
+	EnvCompressAllowEncryptionLegacy = "MINIO_COMPRESS_ALLOW_ENCRYPTION"
+	EnvCompressExtensionsLegacy      = "MINIO_COMPRESS_EXTENSIONS"
+	EnvCompressMimeTypesLegacy2      = "MINIO_COMPRESS_MIME_TYPES"
 )
 
 // SetCompressionConfig - One time migration code needed, for migrating from older config to new for Compression.

@@ -83,7 +83,7 @@ const ( // algorithms used to derive and encrypt DEKs
 	algorithmChaCha20Poly1305 = "ChaCha20Poly1305"
 )
 
-func (kms secretKey) Stat() (Status, error) {
+func (kms secretKey) Stat(context.Context) (Status, error) {
 	return Status{
 		Name:       "SecretKey",
 		DefaultKey: kms.keyID,
@@ -94,11 +94,11 @@ func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
 	return kes.Metric{}, errors.New("kms: metrics are not supported")
 }
 
-func (secretKey) CreateKey(string) error {
+func (secretKey) CreateKey(context.Context, string) error {
 	return errors.New("kms: creating keys is not supported")
 }
 
-func (kms secretKey) GenerateKey(keyID string, context Context) (DEK, error) {
+func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Context) (DEK, error) {
 	if keyID == "" {
 		keyID = kms.keyID
 	}

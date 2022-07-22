@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/hash"
 )
 
@@ -1180,6 +1181,15 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
 	objectNames := []string{"minio-object-1.txt"}
 	uploadIDs := []string{}
+
+	globalStorageClass = storageclass.Config{
+		RRS: storageclass.StorageClass{
+			Parity: 2,
+		},
+		Standard: storageclass.StorageClass{
+			Parity: 4,
+		},
+	}
 
 	// bucketnames[0].
 	// objectNames[0].

@@ -39,11 +39,14 @@ lint: ## runs golangci-lint suite of linters
 check: test
 test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@CGO_ENABLED=0 go test -tags kqueue ./...
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue ./...
 
 test-decom: install
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh
+	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
+	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
+	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
 
 test-upgrade: build
 	@echo "Running minio upgrade tests"
@@ -55,9 +58,9 @@ test-race: verifiers build ## builds minio, runs linters, tests (race)
 
 test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
-	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
-	@GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
 test-replication: install ## verify multi site replication
 	@echo "Running tests for replicating three sites"
@@ -137,6 +140,8 @@ clean: ## cleanup all generated assets
 	@echo "Cleaning up all the generated files"
 	@find . -name '*.test' | xargs rm -fv
 	@find . -name '*~' | xargs rm -fv
+	@find . -name '.#*#' | xargs rm -fv
+	@find . -name '#*#' | xargs rm -fv
 	@rm -rvf minio
 	@rm -rvf build
 	@rm -rvf release

@@ -10,7 +10,7 @@ MC="/usr/bin/mc --insecure"
 
 # AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
 # Special characters for example : ',",<,>,{,}
-MINIO_ACCESSKEY_SECRETKEY_TMP="/config/accessKey_and_secretKey_tmp"
+MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_tmp"
 
 # connectToMinio
 # Use a check-sleep-check loop to wait for MinIO service to be available
@@ -59,6 +59,7 @@ createUser() {
     rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
     return 1
   fi
+  USER=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
   # Create the user if it does not exist
   if ! checkUserExists ; then
     echo "Creating user '$USER'"

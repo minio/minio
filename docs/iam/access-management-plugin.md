@@ -156,4 +156,3 @@ The following structure is also accepted:
 ```
 
 Any unmentioned JSON object keys in the above are ignored.
-

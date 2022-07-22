@@ -427,8 +427,9 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 	})
 
 	for _, pinfo := range poolObjInfos {
-		// skip all objects from suspended pools for mutating calls.
-		if z.IsSuspended(pinfo.PoolIndex) && opts.Mutate {
+		// skip all objects from suspended pools if asked by the
+		// caller.
+		if z.IsSuspended(pinfo.PoolIndex) && opts.SkipDecommissioned {
 			continue
 		}
 
@@ -461,8 +462,8 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 // The check is skipped if there is only one pool, and 0, nil is always returned in that case.
 func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucket, object string) (idx int, err error) {
 	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
-		NoLock: true,
-		Mutate: true,
+		NoLock:             true,
+		SkipDecommissioned: true,
 	})
 }
 
@@ -486,7 +487,7 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 // if none are found falls back to most available space pool, this function is
 // designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{Mutate: true})
+	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{SkipDecommissioned: true})
 	if err != nil && !isErrObjectNotFound(err) {
 		return idx, err
 	}
@@ -2275,7 +2276,6 @@ func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object s
 		return z.serverPools[0].GetObjectTags(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = false
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
@@ -2291,7 +2291,8 @@ func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, objec
 		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true // Avoid transitioning an object from a pool being decommissioned.
+	// Avoid transitioning an object from a pool being decommissioned.
+	opts.SkipDecommissioned = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
@@ -2307,7 +2308,8 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
 	}
 
-	opts.Mutate = true // Avoid restoring object from a pool being decommissioned.
+	// Avoid restoring object from a pool being decommissioned.
+	opts.SkipDecommissioned = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err

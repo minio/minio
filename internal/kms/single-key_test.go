@@ -19,6 +19,7 @@ package kms
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestSingleKeyRoundtrip(t *testing.T) {
 		t.Fatalf("Failed to initialize KMS: %v", err)
 	}
 
-	key, err := KMS.GenerateKey("my-key", Context{})
+	key, err := KMS.GenerateKey(context.Background(), "my-key", Context{})
 	if err != nil {
 		t.Fatalf("Failed to generate key: %v", err)
 	}
