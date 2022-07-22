@@ -18,7 +18,10 @@
 package logger
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"runtime"
 
@@ -58,4 +61,9 @@ func ansiRestoreAttributes() {
 	if color.IsTerminal() {
 		ansiEscape("8")
 	}
+}
+
+// logIgnoreError if true,the error will ignore.
+func logIgnoreError(err error) bool {
+	return err == nil || errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed) || err.Error() == "disk not found"
 }

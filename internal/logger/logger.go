@@ -20,10 +20,8 @@ package logger
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"go/build"
-	"net/http"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -255,18 +253,9 @@ func LogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
 // the execution of the server, if it is not an
 // ignored error.
 func LogIf(ctx context.Context, err error, errKind ...interface{}) {
-	if err == nil {
+	if logIgnoreError(err) {
 		return
 	}
-
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-
-	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
-		return
-	}
-
 	logIf(ctx, err, errKind...)
 }
 
