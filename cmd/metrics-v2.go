@@ -1386,14 +1386,18 @@ func getNodeHealthMetrics() *MetricsGroup {
 			return
 		}
 		metrics = make([]Metric, 0, 16)
-		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
+		nodesUp, nodesDown, nodesOnlineMap, nodesOfflineMap := globalNotificationSys.GetPeerOnlineCount()
 		metrics = append(metrics, Metric{
 			Description: getNodeOnlineTotalMD(),
 			Value:       float64(nodesUp),
+			// add labels record online node
+			VariableLabels: nodesOnlineMap,
 		})
 		metrics = append(metrics, Metric{
 			Description: getNodeOfflineTotalMD(),
 			Value:       float64(nodesDown),
+			// add labels record offline node
+			VariableLabels: nodesOfflineMap,
 		})
 		return
 	})

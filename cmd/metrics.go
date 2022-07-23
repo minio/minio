@@ -110,7 +110,7 @@ func nodeHealthMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
+	nodesUp, nodesDown, _, _ := globalNotificationSys.GetPeerOnlineCount()
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "nodes", "online"),

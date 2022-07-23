@@ -1183,10 +1183,13 @@ func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient
 }
 
 // GetPeerOnlineCount gets the count of online and offline nodes.
-func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
+func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int, nodesOnlineMap, nodesOfflineMap map[string]string) {
 	nodesOnline = 1 // Self is always online.
 	nodesOffline = 0
 	nodesOnlineIndex := make([]bool, len(sys.peerClients))
+	// add onlineMap and offlineMap record node status
+	nodesOnlineMap = make(map[string]string)
+	nodesOfflineMap = make(map[string]string)
 	var wg sync.WaitGroup
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -1195,9 +1198,14 @@ func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int)
 		wg.Add(1)
 		go func(idx int, client *peerRESTClient) {
 			defer wg.Done()
-			nodesOnlineIndex[idx] = client.restClient.HealthCheckFn()
+			if client.restClient.HealthCheckFn() {
+				nodesOnlineIndex[idx] = true
+				nodesOnlineMap[client.host.Name] = "online"
+			} else {
+				nodesOnlineIndex[idx] = false
+				nodesOfflineMap[client.host.Name] = "offline"
+			}
 		}(idx, client)
-
 	}
 	wg.Wait()
 
