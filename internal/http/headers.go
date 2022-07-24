@@ -187,6 +187,9 @@ const (
 	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
 	// predicted date/time of transition
 	MinIOTransition = "X-Minio-Transition"
+
+	// MinIOCompressed is returned when object is compressed
+	MinIOCompressed = "X-Minio-Compressed"
 )
 
 // Common http query params S3 API
