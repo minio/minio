@@ -43,7 +43,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.19.2
+	github.com/minio/console v0.19.3
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
@@ -220,6 +220,3 @@ require (
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
-
-// replace github.com/minio/console => ../console
-replace github.com/minio/console => github.com/minio/console v0.19.2-0.20220722194038-f26786c904d0
