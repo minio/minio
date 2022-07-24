@@ -67,6 +67,13 @@ func TestStripStandardPorts(t *testing.T) {
 	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
 	}
+
+	apiEndpoints = []string{"https://127.0.0.1:443"}
+	expectedAPIEndpoints = []string{"https://127.0.0.1:443"}
+	newAPIEndpoints = stripStandardPorts(apiEndpoints, "")
+	if !reflect.DeepEqual(expectedAPIEndpoints, newAPIEndpoints) {
+		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
+	}
 }
 
 // Test printing server common message.
