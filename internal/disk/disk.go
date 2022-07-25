@@ -30,4 +30,36 @@ type Info struct {
 	Files  uint64
 	Ffree  uint64
 	FSType string
+	Major  uint32
+	Minor  uint32
+}
+
+// DevID is the drive major and minor ids
+type DevID struct {
+	Major uint32
+	Minor uint32
+}
+
+// AllDrivesIOStats is map between drive devices and IO stats
+type AllDrivesIOStats map[DevID]IOStats
+
+// IOStats contains stats of a single drive
+type IOStats struct {
+	ReadIOs        uint64
+	ReadMerges     uint64
+	ReadSectors    uint64
+	ReadTicks      uint64
+	WriteIOs       uint64
+	WriteMerges    uint64
+	WriteSectors   uint64
+	WriteTicks     uint64
+	CurrentIOs     uint64
+	TotalTicks     uint64
+	ReqTicks       uint64
+	DiscardIOs     uint64
+	DiscardMerges  uint64
+	DiscardSectors uint64
+	DiscardTicks   uint64
+	FlushIOs       uint64
+	FlushTicks     uint64
 }

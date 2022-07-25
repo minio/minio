@@ -398,8 +398,21 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	} else {
 		types = madmin.MetricsAll
 	}
+
+	disks := strings.Split(r.Form.Get("disks"), ",")
+	byDisk := strings.EqualFold(r.Form.Get("by-disk"), "true")
+	var diskMap map[string]struct{}
+	if len(disks) > 0 && disks[0] != "" {
+		diskMap = make(map[string]struct{}, len(disks))
+		for _, k := range disks {
+			if k != "" {
+				diskMap[k] = struct{}{}
+			}
+		}
+	}
+
 	hosts := strings.Split(r.Form.Get("hosts"), ",")
-	byhost := strings.EqualFold(r.Form.Get("by-host"), "true")
+	byHost := strings.EqualFold(r.Form.Get("by-host"), "true")
 	var hostMap map[string]struct{}
 	if len(hosts) > 0 && hosts[0] != "" {
 		hostMap = make(map[string]struct{}, len(hosts))
@@ -409,6 +422,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
+
 	done := ctx.Done()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -416,16 +430,19 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 
 	for n > 0 {
 		var m madmin.RealtimeMetrics
-		mLocal := collectLocalMetrics(types, hostMap)
+		mLocal := collectLocalMetrics(types, hostMap, diskMap)
 		m.Merge(&mLocal)
 
 		// Allow half the interval for collecting remote...
 		cctx, cancel := context.WithTimeout(ctx, interval/2)
-		mRemote := collectRemoteMetrics(cctx, types, hostMap)
+		mRemote := collectRemoteMetrics(cctx, types, hostMap, diskMap)
 		cancel()
 		m.Merge(&mRemote)
-		if !byhost {
+		if !byHost {
 			m.ByHost = nil
+		}
+		if !byDisk {
+			m.ByDisk = nil
 		}
 
 		m.Final = n <= 1
