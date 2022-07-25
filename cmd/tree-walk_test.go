@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -137,11 +135,7 @@ func testTreeWalkMarker(t *testing.T, listDir ListDirFunc, isLeaf IsLeafFunc, is
 
 // Test tree-walk.
 func TestTreeWalk(t *testing.T) {
-	fsDir, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatalf("Unable to create tmp directory: %s", err)
-	}
-	defer os.RemoveAll(fsDir)
+	fsDir := t.TempDir()
 
 	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
@@ -181,11 +175,7 @@ func TestTreeWalk(t *testing.T) {
 
 // Test if tree walk go-routine exits cleanly if tree walk is aborted because of timeout.
 func TestTreeWalkTimeout(t *testing.T) {
-	fsDir, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatalf("Unable to create tmp directory: %s", err)
-	}
-	defer os.RemoveAll(fsDir)
+	fsDir := t.TempDir()
 	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
@@ -254,11 +244,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 // without recursively traversing prefixes.
 func TestRecursiveTreeWalk(t *testing.T) {
 	// Create a backend directories fsDir1.
-	fsDir1, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatalf("Unable to create tmp directory: %s", err)
-	}
-	defer os.RemoveAll(fsDir1)
+	fsDir1 := t.TempDir()
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -365,11 +351,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 
 func TestSortedness(t *testing.T) {
 	// Create a backend directories fsDir1.
-	fsDir1, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
-	}
-	defer os.RemoveAll(fsDir1)
+	fsDir1 := t.TempDir()
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -440,11 +422,7 @@ func TestSortedness(t *testing.T) {
 
 func TestTreeWalkIsEnd(t *testing.T) {
 	// Create a backend directories fsDir1.
-	fsDir1, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
-	}
-	defer os.RemoveAll(fsDir1)
+	fsDir1 := t.TempDir()
 
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])

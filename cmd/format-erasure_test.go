@@ -104,11 +104,7 @@ func TestFormatErasureEmpty(t *testing.T) {
 // Tests xl format migration.
 func TestFormatErasureMigrate(t *testing.T) {
 	// Get test root.
-	rootPath, err := getTestRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
+	rootPath := t.TempDir()
 
 	m := &formatErasureV1{}
 	m.Format = formatBackendErasure
