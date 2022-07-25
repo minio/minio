@@ -518,9 +518,9 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 
 var updateInProgress uint32
 
-func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string) (err error) {
+func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string) (err error, readerReturn io.ReadCloser) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
-		return errors.New("update already in progress")
+		return errors.New("update already in progress"), nil
 	}
 	defer atomic.StoreUint32(&updateInProgress, 0)
 
@@ -529,14 +529,17 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 	if u.Scheme == "https" || u.Scheme == "http" {
 		reader, err = getUpdateReaderFromURL(u, transport, mode)
 		if err != nil {
-			return err
+			return err, nil
 		}
 	} else {
 		reader, err = getUpdateReaderFromFile(u)
 		if err != nil {
-			return err
+			return err, nil
 		}
 	}
+
+	// buf := make([]byte, 9)
+	// reader.Read(buf)
 
 	opts := selfupdate.Options{
 		Hash:     crypto.SHA256,
@@ -548,7 +551,7 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 			Code:       AdminUpdateApplyFailure,
 			Message:    fmt.Sprintf("server update failed with: %s, do not restart the servers yet", err),
 			StatusCode: http.StatusInternalServerError,
-		}
+		}, nil
 	}
 
 	minisignPubkey := env.Get(envMinisignPubKey, "")
@@ -560,7 +563,7 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 				Code:       AdminUpdateApplyFailure,
 				Message:    fmt.Sprintf("signature loading failed for %v with %v", u, err),
 				StatusCode: http.StatusInternalServerError,
-			}
+			}, nil
 		}
 		opts.Verifier = v
 	}
@@ -571,7 +574,7 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 				Code:       AdminUpdateApplyFailure,
 				Message:    fmt.Sprintf("Failed to rollback from bad update: %v", rerr),
 				StatusCode: http.StatusInternalServerError,
-			}
+			}, nil
 		}
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
@@ -580,14 +583,14 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
 					filepath.Dir(pathErr.Path), pathErr.Err),
 				StatusCode: http.StatusForbidden,
-			}
+			}, nil
 		}
 		return AdminError{
 			Code:       AdminUpdateApplyFailure,
 			Message:    err.Error(),
 			StatusCode: http.StatusInternalServerError,
-		}
+		}, nil
 	}
 
-	return nil
+	return nil, reader
 }

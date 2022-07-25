@@ -71,14 +71,17 @@ const (
 	mgmtForceStop   = "forceStop"
 )
 
-func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error) {
-	if err = doUpdate(u, lrTime, sha256Sum, releaseInfo, mode); err != nil {
-		return us, err
+func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error, reader io.ReadCloser) {
+	err, readerFromDoUpdate := doUpdate(u, lrTime, sha256Sum, releaseInfo, mode)
+	if err != nil {
+		return us, err, readerFromDoUpdate
 	}
+
+	fmt.Println(readerFromDoUpdate)
 
 	us.CurrentVersion = Version
 	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
-	return us, nil
+	return us, nil, readerFromDoUpdate
 }
 
 // ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
@@ -130,12 +133,20 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 	crTime, err := GetCurrentReleaseTime()
+	fmt.Println(crTime)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
+	updateStatus, err, readerReturn := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,
@@ -147,13 +158,6 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-	}
-
-	updateStatus, err := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
 	}
 
 	// Marshal API response

@@ -61,6 +61,7 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 		values = make(url.Values)
 	}
 
+	// here is where you need to step in
 	respBody, err = client.restClient.Call(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
@@ -423,10 +424,11 @@ type serverUpdateInfo struct {
 	Sha256Sum   []byte
 	Time        time.Time
 	ReleaseInfo string
+	Reader      io.ReadCloser
 }
 
 // ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) error {
+func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance io.ReadCloser) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfo{
@@ -434,6 +436,7 @@ func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha2
 		Sha256Sum:   sha256Sum,
 		Time:        lrTime,
 		ReleaseInfo: releaseInfo,
+		Reader:      readerEntrance,
 	}); err != nil {
 		return err
 	}

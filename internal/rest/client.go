@@ -127,7 +127,8 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	if !c.IsOnline() {
 		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
+	cesarcelis := c.url.String() + method + querySep + values.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cesarcelis, body)
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
