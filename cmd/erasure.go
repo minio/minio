@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
@@ -69,6 +70,8 @@ type erasureObjects struct {
 	bpOld *bpool.BytePoolCap
 
 	deletedCleanupSleeper *dynamicSleeper
+
+	listQuorumCache *lru.ARCCache
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

@@ -33,6 +33,7 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -356,6 +357,11 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 		endpointStrings[i] = endpoint.String()
 	}
 
+	cache, err := lru.NewARC(10000)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
 		sets:               make([]*erasureObjects, setCount),
@@ -469,6 +475,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				nsMutex:               mutex,
 				bp:                    bp,
 				bpOld:                 bpOld,
+				listQuorumCache:       cache,
 			}
 		}(i)
 	}

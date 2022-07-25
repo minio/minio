@@ -108,6 +108,18 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	// List all online disks.
 	onlineDisks, modTime := listOnlineDisks(storageDisks, metaArr, errs)
 
+	var online int
+	defer func() {
+		parentDir := path.Dir(srcObject)
+		if online == er.setDriveCount {
+			er.listQuorumCache.Add(parentDir, nil)
+		} else {
+			// metadata updates that are partial must
+			// be invalidated for listing.
+			er.listQuorumCache.Remove(parentDir)
+		}
+	}()
+
 	// Pick latest valid metadata.
 	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
@@ -177,6 +189,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if _, err = writeUniqueFileInfo(ctx, onlineDisks, srcBucket, srcObject, metaArr, writeQuorum); err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(srcBucket, srcObject, srcOpts.Versioned || srcOpts.VersionSuspended), nil
 }
@@ -879,6 +893,8 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	parentDir := path.Dir(object)
+
 	data := r.Reader
 
 	userDefined := cloneMSS(opts.UserDefined)
@@ -996,8 +1012,15 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// object to delete.
 	var online int
 	defer func() {
-		if online != len(onlineDisks) {
+		if online != er.setDriveCount {
 			er.renameAll(context.Background(), minioMetaTmpBucket, tempObj)
+			// Quorum lost at 'parentDir' remove the entry from the LRU cache
+			// to indicate listing must do quorum listing.
+			er.listQuorumCache.Remove(parentDir)
+		} else {
+			// Quorum present update entry to ensure listing attempts
+			// single drive listing.
+			er.listQuorumCache.Add(parentDir, nil)
 		}
 	}()
 
@@ -1325,6 +1348,16 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				diskErrs[i] = delObjErrs[i][objIndex]
 			}
 		}
+
+		parentDir := path.Dir(dobjects[objIndex].ObjectName)
+		if countOnlineDisks(evalDisks(storageDisks, diskErrs)) == er.setDriveCount {
+			er.listQuorumCache.Add(parentDir, nil)
+		} else {
+			// Partial deletes must be removed to indicate
+			// listing should perform quorum listing.
+			er.listQuorumCache.Remove(parentDir)
+		}
+
 		err := reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
 		if objects[objIndex].VersionID != "" {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName, objects[objIndex].VersionID)
@@ -1612,6 +1645,8 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 		defer lk.Unlock(lkctx.Cancel)
 	}
 
+	parentDir := path.Dir(object)
+
 	disks := er.getDisks()
 
 	var metaArr []FileInfo
@@ -1634,6 +1669,17 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 		}
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	var online int
+	defer func() {
+		if online == er.setDriveCount {
+			er.listQuorumCache.Add(parentDir, nil)
+		} else {
+			// metadata updates that are partial must
+			// be invalidated for listing.
+			er.listQuorumCache.Remove(parentDir)
+		}
+	}()
 
 	// List all online disks.
 	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
@@ -1670,6 +1716,8 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	if err = er.updateObjectMeta(ctx, bucket, object, fi, onlineDisks); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	online = countOnlineDisks(onlineDisks)
 
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }

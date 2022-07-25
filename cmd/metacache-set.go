@@ -780,7 +780,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 
 	// get non-healing disks for listing
 	disks, _ := er.getOnlineDisksWithHealing()
-	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
+	var askDisks int
+	if er.listQuorumCache.Contains(o.BaseDir) {
+		askDisks = getListQuorum("drive", er.setDriveCount)
+	} else {
+		askDisks = getListQuorum(o.AskDisks, er.setDriveCount)
+	}
+
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
