@@ -146,7 +146,15 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
+	fmt.Println(readerReturn)
+
+	// Original:
+	// for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
+
+	// New statement:
+	// for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
+
+	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,

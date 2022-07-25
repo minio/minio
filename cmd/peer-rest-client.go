@@ -419,6 +419,14 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
+type serverUpdateInfoV2 struct {
+	URL         *url.URL
+	Sha256Sum   []byte
+	Time        time.Time
+	ReleaseInfo string
+	Reader      io.ReadCloser
+}
+
 type serverUpdateInfo struct {
 	URL         *url.URL
 	Sha256Sum   []byte
@@ -428,7 +436,28 @@ type serverUpdateInfo struct {
 }
 
 // ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance io.ReadCloser) error {
+func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance io.ReadCloser) error {
+	values := make(url.Values)
+	var reader bytes.Buffer
+	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfoV2{
+		URL:         u,
+		Sha256Sum:   sha256Sum,
+		Time:        lrTime,
+		ReleaseInfo: releaseInfo,
+		Reader:      readerEntrance,
+	}); err != nil {
+		return err
+	}
+	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdate, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// ServerUpdate - sends server update message to remote peers.
+func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfo{
@@ -436,7 +465,6 @@ func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha2
 		Sha256Sum:   sha256Sum,
 		Time:        lrTime,
 		ReleaseInfo: releaseInfo,
-		Reader:      readerEntrance,
 	}); err != nil {
 		return err
 	}
