@@ -40,6 +40,7 @@ const (
 	peerRESTMethodGetBucketStats              = "/getbucketstats"
 	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
 	peerRESTMethodServerUpdate                = "/serverupdate"
+	peerRESTMethodServerUpdateV2              = "/serverupdatev2"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
 	peerRESTMethodGetLocks                    = "/getlocks"

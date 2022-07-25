@@ -526,8 +526,14 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 
 	transport := getUpdateTransport(30 * time.Second)
 	var reader io.ReadCloser
+	var reader2 io.ReadCloser
 	if u.Scheme == "https" || u.Scheme == "http" {
 		reader, err = getUpdateReaderFromURL(u, transport, mode)
+		if err != nil {
+			return err, nil
+		}
+		reader2, err = getUpdateReaderFromURL(u, transport, mode)
+		// fmt.Println(reader2)
 		if err != nil {
 			return err, nil
 		}
@@ -592,5 +598,5 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 		}, nil
 	}
 
-	return nil, reader
+	return nil, reader2
 }

@@ -424,7 +424,6 @@ type serverUpdateInfoV2 struct {
 	Sha256Sum   []byte
 	Time        time.Time
 	ReleaseInfo string
-	Reader      io.ReadCloser
 }
 
 type serverUpdateInfo struct {
@@ -432,7 +431,6 @@ type serverUpdateInfo struct {
 	Sha256Sum   []byte
 	Time        time.Time
 	ReleaseInfo string
-	Reader      io.ReadCloser
 }
 
 // ServerUpdate - sends server update message to remote peers.
@@ -444,11 +442,10 @@ func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sh
 		Sha256Sum:   sha256Sum,
 		Time:        lrTime,
 		ReleaseInfo: releaseInfo,
-		Reader:      readerEntrance,
 	}); err != nil {
 		return err
 	}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdate, values, &reader, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdateV2, values, &reader, -1)
 	if err != nil {
 		return err
 	}

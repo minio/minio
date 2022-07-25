@@ -139,6 +139,8 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// LoadFromHandlers(w, r)
+
 	updateStatus, err, readerReturn := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
@@ -146,13 +148,15 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	fmt.Println(readerReturn)
+	// fmt.Println(readerReturn)
 
 	// Original:
 	// for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
 
 	// New statement:
 	// for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
+
+	// gob.Register(map[string]interface{}{})
 
 	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
 		if nerr.Err != nil {
