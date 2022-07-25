@@ -297,9 +297,7 @@ func (sys *NotificationSys) StartProfiling(profiler string) []NotificationPeerEr
 }
 
 // DownloadProfilingData - download profiling data from all remote peers.
-func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io.Writer) bool {
-	profilingDataFound := false
-
+func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io.Writer) (profilingDataFound bool) {
 	// Initialize a zip writer which will provide a zipped content
 	// of profiling data of all nodes
 	zipWriter := zip.NewWriter(writer)
@@ -320,34 +318,11 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		profilingDataFound = true
 
 		for typ, data := range data {
-			// Send profiling data to zip as file
-			header, zerr := zip.FileInfoHeader(dummyFileInfo{
-				name:    fmt.Sprintf("profile-%s-%s", client.host.String(), typ),
-				size:    int64(len(data)),
-				mode:    0o600,
-				modTime: UTCNow(),
-				isDir:   false,
-				sys:     nil,
-			})
-			if zerr != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-				ctx := logger.SetReqInfo(ctx, reqInfo)
-				logger.LogIf(ctx, zerr)
-				continue
-			}
-			header.Method = zip.Deflate
-			zwriter, zerr := zipWriter.CreateHeader(header)
-			if zerr != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-				ctx := logger.SetReqInfo(ctx, reqInfo)
-				logger.LogIf(ctx, zerr)
-				continue
-			}
-			if _, err = io.Copy(zwriter, bytes.NewReader(data)); err != nil {
+			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data)
+			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
 				logger.LogIf(ctx, err)
-				continue
 			}
 		}
 	}
@@ -371,30 +346,14 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 	// Send profiling data to zip as file
 	for typ, data := range data {
-		header, zerr := zip.FileInfoHeader(dummyFileInfo{
-			name:    fmt.Sprintf("profile-%s-%s", thisAddr, typ),
-			size:    int64(len(data)),
-			mode:    0o600,
-			modTime: UTCNow(),
-			isDir:   false,
-			sys:     nil,
-		})
-		if zerr != nil {
-			return profilingDataFound
-		}
-		header.Method = zip.Deflate
-
-		zwriter, zerr := zipWriter.CreateHeader(header)
-		if zerr != nil {
-			return profilingDataFound
-		}
-
-		if _, err = io.Copy(zwriter, bytes.NewReader(data)); err != nil {
-			return profilingDataFound
+		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data)
+		if err != nil {
+			logger.LogIf(ctx, err)
 		}
 	}
 
-	return profilingDataFound
+	appendClusterMetaInfoToZip(ctx, zipWriter)
+	return
 }
 
 // DownloadBinary - asks remote peers to download a new binary from the URL and to verify the checksum

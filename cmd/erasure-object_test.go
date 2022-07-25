@@ -1073,10 +1073,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 	// Create a backend with 4 disks named disk{1...4}, this name convention
 	// because we will unzip some object data from a sample archive.
 	const numDisks = 4
-	path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := t.TempDir()
 
 	var fsDirs []string
 	for i := 1; i <= numDisks; i++ {

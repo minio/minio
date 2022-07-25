@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"os"
 	"testing"
 )
 
@@ -118,20 +117,13 @@ type erasureTestSetup struct {
 	disks        []StorageAPI
 }
 
-// Removes the temporary disk directories.
-func (e erasureTestSetup) Remove() {
-	for _, path := range e.diskPaths {
-		os.RemoveAll(path)
-	}
-}
-
 // Returns an initialized setup for erasure tests.
-func newErasureTestSetup(dataBlocks int, parityBlocks int, blockSize int64) (*erasureTestSetup, error) {
+func newErasureTestSetup(tb testing.TB, dataBlocks int, parityBlocks int, blockSize int64) (*erasureTestSetup, error) {
 	diskPaths := make([]string, dataBlocks+parityBlocks)
 	disks := make([]StorageAPI, len(diskPaths))
 	var err error
 	for i := range diskPaths {
-		disks[i], diskPaths[i], err = newXLStorageTestSetup()
+		disks[i], diskPaths[i], err = newXLStorageTestSetup(tb)
 		if err != nil {
 			return nil, err
 		}
