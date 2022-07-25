@@ -1458,7 +1458,7 @@ const sessionPolicyNameExtracted = iampolicy.SessionPolicyName + "-extracted"
 // IsAllowedServiceAccount - checks if the given service account is allowed to perform
 // actions. The permission of the parent user is checked first
 func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser string) bool {
-	// Now check if we have a subject claim
+	// Verify if the parent claim matches the parentUser.
 	p, ok := args.Claims[parentClaim]
 	if ok {
 		parentInClaim, ok := p.(string)
@@ -1478,39 +1478,54 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	// Check policy for parent user of service account.
-	svcPolicies, err := sys.PolicyDBGet(parentUser, false, args.Groups...)
-	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return false
-	}
+	isOwnerDerived := parentUser == globalActiveCred.AccessKey
 
-	if len(svcPolicies) == 0 {
-		// If parent user has no policies, check for OpenID
-		// claims/RoleARN in case it exists.
-		roleArn := args.GetRoleArn()
-		if roleArn != "" {
-			arn, err := arn.Parse(roleArn)
-			if err != nil {
-				logger.LogIf(GlobalContext, fmt.Errorf("error parsing role ARN %s: %v", roleArn, err))
-				return false
-			}
-			svcPolicies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
-		} else {
-			// If there is no roleArn claim, check the OpenID
-			// provider's policy claim.
+	var err error
+	var svcPolicies []string
+	roleArn := args.GetRoleArn()
+
+	switch {
+	case isOwnerDerived:
+		// All actions are allowed by default and no policy evaluation is
+		// required.
+
+	case roleArn != "":
+		arn, err := arn.Parse(roleArn)
+		if err != nil {
+			logger.LogIf(GlobalContext, fmt.Errorf("error parsing role ARN %s: %v", roleArn, err))
+			return false
+		}
+		svcPolicies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
+
+	default:
+		// Check policy for parent user of service account.
+		svcPolicies, err = sys.PolicyDBGet(parentUser, false, args.Groups...)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return false
+		}
+
+		// Finally, if there is no parent policy, check if a policy claim is
+		// present.
+		if len(svcPolicies) == 0 {
 			policySet, _ := iampolicy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
 			svcPolicies = policySet.ToSlice()
 		}
-		if len(svcPolicies) == 0 {
-			return false
-		}
 	}
 
-	// Policies were found, evaluate all of them.
-	availablePoliciesStr, combinedPolicy := sys.store.FilterPolicies(strings.Join(svcPolicies, ","), "")
-	if availablePoliciesStr == "" {
+	// Defensive code: Do not allow any operation if no policy is found.
+	if !isOwnerDerived && len(svcPolicies) == 0 {
 		return false
+	}
+
+	var combinedPolicy iampolicy.Policy
+	// Policies were found, evaluate all of them.
+	if !isOwnerDerived {
+		availablePoliciesStr, c := sys.store.FilterPolicies(strings.Join(svcPolicies, ","), "")
+		if availablePoliciesStr == "" {
+			return false
+		}
+		combinedPolicy = c
 	}
 
 	parentArgs := args
@@ -1532,7 +1547,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	}
 
 	if saPolicyClaimStr == inheritedPolicyType {
-		return combinedPolicy.IsAllowed(parentArgs)
+		return isOwnerDerived || combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	// Now check if we have a sessionPolicy.
@@ -1558,37 +1573,51 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 
 	// This can only happen if policy was set but with an empty JSON.
 	if subPolicy.Version == "" && len(subPolicy.Statements) == 0 {
-		return combinedPolicy.IsAllowed(parentArgs)
+		return isOwnerDerived || combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	if subPolicy.Version == "" {
 		return false
 	}
 
-	return combinedPolicy.IsAllowed(parentArgs) && subPolicy.IsAllowed(parentArgs)
+	return subPolicy.IsAllowed(parentArgs) && (isOwnerDerived || combinedPolicy.IsAllowed(parentArgs))
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,
 // which implements claims validation and verification other than
 // applying policies.
 func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
+	// 1. Determine mapped policies
+
+	isOwnerDerived := parentUser == globalActiveCred.AccessKey
 	var policies []string
 	roleArn := args.GetRoleArn()
-	if roleArn != "" {
+
+	switch {
+	case isOwnerDerived:
+		// All actions are allowed by default and no policy evaluation is
+		// required.
+
+	case roleArn != "":
+		// If a roleARN is present, the role policy is applied.
 		arn, err := arn.Parse(roleArn)
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("error parsing role ARN %s: %v", roleArn, err))
 			return false
 		}
 		policies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
-	} else {
-		// Lookup the parent user's mapping if there's no role-ARN.
+
+	default:
+		// Otherwise, inherit parent user's policy
 		var err error
 		policies, err = sys.store.PolicyDBGet(parentUser, false, args.Groups...)
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("error fetching policies on %s: %v", parentUser, err))
 			return false
 		}
+
+		// Finally, if there is no parent policy, check if a policy claim is
+		// present in the session token.
 		if len(policies) == 0 {
 			// If there is no parent policy mapping, we fall back to
 			// using policy claim from JWT.
@@ -1599,26 +1628,36 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 			}
 			policies = policySet.ToSlice()
 		}
+
 	}
 
 	// Defensive code: Do not allow any operation if no policy is found in the session token
-	if len(policies) == 0 {
+	if !isOwnerDerived && len(policies) == 0 {
 		return false
 	}
 
-	combinedPolicy, err := sys.store.GetPolicy(strings.Join(policies, ","))
-	if err == errNoSuchPolicy {
-		for _, pname := range policies {
-			_, err := sys.store.GetPolicy(pname)
-			if err == errNoSuchPolicy {
-				// all policies presented in the claim should exist
-				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
-				return false
+	// 2. Combine the mapped policies into a single combined policy.
+
+	var combinedPolicy iampolicy.Policy
+	if !isOwnerDerived {
+		var err error
+		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
+		if err == errNoSuchPolicy {
+			for _, pname := range policies {
+				_, err := sys.store.GetPolicy(pname)
+				if err == errNoSuchPolicy {
+					// all policies presented in the claim should exist
+					logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
+					return false
+				}
 			}
+			logger.LogIf(GlobalContext, fmt.Errorf("all policies were unexpectedly present!"))
+			return false
 		}
-		logger.LogIf(GlobalContext, fmt.Errorf("all policies were unexpectedly present!"))
-		return false
+
 	}
+
+	// 3. If an inline session-policy is present, evaluate it.
 
 	// These are dynamic values set them appropriately.
 	args.ConditionValues["username"] = []string{parentUser}
@@ -1627,12 +1666,12 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	// Now check if we have a sessionPolicy.
 	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
 	if hasSessionPolicy {
-		return isAllowedSP && combinedPolicy.IsAllowed(args)
+		return isAllowedSP && (isOwnerDerived || combinedPolicy.IsAllowed(args))
 	}
 
 	// Sub policy not set, this is most common since subPolicy
 	// is optional, use the inherited policies.
-	return combinedPolicy.IsAllowed(args)
+	return isOwnerDerived || combinedPolicy.IsAllowed(args)
 }
 
 func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAllowed bool) {
