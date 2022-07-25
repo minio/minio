@@ -602,7 +602,7 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 	return nil, reader2
 }
 
-func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string, reader *bytes.Reader) (err error) {
+func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string, reader []byte) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}
@@ -658,7 +658,8 @@ func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseI
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.Apply(reader, opts); err != nil {
+	cesartesting := bytes.NewReader(reader)
+	if err = selfupdate.Apply(cesartesting, opts); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,

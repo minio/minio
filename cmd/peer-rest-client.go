@@ -424,7 +424,7 @@ type serverUpdateInfoV2 struct {
 	Sha256Sum   []byte
 	Time        time.Time
 	ReleaseInfo string
-	Reader      *bytes.Reader
+	Reader      []byte
 }
 
 type serverUpdateInfo struct {
@@ -435,10 +435,11 @@ type serverUpdateInfo struct {
 }
 
 // ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance *bytes.Reader) error {
+func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance []byte) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
 	// gob.Register(http.bodyEOFSignal)
+	// gob: type bytes.Reader has no exported fields
 	// gob: type not registered for interface: http.bodyEOFSignal
 	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfoV2{
 		URL:         u,

@@ -413,7 +413,7 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, reader *bytes.Reader) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, reader []byte) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
