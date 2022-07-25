@@ -413,13 +413,15 @@ func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, reader io.ReadCloser) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, reader *bytes.Reader) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
 		client := client
+
+		// Utiliza Resume Program so you can enter to client.ServerUpdateV2 at peer-rest-client.go
 		ng.Go(ctx, func() error {
 			return client.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, reader)
 		}, idx, *client.host)

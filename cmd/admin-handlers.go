@@ -84,6 +84,17 @@ func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo st
 	return us, nil, readerFromDoUpdate
 }
 
+func updateServerV2(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string, readerParam *bytes.Reader) (us madmin.ServerUpdateStatus, err error) {
+	err = doUpdateWithReader(u, lrTime, sha256Sum, releaseInfo, mode, readerParam)
+	if err != nil {
+		return us, err
+	}
+
+	us.CurrentVersion = Version
+	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
+	return us, nil
+}
+
 // ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
 // ----------
 // updates all minio servers and restarts them gracefully.
@@ -158,7 +169,11 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	// gob.Register(map[string]interface{}{})
 
-	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
+	// I need to take out the bugger from readerReturn so we can passdown, looking into the other repo..
+	var newBytes []byte
+	newBytes, _ = ioutil.ReadAll(readerReturn)
+
+	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, bytes.NewReader(newBytes)) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,

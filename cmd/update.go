@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"crypto"
 	"crypto/tls"
 	"encoding/hex"
@@ -599,4 +600,87 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 	}
 
 	return nil, reader2
+}
+
+func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string, reader *bytes.Reader) (err error) {
+	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+		return errors.New("update already in progress")
+	}
+	defer atomic.StoreUint32(&updateInProgress, 0)
+
+	transport := getUpdateTransport(30 * time.Second)
+	//var reader io.ReadCloser
+	//var reader2 io.ReadCloser
+	//if u.Scheme == "https" || u.Scheme == "http" {
+	//	reader, err = getUpdateReaderFromURL(u, transport, mode)
+	//	if err != nil {
+	//		return err, nil
+	//	}
+	//	reader2, err = getUpdateReaderFromURL(u, transport, mode)
+	//	// fmt.Println(reader2)
+	//	if err != nil {
+	//		return err, nil
+	//	}
+	//} else {
+	//	reader, err = getUpdateReaderFromFile(u)
+	//	if err != nil {
+	//		return err, nil
+	//	}
+	//}
+
+	// buf := make([]byte, 9)
+	// reader.Read(buf)
+
+	opts := selfupdate.Options{
+		Hash:     crypto.SHA256,
+		Checksum: sha256Sum,
+	}
+
+	if err := opts.CheckPermissions(); err != nil {
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    fmt.Sprintf("server update failed with: %s, do not restart the servers yet", err),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	minisignPubkey := env.Get(envMinisignPubKey, "")
+	if minisignPubkey != "" {
+		v := selfupdate.NewVerifier()
+		u.Path = path.Dir(u.Path) + slashSeparator + releaseInfo + ".minisig"
+		if err = v.LoadFromURL(u.String(), minisignPubkey, transport); err != nil {
+			return AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    fmt.Sprintf("signature loading failed for %v with %v", u, err),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+		opts.Verifier = v
+	}
+
+	if err = selfupdate.Apply(reader, opts); err != nil {
+		if rerr := selfupdate.RollbackError(err); rerr != nil {
+			return AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    fmt.Sprintf("Failed to rollback from bad update: %v", rerr),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return AdminError{
+				Code: AdminUpdateApplyFailure,
+				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
+					filepath.Dir(pathErr.Path), pathErr.Err),
+				StatusCode: http.StatusForbidden,
+			}
+		}
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	return nil
 }
