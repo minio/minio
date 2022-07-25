@@ -85,19 +85,17 @@ var erasureDecodeTests = []struct {
 
 func TestErasureDecode(t *testing.T) {
 	for i, test := range erasureDecodeTests {
-		setup, err := newErasureTestSetup(test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
+		setup, err := newErasureTestSetup(t, test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
 		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
 		}
 		disks := setup.disks
 		data := make([]byte, test.data)
 		if _, err = io.ReadFull(crand.Reader, data); err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
 		}
 
@@ -113,11 +111,9 @@ func TestErasureDecode(t *testing.T) {
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
 		if err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
 		}
 		if n != test.data {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create erasure test file", i)
 		}
 		for i, w := range writers {
@@ -195,7 +191,6 @@ func TestErasureDecode(t *testing.T) {
 				}
 			}
 		}
-		setup.Remove()
 	}
 }
 
@@ -210,12 +205,11 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 	dataBlocks := 7
 	parityBlocks := 7
 	blockSize := int64(1 * humanize.MiByte)
-	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
+	setup, err := newErasureTestSetup(t, dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer setup.Remove()
 	disks := setup.disks
 	erasure, err := NewErasure(context.Background(), dataBlocks, parityBlocks, blockSize)
 	if err != nil {
@@ -288,11 +282,10 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 // Benchmarks
 
 func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, b *testing.B) {
-	setup, err := newErasureTestSetup(data, parity, blockSizeV2)
+	setup, err := newErasureTestSetup(b, data, parity, blockSizeV2)
 	if err != nil {
 		b.Fatalf("failed to create test setup: %v", err)
 	}
-	defer setup.Remove()
 	disks := setup.disks
 	erasure, err := NewErasure(context.Background(), data, parity, blockSizeV2)
 	if err != nil {

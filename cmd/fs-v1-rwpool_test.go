@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"os"
 	"runtime"
 	"testing"
 
@@ -48,11 +47,10 @@ func TestRWPoolLongPath(t *testing.T) {
 // Tests all RWPool methods.
 func TestRWPool(t *testing.T) {
 	// create xlStorage test setup
-	_, path, err := newXLStorageTestSetup()
+	_, path, err := newXLStorageTestSetup(t)
 	if err != nil {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer os.RemoveAll(path)
 
 	rwPool := &fsIOPool{
 		readersMap: make(map[string]*lock.RLockedFile),

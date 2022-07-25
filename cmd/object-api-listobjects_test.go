@@ -23,8 +23,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -1886,18 +1884,14 @@ func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 // BenchmarkListObjects - Run ListObject Repeatedly and benchmark.
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, err := ioutil.TempDir(globalTestTmpDir, "minio-list-benchmark")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(directory)
+	directory := b.TempDir()
 
 	// Create the obj.
 	obj := initFSObjectsB(directory, b)
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}
