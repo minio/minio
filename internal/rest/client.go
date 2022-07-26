@@ -18,6 +18,7 @@
 package rest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -26,6 +27,8 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"path"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -122,21 +125,95 @@ func (e restError) Timeout() bool {
 	return true
 }
 
-// Call - make a REST call with context.
-func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	if !c.IsOnline() {
-		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server is offline")}}
+func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*http.Request, error) {
+	rc, ok := body.(io.ReadCloser)
+	if !ok && body != nil {
+		rc = io.NopCloser(body)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
-	if err != nil {
-		return nil, &NetworkError{err}
+	// The host's colon:port should be normalized. See Issue 14836.
+	req := &http.Request{
+		Method:     http.MethodPost,
+		URL:        u,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:     make(http.Header),
+		Body:       rc,
+		Host:       u.Hostname(),
 	}
+	req.WithContext(ctx)
+	if body != nil {
+		switch v := body.(type) {
+		case *bytes.Buffer:
+			req.ContentLength = int64(v.Len())
+			buf := v.Bytes()
+			req.GetBody = func() (io.ReadCloser, error) {
+				r := bytes.NewReader(buf)
+				return io.NopCloser(r), nil
+			}
+		case *bytes.Reader:
+			req.ContentLength = int64(v.Len())
+			snapshot := *v
+			req.GetBody = func() (io.ReadCloser, error) {
+				r := snapshot
+				return io.NopCloser(&r), nil
+			}
+		case *strings.Reader:
+			req.ContentLength = int64(v.Len())
+			snapshot := *v
+			req.GetBody = func() (io.ReadCloser, error) {
+				r := snapshot
+				return io.NopCloser(&r), nil
+			}
+		default:
+			// This is where we'd set it to -1 (at least
+			// if body != NoBody) to mean unknown, but
+			// that broke people during the Go 1.8 testing
+			// period. People depend on it being 0 I
+			// guess. Maybe retry later. See Issue 18117.
+		}
+		// For client requests, Request.ContentLength of 0
+		// means either actually 0, or unknown. The only way
+		// to explicitly say that the ContentLength is zero is
+		// to set the Body to nil. But turns out too much code
+		// depends on NewRequest returning a non-nil Body,
+		// so we use a well-known ReadCloser variable instead
+		// and have the http package also treat that sentinel
+		// variable to mean explicitly zero.
+		if req.GetBody != nil && req.ContentLength == 0 {
+			req.Body = http.NoBody
+			req.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
+		}
+	}
+
 	if c.newAuthToken != nil {
-		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.RawQuery))
+		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
 	}
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if body != nil {
 		req.Header.Set("Expect", "100-continue")
+	}
+
+	return req, nil
+}
+
+// Call - make a REST call with context.
+func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+	urlStr := c.url.String()
+	if !c.IsOnline() {
+		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: restError("remote server is offline")}}
+	}
+
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: err}}
+	}
+	u.Path = path.Join(u.Path, method)
+	u.RawQuery = values.Encode()
+
+	req, err := c.newRequest(ctx, u, body)
+	if err != nil {
+		return nil, &NetworkError{err}
 	}
 	if length > 0 {
 		req.ContentLength = length
@@ -148,7 +225,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 				atomic.AddUint64(&networkErrsCounter, 1)
 			}
 			if c.MarkOffline() {
-				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.String(), err), c.url.Host)
+				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 			}
 		}
 		return nil, &NetworkError{err}
@@ -171,7 +248,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
-			logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.String()), c.url.Host)
+			logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.Host), c.url.Host)
 			c.MarkOffline()
 		}
 		defer xhttp.DrainBody(resp.Body)
@@ -183,7 +260,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 					atomic.AddUint64(&networkErrsCounter, 1)
 				}
 				if c.MarkOffline() {
-					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.String(), err), c.url.Host)
+					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 				}
 			}
 			return nil, err
