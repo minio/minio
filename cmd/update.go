@@ -518,7 +518,7 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 
 var updateInProgress uint32
 
-func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string) (err error) {
+func downloadBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}
@@ -565,7 +565,35 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.Apply(reader, opts); err != nil {
+	if err = selfupdate.PrepareAndCheckBinary(reader, opts); err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return AdminError{
+				Code: AdminUpdateApplyFailure,
+				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
+					filepath.Dir(pathErr.Path), pathErr.Err),
+				StatusCode: http.StatusForbidden,
+			}
+		}
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	return nil
+}
+
+func commitBinary() (err error) {
+	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+		return errors.New("update already in progress")
+	}
+	defer atomic.StoreUint32(&updateInProgress, 0)
+
+	opts := selfupdate.Options{}
+
+	if err = selfupdate.CommitBinary(opts); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,
