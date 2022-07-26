@@ -2654,7 +2654,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 }
 
 type clusterInfo struct {
-	DeploymentID string `json:"deployement_id"`
+	DeploymentID string `json:"deployment_id"`
 	ClusterName  string `json:"cluster_name"`
 	UsedCapacity uint64 `json:"used_capacity"`
 	Info         struct {
