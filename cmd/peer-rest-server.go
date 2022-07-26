@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -801,10 +802,20 @@ func (s *peerRESTServer) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Re
 	//	return
 	//}
 	// newUpdate, _ := io.ReadAll()
-	if _, err := updateServerV2(r.Body); err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
+
+	// Save file in memory
+	filename := "miniotestingone"
+	outFile, _ := os.Create(filename)
+	// handle err
+	defer outFile.Close()
+	_, _ = io.Copy(outFile, r.Body)
+	// handle err
+
+	// For now don't update the binary let's just save them above to memory...
+	//if _, err := updateServerV2(r.Body); err != nil {
+	//	s.writeErrorResponse(w, err)
+	//	return
+	//}
 }
 
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
