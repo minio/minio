@@ -62,7 +62,7 @@ func TestFSShutdown(t *testing.T) {
 		fs := obj.(*FSObjects)
 
 		objectContent := "12345"
-		obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
+		obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 		obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
 		return fs, disk
 	}
@@ -95,18 +95,18 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, "a", BucketOptions{})
+	err := obj.MakeBucketWithLocation(GlobalContext, "a", MakeBucketOptions{})
 	if !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("BucketNameInvalid error not returned")
 	}
 
-	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Test with valid parameters
-	info, err := fs.GetBucketInfo(GlobalContext, bucketName)
+	info, err := fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 
 	// Test with non-existent bucket
-	_, err = fs.GetBucketInfo(GlobalContext, "a")
+	_, err = fs.GetBucketInfo(GlobalContext, "a", BucketOptions{})
 	if !isSameType(err, BucketNotFound{}) {
 		t.Fatal("BucketNotFound error not returned")
 	}
@@ -123,7 +123,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	// Check for buckets and should get disk not found.
 	os.RemoveAll(disk)
 
-	if _, err = fs.GetBucketInfo(GlobalContext, bucketName); err != nil {
+	if _, err = fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("BucketNotFound error not returned")
 		}
@@ -139,7 +139,7 @@ func TestFSPutObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "1/2/3/4/object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +179,7 @@ func TestFSDeleteObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 	obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 
 	// Test with invalid bucket name
@@ -223,7 +223,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
+	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -242,7 +242,7 @@ func TestFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
@@ -264,7 +264,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -279,7 +279,7 @@ func TestFSListBuckets(t *testing.T) {
 	f.Close()
 
 	// Test list buckets to have only one entry.
-	buckets, err := fs.ListBuckets(GlobalContext)
+	buckets, err := fs.ListBuckets(GlobalContext, BucketOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -289,7 +289,7 @@ func TestFSListBuckets(t *testing.T) {
 
 	// Test ListBuckets with disk not found.
 	os.RemoveAll(disk)
-	if _, err := fs.ListBuckets(GlobalContext); err != nil {
+	if _, err := fs.ListBuckets(GlobalContext, BucketOptions{}); err != nil {
 		if err != errDiskNotFound {
 			t.Fatal("Unexpected error: ", err)
 		}

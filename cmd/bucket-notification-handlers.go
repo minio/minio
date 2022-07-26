@@ -60,7 +60,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	_, err := objAPI.GetBucketInfo(ctx, bucketName)
+	_, err := objAPI.GetBucketInfo(ctx, bucketName, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -132,7 +132,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	_, err := objectAPI.GetBucketInfo(ctx, bucketName)
+	_, err := objectAPI.GetBucketInfo(ctx, bucketName, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

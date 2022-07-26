@@ -108,16 +108,40 @@ func newErasureSingle(ctx context.Context, storageDisk StorageAPI, format *forma
 // List all buckets from one of the set, we are not doing merge
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all sets.
-func (es *erasureSingle) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
+func (es *erasureSingle) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	var listBuckets []BucketInfo
 	healBuckets := map[string]VolInfo{}
 	// lists all unique buckets across drives.
 	if err := listAllBuckets(ctx, []StorageAPI{es.disk}, healBuckets, 0); err != nil {
 		return nil, err
 	}
+	// include deleted buckets in listBuckets output
+	deletedBuckets := map[string]VolInfo{}
 
+	if opts.Deleted {
+		// lists all deleted buckets across drives.
+		if err := listDeletedBuckets(ctx, []StorageAPI{es.disk}, deletedBuckets, 0); err != nil {
+			return nil, err
+		}
+	}
 	for _, v := range healBuckets {
-		listBuckets = append(listBuckets, BucketInfo(v))
+		bi := BucketInfo{
+			Name:    v.Name,
+			Created: v.Created,
+		}
+		if vi, ok := deletedBuckets[v.Name]; ok {
+			bi.Deleted = vi.Created
+		}
+		listBuckets = append(listBuckets, bi)
+	}
+
+	for _, v := range deletedBuckets {
+		if _, ok := healBuckets[v.Name]; !ok {
+			listBuckets = append(listBuckets, BucketInfo{
+				Name:    v.Name,
+				Deleted: v.Created,
+			})
+		}
 	}
 
 	sort.Slice(listBuckets, func(i, j int) bool {
@@ -256,7 +280,7 @@ type renameAllStorager interface {
 
 // Bucket operations
 // MakeBucket - make a bucket.
-func (es *erasureSingle) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
+func (es *erasureSingle) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	defer NSUpdated(bucket, slashSeparator)
 
 	// Lock the bucket name before creating.
@@ -289,6 +313,7 @@ func (es *erasureSingle) MakeBucketWithLocation(ctx context.Context, bucket stri
 
 	// If it doesn't exist we get a new, so ignore errors
 	meta := newBucketMetadata(bucket)
+	meta.SetCreatedAt(opts.CreatedAt)
 	if opts.LockEnabled {
 		meta.VersioningConfigXML = enabledBucketVersioningConfig
 		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
@@ -308,12 +333,17 @@ func (es *erasureSingle) MakeBucketWithLocation(ctx context.Context, bucket stri
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
-func (es *erasureSingle) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
+func (es *erasureSingle) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bi BucketInfo, e error) {
 	volInfo, err := es.disk.StatVol(ctx, bucket)
 	if err != nil {
+		if opts.Deleted {
+			if dvi, derr := es.disk.StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket)); derr == nil {
+				return BucketInfo{Name: bucket, Deleted: dvi.Created}, nil
+			}
+		}
 		return bi, toObjectErr(err, bucket)
 	}
-	return BucketInfo(volInfo), nil
+	return BucketInfo{Name: volInfo.Name, Created: volInfo.Created}, nil
 }
 
 // DeleteBucket - deletes a bucket.
@@ -326,6 +356,28 @@ func (es *erasureSingle) DeleteBucket(ctx context.Context, bucket string, opts D
 	deleteBucketMetadata(ctx, es, bucket)
 	globalBucketMetadataSys.Remove(bucket)
 
+	if err == nil || errors.Is(err, errVolumeNotFound) {
+		if opts.SRDeleteOp == MarkDelete {
+			es.markDelete(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+		}
+	}
+	return toObjectErr(err, bucket)
+}
+
+// markDelete creates a vol entry in .minio.sys/buckets/.deleted until site replication
+// syncs the delete to peers
+func (es *erasureSingle) markDelete(ctx context.Context, bucket, prefix string) error {
+	err := es.disk.MakeVol(ctx, pathJoin(bucket, prefix))
+	if err != nil && errors.Is(err, errVolumeExists) {
+		return nil
+	}
+	return toObjectErr(err, bucket)
+}
+
+// purgeDelete deletes vol entry in .minio.sys/buckets/.deleted after site replication
+// syncs the delete to peers OR on a new MakeBucket call.
+func (es *erasureSingle) purgeDelete(ctx context.Context, bucket, prefix string) error {
+	err := es.disk.DeleteVol(ctx, pathJoin(bucket, prefix), true)
 	return toObjectErr(err, bucket)
 }
 
@@ -3235,7 +3287,7 @@ func (es *erasureSingle) NSScanner(ctx context.Context, bf *bloomFilter, updates
 	results := make([]dataUsageCache, 1)
 	var firstErr error
 
-	allBuckets, err := es.ListBuckets(ctx)
+	allBuckets, err := es.ListBuckets(ctx, BucketOptions{})
 	if err != nil {
 		return err
 	}

@@ -128,7 +128,7 @@ func testCreateBucket(obj ObjectLayer, instanceType, bucketName string, apiRoute
 			defer wg.Done()
 			// Sync start.
 			<-start
-			if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, BucketOptions{}); err != nil {
+			if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, MakeBucketOptions{}); err != nil {
 				if _, ok := err.(BucketExists); !ok {
 					t.Logf("unexpected error: %T: %v", err, err)
 					return
@@ -163,7 +163,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	credentials auth.Credentials, t *testing.T,
 ) {
 	bucketName1 := fmt.Sprintf("%s-1", bucketName)
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, BucketOptions{}); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, MakeBucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

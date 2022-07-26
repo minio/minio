@@ -627,7 +627,7 @@ const (
 // replication is enabled. It is responsible for the creation of the same bucket
 // on remote clusters, and creating replication rules on local and peer
 // clusters.
-func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, opts BucketOptions) error {
+func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	// At this point, the local bucket is created.
 
 	c.RLock()
@@ -650,6 +650,9 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	if opts.ForceCreate {
 		optsMap["forceCreate"] = "true"
 	}
+	createdAt, _ := globalBucketMetadataSys.CreatedAt(bucket)
+	optsMap["createdAt"] = createdAt.Format(time.RFC3339Nano)
+	opts.CreatedAt = createdAt
 
 	// Create bucket and enable versioning on all peers.
 	makeBucketConcErr := c.concDo(
@@ -726,7 +729,7 @@ func (c *SiteReplicationSys) DeleteBucketHook(ctx context.Context, bucket string
 }
 
 // PeerBucketMakeWithVersioningHandler - creates bucket and enables versioning.
-func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Context, bucket string, opts BucketOptions) error {
+func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -750,6 +753,8 @@ func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Con
 	if err != nil {
 		return wrapSRErr(c.annotateErr(makeBucketWithVersion, err))
 	}
+
+	meta.SetCreatedAt(opts.CreatedAt)
 
 	meta.VersioningConfigXML = enabledBucketVersioningConfig
 	if opts.LockEnabled {
@@ -950,7 +955,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 
 // PeerBucketDeleteHandler - deletes bucket on local in response to a delete
 // bucket request from a peer.
-func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket string, forceDelete bool) error {
+func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
@@ -967,8 +972,7 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 			return err
 		}
 	}
-
-	err := objAPI.DeleteBucket(ctx, bucket, DeleteBucketOptions{Force: forceDelete})
+	err := objAPI.DeleteBucket(ctx, bucket, opts)
 	if err != nil {
 		if globalDNSConfig != nil {
 			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
@@ -1498,7 +1502,7 @@ func (c *SiteReplicationSys) listBuckets(ctx context.Context) ([]BucketInfo, err
 	if objAPI == nil {
 		return nil, errSRObjectLayerNotReady
 	}
-	return objAPI.ListBuckets(ctx)
+	return objAPI.ListBuckets(ctx, BucketOptions{Deleted: true})
 }
 
 // syncToAllPeers is used for syncing local data to all remote peers, it is
@@ -1521,11 +1525,12 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			}
 		}
 
-		var opts BucketOptions
+		var opts MakeBucketOptions
 		if lockConfig != nil {
 			opts.LockEnabled = lockConfig.ObjectLockEnabled == "Enabled"
 		}
 
+		opts.CreatedAt, _ = globalBucketMetadataSys.CreatedAt(bucket)
 		// Now call the MakeBucketHook on existing bucket - this will
 		// create buckets and replication rules on peer clusters.
 		err = c.MakeBucketHook(ctx, bucket, opts)
@@ -2161,7 +2166,7 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 			m[t.Arn] = t
 		}
 	}
-	buckets, err := objectAPI.ListBuckets(ctx)
+	buckets, err := objectAPI.ListBuckets(ctx, BucketOptions{})
 	for _, b := range buckets {
 		config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, b.Name)
 		if err != nil {
@@ -2361,10 +2366,8 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 
 	sris := make([]madmin.SRInfo, len(c.state.Peers))
 	depIdx := make(map[string]int, len(c.state.Peers))
-	depIDs := make([]string, 0, len(c.state.Peers))
 	i := 0
 	for d := range c.state.Peers {
-		depIDs = append(depIDs, d)
 		depIdx[d] = i
 		i++
 	}
@@ -2810,14 +2813,18 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			info.BucketStats[b] = make(map[string]srBucketStatsSummary, numSites)
 			for i, s := range slc {
 				dIdx := depIdx[s.DeploymentID]
-				var hasBucket bool
-				if bi, ok := sris[dIdx].Buckets[s.Bucket]; ok {
-					hasBucket = !bi.CreatedAt.Equal(timeSentinel)
+				var hasBucket, isBucketMarkedDeleted bool
+
+				bi, ok := sris[dIdx].Buckets[s.Bucket]
+				if ok {
+					isBucketMarkedDeleted = !bi.DeletedAt.IsZero() && (bi.CreatedAt.IsZero() || bi.DeletedAt.After(bi.CreatedAt))
+					hasBucket = !bi.CreatedAt.IsZero()
 				}
 				quotaCfgSet := hasBucket && quotaCfgs[i] != nil && *quotaCfgs[i] != madmin.BucketQuota{}
 				ss := madmin.SRBucketStatsSummary{
 					DeploymentID:             s.DeploymentID,
 					HasBucket:                hasBucket,
+					BucketMarkedDeleted:      isBucketMarkedDeleted,
 					TagMismatch:              tagMismatch,
 					OLockConfigMismatch:      olockCfgMismatch,
 					SSEConfigMismatch:        sseCfgMismatch,
@@ -3083,13 +3090,16 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			err     error
 		)
 		if opts.Entity == madmin.SRBucketEntity {
-			bi, err := objAPI.GetBucketInfo(ctx, opts.EntityValue)
+			bi, err := objAPI.GetBucketInfo(ctx, opts.EntityValue, BucketOptions{Deleted: opts.ShowDeleted})
 			if err != nil {
+				if isErrBucketNotFound(err) {
+					return info, nil
+				}
 				return info, errSRBackendIssue(err)
 			}
 			buckets = append(buckets, bi)
 		} else {
-			buckets, err = objAPI.ListBuckets(ctx)
+			buckets, err = objAPI.ListBuckets(ctx, BucketOptions{Deleted: opts.ShowDeleted})
 			if err != nil {
 				return info, errSRBackendIssue(err)
 			}
@@ -3097,16 +3107,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 		info.Buckets = make(map[string]madmin.SRBucketInfo, len(buckets))
 		for _, bucketInfo := range buckets {
 			bucket := bucketInfo.Name
-			createdAt, err := globalBucketMetadataSys.CreatedAt(bucket)
-			if err != nil {
-				return info, errSRBackendIssue(err)
-			}
+			bucketExists := bucketInfo.Deleted.IsZero() || (!bucketInfo.Created.IsZero() && bucketInfo.Created.After(bucketInfo.Deleted))
 			bms := madmin.SRBucketInfo{
 				Bucket:    bucket,
-				CreatedAt: createdAt,
+				CreatedAt: bucketInfo.Created.UTC(),
+				DeletedAt: bucketInfo.Deleted.UTC(),
 				Location:  globalSite.Region,
 			}
-
+			if !bucketExists {
+				info.Buckets[bucket] = bms
+				continue
+			}
 			// Get bucket policy if present.
 			policy, updatedAt, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 			found := true
@@ -3555,22 +3566,60 @@ type srStatusInfo struct {
 	GroupStats map[string]map[string]srGroupStatsSummary
 }
 
+// SRBucketDeleteOp - type of delete op
+type SRBucketDeleteOp string
+
+const (
+	// MarkDelete creates .minio.sys/buckets/.deleted/<bucket> vol entry to hold onto deleted bucket's state
+	// until peers are synced in site replication setup.
+	MarkDelete SRBucketDeleteOp = "MarkDelete"
+
+	// Purge deletes the .minio.sys/buckets/.deleted/<bucket> vol entry
+	Purge SRBucketDeleteOp = "Purge"
+	// NoOp no action needed
+	NoOp SRBucketDeleteOp = "NoOp"
+)
+
+// Empty returns true if this Op is not set
+func (s SRBucketDeleteOp) Empty() bool {
+	return string(s) == "" || string(s) == string(NoOp)
+}
+
+func getSRBucketDeleteOp(isSiteReplicated bool) SRBucketDeleteOp {
+	if !isSiteReplicated {
+		return NoOp
+	}
+	return MarkDelete
+}
+
 func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer) error {
-	info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
-		Buckets: true,
-	})
+	buckets, err := c.listBuckets(ctx)
 	if err != nil {
 		return err
 	}
-	for bucket := range info.BucketStats {
-		c.healCreateMissingBucket(ctx, objAPI, bucket, info)
-		c.healVersioningMetadata(ctx, objAPI, bucket, info)
-		c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
-		c.healSSEMetadata(ctx, objAPI, bucket, info)
-		c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
-		c.healBucketPolicies(ctx, objAPI, bucket, info)
-		c.healTagMetadata(ctx, objAPI, bucket, info)
-		c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
+	for _, bi := range buckets {
+		bucket := bi.Name
+		info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
+			Entity:      madmin.SRBucketEntity,
+			EntityValue: bucket,
+			ShowDeleted: true,
+		})
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+
+		c.healBucket(ctx, objAPI, bucket, info)
+
+		if bi.Deleted.IsZero() || (!bi.Created.IsZero() && bi.Deleted.Before(bi.Created)) {
+			c.healVersioningMetadata(ctx, objAPI, bucket, info)
+			c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
+			c.healSSEMetadata(ctx, objAPI, bucket, info)
+			c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
+			c.healBucketPolicies(ctx, objAPI, bucket, info)
+			c.healTagMetadata(ctx, objAPI, bucket, info)
+			c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
+		}
 		// Notification and ILM are site specific settings.
 	}
 	return nil
@@ -4014,84 +4063,176 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 	return nil
 }
 
-func (c *SiteReplicationSys) healCreateMissingBucket(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
-	bs := info.BucketStats[bucket]
+func (c *SiteReplicationSys) purgeDeletedBucket(ctx context.Context, objAPI ObjectLayer, bucket string) {
+	z, ok := objAPI.(*erasureServerPools)
+	if !ok {
+		if z, ok := objAPI.(*erasureSingle); ok {
+			z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+		}
+		return
+	}
+	z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+}
 
+// healBucket creates/deletes the bucket according to latest state across clusters participating in site replication.
+func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
 		return nil
 	}
+	numSites := len(c.state.Peers)
+	mostRecent := func(d1, d2 time.Time) time.Time {
+		if d1.IsZero() {
+			return d2
+		}
+		if d2.IsZero() {
+			return d1
+		}
+		if d1.After(d2) {
+			return d1
+		}
+		return d2
+	}
 
-	bucketCnt := 0
 	var (
 		latestID   string
 		lastUpdate time.Time
+		withB      []string
+		missingB   []string
+		deletedCnt int
 	)
-
-	var dIDs []string
 	for dID, ss := range bs {
-		if ss.HasBucket {
-			bucketCnt++
-		} else {
-			dIDs = append(dIDs, dID)
-		}
 		if lastUpdate.IsZero() {
-			lastUpdate = ss.meta.CreatedAt
+			lastUpdate = mostRecent(ss.meta.CreatedAt, ss.meta.DeletedAt)
 			latestID = dID
 		}
-		if ss.meta.CreatedAt.After(lastUpdate) {
-			lastUpdate = ss.meta.CreatedAt
+		recentUpdt := mostRecent(ss.meta.CreatedAt, ss.meta.DeletedAt)
+		if recentUpdt.After(lastUpdate) {
+			lastUpdate = recentUpdt
 			latestID = dID
+		}
+		if ss.BucketMarkedDeleted {
+			deletedCnt++
+		}
+		if ss.HasBucket {
+			withB = append(withB, dID)
+		} else {
+			missingB = append(missingB, dID)
 		}
 	}
+
 	latestPeerName := info.Sites[latestID].Name
 	bStatus := info.BucketStats[bucket][latestID].meta
-	var opts BucketOptions
-	optsMap := make(map[string]string)
-	if bStatus.Location != "" {
-		optsMap["location"] = bStatus.Location
-		opts.Location = bStatus.Location
+	isMakeBucket := len(missingB) > 0
+	deleteOp := NoOp
+	if latestID != globalDeploymentID {
+		return nil
 	}
+	if lastUpdate.Equal(bStatus.DeletedAt) {
+		isMakeBucket = false
+		switch {
+		case len(withB) == numSites && deletedCnt == numSites:
+			deleteOp = NoOp
+		case len(withB) == 0 && len(missingB) == numSites:
+			deleteOp = Purge
+		default:
+			deleteOp = MarkDelete
+		}
+	}
+	if isMakeBucket {
+		var opts MakeBucketOptions
+		optsMap := make(map[string]string)
+		if bStatus.Location != "" {
+			optsMap["location"] = bStatus.Location
+			opts.Location = bStatus.Location
+		}
 
-	optsMap["versioningEnabled"] = "true"
-	opts.VersioningEnabled = true
-	if bStatus.ObjectLockConfig != nil {
-		config, err := base64.StdEncoding.DecodeString(*bStatus.ObjectLockConfig)
-		if err != nil {
-			return err
+		optsMap["versioningEnabled"] = "true"
+		opts.VersioningEnabled = true
+		opts.CreatedAt = bStatus.CreatedAt
+		optsMap["createdAt"] = bStatus.CreatedAt.Format(time.RFC3339Nano)
+
+		if bStatus.ObjectLockConfig != nil {
+			config, err := base64.StdEncoding.DecodeString(*bStatus.ObjectLockConfig)
+			if err != nil {
+				return err
+			}
+			if bytes.Equal([]byte(string(config)), enabledBucketObjectLockConfig) {
+				optsMap["lockEnabled"] = "true"
+				opts.LockEnabled = true
+			}
 		}
-		if bytes.Equal([]byte(string(config)), enabledBucketObjectLockConfig) {
-			optsMap["lockEnabled"] = "true"
-			opts.LockEnabled = true
+		for _, dID := range missingB {
+			peerName := info.Sites[dID].Name
+			if dID == globalDeploymentID {
+				err := c.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
+				if err != nil {
+					return c.annotateErr(makeBucketWithVersion, fmt.Errorf("error healing bucket for site replication %w from %s -> %s",
+						err, latestPeerName, peerName))
+				}
+			} else {
+				admClient, err := c.getAdminClient(ctx, dID)
+				if err != nil {
+					return c.annotateErr(configureReplication, fmt.Errorf("unable to use admin client for %s: %w", dID, err))
+				}
+				if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap); err != nil {
+					return c.annotatePeerErr(peerName, makeBucketWithVersion, err)
+				}
+				if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil); err != nil {
+					return c.annotatePeerErr(peerName, configureReplication, err)
+				}
+			}
+		}
+		if len(missingB) > 0 {
+			// configure replication from current cluster to other clusters
+			err := c.PeerBucketConfigureReplHandler(ctx, bucket)
+			if err != nil {
+				return c.annotateErr(configureReplication, err)
+			}
+		}
+		return nil
+	}
+	// all buckets are marked deleted across sites at this point. It should be safe to purge the .minio.sys/buckets/.deleted/<bucket> entry
+	// from disk
+	if deleteOp == Purge {
+		for _, dID := range missingB {
+			peerName := info.Sites[dID].Name
+			if dID == globalDeploymentID {
+				c.purgeDeletedBucket(ctx, objAPI, bucket)
+			} else {
+				admClient, err := c.getAdminClient(ctx, dID)
+				if err != nil {
+					return c.annotateErr(configureReplication, fmt.Errorf("unable to use admin client for %s: %w", dID, err))
+				}
+				if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.PurgeDeletedBucketOp, nil); err != nil {
+					return c.annotatePeerErr(peerName, deleteBucket, err)
+				}
+			}
 		}
 	}
-	for _, dID := range dIDs {
-		peerName := info.Sites[dID].Name
-		if dID == globalDeploymentID {
-			err := c.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
-			if err != nil {
-				return c.annotateErr(makeBucketWithVersion, fmt.Errorf("error healing bucket for site replication %w from %s -> %s",
-					err, latestPeerName, peerName))
+	// Mark buckets deleted on remaining peers
+	if deleteOp == MarkDelete {
+		for _, dID := range withB {
+			peerName := info.Sites[dID].Name
+			if dID == globalDeploymentID {
+				err := c.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
+					Force: true,
+				})
+				if err != nil {
+					return c.annotateErr(deleteBucket, fmt.Errorf("error healing bucket for site replication %w from %s -> %s",
+						err, latestPeerName, peerName))
+				}
+			} else {
+				admClient, err := c.getAdminClient(ctx, dID)
+				if err != nil {
+					return c.annotateErr(configureReplication, fmt.Errorf("unable to use admin client for %s: %w", dID, err))
+				}
+				if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.ForceDeleteBucketBktOp, nil); err != nil {
+					return c.annotatePeerErr(peerName, deleteBucket, err)
+				}
 			}
-		} else {
-			admClient, err := c.getAdminClient(ctx, dID)
-			if err != nil {
-				return c.annotateErr(configureReplication, fmt.Errorf("unable to use admin client for %s: %w", dID, err))
-			}
-			if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.MakeWithVersioningBktOp, optsMap); err != nil {
-				return c.annotatePeerErr(peerName, makeBucketWithVersion, err)
-			}
-			if err = admClient.SRPeerBucketOps(ctx, bucket, madmin.ConfigureReplBktOp, nil); err != nil {
-				return c.annotatePeerErr(peerName, configureReplication, err)
-			}
-		}
-	}
-	if len(dIDs) > 0 {
-		// configure replication from current cluster to other clusters
-		err := c.PeerBucketConfigureReplHandler(ctx, bucket)
-		if err != nil {
-			return c.annotateErr(configureReplication, err)
 		}
 	}
 
