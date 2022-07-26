@@ -71,15 +71,15 @@ const (
 	mgmtForceStop   = "forceStop"
 )
 
-func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error, reader io.ReadCloser) {
-	err, readerFromDoUpdate := doUpdate(u, lrTime, sha256Sum, releaseInfo, mode)
+func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error) {
+	err = doUpdate(u, lrTime, sha256Sum, releaseInfo, mode)
 	if err != nil {
-		return us, err, readerFromDoUpdate
+		return us, err
 	}
 
 	us.CurrentVersion = Version
 	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
-	return us, nil, readerFromDoUpdate
+	return us, nil
 }
 
 func updateServerV2(readerParam io.Reader) (us madmin.ServerUpdateStatus, err error) {
@@ -101,10 +101,10 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	//objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
-	//if objectAPI == nil {
-	//	return
-	//}
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
+	if objectAPI == nil {
+		return
+	}
 
 	if globalInplaceUpdateDisabled {
 		// if MINIO_UPDATE=off - inplace update is disabled, mostly in containers.
@@ -142,15 +142,169 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 	crTime, err := GetCurrentReleaseTime()
-	fmt.Println(crTime)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// LoadFromHandlers(w, r)
+	if lrTime.Sub(crTime) <= 0 {
+		updateStatus := madmin.ServerUpdateStatus{
+			CurrentVersion: Version,
+			UpdatedVersion: Version,
+		}
 
-	updateStatus, err, readerReturn := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
+
+	for _, nerr := range globalNotificationSys.DownloadBinary(ctx, u, sha256Sum, releaseInfo) {
+		if nerr.Err != nil {
+			err := AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    nerr.Err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			}
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	err = downloadBinary(u, sha256Sum, releaseInfo, mode)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	for _, nerr := range globalNotificationSys.CommitBinary(ctx) {
+		if nerr.Err != nil {
+			err := AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    nerr.Err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			}
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	err = commitBinary()
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	updateStatus := madmin.ServerUpdateStatus{
+		CurrentVersion: Version,
+		UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(updateStatus)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+
+	// Notify all other MinIO peers signal service.
+	for _, nerr := range globalNotificationSys.SignalService(serviceRestart) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	globalServiceSignalCh <- serviceRestart
+}
+
+// ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
+// ----------
+// updates all minio servers and restarts them gracefully.
+func (a adminAPIHandlers) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServerUpdate")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	//objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
+	//if objectAPI == nil {
+	//	return
+	//}
+
+	if globalInplaceUpdateDisabled {
+		// if MINIO_UPDATE=off - inplace update is disabled, mostly in containers.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	// Loop Thru These Architectures to Get All Readers:
+	var architectures [9]string
+	var readers [9]io.Reader
+	architectures[0] = "https://dl.min.io/server/minio/release/darwin-arm64/minio.sha256sum"
+	architectures[1] = "https: //dl.min.io/server/minio/release/darwin-amd64/minio.sha256sum"
+	architectures[2] = "https: //dl.min.io/server/minio/release/linux-amd64/minio.sha256sum"
+	architectures[3] = "https: //dl.min.io/server/minio/release/linux-arm/minio.sha256sum"
+	architectures[4] = "https: //dl.min.io/server/minio/release/linux-arm64/minio.sha256sum"
+	architectures[5] = "https: //dl.min.io/server/minio/release/linux-mips64/minio.sha256sum"
+	architectures[6] = "https: //dl.min.io/server/minio/release/linux-ppc64le/minio.sha256sum"
+	architectures[7] = "https: //dl.min.io/server/minio/release/linux-s390x/minio.sha256sum"
+	architectures[8] = "https: //dl.min.io/server/minio/release/windows-amd64/minio.exe.sha256sum"
+
+	for index, architecture := range architectures {
+		updateURL := architecture
+		mode := getMinioMode()
+		if updateURL == "" {
+			updateURL = minioReleaseInfoURL
+			if runtime.GOOS == globalWindowsOSName {
+				updateURL = minioReleaseWindowsInfoURL
+			}
+		}
+
+		u, err := url.Parse(updateURL)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		content, err := downloadReleaseURL(u, updateTimeout, mode)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		sha256Sum, lrTime, releaseInfo, err := parseReleaseData(content)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
+		crTime, err := GetCurrentReleaseTime()
+		fmt.Println(crTime)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		err, reader := getReader(u, mode)
+		readers[index] = reader
+	}
+
+	// Update this server
+	updateStatus, err := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
