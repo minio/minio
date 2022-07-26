@@ -805,11 +805,13 @@ func (s *peerRESTServer) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Re
 
 	// Save file in memory
 	filename := "miniotestingone"
-	outFile, _ := os.Create(filename)
+	outFile, err := os.Create(filename)
 	// handle err
+	fmt.Println(err)
 	defer outFile.Close()
-	_, _ = io.Copy(outFile, r.Body)
+	_, err = io.Copy(outFile, r.Body)
 	// handle err
+	fmt.Println(err)
 
 	// For now don't update the binary let's just save them above to memory...
 	//if _, err := updateServerV2(r.Body); err != nil {
