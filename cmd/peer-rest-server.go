@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/gob"
 	"errors"
@@ -804,20 +806,41 @@ func (s *peerRESTServer) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Re
 	// newUpdate, _ := io.ReadAll()
 
 	// Save file in memory
-	filename := "miniotestingone"
-	outFile, err := os.Create(filename)
-	// handle err
-	fmt.Println(err)
-	defer outFile.Close()
-	_, err = io.Copy(outFile, r.Body)
-	// handle err
-	fmt.Println(err)
+	//filename := "miniotestingone"
+	//outFile, err := os.Create(filename)
+	//// handle err
+	//fmt.Println(err)
+	//defer outFile.Close()
+	//_, err = io.Copy(outFile, r.Body)
+	//// handle err
+	//fmt.Println(err)
+
+	// Prueba a leer un binario guardado para ubuntu
+	// y ve si lo puedes aplicar
+	filename := "miniotestingdos"
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer file.Close()
+	stats, statsErr := file.Stat()
+	if statsErr != nil {
+		fmt.Println(statsErr)
+	}
+	var size int64 = stats.Size()
+	bytesfrombin := make([]byte, size)
+	bufr := bufio.NewReader(file)
+	_, err = bufr.Read(bytesfrombin)
+	fmt.Println(err) // use bytes for the apply
+	// return bytes, err
+
+	respuesta := bytes.NewReader(bytesfrombin)
 
 	// For now don't update the binary let's just save them above to memory...
-	//if _, err := updateServerV2(r.Body); err != nil {
-	//	s.writeErrorResponse(w, err)
-	//	return
-	//}
+	if _, err := updateServerV2(respuesta); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 }
 
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
