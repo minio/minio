@@ -264,12 +264,14 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 
 			if args.Password != "" {
 				if _, err = conn.Do("AUTH", args.Password); err != nil {
+					conn.Close()
 					return nil, err
 				}
 			}
 
 			// Must be done after AUTH
 			if _, err = conn.Do("CLIENT", "SETNAME", "MinIO"); err != nil {
+				conn.Close()
 				return nil, err
 			}
 

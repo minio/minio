@@ -17,7 +17,6 @@ linters:
     - deadcode
     - gomodguard
     - gofmt
-    - structcheck
     - unconvert
     - varcheck
     - gocritic

@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -108,6 +109,9 @@ type Client struct {
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
+
+	sync.RWMutex // mutex for lastErr
+	lastErr      error
 }
 
 type restError string
@@ -120,11 +124,25 @@ func (e restError) Timeout() bool {
 	return true
 }
 
+// Given a string of the form "host", "host:port", or "[ipv6::address]:port",
+// return true if the string includes a port.
+func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
+
+// removeEmptyPort strips the empty port in ":port" to ""
+// as mandated by RFC 3986 Section 6.2.3.
+func removeEmptyPort(host string) string {
+	if hasPort(host) {
+		return strings.TrimSuffix(host, ":")
+	}
+	return host
+}
+
 func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
+	u.Host = removeEmptyPort(u.Host)
 	// The host's colon:port should be normalized. See Issue 14836.
 	req := &http.Request{
 		Method:     http.MethodPost,
@@ -134,9 +152,9 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 		ProtoMinor: 1,
 		Header:     make(http.Header),
 		Body:       rc,
-		Host:       u.Hostname(),
+		Host:       u.Host,
 	}
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 	if body != nil {
 		switch v := body.(type) {
 		case *bytes.Buffer:
@@ -196,13 +214,14 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	urlStr := c.url.String()
 	if !c.IsOnline() {
-		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: restError("remote server is offline")}}
+		return nil, &NetworkError{c.LastError()}
 	}
 
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: err}}
 	}
+
 	u.Path = path.Join(u.Path, method)
 	u.RawQuery = values.Encode()
 
@@ -219,7 +238,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 			if !c.NoMetrics {
 				atomic.AddUint64(&networkErrsCounter, 1)
 			}
-			if c.MarkOffline() {
+			if c.MarkOffline(err) {
 				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 			}
 		}
@@ -243,8 +262,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
-			logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.Host), c.url.Host)
-			c.MarkOffline()
+			err = fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.Host)
+			logger.LogOnceIf(ctx, err, c.url.Host)
+			c.MarkOffline(err)
 		}
 		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
@@ -254,7 +274,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 				if !c.NoMetrics {
 					atomic.AddUint64(&networkErrsCounter, 1)
 				}
-				if c.MarkOffline() {
+				if c.MarkOffline(err) {
 					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 				}
 			}
@@ -299,10 +319,20 @@ func (c *Client) LastConn() time.Time {
 	return time.Unix(0, atomic.LoadInt64(&c.lastConn))
 }
 
+// LastError returns previous error
+func (c *Client) LastError() error {
+	c.RLock()
+	defer c.RUnlock()
+	return c.lastErr
+}
+
 // MarkOffline - will mark a client as being offline and spawns
 // a goroutine that will attempt to reconnect if HealthCheckFn is set.
 // returns true if the node changed state from online to offline
-func (c *Client) MarkOffline() bool {
+func (c *Client) MarkOffline(err error) bool {
+	c.Lock()
+	c.lastErr = err
+	c.Unlock()
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
 	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {

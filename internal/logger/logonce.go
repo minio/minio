@@ -37,18 +37,16 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string
 	if err == nil {
 		return
 	}
+
+	nerr := unwrapErrs(err)
 	l.Lock()
 	shouldLog := true
 	prevErr, ok := l.IDMap[id]
-	if ok {
-		err1 := errors.Unwrap(prevErr)
-		err2 := errors.Unwrap(err)
-		if err1 != nil && err2 != nil {
-			// if errors are equal do not log.
-			shouldLog = err1.Error() != err2.Error()
-		}
+	if !ok {
+		l.IDMap[id] = nerr
 	} else {
-		l.IDMap[id] = err
+		// if errors are equal do not log.
+		shouldLog = prevErr.Error() != nerr.Error()
 	}
 	l.Unlock()
 
@@ -57,23 +55,34 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string
 	}
 }
 
+// unwrapErrs upto the point where errors.Unwrap(err) returns nil
+func unwrapErrs(err error) (leafErr error) {
+	uerr := errors.Unwrap(err)
+	for uerr != nil {
+		// Save the current `uerr`
+		leafErr = uerr
+		// continue to look for leaf errors underneath
+		uerr = errors.Unwrap(leafErr)
+	}
+	return leafErr
+}
+
 // One log message per error.
 func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
+
+	nerr := unwrapErrs(err)
+
 	l.Lock()
 	shouldLog := true
 	prevErr, ok := l.IDMap[id]
-	if ok {
-		err1 := errors.Unwrap(prevErr)
-		err2 := errors.Unwrap(err)
-		if err1 != nil && err2 != nil {
-			// if errors are equal do not log.
-			shouldLog = err1.Error() != err2.Error()
-		}
+	if !ok {
+		l.IDMap[id] = nerr
 	} else {
-		l.IDMap[id] = err
+		// if errors are equal do not log.
+		shouldLog = prevErr.Error() != nerr.Error()
 	}
 	l.Unlock()
 

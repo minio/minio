@@ -3,6 +3,14 @@
 # shellcheck disable=SC2120
 exit_1() {
     cleanup
+
+    echo "minio1 ============"
+    cat /tmp/minio1_1.log
+    echo "minio2 ============"
+    cat /tmp/minio2_1.log
+    echo "minio3 ============"
+    cat /tmp/minio3_1.log
+
     exit 1
 }
 
@@ -38,7 +46,7 @@ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(mem
 
 if [ ! -f ./mc ]; then
     wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
-        && chmod +x mc
+	&& chmod +x mc
 fi
 
 minio server --config-dir /tmp/minio-ldap --address ":9001" /tmp/minio-ldap-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
@@ -279,7 +287,7 @@ fi
 # Test if bucket created/deleted when minio1 is down healed
 diff -q <(./mc ls minio1)  <(./mc ls minio2) 1>/dev/null
 if  [ $? -ne 0 ]; then
-    echo "expected `bucket2` delete and `newbucket2` creation to have replicated, exiting..."
+    echo "expected 'bucket2' delete and 'newbucket2' creation to have replicated, exiting..."
     exit_1;
 fi
 
