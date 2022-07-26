@@ -19,11 +19,12 @@ package cmd
 
 import (
 	"context"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -108,7 +109,7 @@ func (m *mrfState) newSetReconnected(pool, set int) {
 		return
 	}
 
-	idler := time.NewTimer(100 * time.Millisecond)
+	idler := timer.NewTimer(100 * time.Millisecond)
 	defer idler.Stop()
 
 	select {
@@ -181,7 +182,7 @@ func (m *mrfState) resetMRFInfoIfNoPendingOps() {
 // issues healing requests for queued objects belonging to the
 // corresponding erasure set
 func (m *mrfState) healRoutine() {
-	idler := time.NewTimer(mrfInfoResetInterval)
+	idler := timer.NewTimer(mrfInfoResetInterval)
 	defer idler.Stop()
 
 	mrfHealingOpts := madmin.HealOpts{

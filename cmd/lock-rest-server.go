@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"net/http"
 	"time"
@@ -214,7 +215,7 @@ func lockMaintenance(ctx context.Context) {
 	}
 
 	// Initialize a new ticker with 1 minute between each ticks.
-	lkTimer := time.NewTimer(lockMaintenanceInterval)
+	lkTimer := timer.NewTimer(lockMaintenanceInterval)
 	// Stop the timer upon returning.
 	defer lkTimer.Stop()
 

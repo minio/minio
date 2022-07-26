@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"hash/crc32"
 	"math/rand"
 	"net/http"
@@ -34,7 +36,6 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bpool"
@@ -291,7 +292,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	// Pre-emptively connect the disks if possible.
 	s.connectDisks()
 
-	monitor := time.NewTimer(monitorInterval)
+	monitor := timer.NewTimer(monitorInterval)
 	defer monitor.Stop()
 
 	for {
@@ -494,7 +495,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 // deletes a dynamic sleeper is used with a factor of 10 ratio with max delay between
 // deletes to be 2 seconds.
 func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
-	timer := time.NewTimer(globalAPIConfig.getDeleteCleanupInterval())
+	timer := timer.NewTimer(globalAPIConfig.getDeleteCleanupInterval())
 	defer timer.Stop()
 
 	for {
@@ -522,7 +523,7 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
 }
 
 func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
-	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
+	timer := timer.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer timer.Stop()
 
 	for {

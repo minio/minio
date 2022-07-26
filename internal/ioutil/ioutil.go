@@ -22,6 +22,7 @@ package ioutil
 import (
 	"bytes"
 	"context"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"os"
 	"sync"
@@ -94,7 +95,7 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 	}
 
 	c := make(chan ioret, 1)
-	t := time.NewTimer(w.timeout)
+	t := timer.NewTimer(w.timeout)
 	defer t.Stop()
 
 	go func() {

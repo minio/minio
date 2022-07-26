@@ -20,6 +20,7 @@ package dsync
 import (
 	"context"
 	"errors"
+	"github.com/minio/minio/internal/timer"
 	"math/rand"
 	"os"
 	"sort"
@@ -251,7 +252,7 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 	go func() {
 		defer cancel()
 
-		refreshTimer := time.NewTimer(dm.refreshInterval)
+		refreshTimer := timer.NewTimer(dm.refreshInterval)
 		defer refreshTimer.Stop()
 
 		for {

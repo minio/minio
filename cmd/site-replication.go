@@ -25,6 +25,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"net/url"
 	"reflect"
 	"sort"
@@ -32,7 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
 	minioClient "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/replication"
@@ -3500,7 +3501,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 const siteHealTimeInterval = 10 * time.Second
 
 func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI ObjectLayer) {
-	healTimer := time.NewTimer(siteHealTimeInterval)
+	healTimer := timer.NewTimer(siteHealTimeInterval)
 	defer healTimer.Stop()
 
 	for {

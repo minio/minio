@@ -24,6 +24,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"math/rand"
 	"path"
 	"sort"
@@ -33,7 +35,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -316,7 +317,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	switch {
 	case sys.openIDConfig.ProviderEnabled():
 		go func() {
-			timer := time.NewTimer(refreshInterval)
+			timer := timer.NewTimer(refreshInterval)
 			defer timer.Stop()
 			for {
 				select {
@@ -331,7 +332,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		}()
 	case sys.ldapConfig.Enabled:
 		go func() {
-			timer := time.NewTimer(refreshInterval)
+			timer := timer.NewTimer(refreshInterval)
 			defer timer.Stop()
 
 			for {
@@ -434,7 +435,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 	var maxRefreshDurationSecondsForLog float64 = 10
 
 	// Load all items periodically
-	timer := time.NewTimer(sys.iamRefreshInterval)
+	timer := timer.NewTimer(sys.iamRefreshInterval)
 	defer timer.Stop()
 	for {
 		select {

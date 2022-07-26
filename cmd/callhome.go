@@ -20,10 +20,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"math/rand"
 	"time"
 
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	uatomic "go.uber.org/atomic"
 )
@@ -104,7 +105,7 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) {
 	ctx = lkctx.Context()
 	defer locker.Unlock(lkctx.Cancel)
 
-	callhomeTimer := time.NewTimer(callhomeFreq.Load())
+	callhomeTimer := timer.NewTimer(callhomeFreq.Load())
 	defer callhomeTimer.Stop()
 
 	for {

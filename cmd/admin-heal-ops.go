@@ -22,12 +22,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"net/http"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -195,7 +196,7 @@ func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	// Launch clean-up routine to remove this heal sequence (after
 	// it ends) from the global state after timeout has elapsed.
-	periodicTimer := time.NewTimer(time.Minute * 5)
+	periodicTimer := timer.NewTimer(time.Minute * 5)
 	defer periodicTimer.Stop()
 
 	for {
@@ -588,7 +589,7 @@ func (h *healSequence) pushHealResultItem(r madmin.HealResultItem) error {
 	// means that the server is holding the maximum amount of
 	// heal-results in memory and the client has not consumed it
 	// for too long.
-	unconsumedTimer := time.NewTimer(healUnconsumedTimeout)
+	unconsumedTimer := timer.NewTimer(healUnconsumedTimeout)
 	defer unconsumedTimer.Stop()
 
 	var itemsLen int

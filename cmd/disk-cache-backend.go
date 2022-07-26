@@ -26,6 +26,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -1623,7 +1624,7 @@ func getMultipartCacheSHADir(dir, bucket, object string) string {
 
 // clean up stale cache multipart uploads according to cleanup interval.
 func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
-	timer := time.NewTimer(cacheStaleUploadCleanupInterval)
+	timer := timer.NewTimer(cacheStaleUploadCleanupInterval)
 	defer timer.Stop()
 	for {
 		select {

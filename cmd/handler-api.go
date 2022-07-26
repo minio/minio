@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"github.com/minio/minio/internal/timer"
 	"io/ioutil"
 	"net/http"
 	"runtime"
@@ -267,7 +268,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 
 		globalHTTPStats.addRequestsInQueue(1)
 
-		deadlineTimer := time.NewTimer(deadline)
+		deadlineTimer := timer.NewTimer(deadline)
 		defer deadlineTimer.Stop()
 
 		select {

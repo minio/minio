@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/timer"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -876,10 +877,10 @@ func (fs *FSObjects) getAllUploadIDs(ctx context.Context) (result map[string]str
 // on all buckets for every `cleanupInterval`, this function is
 // blocking and should be run in a go-routine.
 func (fs *FSObjects) cleanupStaleUploads(ctx context.Context) {
-	expiryUploadsTimer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
+	expiryUploadsTimer := timer.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer expiryUploadsTimer.Stop()
 
-	bgAppendTmpCleaner := time.NewTimer(bgAppendsCleanupInterval)
+	bgAppendTmpCleaner := timer.NewTimer(bgAppendsCleanupInterval)
 	defer bgAppendTmpCleaner.Stop()
 
 	for {

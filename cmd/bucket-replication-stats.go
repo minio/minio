@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"github.com/minio/minio/internal/timer"
 	"sync"
 	"time"
 
@@ -178,7 +179,7 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 
 // load replication metrics at cluster start from initial data usage
 func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
-	rTimer := time.NewTimer(time.Minute)
+	rTimer := timer.NewTimer(time.Minute)
 	defer rTimer.Stop()
 	var (
 		dui DataUsageInfo

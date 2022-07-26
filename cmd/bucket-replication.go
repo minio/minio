@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"math"
 	"net/http"
@@ -32,7 +34,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -1971,7 +1972,7 @@ const resyncTimeInterval = time.Minute * 1
 
 // updateResyncStatus persists in-memory resync metadata stats to disk at periodic intervals
 func (p *ReplicationPool) updateResyncStatus(ctx context.Context, objectAPI ObjectLayer) {
-	resyncTimer := time.NewTimer(resyncTimeInterval)
+	resyncTimer := timer.NewTimer(resyncTimeInterval)
 	defer resyncTimer.Stop()
 
 	for {

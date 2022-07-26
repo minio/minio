@@ -22,6 +22,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"math/rand"
 	"net/http"
@@ -35,7 +37,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -159,7 +160,7 @@ func (es *erasureSingle) ListBuckets(ctx context.Context, opts BucketOptions) (b
 }
 
 func (es *erasureSingle) cleanupStaleUploads(ctx context.Context) {
-	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
+	timer := timer.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer timer.Stop()
 
 	for {
@@ -179,7 +180,7 @@ func (es *erasureSingle) cleanupStaleUploads(ctx context.Context) {
 // deletes a dynamic sleeper is used with a factor of 10 ratio with max delay between
 // deletes to be 2 seconds.
 func (es *erasureSingle) cleanupDeletedObjects(ctx context.Context) {
-	timer := time.NewTimer(globalAPIConfig.getDeleteCleanupInterval())
+	timer := timer.NewTimer(globalAPIConfig.getDeleteCleanupInterval())
 	defer timer.Stop()
 
 	for {

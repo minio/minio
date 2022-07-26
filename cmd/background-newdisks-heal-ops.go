@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"io"
 	"os"
 	"sort"
@@ -29,7 +31,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/logger"
 )
@@ -389,7 +390,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 	// Perform automatic disk healing when a disk is replaced locally.
-	diskCheckTimer := time.NewTimer(defaultMonitorNewDiskInterval)
+	diskCheckTimer := timer.NewTimer(defaultMonitorNewDiskInterval)
 	defer diskCheckTimer.Stop()
 
 	for {

@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/minio/minio/internal/timer"
 	"io/ioutil"
 	"log"
 	"net"
@@ -147,7 +148,7 @@ func (srv *Server) Shutdown() error {
 
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
-	shutdownTimer := time.NewTimer(shutdownTimeout)
+	shutdownTimer := timer.NewTimer(shutdownTimeout)
 	ticker := time.NewTicker(serverShutdownPoll)
 	defer ticker.Stop()
 	for {

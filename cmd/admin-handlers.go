@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/timer"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
@@ -760,7 +761,7 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	}
 	globalProfilerMu.Unlock()
 
-	timer := time.NewTimer(duration)
+	timer := timer.NewTimer(duration)
 	defer timer.Stop()
 	for {
 		select {

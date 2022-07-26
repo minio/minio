@@ -222,7 +222,7 @@ func TestSuccessfulLockRefresh(t *testing.T) {
 	}
 
 	// Make it run twice.
-	timer := time.NewTimer(testDrwMutexRefreshInterval * 2)
+	timer := timer.NewTimer(testDrwMutexRefreshInterval * 2)
 
 	select {
 	case <-ctx.Done():
@@ -295,7 +295,7 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 		unlockReturned <- struct{}{}
 	}()
 
-	timer := time.NewTimer(2 * testDrwMutexUnlockCallTimeout)
+	timer := timer.NewTimer(2 * testDrwMutexUnlockCallTimeout)
 	defer timer.Stop()
 
 	select {

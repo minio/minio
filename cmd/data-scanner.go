@@ -24,6 +24,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/timer"
 	"io/fs"
 	"math"
 	"math/rand"
@@ -35,7 +37,6 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -175,7 +176,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 		logger.LogIf(ctx, err)
 	}
 
-	scannerTimer := time.NewTimer(scannerCycle.Load())
+	scannerTimer := timer.NewTimer(scannerCycle.Load())
 	defer scannerTimer.Stop()
 	defer globalScannerMetrics.setCycle(nil)
 
@@ -1380,14 +1381,13 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 			if maxWait > 0 && wantSleep > maxWait {
 				wantSleep = maxWait
 			}
-			timer := time.NewTimer(wantSleep)
+			timer := timer.NewTimer(wantSleep)
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
 					if d.isScanner {
 						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 					}
-					<-timer.C
 				}
 				return
 			case <-timer.C:
@@ -1397,8 +1397,6 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 				return
 			case <-cycle:
 				if !timer.Stop() {
-					// We expired.
-					<-timer.C
 					if d.isScanner {
 						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 					}
@@ -1427,11 +1425,10 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 		if maxWait > 0 && wantSleep > maxWait {
 			wantSleep = maxWait
 		}
-		timer := time.NewTimer(wantSleep)
+		timer := timer.NewTimer(wantSleep)
 		select {
 		case <-ctx.Done():
 			if !timer.Stop() {
-				<-timer.C
 				if d.isScanner {
 					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
@@ -1444,8 +1441,6 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 			return
 		case <-cycle:
 			if !timer.Stop() {
-				// We expired.
-				<-timer.C
 				if d.isScanner {
 					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
