@@ -125,7 +125,7 @@ func (e restError) Timeout() bool {
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	if !c.IsOnline() {
-		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
+		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server is offline")}}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {
@@ -148,7 +148,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 				atomic.AddUint64(&networkErrsCounter, 1)
 			}
 			if c.MarkOffline() {
-				logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
+				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.String(), err), c.url.Host)
 			}
 		}
 		return nil, &NetworkError{err}
@@ -171,7 +171,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
-			logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by PreconditionFailed with disk ID mismatch", c.url.String()))
+			logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.String()), c.url.Host)
 			c.MarkOffline()
 		}
 		defer xhttp.DrainBody(resp.Body)
@@ -183,7 +183,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 					atomic.AddUint64(&networkErrsCounter, 1)
 				}
 				if c.MarkOffline() {
-					logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
+					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.String(), err), c.url.Host)
 				}
 			}
 			return nil, err

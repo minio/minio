@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 
 	sarama "github.com/Shopify/sarama"
@@ -126,7 +127,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -251,7 +252,7 @@ func (k KafkaArgs) pingBrokers() bool {
 }
 
 // NewKafkaTarget - creates new Kafka target with auth credentials.
-func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
+func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
 	target := &KafkaTarget{
@@ -263,7 +264,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	if args.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
 		if err != nil {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 		config.Version = kafkaVersion
@@ -276,7 +277,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
 	if err != nil {
-		target.loggerOnce(context.Background(), err, target.ID())
+		target.loggerOnce(context.Background(), err, target.ID().String())
 		return target, err
 	}
 
@@ -303,7 +304,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID())
+			target.loggerOnce(context.Background(), oErr, target.ID().String())
 			return target, oErr
 		}
 		target.store = store
@@ -312,7 +313,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		if store == nil || err != sarama.ErrOutOfBrokers {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}

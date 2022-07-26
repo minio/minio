@@ -19,29 +19,36 @@ package logger
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
 
+// LogOnce provides the function type for logger.LogOnceIf() function
+type LogOnce func(ctx context.Context, err error, id string, errKind ...interface{})
+
 // Holds a map of recently logged errors.
 type logOnceType struct {
-	IDMap map[interface{}]error
+	IDMap map[string]error
 	sync.Mutex
 }
 
-func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
 	l.Lock()
-	shouldLog := false
-	prevErr := l.IDMap[id]
-	if prevErr == nil {
+	shouldLog := true
+	prevErr, ok := l.IDMap[id]
+	if ok {
+		err1 := errors.Unwrap(prevErr)
+		err2 := errors.Unwrap(err)
+		if err1 != nil && err2 != nil {
+			// if errors are equal do not log.
+			shouldLog = err1.Error() != err2.Error()
+		}
+	} else {
 		l.IDMap[id] = err
-		shouldLog = true
-	} else if prevErr.Error() != err.Error() {
-		l.IDMap[id] = err
-		shouldLog = true
 	}
 	l.Unlock()
 
@@ -51,19 +58,17 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id interf
 }
 
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
 	l.Lock()
-	shouldLog := false
-	prevErr := l.IDMap[id]
-	if prevErr == nil {
+	shouldLog := true
+	prevErr, ok := l.IDMap[id]
+	if ok && prevErr.Error() == err.Error() {
+		shouldLog = false
+	} else {
 		l.IDMap[id] = err
-		shouldLog = true
-	} else if prevErr.Error() != err.Error() {
-		l.IDMap[id] = err
-		shouldLog = true
 	}
 	l.Unlock()
 
@@ -76,7 +81,7 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, 
 func (l *logOnceType) cleanupRoutine() {
 	for {
 		l.Lock()
-		l.IDMap = make(map[interface{}]error)
+		l.IDMap = make(map[string]error)
 		l.Unlock()
 
 		time.Sleep(30 * time.Minute)
@@ -85,7 +90,7 @@ func (l *logOnceType) cleanupRoutine() {
 
 // Returns logOnceType
 func newLogOnceType() *logOnceType {
-	l := &logOnceType{IDMap: make(map[interface{}]error)}
+	l := &logOnceType{IDMap: make(map[string]error)}
 	go l.cleanupRoutine()
 	return l
 }
@@ -95,7 +100,7 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if logIgnoreError(err) {
 		return
 	}
@@ -103,7 +108,7 @@ func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interf
 }
 
 // LogOnceConsoleIf - similar to LogOnceIf but exclusively only logs to console target.
-func LogOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func LogOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if logIgnoreError(err) {
 		return
 	}
