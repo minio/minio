@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.17
+go 1.18
 
 require (
 	cloud.google.com/go/storage v1.10.0
@@ -43,15 +43,15 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.19.1
+	github.com/minio/console v0.19.3
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.20.0
 	github.com/minio/madmin-go v1.4.3
-	github.com/minio/minio-go/v7 v7.0.31
+	github.com/minio/minio-go/v7 v7.0.32
 	github.com/minio/pkg v1.1.26
-	github.com/minio/selfupdate v0.4.0
+	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
 	github.com/minio/sio v0.3.0
@@ -220,6 +220,3 @@ require (
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
-
-// replace github.com/minio/console => ../console
-replace github.com/minio/console => github.com/minio/console v0.19.2-0.20220722194038-f26786c904d0

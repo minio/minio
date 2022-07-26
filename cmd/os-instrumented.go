@@ -35,6 +35,7 @@ type osMetric uint8
 const (
 	osMetricRemoveAll osMetric = iota
 	osMetricMkdirAll
+	osMetricMkdir
 	osMetricRename
 	osMetricOpenFile
 	osMetricOpen
@@ -114,10 +115,16 @@ func RemoveAll(dirPath string) error {
 	return os.RemoveAll(dirPath)
 }
 
+// Mkdir captures time taken to call os.Mkdir
+func Mkdir(dirPath string, mode os.FileMode) error {
+	defer updateOSMetrics(osMetricMkdir, dirPath)()
+	return os.Mkdir(dirPath, mode)
+}
+
 // MkdirAll captures time taken to call os.MkdirAll
 func MkdirAll(dirPath string, mode os.FileMode) error {
 	defer updateOSMetrics(osMetricMkdirAll, dirPath)()
-	return os.MkdirAll(dirPath, mode)
+	return osMkdirAll(dirPath, mode)
 }
 
 // Rename captures time taken to call os.Rename

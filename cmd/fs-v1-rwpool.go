@@ -187,6 +187,8 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 			return nil, errFileAccessDenied
 		case isSysErrIsDir(err):
 			return nil, errIsNotRegular
+		case isSysErrNotDir(err):
+			return nil, errFileAccessDenied
 		case isSysErrPathNotFound(err):
 			return nil, errFileAccessDenied
 		default:

@@ -199,5 +199,12 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 	}
 
+	if v, ok := objInfo.UserDefined[ReservedMetadataPrefix+"compression"]; ok {
+		if i := strings.LastIndexByte(v, '/'); i >= 0 {
+			v = v[i+1:]
+		}
+		w.Header()[xhttp.MinIOCompressed] = []string{v}
+	}
+
 	return nil
 }

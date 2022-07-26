@@ -71,16 +71,6 @@ const (
 	mgmtForceStop   = "forceStop"
 )
 
-func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string) (us madmin.ServerUpdateStatus, err error) {
-	if err = doUpdate(u, lrTime, sha256Sum, releaseInfo, mode); err != nil {
-		return us, err
-	}
-
-	us.CurrentVersion = Version
-	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
-	return us, nil
-}
-
 // ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
 // ----------
 // updates all minio servers and restarts them gracefully.
@@ -152,7 +142,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime, releaseInfo) {
+	for _, nerr := range globalNotificationSys.DownloadBinary(ctx, u, sha256Sum, releaseInfo) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,
@@ -166,11 +156,37 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	updateStatus, err := updateServer(u, sha256Sum, lrTime, releaseInfo, mode)
+	err = downloadBinary(u, sha256Sum, releaseInfo, mode)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
+	}
+
+	for _, nerr := range globalNotificationSys.CommitBinary(ctx) {
+		if nerr.Err != nil {
+			err := AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    nerr.Err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			}
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	err = commitBinary()
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	updateStatus := madmin.ServerUpdateStatus{
+		CurrentVersion: Version,
+		UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
 	}
 
 	// Marshal API response
@@ -2636,6 +2652,100 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	return nil
 }
 
+type clusterInfo struct {
+	DeploymentID string `json:"deployement_id"`
+	ClusterName  string `json:"cluster_name"`
+	UsedCapacity uint64 `json:"used_capacity"`
+	Info         struct {
+		MinioVersion    string `json:"minio_version"`
+		PoolsCount      int    `json:"pools_count"`
+		ServersCount    int    `json:"servers_count"`
+		DrivesCount     int    `json:"drives_count"`
+		BucketsCount    uint64 `json:"buckets_count"`
+		ObjectsCount    uint64 `json:"objects_count"`
+		TotalDriveSpace uint64 `json:"total_drive_space"`
+		UsedDriveSpace  uint64 `json:"used_drive_space"`
+	} `json:"info"`
+}
+
+func embedFileInZip(zipWriter *zip.Writer, name string, data []byte) error {
+	// Send profiling data to zip as file
+	header, zerr := zip.FileInfoHeader(dummyFileInfo{
+		name:    name,
+		size:    int64(len(data)),
+		mode:    0o600,
+		modTime: UTCNow(),
+		isDir:   false,
+		sys:     nil,
+	})
+	if zerr != nil {
+		return zerr
+	}
+	header.Method = zip.Deflate
+	zwriter, zerr := zipWriter.CreateHeader(header)
+	if zerr != nil {
+		return zerr
+	}
+	_, err := io.Copy(zwriter, bytes.NewReader(data))
+	return err
+}
+
+// appendClusterMetaInfoToZip gets information of the current cluster and embedded
+// it in the passed zipwriter, This is not a critical function and it is allowed
+// to fail with a ten seconds timeout.
+func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return
+	}
+
+	// Add a ten seconds timeout because getting profiling data
+	// is critical for debugging, in contrary to getting cluster info
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	resultCh := make(chan clusterInfo)
+	go func() {
+		ci := clusterInfo{}
+		ci.Info.PoolsCount = len(globalEndpoints)
+		ci.Info.ServersCount = globalEndpoints.NEndpoints()
+		ci.Info.MinioVersion = Version
+
+		si, _ := objectAPI.StorageInfo(ctx)
+
+		ci.Info.DrivesCount = len(si.Disks)
+		for _, disk := range si.Disks {
+			ci.Info.TotalDriveSpace += disk.TotalSpace
+			ci.Info.UsedDriveSpace += disk.UsedSpace
+		}
+
+		dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
+
+		ci.UsedCapacity = dataUsageInfo.ObjectsTotalSize
+		ci.Info.BucketsCount = dataUsageInfo.BucketsCount
+		ci.Info.ObjectsCount = dataUsageInfo.ObjectsTotalCount
+
+		ci.DeploymentID = globalDeploymentID
+		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.ServersCount, ci.Info.DrivesCount, ci.Info.MinioVersion)
+		resultCh <- ci
+	}()
+
+	select {
+	case <-ctx.Done():
+		return
+	case ci := <-resultCh:
+		out, err := json.MarshalIndent(ci, "", "   ")
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return
+		}
+		err = embedFileInZip(zipWriter, "cluster.info", out)
+		if err != nil {
+			logger.LogIf(ctx, err)
+		}
+	}
+}
+
 // getRawDataer provides an interface for getting raw FS files.
 type getRawDataer interface {
 	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error
@@ -2655,7 +2765,8 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	o, ok := newObjectLayerFn().(getRawDataer)
+	objLayer := newObjectLayerFn()
+	o, ok := objLayer.(getRawDataer)
 	if !ok {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
@@ -2778,6 +2889,8 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}); err != nil {
 		logger.LogIf(ctx, err)
 	}
+
+	appendClusterMetaInfoToZip(ctx, zipWriter)
 }
 
 func createHostAnonymizerForFSMode() map[string]string {

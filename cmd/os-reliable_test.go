@@ -18,18 +18,16 @@
 package cmd
 
 import (
-	"os"
 	"testing"
 )
 
 // Tests - mkdirAll()
 func TestOSMkdirAll(t *testing.T) {
 	// create xlStorage test setup
-	_, path, err := newXLStorageTestSetup()
+	_, path, err := newXLStorageTestSetup(t)
 	if err != nil {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer os.RemoveAll(path)
 
 	if err = mkdirAll("", 0o777); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
@@ -47,11 +45,10 @@ func TestOSMkdirAll(t *testing.T) {
 // Tests - renameAll()
 func TestOSRenameAll(t *testing.T) {
 	// create xlStorage test setup
-	_, path, err := newXLStorageTestSetup()
+	_, path, err := newXLStorageTestSetup(t)
 	if err != nil {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer os.RemoveAll(path)
 
 	if err = mkdirAll(pathJoin(path, "testvolume1"), 0o777); err != nil {
 		t.Fatal(err)
