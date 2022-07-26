@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"crypto"
 	"crypto/tls"
 	"encoding/hex"
@@ -505,26 +506,38 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 
 var updateInProgress uint32
 
-func downloadBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string) (err error) {
+// Function to get the reader from an architecture
+func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
+	transport := getUpdateTransport(30 * time.Second)
+	var reader io.ReadCloser
+	if u.Scheme == "https" || u.Scheme == "http" {
+		reader, err = getUpdateReaderFromURL(u, transport, mode)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader, err = getUpdateReaderFromFile(u)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// convert a Reader to bytes
+	binaryFile, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return binaryFile, nil
+}
+
+func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string, reader []byte) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}
 	defer atomic.StoreUint32(&updateInProgress, 0)
 
 	transport := getUpdateTransport(30 * time.Second)
-	var reader io.ReadCloser
-	if u.Scheme == "https" || u.Scheme == "http" {
-		reader, err = getUpdateReaderFromURL(u, transport, mode)
-		if err != nil {
-			return err
-		}
-	} else {
-		reader, err = getUpdateReaderFromFile(u)
-		if err != nil {
-			return err
-		}
-	}
-
 	opts := selfupdate.Options{
 		Hash:     crypto.SHA256,
 		Checksum: sha256Sum,
@@ -552,7 +565,7 @@ func downloadBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode strin
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.PrepareAndCheckBinary(reader, opts); err != nil {
+	if err = selfupdate.PrepareAndCheckBinary(bytes.NewReader(reader), opts); err != nil {
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
 			return AdminError{

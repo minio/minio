@@ -356,8 +356,8 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	return
 }
 
-// DownloadBinary - asks remote peers to download a new binary from the URL and to verify the checksum
-func (sys *NotificationSys) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) []NotificationPeerErr {
+// VerifyBinary - asks remote peers to verify the checksum
+func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, reader []byte) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -365,7 +365,7 @@ func (sys *NotificationSys) DownloadBinary(ctx context.Context, u *url.URL, sha2
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.DownloadBinary(ctx, u, sha256Sum, releaseInfo)
+			return client.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
