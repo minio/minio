@@ -322,6 +322,10 @@ func (es *erasureSingle) DeleteBucket(ctx context.Context, bucket string, opts D
 	defer NSUpdated(bucket, slashSeparator)
 
 	err := es.disk.DeleteVol(ctx, bucket, opts.Force)
+	// Purge the entire bucket metadata entirely.
+	deleteBucketMetadata(ctx, es, bucket)
+	globalBucketMetadataSys.Remove(bucket)
+
 	return toObjectErr(err, bucket)
 }
 

@@ -1647,6 +1647,8 @@ func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err err
 			return nil, errIsNotRegular
 		case osIsPermission(err):
 			return nil, errFileAccessDenied
+		case isSysErrNotDir(err):
+			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
 		case isSysErrTooManyFiles(err):
@@ -2487,8 +2489,10 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 				return errFileAccessDenied
 			}
 			if err = Remove(dstFilePath); err != nil {
-				if isSysErrNotEmpty(err) {
+				if isSysErrNotEmpty(err) || isSysErrNotDir(err) {
 					return errFileAccessDenied
+				} else if isSysErrIO(err) {
+					return errFaultyDisk
 				}
 				return err
 			}
@@ -2496,6 +2500,9 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	}
 
 	if err = renameAll(srcFilePath, dstFilePath); err != nil {
+		if isSysErrNotEmpty(err) || isSysErrNotDir(err) {
+			return errFileAccessDenied
+		}
 		return osErrToFileErr(err)
 	}
 
@@ -2573,7 +2580,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 	defer close(resp)
 
 	volumeDir := pathJoin(s.diskPath, req.Bucket)
-
+	found := 0
 	for _, f := range req.Files {
 		if contextCanceled(ctx) {
 			return ctx.Err()
@@ -2617,10 +2624,14 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			resp <- r
 			continue
 		}
+		found++
 		r.Exists = true
 		r.Data = data
 		r.Modtime = mt
 		resp <- r
+		if req.MaxResults > 0 && found >= req.MaxResults {
+			return nil
+		}
 	}
 	return nil
 }

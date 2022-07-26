@@ -48,6 +48,7 @@ import (
 	"github.com/inconshreveable/mousetrap"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
+	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
@@ -205,28 +206,6 @@ func minioConfigToConsoleFeatures() {
 	if globalLDAPConfig.Enabled {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
-	// if IDP is enabled, set IDP environment variables
-	if globalOpenIDConfig.ProviderCfgs[config.Default] != nil {
-		os.Setenv("CONSOLE_IDP_URL", globalOpenIDConfig.ProviderCfgs[config.Default].URL.String())
-		os.Setenv("CONSOLE_IDP_CLIENT_ID", globalOpenIDConfig.ProviderCfgs[config.Default].ClientID)
-		os.Setenv("CONSOLE_IDP_SECRET", globalOpenIDConfig.ProviderCfgs[config.Default].ClientSecret)
-		os.Setenv("CONSOLE_IDP_HMAC_SALT", globalDeploymentID)
-		os.Setenv("CONSOLE_IDP_HMAC_PASSPHRASE", globalOpenIDConfig.ProviderCfgs[config.Default].ClientID)
-		os.Setenv("CONSOLE_IDP_SCOPES", strings.Join(globalOpenIDConfig.ProviderCfgs[config.Default].DiscoveryDoc.ScopesSupported, ","))
-		if globalOpenIDConfig.ProviderCfgs[config.Default].ClaimUserinfo {
-			os.Setenv("CONSOLE_IDP_USERINFO", config.EnableOn)
-		}
-		if globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURIDynamic {
-			// Enable dynamic redirect-uri's based on incoming 'host' header,
-			// Overrides any other callback URL.
-			os.Setenv("CONSOLE_IDP_CALLBACK_DYNAMIC", config.EnableOn)
-		}
-		if globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURI != "" {
-			os.Setenv("CONSOLE_IDP_CALLBACK", globalOpenIDConfig.ProviderCfgs[config.Default].RedirectURI)
-		} else {
-			os.Setenv("CONSOLE_IDP_CALLBACK", getConsoleEndpoints()[0]+"/oauth_callback")
-		}
-	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 	if globalSubnetConfig.License != "" {
@@ -238,6 +217,29 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.ProxyURL != nil {
 		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
 	}
+}
+
+func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
+	m := make(map[string]consoleoauth2.ProviderConfig, len(globalOpenIDConfig.ProviderCfgs))
+	for name, cfg := range globalOpenIDConfig.ProviderCfgs {
+		callback := getConsoleEndpoints()[0] + "/oauth_callback"
+		if cfg.RedirectURI != "" {
+			callback = cfg.RedirectURI
+		}
+		m[name] = consoleoauth2.ProviderConfig{
+			URL:                     cfg.URL.String(),
+			DisplayName:             cfg.DisplayName,
+			ClientID:                cfg.ClientID,
+			ClientSecret:            cfg.ClientSecret,
+			HMACSalt:                globalDeploymentID,
+			HMACPassphrase:          cfg.ClientID,
+			Scopes:                  strings.Join(cfg.DiscoveryDoc.ScopesSupported, ","),
+			Userinfo:                cfg.ClaimUserinfo,
+			RedirectCallbackDynamic: cfg.RedirectURIDynamic,
+			RedirectCallback:        callback,
+		}
+	}
+	return m
 }
 
 func initConsoleServer() (*restapi.Server, error) {
@@ -262,7 +264,7 @@ func initConsoleServer() (*restapi.Server, error) {
 		return nil, err
 	}
 
-	api := operations.NewConsoleAPI(swaggerSpec)
+	api := operations.NewConsoleAPI(swaggerSpec, buildOpenIDConsoleConfig())
 
 	if !serverDebugLog {
 		// Disable console logging if server debug log is not enabled

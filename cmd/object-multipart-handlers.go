@@ -625,6 +625,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	//
 	// Therefore, we adjust all ETags sent by the client to match what is stored
 	// on the backend.
+	// TODO(klauspost): This should be done while object is finalized instead of fetching the data twice
 	if objectAPI.IsEncryptionSupported() {
 		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
 		if err != nil {
@@ -633,17 +634,17 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 
 		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
-			const MaxParts = 10000
-			listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, MaxParts, ObjectOptions{})
+			// Only fetch parts in between first and last.
+			// We already checked if we have at least one part.
+			start := complMultipartUpload.Parts[0].PartNumber
+			maxParts := complMultipartUpload.Parts[len(complMultipartUpload.Parts)-1].PartNumber - start + 1
+			listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, start-1, maxParts, ObjectOptions{})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
 			sort.Slice(listPartsInfo.Parts, func(i, j int) bool {
 				return listPartsInfo.Parts[i].PartNumber < listPartsInfo.Parts[j].PartNumber
-			})
-			sort.Slice(complMultipartUpload.Parts, func(i, j int) bool {
-				return complMultipartUpload.Parts[i].PartNumber < complMultipartUpload.Parts[j].PartNumber
 			})
 			for i := range listPartsInfo.Parts {
 				for j := range complMultipartUpload.Parts {

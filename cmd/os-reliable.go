@@ -104,7 +104,7 @@ func reliableMkdirAll(dirPath string, mode os.FileMode) (err error) {
 	i := 0
 	for {
 		// Creates all the parent directories, with mode 0777 mkdir honors system umask.
-		if err = MkdirAll(dirPath, mode); err != nil {
+		if err = osMkdirAll(dirPath, mode); err != nil {
 			// Retry only for the first retryable error.
 			if osIsNotExist(err) && i == 0 {
 				i++
@@ -166,6 +166,7 @@ func reliableRename(srcFilePath, dstFilePath string) (err error) {
 	if err = reliableMkdirAll(path.Dir(dstFilePath), 0o777); err != nil {
 		return err
 	}
+
 	i := 0
 	for {
 		// After a successful parent directory create attempt a renameAll.

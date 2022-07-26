@@ -140,6 +140,8 @@ clean: ## cleanup all generated assets
 	@echo "Cleaning up all the generated files"
 	@find . -name '*.test' | xargs rm -fv
 	@find . -name '*~' | xargs rm -fv
+	@find . -name '.#*#' | xargs rm -fv
+	@find . -name '#*#' | xargs rm -fv
 	@rm -rvf minio
 	@rm -rvf build
 	@rm -rvf release
