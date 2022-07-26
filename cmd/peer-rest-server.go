@@ -788,14 +788,19 @@ func (s *peerRESTServer) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var info serverUpdateInfoV2
-	err := gob.NewDecoder(r.Body).Decode(&info)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
+	//var info serverUpdateInfoV2
+	//err := gob.NewDecoder(r.Body).Decode(&info)
+	//if err != nil {
+	//	s.writeErrorResponse(w, err)
+	//	return
+	//}
 
-	if _, err = updateServerV2(info.URL, info.Sha256Sum, info.Time, info.ReleaseInfo, getMinioMode(), info.Reader); err != nil {
+	//if _, err = updateServerV2(info.URL, info.Sha256Sum, info.Time, info.ReleaseInfo, getMinioMode(), info.Reader); err != nil {
+	//	s.writeErrorResponse(w, err)
+	//	return
+	//}
+	// newUpdate, _ := io.ReadAll()
+	if _, err := updateServerV2(r.Body); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

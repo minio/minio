@@ -424,7 +424,7 @@ type serverUpdateInfoV2 struct {
 	Sha256Sum   []byte
 	Time        time.Time
 	ReleaseInfo string
-	Reader      []byte
+	Reader      io.Reader
 }
 
 type serverUpdateInfo struct {
@@ -435,21 +435,21 @@ type serverUpdateInfo struct {
 }
 
 // ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance []byte) error {
+func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, readerEntrance io.Reader) error {
 	values := make(url.Values)
-	var reader bytes.Buffer
+	//var reader bytes.Buffer
 	// gob.Register(http.bodyEOFSignal)
 	// gob: type bytes.Reader has no exported fields
 	// gob: type not registered for interface: http.bodyEOFSignal
-	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfoV2{
-		URL:         u,
-		Sha256Sum:   sha256Sum,
-		Time:        lrTime,
-		ReleaseInfo: releaseInfo,
-		Reader:      readerEntrance,
-	}); err != nil {
-		return err
-	}
+	//if err := gob.NewEncoder(&reader).Encode(serverUpdateInfoV2{
+	//	URL:         u,
+	//	Sha256Sum:   sha256Sum,
+	//	Time:        lrTime,
+	//	ReleaseInfo: releaseInfo,
+	//	Reader:      readerEntrance,
+	//}); err != nil {
+	//	return err
+	//}
 	//reader = serverUpdateInfoV2{
 	//	URL:         u,
 	//	Sha256Sum:   sha256Sum,
@@ -457,7 +457,7 @@ func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sh
 	//	ReleaseInfo: releaseInfo,
 	//	Reader:      readerEntrance,
 	//}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdateV2, values, &reader, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdateV2, values, readerEntrance, -1)
 	if err != nil {
 		return err
 	}

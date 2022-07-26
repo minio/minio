@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"crypto"
 	"crypto/tls"
 	"encoding/hex"
@@ -602,13 +601,13 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 	return nil, reader2
 }
 
-func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string, reader []byte) (err error) {
+func doUpdateWithReader(reader io.Reader) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}
 	defer atomic.StoreUint32(&updateInProgress, 0)
 
-	transport := getUpdateTransport(30 * time.Second)
+	// transport := getUpdateTransport(30 * time.Second)
 	//var reader io.ReadCloser
 	//var reader2 io.ReadCloser
 	//if u.Scheme == "https" || u.Scheme == "http" {
@@ -632,8 +631,8 @@ func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseI
 	// reader.Read(buf)
 
 	opts := selfupdate.Options{
-		Hash:     crypto.SHA256,
-		Checksum: sha256Sum,
+		// Hash: crypto.SHA256,
+		// Checksum: sha256Sum,
 	}
 
 	if err := opts.CheckPermissions(); err != nil {
@@ -644,22 +643,22 @@ func doUpdateWithReader(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseI
 		}
 	}
 
-	minisignPubkey := env.Get(envMinisignPubKey, "")
-	if minisignPubkey != "" {
-		v := selfupdate.NewVerifier()
-		u.Path = path.Dir(u.Path) + slashSeparator + releaseInfo + ".minisig"
-		if err = v.LoadFromURL(u.String(), minisignPubkey, transport); err != nil {
-			return AdminError{
-				Code:       AdminUpdateApplyFailure,
-				Message:    fmt.Sprintf("signature loading failed for %v with %v", u, err),
-				StatusCode: http.StatusInternalServerError,
-			}
-		}
-		opts.Verifier = v
-	}
+	// minisignPubkey := env.Get(envMinisignPubKey, "")
+	//if minisignPubkey != "" {
+	//	v := selfupdate.NewVerifier()
+	//	u.Path = path.Dir(u.Path) + slashSeparator + releaseInfo + ".minisig"
+	//	if err = v.LoadFromURL(u.String(), minisignPubkey, transport); err != nil {
+	//		return AdminError{
+	//			Code:       AdminUpdateApplyFailure,
+	//			Message:    fmt.Sprintf("signature loading failed for %v with %v", u, err),
+	//			StatusCode: http.StatusInternalServerError,
+	//		}
+	//	}
+	//	opts.Verifier = v
+	//}
 
-	cesartesting := bytes.NewReader(reader)
-	if err = selfupdate.Apply(cesartesting, opts); err != nil {
+	//cesartesting := bytes.NewReader(reader)
+	if err = selfupdate.Apply(reader, opts); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,

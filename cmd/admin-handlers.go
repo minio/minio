@@ -77,21 +77,19 @@ func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo st
 		return us, err, readerFromDoUpdate
 	}
 
-	fmt.Println(readerFromDoUpdate)
-
 	us.CurrentVersion = Version
 	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
 	return us, nil, readerFromDoUpdate
 }
 
-func updateServerV2(u *url.URL, sha256Sum []byte, lrTime time.Time, releaseInfo string, mode string, readerParam []byte) (us madmin.ServerUpdateStatus, err error) {
-	err = doUpdateWithReader(u, lrTime, sha256Sum, releaseInfo, mode, readerParam)
+func updateServerV2(readerParam io.Reader) (us madmin.ServerUpdateStatus, err error) {
+	err = doUpdateWithReader(readerParam)
 	if err != nil {
 		return us, err
 	}
 
 	us.CurrentVersion = Version
-	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
+	// us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
 	return us, nil
 }
 
@@ -170,10 +168,22 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	// gob.Register(map[string]interface{}{})
 
 	// I need to take out the bugger from readerReturn so we can passdown, looking into the other repo..
-	var newBytes []byte
-	newBytes, _ = ioutil.ReadAll(readerReturn)
+	//var newBytes []byte
+	//newBytes, err = ioutil.ReadAll(readerReturn)
+	//if err != nil {
+	//	logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+	//	writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	//	return
+	//}
 
-	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, newBytes) {
+	// 0. GET ALL BINARIES FROM ALL ARCHITECTURES.
+	// 1. HERE SEND ALL BINARIES FROM ALL ARCHITECUTERES.
+	// 2. IN ASUS SAVE ALL BINARIES ON DISK FOR LATER USE
+	// 3. HERE SEND SIGNAL TO UPDATE FROM EXISTING BINARIES
+	// 4. IN ASUS USE/APPLY THE CORRECT BINARY AND UPDATE/RESTART SERVERS
+	// 5. ALL SERVERS SHOULD INITIALIZE PROPERLY AND COMMUNICATE WITH NEW VERSION
+
+	for _, nerr := range globalNotificationSys.ServerUpdateV2(ctx, u, sha256Sum, lrTime, releaseInfo, readerReturn) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,
