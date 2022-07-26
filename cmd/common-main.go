@@ -264,7 +264,7 @@ func initConsoleServer() (*restapi.Server, error) {
 		return nil, err
 	}
 
-	api := operations.NewConsoleAPI(swaggerSpec, buildOpenIDConsoleConfig())
+	api := operations.NewConsoleAPI(swaggerSpec)
 
 	if !serverDebugLog {
 		// Disable console logging if server debug log is not enabled
@@ -273,6 +273,12 @@ func initConsoleServer() (*restapi.Server, error) {
 		restapi.LogInfo = noLog
 		restapi.LogError = noLog
 		api.Logger = noLog
+	}
+
+	// Pass in console application config. This needs to happen before the
+	// ConfigureAPI() call.
+	restapi.GlobalMinIOConfig = restapi.MinIOConfig{
+		OpenIDProviders: buildOpenIDConsoleConfig(),
 	}
 
 	server := restapi.NewServer(api)
