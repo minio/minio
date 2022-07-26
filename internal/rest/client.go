@@ -110,11 +110,6 @@ type Client struct {
 	newAuthToken func(audience string) string
 }
 
-// URL query separator constants
-const (
-	querySep = "?"
-)
-
 type restError string
 
 func (e restError) Error() string {

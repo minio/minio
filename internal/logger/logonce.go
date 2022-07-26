@@ -65,8 +65,13 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKi
 	l.Lock()
 	shouldLog := true
 	prevErr, ok := l.IDMap[id]
-	if ok && prevErr.Error() == err.Error() {
-		shouldLog = false
+	if ok {
+		err1 := errors.Unwrap(prevErr)
+		err2 := errors.Unwrap(err)
+		if err1 != nil && err2 != nil {
+			// if errors are equal do not log.
+			shouldLog = err1.Error() != err2.Error()
+		}
 	} else {
 		l.IDMap[id] = err
 	}
