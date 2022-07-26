@@ -783,10 +783,11 @@ func (s *peerRESTServer) ServerUpdateHandlerV2(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if r.ContentLength < 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
+	r.ContentLength = 0 // to get all binary size
+	//if r.ContentLength < 0 {
+	//	s.writeErrorResponse(w, errInvalidArgument)
+	//	return
+	//}
 
 	//var info serverUpdateInfoV2
 	//err := gob.NewDecoder(r.Body).Decode(&info)

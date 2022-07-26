@@ -101,10 +101,10 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
-	if objectAPI == nil {
-		return
-	}
+	//objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
+	//if objectAPI == nil {
+	//	return
+	//}
 
 	if globalInplaceUpdateDisabled {
 		// if MINIO_UPDATE=off - inplace update is disabled, mostly in containers.
