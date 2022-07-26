@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/minio/madmin-go"
@@ -50,6 +51,8 @@ const (
 	Default = madmin.Default
 	Enable  = madmin.EnableKey
 	Comment = madmin.CommentKey
+
+	EnvSeparator = "="
 
 	// Enable values
 	EnableOn  = madmin.EnableOn
@@ -1020,7 +1023,8 @@ func (c Config) CheckValidKeys(subSys string, deprecatedKeys []string) error {
 // GetAvailableTargets - returns a list of targets configured for the given
 // subsystem (whether they are enabled or not). A target could be configured via
 // environment variables or via the configuration store. The default target is
-// `_` and is always returned.
+// `_` and is always returned. The result is sorted so that the default target
+// is the first one and the remaining entries are sorted in ascending order.
 func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 	if SubSystemsSingleTargets.Contains(subSys) {
 		return []string{Default}, nil
@@ -1032,11 +1036,11 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 	}
 
 	kvsMap := c[subSys]
-	s := set.NewStringSet()
+	seen := set.NewStringSet()
 
 	// Add all targets that are configured in the config store.
 	for k := range kvsMap {
-		s.Add(k)
+		seen.Add(k)
 	}
 
 	// Add targets that are configured via environment variables.
@@ -1046,12 +1050,17 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 		for _, k := range envsWithPrefix {
 			tgtName := strings.TrimPrefix(k, envVarPrefix)
 			if tgtName != "" {
-				s.Add(tgtName)
+				seen.Add(tgtName)
 			}
 		}
 	}
 
-	return s.ToSlice(), nil
+	seen.Remove(Default)
+	targets := seen.ToSlice()
+	sort.Strings(targets)
+	targets = append([]string{Default}, targets...)
+
+	return targets, nil
 }
 
 func getEnvVarName(subSys, target, param string) string {
@@ -1059,7 +1068,8 @@ func getEnvVarName(subSys, target, param string) string {
 		return fmt.Sprintf("%s%s%s%s", EnvPrefix, strings.ToUpper(subSys), Default, strings.ToUpper(param))
 	}
 
-	return fmt.Sprintf("%s%s%s%s%s%s", EnvPrefix, strings.ToUpper(subSys), Default, strings.ToUpper(param), Default, target)
+	return fmt.Sprintf("%s%s%s%s%s%s", EnvPrefix, strings.ToUpper(subSys), Default, strings.ToUpper(param),
+		Default, target)
 }
 
 var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys)
@@ -1102,7 +1112,7 @@ func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value strin
 
 	defValue, isFound := defKVS.Lookup(cfgParam)
 	// Comments usually are absent from `defKVS`, so we handle it specially.
-	if cfgParam == Comment {
+	if !isFound && cfgParam == Comment {
 		defValue, isFound = "", true
 	}
 	if !isFound {
@@ -1189,4 +1199,108 @@ func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) 
 	}
 
 	return r, nil
+}
+
+func (c Config) getTargetKVS(subSys, target string) KVS {
+	store, ok := c[subSys]
+	if !ok {
+		return nil
+	}
+	return store[target]
+}
+
+// EnvPair represents an environment variable and its value.
+type EnvPair struct {
+	Name, Value string
+}
+
+// SubsysInfo holds config info for a subsystem target.
+type SubsysInfo struct {
+	SubSys, Target string
+	Params         KVS
+
+	// map of config parameter name to EnvPair.
+	EnvMap map[string]EnvPair
+}
+
+// GetSubsysInfo returns `SubsysInfo`s for all targets for the subsystem.
+func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
+	// Check if config param requested is valid.
+	defKVS1, ok := DefaultKVS[subSys]
+	if !ok {
+		return nil, fmt.Errorf("unknown subsystem: %s", subSys)
+	}
+
+	targets, err := c.GetAvailableTargets(subSys)
+	if err != nil {
+		return nil, err
+	}
+
+	// The `Comment` configuration variable is optional but is available to be
+	// set for all sub-systems. It is not present in the `DefaultKVS` map's
+	// values. To enable fetching a configured comment value from the
+	// environment we add it to the list of default keys for the subsystem.
+	defKVS := make([]KV, len(defKVS1), len(defKVS1)+1)
+	copy(defKVS, defKVS1)
+	defKVS = append(defKVS, KV{Key: Comment})
+
+	r := make([]SubsysInfo, 0, len(targets))
+	for _, target := range targets {
+		kvs := c.getTargetKVS(subSys, target)
+		cs := SubsysInfo{
+			SubSys: subSys,
+			Target: target,
+			Params: kvs,
+			EnvMap: make(map[string]EnvPair),
+		}
+
+		// Add all env vars that are set.
+		for _, kv := range defKVS {
+			envName := getEnvVarName(subSys, target, kv.Key)
+			envPair := EnvPair{
+				Name:  envName,
+				Value: env.Get(envName, ""),
+			}
+			if envPair.Value != "" {
+				cs.EnvMap[kv.Key] = envPair
+			}
+		}
+
+		r = append(r, cs)
+	}
+
+	return r, nil
+}
+
+// AddEnvString adds env vars to the given string builder.
+func (cs *SubsysInfo) AddEnvString(b *strings.Builder) {
+	for _, v := range cs.Params {
+		if ep, ok := cs.EnvMap[v.Key]; ok {
+			b.WriteString(KvComment)
+			b.WriteString(KvSpaceSeparator)
+			b.WriteString(ep.Name)
+			b.WriteString(EnvSeparator)
+			b.WriteString(ep.Value)
+			b.WriteString(KvNewline)
+		}
+	}
+}
+
+// AddString adds the string representation of the configuration to the given
+// builder. When off is true, adds a comment character before the config system
+// output.
+func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
+	cs.AddEnvString(b)
+	if off {
+		b.WriteString(KvComment)
+		b.WriteString(KvSpaceSeparator)
+	}
+	b.WriteString(cs.SubSys)
+	if cs.Target != Default {
+		b.WriteString(SubSystemSeparator)
+		b.WriteString(cs.Target)
+	}
+	b.WriteString(KvSpaceSeparator)
+	b.WriteString(cs.Params.String())
+	b.WriteString(KvNewline)
 }

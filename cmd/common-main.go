@@ -508,8 +508,7 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 			Skip: true,
 		}, nil
 	}
-	const envSeparator = "="
-	envTokens := strings.SplitN(strings.TrimSpace(strings.TrimPrefix(envEntry, "export")), envSeparator, 2)
+	envTokens := strings.SplitN(strings.TrimSpace(strings.TrimPrefix(envEntry, "export")), config.EnvSeparator, 2)
 	if len(envTokens) != 2 {
 		return envKV{}, fmt.Errorf("envEntry malformed; %s, expected to be of form 'KEY=value'", envEntry)
 	}
