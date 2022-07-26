@@ -457,7 +457,7 @@ func (client *peerRESTClient) ServerUpdateV2(ctx context.Context, u *url.URL, sh
 	//	ReleaseInfo: releaseInfo,
 	//	Reader:      readerEntrance,
 	//}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdateV2, values, readerEntrance, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdateV2, values, readerEntrance, 0)
 	if err != nil {
 		return err
 	}
