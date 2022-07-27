@@ -533,9 +533,11 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
 
 	// Data blocks can vary per pool, but parity is same.
-	for _, setDriveCount := range z.SetDriveCounts() {
+	for i, setDriveCount := range z.SetDriveCounts() {
 		b.StandardSCData = append(b.StandardSCData, setDriveCount-scParity)
 		b.RRSCData = append(b.RRSCData, setDriveCount-rrSCParity)
+		b.DrivesPerSet = append(b.DrivesPerSet, setDriveCount)
+		b.TotalSets = append(b.TotalSets, z.serverPools[i].setCount)
 	}
 
 	b.StandardSCParity = scParity
