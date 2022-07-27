@@ -3092,6 +3092,33 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 	return nil
 }
 
+// Health - returns current status of the object layer health, for single drive
+// its as simple as returning healthy as long as drive is accessible.
+func (es *erasureSingle) Health(ctx context.Context, opts HealthOptions) HealthResult {
+	_, err := es.disk.DiskInfo(ctx)
+	if err != nil {
+		return HealthResult{}
+	}
+	if opts.Maintenance {
+		// Single drive cannot be put under maintenance.
+		return HealthResult{
+			Healthy:     false,
+			WriteQuorum: 1,
+		}
+	}
+	return HealthResult{
+		Healthy:     true,
+		WriteQuorum: 1,
+	}
+}
+
+// ReadHealth - returns current status of the object layer health for reads,
+// for single drive its as simple as returning healthy as long as drive is accessible.
+func (es *erasureSingle) ReadHealth(ctx context.Context) bool {
+	res := es.Health(ctx, HealthOptions{})
+	return res.Healthy
+}
+
 // nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (es *erasureSingle) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
