@@ -23,7 +23,7 @@ import (
 	"math"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
@@ -328,6 +328,9 @@ type ListPartsInfo struct {
 
 	// Any metadata set during InitMultipartUpload, including encryption headers.
 	UserDefined map[string]string
+
+	// ChecksumAlgorithm if set
+	ChecksumAlgorithm string
 }
 
 // Lookup - returns if uploadID is valid
@@ -504,6 +507,12 @@ type PartInfo struct {
 
 	// Decompressed Size.
 	ActualSize int64
+
+	// Checksum values
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // CompletePart - represents the part that was completed, this is sent by the client
@@ -515,6 +524,12 @@ type CompletePart struct {
 
 	// Entity tag returned when the part was uploaded.
 	ETag string
+
+	// Checksum values. Optional.
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // CompletedParts - is a collection satisfying sort.Interface.

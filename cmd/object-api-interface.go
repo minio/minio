@@ -26,6 +26,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/hash"
 	"github.com/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -58,6 +59,8 @@ type ObjectOptions struct {
 	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
+
+	WantMultipartChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to CompleteMultipartUpload.
 
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.

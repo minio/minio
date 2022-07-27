@@ -265,6 +265,19 @@ func (r *Reader) SHA256HexString() string {
 	return hex.EncodeToString(r.contentSHA256)
 }
 
+// ContentCRCType returns the content checksum type.
+func (r *Reader) ContentCRCType() ChecksumType {
+	return r.contentHash.Type
+}
+
+// ContentCRC returns the content crc if set.
+func (r *Reader) ContentCRC() map[string]string {
+	if r.contentHash.Type == ChecksumNone || !r.contentHash.Valid() {
+		return nil
+	}
+	return map[string]string{r.contentHash.Type.String(): r.contentHash.Encoded}
+}
+
 var _ io.Closer = (*Reader)(nil) // compiler check
 
 // Close and release resources.

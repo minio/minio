@@ -32,6 +32,7 @@ import (
 
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -352,7 +353,6 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	if parityOrig != parityDrives {
 		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
-
 	dataDrives := len(onlineDisks) - parityDrives
 
 	// we now know the number of blocks this object needs for data and parity.
@@ -590,9 +590,18 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Pick one from the first valid metadata.
 	fi, err := pickValidFileInfo(pctx, partsMetadata, modTime, writeQuorum)
 	if err != nil {
-		return pi, err
+		return pi, toObjectErr(err)
 	}
 
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		if r.ContentCRCType().String() != cs {
+			return pi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum missing"),
+			}
+		}
+	}
 	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
 
 	// Need a unique name for the part being written in minioMetaBucket to
@@ -703,6 +712,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		ActualSize: data.ActualSize(),
 		ModTime:    UTCNow(),
 		Index:      index,
+		CRC:        r.ContentCRC(),
 	}
 
 	partMsg, err := part.MarshalMsg(nil)
@@ -718,11 +728,15 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Return success.
 	return PartInfo{
-		PartNumber:   part.Number,
-		ETag:         part.ETag,
-		LastModified: part.ModTime,
-		Size:         part.Size,
-		ActualSize:   part.ActualSize,
+		PartNumber:     part.Number,
+		ETag:           part.ETag,
+		LastModified:   part.ModTime,
+		Size:           part.Size,
+		ActualSize:     part.ActualSize,
+		ChecksumCRC32:  part.CRC["CRC32"],
+		ChecksumCRC32C: part.CRC["CRC32C"],
+		ChecksumSHA1:   part.CRC["SHA1"],
+		ChecksumSHA256: part.CRC["SHA256"],
 	}, nil
 }
 
@@ -872,6 +886,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
 	result.UserDefined = cloneMSS(fi.Metadata)
+	result.ChecksumAlgorithm = fi.Metadata[hash.MinIOMultipartChecksum]
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(partInfoFiles) == 0 || maxParts == 0 {
@@ -906,11 +921,15 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.Parts = make([]PartInfo, 0, len(parts))
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
-			PartNumber:   part.Number,
-			ETag:         part.ETag,
-			LastModified: part.ModTime,
-			ActualSize:   part.ActualSize,
-			Size:         part.Size,
+			PartNumber:     part.Number,
+			ETag:           part.ETag,
+			LastModified:   part.ModTime,
+			ActualSize:     part.ActualSize,
+			Size:           part.Size,
+			ChecksumCRC32:  part.CRC["CRC32"],
+			ChecksumCRC32C: part.CRC["CRC32C"],
+			ChecksumSHA1:   part.CRC["SHA1"],
+			ChecksumSHA256: part.CRC["SHA256"],
 		})
 		if len(result.Parts) >= maxParts {
 			break
@@ -1066,6 +1085,29 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				GotETag:    part.ETag,
 			}
 			return oi, invp
+		}
+		check := func(err error, given string, t hash.ChecksumType) error {
+			if err != nil {
+				return err
+			}
+			if given == "" {
+				return nil
+			}
+			if currentFI.Parts[partIdx].CRC[t.String()] != given {
+				return InvalidPart{
+					PartNumber: part.PartNumber,
+					ExpETag:    currentFI.Parts[partIdx].CRC[t.String()],
+					GotETag:    given,
+				}
+			}
+			return nil
+		}
+		if err := check(check(check(check(nil,
+			part.ChecksumCRC32C, hash.ChecksumCRC32C),
+			part.ChecksumCRC32, hash.ChecksumCRC32),
+			part.ChecksumSHA1, hash.ChecksumSHA1),
+			part.ChecksumSHA256, hash.ChecksumSHA256); err != nil {
+			return oi, err
 		}
 
 		// All parts except the last part has to be at least 5MB.

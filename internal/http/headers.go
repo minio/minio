@@ -146,7 +146,7 @@ const (
 	MinIOServerStatus = "x-minio-server-status"
 
 	// Content Checksums
-	AmzChecksumAlgo   = "x-amz-sdk-checksum-algorithm"
+	AmzChecksumAlgo   = "x-amz-checksum-algorithm"
 	AmzChecksumCRC32  = "x-amz-checksum-crc32"
 	AmzChecksumCRC32C = "x-amz-checksum-crc32c"
 	AmzChecksumSHA1   = "x-amz-checksum-sha1"

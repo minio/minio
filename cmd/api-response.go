@@ -183,6 +183,7 @@ type ListPartsResponse struct {
 	MaxParts             int
 	IsTruncated          bool
 
+	ChecksumAlgorithm string
 	// List of parts.
 	Parts []Part `xml:"Part"`
 }
@@ -350,6 +351,11 @@ type CompleteMultipartUploadResponse struct {
 	Bucket   string
 	Key      string
 	ETag     string
+
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // DeleteError structure.
@@ -642,14 +648,16 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 }
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
-func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) CompleteMultipartUploadResponse {
-	return CompleteMultipartUploadResponse{
+func generateCompleteMultpartUploadResponse(bucket, key, location string, oi ObjectInfo) CompleteMultipartUploadResponse {
+	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
 		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
-		ETag: "\"" + etag + "\"",
+		ETag: "\"" + oi.ETag + "\"",
 	}
+	// TODO: Add checksums...
+	return c
 }
 
 // generates ListPartsResponse from ListPartsInfo.
@@ -674,6 +682,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker
 	listPartsResponse.IsTruncated = partsInfo.IsTruncated
 	listPartsResponse.NextPartNumberMarker = partsInfo.NextPartNumberMarker
+	listPartsResponse.ChecksumAlgorithm = partsInfo.ChecksumAlgorithm
 
 	listPartsResponse.Parts = make([]Part, len(partsInfo.Parts))
 	for index, part := range partsInfo.Parts {

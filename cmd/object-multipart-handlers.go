@@ -155,6 +155,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 		metadata[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 	}
+	checksumType := hash.NewChecksumType(r.Header.Get(xhttp.AmzChecksumAlgo))
+	if checksumType.Is(hash.ChecksumInvalid) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)
+		return
+	} else if checksumType.Set() {
+		metadata[hash.MinIOMultipartChecksum] = checksumType.String()
+	}
+
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
 	for k, v := range encMetadata {
@@ -174,6 +182,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
 	newMultipartUpload := objectAPI.NewMultipartUpload
 	if api.CacheAPI() != nil {
 		newMultipartUpload = api.CacheAPI().NewMultipartUpload
@@ -675,7 +684,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo)
 	var encodedSuccessResponse []byte
 	if !headerWritten {
 		encodedSuccessResponse = encodeResponse(response)

@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -227,6 +228,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			}
 		}
 	}
+
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {
@@ -335,6 +337,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	opts.ReplicationSourceLegalholdTimestamp = lholdtimestmp
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
 	opts.ReplicationSourceTaggingTimestamp = taggingtimestmp
+
 	return opts, nil
 }
 
@@ -383,6 +386,14 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 				Object: object,
 				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
 			}
+		}
+	}
+	opts.WantMultipartChecksum, err = hash.GetContentChecksum(r)
+	if err != nil {
+		return opts, InvalidArgument{
+			Bucket: bucket,
+			Object: object,
+			Err:    fmt.Errorf("invalid/unknown checksum sent: %v", err),
 		}
 	}
 	opts.MTime = mtime
