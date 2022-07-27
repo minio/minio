@@ -137,6 +137,7 @@ func removeEmptyPort(host string) string {
 	return host
 }
 
+// Copied from http.NewRequest but implemented to ensure we re-use `url.URL` instance.
 func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {

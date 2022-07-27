@@ -55,14 +55,25 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string
 	}
 }
 
+const unwrapErrsDepth = 3
+
 // unwrapErrs upto the point where errors.Unwrap(err) returns nil
 func unwrapErrs(err error) (leafErr error) {
 	uerr := errors.Unwrap(err)
+	depth := 1
 	for uerr != nil {
 		// Save the current `uerr`
 		leafErr = uerr
 		// continue to look for leaf errors underneath
 		uerr = errors.Unwrap(leafErr)
+		depth++
+		if depth == unwrapErrsDepth {
+			// If we have reached enough depth we
+			// do not further recurse down, this
+			// is done to avoid any unnecessary
+			// latencies this might bring.
+			break
+		}
 	}
 	return leafErr
 }
