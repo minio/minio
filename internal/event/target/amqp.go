@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 	"github.com/streadway/amqp"
 )
@@ -115,7 +116,7 @@ type AMQPTarget struct {
 	conn       *amqp.Connection
 	connMutex  sync.Mutex
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns TargetID.
@@ -262,10 +263,7 @@ func (target *AMQPTarget) Save(eventData event.Event) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		cErr := ch.Close()
-		target.loggerOnce(context.Background(), cErr, target.ID())
-	}()
+	defer ch.Close()
 
 	return target.send(eventData, ch, confirms)
 }
@@ -276,10 +274,7 @@ func (target *AMQPTarget) Send(eventKey string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		cErr := ch.Close()
-		target.loggerOnce(context.Background(), cErr, target.ID())
-	}()
+	defer ch.Close()
 
 	eventData, eErr := target.store.Get(eventKey)
 	if eErr != nil {
@@ -308,7 +303,7 @@ func (target *AMQPTarget) Close() error {
 }
 
 // NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}), test bool) (*AMQPTarget, error) {
+func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*AMQPTarget, error) {
 	var conn *amqp.Connection
 	var err error
 
@@ -324,7 +319,7 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce 
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID())
+			target.loggerOnce(context.Background(), oErr, target.ID().String())
 			return target, oErr
 		}
 		target.store = store
@@ -333,7 +328,7 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce 
 	conn, err = amqp.Dial(args.URL.String())
 	if err != nil {
 		if store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}

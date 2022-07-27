@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
 	xnet "github.com/minio/pkg/net"
 )
@@ -94,7 +95,7 @@ type WebhookTarget struct {
 	args       WebhookArgs
 	httpClient *http.Client
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -232,7 +233,7 @@ func (target *WebhookTarget) Close() error {
 }
 
 // NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), transport *http.Transport, test bool) (*WebhookTarget, error) {
+func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce logger.LogOnce, transport *http.Transport, test bool) (*WebhookTarget, error) {
 	var store Store
 	target := &WebhookTarget{
 		id:         event.TargetID{ID: id, Name: "webhook"},
@@ -254,7 +255,7 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := store.Open(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 		target.store = store
@@ -263,7 +264,7 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 	_, err := target.IsActive()
 	if err != nil {
 		if target.store == nil || err != errNotConnected {
-			target.loggerOnce(ctx, err, target.ID())
+			target.loggerOnce(ctx, err, target.ID().String())
 			return target, err
 		}
 	}

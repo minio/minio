@@ -996,7 +996,7 @@ func getMinioProcMetrics() *MetricsGroup {
 		metrics = make([]Metric, 0, 20)
 		p, err := procfs.Self()
 		if err != nil {
-			logger.LogOnceIf(ctx, err, nodeMetricNamespace)
+			logger.LogOnceIf(ctx, err, string(nodeMetricNamespace))
 			return
 		}
 

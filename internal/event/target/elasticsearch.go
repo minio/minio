@@ -36,6 +36,7 @@ import (
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 	"github.com/pkg/errors"
 )
@@ -156,7 +157,7 @@ type ElasticsearchTarget struct {
 	args       ElasticsearchArgs
 	client     esClient
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -320,7 +321,7 @@ func (target *ElasticsearchTarget) checkAndInitClient(ctx context.Context) error
 }
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
-func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*ElasticsearchTarget, error) {
+func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*ElasticsearchTarget, error) {
 	target := &ElasticsearchTarget{
 		id:         event.TargetID{ID: id, Name: "elasticsearch"},
 		args:       args,
@@ -331,7 +332,7 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
 		target.store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := target.store.Open(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}
@@ -342,7 +343,7 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 	err := target.checkAndInitClient(ctx)
 	if err != nil {
 		if target.store == nil || err != errNotConnected {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}
@@ -492,11 +493,10 @@ func (c *esClientV7) removeEntry(ctx context.Context, index string, key string) 
 			return err
 		}
 		defer res.Body.Close()
+		defer io.Copy(ioutil.Discard, res.Body)
 		if res.IsError() {
-			err := fmt.Errorf("Delete err: %s", res.String())
-			return err
+			return fmt.Errorf("Delete err: %s", res.String())
 		}
-		io.Copy(ioutil.Discard, res.Body)
 		return nil
 	}
 	return err
@@ -522,11 +522,11 @@ func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, 
 		return err
 	}
 	defer res.Body.Close()
+	defer io.Copy(ioutil.Discard, res.Body)
 	if res.IsError() {
-		err := fmt.Errorf("Update err: %s", res.String())
-		return err
+		return fmt.Errorf("Update err: %s", res.String())
 	}
-	io.Copy(ioutil.Discard, res.Body)
+
 	return nil
 }
 
@@ -549,11 +549,10 @@ func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event
 		return err
 	}
 	defer res.Body.Close()
+	defer io.Copy(ioutil.Discard, res.Body)
 	if res.IsError() {
-		err := fmt.Errorf("Add err: %s", res.String())
-		return err
+		return fmt.Errorf("Add err: %s", res.String())
 	}
-	io.Copy(ioutil.Discard, res.Body)
 	return nil
 }
 
