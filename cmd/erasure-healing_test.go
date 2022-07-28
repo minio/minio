@@ -236,7 +236,7 @@ func TestHealing(t *testing.T) {
 	er := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
+	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	object := getRandomObjectName()
 	data := bytes.Repeat([]byte("a"), 128*1024)
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -554,7 +554,7 @@ func TestHealCorrectQuorum(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -685,7 +685,7 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -861,7 +861,7 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1004,7 +1004,7 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1161,7 +1161,7 @@ func TestHealObjectErasure(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1258,7 +1258,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	object := "empty-dir/"
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+	err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1359,7 +1359,7 @@ func TestHealLastDataShard(t *testing.T) {
 			}
 			var opts ObjectOptions
 
-			err = obj.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+			err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				t.Fatalf("Failed to make a bucket - %v", err)
 			}

@@ -822,7 +822,7 @@ func (h *healSequence) healBuckets(objAPI ObjectLayer, bucketsOnly bool) error {
 		return h.healBucket(objAPI, h.bucket, bucketsOnly)
 	}
 
-	buckets, err := objAPI.ListBuckets(h.ctx)
+	buckets, err := objAPI.ListBuckets(h.ctx, BucketOptions{})
 	if err != nil {
 		return errFnHealFromAPIErr(h.ctx, err)
 	}

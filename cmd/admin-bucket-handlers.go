@@ -69,7 +69,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
 
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -131,7 +131,7 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
 
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -173,7 +173,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -301,7 +301,7 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 	}
 	if bucket != "" {
 		// Check if bucket exists.
-		if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
@@ -340,7 +340,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -390,13 +390,13 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 	)
 	if bucket != "" {
 		// Check if bucket exists.
-		if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
 		buckets = append(buckets, BucketInfo{Name: bucket})
 	} else {
-		buckets, err = objectAPI.ListBuckets(ctx)
+		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{})
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -684,7 +684,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				opts := BucketOptions{
+				opts := MakeBucketOptions{
 					LockEnabled: config.ObjectLockEnabled == "Enabled",
 				}
 				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
@@ -750,7 +750,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				return
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				err = objectAPI.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+				err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
@@ -817,7 +817,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		}
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+			err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
 					writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
@@ -1089,7 +1089,7 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

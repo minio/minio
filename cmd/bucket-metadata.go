@@ -105,10 +105,8 @@ type BucketMetadata struct {
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
 func newBucketMetadata(name string) BucketMetadata {
-	now := UTCNow()
 	return BucketMetadata{
-		Name:    name,
-		Created: now,
+		Name: name,
 		notificationConfig: &event.Config{
 			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
 		},
@@ -118,6 +116,17 @@ func newBucketMetadata(name string) BucketMetadata {
 		},
 		bucketTargetConfig:     &madmin.BucketTargets{},
 		bucketTargetConfigMeta: make(map[string]string),
+	}
+}
+
+// SetCreatedAt preserves the CreatedAt time for bucket across sites in site replication. It defaults to
+// creation time of bucket on this cluster in all other cases.
+func (b *BucketMetadata) SetCreatedAt(createdAt time.Time) {
+	if b.Created.IsZero() {
+		b.Created = UTCNow()
+	}
+	if !createdAt.IsZero() {
+		b.Created = createdAt.UTC()
 	}
 }
 
@@ -160,17 +169,19 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	if err != nil && !errors.Is(err, errConfigNotFound) {
 		return b, err
 	}
-
+	if err == nil {
+		b.defaultTimestamps()
+	}
 	// Old bucket without bucket metadata. Hence we migrate existing settings.
 	if err := b.convertLegacyConfigs(ctx, objectAPI); err != nil {
 		return b, err
 	}
 
 	// migrate unencrypted remote targets
-	if err = b.migrateTargetConfig(ctx, objectAPI); err != nil {
+	if err := b.migrateTargetConfig(ctx, objectAPI); err != nil {
 		return b, err
 	}
-	b.defaultTimestamps()
+
 	return b, nil
 }
 
@@ -345,6 +356,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 			b.BucketTargetsConfigJSON = configData
 		}
 	}
+	b.defaultTimestamps()
 
 	if err := b.Save(ctx, objectAPI); err != nil {
 		return err

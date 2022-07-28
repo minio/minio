@@ -46,18 +46,9 @@ func TestLockFail(t *testing.T) {
 
 // Tests lock directory fail.
 func TestLockDirFail(t *testing.T) {
-	d, err := ioutil.TempDir("", "lockDir")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		err = os.Remove(d)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
+	d := t.TempDir()
 
-	_, err = LockedOpenFile(d, os.O_APPEND, 0o600)
+	_, err := LockedOpenFile(d, os.O_APPEND, 0o600)
 	if err == nil {
 		t.Fatal("Should fail here")
 	}

@@ -37,11 +37,8 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 		/dev/2 /path/to/1/2 type2 flags,1,2=3 2 2
                 /dev/3 /path/to/1.1 type3 falgs,1,2=3 3 3
 		`
-	dir, err := ioutil.TempDir("", "TestReadProcmountInfos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	var err error
+	dir := t.TempDir()
 	mountsPath := filepath.Join(dir, "mounts")
 	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
 		t.Fatal(err)
@@ -89,11 +86,8 @@ func TestCrossDeviceMount(t *testing.T) {
 		/dev/2 /path/to/1/2 type2 flags,1,2=3 2 2
                 /dev/3 /path/to/1.1 type3 falgs,1,2=3 3 3
 		`
-	dir, err := ioutil.TempDir("", "TestReadProcmountInfos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	var err error
+	dir := t.TempDir()
 	mountsPath := filepath.Join(dir, "mounts")
 	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
 		t.Fatal(err)
@@ -140,11 +134,8 @@ func TestReadProcmountInfos(t *testing.T) {
 		/dev/1    /path/to/1   type1	flags 1 1
 		/dev/2 /path/to/2 type2 flags,1,2=3 2 2
 		`
-	dir, err := ioutil.TempDir("", "TestReadProcmountInfos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	var err error
+	dir := t.TempDir()
 
 	mountsPath := filepath.Join(dir, "mounts")
 	if err = ioutil.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {

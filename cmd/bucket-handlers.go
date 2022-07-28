@@ -201,7 +201,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 
 	getBucketInfo := objectAPI.GetBucketInfo
 
-	if _, err := getBucketInfo(ctx, bucket); err != nil {
+	if _, err := getBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -332,7 +332,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	} else {
 		// Invoke the list buckets.
 		var err error
-		bucketsInfo, err = listBuckets(ctx)
+		bucketsInfo, err = listBuckets(ctx, BucketOptions{})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -447,7 +447,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
 
 	// Before proceeding validate if bucket exists.
-	_, err := objectAPI.GetBucketInfo(ctx, bucket)
+	_, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -746,7 +746,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	opts := BucketOptions{
+	opts := MakeBucketOptions{
 		Location:    location,
 		LockEnabled: objectLockEnabled,
 		ForceCreate: forceCreate,
@@ -765,7 +765,11 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
-					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{Force: false, NoRecreate: true})
+					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
+						Force:      false,
+						NoRecreate: true,
+						SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
+					})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
@@ -1165,7 +1169,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1228,7 +1232,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 	getBucketInfo := objectAPI.GetBucketInfo
 
-	if _, err := getBucketInfo(ctx, bucket); err != nil {
+	if _, err := getBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -1305,7 +1309,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	deleteBucket := objectAPI.DeleteBucket
 
 	// Attempt to delete bucket.
-	if err := deleteBucket(ctx, bucket, DeleteBucketOptions{Force: forceDelete}); err != nil {
+	if err := deleteBucket(ctx, bucket, DeleteBucketOptions{
+		Force:      forceDelete,
+		SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
+	}); err != nil {
 		apiErr := toAPIError(ctx, err)
 		if _, ok := err.(BucketNotEmpty); ok {
 			if globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket) {
@@ -1472,7 +1479,7 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

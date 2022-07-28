@@ -80,7 +80,7 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -142,7 +142,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

@@ -337,33 +337,16 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 		return c.iamGroupPolicyMap[name].toSlice(), c.iamGroupPolicyMap[name].UpdatedAt, nil
 	}
 
-	if name == globalActiveCred.AccessKey {
-		return []string{"consoleAdmin"}, time.Time{}, nil
-	}
-
 	// When looking for a user's policies, we also check if the user
 	// and the groups they are member of are enabled.
-	var parentName string
 	u, ok := c.iamUsersMap[name]
 	if ok {
 		if !u.Credentials.IsValid() {
 			return nil, time.Time{}, nil
 		}
-		parentName = u.Credentials.ParentUser
 	}
 
-	mp, ok := c.iamUserPolicyMap[name]
-	if !ok {
-		// Service accounts with root credentials, inherit parent permissions
-		if parentName == globalActiveCred.AccessKey && u.Credentials.IsServiceAccount() {
-			// even if this is set, the claims present in the service
-			// accounts apply the final permissions if any.
-			return []string{"consoleAdmin"}, mp.UpdatedAt, nil
-		}
-		if parentName != "" {
-			mp = c.iamUserPolicyMap[parentName]
-		}
-	}
+	mp := c.iamUserPolicyMap[name]
 
 	// returned policy could be empty
 	policies := mp.toSlice()

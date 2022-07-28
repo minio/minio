@@ -310,7 +310,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
 	if gatewayName == NASBackendGateway {
-		buckets, err := newObject.ListBuckets(GlobalContext)
+		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}
@@ -332,7 +332,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
-		buckets, err := newObject.ListBuckets(GlobalContext)
+		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}

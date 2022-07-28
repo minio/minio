@@ -70,19 +70,17 @@ func TestErasureHeal(t *testing.T) {
 		}
 
 		// create some test data
-		setup, err := newErasureTestSetup(test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
+		setup, err := newErasureTestSetup(t, test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to setup Erasure environment: %v", i, err)
 		}
 		disks := setup.disks
 		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
 		}
 		data := make([]byte, test.size)
 		if _, err = io.ReadFull(rand.Reader, data); err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
@@ -93,7 +91,6 @@ func TestErasureHeal(t *testing.T) {
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
 		if err != nil {
-			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
@@ -156,6 +153,5 @@ func TestErasureHeal(t *testing.T) {
 				}
 			}
 		}
-		setup.Remove()
 	}
 }
