@@ -21,10 +21,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -39,6 +42,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	ioutilx "github.com/minio/minio/internal/ioutil"
 )
@@ -1295,26 +1299,29 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// byte data for PutObject.
 	bytesData := generateBytesData(6 * humanize.KiByte)
 
-	copySourceHeader := http.Header{}
-	copySourceHeader.Set("X-Amz-Copy-Source", "somewhere")
-	invalidMD5Header := http.Header{}
-	invalidMD5Header.Set("Content-Md5", "42")
-	inalidStorageClassHeader := http.Header{}
-	inalidStorageClassHeader.Set(xhttp.AmzStorageClass, "INVALID")
+	copySourceHeader := map[string]string{"X-Amz-Copy-Source": "somewhere"}
+	invalidMD5Header := map[string]string{"Content-Md5": "42"}
+	inalidStorageClassHeader := map[string]string{xhttp.AmzStorageClass: "INVALID"}
 
-	addCustomHeaders := func(req *http.Request, customHeaders http.Header) {
-		for k, values := range customHeaders {
-			for _, value := range values {
-				req.Header.Set(k, value)
-			}
+	addCustomHeaders := func(req *http.Request, customHeaders map[string]string) {
+		for k, value := range customHeaders {
+			req.Header.Set(k, value)
 		}
 	}
 
+	checksumData := func(b []byte, h hash.Hash) string {
+		h.Reset()
+		_, err := h.Write(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return base64.StdEncoding.EncodeToString(h.Sum(nil))
+	}
 	// test cases with inputs and expected result for GetObject.
 	testCases := []struct {
 		bucketName string
 		objectName string
-		headers    http.Header
+		headers    map[string]string
 		data       []byte
 		dataLen    int
 		accessKey  string
@@ -1322,10 +1329,11 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		fault      Fault
 		// expected output.
 		expectedRespStatus int // expected response status body.
+		wantApiCode        string
+		wantHeaders        map[string]string
 	}{
-		// Test case - 1.
 		// Fetching the entire object and validating its contents.
-		{
+		0: {
 			bucketName: bucketName,
 			objectName: objectName,
 			data:       bytesData,
@@ -1335,9 +1343,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 2.
 		// Test Case with invalid accessID.
-		{
+		1: {
 			bucketName: bucketName,
 			objectName: objectName,
 			data:       bytesData,
@@ -1346,10 +1353,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusForbidden,
+			wantApiCode:        "InvalidAccessKeyId",
 		},
-		// Test case - 3.
 		// Test Case with invalid header key X-Amz-Copy-Source.
-		{
+		2: {
 			bucketName:         bucketName,
 			objectName:         objectName,
 			headers:            copySourceHeader,
@@ -1358,10 +1365,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "InvalidArgument",
 		},
-		// Test case - 4.
 		// Test Case with invalid Content-Md5 value
-		{
+		3: {
 			bucketName:         bucketName,
 			objectName:         objectName,
 			headers:            invalidMD5Header,
@@ -1370,10 +1377,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "InvalidDigest",
 		},
-		// Test case - 5.
 		// Test Case with object greater than maximum allowed size.
-		{
+		4: {
 			bucketName:         bucketName,
 			objectName:         objectName,
 			data:               bytesData,
@@ -1382,10 +1389,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:          credentials.SecretKey,
 			fault:              TooBigObject,
 			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "EntityTooLarge",
 		},
-		// Test case - 6.
 		// Test Case with missing content length
-		{
+		5: {
 			bucketName:         bucketName,
 			objectName:         objectName,
 			data:               bytesData,
@@ -1394,10 +1401,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:          credentials.SecretKey,
 			fault:              MissingContentLength,
 			expectedRespStatus: http.StatusLengthRequired,
+			wantApiCode:        "MissingContentLength",
 		},
-		// Test case - 7.
 		// Test Case with invalid header key X-Amz-Storage-Class
-		{
+		6: {
 			bucketName:         bucketName,
 			objectName:         objectName,
 			headers:            inalidStorageClassHeader,
@@ -1406,6 +1413,92 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "InvalidStorageClass",
+		},
+
+		// Invalid crc32
+		7: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-crc32": "123"},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "InvalidArgument",
+		},
+		// Wrong crc32
+		8: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-crc32": "MTIzNA=="},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "XAmzContentChecksumMismatch",
+		},
+		// Correct crc32
+		9: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-crc32": checksumData(bytesData, crc32.New(crc32.IEEETable))},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+			wantHeaders:        map[string]string{"x-amz-checksum-crc32": checksumData(bytesData, crc32.New(crc32.IEEETable))},
+		},
+		// Correct crc32c
+		10: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-crc32c": checksumData(bytesData, crc32.New(crc32.MakeTable(crc32.Castagnoli)))},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+			wantHeaders:        map[string]string{"x-amz-checksum-crc32c": checksumData(bytesData, crc32.New(crc32.MakeTable(crc32.Castagnoli)))},
+		},
+		// CRC32 as CRC32C
+		11: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-crc32c": checksumData(bytesData, crc32.New(crc32.IEEETable))},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
+			wantApiCode:        "XAmzContentChecksumMismatch",
+		},
+		// SHA1
+		12: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-sha1": checksumData(bytesData, sha1.New())},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+			wantHeaders:        map[string]string{"x-amz-checksum-sha1": checksumData(bytesData, sha1.New())},
+		},
+		// SHA256
+		13: {
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            map[string]string{"x-amz-checksum-sha256": checksumData(bytesData, sha256.New())},
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+			wantHeaders:        map[string]string{"x-amz-checksum-sha256": checksumData(bytesData, sha256.New())},
 		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
@@ -1415,9 +1508,9 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
 		req, err = newTestSignedRequestV4(http.MethodPut, getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, nil)
+			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, testCase.headers)
 		if err != nil {
-			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
+			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i, err)
 		}
 		// Add test case specific headers to the request.
 		addCustomHeaders(req, testCase.headers)
@@ -1435,22 +1528,48 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+			b, _ := io.ReadAll(rec.Body)
+			t.Fatalf("Test %d: Expected the response status to be `%d`, but instead found `%d`: %s", i, testCase.expectedRespStatus, rec.Code, string(b))
+		}
+		if testCase.expectedRespStatus != http.StatusOK {
+			b, err := io.ReadAll(rec.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var apiErr APIErrorResponse
+			err = xml.Unmarshal(b, &apiErr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotErr := apiErr.Code
+			wantErr := testCase.wantApiCode
+			if gotErr != wantErr {
+				t.Errorf("test %d: want api error %q, got %q", i, wantErr, gotErr)
+			}
+			if testCase.wantHeaders != nil {
+				for k, v := range testCase.wantHeaders {
+					got := rec.Header().Get(k)
+					if got != v {
+						t.Errorf("Want header %s = %s, got %#v", k, v, rec.Header())
+					}
+				}
+			}
+
 		}
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
 			gr, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.objectName, nil, nil, readLock, opts)
 			if err != nil {
-				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
 			}
 			if _, err = io.Copy(buffer, gr); err != nil {
 				gr.Close()
-				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
 			}
 			gr.Close()
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
-				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
+				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i, instanceType)
 			}
 			buffer.Reset()
 		}
@@ -1460,10 +1579,10 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT Object endpoint.
 		reqV2, err = newTestSignedRequestV2(http.MethodPut, getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, nil)
+			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey, testCase.headers)
 
 		if err != nil {
-			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutObject: <ERROR> %v", i+1, instanceType, err)
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutObject: <ERROR> %v", i, instanceType, err)
 		}
 
 		// Add test case specific headers to the request.
@@ -1482,7 +1601,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(recV2, reqV2)
 		if recV2.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+			b, _ := io.ReadAll(rec.Body)
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`: %s", i, instanceType, testCase.expectedRespStatus, recV2.Code, string(b))
 		}
 
 		if testCase.expectedRespStatus == http.StatusOK {
@@ -1490,17 +1610,26 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
 			gr, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.objectName, nil, nil, readLock, opts)
 			if err != nil {
-				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
 			}
 			if _, err = io.Copy(buffer, gr); err != nil {
 				gr.Close()
-				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
 			}
 			gr.Close()
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
-				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
+				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i, instanceType)
 			}
 			buffer.Reset()
+
+			if testCase.wantHeaders != nil {
+				for k, v := range testCase.wantHeaders {
+					got := recV2.Header().Get(k)
+					if got != v {
+						t.Errorf("Want header %s = %s, got %#v", k, v, recV2.Header())
+					}
+				}
+			}
 		}
 	}
 

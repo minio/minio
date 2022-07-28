@@ -1738,7 +1738,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if err = actualReader.AddChecksum(r); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
 		// Set compression metrics.
@@ -1760,7 +1760,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	if size >= 0 {
 		if err := hashReader.AddChecksum(r); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
 	}
@@ -1901,7 +1901,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
@@ -1921,6 +1920,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
+	// Do not send checksums in events to avoid leaks.
+	hash.TransferChecksumHeader(w, r)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -2058,7 +2059,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if err = hreader.AddChecksum(r); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 		return
 	}
 
@@ -2231,7 +2232,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 	w.Header()[xhttp.ETag] = []string{`"` + hex.EncodeToString(hreader.MD5Current()) + `"`}
 	hash.TransferChecksumHeader(w, r)
-
 	writeSuccessResponseHeadersOnly(w)
 }
 

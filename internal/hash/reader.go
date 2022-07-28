@@ -173,7 +173,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 		r.sha256.Write(p[:n])
 	}
 	if r.contentHasher != nil {
-		r.contentHasher.Write(p)
+		r.contentHasher.Write(p[:n])
 	}
 
 	if err == io.EOF { // Verify content SHA256, if set.
@@ -187,10 +187,11 @@ func (r *Reader) Read(p []byte) (int, error) {
 		}
 		if r.contentHasher != nil {
 			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw(), sum) {
-				return n, ChecksumMismatch{
+				err := ChecksumMismatch{
 					Want: r.contentHash.Encoded,
 					Got:  base64.StdEncoding.EncodeToString(sum),
 				}
+				return n, err
 			}
 		}
 	}

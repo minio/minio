@@ -55,6 +55,9 @@ type Checksum struct {
 
 // Is returns if c is all of t.
 func (c ChecksumType) Is(t ChecksumType) bool {
+	if t == ChecksumNone {
+		return c == ChecksumNone
+	}
 	return c&t == t
 }
 
@@ -219,9 +222,8 @@ func (c Checksum) Valid() bool {
 	if len(c.Encoded) == 0 || c.Type.Is(ChecksumTrailing) {
 		return c.Type.Is(ChecksumNone) || c.Type.Is(ChecksumTrailing)
 	}
-	h := c.Type.Hasher()
 	raw := c.Raw()
-	return h.Size() == len(raw)
+	return c.Type.RawByteLen() == len(raw)
 }
 
 // Raw returns the Raw checksum.
@@ -256,7 +258,7 @@ func (c Checksum) Matches(content []byte) error {
 // TransferChecksumHeader will transfer any checksum value that has been checked.
 func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
 	t, s := getContentChecksum(r)
-	if t.Is(ChecksumTrailing) || t.Is(ChecksumNone) || t.Is(ChecksumInvalid) {
+	if !t.IsSet() || t.Is(ChecksumTrailing) {
 		// TODO: Add trailing when we can read it.
 		return
 	}
@@ -317,13 +319,14 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 	}
 
 	checkType := func(c ChecksumType) {
-		if s = r.Header.Get(c.Key()); s != "" {
+		if got := r.Header.Get(c.Key()); got != "" {
 			// If already set, invalid
 			if t != ChecksumNone {
 				t = ChecksumInvalid
 				s = ""
 			} else {
 				t = c
+				s = got
 			}
 		}
 	}

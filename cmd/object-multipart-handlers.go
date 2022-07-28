@@ -360,7 +360,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		if err = actualReader.AddChecksum(r); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
 
@@ -382,7 +382,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 	if size >= 0 {
 		if err := hashReader.AddChecksum(r); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
 	}
