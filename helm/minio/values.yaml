@@ -310,6 +310,8 @@ makePolicyJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Command to run after the main command on exit
+  exitCommand: ""
 
 ## List of users to be created after minio install
 ##
@@ -344,6 +346,8 @@ makeUserJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Command to run after the main command on exit
+  exitCommand: ""
 
 ## List of buckets to be created after minio install
 ##
@@ -378,7 +382,9 @@ makeBucketJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
+  # Command to run after the main command on exit
+  exitCommand: ""
+  
 ## List of command to run after minio install
 ## NOTE: the mc command TARGET is always "myminio"
 customCommands:
@@ -399,7 +405,9 @@ customCommandJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
+  # Command to run after the main command on exit
+  exitCommand: ""
+  
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed
 environment:
