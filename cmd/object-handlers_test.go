@@ -3581,153 +3581,123 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 
 	uploadIDCopy := uploadID
 
-	// expected error types for invalid inputs to PutObjectPartHandler.
-	noAPIErr := APIError{}
-	// expected error when content length is missing in the HTTP request.
-	missingContent := getAPIError(ErrMissingContentLength)
-	// expected error when content length is too large.
-	entityTooLarge := getAPIError(ErrEntityTooLarge)
-	// expected error when the signature check fails.
-	badSigning := getAPIError(ErrSignatureDoesNotMatch)
-	// expected error MD5 sum mismatch occurs.
-	badChecksum := getAPIError(ErrInvalidDigest)
-	// expected error when the part number in the request is invalid.
-	invalidPart := getAPIError(ErrInvalidPart)
-	// expected error when maxPart is beyond the limit.
-	invalidMaxParts := getAPIError(ErrInvalidMaxParts)
-	// expected error the when the uploadID is invalid.
-	noSuchUploadID := getAPIError(ErrNoSuchUpload)
-	// expected error when InvalidAccessID is set.
-	invalidAccessID := getAPIError(ErrInvalidAccessKeyID)
-
 	// SignatureMismatch for various signing types
 	testCases := []struct {
 		objectName string
-		reader     io.ReadSeeker
+		content    string
 		partNumber string
 		fault      Fault
 		accessKey  string
 		secretKey  string
 
-		expectedAPIError APIError
+		expectedAPIError APIErrorCode
 	}{
-		// Test case - 1.
 		// Success case.
-		{
+		0: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      None,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: noAPIErr,
+			expectedAPIError: -1,
 		},
-		// Test case - 2.
 		// Case where part number is invalid.
-		{
+		1: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "9999999999999999999",
 			fault:      None,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: invalidPart,
+			expectedAPIError: ErrInvalidPart,
 		},
-		// Test case - 3.
 		// Case where the part number has exceeded the max allowed parts in an upload.
-		{
+		2: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: strconv.Itoa(globalMaxPartID + 1),
 			fault:      None,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: invalidMaxParts,
+			expectedAPIError: ErrInvalidMaxParts,
 		},
-		// Test case - 4.
 		// Case where the content length is not set in the HTTP request.
-		{
+		3: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      MissingContentLength,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: missingContent,
+			expectedAPIError: ErrMissingContentLength,
 		},
-		// Test case - 5.
 		// case where the object size is set to a value greater than the max allowed size.
-		{
+		4: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      TooBigObject,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: entityTooLarge,
+			expectedAPIError: ErrEntityTooLarge,
 		},
-		// Test case - 6.
 		// case where a signature mismatch is introduced and the response is validated.
-		{
+		5: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      BadSignature,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: badSigning,
+			expectedAPIError: ErrSignatureDoesNotMatch,
 		},
-		// Test case - 7.
 		// Case where incorrect checksum is set and the error response
 		// is asserted with the expected error response.
-		{
+		6: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      BadMD5,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: badChecksum,
+			expectedAPIError: ErrInvalidDigest,
 		},
-		// Test case - 8.
 		// case where the a non-existent uploadID is set.
-		{
+		7: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      MissingUploadID,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: noSuchUploadID,
+			expectedAPIError: ErrNoSuchUpload,
 		},
-		// Test case - 9.
 		// case with invalid AccessID.
 		// Forcing the signature check inside the handler to fail.
-		{
+		8: {
 			objectName: testObject,
-			reader:     bytes.NewReader([]byte("hello")),
+			content:    "hello",
 			partNumber: "1",
 			fault:      None,
 			accessKey:  "Invalid-AccessID",
 			secretKey:  credentials.SecretKey,
 
-			expectedAPIError: invalidAccessID,
+			expectedAPIError: ErrInvalidAccessKeyID,
 		},
 	}
 
 	reqV2Str := "V2 Signed HTTP request"
 	reqV4Str := "V4 Signed HTTP request"
 
-	// collection of input HTTP request, ResponseRecorder and request type.
-	// Used to make a collection of V4 and V4 HTTP request.
 	type inputReqRec struct {
 		req     *http.Request
 		rec     *httptest.ResponseRecorder
@@ -3736,7 +3706,9 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 
 	for i, test := range testCases {
 		// Using sub-tests introduced in Go 1.7.
-		t.Run(fmt.Sprintf("MinIO %s : Test case %d.", instanceType, i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("MinIO-%s-Test-%d.", instanceType, i), func(t *testing.T) {
+			// collection of input HTTP request, ResponseRecorder and request type.
+			// Used to make a collection of V4 and V4 HTTP request.
 			var reqV4, reqV2 *http.Request
 			var recV4, recV2 *httptest.ResponseRecorder
 
@@ -3751,7 +3723,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			// constructing a v4 signed HTTP request.
 			reqV4, err = newTestSignedRequestV4(http.MethodPut,
 				getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
-				0, test.reader, test.accessKey, test.secretKey, nil)
+				int64(len(test.content)), bytes.NewReader([]byte(test.content)), test.accessKey, test.secretKey, nil)
 			if err != nil {
 				t.Fatalf("Failed to create a signed V4 request to upload part for %s/%s: <ERROR> %v",
 					bucketName, test.objectName, err)
@@ -3760,10 +3732,10 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			// construct HTTP request for PutObject Part Object endpoint.
 			reqV2, err = newTestSignedRequestV2(http.MethodPut,
 				getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
-				0, test.reader, test.accessKey, test.secretKey, nil)
+				int64(len(test.content)), bytes.NewReader([]byte(test.content)), test.accessKey, test.secretKey, nil)
 
 			if err != nil {
-				t.Fatalf("Test %d %s Failed to create a V2  signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
+				t.Fatalf("Test %d %s Failed to create a V2  signed request to upload part for %s/%s: <ERROR> %v", i, instanceType,
 					bucketName, test.objectName, err)
 			}
 
@@ -3789,6 +3761,9 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 				// HTTP request type string for V4/V2 requests.
 				reqType := reqRec.reqType
 
+				// Clone so we don't retain values we do not want.
+				req.Header = req.Header.Clone()
+
 				// introduce faults in the request.
 				// deliberately introducing the invalid value to be able to assert the response with the expected error response.
 				switch test.fault {
@@ -3812,7 +3787,13 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 				apiRouter.ServeHTTP(rec, req)
 
 				// validate the error response.
-				if test.expectedAPIError != noAPIErr {
+				want := getAPIError(test.expectedAPIError)
+				if test.expectedAPIError == -1 {
+					want.HTTPStatusCode = 200
+					want.Code = "<no error>"
+					want.Description = "<no error>"
+				}
+				if rec.Code != http.StatusOK {
 					var errBytes []byte
 					// read the response body.
 					errBytes, err = ioutil.ReadAll(rec.Result().Body)
@@ -3828,14 +3809,16 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 							reqType, bucketName, test.objectName, err)
 					}
 					// Validate whether the error has occurred for the expected reason.
-					if test.expectedAPIError.Code != errXML.Code {
-						t.Errorf("%s, Expected to fail with error \"%s\", but received \"%s\".",
-							reqType, test.expectedAPIError.Code, errXML.Code)
+					if want.Code != errXML.Code {
+						t.Errorf("%s, Expected to fail with error \"%s\", but received \"%s\": %q.",
+							reqType, want.Code, errXML.Code, errXML.Message)
 					}
 					// Validate the HTTP response status code  with the expected one.
-					if test.expectedAPIError.HTTPStatusCode != rec.Code {
-						t.Errorf("%s, Expected the HTTP response status code to be %d, got %d.", reqType, test.expectedAPIError.HTTPStatusCode, rec.Code)
+					if want.HTTPStatusCode != rec.Code {
+						t.Errorf("%s, Expected the HTTP response status code to be %d, got %d.", reqType, want.HTTPStatusCode, rec.Code)
 					}
+				} else if want.HTTPStatusCode != http.StatusOK {
+					t.Errorf("got 200 ok, want %d", rec.Code)
 				}
 			}
 		})

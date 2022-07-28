@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/hash"
 )
@@ -204,50 +204,50 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{".test", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: .test")},
-		{"------", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: ------")},
+		{bucketName: ".test", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: .test")},
+		{bucketName: "------", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: ------")},
 		{
-			"$this-is-not-valid-too", "obj", "", 1, "", "", "", 0, false, "",
-			fmt.Errorf("%s", "Bucket not found: $this-is-not-valid-too"),
+			bucketName: "$this-is-not-valid-too", objName: "obj", PartID: 1,
+			expectedError: fmt.Errorf("%s", "Bucket not found: $this-is-not-valid-too"),
 		},
-		{"a", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: a")},
+		{bucketName: "a", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: a")},
 		// Test case - 5.
 		// Case with invalid object names.
-		{bucket, "", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket/")},
+		{bucketName: bucket, PartID: 1, expectedError: fmt.Errorf("%s", "Object name invalid: minio-bucket/")},
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
-		{"abc", "def", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},
+		{bucketName: "abc", objName: "def", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: abc")},
 		// Test Case - 7.
 		// Existing bucket, but using a bucket on which NewMultipartUpload is not Initiated.
-		{"unused-bucket", "def", "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{bucketName: "unused-bucket", objName: "def", uploadID: "xyz", PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 8.
 		// Existing bucket, object name different from which NewMultipartUpload is constructed from.
 		// Expecting "Invalid upload id".
-		{bucket, "def", "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{bucketName: bucket, objName: "def", uploadID: "xyz", PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 9.
 		// Existing bucket, bucket and object name are the ones from which NewMultipartUpload is constructed from.
 		// But the uploadID is invalid.
 		// Expecting "Invalid upload id".
-		{bucket, object, "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{bucketName: bucket, objName: object, uploadID: "xyz", PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 10.
 		// Case with valid UploadID, existing bucket name.
 		// But using the bucket name from which NewMultipartUpload is not constructed from.
-		{"unused-bucket", object, uploadID, 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
+		{bucketName: "unused-bucket", objName: object, uploadID: uploadID, PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id "+uploadID)},
 		// Test Case - 11.
 		// Case with valid UploadID, existing bucket name.
 		// But using the object name from which NewMultipartUpload is not constructed from.
-		{bucket, "none-object", uploadID, 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
+		{bucketName: bucket, objName: "none-object", uploadID: uploadID, PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id "+uploadID)},
 		// Test case - 12.
 		// Input to replicate Md5 mismatch.
 		{
-			bucket, object, uploadID, 1, "", "d41d8cd98f00b204e9800998ecf8427f", "", 0, false, "",
-			hash.BadDigest{ExpectedMD5: "d41d8cd98f00b204e9800998ecf8427f", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"},
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputMd5: "d41d8cd98f00b204e9800998ecf8427f",
+			expectedError: hash.BadDigest{ExpectedMD5: "d41d8cd98f00b204e9800998ecf8427f", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"},
 		},
 		// Test case - 13.
 		// When incorrect sha256 is provided.
 		{
-			bucket, object, uploadID, 1, "", "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854", 0, false, "",
-			hash.SHA256Mismatch{
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854",
+			expectedError: hash.SHA256Mismatch{
 				ExpectedSHA256:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854",
 				CalculatedSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			},
@@ -255,22 +255,22 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Test case - 14.
 		// Input with size more than the size of actual data inside the reader.
 		{
-			bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f3335", "", int64(len("abcd") + 1), false, "",
-			hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f3335", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"},
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f3335", intputDataSize: int64(len("abcd") + 1),
+			expectedError: hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f3335", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"},
 		},
 		// Test case - 15.
 		// Input with size less than the size of actual data inside the reader.
 		{
-			bucket, object, uploadID, 1, "abcd", "900150983cd24fb0d6963f7d28e17f73", "", int64(len("abcd") - 1), false, "",
-			hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"},
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "900150983cd24fb0d6963f7d28e17f73", intputDataSize: int64(len("abcd") - 1),
+			expectedError: hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"},
 		},
 
 		// Test case - 16-19.
 		// Validating for success cases.
-		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", int64(len("abcd")), true, "", nil},
-		{bucket, object, uploadID, 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", "e5e088a0b66163a0a26a5e053d2a4496dc16ab6e0e3dd1adf2d16aa84a078c9d", int64(len("efgh")), true, "", nil},
-		{bucket, object, uploadID, 3, "ijkl", "09a0877d04abf8759f99adec02baf579", "005c19658919186b85618c5870463eec8d9b8c1a9d00208a5352891ba5bbe086", int64(len("abcd")), true, "", nil},
-		{bucket, object, uploadID, 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", "f1afc31479522d6cff1ed068f93998f05a8cd3b22f5c37d7f307084f62d1d270", int64(len("abcd")), true, "", nil},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f331f", inputSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", intputDataSize: int64(len("abcd")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 2, inputReaderData: "efgh", inputMd5: "1f7690ebdd9b4caf8fab49ca1757bf27", inputSHA256: "e5e088a0b66163a0a26a5e053d2a4496dc16ab6e0e3dd1adf2d16aa84a078c9d", intputDataSize: int64(len("efgh")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 3, inputReaderData: "ijkl", inputMd5: "09a0877d04abf8759f99adec02baf579", inputSHA256: "005c19658919186b85618c5870463eec8d9b8c1a9d00208a5352891ba5bbe086", intputDataSize: int64(len("abcd")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 4, inputReaderData: "mnop", inputMd5: "e132e96a5ddad6da8b07bba6f6131fef", inputSHA256: "f1afc31479522d6cff1ed068f93998f05a8cd3b22f5c37d7f307084f62d1d270", intputDataSize: int64(len("abcd")), shouldPass: true},
 	}
 
 	// Validate all the test cases.
