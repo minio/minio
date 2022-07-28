@@ -1019,6 +1019,20 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object)
 	}
 
+	// Checksum type set when upload started.
+	var checksumType hash.ChecksumType
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		checksumType = hash.NewChecksumType(cs)
+		if opts.WantMultipartChecksum != nil && !opts.WantMultipartChecksum.Type.Is(checksumType) {
+			return oi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum type mismatch"),
+			}
+		}
+	}
+	var checksumCombined []byte
+
 	var partI ObjectPartInfo
 	for i, part := range partInfoFiles {
 		partID := parts[i].PartNumber
@@ -1075,10 +1089,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
+		gotPart := currentFI.Parts[partIdx]
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		if currentFI.Parts[partIdx].ETag != part.ETag {
+		if gotPart.ETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
 				ExpETag:    currentFI.Parts[partIdx].ETag,
@@ -1086,54 +1101,59 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
-		check := func(err error, given string, t hash.ChecksumType) error {
-			if err != nil {
-				return err
-			}
-			if given == "" {
-				return nil
-			}
-			if currentFI.Parts[partIdx].CRC[t.String()] != given {
-				return InvalidPart{
+		if checksumType.IsSet() {
+			crc := gotPart.CRC[checksumType.String()]
+			if crc == "" {
+				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
-					ExpETag:    currentFI.Parts[partIdx].CRC[t.String()],
-					GotETag:    given,
 				}
 			}
-			return nil
-		}
-		if err := check(check(check(check(nil,
-			part.ChecksumCRC32C, hash.ChecksumCRC32C),
-			part.ChecksumCRC32, hash.ChecksumCRC32),
-			part.ChecksumSHA1, hash.ChecksumSHA1),
-			part.ChecksumSHA256, hash.ChecksumSHA256); err != nil {
-			return oi, err
+			cs := hash.NewChecksumString(checksumType.String(), crc)
+			if !cs.Valid() {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			checksumCombined = append(checksumCombined, cs.Raw()...)
 		}
 
 		// All parts except the last part has to be at least 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentFI.Parts[partIdx].ActualSize,
+				PartSize:   gotPart.ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
 
 		// Save for total object size.
-		objectSize += currentFI.Parts[partIdx].Size
+		objectSize += gotPart.Size
 
 		// Save the consolidated actual size.
-		objectActualSize += currentFI.Parts[partIdx].ActualSize
+		objectActualSize += gotPart.ActualSize
 
 		// Add incoming parts.
 		fi.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			Size:       currentFI.Parts[partIdx].Size,
-			ActualSize: currentFI.Parts[partIdx].ActualSize,
-			ModTime:    currentFI.Parts[partIdx].ModTime,
-			Index:      currentFI.Parts[partIdx].Index,
+			Size:       gotPart.Size,
+			ActualSize: gotPart.ActualSize,
+			ModTime:    gotPart.ModTime,
+			Index:      gotPart.Index,
+			CRC:        nil, // Not transferred since we do not need it.
 		}
 	}
+
+	if opts.WantMultipartChecksum != nil {
+		err := opts.WantMultipartChecksum.Matches(checksumCombined)
+		if err != nil {
+			return oi, err
+		}
+	}
+	if checksumType.IsSet() {
+		cs := hash.NewChecksumFromData(checksumType, checksumCombined)
+		fi.Checksum = map[string]string{cs.Type.String(): cs.Encoded}
+	}
+	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize

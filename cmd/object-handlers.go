@@ -772,6 +772,11 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			}
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		default:
+			// For now only when not encrypted.
+			if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+				hash.AddChecksumHeader(w, objInfo.Checksum)
+			}
 		}
 	}
 

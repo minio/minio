@@ -151,6 +151,7 @@ const (
 	AmzChecksumCRC32C = "x-amz-checksum-crc32c"
 	AmzChecksumSHA1   = "x-amz-checksum-sha1"
 	AmzChecksumSHA256 = "x-amz-checksum-sha256"
+	AmzChecksumMode   = "x-amz-checksum-mode"
 
 	// Delete special flag to force delete a bucket or a prefix
 	MinIOForceDelete = "x-minio-force-delete"

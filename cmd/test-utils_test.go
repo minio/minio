@@ -2296,7 +2296,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 				if etag == "" {
 					t.Fatalf("Unexpected empty etag")
 				}
-				cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
+				cp = append(cp, CompletePart{PartNumber: partID, ETag: etag[1 : len(etag)-1]})
 			} else {
 				t.Fatalf("Missing etag header")
 			}

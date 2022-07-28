@@ -187,6 +187,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 			objInfo.RestoreExpires, _ = restoreStatus.Expiry()
 		}
 	}
+	objInfo.Checksum = fi.Checksum
 	// Success.
 	return objInfo
 }

@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -654,9 +655,12 @@ func generateCompleteMultpartUploadResponse(bucket, key, location string, oi Obj
 		Bucket:   bucket,
 		Key:      key,
 		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
-		ETag: "\"" + oi.ETag + "\"",
+		ETag:           "\"" + oi.ETag + "\"",
+		ChecksumSHA1:   oi.Checksum[hash.ChecksumSHA1.String()],
+		ChecksumSHA256: oi.Checksum[hash.ChecksumSHA256.String()],
+		ChecksumCRC32:  oi.Checksum[hash.ChecksumCRC32.String()],
+		ChecksumCRC32C: oi.Checksum[hash.ChecksumCRC32C.String()],
 	}
-	// TODO: Add checksums...
 	return c
 }
 

@@ -20,6 +20,7 @@ package hash
 import (
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/binary"
 	"hash"
 	"hash/crc32"
 	"net/http"
@@ -73,8 +74,22 @@ func (c ChecksumType) Key() string {
 	return ""
 }
 
-// Set returns whether the type is valid and known.
-func (c ChecksumType) Set() bool {
+func (c ChecksumType) RawByteLen() int {
+	switch {
+	case c.Is(ChecksumCRC32):
+		return 4
+	case c.Is(ChecksumCRC32C):
+		return 4
+	case c.Is(ChecksumSHA1):
+		return sha1.Size
+	case c.Is(ChecksumSHA256):
+		return sha256.Size
+	}
+	return 0
+}
+
+// IsSet returns whether the type is valid and known.
+func (c ChecksumType) IsSet() bool {
 	return !c.Is(ChecksumInvalid) && !c.Is(ChecksumNone)
 }
 
@@ -112,10 +127,64 @@ func (c ChecksumType) String() string {
 	return "invalid"
 }
 
+// Hasher returns a hasher corresponding to the checksum type.
+// Returns nil if no checksum.
+func (c ChecksumType) Hasher() hash.Hash {
+	switch {
+	case c.Is(ChecksumCRC32):
+		return crc32.NewIEEE()
+	case c.Is(ChecksumCRC32C):
+		return crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	case c.Is(ChecksumSHA1):
+		return sha1.New()
+	case c.Is(ChecksumSHA256):
+		return sha256.New()
+	}
+	return nil
+}
+
+// NewChecksumFromData returns a new checksum from specified algorithm and base64 encoded value.
+func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
+	if !t.IsSet() {
+		return nil
+	}
+	h := t.Hasher()
+	h.Write(data)
+	c := Checksum{Type: t, Encoded: base64.StdEncoding.EncodeToString(h.Sum(nil))}
+	if !c.Valid() {
+		return nil
+	}
+	return &c
+}
+
+// ReadCheckSums will read checksums from b and return them.
+func ReadCheckSums(b []byte) map[string]string {
+	res := make(map[string]string, 1)
+	for len(b) > 0 {
+		t, n := binary.Uvarint(b)
+		if n < 0 {
+			break
+		}
+		b = b[:n]
+
+		typ := ChecksumType(t)
+		length := typ.RawByteLen()
+		if length == 0 || len(b) < length {
+			break
+		}
+		res[typ.String()] = base64.StdEncoding.EncodeToString(b[:length])
+		b = b[:length]
+	}
+	if len(res) == 0 {
+		res = nil
+	}
+	return res
+}
+
 // NewChecksumString returns a new checksum from specified algorithm and base64 encoded value.
 func NewChecksumString(alg, value string) *Checksum {
 	t := NewChecksumType(alg)
-	if !t.Set() {
+	if !t.IsSet() {
 		return nil
 	}
 	c := Checksum{Type: t, Encoded: value}
@@ -127,6 +196,19 @@ func NewChecksumString(alg, value string) *Checksum {
 
 func (c Checksum) Trailing() bool {
 	return c.Type.Is(ChecksumTrailing)
+}
+
+// AppendTo will append the checksum to b.
+func (c Checksum) AppendTo(b []byte) []byte {
+	var tmp [binary.MaxVarintLen32]byte
+	n := binary.PutUvarint(tmp[:], uint64(c.Type))
+	crc := c.Raw()
+	if len(crc) != c.Type.RawByteLen() {
+		return b
+	}
+	b = append(b, tmp[:n]...)
+	b = append(b, crc...)
+	return b
 }
 
 // Valid returns whether checksum is valid.
@@ -151,6 +233,26 @@ func (c Checksum) Raw() []byte {
 	return v
 }
 
+// Matches returns whether given content matches c.
+func (c Checksum) Matches(content []byte) error {
+	if len(c.Encoded) == 0 {
+		return nil
+	}
+	hasher := c.Type.Hasher()
+	_, err := hasher.Write(content)
+	if err != nil {
+		return err
+	}
+	got := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
+	if got != c.Encoded {
+		return ChecksumMismatch{
+			Want: c.Encoded,
+			Got:  got,
+		}
+	}
+	return nil
+}
+
 // TransferChecksumHeader will transfer any checksum value that has been checked.
 func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
 	t, s := getContentChecksum(r)
@@ -161,20 +263,18 @@ func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(t.Key(), s)
 }
 
-// Hasher returns a hasher corresponding to the checksum type.
-// Returns nil if no checksum.
-func (c ChecksumType) Hasher() hash.Hash {
-	switch {
-	case c.Is(ChecksumCRC32):
-		return crc32.NewIEEE()
-	case c.Is(ChecksumCRC32C):
-		return crc32.New(crc32.MakeTable(crc32.Castagnoli))
-	case c.Is(ChecksumSHA1):
-		return sha1.New()
-	case c.Is(ChecksumSHA256):
-		return sha256.New()
+// AddChecksumHeader will transfer any checksum value that has been checked.
+func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
+	for k, v := range c {
+		typ := NewChecksumType(k)
+		if !typ.IsSet() {
+			continue
+		}
+		crc := Checksum{Type: typ, Encoded: v}
+		if crc.Valid() {
+			w.Header().Set(typ.Key(), v)
+		}
 	}
-	return nil
 }
 
 // GetContentChecksum returns content checksum.
@@ -203,7 +303,7 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 	alg := r.Header.Get(xhttp.AmzChecksumAlgo)
 	if alg != "" {
 		t |= NewChecksumType(alg)
-		if t.Set() {
+		if t.IsSet() {
 			hdr := t.Key()
 			if s = r.Header.Get(hdr); s == "" {
 				if strings.EqualFold(r.Header.Get(xhttp.AmzTrailer), hdr) {

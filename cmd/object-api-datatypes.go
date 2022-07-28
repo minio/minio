@@ -177,6 +177,9 @@ type ObjectInfo struct {
 	NumVersions int
 	//  The modtime of the successor object version if any
 	SuccessorModTime time.Time
+
+	// User-Defined object tags
+	Checksum map[string]string
 }
 
 // ArchiveInfo returns any saved zip archive meta information

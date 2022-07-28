@@ -159,7 +159,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if checksumType.Is(hash.ChecksumInvalid) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)
 		return
-	} else if checksumType.Set() {
+	} else if checksumType.IsSet() {
 		metadata[hash.MinIOMultipartChecksum] = checksumType.String()
 	}
 
