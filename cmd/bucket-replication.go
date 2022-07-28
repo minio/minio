@@ -1805,6 +1805,7 @@ func (c replicationConfig) Resync(ctx context.Context, oi ObjectInfo, dsc *Repli
 	objInfo.VersionPurgeStatusInternal = ""
 	objInfo.ReplicationStatus = ""
 	objInfo.VersionPurgeStatus = ""
+	delete(objInfo.UserDefined, xhttp.AmzBucketReplicationStatus)
 	resyncdsc := mustReplicate(ctx, oi.Bucket, oi.Name, getMustReplicateOptions(objInfo, replication.ExistingObjectReplicationType, ObjectOptions{}))
 	dsc = &resyncdsc
 	return c.resync(oi, dsc, tgtStatuses)
