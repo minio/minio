@@ -549,6 +549,7 @@ type CompleteMultipartUpload struct {
 	Parts []CompletePart `xml:"Part"`
 }
 
+// NewMultipartUploadResult contains information about a newly created multipart upload.
 type NewMultipartUploadResult struct {
 	UploadID     string
 	ChecksumAlgo string

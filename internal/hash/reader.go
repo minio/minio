@@ -155,7 +155,7 @@ func (r *Reader) AddChecksum(req *http.Request) error {
 		return nil
 	}
 	r.contentHash = *cs
-	if cs.Trailing() {
+	if cs.Type.Trailing() {
 		// Ignore until we have trailing headers.
 		return nil
 	}

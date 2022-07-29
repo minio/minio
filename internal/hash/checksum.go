@@ -30,20 +30,30 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 )
 
-// MinIOMultipartChecksum is as metadata on multiparts to indicate checksum.
+// MinIOMultipartChecksum is as metadata on multipart uploads to indicate checksum type.
 const MinIOMultipartChecksum = "x-minio-multipart-checksum"
 
 // ChecksumType contains information about the checksum type.
 type ChecksumType uint32
 
 const (
+
+	// ChecksumTrailing indicates the checksum will be sent in the trailing header.
+	// Another checksum type will be set.
 	ChecksumTrailing ChecksumType = 1 << iota
+
+	// ChecksumSHA256 indicates a SHA256 checksum.
 	ChecksumSHA256
+	// ChecksumSHA1 indicates a SHA-1 checksum.
 	ChecksumSHA1
+	// ChecksumCRC32 indicates a CRC32 checksum with IEEE table.
 	ChecksumCRC32
+	// ChecksumCRC32C indicates a CRC32 checksum with Castagnoli table.
 	ChecksumCRC32C
+	// ChecksumInvalid indicates an invalid checksum.
 	ChecksumInvalid
 
+	// ChecksumNone indicates no checksum.
 	ChecksumNone ChecksumType = 0
 )
 
@@ -77,6 +87,7 @@ func (c ChecksumType) Key() string {
 	return ""
 }
 
+// RawByteLen returns the size of the un-encoded checksum.
 func (c ChecksumType) RawByteLen() int {
 	switch {
 	case c.Is(ChecksumCRC32):
@@ -146,6 +157,11 @@ func (c ChecksumType) Hasher() hash.Hash {
 	return nil
 }
 
+// Trailing return whether the checksum is traling.
+func (c ChecksumType) Trailing() bool {
+	return c.Is(ChecksumTrailing)
+}
+
 // NewChecksumFromData returns a new checksum from specified algorithm and base64 encoded value.
 func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
 	if !t.IsSet() {
@@ -195,10 +211,6 @@ func NewChecksumString(alg, value string) *Checksum {
 		return nil
 	}
 	return &c
-}
-
-func (c Checksum) Trailing() bool {
-	return c.Type.Is(ChecksumTrailing)
 }
 
 // AppendTo will append the checksum to b.

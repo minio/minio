@@ -1329,7 +1329,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		fault      Fault
 		// expected output.
 		expectedRespStatus int // expected response status body.
-		wantApiCode        string
+		wantAPICode        string
 		wantHeaders        map[string]string
 	}{
 		// Fetching the entire object and validating its contents.
@@ -1353,7 +1353,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusForbidden,
-			wantApiCode:        "InvalidAccessKeyId",
+			wantAPICode:        "InvalidAccessKeyId",
 		},
 		// Test Case with invalid header key X-Amz-Copy-Source.
 		2: {
@@ -1365,7 +1365,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "InvalidArgument",
+			wantAPICode:        "InvalidArgument",
 		},
 		// Test Case with invalid Content-Md5 value
 		3: {
@@ -1377,7 +1377,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "InvalidDigest",
+			wantAPICode:        "InvalidDigest",
 		},
 		// Test Case with object greater than maximum allowed size.
 		4: {
@@ -1389,7 +1389,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:          credentials.SecretKey,
 			fault:              TooBigObject,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "EntityTooLarge",
+			wantAPICode:        "EntityTooLarge",
 		},
 		// Test Case with missing content length
 		5: {
@@ -1401,7 +1401,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			secretKey:          credentials.SecretKey,
 			fault:              MissingContentLength,
 			expectedRespStatus: http.StatusLengthRequired,
-			wantApiCode:        "MissingContentLength",
+			wantAPICode:        "MissingContentLength",
 		},
 		// Test Case with invalid header key X-Amz-Storage-Class
 		6: {
@@ -1413,7 +1413,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "InvalidStorageClass",
+			wantAPICode:        "InvalidStorageClass",
 		},
 
 		// Invalid crc32
@@ -1426,7 +1426,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "InvalidArgument",
+			wantAPICode:        "InvalidArgument",
 		},
 		// Wrong crc32
 		8: {
@@ -1438,7 +1438,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "XAmzContentChecksumMismatch",
+			wantAPICode:        "XAmzContentChecksumMismatch",
 		},
 		// Correct crc32
 		9: {
@@ -1474,7 +1474,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
-			wantApiCode:        "XAmzContentChecksumMismatch",
+			wantAPICode:        "XAmzContentChecksumMismatch",
 		},
 		// SHA1
 		12: {
@@ -1542,7 +1542,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 				t.Fatal(err)
 			}
 			gotErr := apiErr.Code
-			wantErr := testCase.wantApiCode
+			wantErr := testCase.wantAPICode
 			if gotErr != wantErr {
 				t.Errorf("test %d: want api error %q, got %q", i, wantErr, gotErr)
 			}

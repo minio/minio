@@ -34,5 +34,5 @@ func New() hash.Hash { return fipssha256.New() }
 // Sum256 returns the SHA256 checksum of the data.
 func Sum256(data []byte) [fipssha256.Size]byte { return fipssha256.Sum256(data) }
 
-// The size of a SHA256 checksum in bytes.
+// Size is the size of a SHA256 checksum in bytes.
 const Size = fipssha256.Size
