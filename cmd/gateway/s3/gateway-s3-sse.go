@@ -734,7 +734,7 @@ func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, clea
 
 // cleanupStaleUploads removes old custom encryption multipart uploads on backend
 func (l *s3EncObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
-	buckets, err := l.s3Objects.ListBuckets(ctx)
+	buckets, err := l.s3Objects.ListBuckets(ctx, minio.BucketOptions{})
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return

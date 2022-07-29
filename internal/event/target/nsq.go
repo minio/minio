@@ -29,6 +29,7 @@ import (
 	"github.com/nsqio/go-nsq"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -92,7 +93,7 @@ type NSQTarget struct {
 	producer   *nsq.Producer
 	store      Store
 	config     *nsq.Config
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -188,7 +189,7 @@ func (target *NSQTarget) Close() (err error) {
 }
 
 // NewNSQTarget - creates new NSQ target.
-func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*NSQTarget, error) {
+func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*NSQTarget, error) {
 	config := nsq.NewConfig()
 	if args.TLS.Enable {
 		config.TlsV1 = true
@@ -210,7 +211,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nsq-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID())
+			target.loggerOnce(context.Background(), oErr, target.ID().String())
 			return target, oErr
 		}
 		target.store = store
@@ -218,7 +219,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 
 	producer, err := nsq.NewProducer(args.NSQDAddress.String(), config)
 	if err != nil {
-		target.loggerOnce(context.Background(), err, target.ID())
+		target.loggerOnce(context.Background(), err, target.ID().String())
 		return target, err
 	}
 	target.producer = producer
@@ -226,7 +227,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}

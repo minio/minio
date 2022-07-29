@@ -20,30 +20,33 @@ package logger
 import (
 	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"time"
 )
 
+// LogOnce provides the function type for logger.LogOnceIf() function
+type LogOnce func(ctx context.Context, err error, id string, errKind ...interface{})
+
 // Holds a map of recently logged errors.
 type logOnceType struct {
-	IDMap map[interface{}]error
+	IDMap map[string]error
 	sync.Mutex
 }
 
-func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
+
+	nerr := unwrapErrs(err)
 	l.Lock()
-	shouldLog := false
-	prevErr := l.IDMap[id]
-	if prevErr == nil {
-		l.IDMap[id] = err
-		shouldLog = true
-	} else if prevErr.Error() != err.Error() {
-		l.IDMap[id] = err
-		shouldLog = true
+	shouldLog := true
+	prevErr, ok := l.IDMap[id]
+	if !ok {
+		l.IDMap[id] = nerr
+	} else {
+		// if errors are equal do not log.
+		shouldLog = prevErr.Error() != nerr.Error()
 	}
 	l.Unlock()
 
@@ -52,20 +55,45 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id interf
 	}
 }
 
+const unwrapErrsDepth = 3
+
+// unwrapErrs upto the point where errors.Unwrap(err) returns nil
+func unwrapErrs(err error) (leafErr error) {
+	uerr := errors.Unwrap(err)
+	depth := 1
+	for uerr != nil {
+		// Save the current `uerr`
+		leafErr = uerr
+		// continue to look for leaf errors underneath
+		uerr = errors.Unwrap(leafErr)
+		depth++
+		if depth == unwrapErrsDepth {
+			// If we have reached enough depth we
+			// do not further recurse down, this
+			// is done to avoid any unnecessary
+			// latencies this might bring.
+			break
+		}
+	}
+	return leafErr
+}
+
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
+
+	nerr := unwrapErrs(err)
+
 	l.Lock()
-	shouldLog := false
-	prevErr := l.IDMap[id]
-	if prevErr == nil {
-		l.IDMap[id] = err
-		shouldLog = true
-	} else if prevErr.Error() != err.Error() {
-		l.IDMap[id] = err
-		shouldLog = true
+	shouldLog := true
+	prevErr, ok := l.IDMap[id]
+	if !ok {
+		l.IDMap[id] = nerr
+	} else {
+		// if errors are equal do not log.
+		shouldLog = prevErr.Error() != nerr.Error()
 	}
 	l.Unlock()
 
@@ -78,7 +106,7 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, 
 func (l *logOnceType) cleanupRoutine() {
 	for {
 		l.Lock()
-		l.IDMap = make(map[interface{}]error)
+		l.IDMap = make(map[string]error)
 		l.Unlock()
 
 		time.Sleep(30 * time.Minute)
@@ -87,7 +115,7 @@ func (l *logOnceType) cleanupRoutine() {
 
 // Returns logOnceType
 func newLogOnceType() *logOnceType {
-	l := &logOnceType{IDMap: make(map[interface{}]error)}
+	l := &logOnceType{IDMap: make(map[string]error)}
 	go l.cleanupRoutine()
 	return l
 }
@@ -97,35 +125,17 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
-	if err == nil {
+func LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	if logIgnoreError(err) {
 		return
 	}
-
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-
-	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
-		return
-	}
-
 	logOnce.logOnceIf(ctx, err, id, errKind...)
 }
 
 // LogOnceConsoleIf - similar to LogOnceIf but exclusively only logs to console target.
-func LogOnceConsoleIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
-	if err == nil {
+func LogOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	if logIgnoreError(err) {
 		return
 	}
-
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-
-	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
-		return
-	}
-
 	logOnce.logOnceConsoleIf(ctx, err, id, errKind...)
 }

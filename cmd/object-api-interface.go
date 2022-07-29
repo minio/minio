@@ -105,18 +105,25 @@ type TransitionOptions struct {
 	ExpireRestored bool
 }
 
-// BucketOptions represents bucket options for ObjectLayer bucket operations
-type BucketOptions struct {
+// MakeBucketOptions represents bucket options for ObjectLayer bucket operations
+type MakeBucketOptions struct {
 	Location          string
 	LockEnabled       bool
 	VersioningEnabled bool
-	ForceCreate       bool // Create buckets even if they are already created.
+	ForceCreate       bool      // Create buckets even if they are already created.
+	CreatedAt         time.Time // only for site replication
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.
 type DeleteBucketOptions struct {
-	Force      bool // Force deletion
-	NoRecreate bool // Do not recreate on delete failures
+	Force      bool             // Force deletion
+	NoRecreate bool             // Do not recreate on delete failures
+	SRDeleteOp SRBucketDeleteOp // only when site replication is enabled
+}
+
+// BucketOptions provides options for ListBuckets and GetBucketInfo call.
+type BucketOptions struct {
+	Deleted bool // true only when site replication is enabled
 }
 
 // SetReplicaStatus sets replica status and timestamp for delete operations in ObjectOptions
@@ -190,9 +197,9 @@ type ObjectLayer interface {
 	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
-	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
-	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
+	MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error
+	GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error)
+	ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)

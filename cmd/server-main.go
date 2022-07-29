@@ -607,7 +607,7 @@ func serverMain(ctx *cli.Context) {
 		initDataScanner(GlobalContext, newObject)
 
 		// List buckets to heal, and be re-used for loading configs.
-		buckets, err := newObject.ListBuckets(GlobalContext)
+		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to heal: %w", err))
 		}

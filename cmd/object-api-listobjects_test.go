@@ -23,8 +23,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,7 +41,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		"test-bucket-files",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: true,
 		})
 		if err != nil {
@@ -331,7 +329,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		"test-bucket-max-keys-prefixes",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: versioned,
 		})
 		if err != nil {
@@ -1021,7 +1019,7 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 		"bucket-suspended-version-id",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: true,
 		})
 		if err != nil {
@@ -1108,7 +1106,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		"test-bucket-max-keys-prefixes",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{VersioningEnabled: true})
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{VersioningEnabled: true})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1738,7 +1736,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 		"test-bucket-list-object-continuation-2",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1886,18 +1884,14 @@ func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 // BenchmarkListObjects - Run ListObject Repeatedly and benchmark.
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, err := ioutil.TempDir(globalTestTmpDir, "minio-list-benchmark")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(directory)
+	directory := b.TempDir()
 
 	// Create the obj.
 	obj := initFSObjectsB(directory, b)
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}

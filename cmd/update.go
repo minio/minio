@@ -291,63 +291,50 @@ func getUserAgent(mode string) string {
 }
 
 func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content string, err error) {
-	var reader io.ReadCloser
-	if u.Scheme == "https" || u.Scheme == "http" {
-		req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-		if err != nil {
-			return content, AdminError{
-				Code:       AdminUpdateUnexpectedFailure,
-				Message:    err.Error(),
-				StatusCode: http.StatusInternalServerError,
-			}
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
 		}
-		req.Header.Set("User-Agent", getUserAgent(mode))
+	}
+	req.Header.Set("User-Agent", getUserAgent(mode))
 
-		client := &http.Client{Transport: getUpdateTransport(timeout)}
-		resp, err := client.Do(req)
-		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, false) {
-				return content, AdminError{
-					Code:       AdminUpdateURLNotReachable,
-					Message:    err.Error(),
-					StatusCode: http.StatusServiceUnavailable,
-				}
-			}
-			return content, AdminError{
-				Code:       AdminUpdateUnexpectedFailure,
-				Message:    err.Error(),
-				StatusCode: http.StatusInternalServerError,
-			}
-		}
-		if resp == nil {
-			return content, AdminError{
-				Code:       AdminUpdateUnexpectedFailure,
-				Message:    fmt.Sprintf("No response from server to download URL %s", u),
-				StatusCode: http.StatusInternalServerError,
-			}
-		}
-		reader = resp.Body
-		defer xhttp.DrainBody(resp.Body)
-
-		if resp.StatusCode != http.StatusOK {
-			return content, AdminError{
-				Code:       AdminUpdateUnexpectedFailure,
-				Message:    fmt.Sprintf("Error downloading URL %s. Response: %v", u, resp.Status),
-				StatusCode: resp.StatusCode,
-			}
-		}
-	} else {
-		reader, err = os.Open(u.Path)
-		if err != nil {
+	client := &http.Client{Transport: getUpdateTransport(timeout)}
+	resp, err := client.Do(req)
+	if err != nil {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return content, AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
 				StatusCode: http.StatusServiceUnavailable,
 			}
 		}
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	if resp == nil {
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    fmt.Sprintf("No response from server to download URL %s", u),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	defer xhttp.DrainBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    fmt.Sprintf("Error downloading URL %s. Response: %v", u, resp.Status),
+			StatusCode: resp.StatusCode,
+		}
 	}
 
-	contentBytes, err := ioutil.ReadAll(reader)
+	contentBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return content, AdminError{
 			Code:       AdminUpdateUnexpectedFailure,
@@ -518,7 +505,7 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 
 var updateInProgress uint32
 
-func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string, mode string) (err error) {
+func downloadBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}
@@ -565,7 +552,35 @@ func doUpdate(u *url.URL, lrTime time.Time, sha256Sum []byte, releaseInfo string
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.Apply(reader, opts); err != nil {
+	if err = selfupdate.PrepareAndCheckBinary(reader, opts); err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return AdminError{
+				Code: AdminUpdateApplyFailure,
+				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
+					filepath.Dir(pathErr.Path), pathErr.Err),
+				StatusCode: http.StatusForbidden,
+			}
+		}
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	return nil
+}
+
+func commitBinary() (err error) {
+	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+		return errors.New("update already in progress")
+	}
+	defer atomic.StoreUint32(&updateInProgress, 0)
+
+	opts := selfupdate.Options{}
+
+	if err = selfupdate.CommitBinary(opts); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,

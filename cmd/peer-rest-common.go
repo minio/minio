@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v23" // Added /metrics
+	peerRESTVersion       = "v24" // Change ServerUpdate to DownloadBinary and CommitBinary
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -39,7 +39,8 @@ const (
 	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
 	peerRESTMethodGetBucketStats              = "/getbucketstats"
 	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
-	peerRESTMethodServerUpdate                = "/serverupdate"
+	peerRESTMethodDownloadBinary              = "/downloadbinary"
+	peerRESTMethodCommitBinary                = "/commitbinary"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
 	peerRESTMethodGetLocks                    = "/getlocks"

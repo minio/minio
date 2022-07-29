@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
@@ -217,7 +218,7 @@ type NATSTarget struct {
 	stanConn   stan.Conn
 	jstream    nats.JetStream
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -350,7 +351,7 @@ func (target *NATSTarget) Close() (err error) {
 }
 
 // NewNATSTarget - creates new NATS target.
-func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*NATSTarget, error) {
+func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*NATSTarget, error) {
 	var natsConn *nats.Conn
 	var stanConn stan.Conn
 	var jstream nats.JetStream
@@ -369,14 +370,14 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID())
+			target.loggerOnce(context.Background(), oErr, target.ID().String())
 			return target, oErr
 		}
 		target.store = store
 	}
 
 	if args.Streaming.Enable {
-		target.loggerOnce(context.Background(), errors.New("NATS Streaming is deprecated please migrate to JetStream"), target.ID())
+		target.loggerOnce(context.Background(), errors.New("NATS Streaming is deprecated please migrate to JetStream"), target.ID().String())
 
 		stanConn, err = args.connectStan()
 		target.stanConn = stanConn
@@ -387,7 +388,7 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 
 	if err != nil {
 		if store == nil || err.Error() != nats.ErrNoServers.Error() {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 	}
@@ -396,7 +397,7 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 		jstream, err = target.natsConn.JetStream()
 		if err != nil {
 			if store == nil || err.Error() != nats.ErrNoServers.Error() {
-				target.loggerOnce(context.Background(), err, target.ID())
+				target.loggerOnce(context.Background(), err, target.ID().String())
 				return target, err
 			}
 		}

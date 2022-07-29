@@ -113,7 +113,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	}
 
 	if bucketName != "" {
-		if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
+		if _, err := objAPI.GetBucketInfo(ctx, bucketName, BucketOptions{}); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}

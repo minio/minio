@@ -533,9 +533,11 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
 
 	// Data blocks can vary per pool, but parity is same.
-	for _, setDriveCount := range z.SetDriveCounts() {
+	for i, setDriveCount := range z.SetDriveCounts() {
 		b.StandardSCData = append(b.StandardSCData, setDriveCount-scParity)
 		b.RRSCData = append(b.RRSCData, setDriveCount-rrSCParity)
+		b.DrivesPerSet = append(b.DrivesPerSet, setDriveCount)
+		b.TotalSets = append(b.TotalSets, z.serverPools[i].setCount)
 	}
 
 	b.StandardSCParity = scParity
@@ -613,7 +615,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 	var results []dataUsageCache
 	var firstErr error
 
-	allBuckets, err := z.ListBuckets(ctx)
+	allBuckets, err := z.ListBuckets(ctx, BucketOptions{})
 	if err != nil {
 		return err
 	}
@@ -718,7 +720,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 // MakeBucketWithLocation - creates a new bucket across all serverPools simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
-func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
+func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Lock the bucket name before creating.
@@ -758,6 +760,7 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 
 	// If it doesn't exist we get a new, so ignore errors
 	meta := newBucketMetadata(bucket)
+	meta.SetCreatedAt(opts.CreatedAt)
 	if opts.LockEnabled {
 		meta.VersioningConfigXML = enabledBucketVersioningConfig
 		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
@@ -1539,9 +1542,9 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 }
 
 // GetBucketInfo - returns bucket info from one of the erasure coded serverPools.
-func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
+func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error) {
 	if z.SinglePool() {
-		bucketInfo, err = z.serverPools[0].GetBucketInfo(ctx, bucket)
+		bucketInfo, err = z.serverPools[0].GetBucketInfo(ctx, bucket, opts)
 		if err != nil {
 			return bucketInfo, err
 		}
@@ -1552,7 +1555,7 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string) (
 		return bucketInfo, nil
 	}
 	for _, pool := range z.serverPools {
-		bucketInfo, err = pool.GetBucketInfo(ctx, bucket)
+		bucketInfo, err = pool.GetBucketInfo(ctx, bucket, opts)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
@@ -1626,7 +1629,11 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 
 	// Purge the entire bucket metadata entirely.
 	z.renameAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
-
+	// If site replication is configured, hold on to deleted bucket state until sites sync
+	switch opts.SRDeleteOp {
+	case MarkDelete:
+		z.markDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+	}
 	// Success.
 	return nil
 }
@@ -1644,6 +1651,27 @@ func (z *erasureServerPools) renameAll(ctx context.Context, bucket, prefix strin
 	}
 }
 
+// markDelete will create a directory of deleted bucket in .minio.sys/buckets/.deleted across all disks
+// in situations where the deleted bucket needs to be held on to until all sites are in sync for
+// site replication
+func (z *erasureServerPools) markDelete(ctx context.Context, bucket, prefix string) {
+	for _, servers := range z.serverPools {
+		for _, set := range servers.sets {
+			set.markDelete(ctx, bucket, prefix)
+		}
+	}
+}
+
+// purgeDelete deletes vol entry in .minio.sys/buckets/.deleted after site replication
+// syncs the delete to peers.
+func (z *erasureServerPools) purgeDelete(ctx context.Context, bucket, prefix string) {
+	for _, servers := range z.serverPools {
+		for _, set := range servers.sets {
+			set.purgeDelete(ctx, bucket, prefix)
+		}
+	}
+}
+
 // This function is used to undo a successful DeleteBucket operation.
 func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools []*erasureSets, errs []error) {
 	g := errgroup.WithNErrs(len(serverPools))
@@ -1653,7 +1681,7 @@ func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return serverPools[index].MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+				return serverPools[index].MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 			}
 			return nil
 		}, index)
@@ -1665,15 +1693,15 @@ func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools
 // List all buckets from one of the serverPools, we are not doing merge
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all serverPools.
-func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
+func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	if z.SinglePool() {
-		buckets, err = z.serverPools[0].ListBuckets(ctx)
+		buckets, err = z.serverPools[0].ListBuckets(ctx, opts)
 	} else {
 		for idx, pool := range z.serverPools {
 			if z.IsSuspended(idx) {
 				continue
 			}
-			buckets, err = pool.ListBuckets(ctx)
+			buckets, err = pool.ListBuckets(ctx, opts)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue
@@ -1685,9 +1713,9 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketI
 		return nil, err
 	}
 	for i := range buckets {
-		meta, err := globalBucketMetadataSys.Get(buckets[i].Name)
+		createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
 		if err == nil {
-			buckets[i].Created = meta.Created
+			buckets[i].Created = createdAt
 		}
 	}
 	return buckets, nil

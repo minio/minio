@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"runtime"
 	"sort"
 	"time"
 
@@ -47,6 +48,38 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 		defer close(ch)
 
 		concurrency := opts.concurrencyStart
+
+		if opts.autotune {
+			// if we have less drives than concurrency then choose
+			// only the concurrency to be number of drives to start
+			// with - since default '32' might be big and may not
+			// complete in total time of 10s.
+			if globalEndpoints.NEndpoints() < concurrency {
+				concurrency = globalEndpoints.NEndpoints()
+			}
+
+			// Check if we have local disks per pool less than
+			// the concurrency make sure we choose only the "start"
+			// concurrency to be equal to the lowest number of
+			// local disks per server.
+			for _, localDiskCount := range globalEndpoints.NLocalDisksPathsPerPool() {
+				if localDiskCount < concurrency {
+					concurrency = localDiskCount
+				}
+			}
+
+			// Any concurrency less than '4' just stick to '4' concurrent
+			// operations for now to begin with.
+			if concurrency < 4 {
+				concurrency = 4
+			}
+
+			// if GOMAXPROCS is set to a lower value then choose to use
+			// concurrency == GOMAXPROCS instead.
+			if runtime.GOMAXPROCS(0) < concurrency {
+				concurrency = runtime.GOMAXPROCS(0)
+			}
+		}
 
 		throughputHighestGet := uint64(0)
 		throughputHighestPut := uint64(0)
@@ -97,7 +130,11 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			result.Version = Version
 			result.Concurrent = concurrency
 
-			ch <- result
+			select {
+			case ch <- result:
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		for {

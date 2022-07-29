@@ -1452,11 +1452,6 @@ func getListenNotificationURL(endPoint, bucketName string, prefixes, suffixes, e
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
-// returns temp root directory. `
-func getTestRoot() (string, error) {
-	return ioutil.TempDir(globalTestTmpDir, "api-")
-}
-
 // getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
 func getRandomDisks(N int) ([]string, error) {
 	var erasureDisks []string
@@ -1528,7 +1523,7 @@ func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
