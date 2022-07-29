@@ -2713,7 +2713,7 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 	go func() {
 		ci := clusterInfo{}
 		ci.Info.PoolsCount = len(globalEndpoints)
-		ci.Info.ServersCount = len(globalNotificationSys.ServerInfo()) + 1
+		ci.Info.ServersCount = len(globalEndpoints.Hostnames())
 		ci.Info.MinioVersion = Version
 
 		si, _ := objectAPI.StorageInfo(ctx)
