@@ -129,7 +129,7 @@ type Config struct {
 	} `json:"sasl"`
 
 	// Custom logger
-	LogOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}) `json:"-"`
+	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
 // Check if atleast one broker in cluster is active

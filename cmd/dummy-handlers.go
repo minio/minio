@@ -52,7 +52,7 @@ func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *h
 	}
 
 	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -84,7 +84,7 @@ func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r
 	}
 
 	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -117,7 +117,7 @@ func (api objectAPIHandlers) GetBucketRequestPaymentHandler(w http.ResponseWrite
 	}
 
 	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -151,7 +151,7 @@ func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -189,7 +189,7 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 	}
 
 	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	_, err := objAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

@@ -143,7 +143,7 @@ func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r
 	}
 
 	// Check if bucket exists.
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

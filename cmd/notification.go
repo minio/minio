@@ -456,7 +456,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 			defer mu.Unlock()
 
 			if err != nil || !serverBF.Complete || bf == nil {
-				logger.LogOnceIf(ctx, err, fmt.Sprintf("host:%s, cycle:%d", client.host, current), client.cycleServerBloomFilter)
+				logger.LogOnceIf(ctx, err, client.host.String(), client.cycleServerBloomFilter)
 				bf = nil
 				return nil
 			}
@@ -717,7 +717,7 @@ func (sys *NotificationSys) InitBucketTargets(ctx context.Context, objAPI Object
 			if res.Err != nil {
 				reqInfo := &logger.ReqInfo{}
 				reqInfo.AppendTags("targetID", res.ID.Name)
-				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID)
+				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID.String())
 			}
 		}
 	}()

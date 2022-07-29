@@ -1210,12 +1210,22 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		concurrent = runtime.GOMAXPROCS(0)
 	}
 
+	// if we have less drives than concurrency then choose
+	// only the concurrency to be number of drives to start
+	// with - since default '32' might be big and may not
+	// complete in total time of 10s.
+	if globalEndpoints.NEndpoints() < concurrent {
+		concurrent = globalEndpoints.NEndpoints()
+	}
+
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		duration = time.Second * 10
 	}
 
-	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
+	storageInfo, _ := objectAPI.StorageInfo(ctx)
+
+	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 	if !sufficientCapacity {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
 			Code:       "XMinioSpeedtestInsufficientCapacity",
@@ -1288,7 +1298,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 }
 
 func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName string) (bucketExists bool, err error) {
-	if err = objectAPI.MakeBucketWithLocation(ctx, bucketName, BucketOptions{}); err != nil {
+	if err = objectAPI.MakeBucketWithLocation(ctx, bucketName, MakeBucketOptions{}); err != nil {
 		if _, ok := err.(BucketExists); !ok {
 			// Only BucketExists error can be ignored.
 			return false, err
@@ -1302,11 +1312,11 @@ func deleteObjectPerfBucket(objectAPI ObjectLayer) {
 	objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
 		Force:      true,
 		NoRecreate: true,
+		SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 	})
 }
 
-func validateObjPerfOptions(ctx context.Context, objectAPI ObjectLayer, concurrent int, size int, autotune bool) (sufficientCapacity bool, canAutotune bool, capacityErrMsg string) {
-	storageInfo, _ := objectAPI.StorageInfo(ctx)
+func validateObjPerfOptions(ctx context.Context, storageInfo madmin.StorageInfo, concurrent int, size int, autotune bool) (bool, bool, string) {
 	capacityNeeded := uint64(concurrent * size)
 	capacity := GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo)
 
@@ -2219,11 +2229,20 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 				concurrent = runtime.GOMAXPROCS(0)
 			}
 
+			// if we have less drives than concurrency then choose
+			// only the concurrency to be number of drives to start
+			// with - since default '32' might be big and may not
+			// complete in total time of 10s.
+			if globalEndpoints.NEndpoints() < concurrent {
+				concurrent = globalEndpoints.NEndpoints()
+			}
+
+			storageInfo, _ := objectAPI.StorageInfo(ctx)
+
 			size := 64 * humanize.MiByte
 			autotune := true
 
-			sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, objectAPI, concurrent, size, autotune)
-
+			sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 			if !sufficientCapacity {
 				healthInfo.Perf.Error = capacityErrMsg
 				partialWrite(healthInfo)
@@ -2653,7 +2672,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 }
 
 type clusterInfo struct {
-	DeploymentID string `json:"deployement_id"`
+	DeploymentID string `json:"deployment_id"`
 	ClusterName  string `json:"cluster_name"`
 	UsedCapacity uint64 `json:"used_capacity"`
 	Info         struct {

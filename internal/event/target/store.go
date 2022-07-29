@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 )
 
 const retryInterval = 3 * time.Second
@@ -46,36 +47,34 @@ type Store interface {
 }
 
 // replayEvents - Reads the events from the store and replays.
-func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), id event.TargetID) <-chan string {
+func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce logger.LogOnce, id event.TargetID) <-chan string {
 	eventKeyCh := make(chan string)
 
 	go func() {
+		defer close(eventKeyCh)
+
 		retryTicker := time.NewTicker(retryInterval)
 		defer retryTicker.Stop()
-		defer close(eventKeyCh)
+
 		for {
 			names, err := store.List()
-			if err == nil {
+			if err != nil {
+				loggerOnce(context.Background(), fmt.Errorf("eventStore.List() failed with: %w", err), id.String())
+			} else {
 				for _, name := range names {
 					select {
 					case eventKeyCh <- strings.TrimSuffix(name, eventExt):
-						// Get next key.
+					// Get next key.
 					case <-doneCh:
 						return
 					}
 				}
 			}
 
-			if len(names) < 2 {
-				select {
-				case <-retryTicker.C:
-					if err != nil {
-						loggerOnce(context.Background(),
-							fmt.Errorf("store.List() failed '%w'", err), id)
-					}
-				case <-doneCh:
-					return
-				}
+			select {
+			case <-retryTicker.C:
+			case <-doneCh:
+				return
 			}
 		}
 	}()
@@ -98,7 +97,7 @@ func IsConnResetErr(err error) bool {
 }
 
 // sendEvents - Reads events from the store and re-plays.
-func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) {
+func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce logger.LogOnce) {
 	retryTicker := time.NewTicker(retryInterval)
 	defer retryTicker.Stop()
 
@@ -112,7 +111,7 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 			if err != errNotConnected && !IsConnResetErr(err) {
 				loggerOnce(context.Background(),
 					fmt.Errorf("target.Send() failed with '%w'", err),
-					target.ID())
+					target.ID().String())
 			}
 
 			// Retrying after 3secs back-off

@@ -31,6 +31,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -111,7 +112,7 @@ type MQTTTarget struct {
 	client     mqtt.Client
 	store      Store
 	quitCh     chan struct{}
-	loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})
+	loggerOnce logger.LogOnce
 }
 
 // ID - returns target ID.
@@ -202,7 +203,7 @@ func (target *MQTTTarget) Close() error {
 }
 
 // NewMQTTTarget - creates new MQTT target.
-func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*MQTTTarget, error) {
+func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*MQTTTarget, error) {
 	if args.MaxReconnectInterval == 0 {
 		// Default interval
 		// https://github.com/eclipse/paho.mqtt.golang/blob/master/options.go#L115
@@ -253,7 +254,7 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 					target.loggerOnce(context.Background(),
 						fmt.Errorf("Previous connect failed with %w attempting a reconnect",
 							token.Error()),
-						target.ID())
+						target.ID().String())
 					time.Sleep(reconnectInterval * time.Second)
 					token = client.Connect()
 					goto retry
@@ -270,7 +271,7 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
 		target.store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := target.store.Open(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(context.Background(), err, target.ID().String())
 			return target, err
 		}
 

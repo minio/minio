@@ -232,7 +232,7 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 // Return count entries at the directory dirPath and all entries
 // if count is set to -1
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := Open(dirPath)
+	f, err := OpenFile(dirPath, readMode, 0)
 	if err != nil {
 		return nil, osErrToFileErr(err)
 	}

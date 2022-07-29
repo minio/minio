@@ -254,7 +254,7 @@ func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates cha
 		return err
 	}
 	totalCache.Info.Name = dataUsageRoot
-	buckets, err := fs.ListBuckets(ctx)
+	buckets, err := fs.ListBuckets(ctx, BucketOptions{})
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func (fs *FSObjects) statBucketDir(ctx context.Context, bucket string) (os.FileI
 }
 
 // MakeBucketWithLocation - create a new bucket, returns if it already exists.
-func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
+func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	if opts.LockEnabled || opts.VersioningEnabled {
 		return NotImplemented{}
 	}
@@ -524,7 +524,7 @@ func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 }
 
 // GetBucketInfo - fetch bucket metadata info.
-func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
+func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bi BucketInfo, e error) {
 	st, err := fs.statBucketDir(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -543,7 +543,7 @@ func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucke
 }
 
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.
-func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
+func (fs *FSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
 	if err := checkPathLength(fs.fsPath); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err

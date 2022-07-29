@@ -24,6 +24,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
@@ -116,19 +118,38 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 		_, isLockEnabled := r.Form["lockEnabled"]
 		_, isVersioningEnabled := r.Form["versioningEnabled"]
 		_, isForceCreate := r.Form["forceCreate"]
-		opts := BucketOptions{
+		createdAtStr := strings.TrimSpace(r.Form.Get("createdAt"))
+		createdAt, cerr := time.Parse(time.RFC3339Nano, createdAtStr)
+		if cerr != nil {
+			createdAt = timeSentinel
+		}
+
+		opts := MakeBucketOptions{
 			Location:          r.Form.Get("location"),
 			LockEnabled:       isLockEnabled,
 			VersioningEnabled: isVersioningEnabled,
 			ForceCreate:       isForceCreate,
+			CreatedAt:         createdAt,
 		}
 		err = globalSiteReplicationSys.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
 	case madmin.ConfigureReplBktOp:
 		err = globalSiteReplicationSys.PeerBucketConfigureReplHandler(ctx, bucket)
 	case madmin.DeleteBucketBktOp:
-		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, false)
+		_, noRecreate := r.Form["noRecreate"]
+		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
+			Force:      false,
+			NoRecreate: noRecreate,
+			SRDeleteOp: getSRBucketDeleteOp(true),
+		})
 	case madmin.ForceDeleteBucketBktOp:
-		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, true)
+		_, noRecreate := r.Form["noRecreate"]
+		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
+			Force:      true,
+			NoRecreate: noRecreate,
+			SRDeleteOp: getSRBucketDeleteOp(true),
+		})
+	case madmin.PurgeDeletedBucketOp:
+		globalSiteReplicationSys.purgeDeletedBucket(ctx, objectAPI, bucket)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -436,6 +457,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	opts.Users = q.Get("users") == "true"
 	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
 	opts.EntityValue = q.Get("entityvalue")
+	opts.ShowDeleted = q.Get("showDeleted") == "true"
 	return
 }
 

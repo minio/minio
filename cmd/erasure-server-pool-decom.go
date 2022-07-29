@@ -1119,7 +1119,7 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 		return errInvalidArgument
 	}
 
-	buckets, err := z.ListBuckets(ctx)
+	buckets, err := z.ListBuckets(ctx, BucketOptions{})
 	if err != nil {
 		return err
 	}
@@ -1157,7 +1157,7 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, idx int) (er
 		pathJoin(minioMetaBucket, bucketMetaPrefix),
 	} {
 		var bucketExists BucketExists
-		if err = z.MakeBucketWithLocation(ctx, metaBucket, BucketOptions{}); err != nil {
+		if err = z.MakeBucketWithLocation(ctx, metaBucket, MakeBucketOptions{}); err != nil {
 			if !errors.As(err, &bucketExists) {
 				return err
 			}
