@@ -39,7 +39,7 @@ function start_minio_5drive() {
     "${MINIO[@]}" --address ":$start_port" "${WORK_DIR}/cicd-corpus/disk{1...5}" > "${WORK_DIR}/server1.log" 2>&1 &
     pid=$!
     disown $pid
-    sleep 30
+    sleep 5
 
     if ! ps -p ${pid} 1>&2 >/dev/null; then
 	echo "server1 log:"
