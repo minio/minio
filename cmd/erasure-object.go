@@ -534,6 +534,11 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		return metaFileInfos, errs
 	}
 
+	versionID := lfi.VersionID
+	if versionID == "" {
+		versionID = nullVersionID
+	}
+
 	for index := range metadataArray {
 		if metadataArray[index] == nil {
 			continue
@@ -541,21 +546,15 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 
 		// make sure to preserve this for diskmtime based healing bugfix.
 		diskMTime := metaFileInfos[index].DiskMTime
-		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, "")
+		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID)
 		if errs[index] != nil {
 			continue
 		}
 
-		if metaFileInfos[index].IsValid() && metaFileInfos[index].ModTime.Equal(lfi.ModTime) {
-			versionID := metaFileInfos[index].VersionID
-			if versionID == "" {
-				versionID = nullVersionID
-			}
-			if readData {
-				metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
-			}
-			metaFileInfos[index].DiskMTime = diskMTime
+		if readData {
+			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
+		metaFileInfos[index].DiskMTime = diskMTime
 	}
 
 	// Return all the metadata.
