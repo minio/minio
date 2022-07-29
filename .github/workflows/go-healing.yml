@@ -49,3 +49,4 @@ jobs:
           make verify-healing
           make verify-healing-inconsistent-versions
           make verify-healing-with-root-disks
+          make verify-healing-with-rewrite
