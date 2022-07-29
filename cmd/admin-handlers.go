@@ -1206,18 +1206,6 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		concurrent = 32
 	}
 
-	if runtime.GOMAXPROCS(0) < concurrent {
-		concurrent = runtime.GOMAXPROCS(0)
-	}
-
-	// if we have less drives than concurrency then choose
-	// only the concurrency to be number of drives to start
-	// with - since default '32' might be big and may not
-	// complete in total time of 10s.
-	if globalEndpoints.NEndpoints() < concurrent {
-		concurrent = globalEndpoints.NEndpoints()
-	}
-
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		duration = time.Second * 10
@@ -2225,17 +2213,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	getAndWriteObjPerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
 			concurrent := 32
-			if runtime.GOMAXPROCS(0) < concurrent {
-				concurrent = runtime.GOMAXPROCS(0)
-			}
-
-			// if we have less drives than concurrency then choose
-			// only the concurrency to be number of drives to start
-			// with - since default '32' might be big and may not
-			// complete in total time of 10s.
-			if globalEndpoints.NEndpoints() < concurrent {
-				concurrent = globalEndpoints.NEndpoints()
-			}
 
 			storageInfo, _ := objectAPI.StorageInfo(ctx)
 
