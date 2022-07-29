@@ -381,7 +381,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	if userDefined["content-type"] == "" {
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
-	if opts.WantMultipartChecksum != nil && opts.WantMultipartChecksum.Type.IsSet() {
+
+	// TODO(klauspost): Enable when more tested.
+	if false && opts.WantMultipartChecksum != nil && opts.WantMultipartChecksum.Type.IsSet() {
 		userDefined[hash.MinIOMultipartChecksum] = opts.WantMultipartChecksum.Type.String()
 	}
 
