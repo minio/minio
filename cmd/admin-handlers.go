@@ -142,7 +142,16 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.DownloadBinary(ctx, u, sha256Sum, releaseInfo) {
+	// Download Binary Once
+	reader, err := downloadBinary(u, mode)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Push binary to other servers
+	for _, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,
@@ -156,7 +165,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	err = downloadBinary(u, sha256Sum, releaseInfo, mode)
+	err = verifyBinary(u, sha256Sum, releaseInfo, mode, reader)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

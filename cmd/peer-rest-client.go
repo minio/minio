@@ -422,16 +422,18 @@ type binaryInfo struct {
 	URL         *url.URL
 	Sha256Sum   []byte
 	ReleaseInfo string
+	BinaryFile  []byte
 }
 
-// DownloadBinary - sends download binary message to remote peers.
-func (client *peerRESTClient) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) error {
+// VerifyBinary - sends verify binary message to remote peers.
+func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, readerInput []byte) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(binaryInfo{
 		URL:         u,
 		Sha256Sum:   sha256Sum,
 		ReleaseInfo: releaseInfo,
+		BinaryFile:  readerInput,
 	}); err != nil {
 		return err
 	}
