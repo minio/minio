@@ -43,7 +43,7 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/miekg/dns v1.1.48
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.19.4-0.20220728202016-3b11556f4b9d
+	github.com/minio/console v0.19.4
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
