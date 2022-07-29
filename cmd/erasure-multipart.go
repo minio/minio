@@ -326,7 +326,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // '.minio.sys/multipart/bucket/object/uploads.json' on all the
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
-func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
+func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	userDefined := cloneMSS(opts.UserDefined)
 
 	onlineDisks := er.getDisks()
@@ -381,6 +381,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	if userDefined["content-type"] == "" {
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
+	if opts.WantMultipartChecksum != nil && opts.WantMultipartChecksum.Type.IsSet() {
+		userDefined[hash.MinIOMultipartChecksum] = opts.WantMultipartChecksum.Type.String()
+	}
 
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
@@ -402,11 +405,12 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
+		return nil, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
-
-	// Return success.
-	return uploadID, nil
+	return &NewMultipartUploadResult{
+		UploadID:     uploadID,
+		ChecksumAlgo: userDefined[hash.MinIOMultipartChecksum],
+	}, nil
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a
@@ -414,7 +418,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
+func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	auditObjectErasureSet(ctx, object, &er)
 
 	return er.newMultipartUpload(ctx, bucket, object, opts)

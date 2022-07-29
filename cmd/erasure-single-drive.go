@@ -1844,7 +1844,7 @@ func (es *erasureSingle) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 	}
 
-	uploadID, err := es.NewMultipartUpload(ctx, bucket, object, ropts)
+	result, err := es.NewMultipartUpload(ctx, bucket, object, ropts)
 	if err != nil {
 		return setRestoreHeaderFn(oi, err)
 	}
@@ -1864,7 +1864,7 @@ func (es *erasureSingle) restoreTransitionedObject(ctx context.Context, bucket s
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
-		pInfo, err := es.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
+		pInfo, err := es.PutObjectPart(ctx, bucket, object, result.UploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
@@ -1876,7 +1876,7 @@ func (es *erasureSingle) restoreTransitionedObject(ctx context.Context, bucket s
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = es.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
+	_, err = es.CompleteMultipartUpload(ctx, bucket, object, result.UploadID, uploadedParts, ObjectOptions{
 		MTime: oi.ModTime,
 	})
 	return setRestoreHeaderFn(oi, err)
@@ -2084,7 +2084,7 @@ func (es *erasureSingle) ListMultipartUploads(ctx context.Context, bucket, objec
 // '.minio.sys/multipart/bucket/object/uploads.json' on all the
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
-func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
+func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	onlineDisks := []StorageAPI{es.disk}
 	parityDrives := 0
 	dataDrives := len(onlineDisks) - parityDrives
@@ -2136,11 +2136,11 @@ func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, 
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
+		return nil, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
 	// Return success.
-	return uploadID, nil
+	return &NewMultipartUploadResult{UploadID: uploadID}, nil
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a
@@ -2148,9 +2148,9 @@ func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, 
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (es *erasureSingle) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
+func (es *erasureSingle) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, es); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// No metadata is set, allocate a new one.

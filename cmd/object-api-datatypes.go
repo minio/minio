@@ -547,3 +547,8 @@ func (a CompletedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 type CompleteMultipartUpload struct {
 	Parts []CompletePart `xml:"Part"`
 }
+
+type NewMultipartUploadResult struct {
+	UploadID     string
+	ChecksumAlgo string
+}

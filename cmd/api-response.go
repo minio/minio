@@ -163,6 +163,12 @@ type Part struct {
 	LastModified string
 	ETag         string
 	Size         int64
+
+	// Checksum values
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // ListPartsResponse - format for list parts response.
@@ -695,6 +701,10 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
 		newPart.LastModified = part.LastModified.UTC().Format(iso8601TimeFormat)
+		newPart.ChecksumCRC32 = part.ChecksumCRC32
+		newPart.ChecksumCRC32C = part.ChecksumCRC32C
+		newPart.ChecksumSHA1 = part.ChecksumSHA1
+		newPart.ChecksumSHA256 = part.ChecksumSHA256
 		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse

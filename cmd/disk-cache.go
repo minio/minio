@@ -87,7 +87,7 @@ type CacheObjectLayer interface {
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	// Multipart operations.
-	NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error)
+	NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error)
 	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error)
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -122,7 +122,7 @@ type cacheObjects struct {
 	InnerDeleteObjectFn            func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	InnerPutObjectFn               func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	InnerCopyObjectFn              func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerNewMultipartUploadFn      func(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error)
+	InnerNewMultipartUploadFn      func(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error)
 	InnerPutObjectPartFn           func(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error)
 	InnerAbortMultipartUploadFn    func(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	InnerCompleteMultipartUploadFn func(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -866,7 +866,7 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		InnerCopyObjectFn: func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 			return newObjectLayerFn().CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 		},
-		InnerNewMultipartUploadFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
+		InnerNewMultipartUploadFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error) {
 			return newObjectLayerFn().NewMultipartUpload(ctx, bucket, object, opts)
 		},
 		InnerPutObjectPartFn: func(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error) {
@@ -961,7 +961,7 @@ func (c *cacheObjects) queuePendingWriteback(ctx context.Context) {
 }
 
 // NewMultipartUpload - Starts a new multipart upload operation to backend - if writethrough mode is enabled, starts caching the multipart.
-func (c *cacheObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
+func (c *cacheObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error) {
 	newMultipartUploadFn := c.InnerNewMultipartUploadFn
 	dcache, err := c.getCacheToLoc(ctx, bucket, object)
 	if err != nil {
@@ -996,9 +996,11 @@ func (c *cacheObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	}
 
 	// perform multipart upload on backend and cache simultaneously
-	uploadID, err = newMultipartUploadFn(ctx, bucket, object, opts)
-	dcache.NewMultipartUpload(GlobalContext, bucket, object, uploadID, opts)
-	return uploadID, err
+	res, err = newMultipartUploadFn(ctx, bucket, object, opts)
+	if err == nil {
+		dcache.NewMultipartUpload(GlobalContext, bucket, object, res.UploadID, opts)
+	}
+	return res, err
 }
 
 // PutObjectPart streams part to cache concurrently if writethrough mode is enabled. Otherwise redirects the call to remote

@@ -561,14 +561,14 @@ func TestHealCorrectQuorum(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
+	res, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, res.UploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -578,7 +578,7 @@ func TestHealCorrectQuorum(t *testing.T) {
 		})
 	}
 
-	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - got: %v", err)
 	}
@@ -694,10 +694,11 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	z := objLayer.(*erasureServerPools)
 	set := z.serverPools[1]
 
-	uploadID, err := set.NewMultipartUpload(ctx, bucket, object, opts)
+	res, err := set.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
+	uploadID := res.UploadID
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
@@ -868,14 +869,14 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
+	res, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, res.UploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -885,7 +886,7 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 		})
 	}
 
-	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
@@ -1011,14 +1012,14 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
+	res, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, res.UploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -1028,7 +1029,7 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 		})
 	}
 
-	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
@@ -1168,14 +1169,14 @@ func TestHealObjectErasure(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := obj.NewMultipartUpload(ctx, bucket, object, opts)
+	res, err := obj.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := obj.PutObjectPart(ctx, bucket, object, res.UploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -1190,7 +1191,7 @@ func TestHealObjectErasure(t *testing.T) {
 	er := z.serverPools[0].sets[0]
 	firstDisk := er.getDisks()[0]
 
-	_, err = obj.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = obj.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}

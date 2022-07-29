@@ -435,7 +435,7 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 }
 
 // NewMultipartUpload uploads object in multiple parts
-func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
+func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket, object string, o minio.ObjectOptions) (result *minio.NewMultipartUploadResult, err error) {
 	var sseOpts encrypt.ServerSide
 	if o.ServerSideEncryption == nil {
 		return l.s3Objects.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{UserDefined: o.UserDefined})
@@ -446,7 +446,7 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 		sseOpts = o.ServerSideEncryption
 	}
 
-	uploadID, err = l.s3Objects.NewMultipartUpload(ctx, bucket, getGWContentPath(object), minio.ObjectOptions{ServerSideEncryption: sseOpts})
+	result, err = l.s3Objects.NewMultipartUpload(ctx, bucket, getGWContentPath(object), minio.ObjectOptions{ServerSideEncryption: sseOpts})
 	if err != nil {
 		return
 	}
@@ -454,11 +454,11 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 	gwmeta := newGWMetaV1()
 	gwmeta.Meta = o.UserDefined
 	gwmeta.Stat.ModTime = time.Now().UTC()
-	err = l.writeGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID), gwmeta, minio.ObjectOptions{})
+	err = l.writeGWMetadata(ctx, bucket, getTmpDareMetaPath(object, result.UploadID), gwmeta, minio.ObjectOptions{})
 	if err != nil {
-		return uploadID, minio.ErrorRespToObjectError(err)
+		return nil, minio.ErrorRespToObjectError(err)
 	}
-	return uploadID, nil
+	return result, nil
 }
 
 // PutObject creates a new object with the incoming data,

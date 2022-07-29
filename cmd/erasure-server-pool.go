@@ -1336,14 +1336,14 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
+func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, z); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if z.SinglePool() {
 		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1) {
-			return "", toObjectErr(errDiskFull)
+			return nil, toObjectErr(errDiskFull)
 		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
@@ -1354,7 +1354,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		}
 		result, err := pool.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		// If there is a multipart upload with the same bucket/object name,
 		// create the new multipart in the same pool, this will avoid
@@ -1368,7 +1368,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	// to return since this holds a read lock on the namespace.
 	idx, err := z.getPoolIdx(ctx, bucket, object, -1)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)

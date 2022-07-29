@@ -1947,7 +1947,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 	}
 
-	uploadID, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
+	res, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
 	if err != nil {
 		return setRestoreHeaderFn(oi, err)
 	}
@@ -1967,7 +1967,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
-		pInfo, err := er.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
+		pInfo, err := er.PutObjectPart(ctx, bucket, object, res.UploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
@@ -1979,7 +1979,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{
 		MTime: oi.ModTime,
 	})
 	return setRestoreHeaderFn(oi, err)

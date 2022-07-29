@@ -1714,11 +1714,12 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	// PutObjectPart API HTTP Handler has to be tested in isolation,
 	// that is without any other handler being registered,
 	// That's why NewMultipartUpload is initiated using ObjectLayer.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
+	res, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
+	uploadID := res.UploadID
 
 	a := 0
 	b := globalMinPartSize
@@ -1830,11 +1831,12 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// PutObjectPart API HTTP Handler has to be tested in isolation,
 	// that is without any other handler being registered,
 	// That's why NewMultipartUpload is initiated using ObjectLayer.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
+	res, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
+	uploadID := res.UploadID
 
 	// test cases with inputs and expected result for Copy Object.
 	testCases := []struct {
@@ -2793,20 +2795,18 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// object used for the test.
 	objectName := "test-object-new-multipart"
 
-	// uploadID obtained from NewMultipart upload.
-	var uploadID string
 	// upload IDs collected.
 	var uploadIDs []string
 
 	for i := 0; i < 2; i++ {
 		// initiate new multipart uploadID.
-		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
+		res, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
 			t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 		}
 
-		uploadIDs = append(uploadIDs, uploadID)
+		uploadIDs = append(uploadIDs, res.UploadID)
 	}
 
 	// Parts with size greater than 5 MiB.
@@ -3163,20 +3163,18 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// object used for the test.
 	objectName := "test-object-new-multipart"
 
-	// uploadID obtained from NewMultipart upload.
-	var uploadID string
 	// upload IDs collected.
 	var uploadIDs []string
 
 	for i := 0; i < 2; i++ {
 		// initiate new multipart uploadID.
-		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
+		res, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
 			t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 		}
 
-		uploadIDs = append(uploadIDs, uploadID)
+		uploadIDs = append(uploadIDs, res.UploadID)
 	}
 
 	// Parts with size greater than 5 MiB.
@@ -3573,11 +3571,12 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	// PutObjectPart API HTTP Handler has to be tested in isolation,
 	// that is without any other handler being registered,
 	// That's why NewMultipartUpload is initiated using ObjectLayer.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
+	res, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
+	uploadID := res.UploadID
 
 	uploadIDCopy := uploadID
 
@@ -3958,12 +3957,12 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	// PutObjectPart API HTTP Handler has to be tested in isolation,
 	// that is without any other handler being registered,
 	// That's why NewMultipartUpload is initiated using ObjectLayer.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
+	res, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
-
+	uploadID := res.UploadID
 	uploadIDCopy := uploadID
 
 	// create an object Part, will be used to test list object parts.
