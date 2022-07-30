@@ -315,7 +315,7 @@ func (l EndpointServerPools) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()
 }
 
-// NEndpoints - returns all nodes count
+// NEndpoints - returns number of endpoints
 func (l EndpointServerPools) NEndpoints() (count int) {
 	for _, ep := range l {
 		count += len(ep.Endpoints)
