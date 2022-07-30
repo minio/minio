@@ -1189,17 +1189,32 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		// For derived credentials, check the parent user's permissions.
 		accountName = cred.ParentUser
 	}
-	policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
 
-	buf, err := json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+	var buf []byte
+	if accountName == globalActiveCred.AccessKey {
+		for _, policy := range iampolicy.DefaultPolicies {
+			if policy.Name == "consoleAdmin" {
+				buf, err = json.MarshalIndent(policy.Definition, "", " ")
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+					return
+				}
+				break
+			}
+		}
+	} else {
+		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		buf, err = json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	acctInfo := madmin.AccountInfo{
