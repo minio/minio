@@ -2,9 +2,9 @@
 
 MinIO server allows WORM for specific objects or by configuring a bucket with default object lock configuration that applies default retention mode and retention duration to all objects. This makes objects in the bucket immutable i.e. delete of the version are not allowed until an expiry specified in the bucket's object lock configuration or object retention.
 
-Object locking requires locking to be enabled on a bucket at the time of bucket creation, object locking also automatically enables versioning on the bucket. In addition, a default retention period and retention mode can be configured on a bucket to be applied to objects created in that bucket.
+Object locking requires locking to be enabled on a bucket at the time of bucket creation refer to `mc mb --with-lock`, object locking enables versioning on the bucket and cannot be disabled.
 
-Independent of retention, an object can also be under legal hold. This effectively disallows all deletes of an object under legal hold until the legal hold is removed by an API call.
+A default retention period and retention mode can be configured on a bucket to be applied to objects created in that bucket. Independent of retention, an object can also be under legal hold. This effectively disallows all deletes of an object under legal hold until the legal hold is removed by an API call.
 
 ## Get Started
 
@@ -15,7 +15,7 @@ Independent of retention, an object can also be under legal hold. This effective
 
 ### 2. Set bucket WORM configuration
 
-WORM on a bucket is enabled by setting object lock configuration. This configuration is applied to existing and new objects in the bucket. Below is an example sets `Governance` mode and one day retention time from object creation time of all objects in `mybucket`.
+WORM on a bucket is enabled by setting object lock configuration. This configuration is applied to all the objects in the bucket. Below is an example to set `Governance` mode and one day retention time on `mybucket`.
 
 ```sh
 awscli s3api put-object-lock-configuration --bucket mybucket --object-lock-configuration 'ObjectLockEnabled=\"Enabled\",Rule={DefaultRetention={Mode=\"GOVERNANCE\",Days=1}}'
@@ -44,13 +44,12 @@ See <https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html> 
 ## Concepts
 
 - If an object is under legal hold, it cannot be deleted unless the legal hold is explicitly removed for the respective version id. DeleteObjectVersion() would fail otherwise.
-- In `Compliance` mode, objects cannot be deleted by anyone until retention period is expired for the respective version id. If user has requisite governance bypass permissions, an object's retention date can be extended in `Compliance` mode.
+- In `Compliance` mode, objects cannot be deleted by anyone until retention period has expired for the given version id. If user has governance bypass permissions, an object's retention date can be extended in `Compliance` mode.
 - Once object lock configuration is set to a bucket
   - New objects inherit the retention settings of the bucket object lock configuration automatically
-  - Retention headers can be optionally set when uploading objects
-  - Explicitly calling PutObjectRetention API call on the object
+  - Retention headers can be optionally set while uploading objects
+  - Once objects are uploaded PutObjectRetention API can be called to change retention settings
 - *MINIO_NTP_SERVER* environment variable can be set to remote NTP server endpoint if system time is not desired for setting retention dates.
-- **Object locking feature is only available in erasure coded and distributed erasure coded setups**.
 
 ## Explore Further
 
