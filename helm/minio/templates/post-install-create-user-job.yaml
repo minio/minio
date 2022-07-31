@@ -64,7 +64,7 @@ spec:
                 name: {{ tpl .existingSecret $global }}
                 items:
                   - key: {{ .existingSecretKey }}
-                    path: secrets/{{ tpl .accessKey $global }}
+                    path: secrets/{{ tpl .existingSecretKey $global }}
             {{- end }}
             {{- end }}
         {{- if .Values.tls.enabled }}
