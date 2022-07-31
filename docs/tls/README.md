@@ -86,8 +86,6 @@ Alternatively, use the following command to generate a private ECDSA key protect
 openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
 ```
 
-**Note:** NIST curves P-384 and P-521 are not currently supported.
-
 #### 3.2.2 Generate a private key with RSA
 
 Use the following command to generate a private key with RSA:
