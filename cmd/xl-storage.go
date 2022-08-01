@@ -394,7 +394,7 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 		return nil, time.Time{}, err
 	}
 
-	f, err := OpenFile(itemPath, readMode, 0)
+	f, err := OpenFile(itemPath, readMode, 0o666)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -1547,7 +1547,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 	}
 
 	// Open the file for reading.
-	file, err := Open(filePath)
+	file, err := OpenFile(filePath, readMode, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -2515,7 +2515,7 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 
 func (s *xlStorage) bitrotVerify(ctx context.Context, partPath string, partSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	// Open the file for reading.
-	file, err := Open(partPath)
+	file, err := OpenFile(partPath, readMode, 0o666)
 	if err != nil {
 		return osErrToFileErr(err)
 	}

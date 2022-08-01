@@ -227,7 +227,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 	for _, drive := range drives {
 
 		cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
-		f, err := os.Open(cacheFormatPath)
+		f, err := OpenFile(cacheFormatPath, readMode, 0o666)
 		if err != nil {
 			if osIsNotExist(err) {
 				continue

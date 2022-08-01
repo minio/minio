@@ -181,7 +181,7 @@ func IsBOSH() bool {
 // Check if this is Helm package installation and report helm chart version
 func getHelmVersion(helmInfoFilePath string) string {
 	// Read the file exists.
-	helmInfoFile, err := os.Open(helmInfoFilePath)
+	helmInfoFile, err := Open(helmInfoFilePath)
 	if err != nil {
 		// Log errors and return "" as MinIO can be deployed
 		// without Helm charts as well.
