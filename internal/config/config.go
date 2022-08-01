@@ -836,10 +836,6 @@ func GetSubSys(s string) (subSys string, inputs []string, tgt string, e error) {
 		return subSys, inputs, tgt, Errorf("unknown sub-system %s", s)
 	}
 
-	if len(inputs) == 1 {
-		return subSys, inputs, tgt, nil
-	}
-
 	if SubSystemsSingleTargets.Contains(subSystemValue[0]) && len(subSystemValue) == 2 {
 		return subSys, inputs, tgt, Errorf("sub-system '%s' only supports single target", subSystemValue[0])
 	}
