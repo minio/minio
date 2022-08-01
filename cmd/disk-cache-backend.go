@@ -624,7 +624,7 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	if err := os.MkdirAll(cachedPath, 0o777); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
+	f, err := OpenFile(metaPath, os.O_RDWR|os.O_CREATE|writeMode, 0o666)
 	if err != nil {
 		return err
 	}
@@ -687,7 +687,7 @@ func (c *diskCache) updateMetadata(ctx context.Context, bucket, object, etag str
 	if err := os.MkdirAll(cachedPath, 0o777); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(metaPath, os.O_RDWR, 0o666)
+	f, err := OpenFile(metaPath, os.O_RDWR|writeMode, 0o666)
 	if err != nil {
 		return err
 	}
@@ -1275,12 +1275,12 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 
 	cachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(cachePath, uploadID)
-	if err := os.MkdirAll(uploadIDDir, 0o777); err != nil {
+	if err := mkdirAll(uploadIDDir, 0o777); err != nil {
 		return uploadID, err
 	}
 	metaPath := pathJoin(uploadIDDir, cacheMetaJSONFile)
 
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
+	f, err := OpenFile(metaPath, os.O_RDWR|os.O_CREATE|writeMode, 0o666)
 	if err != nil {
 		return uploadID, err
 	}
@@ -1386,7 +1386,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	defer uploadLock.Unlock(ulkctx.Cancel)
 
 	metaPath := pathJoin(uploadDir, cacheMetaJSONFile)
-	f, err := os.OpenFile(metaPath, os.O_RDWR, 0o666)
+	f, err := OpenFile(metaPath, os.O_RDWR|writeMode, 0o666)
 	if err != nil {
 		return err
 	}
@@ -1465,7 +1465,7 @@ func newCachePartEncryptReader(ctx context.Context, bucket, object string, partI
 func (c *diskCache) uploadIDExists(bucket, object, uploadID string) (err error) {
 	mpartCachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(mpartCachePath, uploadID)
-	if _, err := os.Stat(uploadIDDir); err != nil {
+	if _, err := Stat(uploadIDDir); err != nil {
 		return err
 	}
 	return nil
@@ -1564,7 +1564,7 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	uploadMeta.Hits++
 	metaPath := pathJoin(uploadIDDir, cacheMetaJSONFile)
 
-	f, err := os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0o666)
+	f, err := OpenFile(metaPath, os.O_RDWR|os.O_CREATE|writeMode, 0o666)
 	if err != nil {
 		return oi, err
 	}
@@ -1634,7 +1634,7 @@ func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
 			readDirFn(pathJoin(c.dir, minioMetaBucket, cacheMultipartDir), func(shaDir string, typ os.FileMode) error {
 				return readDirFn(pathJoin(c.dir, minioMetaBucket, cacheMultipartDir, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 					uploadIDPath := pathJoin(c.dir, minioMetaBucket, cacheMultipartDir, shaDir, uploadIDDir)
-					fi, err := os.Stat(uploadIDPath)
+					fi, err := Stat(uploadIDPath)
 					if err != nil {
 						return nil
 					}
@@ -1649,8 +1649,8 @@ func (c *diskCache) cleanupStaleUploads(ctx context.Context) {
 			readDirFn(pathJoin(c.dir, minioMetaBucket, cacheWritebackDir), func(shaDir string, typ os.FileMode) error {
 				wbdir := pathJoin(c.dir, minioMetaBucket, cacheWritebackDir, shaDir)
 				cachedir := pathJoin(c.dir, shaDir)
-				if _, err := os.Stat(cachedir); os.IsNotExist(err) {
-					fi, err := os.Stat(wbdir)
+				if _, err := Stat(cachedir); os.IsNotExist(err) {
+					fi, err := Stat(wbdir)
 					if err != nil {
 						return nil
 					}

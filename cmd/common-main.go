@@ -535,7 +535,7 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 // the environment values from a file, in the form "key, value".
 // in a structured form.
 func minioEnvironFromFile(envConfigFile string) ([]envKV, error) {
-	f, err := os.Open(envConfigFile)
+	f, err := Open(envConfigFile)
 	if err != nil {
 		return nil, err
 	}
@@ -916,7 +916,7 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 	// Therefore, we read all filenames in the cert directory and check
 	// for each directory whether it contains a public.crt and private.key.
 	// If so, we try to add it to certificate manager.
-	root, err := os.Open(globalCertsDir.Get())
+	root, err := Open(globalCertsDir.Get())
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -935,7 +935,7 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 			continue
 		}
 		if file.Mode()&os.ModeSymlink == os.ModeSymlink {
-			file, err = os.Stat(filepath.Join(root.Name(), file.Name()))
+			file, err = Stat(filepath.Join(root.Name(), file.Name()))
 			if err != nil {
 				// not accessible ignore
 				continue
