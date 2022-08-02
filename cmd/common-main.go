@@ -830,43 +830,56 @@ func handleKMSConfig() {
 				endpoints = append(endpoints, strings.Join(lbls, ""))
 			}
 		}
-		// Manually load the certificate and private key into memory.
-		// We need to check whether the private key is encrypted, and
-		// if so, decrypt it using the user-provided password.
-		certBytes, err := os.ReadFile(env.Get(config.EnvKESClientCert, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to load KES client certificate as specified by the shell environment")
-		}
-		keyBytes, err := os.ReadFile(env.Get(config.EnvKESClientKey, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to load KES client private key as specified by the shell environment")
-		}
-		privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
-		if len(rest) != 0 {
-			logger.Fatal(errors.New("private key contains additional data"), "Unable to load KES client private key as specified by the shell environment")
-		}
-		if x509.IsEncryptedPEMBlock(privateKeyPEM) {
-			keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
-			if err != nil {
-				logger.Fatal(err, "Unable to decrypt KES client private key as specified by the shell environment")
-			}
-			keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
-		}
-		certificate, err := tls.X509KeyPair(certBytes, keyBytes)
-		if err != nil {
-			logger.Fatal(err, "Unable to load KES client certificate as specified by the shell environment")
-		}
 		rootCAs, err := certs.GetRootCAs(env.Get(config.EnvKESServerCA, globalCertsCADir.Get()))
 		if err != nil {
 			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(config.EnvKESServerCA, globalCertsCADir.Get())))
 		}
 
+		loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
+			// Manually load the certificate and private key into memory.
+			// We need to check whether the private key is encrypted, and
+			// if so, decrypt it using the user-provided password.
+			certBytes, err := os.ReadFile(certFile)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
+			}
+			keyBytes, err := os.ReadFile(keyFile)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("Unable to load KES client private key as specified by the shell environment: %v", err)
+			}
+			privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
+			if len(rest) != 0 {
+				return tls.Certificate{}, errors.New("Unable to load KES client private key as specified by the shell environment: private key contains additional data")
+			}
+			if x509.IsEncryptedPEMBlock(privateKeyPEM) {
+				keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
+				if err != nil {
+					return tls.Certificate{}, fmt.Errorf("Unable to decrypt KES client private key as specified by the shell environment: %v", err)
+				}
+				keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
+			}
+			certificate, err := tls.X509KeyPair(certBytes, keyBytes)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
+			}
+			return certificate, nil
+		}
+
+		reloadCertEvents := make(chan tls.Certificate, 1)
+		certificate, err := certs.NewCertificate(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""), loadX509KeyPair)
+		if err != nil {
+			logger.Fatal(err, "Failed to load KES client certificate")
+		}
+		certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
+		certificate.Notify(reloadCertEvents)
+
 		defaultKeyID := env.Get(config.EnvKESKeyName, "")
 		KMS, err := kms.NewWithConfig(kms.Config{
-			Endpoints:    endpoints,
-			DefaultKeyID: defaultKeyID,
-			Certificate:  certificate,
-			RootCAs:      rootCAs,
+			Endpoints:        endpoints,
+			DefaultKeyID:     defaultKeyID,
+			Certificate:      certificate,
+			ReloadCertEvents: reloadCertEvents,
+			RootCAs:          rootCAs,
 		})
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
