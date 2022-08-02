@@ -1203,6 +1203,8 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
+	defer NSUpdated(bucket, object)
+
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -2803,6 +2805,8 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 		partsMetadata, bucket, object, writeQuorum); err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
+
+	defer NSUpdated(bucket, object)
 
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {

@@ -686,8 +686,6 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
-	defer NSUpdated(dstBucket, dstEntry)
-
 	g := errgroup.WithNErrs(len(disks))
 
 	fvID := mustGetUUID()
@@ -1139,6 +1137,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	defer NSUpdated(bucket, object)
 
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
