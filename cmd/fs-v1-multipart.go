@@ -517,7 +517,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		}
 	}
 
-	rc, _, err := fsOpenFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile), 0)
+	rc, _, err := fsOpenFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile), 0o666)
 	if err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
 			return result, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
