@@ -635,6 +635,8 @@ github.com/minio/minio-go/v7 v7.0.33/go.mod h1:nCrRzjoSUQh8hgKKtu3Y708OLvRLtuASM
 github.com/minio/pkg v1.1.20/go.mod h1:Xo7LQshlxGa9shKwJ7NzQbgW4s8T/Wc1cOStR/eUiMY=
 github.com/minio/pkg v1.1.26 h1:a8x4sHNBxCiHEkxZ/0EBTLqvV3nMtM2G/A6lXNfXN3U=
 github.com/minio/pkg v1.1.26/go.mod h1:z9PfmEI804KFkF6eY4LoGe8IDVvTCsYGVuaf58Dr0WI=
+github.com/minio/pkg v1.3.0 h1:myG72OiSi1dMN5kTrdfffzC1VHQaoRwC6jefyH3VGrU=
+github.com/minio/pkg v1.3.0/go.mod h1:z9PfmEI804KFkF6eY4LoGe8IDVvTCsYGVuaf58Dr0WI=
 github.com/minio/selfupdate v0.5.0 h1:0UH1HlL49+2XByhovKl5FpYTjKfvrQ2sgL1zEXK6mfI=
 github.com/minio/selfupdate v0.5.0/go.mod h1:mcDkzMgq8PRcpCRJo/NlPY7U45O5dfYl2Y0Rg7IustY=
 github.com/minio/sha256-simd v0.1.1/go.mod h1:B5e1o+1/KgNmWrSQK08Y6Z1Vb5pwIktudl0J58iy0KM=
