@@ -275,10 +275,6 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (er erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
-	if !opts.DryRun {
-		defer NSUpdated(bucket, object)
-	}
-
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
 

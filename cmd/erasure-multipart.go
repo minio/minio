@@ -1159,6 +1159,8 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object)
 	}
 
+	defer NSUpdated(bucket, object)
+
 	// Check if there is any offline disk and add it to the MRF list
 	for _, disk := range onlineDisks {
 		if disk != nil && disk.IsOnline() {
