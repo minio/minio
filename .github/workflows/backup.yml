@@ -25,7 +25,7 @@ jobs:
       - name: Create backup
         if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
         run: |
-          github-backup 0chain -P -t ${{ secrets.ACCESS_TOKEN }} --output-directory=/github-backup/zs3server --all -O -R zs3server
+          github-backup -O 0chain -P -t ${{ secrets.ACCESS_TOKEN }} --output-directory=/github-backup/zs3server --all -O -R zs3server
           
       - name: Create zip
         if: steps.get_info.outputs.GIT_COMMIT_DATE == steps.get_info.outputs.YESTERDAY_DATE
