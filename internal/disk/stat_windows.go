@@ -70,7 +70,7 @@ func GetInfo(path string) (info Info, err error) {
 		uintptr(unsafe.Pointer(&lpTotalNumberOfFreeBytes)))
 
 	if uint64(lpTotalNumberOfFreeBytes) > uint64(lpTotalNumberOfBytes) {
-		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'",
+		return info, fmt.Errorf("detected free space (%d) > total drive space (%d), fs corruption at (%s). please run 'fsck'",
 			uint64(lpTotalNumberOfFreeBytes), uint64(lpTotalNumberOfBytes), path)
 	}
 

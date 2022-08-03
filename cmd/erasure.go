@@ -288,7 +288,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			disk := disks[i-1]
 
 			if disk == nil {
-				infos[i-1].Error = "nil disk"
+				infos[i-1].Error = "nil drive"
 				return
 			}
 
@@ -354,7 +354,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 	// Collect disks we can use.
 	disks, healing := er.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
-		logger.LogIf(ctx, errors.New("data-scanner: all disks are offline or being healed, skipping scanner cycle"))
+		logger.LogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
 		return nil
 	}
 

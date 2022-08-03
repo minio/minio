@@ -1077,7 +1077,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 
 	var fsDirs []string
 	for i := 1; i <= numDisks; i++ {
-		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("disk%d", i)))
+		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("drive%d", i)))
 	}
 
 	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))

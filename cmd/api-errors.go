@@ -1158,7 +1158,7 @@ var errorCodes = errorCodeMap{
 	// MinIO extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
-		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
+		Description:    "Storage backend has reached its minimum free drive threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInsufficientStorage,
 	},
 	ErrRequestBodyParse: {

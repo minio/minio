@@ -449,7 +449,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 			serverBF, err := client.cycleServerBloomFilter(ctx, req)
 			if false && intDataUpdateTracker.debug {
 				b, _ := json.MarshalIndent(serverBF, "", "  ")
-				logger.Info("Disk %v, Bloom filter: %v", client.host.Name, string(b))
+				logger.Info("Drive %v, Bloom filter: %v", client.host.Name, string(b))
 			}
 			// Keep lock while checking result.
 			mu.Lock()

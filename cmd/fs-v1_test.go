@@ -41,7 +41,7 @@ func TestNewFS(t *testing.T) {
 	}
 	_, err = NewFSObjectLayer(disk)
 	if err != nil {
-		errMsg := "Unable to recognize backend format, Disk is not in FS format."
+		errMsg := "Unable to recognize backend format, Drive is not in FS format."
 		if err.Error() == errMsg {
 			t.Errorf("Expecting %s, got %s", errMsg, err)
 		}

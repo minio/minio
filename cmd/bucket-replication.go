@@ -1992,7 +1992,7 @@ func (p *ReplicationPool) updateResyncStatus(ctx context.Context, objectAPI Obje
 				if updt {
 					brs.LastUpdate = now
 					if err := saveResyncStatus(ctx, bucket, brs, objectAPI); err != nil {
-						logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to disk for %s - %w", bucket, err))
+						logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to drive for %s - %w", bucket, err))
 						continue
 					}
 				}

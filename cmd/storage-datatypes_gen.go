@@ -50,7 +50,7 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	}
 	z.RootDisk, err = dc.ReadBool()
 	if err != nil {
-		err = msgp.WrapError(err, "RootDisk")
+		err = msgp.WrapError(err, "RootDrive")
 		return
 	}
 	z.Healing, err = dc.ReadBool()
@@ -125,7 +125,7 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	err = en.WriteBool(z.RootDisk)
 	if err != nil {
-		err = msgp.WrapError(err, "RootDisk")
+		err = msgp.WrapError(err, "RootDrive")
 		return
 	}
 	err = en.WriteBool(z.Healing)
@@ -230,7 +230,7 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	z.RootDisk, bts, err = msgp.ReadBoolBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "RootDisk")
+		err = msgp.WrapError(err, "RootDrive")
 		return
 	}
 	z.Healing, bts, err = msgp.ReadBoolBytes(bts)
@@ -727,7 +727,7 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	}
 	z.DiskMTime, err = dc.ReadTime()
 	if err != nil {
-		err = msgp.WrapError(err, "DiskMTime")
+		err = msgp.WrapError(err, "DriveMTime")
 		return
 	}
 	return
@@ -891,7 +891,7 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	err = en.WriteTime(z.DiskMTime)
 	if err != nil {
-		err = msgp.WrapError(err, "DiskMTime")
+		err = msgp.WrapError(err, "DriveMTime")
 		return
 	}
 	return
@@ -1132,7 +1132,7 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	z.DiskMTime, bts, err = msgp.ReadTimeBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "DiskMTime")
+		err = msgp.WrapError(err, "DriveMTime")
 		return
 	}
 	o = bts
@@ -1577,7 +1577,7 @@ func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		case "dmt":
 			z.DiskMTime, err = dc.ReadTime()
 			if err != nil {
-				err = msgp.WrapError(err, "DiskMTime")
+				err = msgp.WrapError(err, "DriveMTime")
 				return
 			}
 		default:
@@ -1611,7 +1611,7 @@ func (z *RawFileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	err = en.WriteTime(z.DiskMTime)
 	if err != nil {
-		err = msgp.WrapError(err, "DiskMTime")
+		err = msgp.WrapError(err, "DriveMTime")
 		return
 	}
 	return
@@ -1657,7 +1657,7 @@ func (z *RawFileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		case "dmt":
 			z.DiskMTime, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "DiskMTime")
+				err = msgp.WrapError(err, "DriveMTime")
 				return
 			}
 		default:

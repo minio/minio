@@ -631,10 +631,10 @@ func serverMain(ctx *cli.Context) {
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {
-			logger.Info(color.Yellow("WARNING: Disk caching is deprecated for single/multi drive MinIO setups. Please migrate to using MinIO S3 gateway instead of disk caching"))
+			logger.Info(color.Yellow("WARNING: Drive caching is deprecated for single/multi drive MinIO setups. Please migrate to using MinIO S3 gateway instead of drive caching"))
 			var cacheAPI CacheObjectLayer
 			cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
-			logger.FatalIf(err, "Unable to initialize disk caching")
+			logger.FatalIf(err, "Unable to initialize drive caching")
 
 			setCacheObjectLayer(cacheAPI)
 		}
