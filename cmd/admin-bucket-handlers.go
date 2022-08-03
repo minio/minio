@@ -374,7 +374,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	bucket := pathClean(r.Form.Get("bucket"))
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -619,6 +619,39 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 	}
 }
 
+type importMetaReport struct {
+	madmin.BucketMetaImportErrs
+}
+
+func (i *importMetaReport) SetStatus(bucket, fname string, err error) {
+	st := i.Buckets[bucket]
+	var errMsg string
+	if err != nil {
+		errMsg = err.Error()
+	}
+	switch fname {
+	case bucketPolicyConfig:
+		st.Policy = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketNotificationConfig:
+		st.Notification = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketLifecycleConfig:
+		st.Lifecycle = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketSSEConfig:
+		st.SSEConfig = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketTaggingConfig:
+		st.Tagging = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketQuotaConfigFile:
+		st.Quota = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case objectLockConfig:
+		st.ObjectLock = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketVersioningConfig:
+		st.Versioning = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	default:
+		st.Err = errMsg
+	}
+	i.Buckets[bucket] = st
+}
+
 // ImportBucketMetadataHandler - imports all bucket metadata from a zipped file and overwrite bucket metadata config
 // There are some caveats regarding the following:
 // 1. object lock config - object lock should have been specified at time of bucket creation. Only default retention settings are imported here.
@@ -628,9 +661,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 	ctx := newContext(r, w, "ImportBucketMetadata")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-	bucket := pathClean(r.Form.Get("bucket"))
 
-	if !globalIsErasure {
+	if globalIsGateway {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -651,37 +683,36 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		return
 	}
 	bucketMap := make(map[string]struct{}, 1)
-
+	rpt := importMetaReport{
+		madmin.BucketMetaImportErrs{
+			Buckets: make(map[string]madmin.BucketStatus, len(zr.File)),
+		},
+	}
 	// import object lock config if any - order of import matters here.
 	for _, file := range zr.File {
 		slc := strings.Split(file.Name, slashSeparator)
 		if len(slc) != 2 { // expecting bucket/configfile in the zipfile
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-			return
+			rpt.SetStatus(file.Name, "", fmt.Errorf("malformed zip - expecting format bucket/<config.json>"))
+			continue
 		}
-		b, fileName := slc[0], slc[1]
-		if bucket == "" { // use bucket requested in query parameters if specified. Otherwise default bucket name to directory name within zip
-			bucket = b
-		}
+		bucket, fileName := slc[0], slc[1]
 		switch fileName {
 		case objectLockConfig:
 			reader, err := file.Open()
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 			config, err := objectlock.ParseObjectLockConfig(reader)
 			if err != nil {
-				apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
-				apiErr.Description = err.Error()
-				writeErrorResponse(ctx, w, apiErr, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
+				continue
 			}
 
 			configData, err := xml.Marshal(config)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
@@ -690,8 +721,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
-						writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-						return
+						rpt.SetStatus(bucket, fileName, err)
+						continue
 					}
 				}
 				bucketMap[bucket] = struct{}{}
@@ -699,15 +730,16 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Deny object locking configuration settings on existing buckets without object lock enabled.
 			if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, configData)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 
 			// Call site replication hook.
 			//
@@ -720,8 +752,8 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				ObjectLockConfig: &cfgStr,
 				UpdatedAt:        updatedAt,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 		}
 	}
@@ -730,162 +762,145 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 	for _, file := range zr.File {
 		slc := strings.Split(file.Name, slashSeparator)
 		if len(slc) != 2 { // expecting bucket/configfile in the zipfile
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-			return
+			rpt.SetStatus(file.Name, "", fmt.Errorf("malformed zip - expecting format bucket/<config.json>"))
+			continue
 		}
-		b, fileName := slc[0], slc[1]
-		if bucket == "" { // use bucket requested in query parameters if specified. Otherwise default bucket name to directory name within zip
-			bucket = b
-		}
+		bucket, fileName := slc[0], slc[1]
 		switch fileName {
 		case bucketVersioningConfig:
 			reader, err := file.Open()
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 			v, err := versioning.ParseConfig(io.LimitReader(reader, maxBucketVersioningConfigSize))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
-				if err != nil {
+				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{}); err != nil {
 					if _, ok := err.(BucketExists); !ok {
-						writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-						return
+						rpt.SetStatus(bucket, fileName, err)
+						continue
 					}
 				}
 				bucketMap[bucket] = struct{}{}
 			}
 
 			if globalSiteReplicationSys.isEnabled() && v.Suspended() {
-				writeErrorResponse(ctx, w, APIError{
-					Code:           "InvalidBucketState",
-					Description:    "Cluster replication is enabled for this site, so the versioning state cannot be changed.",
-					HTTPStatusCode: http.StatusConflict,
-				}, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("Cluster replication is enabled for this site, so the versioning state cannot be suspended."))
+				continue
 			}
 
 			if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled && v.Suspended() {
-				writeErrorResponse(ctx, w, APIError{
-					Code:           "InvalidBucketState",
-					Description:    "An Object Lock configuration is present on this bucket, so the versioning state cannot be changed.",
-					HTTPStatusCode: http.StatusConflict,
-				}, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("An Object Lock configuration is present on this bucket, so the versioning state cannot be suspended."))
+				continue
 			}
 			if _, err := getReplicationConfig(ctx, bucket); err == nil && v.Suspended() {
-				writeErrorResponse(ctx, w, APIError{
-					Code:           "InvalidBucketState",
-					Description:    "A replication configuration is present on this bucket, so the versioning state cannot be changed.",
-					HTTPStatusCode: http.StatusConflict,
-				}, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("A replication configuration is present on this bucket, so the versioning state cannot be suspended."))
+				continue
 			}
 
 			configData, err := xml.Marshal(v)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
+				continue
 			}
 
 			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 		}
 	}
 
 	for _, file := range zr.File {
 		reader, err := file.Open()
 		if err != nil {
-			writeErrorResponse(ctx, w, importError(ctx, err, file.Name, ""), r.URL)
-			return
+			rpt.SetStatus(file.Name, "", err)
+			continue
 		}
 		sz := file.FileInfo().Size()
 		slc := strings.Split(file.Name, slashSeparator)
 		if len(slc) != 2 { // expecting bucket/configfile in the zipfile
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-			return
+			rpt.SetStatus(file.Name, "", fmt.Errorf("malformed zip - expecting format bucket/<config.json>"))
+			continue
 		}
-		b, fileName := slc[0], slc[1]
-		if bucket == "" { // use bucket requested in query parameters if specified. Otherwise default bucket name to directory name within zip
-			bucket = b
-		}
+		bucket, fileName := slc[0], slc[1]
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
 			err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
-					writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-					return
+					rpt.SetStatus(bucket, "", err)
+					continue
 				}
 			}
 			bucketMap[bucket] = struct{}{}
+		}
+		if _, ok := bucketMap[bucket]; !ok {
+			continue
 		}
 		switch fileName {
 		case bucketNotificationConfig:
 			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region, globalNotificationSys.targetList)
 			if err != nil {
-				apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
-				if event.IsEventError(err) {
-					apiErr = importError(ctx, err, file.Name, bucket)
-				}
-				writeErrorResponse(ctx, w, apiErr, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
+				continue
 			}
 
 			configData, err := xml.Marshal(config)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketNotificationConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 			rulesMap := config.ToRulesMap()
 			globalNotificationSys.AddRulesMap(bucket, rulesMap)
+			rpt.SetStatus(bucket, fileName, nil)
 		case bucketPolicyConfig:
 			// Error out if Content-Length is beyond allowed size.
 			if sz > maxBucketPolicySize {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPolicyTooLarge), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrPolicyTooLarge.String()))
+				continue
 			}
 
 			bucketPolicyBytes, err := ioutil.ReadAll(io.LimitReader(reader, sz))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			bucketPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyBytes), bucket)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			// Version in policy must not be empty
 			if bucketPolicy.Version == "" {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrMalformedPolicy.String()))
+				continue
 			}
 
 			configData, err := json.Marshal(bucketPolicy)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, configData)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 			// Call site replication hook.
 			if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 				Type:      madmin.SRBucketMetaTypePolicy,
@@ -893,56 +908,51 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Policy:    bucketPolicyBytes,
 				UpdatedAt: updatedAt,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
-
 		case bucketLifecycleConfig:
 			bucketLifecycle, err := lifecycle.ParseLifecycleConfig(io.LimitReader(reader, sz))
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			// Validate the received bucket policy document
 			if err = bucketLifecycle.Validate(); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			// Validate the transition storage ARNs
 			if err = validateTransitionTier(bucketLifecycle); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			configData, err := xml.Marshal(bucketLifecycle)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 		case bucketSSEConfig:
 			// Parse bucket encryption xml
 			encConfig, err := validateBucketSSEConfig(io.LimitReader(reader, maxBucketSSEConfigSize))
 			if err != nil {
-				apiErr := APIError{
-					Code:           "MalformedXML",
-					Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, err),
-					HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
-				}
-				writeErrorResponse(ctx, w, apiErr, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
+				continue
 			}
 
 			// Return error if KMS is not initialized
 			if GlobalKMS == nil {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s", errorCodes[ErrKMSNotConfigured].Description))
+				continue
 			}
 			kmsKey := encConfig.KeyID()
 			if kmsKey != "" {
@@ -950,26 +960,27 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				_, err := GlobalKMS.GenerateKey(ctx, kmsKey, kmsContext)
 				if err != nil {
 					if errors.Is(err, kes.ErrKeyNotFound) {
-						writeErrorResponse(ctx, w, importError(ctx, errKMSKeyNotFound, file.Name, bucket), r.URL)
-						return
+						rpt.SetStatus(bucket, fileName, errKMSKeyNotFound)
+						continue
 					}
-					writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-					return
+					rpt.SetStatus(bucket, fileName, err)
+					continue
 				}
 			}
 
 			configData, err := xml.Marshal(encConfig)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			// Store the bucket encryption configuration in the object layer
 			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, configData)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 
 			// Call site replication hook.
 			//
@@ -982,29 +993,30 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				SSEConfig: &cfgStr,
 				UpdatedAt: updatedAt,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 		case bucketTaggingConfig:
 			tags, err := tags.ParseBucketXML(io.LimitReader(reader, sz))
 			if err != nil {
-				apiErr := errorCodes.ToAPIErrWithErr(ErrMalformedXML, fmt.Errorf("error importing %s with %w", file.Name, err))
-				writeErrorResponse(ctx, w, apiErr, r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
+				continue
 			}
 
 			configData, err := xml.Marshal(tags)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, configData)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
+
 			// Call site replication hook.
 			//
 			// We encode the xml bytes as base64 to ensure there are no encoding
@@ -1016,32 +1028,33 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				Tags:      &cfgStr,
 				UpdatedAt: updatedAt,
 			}); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 		case bucketQuotaConfigFile:
 			data, err := ioutil.ReadAll(reader)
 			if err != nil {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			quotaConfig, err := parseBucketQuota(bucket, data)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 
 			if quotaConfig.Type == "fifo" {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, fmt.Errorf("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore"))
+				continue
 			}
 
 			updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
 			if err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
+			rpt.SetStatus(bucket, fileName, nil)
 
 			bucketMeta := madmin.SRBucketMeta{
 				Type:      madmin.SRBucketMetaTypeQuotaConfig,
@@ -1055,11 +1068,19 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Call site replication hook.
 			if err = globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta); err != nil {
-				writeErrorResponse(ctx, w, importError(ctx, err, file.Name, bucket), r.URL)
-				return
+				rpt.SetStatus(bucket, fileName, err)
+				continue
 			}
 		}
 	}
+
+	rptData, err := json.Marshal(rpt.BucketMetaImportErrs)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, rptData)
 }
 
 // ReplicationDiffHandler - POST returns info on unreplicated versions for a remote target ARN
