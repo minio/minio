@@ -56,8 +56,8 @@ func BenchmarkDecodeDiskInfoMsgp(b *testing.B) {
 		FSType:    "xfs",
 		RootDisk:  true,
 		Healing:   true,
-		Endpoint:  "http://localhost:9001/tmp/disk1",
-		MountPath: "/tmp/disk1",
+		Endpoint:  "http://localhost:9001/tmp/drive1",
+		MountPath: "/tmp/drive1",
 		ID:        "uuid",
 		Error:     "",
 	}
@@ -85,8 +85,8 @@ func BenchmarkDecodeDiskInfoGOB(b *testing.B) {
 		FSType:    "xfs",
 		RootDisk:  true,
 		Healing:   true,
-		Endpoint:  "http://localhost:9001/tmp/disk1",
-		MountPath: "/tmp/disk1",
+		Endpoint:  "http://localhost:9001/tmp/drive1",
+		MountPath: "/tmp/drive1",
 		ID:        "uuid",
 		Error:     "",
 	}
@@ -115,8 +115,8 @@ func BenchmarkEncodeDiskInfoMsgp(b *testing.B) {
 		FSType:    "xfs",
 		RootDisk:  true,
 		Healing:   true,
-		Endpoint:  "http://localhost:9001/tmp/disk1",
-		MountPath: "/tmp/disk1",
+		Endpoint:  "http://localhost:9001/tmp/drive1",
+		MountPath: "/tmp/drive1",
 		ID:        "uuid",
 		Error:     "",
 	}
@@ -140,8 +140,8 @@ func BenchmarkEncodeDiskInfoGOB(b *testing.B) {
 		FSType:    "xfs",
 		RootDisk:  true,
 		Healing:   true,
-		Endpoint:  "http://localhost:9001/tmp/disk1",
-		MountPath: "/tmp/disk1",
+		Endpoint:  "http://localhost:9001/tmp/drive1",
+		MountPath: "/tmp/drive1",
 		ID:        "uuid",
 		Error:     "",
 	}

@@ -273,7 +273,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(cacheNamespace, "hits", "total"),
-			"Total number of disk cache hits in current MinIO instance",
+			"Total number of drive cache hits in current MinIO instance",
 			nil, nil),
 		prometheus.CounterValue,
 		float64(cacheObjLayer.CacheStats().getHits()),
@@ -281,7 +281,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(cacheNamespace, "misses", "total"),
-			"Total number of disk cache misses in current MinIO instance",
+			"Total number of drive cache misses in current MinIO instance",
 			nil, nil),
 		prometheus.CounterValue,
 		float64(cacheObjLayer.CacheStats().getMisses()),
@@ -328,7 +328,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName("cache", "total", "size"),
-				"Indicates total size of cache disk",
+				"Indicates total size of cache drive",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(cdStats.TotalCapacity),
@@ -593,7 +593,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "disks", "offline"),
-			"Total number of offline disks in current MinIO server instance",
+			"Total number of offline drives in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(offlineDisks.Sum()),
@@ -602,8 +602,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// MinIO Total Disks per node
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(minioNamespace, "disks", "total"),
-			"Total number of disks for current MinIO server instance",
+			prometheus.BuildFQName(minioNamespace, "drives", "total"),
+			"Total number of drives for current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(totalDisks.Sum()),
@@ -614,7 +614,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(diskNamespace, "storage", "used"),
-				"Total disk storage used on the disk",
+				"Total disk storage used on the drive",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(disk.UsedSpace),
@@ -625,7 +625,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(diskNamespace, "storage", "available"),
-				"Total available space left on the disk",
+				"Total available space left on the drive",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(disk.AvailableSpace),
@@ -636,7 +636,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(diskNamespace, "storage", "total"),
-				"Total space on the disk",
+				"Total space on the drive",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(disk.TotalSpace),

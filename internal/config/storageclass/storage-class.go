@@ -132,12 +132,12 @@ func (sc *StorageClass) String() string {
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
-// Supported Storage Class format is "Scheme:Number of parity disks".
+// Supported Storage Class format is "Scheme:Number of parity drives".
 // Currently only supported scheme is "EC".
 func parseStorageClass(storageClassEnv string) (sc StorageClass, err error) {
 	s := strings.Split(storageClassEnv, ":")
 
-	// only two elements allowed in the string - "scheme" and "number of parity disks"
+	// only two elements allowed in the string - "scheme" and "number of parity drives"
 	if len(s) > 2 {
 		return StorageClass{}, config.ErrStorageClassValue(nil).Msg("Too many sections in " + storageClassEnv)
 	} else if len(s) < 2 {
@@ -203,7 +203,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 
 	if ssParity > 0 && rrsParity > 0 {
 		if ssParity > 0 && ssParity < rrsParity {
-			return fmt.Errorf("Standard storage class parity disks %d should be greater than or equal to Reduced redundancy storage class parity disks %d", ssParity, rrsParity)
+			return fmt.Errorf("Standard storage class parity drives %d should be greater than or equal to Reduced redundancy storage class parity drives %d", ssParity, rrsParity)
 		}
 	}
 	return nil

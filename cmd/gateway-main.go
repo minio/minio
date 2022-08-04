@@ -323,7 +323,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
 		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
+		logger.FatalIf(err, "Unable to initialize drive caching")
 
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI

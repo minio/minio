@@ -209,7 +209,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		if serverDebugLog {
-			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on %s erasure set\n",
+			console.Debugf(color.Green("healDrive:")+" healing bucket %s content on %s erasure set\n",
 				bucket, humanize.Ordinal(tracker.SetIndex+1))
 		}
 

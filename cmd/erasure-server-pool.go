@@ -1907,7 +1907,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 
 	disks, _ := set.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
-		return errors.New("listAndHeal: No non-healing disks found")
+		return errors.New("listAndHeal: No non-healing drives found")
 	}
 
 	// How to resolve partial results.
@@ -2098,7 +2098,7 @@ func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx 
 			}
 		}
 	}
-	return -1, -1, -1, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
+	return -1, -1, -1, fmt.Errorf("DriveID(%s) %w", id, errDiskNotFound)
 }
 
 // HealthOptions takes input options to return sepcific information

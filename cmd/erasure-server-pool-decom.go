@@ -457,7 +457,7 @@ func (p *poolMeta) updateAfter(ctx context.Context, idx int, pools []*erasureSet
 	now := UTCNow()
 	if now.Sub(p.Pools[idx].LastUpdate) >= duration {
 		if serverDebugLog {
-			console.Debugf("decommission: persisting poolMeta on disk: threshold:%s, poolMeta:%#v\n", now.Sub(p.Pools[idx].LastUpdate), p.Pools[idx])
+			console.Debugf("decommission: persisting poolMeta on drive: threshold:%s, poolMeta:%#v\n", now.Sub(p.Pools[idx].LastUpdate), p.Pools[idx])
 		}
 		p.Pools[idx].LastUpdate = now
 		if err := p.save(ctx, pools); err != nil {
@@ -677,7 +677,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		set := set
 		disks := set.getOnlineDisks()
 		if len(disks) == 0 {
-			logger.LogIf(GlobalContext, fmt.Errorf("no online disks found for set with endpoints %s",
+			logger.LogIf(GlobalContext, fmt.Errorf("no online drives found for set with endpoints %s",
 				set.getEndpoints()))
 			continue
 		}

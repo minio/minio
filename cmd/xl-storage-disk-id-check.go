@@ -757,7 +757,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	t = time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess)))
 	if t > maxTimeSinceLastSuccess {
 		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
-			logger.LogAlwaysIf(ctx, fmt.Errorf("taking disk %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
+			logger.LogAlwaysIf(ctx, fmt.Errorf("taking drive %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
 			go p.monitorDiskStatus()
 		}
 		return errFaultyDisk
@@ -789,7 +789,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 			Force:     false,
 		})
 		if err == nil {
-			logger.Info("Able to read+write, bringing disk %s online.", p.storage.String())
+			logger.Info("Able to read+write, bringing drive %s online.", p.storage.String())
 			atomic.StoreInt32(&p.health.status, diskHealthOK)
 			return
 		}

@@ -186,7 +186,7 @@ func (e SignatureDoesNotMatch) Error() string {
 type StorageFull struct{}
 
 func (e StorageFull) Error() string {
-	return "Storage reached its minimum free disk threshold."
+	return "Storage reached its minimum free drive threshold."
 }
 
 // SlowDown  too many file descriptors open or backend busy .

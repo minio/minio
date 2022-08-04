@@ -80,7 +80,7 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 		return j, nil
 	}
 
-	return nil, errors.New("no local disk found")
+	return nil, errors.New("no local drive found")
 }
 
 // rotate rotates the journal. If a read-only journal already exists it does

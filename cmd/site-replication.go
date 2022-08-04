@@ -542,7 +542,7 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
 	}
 	if err = c.saveToDisk(ctx, state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }
@@ -2143,7 +2143,7 @@ func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI Ob
 	}
 
 	if err := c.saveToDisk(ctx, state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }
@@ -3492,7 +3492,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 		}
 	}
 	if err := c.saveToDisk(ctx, c.state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }

@@ -66,7 +66,7 @@ func TestErasureHeal(t *testing.T) {
 	for i, test := range erasureHealTests {
 		if test.offDisks < test.badStaleDisks {
 			// test case sanity check
-			t.Fatalf("Test %d: Bad test case - number of stale disks cannot be less than number of badstale disks", i)
+			t.Fatalf("Test %d: Bad test case - number of stale drives cannot be less than number of badstale drives", i)
 		}
 
 		// create some test data
