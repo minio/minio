@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,31 +19,43 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"hash/crc32"
 	"io"
-	"log"
 	"os"
 	"strings"
-
-	"github.com/secure-io/sio-go"
+	"time"
 )
 
 var (
-	key = flag.String("key", "", "decryption string")
-	js  = flag.Bool("json", false, "expect json input from stdin")
+	keyHex      = flag.String("key", "", "decryption key")
+	privKeyPath = flag.String("private-key", "", "private certificate")
+	stdin       = flag.Bool("stdin", false, "expect 'mc support inspect' json output from stdin")
+	export      = flag.Bool("export", false, "export xl.meta")
+	djson       = flag.Bool("djson", false, "expect djson format for xl.meta")
 )
 
 func main() {
 	flag.Parse()
 
-	if *js {
-		// Match struct in https://github.com/minio/mc/blob/b3ce21fb72a914f50522358668e6464eb97de8d1/cmd/admin-inspect.go#L135
+	// Prompt for decryption key if no --key or --private-key are provided
+	if *keyHex == "" && *privKeyPath == "" {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Enter Decryption Key: ")
+
+		text, _ := reader.ReadString('\n')
+		// convert CRLF to LF
+		*keyHex = strings.ReplaceAll(text, "\n", "")
+		*keyHex = strings.TrimSpace(*keyHex)
+	}
+
+	var inputFileName, outputFileName string
+
+	// Parse parameters
+	switch {
+	case *stdin:
+		// Parse 'mc support inspect --json' output
 		input := struct {
 			File string `json:"file"`
 			Key  string `json:"key"`
@@ -53,90 +65,53 @@ func main() {
 			fatalErr(err)
 		}
 		fatalErr(json.Unmarshal(got, &input))
-		r, err := os.Open(input.File)
-		fatalErr(err)
-		dstName := strings.TrimSuffix(input.File, ".enc") + ".zip"
-		w, err := os.Create(dstName)
-		fatalErr(err)
-
-		decrypt(input.Key, r, w)
-		r.Close()
-		w.Close()
-		fmt.Println("Output decrypted to", dstName)
-		return
-	}
-	args := flag.Args()
-	switch len(flag.Args()) {
-	case 0:
-		// Read from stdin, write to stdout.
-		if *key == "" {
-			flag.Usage()
-			fatalErr(errors.New("no key supplied"))
-		}
-		decrypt(*key, os.Stdin, os.Stdout)
-		return
-	case 1:
-		r, err := os.Open(args[0])
-		fatalErr(err)
-		if len(*key) == 0 {
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Enter Decryption Key: ")
-
-			text, _ := reader.ReadString('\n')
-			// convert CRLF to LF
-			*key = strings.ReplaceAll(text, "\n", "")
-		}
-		*key = strings.TrimSpace(*key)
-		fatalIf(len(*key) != 72, "Unexpected key length: %d, want 72", len(*key))
-
-		dstName := strings.TrimSuffix(args[0], ".enc") + ".zip"
-		w, err := os.Create(dstName)
-		fatalErr(err)
-
-		decrypt(*key, r, w)
-		r.Close()
-		w.Close()
-
-		fmt.Println("Output decrypted to", dstName)
-		return
+		inputFileName = input.File
+		*keyHex = input.Key
+	case len(flag.Args()) == 1:
+		inputFileName = flag.Args()[0]
 	default:
 		flag.Usage()
 		fatalIf(true, "Only 1 file can be decrypted")
 		os.Exit(1)
 	}
-}
 
-func decrypt(keyHex string, r io.Reader, w io.Writer) {
-	id, err := hex.DecodeString(keyHex[:8])
-	fatalErr(err)
-	key, err := hex.DecodeString(keyHex[8:])
-	fatalErr(err)
+	// Calculate the output file name
+	switch {
+	case strings.HasSuffix(inputFileName, ".enc"):
+		outputFileName = strings.TrimSuffix(inputFileName, ".enc") + ".zip"
+	case strings.HasSuffix(inputFileName, ".zip"):
+		outputFileName = strings.TrimSuffix(inputFileName, ".zip") + ".decrypted.zip"
+	}
 
-	// Verify that CRC is ok.
-	want := binary.LittleEndian.Uint32(id)
-	got := crc32.ChecksumIEEE(key)
-	fatalIf(want != got, "Invalid key checksum, want %x, got %x", want, got)
-
-	stream, err := sio.AES_256_GCM.Stream(key)
-	fatalErr(err)
-
-	// Zero nonce, we only use each key once, and 32 bytes is plenty.
-	nonce := make([]byte, stream.NonceSize())
-	encr := stream.DecryptReader(r, nonce, nil)
-	_, err = io.Copy(w, encr)
-	fatalErr(err)
-}
-
-func fatalErr(err error) {
+	// Backup any already existing output file
+	_, err := os.Stat(outputFileName)
 	if err == nil {
-		return
+		err := os.Rename(outputFileName, outputFileName+"."+time.Now().Format("20060102150405"))
+		if err != nil {
+			fatalErr(err)
+		}
 	}
-	log.Fatalln(err)
-}
 
-func fatalIf(b bool, msg string, v ...interface{}) {
-	if !b {
-		return
+	// Open the input and create the output file
+	input, err := os.Open(inputFileName)
+	fatalErr(err)
+	defer input.Close()
+	output, err := os.Create(outputFileName)
+	fatalErr(err)
+
+	// Decrypt the inspect data
+	switch {
+	case *keyHex != "":
+		extractInspectV1(*keyHex, input, output)
+	case *privKeyPath != "":
+		extractInspectV2(*privKeyPath, input, output)
 	}
-	log.Fatalf(msg, v...)
+
+	output.Close()
+
+	// Export xl.meta to stdout
+	if *export {
+		inspectToExportType(outputFileName, *djson)
+		os.Remove(outputFileName)
+	}
 }

@@ -21,8 +21,13 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
+	"crypto/rsa"
+	"crypto/sha512"
 	"crypto/subtle"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -2641,6 +2646,19 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 	}
 }
 
+func bytesToPublicKey(pub []byte) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode(pub)
+	ifc, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := ifc.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("not an RSA public key")
+	}
+	return key, nil
+}
+
 // getRawDataer provides an interface for getting raw FS files.
 type getRawDataer interface {
 	GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error
@@ -2667,12 +2685,17 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err := parseForm(r); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	volume := r.Form.Get("volume")
-	file := r.Form.Get("file")
 	if len(volume) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
 		return
 	}
+	file := r.Form.Get("file")
 	if len(file) == 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
@@ -2685,41 +2708,81 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var publicKey *rsa.PublicKey
+
+	publicKeyB64 := r.Form.Get("public-key")
+	if publicKeyB64 != "" {
+		publicKeyBytes, err := base64.StdEncoding.DecodeString(publicKeyB64)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		publicKey, err = bytesToPublicKey(publicKeyBytes)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
 	var key [32]byte
 	// MUST use crypto/rand
 	n, err := crand.Read(key[:])
 	if err != nil || n != len(key) {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	// Write a version for making *incompatible* changes.
+	// The AdminClient will reject any version it does not know.
+	if publicKey == nil {
+		w.Write([]byte{1})
+		w.Write(key[:])
+	} else {
+		w.Write([]byte{2})
+	}
+
+	archiveW := zip.NewWriter(w)
+	defer archiveW.Close()
+
+	if publicKey != nil {
+		cipherKey, err := rsa.EncryptOAEP(sha512.New(), crand.Reader, publicKey, key[:], nil)
+		if err != nil {
+			// Too late to write an error over HTTP
+			logger.LogIf(ctx, err)
+			return
+		}
+		err = embedFileInZip(archiveW, "key.enc", cipherKey)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return
+		}
+	}
+
+	dataW, err := archiveW.CreateHeader(&zip.FileHeader{
+		Name: "data.zip",
+		// data.zip will be already compressed,
+		// no need to compress again this file.
+		Method: zip.Store,
+	})
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+
 	stream, err := sio.AES_256_GCM.Stream(key[:])
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
 		return
 	}
 	// Zero nonce, we only use each key once, and 32 bytes is plenty.
 	nonce := make([]byte, stream.NonceSize())
-	encw := stream.EncryptWriter(w, nonce, nil)
-
-	defer encw.Close()
-
-	// Write a version for making *incompatible* changes.
-	// The AdminClient will reject any version it does not know.
-	w.Write([]byte{1})
-
-	// Write key first (without encryption)
-	_, err = w.Write(key[:])
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
-		return
-	}
+	encw := stream.EncryptWriter(dataW, nonce, nil)
 
 	// Initialize a zip writer which will provide a zipped content
 	// of profiling data of all nodes
-	zipWriter := zip.NewWriter(encw)
-	defer zipWriter.Close()
+	dataZipW := zip.NewWriter(encw)
+
 	rawDataFn := func(r io.Reader, host, disk, filename string, si StatInfo) error {
 		// Prefix host+disk
 		filename = path.Join(host, disk, filename)
@@ -2748,7 +2811,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			return nil
 		}
 		header.Method = zip.Deflate
-		zwriter, zerr := zipWriter.CreateHeader(header)
+		zwriter, zerr := dataZipW.CreateHeader(header)
 		if zerr != nil {
 			logger.LogIf(ctx, zerr)
 			return nil
@@ -2770,6 +2833,10 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	if !errors.Is(err, errFileNotFound) {
 		logger.LogIf(ctx, err)
 	}
+
+	logger.LogIf(ctx, dataZipW.Close())
+	logger.LogIf(ctx, encw.Close())
+
 	// save args passed to inspect command
 	inspectArgs := []string{fmt.Sprintf(" Inspect path: %s%s%s\n", volume, slashSeparator, file)}
 	cmdLine := []string{"Server command line args: "}
@@ -2779,13 +2846,10 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	cmdLine = append(cmdLine, "\n")
 	inspectArgs = append(inspectArgs, cmdLine...)
 	inspectArgsBytes := []byte(strings.Join(inspectArgs, " "))
-	if err = rawDataFn(bytes.NewReader(inspectArgsBytes), "", "", "inspect-input.txt", StatInfo{
-		Size: int64(len(inspectArgsBytes)),
-	}); err != nil {
-		logger.LogIf(ctx, err)
-	}
+	embedFileInZip(archiveW, "inspect-input.txt", inspectArgsBytes)
 
-	appendClusterMetaInfoToZip(ctx, zipWriter)
+	// Add clusterInfo
+	appendClusterMetaInfoToZip(ctx, archiveW)
 }
 
 func createHostAnonymizerForFSMode() map[string]string {
