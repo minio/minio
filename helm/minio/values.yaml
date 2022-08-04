@@ -421,6 +421,21 @@ environment:
 ##
 # extraSecret: minio-extraenv
 
+## OpenID Identity Management
+## The following section documents environment variables for enabling external identity management using an OpenID Connect (OIDC)-compatible provider.
+## See https://docs.min.io/minio/baremetal/security/openid-external-identity-management/external-authentication-with-openid-identity-provider.html#minio-external-identity-management-openid for a tutorial on using these variables.
+oidc:
+  enabled: false
+  configUrl: "https://identity-provider-url/.well-known/openid-configuration"
+  clientId: "minio"
+  clientSecret: ""
+  claimName: "policy"
+  scopes: "openid,profile,email"
+  redirectUri: "https://console-endpoint-url/oauth_callback"
+  # Can leave empty
+  claimPrefix: ""
+  comment: ""
+
 networkPolicy:
   enabled: false
   allowExternal: true
