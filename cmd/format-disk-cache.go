@@ -110,7 +110,7 @@ func formatCacheGetVersion(r io.ReadSeeker) (string, error) {
 // Creates a new cache format.json if unformatted.
 func createFormatCache(fsFormatPath string, format *formatCacheV1) error {
 	// open file using READ & WRITE permission
-	file, err := os.OpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0o600)
+	file, err := os.OpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func loadFormatCache(ctx context.Context, drives []string) ([]*formatCacheV2, bo
 	migrating := false
 	for i, drive := range drives {
 		cacheFormatPath := pathJoin(drive, minioMetaBucket, formatConfigFile)
-		f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
+		f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0o666)
 		if err != nil {
 			if osIsNotExist(err) {
 				continue
@@ -478,7 +478,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 
 func migrateCacheFormatJSON(cacheFormatPath string) error {
 	// now migrate format.json
-	f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
+	f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}
