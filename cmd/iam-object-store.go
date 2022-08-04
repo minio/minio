@@ -90,6 +90,9 @@ func (iamOS *IAMObjectStore) getUsersSysType() UsersSysType {
 // 3. Migrate user identity json file to include version info.
 func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context) error {
 	basePrefix := iamConfigUsersPrefix
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -274,6 +277,8 @@ func (iamOS *IAMObjectStore) loadPolicyDoc(ctx context.Context, policy string, m
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPoliciesPrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -323,6 +328,8 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		basePrefix = iamConfigUsersPrefix
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -350,6 +357,8 @@ func (iamOS *IAMObjectStore) loadGroup(ctx context.Context, group string, m map[
 }
 
 func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigGroupsPrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -392,6 +401,8 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
 		if item.Err != nil {
 			return item.Err
@@ -432,7 +443,8 @@ var (
 
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
 		if item.Err != nil {
 			return nil, item.Err
