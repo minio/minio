@@ -30,7 +30,7 @@ import (
 type badDisk struct{ StorageAPI }
 
 func (a badDisk) String() string {
-	return "bad-drive"
+	return "bad-disk"
 }
 
 func (a badDisk) AppendFile(ctx context.Context, volume string, path string, buf []byte) error {
