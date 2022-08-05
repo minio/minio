@@ -189,15 +189,20 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	cfg := globalServerConfig.Clone()
 	vars := mux.Vars(r)
-	buf := &bytes.Buffer{}
-	cw := config.NewConfigWriteTo(cfg, vars["key"])
-	if _, err := cw.WriteTo(buf); err != nil {
+	subSys := vars["key"]
+	subSysConfigs, err := cfg.GetSubsysInfo(subSys)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
+	var s strings.Builder
+	for _, subSysConfig := range subSysConfigs {
+		subSysConfig.AddString(&s, false)
+	}
+
 	password := cred.SecretKey
-	econfigData, err := madmin.EncryptData(password, buf.Bytes())
+	econfigData, err := madmin.EncryptData(password, []byte(s.String()))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -427,42 +432,30 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		count += len(cfg[hkv.Key])
 	}
 	for _, hkv := range hkvs {
-		v := cfg[hkv.Key]
-		for target, kv := range v {
-			off := kv.Get(config.Enable) == config.EnableOff
+		// We ignore the error below, as we cannot get one.
+		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key)
+
+		for _, item := range cfgSubsysItems {
+			off := item.Params.Get(config.Enable) == config.EnableOff
 			switch hkv.Key {
 			case config.EtcdSubSys:
-				off = !etcd.Enabled(kv)
+				off = !etcd.Enabled(item.Params)
 			case config.CacheSubSys:
-				off = !cache.Enabled(kv)
+				off = !cache.Enabled(item.Params)
 			case config.StorageClassSubSys:
-				off = !storageclass.Enabled(kv)
+				off = !storageclass.Enabled(item.Params)
 			case config.PolicyPluginSubSys:
-				off = !polplugin.Enabled(kv)
+				off = !polplugin.Enabled(item.Params)
 			case config.IdentityOpenIDSubSys:
-				off = !openid.Enabled(kv)
+				off = !openid.Enabled(item.Params)
 			case config.IdentityLDAPSubSys:
-				off = !xldap.Enabled(kv)
+				off = !xldap.Enabled(item.Params)
 			case config.IdentityTLSSubSys:
 				off = !globalSTSTLSConfig.Enabled
 			case config.IdentityPluginSubSys:
-				off = !idplugin.Enabled(kv)
+				off = !idplugin.Enabled(item.Params)
 			}
-			if off {
-				s.WriteString(config.KvComment)
-				s.WriteString(config.KvSpaceSeparator)
-			}
-			s.WriteString(hkv.Key)
-			if target != config.Default {
-				s.WriteString(config.SubSystemSeparator)
-				s.WriteString(target)
-			}
-			s.WriteString(config.KvSpaceSeparator)
-			s.WriteString(kv.String())
-			count--
-			if count > 0 {
-				s.WriteString(config.KvNewline)
-			}
+			item.AddString(&s, off)
 		}
 	}
 
