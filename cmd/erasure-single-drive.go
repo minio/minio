@@ -1310,12 +1310,12 @@ func (es *erasureSingle) DeleteObjects(ctx context.Context, bucket string, objec
 				DeleteMarker:          vr.Deleted,
 				DeleteMarkerVersionID: vr.VersionID,
 				DeleteMarkerMTime:     DeleteMarkerMTime{vr.ModTime},
-				ObjectName:            vr.Name,
+				ObjectName:            decodeDirObject(vr.Name),
 				ReplicationState:      vr.ReplicationState,
 			}
 		} else {
 			dobjects[i] = DeletedObject{
-				ObjectName:       vr.Name,
+				ObjectName:       decodeDirObject(vr.Name),
 				VersionID:        vr.VersionID,
 				ReplicationState: vr.ReplicationState,
 			}
