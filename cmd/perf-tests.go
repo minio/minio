@@ -37,14 +37,35 @@ import (
 
 // SpeedTestResult return value of the speedtest function
 type SpeedTestResult struct {
-	Endpoint  string
-	Uploads   uint64
-	Downloads uint64
-	Error     string
+	Endpoint      string
+	Uploads       uint64
+	Downloads     uint64
+	UploadTimes   madmin.TimeDurations
+	DownloadTimes madmin.TimeDurations
+	DownloadTTFB  madmin.TimeDurations
+	Error         string
 }
 
 func newRandomReader(size int) io.Reader {
 	return io.LimitReader(randreader.New(), int64(size))
+}
+
+type firstByteRecorder struct {
+	t *time.Time
+	r io.Reader
+}
+
+func (f *firstByteRecorder) Read(p []byte) (n int, err error) {
+	if f.t != nil || len(p) == 0 {
+		return f.r.Read(p)
+	}
+	// Read a single byte.
+	n, err = f.r.Read(p[:1])
+	if n > 0 {
+		t := time.Now()
+		f.t = &t
+	}
+	return n, err
 }
 
 // Runs the speedtest on local MinIO process.
@@ -54,9 +75,9 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 		return SpeedTestResult{}, errServerNotInitialized
 	}
 
+	var wg sync.WaitGroup
 	var errOnce sync.Once
 	var retError string
-	var wg sync.WaitGroup
 	var totalBytesWritten uint64
 	var totalBytesRead uint64
 
@@ -80,11 +101,14 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 		DisableMultipart:     true,
 	}
 
+	var mu sync.Mutex
+	var uploadTimes madmin.TimeDurations
 	wg.Add(opts.concurrency)
 	for i := 0; i < opts.concurrency; i++ {
 		go func(i int) {
 			defer wg.Done()
 			for {
+				t := time.Now()
 				reader := newRandomReader(opts.objectSize)
 				tmpObjName := pathJoin(objNamePrefix, fmt.Sprintf("%d/%d", i, objCountPerThread[i]))
 				info, err := globalMinioClient.PutObject(uploadsCtx, opts.bucketName, tmpObjName, reader, int64(opts.objectSize), popts)
@@ -97,8 +121,12 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 					uploadsCancel()
 					return
 				}
+				response := time.Since(t)
 				atomic.AddUint64(&totalBytesWritten, uint64(info.Size))
 				objCountPerThread[i]++
+				mu.Lock()
+				uploadTimes = append(uploadTimes, response)
+				mu.Unlock()
 			}
 		}(i)
 	}
@@ -106,7 +134,12 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 
 	// We already saw write failures, no need to proceed into read's
 	if retError != "" {
-		return SpeedTestResult{Uploads: totalBytesWritten, Downloads: totalBytesRead, Error: retError}, nil
+		return SpeedTestResult{
+			Uploads:     totalBytesWritten,
+			Downloads:   totalBytesRead,
+			UploadTimes: uploadTimes,
+			Error:       retError,
+		}, nil
 	}
 
 	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
@@ -119,6 +152,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	gopts := minio.GetObjectOptions{}
 	gopts.Set(globalObjectPerfUserMetadata, "true") // Bypass S3 API freeze
 
+	var downloadTimes madmin.TimeDurations
+	var downloadTTFB madmin.TimeDurations
 	wg.Add(opts.concurrency)
 	for i := 0; i < opts.concurrency; i++ {
 		go func(i int) {
@@ -132,6 +167,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 					j = 0
 				}
 				tmpObjName := pathJoin(objNamePrefix, fmt.Sprintf("%d/%d", i, j))
+				t := time.Now()
 				r, err := globalMinioClient.GetObject(downloadsCtx, opts.bucketName, tmpObjName, gopts)
 				if err != nil {
 					errResp, ok := err.(minio.ErrorResponse)
@@ -146,13 +182,22 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 					downloadsCancel()
 					return
 				}
-				n, err := io.Copy(ioutil.Discard, r)
+				fbr := firstByteRecorder{
+					r: r,
+				}
+				n, err := io.Copy(ioutil.Discard, &fbr)
 				r.Close()
 				if err == nil {
+					response := time.Since(t)
+					ttfb := time.Since(*fbr.t)
 					// Only capture success criteria - do not
 					// have to capture failed reads, truncated
 					// reads etc.
 					atomic.AddUint64(&totalBytesRead, uint64(n))
+					mu.Lock()
+					downloadTimes = append(downloadTimes, response)
+					downloadTTFB = append(downloadTTFB, ttfb)
+					mu.Unlock()
 				}
 				if err != nil {
 					if !contextCanceled(downloadsCtx) && !errors.Is(err, context.Canceled) {
@@ -169,7 +214,14 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	}
 	wg.Wait()
 
-	return SpeedTestResult{Uploads: totalBytesWritten, Downloads: totalBytesRead, Error: retError}, nil
+	return SpeedTestResult{
+		Uploads:       totalBytesWritten,
+		Downloads:     totalBytesRead,
+		UploadTimes:   uploadTimes,
+		DownloadTimes: downloadTimes,
+		DownloadTTFB:  downloadTTFB,
+		Error:         retError,
+	}, nil
 }
 
 // To collect RX stats during "mc support perf net"
