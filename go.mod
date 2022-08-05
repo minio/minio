@@ -48,7 +48,7 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.20.0
-	github.com/minio/madmin-go v1.4.9
+	github.com/minio/madmin-go v1.4.12
 	github.com/minio/minio-go/v7 v7.0.34
 	github.com/minio/pkg v1.3.0
 	github.com/minio/selfupdate v0.5.0
@@ -164,7 +164,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/minio/colorjson v1.0.2 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20220705180830-01b87ecc02ff // indirect
+	github.com/minio/mc v0.0.0-20220805080128-351d021b924b // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -221,6 +221,3 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
-
-replace github.com/minio/madmin-go => ../madmin-go
-replace github.com/minio/mc => ../mc
