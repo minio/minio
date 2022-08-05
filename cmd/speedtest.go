@@ -94,6 +94,9 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.objectSize) / uint64(durationSecs)
 			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
 			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.objectSize) / uint64(durationSecs)
+			var totalUploadTimes madmin.TimeDurations
+			var totalDownloadTimes madmin.TimeDurations
+			var totalDownloadTTFB madmin.TimeDurations
 			for i := 0; i < len(throughputHighestResults); i++ {
 				errStr := ""
 				if throughputHighestResults[i].Error != "" {
@@ -116,13 +119,22 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
+
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
 					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
+
+				totalUploadTimes = append(totalUploadTimes, throughputHighestResults[i].UploadTimes...)
+				totalDownloadTimes = append(totalDownloadTimes, throughputHighestResults[i].DownloadTimes...)
+				totalDownloadTTFB = append(totalDownloadTTFB, throughputHighestResults[i].DownloadTTFB...)
 			}
+
+			result.PUTStats.Response = totalUploadTimes.Measure()
+			result.GETStats.Response = totalDownloadTimes.Measure()
+			result.GETStats.TTFB = totalDownloadTTFB.Measure()
 
 			result.Size = opts.objectSize
 			result.Disks = globalEndpoints.NEndpoints()
@@ -185,6 +197,8 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				break
 			}
 
+			// We break if we did not see 2.5% growth rate in total GET
+			// requests, we have reached our peak at this point.
 			doBreak := float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025
 
 			throughputHighestGet = totalGet
