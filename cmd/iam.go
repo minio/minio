@@ -161,11 +161,6 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 	return sys.store.UserNotificationHandler(ctx, accessKey, svcUser)
 }
 
-// Perform IAM configuration migration.
-func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
-	return sys.store.migrateBackendFormat(ctx)
-}
-
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	if sys.ldapConfig.Enabled {
@@ -238,31 +233,15 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Indicate to our routine to exit cleanly upon return.
 	defer cancel()
 
-	// allocate dynamic timeout once before the loop
-	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Migrate storage format if needed.
 	for {
-		// Hold the lock for migration only.
-		txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
-
-		// let one of the server acquire the lock, if not let them timeout.
-		// which shall be retried again by this loop.
-		lkctx, err := txnLk.GetLock(retryCtx, iamLockTimeout)
-		if err != nil {
-			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
-			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
-			continue
-		}
-
 		if etcdClient != nil {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
 			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
-				txnLk.Unlock(lkctx.Cancel)
 				if errors.Is(err, errEtcdUnreachable) {
 					logger.Info("Connection to etcd timed out. Retrying..")
 					continue
@@ -273,25 +252,16 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 			}
 		}
 
-		// These messages only meant primarily for distributed setup, so only log during distributed setup.
-		if globalIsDistErasure {
-			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. lock acquired")
-		}
-
 		// Migrate IAM configuration, if necessary.
-		if err := sys.doIAMConfigMigration(retryCtx); err != nil {
-			txnLk.Unlock(lkctx.Cancel)
+		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				continue
 			}
-			logger.LogIf(ctx, fmt.Errorf("Unable to migrate IAM users and policies to new format: %w", err))
-			logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
+			logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, unable to write the IAM format"))
 			return
 		}
 
-		// Successfully migrated, proceed to load the users.
-		txnLk.Unlock(lkctx.Cancel)
 		break
 	}
 

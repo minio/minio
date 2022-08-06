@@ -57,10 +57,6 @@ func (ids *iamDummyStore) getUsersSysType() UsersSysType {
 	return ids.usersSysType
 }
 
-func (ids *iamDummyStore) migrateBackendFormat(context.Context) error {
-	return nil
-}
-
 func (ids *iamDummyStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
 	v, ok := ids.iamPolicyDocsMap[policy]
 	if !ok {
