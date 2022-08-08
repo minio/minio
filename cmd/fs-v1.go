@@ -867,7 +867,7 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
 
-	rc, _, err := fsOpenFile(ctx, fsMetaPath, 0o666)
+	rc, _, err := fsOpenFile(ctx, fsMetaPath, 0)
 	if err == nil {
 		fsMetaBuf, rerr := ioutil.ReadAll(rc)
 		rc.Close()
