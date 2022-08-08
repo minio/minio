@@ -2210,7 +2210,10 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 // Other helpers
 
 func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient, error) {
-	epURL, _ := url.Parse(endpoint)
+	epURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
 	client, err := madmin.New(epURL.Host, accessKey, secretKey, epURL.Scheme == "https")
 	if err != nil {
 		return nil, err
