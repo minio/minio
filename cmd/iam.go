@@ -38,8 +38,13 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
+	idplugin "github.com/minio/minio/internal/config/identity/plugin"
+	"github.com/minio/minio/internal/config/policy/opa"
+	polplugin "github.com/minio/minio/internal/config/policy/plugin"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -218,6 +223,54 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	globalServerConfigMu.RLock()
+	s := globalServerConfig
+	globalServerConfigMu.RUnlock()
+
+	ldapCfg := s[config.IdentityLDAPSubSys][config.Default]
+
+	var err error
+	globalOpenIDConfig, err = openid.LookupConfig(s,
+		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
+	}
+
+	// Initialize if LDAP is enabled
+	globalLDAPConfig, err = xldap.Lookup(ldapCfg, globalRootCAs)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
+	}
+
+	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
+		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
+	}
+
+	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
+
+	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
+		NewGatewayHTTPTransport(), xhttp.DrainBody)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err))
+	}
+
+	if authZPluginCfg.URL == nil {
+		opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
+			NewGatewayHTTPTransport(), xhttp.DrainBody)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
+		} else {
+			authZPluginCfg.URL = opaCfg.URL
+			authZPluginCfg.AuthToken = opaCfg.AuthToken
+			authZPluginCfg.Transport = opaCfg.Transport
+			authZPluginCfg.CloseRespFn = opaCfg.CloseRespFn
+		}
+	}
+
+	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
+
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -330,8 +383,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	// From AuthN plugin if enabled.
-	if globalAuthNPlugin != nil {
-		riMap := globalAuthNPlugin.GetRoleInfo()
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
 		sys.validateAndAddRolePolicyMappings(ctx, riMap)
 	}
 
@@ -352,7 +405,8 @@ func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[a
 		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
 		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
 		if len(unknownPoliciesSet) > 0 {
-			if globalAuthZPlugin == nil {
+			authz := newGlobalAuthZPluginFn()
+			if authz == nil {
 				// Print a warning that some policies mapped to a role are not defined.
 				errMsg := fmt.Errorf(
 					"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",

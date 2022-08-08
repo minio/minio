@@ -843,7 +843,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	claims := make(map[string]interface{})
 	defer logger.AuditLog(ctx, w, r, claims)
 
-	if globalAuthNPlugin == nil {
+	authn := newGlobalAuthNPluginFn()
+	if authn == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCustomToken' is disabled"))
 		return
 	}
@@ -879,7 +880,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 		return
 	}
 
-	res, err := globalAuthNPlugin.Authenticate(roleArn, token)
+	res, err := authn.Authenticate(roleArn, token)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
