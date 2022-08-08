@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -575,12 +575,11 @@ const (
 var diskMaxConcurrent = 512
 
 func init() {
-	if s, ok := os.LookupEnv("_MINIO_DISK_MAX_CONCURRENT"); ok && s != "" {
-		var err error
-		diskMaxConcurrent, err = strconv.Atoi(s)
-		if err != nil {
-			logger.Fatal(err, "invalid _MINIO_DISK_MAX_CONCURRENT value")
-		}
+	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "512")
+	diskMaxConcurrent, _ = strconv.Atoi(s)
+	if diskMaxConcurrent <= 0 {
+		logger.LogIf(GlobalContext, fmt.Errorf("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s))
+		diskMaxConcurrent = 512
 	}
 }
 
