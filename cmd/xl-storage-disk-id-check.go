@@ -578,7 +578,7 @@ func init() {
 	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "512")
 	diskMaxConcurrent, _ = strconv.Atoi(s)
 	if diskMaxConcurrent <= 0 {
-		logger.LogIf(GlobalContext, fmt.Errorf("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s))
+		logger.Info("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s)
 		diskMaxConcurrent = 512
 	}
 }
