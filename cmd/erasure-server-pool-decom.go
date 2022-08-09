@@ -802,12 +802,12 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					}
 					stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
 					if err = z.decommissionObject(ctx, bi.Name, gr); err != nil {
-						stopFn()
+						stopFn(err)
 						failure = true
 						logger.LogIf(ctx, err)
 						continue
 					}
-					stopFn()
+					stopFn(nil)
 					failure = false
 					break
 				}
@@ -830,7 +830,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
 				)
-				stopFn()
+				stopFn(err)
 				auditLogDecom(ctx, "DecomDeleteObject", bi.Name, entry.name, "", err)
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -901,7 +901,11 @@ const (
 	decomMetricDecommissionRemoveObject
 )
 
-func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.Duration, path string, err error) madmin.TraceInfo {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	}
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceDecommission,
 		Time:      startTime,
@@ -909,15 +913,16 @@ func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.D
 		FuncName:  fmt.Sprintf("decommission.%s (pool-id=%d)", d.String(), poolIdx),
 		Duration:  duration,
 		Path:      path,
+		Error:     errStr,
 	}
 }
 
-func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func() {
+func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func(err error) {
 	startTime := time.Now()
-	return func() {
+	return func(err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceDecommission) > 0 {
-			globalTrace.Publish(decomTrace(d, poolIdx, startTime, duration, strings.Join(paths, " ")))
+			globalTrace.Publish(decomTrace(d, poolIdx, startTime, duration, strings.Join(paths, " "), err))
 		}
 	}
 }
@@ -941,10 +946,10 @@ func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx i
 		}
 		stopFn := globalDecommissionMetrics.log(decomMetricDecommissionBucket, idx, bucket.Name)
 		if err := z.decommissionPool(ctx, idx, pool, bucket); err != nil {
-			stopFn()
+			stopFn(err)
 			return err
 		}
-		stopFn()
+		stopFn(nil)
 
 		z.poolMetaMutex.Lock()
 		z.poolMeta.BucketDone(idx, bucket)
