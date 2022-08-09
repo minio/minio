@@ -50,6 +50,7 @@ createBucket() {
   POLICY=$2
   PURGE=$3
   VERSIONING=$4
+  OBJECTLOCKING=$5
 
   # Purge the bucket, if set & exists
   # Since PURGE is user input, check explicitly for `true`
@@ -64,21 +65,28 @@ createBucket() {
     fi
   fi
 
-  # Create the bucket if it does not exist
+  # Create the bucket if it does not exist and set objectlocking if enabled
   if ! checkBucketExists $BUCKET ; then
+    if [ ! -z $OBJECTLOCKING ] ; then
+      if [ $OBJECTLOCKING = true ] ; then
+          echo "Creating bucket with OBJECTLOCKING '$BUCKET'"
+          ${MC} mb --with-lock myminio/$BUCKET
+      elif [ $OBJECTLOCKING = false ] ; then
     echo "Creating bucket '$BUCKET'"
     ${MC} mb myminio/$BUCKET
+    fi
   else
     echo "Bucket '$BUCKET' already exists."
+  fi
   fi
 
 
   # set versioning for bucket
   if [ ! -z $VERSIONING ] ; then
-    if [ $VERSIONING = true ] ; then
+    if [ $VERSIONING = true ] && [ $OBJECTLOCKING = false ] ; then
         echo "Enabling versioning for '$BUCKET'"
         ${MC} version enable myminio/$BUCKET
-    elif [ $VERSIONING = false ] ; then
+    elif [ $VERSIONING = false ] && [ $OBJECTLOCKING = false ] ; then
         echo "Suspending versioning for '$BUCKET'"
         ${MC} version suspend myminio/$BUCKET
     fi
@@ -104,6 +112,6 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }}
+createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }} {{ .objectlocking }}
 {{- end }}
 {{- end }}
