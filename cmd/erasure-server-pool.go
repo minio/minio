@@ -1178,7 +1178,6 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
 	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -1189,6 +1188,8 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 		Versioned:   true,
 	}
+	// set bucket metadata in opts
+	opts.setBucketMeta(ctx)
 
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
@@ -1235,12 +1236,16 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
-
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	lc, _ := globalLifecycleSys.Get(bucket)
-
-	// Check if bucket is object locked.
-	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	opts := listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
+		Marker:      marker,
+		InclDeleted: false,
+		AskDisks:    globalAPIConfig.getListQuorum(),
+	}
+	opts.setBucketMeta(ctx)
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -1252,8 +1257,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		// to avoid the need for ListObjects().
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
-			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
+			if opts.Lifecycle != nil {
+				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
@@ -1264,18 +1269,6 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
-	}
-
-	opts := listPathOptions{
-		Bucket:      bucket,
-		Prefix:      prefix,
-		Separator:   delimiter,
-		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
-		Marker:      marker,
-		InclDeleted: false,
-		AskDisks:    globalAPIConfig.getListQuorum(),
-		Lifecycle:   lc,
-		Retention:   rcfg,
 	}
 
 	merged, err := z.listPath(ctx, &opts)

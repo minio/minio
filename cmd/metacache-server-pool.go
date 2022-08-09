@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
-	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -486,9 +485,9 @@ func (es *erasureSingle) listMerged(ctx context.Context, o listPathOptions, resu
 	mu.Unlock()
 
 	// Do lifecycle filtering.
-	if o.Lifecycle != nil {
+	if o.Lifecycle != nil || o.Replication.Config != nil {
 		filterIn := make(chan metaCacheEntry, 10)
-		go filterLifeCycle(ctx, o.Bucket, *o.Lifecycle, o.Retention, filterIn, results)
+		go applyBucketActions(ctx, o, filterIn, results)
 		// Replace results.
 		results = filterIn
 	}
@@ -572,9 +571,9 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	mu.Unlock()
 
 	// Do lifecycle filtering.
-	if o.Lifecycle != nil {
+	if o.Lifecycle != nil || o.Replication.Config != nil {
 		filterIn := make(chan metaCacheEntry, 10)
-		go filterLifeCycle(ctx, o.Bucket, *o.Lifecycle, o.Retention, filterIn, results)
+		go applyBucketActions(ctx, o, filterIn, results)
 		// Replace results.
 		results = filterIn
 	}
@@ -635,15 +634,16 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	return nil
 }
 
-// filterLifeCycle will filter out objects if the most recent
-// version should be deleted by lifecycle.
+// applyBucketActions applies lifecycle and replication actions on the listing
+// It will filter out objects if the most recent version should be deleted by lifecycle.
+// Entries that failed replication will be queued if no lifecycle rules got applied.
 // out will be closed when there are no more results.
 // When 'in' is closed or the context is canceled the
 // function closes 'out' and exits.
-func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle, lr lock.Retention, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
+func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
 	defer close(out)
 
-	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+	vcfg, _ := globalBucketVersioningSys.Get(o.Bucket)
 	for {
 		var obj metaCacheEntry
 		var ok bool
@@ -656,29 +656,32 @@ func filterLifeCycle(ctx context.Context, bucket string, lc lifecycle.Lifecycle,
 			}
 		}
 
-		fi, err := obj.fileInfo(bucket)
+		fi, err := obj.fileInfo(o.Bucket)
 		if err != nil {
 			continue
 		}
 
 		versioned := vcfg != nil && vcfg.Versioned(obj.name)
 
-		objInfo := fi.ToObjectInfo(bucket, obj.name, versioned)
-		action := evalActionFromLifecycle(ctx, lc, lr, objInfo, false)
-		switch action {
-		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-			globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
-			// Skip this entry.
-			continue
-		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-			globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
-			// Skip this entry.
-			continue
+		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
+		if o.Lifecycle != nil {
+			action := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo, false)
+			switch action {
+			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
+				// Skip this entry.
+				continue
+			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+				globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+				// Skip this entry.
+				continue
+			}
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case out <- obj:
+			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
 		}
 	}
 }
