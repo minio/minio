@@ -1103,6 +1103,9 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 		} else {
 			_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+			if err == nil && updReq.Status != madmin.GroupEnabled {
+				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
+			}
 		}
 	}
 	if err != nil {
@@ -4683,7 +4686,6 @@ func (c *SiteReplicationSys) healGroups(ctx context.Context, objAPI ObjectLayer,
 			continue
 		}
 		peerName := info.Sites[dID].Name
-
 		if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemGroupInfo,
 			GroupInfo: &madmin.SRGroupInfo{
