@@ -534,7 +534,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 	if dobj.VersionID != "" && rinfo.VersionPurgeStatus == Complete {
 		return
 	}
-	if tgt.IsOffline() {
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN))
 		sendEvent(eventArgs{
 			BucketName: dobj.Bucket,
@@ -1039,7 +1039,7 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		rinfo.ReplicationResynced = true
 		return
 	}
-	if tgt.IsOffline() {
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, tgt.ARN))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
@@ -1659,7 +1659,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 	}
 	for _, t := range proxyTargets.Targets {
 		tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, t.Arn)
-		if tgt == nil || tgt.IsOffline() {
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			continue
 		}
 		// if proxying explicitly disabled on remote target

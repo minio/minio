@@ -888,7 +888,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationRemoteConnectionError: {
 		Code:           "XMinioAdminReplicationRemoteConnectionError",
-		Description:    "Remote service connection error - please check remote service credentials and target bucket",
+		Description:    "Remote service connection error",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationBandwidthLimitError: {
@@ -2074,7 +2074,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrRemoteDestinationNotFoundError
 	case BucketRemoteTargetNotFound:
 		apiErr = ErrRemoteTargetNotFoundError
-	case BucketRemoteConnectionErr:
+	case RemoteTargetConnectionErr:
 		apiErr = ErrReplicationRemoteConnectionError
 	case BucketRemoteAlreadyExists:
 		apiErr = ErrBucketRemoteAlreadyExists
