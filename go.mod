@@ -72,7 +72,6 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.22.6
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.7-0.20211026165309-e818a1881b0e
