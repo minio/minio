@@ -368,7 +368,7 @@ func getVfsConf(c *cli.Context, metaConf *meta.Config, format *meta.Format, chun
 	return cfg
 }
 func registerMetaMsg(m meta.Meta, store chunk.ChunkStore, chunkConf *chunk.Config) {
-	m.OnMsg(meta.DeleteChunk, func(args ...interface{}) error {
+	m.OnMsg(meta.DeleteSlice, func(args ...interface{}) error {
 		return store.Remove(args[0].(uint64), int(args[1].(uint32)))
 	})
 	m.OnMsg(meta.CompactChunk, func(args ...interface{}) error {
