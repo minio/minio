@@ -189,6 +189,7 @@ Description of the configuration parameters used above -
 - `buckets[].purge` - purge if bucket exists already
 
 ### Create policies after install
+
 Install the chart, specifying the policies you want to create after install:
 
 ```bash
