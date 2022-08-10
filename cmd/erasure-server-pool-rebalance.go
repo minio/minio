@@ -444,8 +444,9 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			}
 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
-			logger.LogIf(ctx, z.saveRebalanceStats(ctx, poolIdx, rebalSaveStats))
-			stopFn()
+			err := z.saveRebalanceStats(ctx, poolIdx, rebalSaveStats)
+			stopFn(err)
+			logger.LogIf(ctx, err)
 
 			if rebalDone {
 				return
@@ -469,11 +470,11 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBucket, poolIdx, bucket)
 		err = z.rebalanceBucket(ctx, bucket, poolIdx)
 		if err != nil {
-			stopFn()
+			stopFn(err)
 			logger.LogIf(ctx, err)
 			return
 		}
-		stopFn()
+		stopFn(nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
 	}
 
@@ -645,13 +646,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 					stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceObject, poolIdx, bucket, version.Name)
 					if err = z.rebalanceObject(ctx, bucket, gr); err != nil {
-						stopFn()
+						stopFn(err)
 						failure = true
 						logger.LogIf(ctx, err)
 						continue
 					}
 
-					stopFn()
+					stopFn(nil)
 					failure = false
 					oi = gr.ObjInfo
 					break
@@ -674,7 +675,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
 				)
-				stopFn()
+				stopFn(err)
 				auditLogRebalance(ctx, "Rebalance:DeleteObject", bucket, entry.name, "", err)
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -885,8 +886,8 @@ func (z *erasureServerPools) StartRebalance() {
 
 		go func(idx int) {
 			stopfn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBuckets, idx)
-			z.rebalanceBuckets(ctx, idx)
-			stopfn()
+			err := z.rebalanceBuckets(ctx, idx)
+			stopfn(err)
 		}(poolIdx)
 	}
 	return
@@ -926,24 +927,28 @@ const (
 	rebalanceMetricSaveMetadata
 )
 
-func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duration time.Duration, err error, path string) madmin.TraceInfo {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	}
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceRebalance,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  "rebalance." + r.String(),
+		FuncName:  fmt.Sprintf("rebalance.%s (pool-id=%d)", r.String(), poolIdx),
 		Duration:  duration,
 		Path:      path,
-		Message:   fmt.Sprintf("pool %d", poolIdx),
+		Error:     errStr,
 	}
 }
 
-func (p *rebalanceMetrics) log(r rebalanceMetric, poolIdx int, paths ...string) func() {
+func (p *rebalanceMetrics) log(r rebalanceMetric, poolIdx int, paths ...string) func(err error) {
 	startTime := time.Now()
-	return func() {
+	return func(err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceRebalance) > 0 {
-			globalTrace.Publish(rebalanceTrace(r, poolIdx, startTime, duration, strings.Join(paths, " ")))
+			globalTrace.Publish(rebalanceTrace(r, poolIdx, startTime, duration, err, strings.Join(paths, " ")))
 		}
 	}
 }
