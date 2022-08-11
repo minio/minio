@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [ -n "$TEST_DEBUG" ]; then
+    set -x
+fi
+
 trap 'catch $LINENO' ERR
 
 # shellcheck disable=SC2120

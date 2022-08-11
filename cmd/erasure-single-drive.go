@@ -1223,7 +1223,7 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-func (es *erasureSingle) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
+func (es *erasureSingle) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {
 	return es.disk.DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
 }
 
@@ -1447,7 +1447,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	goi, writeQuorum, gerr := es.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	goi, _, gerr := es.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
 		case InsufficientReadQuorum:
@@ -1459,6 +1459,11 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 		} else {
 			return objInfo, gerr
 		}
+	}
+
+	// Do not create new delete markers.
+	if goi.DeleteMarker && opts.VersionID == "" {
+		return goi, nil
 	}
 
 	if opts.Expiration.Expire {
@@ -1557,7 +1562,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 			// delete marker. Add delete marker, since we don't have
 			// any version specified explicitly. Or if a particular
 			// version id needs to be replicated.
-			if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
+			if err = es.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
 			return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
@@ -1576,7 +1581,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
-	if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
+	if err = es.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1813,14 +1818,7 @@ func (es *erasureSingle) TransitionObject(ctx context.Context, bucket, object st
 	fi.TransitionVersionID = string(rv)
 	eventName := event.ObjectTransitionComplete
 
-	// we now know the number of blocks this object needs for data and parity.
-	// writeQuorum is dataBlocks + 1
-	writeQuorum := fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		writeQuorum++
-	}
-
-	if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+	if err = es.deleteObjectVersion(ctx, bucket, object, fi, false); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 

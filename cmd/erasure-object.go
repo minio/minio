@@ -448,15 +448,28 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		}
 		defer NSUpdated(bucket, object)
 
-		if opts.VersionID != "" {
-			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
-				VersionID: opts.VersionID,
-			}, false)
-		} else {
-			er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
-				VersionID: m.VersionID,
-			}, false)
+		fi := FileInfo{
+			VersionID: m.VersionID,
 		}
+		if opts.VersionID != "" {
+			fi = FileInfo{
+				VersionID: opts.VersionID,
+			}
+		}
+
+		disks := er.getDisks()
+		g := errgroup.WithNErrs(len(disks))
+		for index := range disks {
+			index := index
+			g.Go(func() error {
+				if disks[index] == nil {
+					return errDiskNotFound
+				}
+				return disks[index].DeleteVersion(ctx, bucket, object, fi, false)
+			}, index)
+		}
+
+		g.Wait()
 	}
 	return m, err
 }
@@ -1172,8 +1185,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
+func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {
 	disks := er.getDisks()
+	// Assume (N/2 + 1) quorum for Delete()
+	// this is a theoretical assumption such that
+	// for delete's we do not need to honor storage
+	// class for objects that have reduced quorum
+	// due to storage class - this only needs to be honored
+	// for Read() requests alone that we already do.
+	writeQuorum := len(disks)/2 + 1
+
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
 		index := index
@@ -1423,31 +1444,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	// Acquire a write lock before deleting the object.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
-
-	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	goi, writeQuorum, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
-	if gerr != nil && goi.Name == "" {
-		switch gerr.(type) {
-		case InsufficientReadQuorum:
-			return objInfo, InsufficientWriteQuorum{}
-		}
-		// For delete marker replication, versionID being replicated will not exist on disk
-		if opts.DeleteMarker {
-			versionFound = false
-		} else {
-			return objInfo, gerr
-		}
-	}
-
+	goi := opts.CurrentObjInfo
 	if opts.Expiration.Expire {
 		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
 		var isErr bool
@@ -1474,18 +1472,31 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	defer NSUpdated(bucket, object)
 
+	// Acquire a write lock before deleting the object.
+	lk := er.NewNSLock(bucket, object)
+	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
+
 	storageDisks := er.getDisks()
 
-	var markDelete bool
-	// Determine whether to mark object deleted for replication
-	if goi.VersionID != "" {
-		markDelete = true
+	versionFound := true
+	if goi.Name == "" && opts.DeleteMarker {
+		versionFound = false
 	}
 
-	// Default deleteMarker to true if object is under versioning
-	deleteMarker := opts.Versioned
+	// Determine whether to mark object deleted for replication
+	markDelete := opts.VersionID != ""
 
-	if opts.VersionID != "" {
+	// Default deleteMarker to true if object is under versioning
+	// versioning suspended means we add `null` version as
+	// delete marker, if its not decided already.
+	deleteMarker := (opts.Versioned || opts.VersionSuspended) && opts.VersionID == "" || (opts.DeleteMarker && opts.VersionID != "")
+
+	if markDelete {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus() == replication.Replica {
 			markDelete = false
@@ -1496,22 +1507,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus() == Complete {
 			markDelete = false
 		}
-
-		// Version is found but we do not wish to create more delete markers
-		// now, since VersionPurgeStatus() is already set, we can let the
-		// lower layers decide this. This fixes a regression that was introduced
-		// in PR #14555 where !VersionPurgeStatus.Empty() is automatically
-		// considered as Delete marker true to avoid listing such objects by
-		// regular ListObjects() calls. However for delete replication this
-		// ends up being a problem because "upon" a successful delete this
-		// ends up creating a new delete marker that is spurious and unnecessary.
-		if versionFound {
-			if !goi.VersionPurgeStatus.Empty() {
-				deleteMarker = false
-			} else if !goi.DeleteMarker { // implies a versioned delete of object
-				deleteMarker = false
-			}
-		}
 	}
 
 	modTime := opts.MTime
@@ -1519,38 +1514,31 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		modTime = UTCNow()
 	}
 	fvID := mustGetUUID()
-	if markDelete {
-		if opts.Versioned || opts.VersionSuspended {
-			if !deleteMarker {
-				// versioning suspended means we add `null` version as
-				// delete marker, if its not decided already.
-				deleteMarker = opts.VersionSuspended && opts.VersionID == ""
-			}
-			fi := FileInfo{
-				Name:             object,
-				Deleted:          deleteMarker,
-				MarkDeleted:      markDelete,
-				ModTime:          modTime,
-				ReplicationState: opts.DeleteReplication,
-				TransitionStatus: opts.Transition.Status,
-				ExpireRestored:   opts.Transition.ExpireRestored,
-			}
-			fi.SetTierFreeVersionID(fvID)
-			if opts.Versioned {
-				fi.VersionID = mustGetUUID()
-				if opts.VersionID != "" {
-					fi.VersionID = opts.VersionID
-				}
-			}
-			// versioning suspended means we add `null` version as
-			// delete marker. Add delete marker, since we don't have
-			// any version specified explicitly. Or if a particular
-			// version id needs to be replicated.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
-				return objInfo, toObjectErr(err, bucket, object)
-			}
-			return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+	if markDelete && (opts.Versioned || opts.VersionSuspended) {
+		fi := FileInfo{
+			Name:             object,
+			Deleted:          deleteMarker,
+			MarkDeleted:      markDelete,
+			ModTime:          modTime,
+			ReplicationState: opts.DeleteReplication,
+			TransitionStatus: opts.Transition.Status,
+			ExpireRestored:   opts.Transition.ExpireRestored,
 		}
+		fi.SetTierFreeVersionID(fvID)
+		if opts.Versioned {
+			fi.VersionID = mustGetUUID()
+			if opts.VersionID != "" {
+				fi.VersionID = opts.VersionID
+			}
+		}
+		// versioning suspended means we add `null` version as
+		// delete marker. Add delete marker, since we don't have
+		// any version specified explicitly. Or if a particular
+		// version id needs to be replicated.
+		if err = er.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
+			return objInfo, toObjectErr(err, bucket, object)
+		}
+		return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 	}
 
 	// Delete the object version on all disks.
@@ -1565,7 +1553,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
+	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1577,13 +1565,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		break
 	}
 
-	return ObjectInfo{
-		Bucket:                     bucket,
-		Name:                       object,
-		VersionID:                  opts.VersionID,
-		VersionPurgeStatusInternal: opts.DeleteReplication.VersionPurgeStatusInternal,
-		ReplicationStatusInternal:  opts.DeleteReplication.ReplicationStatusInternal,
-	}, nil
+	return dfi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
 // Send the successful but partial upload/delete, however ignore
@@ -1853,14 +1835,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	eventName := event.ObjectTransitionComplete
 
 	storageDisks := er.getDisks()
-	// we now know the number of blocks this object needs for data and parity.
-	// writeQuorum is dataBlocks + 1
-	writeQuorum := fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		writeQuorum++
-	}
 
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+	if err = er.deleteObjectVersion(ctx, bucket, object, fi, false); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 
