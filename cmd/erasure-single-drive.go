@@ -2859,11 +2859,16 @@ func (es *erasureSingle) AbortMultipartUpload(ctx context.Context, bucket, objec
 func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
 
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	lc, _ := globalLifecycleSys.Get(bucket)
-
-	// Check if bucket is object locked.
-	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	opts := listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
+		Marker:      marker,
+		InclDeleted: false,
+		AskDisks:    globalAPIConfig.getListQuorum(),
+	}
+	opts.setBucketMeta(ctx)
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -2875,8 +2880,8 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 		// to avoid the need for ListObjects().
 		objInfo, err := es.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
-			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
+			if opts.Lifecycle != nil {
+				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
@@ -2887,18 +2892,6 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
-	}
-
-	opts := listPathOptions{
-		Bucket:      bucket,
-		Prefix:      prefix,
-		Separator:   delimiter,
-		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
-		Marker:      marker,
-		InclDeleted: false,
-		AskDisks:    globalAPIConfig.getListQuorum(),
-		Lifecycle:   lc,
-		Retention:   rcfg,
 	}
 
 	merged, err := es.listPath(ctx, &opts)
@@ -2959,7 +2952,6 @@ func (es *erasureSingle) ListObjectVersions(ctx context.Context, bucket, prefix,
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
 	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -2970,6 +2962,7 @@ func (es *erasureSingle) ListObjectVersions(ctx context.Context, bucket, prefix,
 		AskDisks:    "strict",
 		Versioned:   true,
 	}
+	opts.setBucketMeta(ctx)
 
 	merged, err := es.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {

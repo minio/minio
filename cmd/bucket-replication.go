@@ -2386,3 +2386,90 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	}()
 	return diffCh, nil
 }
+
+// QueueReplicationHeal is a wrapper for queueReplicationHeal
+func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
+	// un-versioned case
+	if oi.VersionID == "" {
+		return
+	}
+	rcfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	queueReplicationHeal(ctx, bucket, oi, replicationConfig{
+		Config:  rcfg,
+		remotes: tgts,
+	})
+}
+
+// queueReplicationHeal enqueues objects that failed replication OR eligible for resyncing through
+// an ongoing resync operation or via existing objects replication configuration setting.
+func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcfg replicationConfig) (roi ReplicateObjectInfo) {
+	// un-versioned case
+	if oi.VersionID == "" {
+		return roi
+	}
+
+	if rcfg.Config == nil || rcfg.remotes == nil {
+		return roi
+	}
+	roi = getHealReplicateObjectInfo(oi, rcfg)
+	if !roi.Dsc.ReplicateAny() {
+		return
+	}
+	// early return if replication already done, otherwise we need to determine if this
+	// version is an existing object that needs healing.
+	if oi.ReplicationStatus == replication.Completed && oi.VersionPurgeStatus.Empty() && !roi.ExistingObjResync.mustResync() {
+		return
+	}
+
+	if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
+		versionID := ""
+		dmVersionID := ""
+		if roi.VersionPurgeStatus.Empty() {
+			dmVersionID = roi.VersionID
+		} else {
+			versionID = roi.VersionID
+		}
+
+		dv := DeletedObjectReplicationInfo{
+			DeletedObject: DeletedObject{
+				ObjectName:            roi.Name,
+				DeleteMarkerVersionID: dmVersionID,
+				VersionID:             versionID,
+				ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
+				DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
+				DeleteMarker:          roi.DeleteMarker,
+			},
+			Bucket:    roi.Bucket,
+			OpType:    replication.HealReplicationType,
+			EventType: ReplicateHealDelete,
+		}
+		// heal delete marker replication failure or versioned delete replication failure
+		if roi.ReplicationStatus == replication.Pending ||
+			roi.ReplicationStatus == replication.Failed ||
+			roi.VersionPurgeStatus == Failed || roi.VersionPurgeStatus == Pending {
+			globalReplicationPool.queueReplicaDeleteTask(dv)
+			return
+		}
+		// if replication status is Complete on DeleteMarker and existing object resync required
+		if roi.ExistingObjResync.mustResync() && (roi.ReplicationStatus == replication.Completed || roi.ReplicationStatus.Empty()) {
+			queueReplicateDeletesWrapper(dv, roi.ExistingObjResync)
+			return
+		}
+		return
+	}
+	if roi.ExistingObjResync.mustResync() {
+		roi.OpType = replication.ExistingObjectReplicationType
+	}
+	switch roi.ReplicationStatus {
+	case replication.Pending, replication.Failed:
+		roi.EventType = ReplicateHeal
+		globalReplicationPool.queueReplicaTask(roi)
+		return
+	}
+	if roi.ExistingObjResync.mustResync() {
+		roi.EventType = ReplicateExisting
+		globalReplicationPool.queueReplicaTask(roi)
+	}
+	return
+}
