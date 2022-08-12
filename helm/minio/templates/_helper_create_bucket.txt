@@ -65,34 +65,40 @@ createBucket() {
     fi
   fi
 
-  # Create the bucket if it does not exist and set objectlocking if enabled
-  if ! checkBucketExists $BUCKET ; then
+# Create the bucket if it does not exist and set objectlocking if enabled (NOTE: versioning will be not changed if OBJECTLOCKING is set because it enables versioning to the Buckets created)
+if ! checkBucketExists $BUCKET ; then
     if [ ! -z $OBJECTLOCKING ] ; then
       if [ $OBJECTLOCKING = true ] ; then
           echo "Creating bucket with OBJECTLOCKING '$BUCKET'"
           ${MC} mb --with-lock myminio/$BUCKET
       elif [ $OBJECTLOCKING = false ] ; then
-    echo "Creating bucket '$BUCKET'"
-    ${MC} mb myminio/$BUCKET
-    fi
+            echo "Creating bucket '$BUCKET'"
+            ${MC} mb myminio/$BUCKET
+      fi
+  elif [ -z $OBJECTLOCKING ] ; then
+        echo "Creating bucket '$BUCKET'"
+        ${MC} mb myminio/$BUCKET
   else
-    echo "Bucket '$BUCKET' already exists."
+    echo "Bucket '$BUCKET' already exists."  
   fi
   fi
 
 
-  # set versioning for bucket
+  # set versioning for bucket if objectlocking is disabled or not set
+  if [ -z $OBJECTLOCKING ] ; then
   if [ ! -z $VERSIONING ] ; then
-    if [ $VERSIONING = true ] && [ $OBJECTLOCKING = false ] ; then
+    if [ $VERSIONING = true ] ; then
         echo "Enabling versioning for '$BUCKET'"
         ${MC} version enable myminio/$BUCKET
-    elif [ $VERSIONING = false ] && [ $OBJECTLOCKING = false ] ; then
+    elif [ $VERSIONING = false ] ; then
         echo "Suspending versioning for '$BUCKET'"
         ${MC} version suspend myminio/$BUCKET
+    fi
     fi
   else
       echo "Bucket '$BUCKET' versioning unchanged."
   fi
+
 
   # At this point, the bucket should exist, skip checking for existence
   # Set policy on the bucket
