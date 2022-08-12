@@ -295,10 +295,10 @@ func (z *rebalanceMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "StoppedAt")
 				return
 			}
-		case "arn":
-			err = dc.ReadExactBytes((z.ARN)[:])
+		case "id":
+			err = dc.ReadExactBytes((z.ID)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "ARN")
+				err = msgp.WrapError(err, "ID")
 				return
 			}
 		case "pf":
@@ -362,14 +362,14 @@ func (z *rebalanceMeta) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "StoppedAt")
 		return
 	}
-	// write "arn"
-	err = en.Append(0xa3, 0x61, 0x72, 0x6e)
+	// write "id"
+	err = en.Append(0xa2, 0x69, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes((z.ARN)[:])
+	err = en.WriteBytes((z.ID)[:])
 	if err != nil {
-		err = msgp.WrapError(err, "ARN")
+		err = msgp.WrapError(err, "ID")
 		return
 	}
 	// write "pf"
@@ -416,9 +416,9 @@ func (z *rebalanceMeta) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "stopTs"
 	o = append(o, 0x84, 0xa6, 0x73, 0x74, 0x6f, 0x70, 0x54, 0x73)
 	o = msgp.AppendTime(o, z.StoppedAt)
-	// string "arn"
-	o = append(o, 0xa3, 0x61, 0x72, 0x6e)
-	o = msgp.AppendBytes(o, (z.ARN)[:])
+	// string "id"
+	o = append(o, 0xa2, 0x69, 0x64)
+	o = msgp.AppendBytes(o, (z.ID)[:])
 	// string "pf"
 	o = append(o, 0xa2, 0x70, 0x66)
 	o = msgp.AppendFloat64(o, z.PercentFreeGoal)
@@ -463,10 +463,10 @@ func (z *rebalanceMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "StoppedAt")
 				return
 			}
-		case "arn":
-			bts, err = msgp.ReadExactBytes(bts, (z.ARN)[:])
+		case "id":
+			bts, err = msgp.ReadExactBytes(bts, (z.ID)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "ARN")
+				err = msgp.WrapError(err, "ID")
 				return
 			}
 		case "pf":
@@ -519,7 +519,7 @@ func (z *rebalanceMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *rebalanceMeta) Msgsize() (s int) {
-	s = 1 + 7 + msgp.TimeSize + 4 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 3 + msgp.Float64Size + 4 + msgp.ArrayHeaderSize
+	s = 1 + 7 + msgp.TimeSize + 3 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 3 + msgp.Float64Size + 4 + msgp.ArrayHeaderSize
 	for za0002 := range z.PoolStats {
 		if z.PoolStats[za0002] == nil {
 			s += msgp.NilSize

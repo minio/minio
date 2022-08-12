@@ -122,7 +122,7 @@ type rebalanceMeta struct {
 	cancel          context.CancelFunc `msg:"-"` // to be invoked on rebalance-stop
 	lastRefreshedAt time.Time          `msg:"-"`
 	StoppedAt       time.Time          `msg:"stopTs"` // Time when rebalance-stop was issued.
-	ARN             [16]byte           `msg:"arn"`    // ARN of the ongoing rebalance operation
+	ID              [16]byte           `msg:"id"`     // ID of the ongoing rebalance operation
 	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
 	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
 }
@@ -177,7 +177,7 @@ func (z *erasureServerPools) loadRebalanceMeta(ctx context.Context) error {
 // operation and saves it in the object store.
 func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []string) (arn uuid.UUID, err error) {
 	r := &rebalanceMeta{
-		ARN:       [16]byte(uuid.New()),
+		ID:        [16]byte(uuid.New()),
 		PoolStats: make([]*rebalanceStats, len(z.serverPools)),
 	}
 
@@ -222,18 +222,18 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	}
 
 	z.rebalMeta = r
-	return r.ARN, nil
+	return r.ID, nil
 }
 
 func (r *rebalanceMeta) MarshalJSON() ([]byte, error) {
 	type rMeta struct {
-		ARN             uuid.UUID         `json:"arn"`
+		ID              uuid.UUID         `json:"id"`
 		PercentFreeGoal float64           `json:"percentFreeGoal"`
 		PoolStats       []*rebalanceStats `json:"poolStats"`
 		StoppedAt       time.Time         `json:"stoppedAt"`
 	}
 	rm := rMeta{
-		ARN:             uuid.UUID(r.ARN),
+		ID:              uuid.UUID(r.ID),
 		PercentFreeGoal: r.PercentFreeGoal,
 		PoolStats:       r.PoolStats,
 		StoppedAt:       r.StoppedAt,
@@ -265,7 +265,7 @@ func (r *rebalanceMeta) clone() *rebalanceMeta {
 	}
 	s := rebalanceMeta{
 		lastRefreshedAt: r.lastRefreshedAt,
-		ARN:             r.ARN,
+		ID:              r.ID,
 		PercentFreeGoal: r.PercentFreeGoal,
 		PoolStats:       rstats(r.PoolStats).clone(),
 		StoppedAt:       r.StoppedAt,

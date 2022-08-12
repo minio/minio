@@ -232,6 +232,8 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	pools.loadRebalanceMetaWithTTL(ctx, 2*time.Second)
+
 	if pools.IsRebalanceStarted() {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
@@ -248,8 +250,8 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		buckets = append(buckets, bInfo.Name)
 	}
 
-	var arn uuid.UUID
-	if arn, err = pools.initRebalanceMeta(ctx, buckets); err != nil {
+	var id uuid.UUID
+	if id, err = pools.initRebalanceMeta(ctx, buckets); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -258,8 +260,8 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 	pools.StartRebalance()
 
 	b, err := json.Marshal(struct {
-		ARN uuid.UUID `json:"arn"`
-	}{ARN: arn})
+		ID uuid.UUID `json:"id"`
+	}{ID: id})
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
