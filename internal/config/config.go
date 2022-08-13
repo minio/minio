@@ -1217,7 +1217,8 @@ type EnvPair struct {
 // SubsysInfo holds config info for a subsystem target.
 type SubsysInfo struct {
 	SubSys, Target string
-	Params         KVS
+	Defaults       KVS
+	Config         KVS
 
 	// map of config parameter name to EnvPair.
 	EnvMap map[string]EnvPair
@@ -1248,10 +1249,11 @@ func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
 	for _, target := range targets {
 		kvs := c.getTargetKVS(subSys, target)
 		cs := SubsysInfo{
-			SubSys: subSys,
-			Target: target,
-			Params: kvs,
-			EnvMap: make(map[string]EnvPair),
+			SubSys:   subSys,
+			Target:   target,
+			Defaults: defKVS,
+			Config:   kvs,
+			EnvMap:   make(map[string]EnvPair),
 		}
 
 		// Add all env vars that are set.
@@ -1274,7 +1276,7 @@ func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
 
 // AddEnvString adds env vars to the given string builder.
 func (cs *SubsysInfo) AddEnvString(b *strings.Builder) {
-	for _, v := range cs.Params {
+	for _, v := range cs.Defaults {
 		if ep, ok := cs.EnvMap[v.Key]; ok {
 			b.WriteString(KvComment)
 			b.WriteString(KvSpaceSeparator)
@@ -1301,6 +1303,6 @@ func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
 		b.WriteString(cs.Target)
 	}
 	b.WriteString(KvSpaceSeparator)
-	b.WriteString(cs.Params.String())
+	b.WriteString(cs.Config.String())
 	b.WriteString(KvNewline)
 }

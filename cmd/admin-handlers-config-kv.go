@@ -436,24 +436,24 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key)
 
 		for _, item := range cfgSubsysItems {
-			off := item.Params.Get(config.Enable) == config.EnableOff
+			off := item.Config.Get(config.Enable) == config.EnableOff
 			switch hkv.Key {
 			case config.EtcdSubSys:
-				off = !etcd.Enabled(item.Params)
+				off = !etcd.Enabled(item.Config)
 			case config.CacheSubSys:
-				off = !cache.Enabled(item.Params)
+				off = !cache.Enabled(item.Config)
 			case config.StorageClassSubSys:
-				off = !storageclass.Enabled(item.Params)
+				off = !storageclass.Enabled(item.Config)
 			case config.PolicyPluginSubSys:
-				off = !polplugin.Enabled(item.Params)
+				off = !polplugin.Enabled(item.Config)
 			case config.IdentityOpenIDSubSys:
-				off = !openid.Enabled(item.Params)
+				off = !openid.Enabled(item.Config)
 			case config.IdentityLDAPSubSys:
-				off = !xldap.Enabled(item.Params)
+				off = !xldap.Enabled(item.Config)
 			case config.IdentityTLSSubSys:
 				off = !globalSTSTLSConfig.Enabled
 			case config.IdentityPluginSubSys:
-				off = !idplugin.Enabled(item.Params)
+				off = !idplugin.Enabled(item.Config)
 			}
 			item.AddString(&s, off)
 		}
