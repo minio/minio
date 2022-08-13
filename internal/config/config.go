@@ -70,46 +70,46 @@ const (
 
 // Top level config constants.
 const (
-	CredentialsSubSys    = "credentials"
-	PolicyOPASubSys      = "policy_opa"
-	PolicyPluginSubSys   = "policy_plugin"
-	IdentityOpenIDSubSys = "identity_openid"
-	IdentityLDAPSubSys   = "identity_ldap"
-	IdentityTLSSubSys    = "identity_tls"
-	IdentityPluginSubSys = "identity_plugin"
-	CacheSubSys          = "cache"
-	SiteSubSys           = "site"
-	RegionSubSys         = "region"
-	EtcdSubSys           = "etcd"
-	StorageClassSubSys   = "storage_class"
-	APISubSys            = "api"
-	CompressionSubSys    = "compression"
-	LoggerWebhookSubSys  = "logger_webhook"
-	AuditWebhookSubSys   = "audit_webhook"
-	AuditKafkaSubSys     = "audit_kafka"
-	HealSubSys           = "heal"
-	ScannerSubSys        = "scanner"
-	CrawlerSubSys        = "crawler"
-	SubnetSubSys         = "subnet"
-	CallhomeSubSys       = "callhome"
+	CredentialsSubSys    = madmin.CredentialsSubSys
+	PolicyOPASubSys      = madmin.PolicyOPASubSys
+	PolicyPluginSubSys   = madmin.PolicyPluginSubSys
+	IdentityOpenIDSubSys = madmin.IdentityOpenIDSubSys
+	IdentityLDAPSubSys   = madmin.IdentityLDAPSubSys
+	IdentityTLSSubSys    = madmin.IdentityTLSSubSys
+	IdentityPluginSubSys = madmin.IdentityPluginSubSys
+	CacheSubSys          = madmin.CacheSubSys
+	SiteSubSys           = madmin.SiteSubSys
+	RegionSubSys         = madmin.RegionSubSys
+	EtcdSubSys           = madmin.EtcdSubSys
+	StorageClassSubSys   = madmin.StorageClassSubSys
+	APISubSys            = madmin.APISubSys
+	CompressionSubSys    = madmin.CompressionSubSys
+	LoggerWebhookSubSys  = madmin.LoggerWebhookSubSys
+	AuditWebhookSubSys   = madmin.AuditWebhookSubSys
+	AuditKafkaSubSys     = madmin.AuditKafkaSubSys
+	HealSubSys           = madmin.HealSubSys
+	ScannerSubSys        = madmin.ScannerSubSys
+	CrawlerSubSys        = madmin.CrawlerSubSys
+	SubnetSubSys         = madmin.SubnetSubSys
+	CallhomeSubSys       = madmin.CallhomeSubSys
 
-	// Add new constants here if you add new fields to config.
+	// Add new constants here (similar to above) if you add new fields to config.
 )
 
 // Notification config constants.
 const (
-	NotifyKafkaSubSys    = "notify_kafka"
-	NotifyMQTTSubSys     = "notify_mqtt"
-	NotifyMySQLSubSys    = "notify_mysql"
-	NotifyNATSSubSys     = "notify_nats"
-	NotifyNSQSubSys      = "notify_nsq"
-	NotifyESSubSys       = "notify_elasticsearch"
-	NotifyAMQPSubSys     = "notify_amqp"
-	NotifyPostgresSubSys = "notify_postgres"
-	NotifyRedisSubSys    = "notify_redis"
-	NotifyWebhookSubSys  = "notify_webhook"
+	NotifyKafkaSubSys    = madmin.NotifyKafkaSubSys
+	NotifyMQTTSubSys     = madmin.NotifyMQTTSubSys
+	NotifyMySQLSubSys    = madmin.NotifyMySQLSubSys
+	NotifyNATSSubSys     = madmin.NotifyNATSSubSys
+	NotifyNSQSubSys      = madmin.NotifyNSQSubSys
+	NotifyESSubSys       = madmin.NotifyESSubSys
+	NotifyAMQPSubSys     = madmin.NotifyAMQPSubSys
+	NotifyPostgresSubSys = madmin.NotifyPostgresSubSys
+	NotifyRedisSubSys    = madmin.NotifyRedisSubSys
+	NotifyWebhookSubSys  = madmin.NotifyWebhookSubSys
 
-	// Add new constants here if you add new fields to config.
+	// Add new constants here (similar to above) if you add new fields to config.
 )
 
 // NotifySubSystems - all notification sub-systems
@@ -134,39 +134,7 @@ var LoggerSubSystems = set.CreateStringSet(
 )
 
 // SubSystems - all supported sub-systems
-var SubSystems = set.CreateStringSet(
-	CredentialsSubSys,
-	SiteSubSys,
-	RegionSubSys,
-	EtcdSubSys,
-	CacheSubSys,
-	APISubSys,
-	StorageClassSubSys,
-	CompressionSubSys,
-	LoggerWebhookSubSys,
-	AuditWebhookSubSys,
-	AuditKafkaSubSys,
-	PolicyOPASubSys,
-	PolicyPluginSubSys,
-	IdentityLDAPSubSys,
-	IdentityOpenIDSubSys,
-	IdentityTLSSubSys,
-	IdentityPluginSubSys,
-	ScannerSubSys,
-	HealSubSys,
-	NotifyAMQPSubSys,
-	NotifyESSubSys,
-	NotifyKafkaSubSys,
-	NotifyMQTTSubSys,
-	NotifyMySQLSubSys,
-	NotifyNATSSubSys,
-	NotifyNSQSubSys,
-	NotifyPostgresSubSys,
-	NotifyRedisSubSys,
-	NotifyWebhookSubSys,
-	SubnetSubSys,
-	CallhomeSubSys,
-)
+var SubSystems = madmin.SubSystems
 
 // SubSystemsDynamic - all sub-systems that have dynamic config.
 var SubSystemsDynamic = set.CreateStringSet(
@@ -212,8 +180,8 @@ const (
 	KvSingleQuote      = madmin.KvSingleQuote
 
 	// Env prefix used for all envs in MinIO
-	EnvPrefix        = "MINIO_"
-	EnvWordDelimiter = `_`
+	EnvPrefix        = madmin.EnvPrefix
+	EnvWordDelimiter = madmin.EnvWordDelimiter
 )
 
 // DefaultKVS - default kvs for all sub-systems
