@@ -263,6 +263,7 @@ const (
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
+	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
@@ -1226,6 +1227,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified group does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminNoSuchJob: {
+		Code:           "XMinioAdminNoSuchJob",
+		Description:    "The specified job does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrAdminGroupNotEmpty: {
 		Code:           "XMinioAdminGroupNotEmpty",
 		Description:    "The specified group is not empty - cannot remove it.",
@@ -1923,6 +1929,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty
+	case errNoSuchJob:
+		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:

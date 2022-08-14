@@ -425,23 +425,25 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	var types madmin.MetricType
-	if t, _ := strconv.ParseUint(r.Form.Get(peerRESTTypes), 10, 64); t != 0 {
+	if t, _ := strconv.ParseUint(r.Form.Get(peerRESTMetricsTypes), 10, 64); t != 0 {
 		types = madmin.MetricType(t)
 	} else {
 		types = madmin.MetricsAll
 	}
 
 	diskMap := make(map[string]struct{})
-	if r.Form != nil {
-		for _, disk := range r.Form[peerRESTDisk] {
-			diskMap[disk] = struct{}{}
-		}
+	for _, disk := range r.Form[peerRESTDisk] {
+		diskMap[disk] = struct{}{}
 	}
+	jobID := r.Form.Get(peerRESTJobID)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	info := collectLocalMetrics(types, nil, diskMap)
+	info := collectLocalMetrics(types, collectMetricsOpts{
+		disks: diskMap,
+		jobID: jobID,
+	})
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -1308,7 +1310,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(httpTraceHdrs(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(httpTraceHdrs(server.GetMemInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(httpTraceHdrs(server.GetMetricsHandler)).Queries(restQueries(peerRESTTypes)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(httpTraceHdrs(server.GetMetricsHandler)).Queries(restQueries(peerRESTMetricsTypes)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysErrors).HandlerFunc(httpTraceHdrs(server.GetSysErrorsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysServices).HandlerFunc(httpTraceHdrs(server.GetSysServicesHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(httpTraceHdrs(server.GetSysConfigHandler))

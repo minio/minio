@@ -601,6 +601,8 @@ func serverMain(ctx *cli.Context) {
 		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
 
+		globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
+
 		go func() {
 			err := globalTierConfigMgr.Init(GlobalContext, newObject)
 			if err != nil {

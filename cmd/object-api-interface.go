@@ -85,6 +85,8 @@ type ObjectOptions struct {
 	// mainly set for certain WRITE operations.
 	SkipDecommissioned bool
 
+	WalkFilter      func(info FileInfo) bool // return WalkFilter returns 'true/false'
+	WalkMarker      string                   // set to skip until this object
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
 	// IndexCB will return any index created but the compression.

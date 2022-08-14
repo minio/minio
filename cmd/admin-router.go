@@ -206,6 +206,16 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/replication/diff").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.ReplicationDiffHandler))).Queries("bucket", "{bucket:.*}")
 
+		// Batch job operations
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/start-job").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.StartBatchJob)))
+
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-jobs").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ListBatchJobs)))
+
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/describe-job").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.DescribeBatchJob)))
+
 		// Bucket migration operations
 		// ExportBucketMetaHandler
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-bucket-metadata").HandlerFunc(

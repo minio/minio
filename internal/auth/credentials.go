@@ -94,10 +94,10 @@ const (
 
 // Credentials holds access and secret keys.
 type Credentials struct {
-	AccessKey    string                 `xml:"AccessKeyId" json:"accessKey,omitempty"`
-	SecretKey    string                 `xml:"SecretAccessKey" json:"secretKey,omitempty"`
-	Expiration   time.Time              `xml:"Expiration" json:"expiration,omitempty"`
-	SessionToken string                 `xml:"SessionToken" json:"sessionToken,omitempty"`
+	AccessKey    string                 `xml:"AccessKeyId" json:"accessKey,omitempty" yaml:"accessKey"`
+	SecretKey    string                 `xml:"SecretAccessKey" json:"secretKey,omitempty" yaml:"secretKey"`
+	SessionToken string                 `xml:"SessionToken" json:"sessionToken,omitempty" yaml:"sessionToken"`
+	Expiration   time.Time              `xml:"Expiration" json:"expiration,omitempty" yaml:"-"`
 	Status       string                 `xml:"-" json:"status,omitempty"`
 	ParentUser   string                 `xml:"-" json:"parentUser,omitempty"`
 	Groups       []string               `xml:"-" json:"groups,omitempty"`
