@@ -196,8 +196,9 @@ const (
 	ErrInvalidTagDirective
 	// Add new error codes here.
 
-	// SSE-S3 related API errors
+	// SSE-S3/SSE-KMS related API errors
 	ErrInvalidEncryptionMethod
+	ErrInvalidEncryptionKeyID
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
 	ErrInsecureSSECustomerRequest
@@ -1072,6 +1073,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The encryption method specified is not supported",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidEncryptionKeyID: {
+		Code:           "InvalidRequest",
+		Description:    "The specified KMS KeyID contains unsupported characters",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInsecureSSECustomerRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Requests specifying Server Side Encryption with Customer provided keys must be made over a secure connection.",
@@ -1921,6 +1927,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
+	case crypto.ErrInvalidEncryptionKeyID:
+		apiErr = ErrInvalidEncryptionKeyID
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
 	case crypto.ErrMissingCustomerKey:
