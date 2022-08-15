@@ -123,7 +123,7 @@ spec:
               value: {{ .Values.oidc.configUrl }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
               value: {{ .Values.oidc.clientId }}
-            - name: MINIO_IDENTITY_OPENID_CLIENTs_SECRET
+            - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
               value: {{ .Values.oidc.clientSecret }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
               value: {{ .Values.oidc.claimName }}
