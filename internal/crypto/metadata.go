@@ -56,6 +56,9 @@ const (
 	// be part of the object. Therefore, the bucket/object name must be added
 	// to the context, if not present, whenever a decryption is performed.
 	MetaContext = "X-Minio-Internal-Server-Side-Encryption-Context"
+
+	// ARNPrefix prefix for "arn:aws:kms"
+	ARNPrefix = "arn:aws:kms:"
 )
 
 // IsMultiPart returns true if the object metadata indicates

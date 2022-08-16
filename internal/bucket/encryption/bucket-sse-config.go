@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
@@ -102,8 +103,13 @@ func ParseBucketSSEConfig(r io.Reader) (*BucketSSEConfig, error) {
 				return nil, errors.New("MasterKeyID is allowed with aws:kms only")
 			}
 		case AWSKms:
-			if rule.DefaultEncryptionAction.MasterKeyID == "" {
+			keyID := rule.DefaultEncryptionAction.MasterKeyID
+			if keyID == "" {
 				return nil, errors.New("MasterKeyID is missing with aws:kms")
+			}
+			spaces := strings.HasPrefix(keyID, " ") || strings.HasSuffix(keyID, " ")
+			if spaces {
+				return nil, errors.New("MasterKeyID contains unsupported characters")
 			}
 		}
 	}
@@ -164,7 +170,7 @@ func (b *BucketSSEConfig) Algo() Algorithm {
 // empty key ID.
 func (b *BucketSSEConfig) KeyID() string {
 	for _, rule := range b.Rules {
-		return rule.DefaultEncryptionAction.MasterKeyID
+		return strings.TrimPrefix(rule.DefaultEncryptionAction.MasterKeyID, crypto.ARNPrefix)
 	}
 	return ""
 }
