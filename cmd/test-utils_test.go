@@ -373,6 +373,8 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
+	globalEventNotifier.InitBucketTargets(ctx, objLayer)
+
 	return testServer
 }
 

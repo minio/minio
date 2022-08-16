@@ -117,12 +117,15 @@ func (r RedisArgs) validateFormat(c redis.Conn) error {
 
 // RedisTarget - Redis target.
 type RedisTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       RedisArgs
 	pool       *redis.Pool
 	store      Store
 	firstPing  bool
 	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
@@ -130,13 +133,15 @@ func (target *RedisTarget) ID() event.TargetID {
 	return target.id
 }
 
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *RedisTarget) HasQueueStore() bool {
-	return target.store != nil
-}
-
 // IsActive - Return true if target is up and active
 func (target *RedisTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+	return target.isActive()
+}
+
+func (target *RedisTarget) isActive() (bool, error) {
 	conn := target.pool.Get()
 	defer conn.Close()
 
@@ -152,10 +157,14 @@ func (target *RedisTarget) IsActive() (bool, error) {
 
 // Save - saves the events to the store if questore is configured, which will be replayed when the redis connection is active.
 func (target *RedisTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -204,6 +213,10 @@ func (target *RedisTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to redis.
 func (target *RedisTarget) Send(eventKey string) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	conn := target.pool.Get()
 	defer conn.Close()
 
@@ -248,11 +261,58 @@ func (target *RedisTarget) Send(eventKey string) error {
 
 // Close - releases the resources used by the pool.
 func (target *RedisTarget) Close() error {
+	close(target.quitCh)
 	return target.pool.Close()
 }
 
+func (target *RedisTarget) init() error {
+	return target.lazyInit.Do(target.initRedis)
+}
+
+func (target *RedisTarget) initRedis() error {
+	conn := target.pool.Get()
+	defer conn.Close()
+
+	_, pingErr := conn.Do("PING")
+	if pingErr != nil {
+		if !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
+			target.loggerOnce(context.Background(), pingErr, target.ID().String())
+		}
+		return pingErr
+	}
+
+	if err := target.args.validateFormat(conn); err != nil {
+		target.loggerOnce(context.Background(), err, target.ID().String())
+		return err
+	}
+
+	target.firstPing = true
+
+	yes, err := target.isActive()
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return errNotConnected
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
 // NewRedisTarget - creates new Redis target.
-func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*RedisTarget, error) {
+func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*RedisTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of Redis `%s`: %w", id, err)
+		}
+	}
+
 	pool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 2 * 60 * time.Second,
@@ -283,48 +343,12 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 		},
 	}
 
-	var store Store
-
-	target := &RedisTarget{
+	return &RedisTarget{
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
+		store:      store,
 		loggerOnce: loggerOnce,
-	}
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID().String())
-			return target, oErr
-		}
-		target.store = store
-	}
-
-	conn := target.pool.Get()
-	defer conn.Close()
-
-	_, pingErr := conn.Do("PING")
-	if pingErr != nil {
-		if target.store == nil || !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
-			target.loggerOnce(context.Background(), pingErr, target.ID().String())
-			return target, pingErr
-		}
-	} else {
-		if err := target.args.validateFormat(conn); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
-		}
-		target.firstPing = true
-	}
-
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
-	}
-
-	return target, nil
+		quitCh:     make(chan struct{}),
+	}, nil
 }

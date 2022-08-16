@@ -91,25 +91,31 @@ func (w WebhookArgs) Validate() error {
 
 // WebhookTarget - Webhook target.
 type WebhookTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       WebhookArgs
+	transport  *http.Transport
 	httpClient *http.Client
 	store      Store
 	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
-func (target WebhookTarget) ID() event.TargetID {
+func (target *WebhookTarget) ID() event.TargetID {
 	return target.id
-}
-
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *WebhookTarget) HasQueueStore() bool {
-	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active
 func (target *WebhookTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+	return target.isActive()
+}
+
+func (target *WebhookTarget) isActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -144,6 +150,10 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 // Save - saves the events to the store if queuestore is configured,
 // which will be replayed when the webhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
@@ -206,6 +216,10 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	eventData, eErr := target.store.Get(eventKey)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
@@ -229,52 +243,60 @@ func (target *WebhookTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *WebhookTarget) Close() error {
+	close(target.quitCh)
 	return nil
 }
 
-// NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce logger.LogOnce, transport *http.Transport, test bool) (*WebhookTarget, error) {
-	var store Store
-	target := &WebhookTarget{
-		id:         event.TargetID{ID: id, Name: "webhook"},
-		args:       args,
-		loggerOnce: loggerOnce,
-	}
+func (target *WebhookTarget) init() error {
+	return target.lazyInit.Do(target.initWebhook)
+}
 
-	if target.args.ClientCert != "" && target.args.ClientKey != "" {
-		manager, err := certs.NewManager(ctx, target.args.ClientCert, target.args.ClientKey, tls.LoadX509KeyPair)
+// Only called from init()
+func (target *WebhookTarget) initWebhook() error {
+	args := target.args
+	transport := target.transport
+
+	if args.ClientCert != "" && args.ClientKey != "" {
+		manager, err := certs.NewManager(context.Background(), args.ClientCert, args.ClientKey, tls.LoadX509KeyPair)
 		if err != nil {
-			return target, err
+			return err
 		}
 		manager.ReloadOnSignal(syscall.SIGHUP) // allow reloads upon SIGHUP
 		transport.TLSClientConfig.GetClientCertificate = manager.GetClientCertificate
 	}
 	target.httpClient = &http.Client{Transport: transport}
 
+	yes, err := target.isActive()
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return errNotConnected
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
+// NewWebhookTarget - creates new Webhook target.
+func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce logger.LogOnce, transport *http.Transport) (*WebhookTarget, error) {
+	var store Store
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := store.Open(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
-		}
-		target.store = store
-	}
-
-	_, err := target.IsActive()
-	if err != nil {
-		if target.store == nil || err != errNotConnected {
-			target.loggerOnce(ctx, err, target.ID().String())
-			return target, err
+			return nil, fmt.Errorf("unable to initialize the queue store of Webhook `%s`: %w", id, err)
 		}
 	}
 
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, ctx.Done(), target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, ctx.Done(), target.loggerOnce)
-	}
-
-	return target, nil
+	return &WebhookTarget{
+		id:         event.TargetID{ID: id, Name: "webhook"},
+		args:       args,
+		loggerOnce: loggerOnce,
+		transport:  transport,
+		store:      store,
+		quitCh:     make(chan struct{}),
+	}, nil
 }

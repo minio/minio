@@ -307,6 +307,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	// Initialize the internal state of the event notifier
+	globalEventNotifier.Init(newObject)
+
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
 	if gatewayName == NASBackendGateway {

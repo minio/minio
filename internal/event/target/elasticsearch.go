@@ -153,11 +153,14 @@ func (a ElasticsearchArgs) Validate() error {
 
 // ElasticsearchTarget - Elasticsearch target.
 type ElasticsearchTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       ElasticsearchArgs
 	client     esClient
 	store      Store
 	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
@@ -165,13 +168,15 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
 }
 
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *ElasticsearchTarget) HasQueueStore() bool {
-	return target.store != nil
-}
-
 // IsActive - Return true if target is up and active
 func (target *ElasticsearchTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+	return target.isActive()
+}
+
+func (target *ElasticsearchTarget) isActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -185,6 +190,10 @@ func (target *ElasticsearchTarget) IsActive() (bool, error) {
 
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.
 func (target *ElasticsearchTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
@@ -247,6 +256,10 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to Elasticsearch.
 func (target *ElasticsearchTarget) Send(eventKey string) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -278,6 +291,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *ElasticsearchTarget) Close() error {
+	close(target.quitCh)
 	if target.client != nil {
 		// Stops the background processes that the client is running.
 		target.client.stop()
@@ -320,42 +334,46 @@ func (target *ElasticsearchTarget) checkAndInitClient(ctx context.Context) error
 	return nil
 }
 
-// NewElasticsearchTarget - creates new Elasticsearch target.
-func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*ElasticsearchTarget, error) {
-	target := &ElasticsearchTarget{
-		id:         event.TargetID{ID: id, Name: "elasticsearch"},
-		args:       args,
-		loggerOnce: loggerOnce,
-	}
+func (target *ElasticsearchTarget) init() error {
+	return target.lazyInit.Do(target.initElasticsearch)
+}
 
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
-		target.store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := target.store.Open(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
-		}
-	}
-
+func (target *ElasticsearchTarget) initElasticsearch() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err := target.checkAndInitClient(ctx)
 	if err != nil {
-		if target.store == nil || err != errNotConnected {
+		if err != errNotConnected {
 			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
+		}
+		return err
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
+// NewElasticsearchTarget - creates new Elasticsearch target.
+func NewElasticsearchTarget(id string, args ElasticsearchArgs, loggerOnce logger.LogOnce) (*ElasticsearchTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of Elasticsearch `%s`: %w", id, err)
 		}
 	}
 
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
-	}
-
-	return target, nil
+	return &ElasticsearchTarget{
+		id:         event.TargetID{ID: id, Name: "elasticsearch"},
+		args:       args,
+		store:      store,
+		loggerOnce: loggerOnce,
+		quitCh:     make(chan struct{}),
+	}, nil
 }
 
 // ES Client definitions and methods

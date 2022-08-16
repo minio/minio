@@ -192,8 +192,6 @@ var (
 
 	globalEventNotifier    *EventNotifier
 	globalConfigTargetList *event.TargetList
-	// globalEnvTargetList has list of targets configured via env.
-	globalEnvTargetList *event.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
 	globalBucketMonitor     *bandwidth.Monitor

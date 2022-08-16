@@ -396,7 +396,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 	}
 
 	if config.NotifySubSystems.Contains(subSys) {
-		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalEventNotifier.ConfiguredTargetIDs(), subSys); err != nil {
+		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, subSys, NewGatewayHTTPTransport()); err != nil {
 			return err
 		}
 	}
@@ -555,12 +555,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	transport := NewGatewayHTTPTransport()
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, transport, false)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
-	}
-
-	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), transport, true)
+	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
