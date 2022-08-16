@@ -1446,30 +1446,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi := opts.CurrentObjInfo
-	if opts.Expiration.Expire {
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
-		var isErr bool
-		switch action {
-		case lifecycle.NoneAction:
-			isErr = true
-		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-			isErr = true
-		}
-		if isErr {
-			if goi.VersionID != "" {
-				return goi, VersionNotFound{
-					Bucket:    bucket,
-					Object:    object,
-					VersionID: goi.VersionID,
-				}
-			}
-			return goi, ObjectNotFound{
-				Bucket: bucket,
-				Object: object,
-			}
-		}
-	}
-
 	defer NSUpdated(bucket, object)
 
 	// Acquire a write lock before deleting the object.
@@ -1482,6 +1458,33 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	defer lk.Unlock(lkctx.Cancel)
 
 	storageDisks := er.getDisks()
+
+	if opts.Expiration.Expire {
+		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+		if err == nil {
+			action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
+			var isErr bool
+			switch action {
+			case lifecycle.NoneAction:
+				isErr = true
+			case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+				isErr = true
+			}
+			if isErr {
+				if goi.VersionID != "" {
+					return goi, VersionNotFound{
+						Bucket:    bucket,
+						Object:    object,
+						VersionID: goi.VersionID,
+					}
+				}
+				return goi, ObjectNotFound{
+					Bucket: bucket,
+					Object: object,
+				}
+			}
+		}
+	}
 
 	versionFound := true
 	if goi.Name == "" && opts.DeleteMarker {
