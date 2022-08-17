@@ -151,7 +151,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.
-var SubSystemsSingleTargets = set.CreateStringSet([]string{
+var SubSystemsSingleTargets = set.CreateStringSet(
 	CredentialsSubSys,
 	SiteSubSys,
 	RegionSubSys,
@@ -167,7 +167,9 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	IdentityPluginSubSys,
 	HealSubSys,
 	ScannerSubSys,
-}...)
+	SubnetSubSys,
+	CallhomeSubSys,
+)
 
 // Constant separators
 const (
