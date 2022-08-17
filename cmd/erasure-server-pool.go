@@ -1002,8 +1002,19 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return ObjectInfo{}, err
 	}
 
+	// Acquire a write lock before deleting the object.
+	lk := z.NewNSLock(bucket, object)
+	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
+
 	object = encodeDirObject(object)
-	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, opts)
+	gopts := opts
+	gopts.NoLock = true
+	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, gopts)
 	if err != nil {
 		switch err.(type) {
 		case InsufficientReadQuorum:

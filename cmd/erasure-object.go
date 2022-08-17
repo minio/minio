@@ -1448,15 +1448,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	goi := opts.CurrentObjInfo
 	defer NSUpdated(bucket, object)
 
-	// Acquire a write lock before deleting the object.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
-
 	storageDisks := er.getDisks()
 
 	if opts.Expiration.Expire {
