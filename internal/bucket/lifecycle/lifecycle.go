@@ -390,8 +390,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 // ExpectedExpiryTime calculates the expiry, transition or restore date/time based on a object modtime.
 // The expected transition or restore time is always a midnight time following the the object
 // modification time plus the number of transition/restore days.
-//   e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
-//       transition in 1 day, then the expected transition time is `Fri, 23 May 2020 00:00:00 GMT`
+//
+//	e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
+//	    transition in 1 day, then the expected transition time is `Fri, 23 May 2020 00:00:00 GMT`
 func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 	if days == 0 {
 		return modTime

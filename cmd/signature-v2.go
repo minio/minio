@@ -107,7 +107,8 @@ func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error)
 }
 
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
-//     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
+//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
+//
 // returns ErrNone if matches. S3 errors otherwise.
 func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// r.RequestURI will have raw encoded URI as sent by the client.

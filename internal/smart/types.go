@@ -18,6 +18,7 @@
 package smart
 
 // Defined in <linux/nvme_ioctl.h>
+//
 //nolint:structcheck,deadcode
 type nvmePassthruCommand struct {
 	opcode      uint8
@@ -138,6 +139,7 @@ type nvmeSMARTLog struct {
 } // 512 bytes
 
 // NVMeDevice represents drive data about NVMe drives
+//
 //nolint:structcheck
 type NVMeDevice struct {
 	Name string

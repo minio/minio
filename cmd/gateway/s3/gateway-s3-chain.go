@@ -37,18 +37,17 @@ import (
 // will cache that Provider for all calls to IsExpired(), until Retrieve is
 // called again after IsExpired() is true.
 //
-//     creds := credentials.NewChainCredentials(
-//         []credentials.Provider{
-//             &credentials.EnvAWSS3{},
-//             &credentials.EnvMinio{},
-//         })
+//	creds := credentials.NewChainCredentials(
+//	    []credentials.Provider{
+//	        &credentials.EnvAWSS3{},
+//	        &credentials.EnvMinio{},
+//	    })
 //
-//     // Usage of ChainCredentials.
-//     mc, err := minio.NewWithCredentials(endpoint, creds, secure, "us-east-1")
-//     if err != nil {
-//          log.Fatalln(err)
-//     }
-//
+//	// Usage of ChainCredentials.
+//	mc, err := minio.NewWithCredentials(endpoint, creds, secure, "us-east-1")
+//	if err != nil {
+//	     log.Fatalln(err)
+//	}
 type Chain struct {
 	Providers []credentials.Provider
 	curr      credentials.Provider
