@@ -45,10 +45,10 @@ type DummyDataGen struct {
 //
 // Given the function:
 //
-// f := func(r io.Reader) string {
-//           b, _ := ioutil.ReadAll(r)
-//           return string(b)
-// }
+//	f := func(r io.Reader) string {
+//	          b, _ := ioutil.ReadAll(r)
+//	          return string(b)
+//	}
 //
 // for example, the following is true:
 //

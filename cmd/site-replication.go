@@ -2057,7 +2057,7 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				return
 			}
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
-				if errors.As(err, &errMissingSRConfig) {
+				if errors.Is(err, errMissingSRConfig) {
 					return
 				}
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))

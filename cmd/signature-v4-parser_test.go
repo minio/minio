@@ -82,10 +82,11 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 // A valid format of creadential should be of the following format.
 // Credential = accessKey + SlashSeparator+ scope
 // where scope = string.Join([]string{  currTime.Format(yyyymmdd),
-// 			globalMinioDefaultRegion,
-//               	"s3",
-//		        "aws4_request",
-//                       },SlashSeparator)
+//
+//				globalMinioDefaultRegion,
+//	              	"s3",
+//			        "aws4_request",
+//	                      },SlashSeparator)
 func TestParseCredentialHeader(t *testing.T) {
 	sampleTimeStr := UTCNow().Format(yyyymmdd)
 

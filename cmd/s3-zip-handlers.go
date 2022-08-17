@@ -50,7 +50,8 @@ const (
 )
 
 // splitZipExtensionPath splits the S3 path to the zip file and the path inside the zip:
-//  e.g  /path/to/archive.zip/backup-2021/myimage.png => /path/to/archive.zip, backup/myimage.png
+//
+//	e.g  /path/to/archive.zip/backup-2021/myimage.png => /path/to/archive.zip, backup/myimage.png
 func splitZipExtensionPath(input string) (zipPath, object string, err error) {
 	idx := strings.Index(input, archivePattern)
 	if idx < 0 {

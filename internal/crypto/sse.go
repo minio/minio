@@ -43,9 +43,9 @@ const (
 )
 
 // Type represents an AWS SSE type:
-//  • SSE-C
-//  • SSE-S3
-//  • SSE-KMS
+//   - SSE-C
+//   - SSE-S3
+//   - SSE-KMS
 type Type interface {
 	fmt.Stringer
 

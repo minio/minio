@@ -24,35 +24,35 @@
 // In general, an S3 ETag is an MD5 checksum of the object
 // content. However, there are many exceptions to this rule.
 //
-//
-// Single-part Upload
+// # Single-part Upload
 //
 // In case of a basic single-part PUT operation - without server
 // side encryption or object compression - the ETag of an object
 // is its content MD5.
 //
-//
-// Multi-part Upload
+// # Multi-part Upload
 //
 // The ETag of an object does not correspond to its content MD5
 // when the object is uploaded in multiple parts via the S3
 // multipart API. Instead, S3 first computes a MD5 of each part:
-//   e1 := MD5(part-1)
-//   e2 := MD5(part-2)
-//  ...
-//   eN := MD5(part-N)
+//
+//	 e1 := MD5(part-1)
+//	 e2 := MD5(part-2)
+//	...
+//	 eN := MD5(part-N)
 //
 // Then, the ETag of the object is computed as MD5 of all individual
 // part checksums. S3 also encodes the number of parts into the ETag
 // by appending a -<number-of-parts> at the end:
-//   ETag := MD5(e1 || e2 || e3 ... || eN) || -N
 //
-//   For example: ceb8853ddc5086cc4ab9e149f8f09c88-5
+//	ETag := MD5(e1 || e2 || e3 ... || eN) || -N
+//
+//	For example: ceb8853ddc5086cc4ab9e149f8f09c88-5
 //
 // However, this scheme is only used for multipart objects that are
 // not encrypted.
 //
-// Server-side Encryption
+// # Server-side Encryption
 //
 // S3 specifies three types of server-side-encryption - SSE-C, SSE-S3
 // and SSE-KMS - with different semantics w.r.t. ETags.
@@ -75,12 +75,12 @@
 // in case of SSE-C or SSE-KMS except that the ETag is well-formed.
 //
 // To put all of this into a simple rule:
-//    SSE-S3 : ETag == MD5
-//    SSE-C  : ETag != MD5
-//    SSE-KMS: ETag != MD5
 //
+//	SSE-S3 : ETag == MD5
+//	SSE-C  : ETag != MD5
+//	SSE-KMS: ETag != MD5
 //
-// Encrypted ETags
+// # Encrypted ETags
 //
 // An S3 implementation has to remember the content MD5 of objects
 // in case of SSE-S3. However, storing the ETag of an encrypted
@@ -94,8 +94,7 @@
 // encryption schemes. Such an ETag must be decrypted before sent to an
 // S3 client.
 //
-//
-// S3 Clients
+// # S3 Clients
 //
 // There are many different S3 client implementations. Most of them
 // access the ETag by looking for the HTTP response header key "Etag".
@@ -206,27 +205,28 @@ func (e ETag) Parts() int {
 // ETag.
 //
 // In general, a caller has to distinguish the following cases:
-//  - The object is a multipart object. In this case,
-//    Format returns the ETag unmodified.
-//  - The object is a SSE-KMS or SSE-C encrypted single-
-//    part object. In this case, Format returns the last
-//    16 bytes of the encrypted ETag which will be a random
-//    value.
-//  - The object is a SSE-S3 encrypted single-part object.
-//    In this case, the caller has to decrypt the ETag first
-//    before calling Format.
-//    S3 clients expect that the ETag of an SSE-S3 encrypted
-//    single-part object is equal to the object's content MD5.
-//    Formatting the SSE-S3 ETag before decryption will result
-//    in a random-looking ETag which an S3 client will not accept.
+//   - The object is a multipart object. In this case,
+//     Format returns the ETag unmodified.
+//   - The object is a SSE-KMS or SSE-C encrypted single-
+//     part object. In this case, Format returns the last
+//     16 bytes of the encrypted ETag which will be a random
+//     value.
+//   - The object is a SSE-S3 encrypted single-part object.
+//     In this case, the caller has to decrypt the ETag first
+//     before calling Format.
+//     S3 clients expect that the ETag of an SSE-S3 encrypted
+//     single-part object is equal to the object's content MD5.
+//     Formatting the SSE-S3 ETag before decryption will result
+//     in a random-looking ETag which an S3 client will not accept.
 //
 // Hence, a caller has to check:
-//   if method == SSE-S3 {
-//      ETag, err := Decrypt(key, ETag)
-//      if err != nil {
-//      }
-//   }
-//   ETag = ETag.Format()
+//
+//	if method == SSE-S3 {
+//	   ETag, err := Decrypt(key, ETag)
+//	   if err != nil {
+//	   }
+//	}
+//	ETag = ETag.Format()
 func (e ETag) Format() ETag {
 	if !e.IsEncrypted() {
 		return e
@@ -359,8 +359,8 @@ func Parse(s string) (ETag, error) {
 
 // parse parse s as an S3 ETag, returning the result.
 // It operates in one of two modes:
-//  - strict
-//  - non-strict
+//   - strict
+//   - non-strict
 //
 // In strict mode, parse only accepts ETags that
 // are AWS S3 compatible. In particular, an AWS

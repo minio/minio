@@ -171,12 +171,12 @@ type preSignValues struct {
 
 // Parses signature version '4' query string of the following form.
 //
-//   querystring = X-Amz-Algorithm=algorithm
-//   querystring += &X-Amz-Credential= urlencode(accessKey + '/' + credential_scope)
-//   querystring += &X-Amz-Date=date
-//   querystring += &X-Amz-Expires=timeout interval
-//   querystring += &X-Amz-SignedHeaders=signed_headers
-//   querystring += &X-Amz-Signature=signature
+//	querystring = X-Amz-Algorithm=algorithm
+//	querystring += &X-Amz-Credential= urlencode(accessKey + '/' + credential_scope)
+//	querystring += &X-Amz-Date=date
+//	querystring += &X-Amz-Expires=timeout interval
+//	querystring += &X-Amz-SignedHeaders=signed_headers
+//	querystring += &X-Amz-Signature=signature
 //
 // verifies if any of the necessary query params are missing in the presigned request.
 func doesV4PresignParamsExist(query url.Values) APIErrorCode {
@@ -251,9 +251,8 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 
 // Parses signature version '4' header of the following form.
 //
-//    Authorization: algorithm Credential=accessKeyID/credScope, \
-//            SignedHeaders=signedHeaders, Signature=signature
-//
+//	Authorization: algorithm Credential=accessKeyID/credScope, \
+//	        SignedHeaders=signedHeaders, Signature=signature
 func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues, aec APIErrorCode) {
 	// credElement is fetched first to skip replacing the space in access key.
 	credElement := strings.TrimPrefix(strings.Split(strings.TrimSpace(v4Auth), ",")[0], signV4Algorithm)
