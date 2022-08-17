@@ -82,13 +82,11 @@ spec:
             - name: minio-user
               mountPath: "/tmp/credentials"
               readOnly: true
-            {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
-              {{- if .Values.persistence.subPath }}
+              {{- if and .Values.persistence.enabled .Values.persistence.subPath }}
               subPath: "{{ .Values.persistence.subPath }}"
               {{- end }}
-            {{- end }}
             {{- if .Values.extraSecret }}
             - name: extra-secret
               mountPath: "/tmp/minio-config-env"
