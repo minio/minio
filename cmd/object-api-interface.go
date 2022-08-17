@@ -82,11 +82,6 @@ type ObjectOptions struct {
 	WalkAscending   bool                     // return Walk results in ascending order of versions
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
-	// CurrentObjInfo carries ObjInfo specific to object on a pool
-	// this is mainly used as an optimization to avoid calling multiple
-	// times xl.meta
-	CurrentObjInfo ObjectInfo
-
 	// IndexCB will return any index created but the compression.
 	// Object must have been read at this point.
 	IndexCB func() []byte

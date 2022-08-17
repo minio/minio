@@ -97,7 +97,7 @@ count=$(./mc replicate resync status sitea/bucket --remote-bucket "${remote_arn}
 out=$(diff -qpruN /tmp/sitea.txt /tmp/siteb.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
-    echo "BUG: expected no missing entries after decommission: $out"
+    echo "BUG: expected no missing entries after replication: $out"
     exit 1
 fi
 

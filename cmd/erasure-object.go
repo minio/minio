@@ -452,9 +452,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 			VersionID: m.VersionID,
 		}
 		if opts.VersionID != "" {
-			fi = FileInfo{
-				VersionID: opts.VersionID,
-			}
+			fi.VersionID = opts.VersionID
 		}
 
 		disks := er.getDisks()
@@ -1445,7 +1443,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	goi := opts.CurrentObjInfo
 	defer NSUpdated(bucket, object)
 
 	storageDisks := er.getDisks()
@@ -1477,13 +1474,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	versionFound := true
-	if goi.Name == "" && opts.DeleteMarker {
-		versionFound = false
-	}
+	versionFound := !(opts.DeleteMarker && opts.VersionID != "")
 
 	// Determine whether to mark object deleted for replication
-	markDelete := opts.VersionID != ""
+	markDelete := !opts.DeleteMarker && opts.VersionID != ""
 
 	// Default deleteMarker to true if object is under versioning
 	// versioning suspended means we add `null` version as

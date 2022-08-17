@@ -380,7 +380,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	return serverPools
 }
 
-// PoolObjInfo represents the state of an object per pool
+// PoolObjInfo represents the state of current object version per pool
 type PoolObjInfo struct {
 	Index   int
 	ObjInfo ObjectInfo
@@ -1002,6 +1002,8 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return ObjectInfo{}, err
 	}
 
+	object = encodeDirObject(object)
+
 	// Acquire a write lock before deleting the object.
 	lk := z.NewNSLock(bucket, object)
 	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
@@ -1011,7 +1013,6 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx.Cancel)
 
-	object = encodeDirObject(object)
 	gopts := opts
 	gopts.NoLock = true
 	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, gopts)
@@ -1025,18 +1026,12 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 
 	// Delete marker already present we are not going to create new delete markers.
 	if pinfo.ObjInfo.DeleteMarker && opts.VersionID == "" {
+		pinfo.ObjInfo.Name = decodeDirObject(object)
 		return pinfo.ObjInfo, nil
 	}
 
-	opts.CurrentObjInfo = pinfo.ObjInfo
-	// Caller asked to create delete marker and the top-most object
-	// is not a delete marker simply means that we are creating
-	// a fresh delete marker.
-	if opts.DeleteMarker && !pinfo.ObjInfo.DeleteMarker {
-		opts.CurrentObjInfo = ObjectInfo{}
-	}
 	objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
-	objInfo.Name = decodeDirObject(objInfo.Name)
+	objInfo.Name = decodeDirObject(object)
 	return objInfo, err
 }
 
