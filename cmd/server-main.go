@@ -290,7 +290,7 @@ func initAllSubsystems() {
 	}
 
 	// Create new bucket replication subsytem
-	globalBucketTargetSys = NewBucketTargetSys()
+	globalBucketTargetSys = NewBucketTargetSys(GlobalContext)
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()

@@ -2217,6 +2217,9 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	if err != nil {
 		return nil, err
 	}
+	if globalBucketTargetSys.isOffline(epURL) {
+		return nil, RemoteTargetConnectionErr{Endpoint: epURL.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", epURL.String())}
+	}
 	client, err := madmin.New(epURL.Host, accessKey, secretKey, epURL.Scheme == "https")
 	if err != nil {
 		return nil, err
@@ -2230,6 +2233,10 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	if globalBucketTargetSys.isOffline(ep) {
+		return nil, RemoteTargetConnectionErr{Endpoint: ep.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", ep.String())}
+	}
+
 	return minioClient.New(ep.Host, &minioClient.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",

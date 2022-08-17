@@ -310,7 +310,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 	rinfo.Targets = append(rinfo.Targets, ResyncTarget{Arn: tgtArns[0], ResetID: target.ResetID})
 	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, true); err != nil {
 		switch err.(type) {
-		case BucketRemoteConnectionErr:
+		case RemoteTargetConnectionErr:
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrReplicationRemoteConnectionError, err), r.URL)
 		default:
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
