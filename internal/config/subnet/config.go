@@ -55,7 +55,7 @@ type Config struct {
 	ProxyURL *xnet.URL `json:"proxy_url"`
 
 	// Transport configured with proxy_url if set optionally.
-	transport *http.Transport
+	transport http.RoundTripper
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.
@@ -83,11 +83,13 @@ func LookupConfig(kvs config.KVS, transport http.RoundTripper) (cfg Config, err 
 	}
 
 	// Make sure to clone the transport before editing the ProxyURL
-	ctransport := transport.(*http.Transport).Clone()
 	if cfg.ProxyURL != nil {
+		ctransport := transport.(*http.Transport).Clone()
 		ctransport.Proxy = http.ProxyURL((*url.URL)(cfg.ProxyURL))
+		cfg.transport = ctransport
+	} else {
+		cfg.transport = transport
 	}
-	cfg.transport = ctransport
 
 	return cfg, nil
 }

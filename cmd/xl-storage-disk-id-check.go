@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -575,12 +575,11 @@ const (
 var diskMaxConcurrent = 512
 
 func init() {
-	if s, ok := os.LookupEnv("_MINIO_DISK_MAX_CONCURRENT"); ok && s != "" {
-		var err error
-		diskMaxConcurrent, err = strconv.Atoi(s)
-		if err != nil {
-			logger.Fatal(err, "invalid _MINIO_DISK_MAX_CONCURRENT value")
-		}
+	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "512")
+	diskMaxConcurrent, _ = strconv.Atoi(s)
+	if diskMaxConcurrent <= 0 {
+		logger.Info("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s)
+		diskMaxConcurrent = 512
 	}
 }
 
@@ -757,7 +756,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	t = time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess)))
 	if t > maxTimeSinceLastSuccess {
 		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
-			logger.LogAlwaysIf(ctx, fmt.Errorf("taking disk %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
+			logger.LogAlwaysIf(ctx, fmt.Errorf("taking drive %s offline, time since last response %v", p.storage.String(), t.Round(time.Millisecond)))
 			go p.monitorDiskStatus()
 		}
 		return errFaultyDisk
@@ -789,7 +788,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 			Force:     false,
 		})
 		if err == nil {
-			logger.Info("Able to read+write, bringing disk %s online.", p.storage.String())
+			logger.Info("Able to read+write, bringing drive %s online.", p.storage.String())
 			atomic.StoreInt32(&p.health.status, diskHealthOK)
 			return
 		}

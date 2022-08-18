@@ -838,7 +838,7 @@
             "instant": true,
             "interval": "",
             "intervalFactor": 1,
-            "legendFormat": "Total online disks in MinIO Cluster",
+            "legendFormat": "Total online drives in MinIO Cluster",
             "metric": "process_start_time_seconds",
             "refId": "A",
             "step": 60
@@ -846,7 +846,7 @@
         ],
         "timeFrom": null,
         "timeShift": null,
-        "title": "Total Online Disks",
+        "title": "Total Online Drives",
         "type": "stat"
       },
       {
@@ -1276,7 +1276,7 @@
         ],
         "timeFrom": null,
         "timeShift": null,
-        "title": "Total Offline Disks",
+        "title": "Total Offline Drives",
         "type": "stat"
       },
       {
@@ -2453,7 +2453,7 @@
         "dashLength": 10,
         "dashes": false,
         "datasource": "${DS_PROMETHEUS}",
-        "description": "Number of online disks per MinIO Server",
+        "description": "Number of online drives per MinIO Server",
         "fieldConfig": {
           "defaults": {
             "links": []

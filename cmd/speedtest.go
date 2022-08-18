@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"runtime"
 	"sort"
 	"time"
 
@@ -48,6 +49,38 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 
 		concurrency := opts.concurrencyStart
 
+		if opts.autotune {
+			// if we have less drives than concurrency then choose
+			// only the concurrency to be number of drives to start
+			// with - since default '32' might be big and may not
+			// complete in total time of 10s.
+			if globalEndpoints.NEndpoints() < concurrency {
+				concurrency = globalEndpoints.NEndpoints()
+			}
+
+			// Check if we have local disks per pool less than
+			// the concurrency make sure we choose only the "start"
+			// concurrency to be equal to the lowest number of
+			// local disks per server.
+			for _, localDiskCount := range globalEndpoints.NLocalDisksPathsPerPool() {
+				if localDiskCount < concurrency {
+					concurrency = localDiskCount
+				}
+			}
+
+			// Any concurrency less than '4' just stick to '4' concurrent
+			// operations for now to begin with.
+			if concurrency < 4 {
+				concurrency = 4
+			}
+
+			// if GOMAXPROCS is set to a lower value then choose to use
+			// concurrency == GOMAXPROCS instead.
+			if runtime.GOMAXPROCS(0) < concurrency {
+				concurrency = runtime.GOMAXPROCS(0)
+			}
+		}
+
 		throughputHighestGet := uint64(0)
 		throughputHighestPut := uint64(0)
 		var throughputHighestResults []SpeedTestResult
@@ -61,6 +94,9 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.objectSize) / uint64(durationSecs)
 			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
 			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.objectSize) / uint64(durationSecs)
+			var totalUploadTimes madmin.TimeDurations
+			var totalDownloadTimes madmin.TimeDurations
+			var totalDownloadTTFB madmin.TimeDurations
 			for i := 0; i < len(throughputHighestResults); i++ {
 				errStr := ""
 				if throughputHighestResults[i].Error != "" {
@@ -83,13 +119,22 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
+
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
 					Endpoint:         throughputHighestResults[i].Endpoint,
 					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
 					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.objectSize) / uint64(durationSecs),
 					Err:              errStr,
 				})
+
+				totalUploadTimes = append(totalUploadTimes, throughputHighestResults[i].UploadTimes...)
+				totalDownloadTimes = append(totalDownloadTimes, throughputHighestResults[i].DownloadTimes...)
+				totalDownloadTTFB = append(totalDownloadTTFB, throughputHighestResults[i].DownloadTTFB...)
 			}
+
+			result.PUTStats.Response = totalUploadTimes.Measure()
+			result.GETStats.Response = totalDownloadTimes.Measure()
+			result.GETStats.TTFB = totalDownloadTTFB.Measure()
 
 			result.Size = opts.objectSize
 			result.Disks = globalEndpoints.NEndpoints()
@@ -97,7 +142,11 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			result.Version = Version
 			result.Concurrent = concurrency
 
-			ch <- result
+			select {
+			case ch <- result:
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		for {
@@ -148,6 +197,8 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				break
 			}
 
+			// We break if we did not see 2.5% growth rate in total GET
+			// requests, we have reached our peak at this point.
 			doBreak := float64(totalGet-throughputHighestGet)/float64(totalGet) < 0.025
 
 			throughputHighestGet = totalGet

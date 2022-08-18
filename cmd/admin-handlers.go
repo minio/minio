@@ -142,7 +142,16 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	for _, nerr := range globalNotificationSys.DownloadBinary(ctx, u, sha256Sum, releaseInfo) {
+	// Download Binary Once
+	reader, err := downloadBinary(u, mode)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Push binary to other servers
+	for _, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader) {
 		if nerr.Err != nil {
 			err := AdminError{
 				Code:       AdminUpdateApplyFailure,
@@ -156,7 +165,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	err = downloadBinary(u, sha256Sum, releaseInfo, mode)
+	err = verifyBinary(u, sha256Sum, releaseInfo, mode, reader)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -389,8 +398,21 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	} else {
 		types = madmin.MetricsAll
 	}
+
+	disks := strings.Split(r.Form.Get("disks"), ",")
+	byDisk := strings.EqualFold(r.Form.Get("by-disk"), "true")
+	var diskMap map[string]struct{}
+	if len(disks) > 0 && disks[0] != "" {
+		diskMap = make(map[string]struct{}, len(disks))
+		for _, k := range disks {
+			if k != "" {
+				diskMap[k] = struct{}{}
+			}
+		}
+	}
+
 	hosts := strings.Split(r.Form.Get("hosts"), ",")
-	byhost := strings.EqualFold(r.Form.Get("by-host"), "true")
+	byHost := strings.EqualFold(r.Form.Get("by-host"), "true")
 	var hostMap map[string]struct{}
 	if len(hosts) > 0 && hosts[0] != "" {
 		hostMap = make(map[string]struct{}, len(hosts))
@@ -400,6 +422,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
+
 	done := ctx.Done()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -407,16 +430,19 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 
 	for n > 0 {
 		var m madmin.RealtimeMetrics
-		mLocal := collectLocalMetrics(types, hostMap)
+		mLocal := collectLocalMetrics(types, hostMap, diskMap)
 		m.Merge(&mLocal)
 
 		// Allow half the interval for collecting remote...
 		cctx, cancel := context.WithTimeout(ctx, interval/2)
-		mRemote := collectRemoteMetrics(cctx, types, hostMap)
+		mRemote := collectRemoteMetrics(cctx, types, hostMap, diskMap)
 		cancel()
 		m.Merge(&mRemote)
-		if !byhost {
+		if !byHost {
 			m.ByHost = nil
+		}
+		if !byDisk {
+			m.ByDisk = nil
 		}
 
 		m.Final = n <= 1
@@ -1206,18 +1232,6 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		concurrent = 32
 	}
 
-	if runtime.GOMAXPROCS(0) < concurrent {
-		concurrent = runtime.GOMAXPROCS(0)
-	}
-
-	// if we have less drives than concurrency then choose
-	// only the concurrency to be number of drives to start
-	// with - since default '32' might be big and may not
-	// complete in total time of 10s.
-	if globalEndpoints.NEndpoints() < concurrent {
-		concurrent = globalEndpoints.NEndpoints()
-	}
-
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		duration = time.Second * 10
@@ -1275,14 +1289,24 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		storageClass:     storageClass,
 		bucketName:       customBucket,
 	})
+	var prevResult madmin.SpeedTestResult
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-keepAliveTicker.C:
-			// Write a blank entry to prevent client from disconnecting
-			if err := enc.Encode(madmin.SpeedTestResult{}); err != nil {
-				return
+			// if previous result is set keep writing the
+			// previous result back to the client
+			if prevResult.Version != "" {
+				if err := enc.Encode(prevResult); err != nil {
+					return
+				}
+			} else {
+				// first result is not yet obtained, keep writing
+				// empty entry to prevent client from disconnecting.
+				if err := enc.Encode(madmin.SpeedTestResult{}); err != nil {
+					return
+				}
 			}
 			w.(http.Flusher).Flush()
 		case result, ok := <-ch:
@@ -1292,6 +1316,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 			if err := enc.Encode(result); err != nil {
 				return
 			}
+			prevResult = result
 			w.(http.Flusher).Flush()
 		}
 	}
@@ -2225,17 +2250,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	getAndWriteObjPerfInfo := func() {
 		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
 			concurrent := 32
-			if runtime.GOMAXPROCS(0) < concurrent {
-				concurrent = runtime.GOMAXPROCS(0)
-			}
-
-			// if we have less drives than concurrency then choose
-			// only the concurrency to be number of drives to start
-			// with - since default '32' might be big and may not
-			// complete in total time of 10s.
-			if globalEndpoints.NEndpoints() < concurrent {
-				concurrent = globalEndpoints.NEndpoints()
-			}
 
 			storageInfo, _ := objectAPI.StorageInfo(ctx)
 
@@ -2727,7 +2741,7 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 	go func() {
 		ci := clusterInfo{}
 		ci.Info.PoolsCount = len(globalEndpoints)
-		ci.Info.ServersCount = globalEndpoints.NEndpoints()
+		ci.Info.ServersCount = len(globalEndpoints.Hostnames())
 		ci.Info.MinioVersion = Version
 
 		si, _ := objectAPI.StorageInfo(ctx)

@@ -23,8 +23,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/minio/kes"
+	"github.com/minio/pkg/certs"
 )
 
 const (
@@ -46,7 +48,11 @@ type Config struct {
 
 	// Certificate is the client TLS certificate
 	// to authenticate to KMS via mTLS.
-	Certificate tls.Certificate
+	Certificate *certs.Certificate
+
+	// ReloadCertEvents is an event channel that receives
+	// the reloaded client certificate.
+	ReloadCertEvents <-chan tls.Certificate
 
 	// RootCAs is a set of root CA certificates
 	// to verify the KMS server TLS certificate.
@@ -64,7 +70,7 @@ func NewWithConfig(config Config) (KMS, error) {
 
 	client := kes.NewClientWithConfig("", &tls.Config{
 		MinVersion:         tls.VersionTLS12,
-		Certificates:       []tls.Certificate{config.Certificate},
+		Certificates:       []tls.Certificate{config.Certificate.Get()},
 		RootCAs:            config.RootCAs,
 		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	})
@@ -81,14 +87,35 @@ func NewWithConfig(config Config) (KMS, error) {
 			}
 		}
 	}
-	return &kesClient{
+
+	c := &kesClient{
 		client:        client,
 		defaultKeyID:  config.DefaultKeyID,
 		bulkAvailable: bulkAvailable,
-	}, nil
+	}
+	go func() {
+		for {
+			select {
+			case certificate := <-config.ReloadCertEvents:
+				client := kes.NewClientWithConfig("", &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					Certificates:       []tls.Certificate{certificate},
+					RootCAs:            config.RootCAs,
+					ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+				})
+				client.Endpoints = endpoints
+
+				c.lock.Lock()
+				c.client = client
+				c.lock.Unlock()
+			}
+		}
+	}()
+	return c, nil
 }
 
 type kesClient struct {
+	lock         sync.RWMutex
 	defaultKeyID string
 	client       *kes.Client
 
@@ -113,6 +140,9 @@ func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 }
 
 func (c *kesClient) Metrics(ctx context.Context) (kes.Metric, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	return c.client.Metrics(ctx)
 }
 
@@ -122,6 +152,9 @@ func (c *kesClient) Metrics(ctx context.Context) (kes.Metric, error) {
 // If the a key with the same keyID already exists then
 // CreateKey returns kes.ErrKeyExists.
 func (c *kesClient) CreateKey(ctx context.Context, keyID string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	return c.client.CreateKey(ctx, keyID)
 }
 
@@ -134,6 +167,9 @@ func (c *kesClient) CreateKey(ctx context.Context, keyID string) error {
 // The same context must be provided when the generated
 // key should be decrypted.
 func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Context) (DEK, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	if keyID == "" {
 		keyID = c.defaultKeyID
 	}
@@ -156,6 +192,9 @@ func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Con
 // server referenced by the key ID. The context must match the
 // context value used to generate the ciphertext.
 func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]byte, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	ctxBytes, err := ctx.MarshalText()
 	if err != nil {
 		return nil, err
@@ -164,6 +203,9 @@ func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]
 }
 
 func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	if c.bulkAvailable {
 		CCPs := make([]kes.CCP, 0, len(ciphertexts))
 		for i := range ciphertexts {

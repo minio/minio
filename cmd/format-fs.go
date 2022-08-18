@@ -165,7 +165,7 @@ func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) e
 func createFormatFS(fsFormatPath string) error {
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0o600)
+	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0o666)
 	if err != nil {
 		return err
 	}
@@ -256,7 +256,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			// Hold write lock during migration so that we do not disturb any
 			// minio processes running in parallel.
 			var wlk *lock.LockedFile
-			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
+			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0o666)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again.
 				time.Sleep(100 * time.Millisecond)
@@ -357,7 +357,7 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 		case <-ctx.Done():
 			return fmt.Errorf("Initializing FS format stopped gracefully")
 		default:
-			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
+			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0o666)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again
 				logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())

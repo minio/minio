@@ -208,25 +208,29 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		l.ServerAddr = net.JoinHostPort(l.ServerAddr, "636")
 	}
 
-	if l.serverInsecure {
-		return ldap.Dial("tcp", l.ServerAddr)
-	}
-
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: l.tlsSkipVerify,
 		RootCAs:            l.rootCAs,
 	}
 
-	if l.serverStartTLS {
-		conn, err := ldap.Dial("tcp", l.ServerAddr)
-		if err != nil {
-			return nil, err
+	if l.serverInsecure {
+		ldapConn, err = ldap.Dial("tcp", l.ServerAddr)
+	} else {
+		if l.serverStartTLS {
+			ldapConn, err = ldap.Dial("tcp", l.ServerAddr)
+		} else {
+			ldapConn, err = ldap.DialTLS("tcp", l.ServerAddr, tlsConfig)
 		}
-		err = conn.StartTLS(tlsConfig)
-		return conn, err
 	}
 
-	return ldap.DialTLS("tcp", l.ServerAddr, tlsConfig)
+	if ldapConn != nil {
+		ldapConn.SetTimeout(30 * time.Second) // Change default timeout to 30 seconds.
+		if l.serverStartTLS {
+			err = ldapConn.StartTLS(tlsConfig)
+		}
+	}
+
+	return ldapConn, err
 }
 
 // GetExpiryDuration - return parsed expiry duration.

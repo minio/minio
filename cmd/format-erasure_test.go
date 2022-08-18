@@ -149,13 +149,13 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if formatV3.Erasure.This != m.Erasure.Disk {
-		t.Fatalf("expected disk uuid: %s, got: %s", m.Erasure.Disk, formatV3.Erasure.This)
+		t.Fatalf("expected drive uuid: %s, got: %s", m.Erasure.Disk, formatV3.Erasure.This)
 	}
 	if len(formatV3.Erasure.Sets) != 1 {
 		t.Fatalf("expected single set after migrating from v1 to v3, but found %d", len(formatV3.Erasure.Sets))
 	}
 	if !reflect.DeepEqual(formatV3.Erasure.Sets[0], m.Erasure.JBOD) {
-		t.Fatalf("expected disk uuid: %v, got: %v", m.Erasure.JBOD, formatV3.Erasure.Sets[0])
+		t.Fatalf("expected drive uuid: %v, got: %v", m.Erasure.JBOD, formatV3.Erasure.Sets[0])
 	}
 
 	m = &formatErasureV1{}

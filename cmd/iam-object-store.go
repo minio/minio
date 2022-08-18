@@ -26,7 +26,6 @@ import (
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -72,132 +71,6 @@ func (iamOS *IAMObjectStore) unlock() {
 
 func (iamOS *IAMObjectStore) getUsersSysType() UsersSysType {
 	return iamOS.usersSysType
-}
-
-// Migrate users directory in a single scan.
-//
-// 1. Migrate user policy from:
-//
-// `iamConfigUsersPrefix + "<username>/policy.json"`
-//
-// to:
-//
-// `iamConfigPolicyDBUsersPrefix + "<username>.json"`.
-//
-// 2. Add versioning to the policy json file in the new
-// location.
-//
-// 3. Migrate user identity json file to include version info.
-func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context) error {
-	basePrefix := iamConfigUsersPrefix
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
-		if item.Err != nil {
-			return item.Err
-		}
-
-		user := path.Dir(item.Item)
-		{
-			// 1. check if there is policy file in old location.
-			oldPolicyPath := pathJoin(basePrefix, user, iamPolicyFile)
-			var policyName string
-			if err := iamOS.loadIAMConfig(ctx, &policyName, oldPolicyPath); err != nil {
-				switch err {
-				case errConfigNotFound:
-					// This case means it is already
-					// migrated or there is no policy on
-					// user.
-				default:
-					// File may be corrupt or network error
-				}
-
-				// Nothing to do on the policy file,
-				// so move on to check the id file.
-				goto next
-			}
-
-			// 2. copy policy file to new location.
-			mp := newMappedPolicy(policyName)
-			userType := regUser
-			if err := iamOS.saveMappedPolicy(ctx, user, userType, false, mp); err != nil {
-				return err
-			}
-
-			// 3. delete policy file from old
-			// location. Ignore error.
-			iamOS.deleteIAMConfig(ctx, oldPolicyPath)
-		}
-	next:
-		// 4. check if user identity has old format.
-		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		cred := auth.Credentials{
-			AccessKey: user,
-		}
-		if err := iamOS.loadIAMConfig(ctx, &cred, identityPath); err != nil {
-			switch err {
-			case errConfigNotFound:
-				// This should not happen.
-			default:
-				// File may be corrupt or network error
-			}
-			continue
-		}
-
-		// If the file is already in the new format,
-		// then the parsed auth.Credentials will have
-		// the zero value for the struct.
-		if !cred.IsValid() {
-			// nothing to do
-			continue
-		}
-
-		u := newUserIdentity(cred)
-		if err := iamOS.saveIAMConfig(ctx, u, identityPath); err != nil {
-			logger.LogIf(ctx, err)
-			return err
-		}
-
-		// Nothing to delete as identity file location
-		// has not changed.
-	}
-	return nil
-}
-
-func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
-	var iamFmt iamFormat
-	path := getIAMFormatFilePath()
-	if err := iamOS.loadIAMConfig(ctx, &iamFmt, path); err != nil {
-		switch err {
-		case errConfigNotFound:
-			// Need to migrate to V1.
-		default:
-			// if IAM format
-			return err
-		}
-	}
-
-	if iamFmt.Version >= iamFormatVersion1 {
-		// Nothing to do.
-		return nil
-	}
-
-	if err := iamOS.migrateUsersConfigToV1(ctx); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	// Save iam format to version 1.
-	if err := iamOS.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	return nil
-}
-
-// Should be called under config migration lock
-func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
-	iamOS.Lock()
-	defer iamOS.Unlock()
-	return iamOS.migrateToV1(ctx)
 }
 
 func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
@@ -274,6 +147,8 @@ func (iamOS *IAMObjectStore) loadPolicyDoc(ctx context.Context, policy string, m
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPoliciesPrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -323,6 +198,8 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		basePrefix = iamConfigUsersPrefix
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -350,6 +227,8 @@ func (iamOS *IAMObjectStore) loadGroup(ctx context.Context, group string, m map[
 }
 
 func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigGroupsPrefix) {
 		if item.Err != nil {
 			return item.Err
@@ -392,6 +271,8 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
 		if item.Err != nil {
 			return item.Err
@@ -432,7 +313,8 @@ var (
 
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
 		if item.Err != nil {
 			return nil, item.Err

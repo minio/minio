@@ -57,10 +57,10 @@ var errInvalidRangeSource = errors.New("Range specified exceeds source object si
 
 // error returned by disks which are to be initialized are waiting for the
 // first server to initialize them in distributed set to initialize them.
-var errNotFirstDisk = errors.New("Not first disk")
+var errNotFirstDisk = errors.New("Not first drive")
 
 // error returned by first disk waiting to initialize other servers.
-var errFirstDiskWait = errors.New("Waiting on other disks")
+var errFirstDiskWait = errors.New("Waiting on other drives")
 
 // error returned for a negative actual size.
 var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")

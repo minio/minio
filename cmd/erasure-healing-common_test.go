@@ -260,7 +260,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
-					t.Fatalf("disk (%v) with part.1 missing is not a disk with available data",
+					t.Fatalf("Drive (%v) with part.1 missing is not a drive with available data",
 						erasureDisks[tamperedIndex])
 				}
 			}
@@ -446,7 +446,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
-					t.Fatalf("disk (%v) with part.1 missing is not a disk with available data",
+					t.Fatalf("Drive (%v) with part.1 missing is not a drive with available data",
 						erasureDisks[tamperedIndex])
 				}
 			}
@@ -506,7 +506,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
 	}
 
 	for diskIndex, disk := range filteredDisks {
@@ -515,7 +515,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		}
 
 		if disk == nil {
-			t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+			t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
 		}
 	}
 
@@ -528,14 +528,14 @@ func TestDisksWithAllParts(t *testing.T) {
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
 	}
 	for diskIndex, disk := range filteredDisks {
 		if diskIndex == 0 && disk != nil {
-			t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
+			t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 		}
 		if diskIndex != 0 && disk == nil {
-			t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+			t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
 		}
 	}
 	partsMetadata[0] = partsMetadataBackup // Revert before going to the next test
@@ -549,14 +549,14 @@ func TestDisksWithAllParts(t *testing.T) {
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
 	}
 	for diskIndex, disk := range filteredDisks {
 		if diskIndex == 1 && disk != nil {
-			t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
+			t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 		}
 		if diskIndex != 1 && disk == nil {
-			t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+			t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
 		}
 	}
 	partsMetadata[1] = partsMetadataBackup // Revert before going to the next test
@@ -586,23 +586,23 @@ func TestDisksWithAllParts(t *testing.T) {
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
+		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
 	}
 
 	for diskIndex, disk := range filteredDisks {
 		if _, ok := diskFailures[diskIndex]; ok {
 			if disk != nil {
-				t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
+				t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 			}
 			if errs[diskIndex] == nil {
-				t.Errorf("Expected error not received, diskIndex: %d", diskIndex)
+				t.Errorf("Expected error not received, driveIndex: %d", diskIndex)
 			}
 		} else {
 			if disk == nil {
-				t.Errorf("Disk erroneously filtered, diskIndex: %d", diskIndex)
+				t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
 			}
 			if errs[diskIndex] != nil {
-				t.Errorf("Unexpected error, %s, diskIndex: %d", errs[diskIndex], diskIndex)
+				t.Errorf("Unexpected error, %s, driveIndex: %d", errs[diskIndex], diskIndex)
 			}
 
 		}

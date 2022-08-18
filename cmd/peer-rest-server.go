@@ -426,10 +426,17 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 		types = madmin.MetricsAll
 	}
 
+	diskMap := make(map[string]struct{})
+	if r.Form != nil {
+		for _, disk := range r.Form[peerRESTDisk] {
+			diskMap[disk] = struct{}{}
+		}
+	}
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	info := collectLocalMetrics(types, nil)
+	info := collectLocalMetrics(types, nil, diskMap)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -770,7 +777,7 @@ func (s *peerRESTServer) DownloadBinaryHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err = downloadBinary(info.URL, info.Sha256Sum, info.ReleaseInfo, getMinioMode()); err != nil {
+	if err = verifyBinary(info.URL, info.Sha256Sum, info.ReleaseInfo, getMinioMode(), info.BinaryFile); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

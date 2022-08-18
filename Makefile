@@ -15,7 +15,7 @@ checks: ## check dependencies
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
 
 help: ## print this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-40s\033[0m %s\n", $$1, $$2}'
 
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
@@ -90,10 +90,15 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
 
-verify-healing-with-root-disks:
-	@echo "Verify healing with root disks"
+verify-healing-with-root-disks: ## verify healing root disks
+	@echo "Verify healing with root drives"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing-with-root-disks.sh)
+
+verify-healing-with-rewrite: ## verify healing to rewrite old xl.meta -> new xl.meta
+	@echo "Verify healing with rewrite"
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/rewrite-old-new.sh)
 
 verify-healing-inconsistent-versions: ## verify resolving inconsistent versions
 	@echo "Verify resolving inconsistent versions build with race"

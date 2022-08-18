@@ -31,7 +31,7 @@ func TestNewObjectLayer(t *testing.T) {
 	nDisks := 1
 	disks, err := getRandomDisks(nDisks)
 	if err != nil {
-		t.Fatal("Failed to create disks for the backend")
+		t.Fatal("Failed to create drives for the backend")
 	}
 	defer removeRoots(disks)
 
@@ -50,7 +50,7 @@ func TestNewObjectLayer(t *testing.T) {
 	nDisks = 16
 	disks, err = getRandomDisks(nDisks)
 	if err != nil {
-		t.Fatal("Failed to create disks for the backend")
+		t.Fatal("Failed to create drives for the backend")
 	}
 	defer removeRoots(disks)
 

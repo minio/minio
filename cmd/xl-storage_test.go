@@ -659,7 +659,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 	// should fail with disk not found.
 	err = xlStorageDeletedStorage.DeleteVol(context.Background(), "Del-Vol", false)
 	if err != errDiskNotFound {
-		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
+		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
 	}
 }
 
@@ -723,7 +723,7 @@ func TestXLStorageStatVol(t *testing.T) {
 	// should fail with disk not found.
 	_, err = xlStorageDeletedStorage.StatVol(context.Background(), "Stat vol")
 	if err != errDiskNotFound {
-		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
+		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
 	}
 }
 
@@ -902,7 +902,7 @@ func TestXLStorageListDir(t *testing.T) {
 		Force:     false,
 	})
 	if err != errDiskNotFound {
-		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
+		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
 	}
 }
 
@@ -1044,7 +1044,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		Force:     false,
 	})
 	if err != errDiskNotFound {
-		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
+		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
 	}
 }
 

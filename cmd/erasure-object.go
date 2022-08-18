@@ -534,6 +534,11 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		return metaFileInfos, errs
 	}
 
+	versionID := lfi.VersionID
+	if versionID == "" {
+		versionID = nullVersionID
+	}
+
 	for index := range metadataArray {
 		if metadataArray[index] == nil {
 			continue
@@ -541,21 +546,15 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 
 		// make sure to preserve this for diskmtime based healing bugfix.
 		diskMTime := metaFileInfos[index].DiskMTime
-		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, "")
+		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID)
 		if errs[index] != nil {
 			continue
 		}
 
-		if metaFileInfos[index].IsValid() && metaFileInfos[index].ModTime.Equal(lfi.ModTime) {
-			versionID := metaFileInfos[index].VersionID
-			if versionID == "" {
-				versionID = nullVersionID
-			}
-			if readData {
-				metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
-			}
-			metaFileInfos[index].DiskMTime = diskMTime
+		if readData {
+			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
+		metaFileInfos[index].DiskMTime = diskMTime
 	}
 
 	// Return all the metadata.
@@ -687,8 +686,6 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
-	defer NSUpdated(dstBucket, dstEntry)
-
 	g := errgroup.WithNErrs(len(disks))
 
 	fvID := mustGetUUID()
@@ -1140,6 +1137,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		logger.LogIf(ctx, err)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+
+	defer NSUpdated(bucket, object)
 
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {

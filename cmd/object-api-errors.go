@@ -186,7 +186,7 @@ func (e SignatureDoesNotMatch) Error() string {
 type StorageFull struct{}
 
 func (e StorageFull) Error() string {
-	return "Storage reached its minimum free disk threshold."
+	return "Storage reached its minimum free drive threshold."
 }
 
 // SlowDown  too many file descriptors open or backend busy .
@@ -422,11 +422,18 @@ func (e BucketRemoteTargetNotFound) Error() string {
 	return "Remote target not found: " + e.Bucket
 }
 
-// BucketRemoteConnectionErr remote target connection failure.
-type BucketRemoteConnectionErr GenericError
+// RemoteTargetConnectionErr remote target connection failure.
+type RemoteTargetConnectionErr struct {
+	Err      error
+	Bucket   string
+	Endpoint string
+}
 
-func (e BucketRemoteConnectionErr) Error() string {
-	return fmt.Sprintf("Remote service endpoint or target bucket not available: %s \n\t%s", e.Bucket, e.Err.Error())
+func (e RemoteTargetConnectionErr) Error() string {
+	if e.Bucket != "" {
+		return fmt.Sprintf("Remote service endpoint offline or target bucket/remote service credentials invalid: %s \n\t%s", e.Bucket, e.Err.Error())
+	}
+	return fmt.Sprintf("Remote service endpoint %s not available\n\t%s", e.Endpoint, e.Err.Error())
 }
 
 // BucketRemoteAlreadyExists remote already exists for this target type.

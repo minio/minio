@@ -534,7 +534,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	var fsMeta fsMetaV1
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
-		return result, err
+		return result, toObjectErr(fmt.Errorf("unable to parse %s: error %w", pathJoin(uploadIDDir, fs.metaJSONFile), err), bucket, object)
 	}
 
 	result.UserDefined = fsMeta.Meta

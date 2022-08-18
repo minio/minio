@@ -102,12 +102,29 @@ type listPathOptions struct {
 	// Retention configuration, needed to be passed along with lifecycle if set.
 	Retention lock.Retention
 
+	// Replication configuration
+	Replication replicationConfig
 	// pool and set of where the cache is located.
 	pool, set int
 }
 
 func init() {
 	gob.Register(listPathOptions{})
+}
+
+func (o *listPathOptions) setBucketMeta(ctx context.Context) {
+	lc, _ := globalLifecycleSys.Get(o.Bucket)
+
+	// Check if bucket is object locked.
+	rcfg, _ := globalBucketObjectLockSys.Get(o.Bucket)
+	replCfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, o.Bucket)
+	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, o.Bucket)
+	o.Lifecycle = lc
+	o.Replication = replicationConfig{
+		Config:  replCfg,
+		remotes: tgts,
+	}
+	o.Retention = rcfg
 }
 
 // newMetacache constructs a new metacache from the options.
@@ -1332,7 +1349,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				if err != nil {
 					if disks[i] != nil {
 						combinedErr = append(combinedErr,
-							fmt.Sprintf("disk %s returned: %s", disks[i], err))
+							fmt.Sprintf("drive %s returned: %s", disks[i], err))
 					} else {
 						combinedErr = append(combinedErr, err.Error())
 					}

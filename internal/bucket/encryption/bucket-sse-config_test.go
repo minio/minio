@@ -62,7 +62,7 @@ func TestParseBucketSSEConfig(t *testing.T) {
 			{
 				DefaultEncryptionAction: EncryptionAction{
 					Algorithm:   AWSKms,
-					MasterKeyID: "arn:aws:kms:us-east-1:1234/5678example",
+					MasterKeyID: "arn:aws:kms:my-minio-key",
 				},
 			},
 		},
@@ -70,6 +70,7 @@ func TestParseBucketSSEConfig(t *testing.T) {
 
 	testCases := []struct {
 		inputXML       string
+		keyID          string
 		expectedErr    error
 		shouldPass     bool
 		expectedConfig *BucketSSEConfig
@@ -83,10 +84,11 @@ func TestParseBucketSSEConfig(t *testing.T) {
 		},
 		// 2. Valid XML SSE-KMS
 		{
-			inputXML:       `<ServerSideEncryptionConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ApplyServerSideEncryptionByDefault><SSEAlgorithm>aws:kms</SSEAlgorithm><KMSMasterKeyID>arn:aws:kms:us-east-1:1234/5678example</KMSMasterKeyID></ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>`,
+			inputXML:       `<ServerSideEncryptionConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ApplyServerSideEncryptionByDefault><SSEAlgorithm>aws:kms</SSEAlgorithm><KMSMasterKeyID>arn:aws:kms:my-minio-key</KMSMasterKeyID></ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>`,
 			expectedErr:    nil,
 			shouldPass:     true,
 			expectedConfig: actualKMSConfig,
+			keyID:          "my-minio-key",
 		},
 		// 3. Invalid - more than one rule
 		{
@@ -119,23 +121,33 @@ func TestParseBucketSSEConfig(t *testing.T) {
 			shouldPass:     true,
 			expectedConfig: actualAES256NoNSConfig,
 		},
+		// 8. Space characters in MasterKeyID
+		{
+			inputXML:    `<ServerSideEncryptionConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ApplyServerSideEncryptionByDefault><SSEAlgorithm>aws:kms</SSEAlgorithm><KMSMasterKeyID> arn:aws:kms:my-minio-key </KMSMasterKeyID></ApplyServerSideEncryptionByDefault></Rule></ServerSideEncryptionConfiguration>`,
+			expectedErr: errors.New("MasterKeyID contains unsupported characters"),
+			shouldPass:  false,
+		},
 	}
 
 	for i, tc := range testCases {
-		_, err := ParseBucketSSEConfig(bytes.NewReader([]byte(tc.inputXML)))
+		ssec, err := ParseBucketSSEConfig(bytes.NewReader([]byte(tc.inputXML)))
 		if tc.shouldPass && err != nil {
-			t.Fatalf("Test case %d: Expected to succeed but got %s", i+1, err)
+			t.Errorf("Test case %d: Expected to succeed but got %s", i+1, err)
 		}
 
 		if !tc.shouldPass {
 			if err == nil || err != nil && err.Error() != tc.expectedErr.Error() {
-				t.Fatalf("Test case %d: Expected %s but got %s", i+1, tc.expectedErr, err)
+				t.Errorf("Test case %d: Expected %s but got %s", i+1, tc.expectedErr, err)
 			}
 			continue
 		}
 
+		if tc.keyID != "" && tc.keyID != ssec.KeyID() {
+			t.Errorf("Test case %d: Expected bucket encryption KeyID %s but got %s", i+1, tc.keyID, ssec.KeyID())
+		}
+
 		if expectedXML, err := xml.Marshal(tc.expectedConfig); err != nil || !bytes.Equal(expectedXML, []byte(tc.inputXML)) {
-			t.Fatalf("Test case %d: Expected bucket encryption XML %s but got %s", i+1, string(expectedXML), tc.inputXML)
+			t.Errorf("Test case %d: Expected bucket encryption XML %s but got %s", i+1, string(expectedXML), tc.inputXML)
 		}
 	}
 }

@@ -332,7 +332,7 @@ func getNodeDiskAPILatencyMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      apiLatencyMicroSec,
-		Help:      "Average last minute latency in µs for disk API storage operations",
+		Help:      "Average last minute latency in µs for drive API storage operations",
 		Type:      gaugeMetric,
 	}
 }
@@ -342,7 +342,7 @@ func getNodeDiskUsedBytesMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      usedBytes,
-		Help:      "Total storage used on a disk",
+		Help:      "Total storage used on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -352,7 +352,7 @@ func getNodeDiskFreeBytesMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      freeBytes,
-		Help:      "Total storage available on a disk",
+		Help:      "Total storage available on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -362,7 +362,7 @@ func getClusterDisksOfflineTotalMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      offlineTotal,
-		Help:      "Total disks offline",
+		Help:      "Total drives offline",
 		Type:      gaugeMetric,
 	}
 }
@@ -372,7 +372,7 @@ func getClusterDisksOnlineTotalMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      onlineTotal,
-		Help:      "Total disks online",
+		Help:      "Total drives online",
 		Type:      gaugeMetric,
 	}
 }
@@ -382,7 +382,7 @@ func getClusterDisksTotalMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      total,
-		Help:      "Total disks",
+		Help:      "Total drives",
 		Type:      gaugeMetric,
 	}
 }
@@ -402,7 +402,7 @@ func getNodeDiskTotalBytesMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      totalBytes,
-		Help:      "Total storage on a disk",
+		Help:      "Total storage on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -702,7 +702,7 @@ func getCacheHitsTotalMD() MetricDescription {
 		Namespace: minioNamespace,
 		Subsystem: cacheSubsystem,
 		Name:      hitsTotal,
-		Help:      "Total number of disk cache hits",
+		Help:      "Total number of drive cache hits",
 		Type:      counterMetric,
 	}
 }
@@ -712,7 +712,7 @@ func getCacheHitsMissedTotalMD() MetricDescription {
 		Namespace: minioNamespace,
 		Subsystem: cacheSubsystem,
 		Name:      missedTotal,
-		Help:      "Total number of disk cache misses",
+		Help:      "Total number of drive cache misses",
 		Type:      counterMetric,
 	}
 }
@@ -752,7 +752,7 @@ func getCacheTotalBytesMD() MetricDescription {
 		Namespace: minioNamespace,
 		Subsystem: cacheSubsystem,
 		Name:      totalBytes,
-		Help:      "Total size of cache disk in bytes",
+		Help:      "Total size of cache drive in bytes",
 		Type:      gaugeMetric,
 	}
 }

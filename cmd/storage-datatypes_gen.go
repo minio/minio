@@ -14,8 +14,8 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 13 {
-		err = msgp.ArrayError{Wanted: 13, Got: zb0001}
+	if zb0001 != 16 {
+		err = msgp.ArrayError{Wanted: 16, Got: zb0001}
 		return
 	}
 	z.Total, err = dc.ReadUint64()
@@ -43,6 +43,16 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "FreeInodes")
 		return
 	}
+	z.Major, err = dc.ReadUint32()
+	if err != nil {
+		err = msgp.WrapError(err, "Major")
+		return
+	}
+	z.Minor, err = dc.ReadUint32()
+	if err != nil {
+		err = msgp.WrapError(err, "Minor")
+		return
+	}
 	z.FSType, err = dc.ReadString()
 	if err != nil {
 		err = msgp.WrapError(err, "FSType")
@@ -56,6 +66,11 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	z.Healing, err = dc.ReadBool()
 	if err != nil {
 		err = msgp.WrapError(err, "Healing")
+		return
+	}
+	z.Scanning, err = dc.ReadBool()
+	if err != nil {
+		err = msgp.WrapError(err, "Scanning")
 		return
 	}
 	z.Endpoint, err = dc.ReadString()
@@ -88,8 +103,8 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 13
-	err = en.Append(0x9d)
+	// array header, size 16
+	err = en.Append(0xdc, 0x0, 0x10)
 	if err != nil {
 		return
 	}
@@ -118,6 +133,16 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "FreeInodes")
 		return
 	}
+	err = en.WriteUint32(z.Major)
+	if err != nil {
+		err = msgp.WrapError(err, "Major")
+		return
+	}
+	err = en.WriteUint32(z.Minor)
+	if err != nil {
+		err = msgp.WrapError(err, "Minor")
+		return
+	}
 	err = en.WriteString(z.FSType)
 	if err != nil {
 		err = msgp.WrapError(err, "FSType")
@@ -131,6 +156,11 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteBool(z.Healing)
 	if err != nil {
 		err = msgp.WrapError(err, "Healing")
+		return
+	}
+	err = en.WriteBool(z.Scanning)
+	if err != nil {
+		err = msgp.WrapError(err, "Scanning")
 		return
 	}
 	err = en.WriteString(z.Endpoint)
@@ -164,16 +194,19 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *DiskInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 13
-	o = append(o, 0x9d)
+	// array header, size 16
+	o = append(o, 0xdc, 0x0, 0x10)
 	o = msgp.AppendUint64(o, z.Total)
 	o = msgp.AppendUint64(o, z.Free)
 	o = msgp.AppendUint64(o, z.Used)
 	o = msgp.AppendUint64(o, z.UsedInodes)
 	o = msgp.AppendUint64(o, z.FreeInodes)
+	o = msgp.AppendUint32(o, z.Major)
+	o = msgp.AppendUint32(o, z.Minor)
 	o = msgp.AppendString(o, z.FSType)
 	o = msgp.AppendBool(o, z.RootDisk)
 	o = msgp.AppendBool(o, z.Healing)
+	o = msgp.AppendBool(o, z.Scanning)
 	o = msgp.AppendString(o, z.Endpoint)
 	o = msgp.AppendString(o, z.MountPath)
 	o = msgp.AppendString(o, z.ID)
@@ -194,8 +227,8 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 13 {
-		err = msgp.ArrayError{Wanted: 13, Got: zb0001}
+	if zb0001 != 16 {
+		err = msgp.ArrayError{Wanted: 16, Got: zb0001}
 		return
 	}
 	z.Total, bts, err = msgp.ReadUint64Bytes(bts)
@@ -223,6 +256,16 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "FreeInodes")
 		return
 	}
+	z.Major, bts, err = msgp.ReadUint32Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Major")
+		return
+	}
+	z.Minor, bts, err = msgp.ReadUint32Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Minor")
+		return
+	}
 	z.FSType, bts, err = msgp.ReadStringBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "FSType")
@@ -236,6 +279,11 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.Healing, bts, err = msgp.ReadBoolBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Healing")
+		return
+	}
+	z.Scanning, bts, err = msgp.ReadBoolBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Scanning")
 		return
 	}
 	z.Endpoint, bts, err = msgp.ReadStringBytes(bts)
@@ -269,7 +317,7 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DiskInfo) Msgsize() (s int) {
-	s = 1 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.StringPrefixSize + len(z.FSType) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.Endpoint) + msgp.StringPrefixSize + len(z.MountPath) + msgp.StringPrefixSize + len(z.ID) + z.Metrics.Msgsize() + msgp.StringPrefixSize + len(z.Error)
+	s = 3 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint32Size + msgp.Uint32Size + msgp.StringPrefixSize + len(z.FSType) + msgp.BoolSize + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.Endpoint) + msgp.StringPrefixSize + len(z.MountPath) + msgp.StringPrefixSize + len(z.ID) + z.Metrics.Msgsize() + msgp.StringPrefixSize + len(z.Error)
 	return
 }
 

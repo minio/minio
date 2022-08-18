@@ -154,6 +154,24 @@ spec:
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
             {{- end}}
+            {{- if .Values.oidc.enabled }}
+            - name: MINIO_IDENTITY_OPENID_CONFIG_URL
+              value: {{ .Values.oidc.configUrl }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_ID
+              value: {{ .Values.oidc.clientId }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
+              value: {{ .Values.oidc.clientSecret }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
+              value: {{ .Values.oidc.claimName }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_PREFIX
+              value: {{ .Values.oidc.claimPrefix }}
+            - name: MINIO_IDENTITY_OPENID_SCOPES
+              value: {{ .Values.oidc.scopes }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
+            - name: MINIO_IDENTITY_OPENID_COMMENT
+              value: {{ .Values.oidc.comment }}
+            {{- end}}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
               value: {{ $val | quote }}

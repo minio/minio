@@ -102,6 +102,33 @@ func getUserIdentityPath(user string, userType IAMUserType) string {
 	return pathJoin(basePath, user, iamIdentityFile)
 }
 
+func saveIAMFormat(ctx context.Context, store IAMStorageAPI) error {
+	var iamFmt iamFormat
+	path := getIAMFormatFilePath()
+	if err := store.loadIAMConfig(ctx, &iamFmt, path); err != nil {
+		switch err {
+		case errConfigNotFound:
+			// Need to migrate to V1.
+		default:
+			// if IAM format
+			return err
+		}
+	}
+
+	if iamFmt.Version >= iamFormatVersion1 {
+		// Nothing to do.
+		return nil
+	}
+
+	// Save iam format to version 1.
+	if err := store.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	return nil
+}
+
 func getGroupInfoPath(group string) string {
 	return pathJoin(iamConfigGroupsPrefix, group, iamGroupMembersFile)
 }
@@ -374,7 +401,6 @@ type IAMStorageAPI interface {
 	unlock()
 	rlock() *iamCache
 	runlock()
-	migrateBackendFormat(context.Context) error
 	getUsersSysType() UsersSysType
 	loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error
 	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error

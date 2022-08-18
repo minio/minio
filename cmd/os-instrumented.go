@@ -37,7 +37,8 @@ const (
 	osMetricMkdirAll
 	osMetricMkdir
 	osMetricRename
-	osMetricOpenFile
+	osMetricOpenFileW
+	osMetricOpenFileR
 	osMetricOpen
 	osMetricOpenFileDirectIO
 	osMetricLstat
@@ -135,7 +136,12 @@ func Rename(src, dst string) error {
 
 // OpenFile captures time taken to call os.OpenFile
 func OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
-	defer updateOSMetrics(osMetricOpenFile, name)()
+	switch flag & writeMode {
+	case writeMode:
+		defer updateOSMetrics(osMetricOpenFileW, name)()
+	default:
+		defer updateOSMetrics(osMetricOpenFileR, name)()
+	}
 	return os.OpenFile(name, flag, perm)
 }
 

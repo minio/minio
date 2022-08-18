@@ -214,7 +214,7 @@ Example 1:
 
 	ErrUnsupportedBackend = newErrFn(
 		"Unable to write to the backend",
-		"Please ensure your disk supports O_DIRECT",
+		"Please ensure your drive supports O_DIRECT",
 		"",
 	)
 

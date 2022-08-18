@@ -75,6 +75,9 @@ func unwrapErrs(err error) (leafErr error) {
 			break
 		}
 	}
+	if uerr == nil {
+		leafErr = err
+	}
 	return leafErr
 }
 

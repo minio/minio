@@ -292,6 +292,19 @@ func (l EndpointServerPools) LocalDisksPaths() []string {
 	return disks
 }
 
+// NLocalDisksPathsPerPool returns the disk paths of the local disks per pool
+func (l EndpointServerPools) NLocalDisksPathsPerPool() []int {
+	localDisksCount := make([]int, len(l))
+	for i, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				localDisksCount[i]++
+			}
+		}
+	}
+	return localDisksCount
+}
+
 // FirstLocal returns true if the first endpoint is local.
 func (l EndpointServerPools) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
@@ -302,7 +315,7 @@ func (l EndpointServerPools) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()
 }
 
-// NEndpoints - returns all nodes count
+// NEndpoints - returns number of endpoints
 func (l EndpointServerPools) NEndpoints() (count int) {
 	for _, ep := range l {
 		count += len(ep.Endpoints)

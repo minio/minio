@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -100,6 +101,9 @@ type xlStorage struct {
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
+
+	// Indicate of NSScanner is in progress in this disk
+	scanning int32
 
 	formatFileInfo  os.FileInfo
 	formatLegacy    bool
@@ -394,7 +398,7 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 		return nil, time.Time{}, err
 	}
 
-	f, err := OpenFile(itemPath, readMode, 0)
+	f, err := OpenFile(itemPath, readMode, 0o666)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -423,6 +427,9 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 }
 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+	atomic.AddInt32(&s.scanning, 1)
+	defer atomic.AddInt32(&s.scanning, -1)
+
 	// Updates must be closed before we return.
 	defer close(updates)
 	var lc *lifecycle.Lifecycle
@@ -576,6 +583,8 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			if err != nil {
 				return dcinfo, err
 			}
+			dcinfo.Major = di.Major
+			dcinfo.Minor = di.Minor
 			dcinfo.Total = di.Total
 			dcinfo.Free = di.Free
 			dcinfo.Used = di.Used
@@ -587,6 +596,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			// - if we found an unformatted disk (no 'format.json')
 			// - if we found healing tracker 'healing.bin'
 			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
+			dcinfo.Scanning = atomic.LoadInt32(&s.scanning) == 1
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
@@ -751,18 +761,24 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 }
 
 // ListVols - list volumes.
-func (s *xlStorage) ListVols(context.Context) (volsInfo []VolInfo, err error) {
-	return listVols(s.diskPath)
+func (s *xlStorage) ListVols(ctx context.Context) (volsInfo []VolInfo, err error) {
+	return listVols(ctx, s.diskPath)
 }
 
 // List all the volumes from diskPath.
-func listVols(dirPath string) ([]VolInfo, error) {
+func listVols(ctx context.Context, dirPath string) ([]VolInfo, error) {
 	if err := checkPathLength(dirPath); err != nil {
 		return nil, err
 	}
 	entries, err := readDir(dirPath)
 	if err != nil {
-		return nil, errDiskNotFound
+		logger.LogIf(ctx, err)
+		if errors.Is(err, errFileAccessDenied) {
+			return nil, errDiskAccessDenied
+		} else if errors.Is(err, errFileNotFound) {
+			return nil, errDiskNotFound
+		}
+		return nil, err
 	}
 	volsInfo := make([]VolInfo, 0, len(entries))
 	for _, entry := range entries {
@@ -1547,7 +1563,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 	}
 
 	// Open the file for reading.
-	file, err := Open(filePath)
+	file, err := OpenFile(filePath, readMode, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -2515,7 +2531,7 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 
 func (s *xlStorage) bitrotVerify(ctx context.Context, partPath string, partSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	// Open the file for reading.
-	file, err := Open(partPath)
+	file, err := OpenFile(partPath, readMode, 0o666)
 	if err != nil {
 		return osErrToFileErr(err)
 	}
