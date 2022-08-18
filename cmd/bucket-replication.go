@@ -2053,9 +2053,9 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		return
 	}
 
-	// Walk through all object versions - note ascending order of walk needed to ensure delete marker replicated to
-	// target after object version is first created.
-	if err := objectAPI.Walk(ctx, bucket, "", objInfoCh, ObjectOptions{WalkAscending: true}); err != nil {
+	// Walk through all object versions - Walk() is always in ascending order needed to ensure
+	// delete marker replicated to target after object version is first created.
+	if err := objectAPI.Walk(ctx, bucket, "", objInfoCh, ObjectOptions{}); err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
