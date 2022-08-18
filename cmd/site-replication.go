@@ -2005,7 +2005,7 @@ func (c *SiteReplicationSys) isEnabled() bool {
 	return c.enabled
 }
 
-var errMissingSRConfig = fmt.Errorf("Site not found in site replication configuration")
+var errMissingSRConfig = fmt.Errorf("unable to find site replication configuration")
 
 // RemovePeerCluster - removes one or more clusters from site replication configuration.
 func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) (st madmin.ReplicateRemoveStatus, err error) {
@@ -2057,7 +2057,8 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				return
 			}
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
-				if errors.As(err, &errMissingSRConfig) {
+				if errors.Is(err, errMissingSRConfig) {
+					// ignore if peer is already removed.
 					return
 				}
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
