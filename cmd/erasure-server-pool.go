@@ -1046,8 +1046,16 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	poolObjIdxMap := map[int][]ObjectToDelete{}
 	origIndexMap := map[int][]int{}
 
+	// Always perform 1/10th of the number of objects per delete
+	concurrent := len(objects) / 10
+	if concurrent <= 10 {
+		// if we cannot get 1/10th then choose the number of
+		// objects as concurrent.
+		concurrent = len(objects)
+	}
+
 	var mu sync.Mutex
-	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(10)
+	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(concurrent)
 	for j, obj := range objects {
 		j := j
 		obj := obj
