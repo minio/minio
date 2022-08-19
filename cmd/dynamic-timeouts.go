@@ -34,11 +34,24 @@ const (
 
 // timeouts that are dynamically adapted based on actual usage results
 type dynamicTimeout struct {
-	timeout int64
-	minimum int64
-	entries int64
-	log     [dynamicTimeoutLogSize]time.Duration
-	mutex   sync.Mutex
+	timeout       int64
+	minimum       int64
+	entries       int64
+	log           [dynamicTimeoutLogSize]time.Duration
+	mutex         sync.Mutex
+	retryInterval time.Duration
+}
+
+type dynamicTimeoutOpts struct {
+	timeout       time.Duration
+	minimum       time.Duration
+	retryInterval time.Duration
+}
+
+func newDynamicTimeoutWithOpts(opts dynamicTimeoutOpts) *dynamicTimeout {
+	dt := newDynamicTimeout(opts.timeout, opts.minimum)
+	dt.retryInterval = opts.retryInterval
+	return dt
 }
 
 // newDynamicTimeout returns a new dynamic timeout initialized with timeout value
@@ -55,6 +68,10 @@ func newDynamicTimeout(timeout, minimum time.Duration) *dynamicTimeout {
 // Timeout returns the current timeout value
 func (dt *dynamicTimeout) Timeout() time.Duration {
 	return time.Duration(atomic.LoadInt64(&dt.timeout))
+}
+
+func (dt *dynamicTimeout) RetryInterval() time.Duration {
+	return dt.retryInterval
 }
 
 // LogSuccess logs the duration of a successful action that
