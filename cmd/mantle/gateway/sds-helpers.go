@@ -10,9 +10,8 @@ import (
 )
 
 type config struct {
-	BunkerProductId string `json:"bunkerProductId"`
-	MantleUrl       string `json:"mantleUrl"`
-	ApiKey          string `json:"apiKey"`
+	SdsUrl string `json:"sdsUrl"`
+	ApiKey string `json:"apiKey"`
 }
 
 var (
@@ -24,7 +23,7 @@ func init() {
 	defer f.Close()
 
 	if err != nil {
-		log.Fatal("Error opening mantle config file. Hint: maybe config.json is missing?")
+		log.Fatal("Error opening mantle config file. Hint: maybe config-mantle.json is missing?")
 	}
 
 	b, err := io.ReadAll(f)
@@ -41,8 +40,7 @@ func init() {
 }
 
 func urlJoin(params ...string) string {
-	u, _ := url.Parse(mantleConfig.MantleUrl)
-	u.Path = path.Join(u.Path, mantleConfig.BunkerProductId)
+	u, _ := url.Parse(mantleConfig.SdsUrl)
 
 	for _, p := range params {
 		u.Path = path.Join(u.Path, p)

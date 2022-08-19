@@ -15,7 +15,7 @@ func Put(f *os.File, fn string) (string, error) {
 	client := &http.Client{}
 	val := map[string]io.Reader{
 		"file":        f,
-		"displayName": strings.NewReader(fn),
+		"DisplayName": strings.NewReader(fn),
 	}
 
 	putResp, err := network.UploadFormData(client, urlJoin("files"), val, setMantleHeaders())
@@ -48,32 +48,32 @@ func Get(r io.Reader) (bb []byte, err error) {
 }
 
 type sdsFileInfo struct {
-	Size int64  `json:"size"`
-	Id   string `json:"id"`
+	//More fields are available.
+	Size            int64  `json:"size"`
+	UnencryptedSize int64  `json:"unencryptedSize"`
+	Id              string `json:"id"`
 }
 
 func GetFileSize(id string) (s int64, err error) {
 	client := &http.Client{}
-	resp, err := network.Get(client, urlJoin("files"), setMantleHeaders())
+	resp, err := network.Get(client, urlJoin("files/info", id), setMantleHeaders())
 	if err != nil {
 		return 0, err
 	}
 
-	fis := make([]sdsFileInfo, 0)
+	fi := sdsFileInfo{Id: id}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
 	}
 
-	err = json.Unmarshal(b, &fis)
+	err = json.Unmarshal(b, &fi)
 	if err != nil {
 		return
 	}
 
-	for _, e := range fis {
-		if id == e.Id {
-			return e.Size, nil
-		}
+	if fi.UnencryptedSize > 0 {
+		return fi.UnencryptedSize, nil
 	}
 
 	fmt.Println("cannot find file in mantle sds")

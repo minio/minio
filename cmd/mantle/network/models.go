@@ -1,6 +1,6 @@
 package network
 
-type PutBunkerFileResp struct {
-	Id          string
-	DisplayName string
+type PutFileResp struct {
+	Id string
+	//other fields are available.
 }
