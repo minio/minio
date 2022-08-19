@@ -64,7 +64,11 @@ const (
 var (
 	globalHealConfig heal.Config
 
-	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
+	dataScannerLeaderLockTimeout = newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
+		timeout:       30 * time.Second,
+		minimum:       10 * time.Second,
+		retryInterval: time.Second,
+	})
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second, true)
 	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
