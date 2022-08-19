@@ -47,7 +47,7 @@ Download [`certgen`](https://github.com/minio/certgen/releases/latest) for your 
 `certgen` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
 
 ```sh
-./certgen -ca -host "10.10.0.3,10.10.0.4,10.10.0.5"
+./certgen -host "10.10.0.3,10.10.0.4,10.10.0.5"
 ```
 
 A response similar to this one should be displayed:
