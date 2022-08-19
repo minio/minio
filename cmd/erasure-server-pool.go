@@ -432,7 +432,7 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			continue
 		}
 		// Skip object if it's from pools participating in a rebalance operation.
-		if opts.SkipRebalancing && z.IsPoolRebalancing(pinfo.PoolIndex) {
+		if opts.SkipRebalancing && z.IsPoolRebalancing(pinfo.Index) {
 			continue
 		}
 

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -232,8 +231,6 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	pools.loadRebalanceMetaWithTTL(ctx, 2*time.Second)
-
 	if pools.IsRebalanceStarted() {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
@@ -282,15 +279,26 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Proxy rebalance-status to first pool first node, so that users see a
+	// consistent view of rebalance progress even though different rebalancing
+	// pools may temporarily have out of date info on the others.
+	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
+		for nodeIdx, proxyEp := range globalProxyEndpoints {
+			if proxyEp.Endpoint.Host == ep.Host {
+				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+					return
+				}
+			}
+		}
+	}
+
 	pools, ok := objectAPI.(*erasureServerPools)
 	if !ok {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
-	pools.loadRebalanceMetaWithTTL(ctx, 2*time.Second)
-
-	rs, err := pools.rebalanceStatus(ctx)
+	rs, err := rebalanceStatus(ctx, pools)
 	if err != nil {
 		if errors.Is(err, errRebalanceNotStarted) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceNotStarted), r.URL)

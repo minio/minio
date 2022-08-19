@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -101,6 +100,7 @@ func (rs rstats) clone() []*rebalanceStats {
 	return ss
 }
 
+//go:generate stringer -type=rebalStatus -trimprefix=rebal $GOFILE
 type rebalStatus uint8
 
 const (
@@ -131,17 +131,6 @@ var (
 	errRebalanceNotStarted     = errors.New("rebalance not started")
 	errRebalanceAlreadyRunning = errors.New("rebalance already running")
 )
-
-func (z *erasureServerPools) rebalanceStatus(ctx context.Context) (r *rebalanceMeta, err error) {
-	z.rebalMu.RLock()
-	defer z.rebalMu.RUnlock()
-
-	if z.rebalMeta == nil {
-		return nil, errRebalanceNotStarted
-	}
-
-	return z.rebalMeta.clone(), nil
-}
 
 func (z *erasureServerPools) loadRebalanceMetaWithTTL(ctx context.Context, ttl time.Duration) error {
 	var reload bool
@@ -204,15 +193,15 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 			RebalancedBuckets: make([]string, 0, len(buckets)),
 			InitFreeSpace:     diskStats[idx].AvailableSpace,
 			InitCapacity:      diskStats[idx].TotalSpace,
-			Info: rebalanceInfo{
-				StartTime: now,
-				Status:    rebalStarted,
-			},
 		}
 		copy(r.PoolStats[idx].Buckets, buckets)
 
 		if pfi := float64(diskStats[idx].AvailableSpace) / float64(diskStats[idx].TotalSpace); pfi < r.PercentFreeGoal {
 			r.PoolStats[idx].Participating = true
+			r.PoolStats[idx].Info = rebalanceInfo{
+				StartTime: now,
+				Status:    rebalStarted,
+			}
 		}
 	}
 
@@ -223,22 +212,6 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 
 	z.rebalMeta = r
 	return r.ID, nil
-}
-
-func (r *rebalanceMeta) MarshalJSON() ([]byte, error) {
-	type rMeta struct {
-		ID              uuid.UUID         `json:"id"`
-		PercentFreeGoal float64           `json:"percentFreeGoal"`
-		PoolStats       []*rebalanceStats `json:"poolStats"`
-		StoppedAt       time.Time         `json:"stoppedAt"`
-	}
-	rm := rMeta{
-		ID:              uuid.UUID(r.ID),
-		PercentFreeGoal: r.PercentFreeGoal,
-		PoolStats:       r.PoolStats,
-		StoppedAt:       r.StoppedAt,
-	}
-	return json.Marshal(rm)
 }
 
 func (z *erasureServerPools) updatePoolStats(poolIdx int, bucket string, oi ObjectInfo) {
@@ -418,6 +391,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		defer timer.Stop()
 		var rebalDone bool
 		var traceMsg string
+
 		for {
 			select {
 			case <-doneCh:
@@ -432,13 +406,19 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				traceMsg = fmt.Sprintf("completed at %s", now)
 
 			case <-ctx.Done():
+
+				// rebalance stopped for poolIdx
+				now := time.Now()
+				z.rebalMu.Lock()
+				z.rebalMeta.PoolStats[poolIdx].Info.Status = rebalStopped
+				z.rebalMeta.PoolStats[poolIdx].Info.EndTime = now
+				z.rebalMu.Unlock()
+
 				rebalDone = true
-				traceMsg = fmt.Sprintf("stopped at %s", time.Now())
+				traceMsg = fmt.Sprintf("stopped at %s", now)
 
 			case <-timer.C:
 				timer.Reset(randSleepFor())
-				// notify peers of recent updates to rebalance stats
-				globalNotificationSys.LoadRebalanceMeta(ctx, false)
 
 				traceMsg = fmt.Sprintf("saved at %s", time.Now())
 			}
@@ -513,10 +493,12 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	lr, _ := globalBucketObjectLockSys.Get(bucket)
 
 	pool := z.serverPools[poolIdx]
-	wStr := env.Get("_MINIO_REBALANCE_WORKERS", strconv.Itoa(len(pool.sets)))
+	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
+	wStr := env.Get(envRebalanceWorkers, strconv.Itoa(len(pool.sets)))
 	workerSize, err := strconv.Atoi(wStr)
 	if err != nil {
-		return err
+		logger.LogIf(ctx, fmt.Errorf("invalid %s value: %v, defaulting to %d", envRebalanceWorkers, err, len(pool.sets)))
+		workerSize = len(pool.sets)
 	}
 	workers := make(chan struct{}, workerSize)
 	var wg sync.WaitGroup
@@ -575,7 +557,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 			var rebalanced int
 			for _, version := range fivs.Versions {
-				// FIXME(kp): Skip transitioned objects for now. TBD
+				// Skip transitioned objects for now. TBD
 				if version.IsRemote() {
 					logger.LogIf(ctx, fmt.Errorf("skipping %s/%s transitioned object", bucket, version.Name))
 					continue
@@ -788,7 +770,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 	}
 
 	if oi.isMultipart() {
-		uploadID, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
+		res, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
 			VersionID:   oi.VersionID,
 			MTime:       oi.ModTime,
 			UserDefined: oi.UserDefined,
@@ -796,7 +778,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		if err != nil {
 			return fmt.Errorf("rebalanceObject: NewMultipartUpload() %w", err)
 		}
-		defer z.AbortMultipartUpload(ctx, bucket, oi.Name, uploadID, ObjectOptions{})
+		defer z.AbortMultipartUpload(ctx, bucket, oi.Name, res.UploadID, ObjectOptions{})
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
@@ -804,7 +786,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}
-			pi, err := z.PutObjectPart(ctx, bucket, oi.Name, uploadID,
+			pi, err := z.PutObjectPart(ctx, bucket, oi.Name, res.UploadID,
 				part.Number,
 				NewPutObjReader(hr),
 				ObjectOptions{
@@ -821,7 +803,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 				PartNumber: pi.PartNumber,
 			}
 		}
-		_, err = z.CompleteMultipartUpload(ctx, bucket, oi.Name, uploadID, parts, ObjectOptions{
+		_, err = z.CompleteMultipartUpload(ctx, bucket, oi.Name, res.UploadID, parts, ObjectOptions{
 			MTime: oi.ModTime,
 		})
 		if err != nil {
