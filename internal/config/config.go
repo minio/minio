@@ -948,7 +948,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 func (c Config) CheckValidKeys(subSys string, deprecatedKeys []string) error {
 	defKVS, ok := DefaultKVS[subSys]
 	if !ok {
-		return fmt.Errorf("Subsystem %s does not exist", subSys)
+		return Errorf("Subsystem %s does not exist", subSys)
 	}
 
 	// Make a list of valid keys for the subsystem including the `comment`
@@ -973,7 +973,7 @@ func (c Config) CheckValidKeys(subSys string, deprecatedKeys []string) error {
 
 	isSingleTarget := SubSystemsSingleTargets.Contains(subSys)
 	if isSingleTarget && len(candidates) > 0 {
-		return fmt.Errorf("The following environment variables are unknown: %s",
+		return Errorf("The following environment variables are unknown: %s",
 			strings.Join(candidates.ToSlice(), ", "))
 	}
 
@@ -993,7 +993,7 @@ func (c Config) CheckValidKeys(subSys string, deprecatedKeys []string) error {
 
 		// Whatever remains are invalid env vars - return an error.
 		if len(candidates) > 0 {
-			return fmt.Errorf("The following environment variables are unknown: %s",
+			return Errorf("The following environment variables are unknown: %s",
 				strings.Join(candidates.ToSlice(), ", "))
 		}
 	}
@@ -1029,7 +1029,7 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 
 	defKVS, ok := DefaultKVS[subSys]
 	if !ok {
-		return nil, fmt.Errorf("Subsystem %s does not exist", subSys)
+		return nil, Errorf("Subsystem %s does not exist", subSys)
 	}
 
 	kvsMap := c[subSys]
@@ -1160,13 +1160,13 @@ type KVSrc struct {
 func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) {
 	// Initially only support OpenID
 	if !resolvableSubsystems.Contains(subSys) {
-		return nil, fmt.Errorf("unsupported subsystem: %s", subSys)
+		return nil, Errorf("unsupported subsystem: %s", subSys)
 	}
 
 	// Check if config param requested is valid.
 	defKVS, ok := DefaultKVS[subSys]
 	if !ok {
-		return nil, fmt.Errorf("unknown subsystem: %s", subSys)
+		return nil, Errorf("unknown subsystem: %s", subSys)
 	}
 
 	r := make([]KVSrc, 0, len(defKVS)+1)
@@ -1226,7 +1226,7 @@ func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
 	// Check if config param requested is valid.
 	defKVS1, ok := DefaultKVS[subSys]
 	if !ok {
-		return nil, fmt.Errorf("unknown subsystem: %s", subSys)
+		return nil, Errorf("unknown subsystem: %s", subSys)
 	}
 
 	targets, err := c.GetAvailableTargets(subSys)
