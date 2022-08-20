@@ -1059,13 +1059,15 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		VersionSuspended: versionSuspended,
 	})
 	if err != nil {
-		sendEvent(eventArgs{
-			EventName:  event.ObjectReplicationNotTracked,
-			BucketName: bucket,
-			Object:     objInfo,
-			Host:       "Internal: [Replication]",
-		})
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replicate for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+		if !isErrObjectNotFound(err) {
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				Host:       "Internal: [Replication]",
+			})
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+		}
 		return
 	}
 	defer func() {
