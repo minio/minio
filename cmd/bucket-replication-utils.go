@@ -737,3 +737,32 @@ func extractReplicateDiffOpts(q url.Values) (opts madmin.ReplDiffOpts) {
 	opts.Prefix = q.Get("prefix")
 	return
 }
+
+const (
+	replicationMRFDir = bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + "mrf"
+	mrfMetaFormat     = 1
+	mrfMetaVersionV1  = 1
+	mrfMetaVersion    = mrfMetaVersionV1
+)
+
+// MRFReplicateEntry mrf entry to save to disk
+type MRFReplicateEntry struct {
+	Bucket    string `json:"bucket" msg:"b"`
+	Object    string `json:"object" msg:"o"`
+	versionID string `json:"-"`
+}
+
+// MRFReplicateEntries has the map of MRF entries to save to disk
+type MRFReplicateEntries struct {
+	Entries map[string]MRFReplicateEntry `json:"entries" msg:"e"`
+	Version int                          `json:"version" msg:"v"`
+}
+
+// ToMRFEntry returns the relevant info needed by MRF
+func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
+	return MRFReplicateEntry{
+		Bucket:    ri.Bucket,
+		Object:    ri.Name,
+		versionID: ri.VersionID,
+	}
+}
