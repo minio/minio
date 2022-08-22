@@ -206,6 +206,8 @@ func minioConfigToConsoleFeatures() {
 	if globalLDAPConfig.Enabled {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
+	defer env.SetEnvOn()
+	os.Setenv("CONSOLE_SUBNET_URL", env.Get(config.EnvMinIOConsoleSubnetURL, ""))
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 	if globalSubnetConfig.License != "" {
