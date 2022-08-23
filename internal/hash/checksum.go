@@ -184,7 +184,7 @@ func ReadCheckSums(b []byte) map[string]string {
 		if n < 0 {
 			break
 		}
-		b = b[:n]
+		b = b[n:]
 
 		typ := ChecksumType(t)
 		length := typ.RawByteLen()
@@ -192,7 +192,7 @@ func ReadCheckSums(b []byte) map[string]string {
 			break
 		}
 		res[typ.String()] = base64.StdEncoding.EncodeToString(b[:length])
-		b = b[:length]
+		b = b[length:]
 	}
 	if len(res) == 0 {
 		res = nil
@@ -214,6 +214,7 @@ func NewChecksumString(alg, value string) *Checksum {
 }
 
 // AppendTo will append the checksum to b.
+// ReadCheckSums reads the values back.
 func (c Checksum) AppendTo(b []byte) []byte {
 	var tmp [binary.MaxVarintLen32]byte
 	n := binary.PutUvarint(tmp[:], uint64(c.Type))
@@ -265,6 +266,14 @@ func (c Checksum) Matches(content []byte) error {
 		}
 	}
 	return nil
+}
+
+// AsMap returns the
+func (c *Checksum) AsMap() map[string]string {
+	if c == nil || !c.Valid() {
+		return nil
+	}
+	return map[string]string{c.Type.String(): c.Encoded}
 }
 
 // TransferChecksumHeader will transfer any checksum value that has been checked.

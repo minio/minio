@@ -962,6 +962,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
+	fi.Checksum = opts.WantChecksum.AsMap()
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 

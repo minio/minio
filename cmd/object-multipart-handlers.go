@@ -181,7 +181,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)
 		return
 	} else if checksumType.IsSet() && !checksumType.Is(hash.ChecksumTrailing) {
-		opts.WantMultipartChecksum = &hash.Checksum{Type: checksumType}
+		opts.WantChecksum = &hash.Checksum{Type: checksumType}
 	}
 
 	newMultipartUpload := objectAPI.NewMultipartUpload

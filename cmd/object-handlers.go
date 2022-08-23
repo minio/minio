@@ -518,6 +518,14 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 	}
 
+	fmt.Println("GetObject")
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+		fmt.Println("Adding", objInfo.Checksum)
+		hash.AddChecksumHeader(w, objInfo.Checksum)
+	} else {
+		fmt.Println("header:", r.Header.Get(xhttp.AmzChecksumMode))
+	}
+
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -779,12 +787,15 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			}
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
-		default:
-			// For now only when not encrypted.
-			if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-				hash.AddChecksumHeader(w, objInfo.Checksum)
-			}
 		}
+	}
+
+	fmt.Println("HeadObject")
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+		fmt.Println("Adding", objInfo.Checksum)
+		hash.AddChecksumHeader(w, objInfo.Checksum)
+	} else {
+		fmt.Println("header:", r.Header.Get(xhttp.AmzChecksumMode))
 	}
 
 	// Set standard object headers.

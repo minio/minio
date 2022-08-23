@@ -287,6 +287,15 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		metadata["etag"] = etag
 	}
 
+	wantCRC, err := hash.GetContentChecksum(r)
+	if err != nil {
+		return opts, InvalidArgument{
+			Bucket: bucket,
+			Object: object,
+			Err:    fmt.Errorf("invalid/unknown checksum sent: %v", err),
+		}
+	}
+
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
@@ -297,6 +306,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			Versioned:            versioned,
 			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
+			WantChecksum:         wantCRC,
 		}, nil
 	}
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
@@ -305,6 +315,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts.Versioned = versioned
 		opts.VersionSuspended = versionSuspended
 		opts.UserDefined = metadata
+		opts.WantChecksum = wantCRC
 		return
 	}
 	if crypto.S3KMS.IsRequested(r.Header) {
@@ -323,6 +334,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			Versioned:            versioned,
 			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
+			WantChecksum:         wantCRC,
 		}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
@@ -337,6 +349,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	opts.ReplicationSourceLegalholdTimestamp = lholdtimestmp
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
 	opts.ReplicationSourceTaggingTimestamp = taggingtimestmp
+	opts.WantChecksum = wantCRC
 
 	return opts, nil
 }
@@ -388,7 +401,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 			}
 		}
 	}
-	opts.WantMultipartChecksum, err = hash.GetContentChecksum(r)
+	opts.WantChecksum, err = hash.GetContentChecksum(r)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,

@@ -382,9 +382,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
-	// TODO(klauspost): Enable when more tested.
-	if false && opts.WantMultipartChecksum != nil && opts.WantMultipartChecksum.Type.IsSet() {
-		userDefined[hash.MinIOMultipartChecksum] = opts.WantMultipartChecksum.Type.String()
+	if opts.WantChecksum != nil && opts.WantChecksum.Type.IsSet() {
+		userDefined[hash.MinIOMultipartChecksum] = opts.WantChecksum.Type.String()
 	}
 
 	modTime := opts.MTime
@@ -1029,7 +1028,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	var checksumType hash.ChecksumType
 	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
 		checksumType = hash.NewChecksumType(cs)
-		if opts.WantMultipartChecksum != nil && !opts.WantMultipartChecksum.Type.Is(checksumType) {
+		if opts.WantChecksum != nil && !opts.WantChecksum.Type.Is(checksumType) {
 			return oi, InvalidArgument{
 				Bucket: bucket,
 				Object: fi.Name,
@@ -1149,8 +1148,8 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	if opts.WantMultipartChecksum != nil {
-		err := opts.WantMultipartChecksum.Matches(checksumCombined)
+	if opts.WantChecksum != nil {
+		err := opts.WantChecksum.Matches(checksumCombined)
 		if err != nil {
 			return oi, err
 		}

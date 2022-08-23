@@ -60,7 +60,7 @@ type ObjectOptions struct {
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
 
-	WantMultipartChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to CompleteMultipartUpload.
+	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.
