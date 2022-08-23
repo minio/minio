@@ -46,6 +46,12 @@ ignoreChartChecksums: false
 ## Additional arguments to pass to minio binary
 extraArgs: []
 
+## Additional volumes to minio container
+extraVolumes: []
+
+## Additional volumeMounts to minio container
+extraVolumeMounts: []
+
 ## Internal port number for MinIO S3 API container
 ## Change service.port to change external port number
 minioAPIPort: "9000"
