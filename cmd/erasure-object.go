@@ -1502,10 +1502,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		modTime = UTCNow()
 	}
 	fvID := mustGetUUID()
+
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		fi := FileInfo{
 			Name:             object,
-			Deleted:          deleteMarker,
+			Deleted:          true,
 			MarkDeleted:      markDelete,
 			ModTime:          modTime,
 			ReplicationState: opts.DeleteReplication,
