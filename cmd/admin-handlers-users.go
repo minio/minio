@@ -1529,7 +1529,29 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		}
 	}
 
-	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, isGroup)
+	// Validate that user or group exists.
+	if !isGroup {
+		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
+			_, ok := globalIAMSys.GetUser(ctx, entityName)
+			if !ok {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+				return
+			}
+		}
+	} else {
+		_, err := globalIAMSys.GetGroupDescription(entityName)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, userType, isGroup)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1539,6 +1561,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
 			UserOrGroup: entityName,
+			UserType:    int(userType),
 			IsGroup:     isGroup,
 			Policy:      policyName,
 		},
@@ -2114,7 +2137,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, userPolicyMappingsFile, u), r.URL)
 					return
 				}
-				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, false); err != nil {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, regUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, userPolicyMappingsFile, u), r.URL)
 					return
 				}
@@ -2143,7 +2166,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for g, pm := range grpPolicyMap {
-				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, true); err != nil {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
 					return
 				}
@@ -2182,7 +2205,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, stsUserPolicyMappingsFile, u), r.URL)
 					return
 				}
-				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, false); err != nil {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
 					return
 				}
@@ -2211,7 +2234,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for g, pm := range grpPolicyMap {
-				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, true); err != nil {
+				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsGroupPolicyMappingsFile, g), r.URL)
 					return
 				}
