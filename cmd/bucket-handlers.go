@@ -727,9 +727,28 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.CreateBucketAction, bucket, "")
+	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
+	}
+
+	if objectLockEnabled {
+		// Creating a bucket with locking requires the user having more permissions
+		for _, action := range []iampolicy.Action{iampolicy.PutBucketObjectLockConfigurationAction, iampolicy.PutBucketVersioningAction} {
+			if !globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
+				Action:          action,
+				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				BucketName:      bucket,
+				IsOwner:         owner,
+				Claims:          cred.Claims,
+			}) {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+				return
+			}
+		}
 	}
 
 	// Parse incoming location constraint.

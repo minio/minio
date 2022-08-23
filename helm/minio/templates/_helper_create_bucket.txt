@@ -50,6 +50,7 @@ createBucket() {
   POLICY=$2
   PURGE=$3
   VERSIONING=$4
+  OBJECTLOCKING=$5
 
   # Purge the bucket, if set & exists
   # Since PURGE is user input, check explicitly for `true`
@@ -64,16 +65,27 @@ createBucket() {
     fi
   fi
 
-  # Create the bucket if it does not exist
-  if ! checkBucketExists $BUCKET ; then
-    echo "Creating bucket '$BUCKET'"
-    ${MC} mb myminio/$BUCKET
+# Create the bucket if it does not exist and set objectlocking if enabled (NOTE: versioning will be not changed if OBJECTLOCKING is set because it enables versioning to the Buckets created)
+if ! checkBucketExists $BUCKET ; then
+    if [ ! -z $OBJECTLOCKING ] ; then
+      if [ $OBJECTLOCKING = true ] ; then
+          echo "Creating bucket with OBJECTLOCKING '$BUCKET'"
+          ${MC} mb --with-lock myminio/$BUCKET
+      elif [ $OBJECTLOCKING = false ] ; then
+            echo "Creating bucket '$BUCKET'"
+            ${MC} mb myminio/$BUCKET
+      fi
+  elif [ -z $OBJECTLOCKING ] ; then
+        echo "Creating bucket '$BUCKET'"
+        ${MC} mb myminio/$BUCKET
   else
-    echo "Bucket '$BUCKET' already exists."
+    echo "Bucket '$BUCKET' already exists."  
+  fi
   fi
 
 
-  # set versioning for bucket
+  # set versioning for bucket if objectlocking is disabled or not set
+  if [ -z $OBJECTLOCKING ] ; then
   if [ ! -z $VERSIONING ] ; then
     if [ $VERSIONING = true ] ; then
         echo "Enabling versioning for '$BUCKET'"
@@ -82,9 +94,11 @@ createBucket() {
         echo "Suspending versioning for '$BUCKET'"
         ${MC} version suspend myminio/$BUCKET
     fi
+    fi
   else
       echo "Bucket '$BUCKET' versioning unchanged."
   fi
+
 
   # At this point, the bucket should exist, skip checking for existence
   # Set policy on the bucket
@@ -104,6 +118,6 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }}
+createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }} {{ .objectlocking }}
 {{- end }}
 {{- end }}

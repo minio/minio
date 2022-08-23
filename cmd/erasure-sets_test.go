@@ -187,7 +187,7 @@ func TestNewErasureSets(t *testing.T) {
 	// Initializes all erasure disks
 	storageDisks, format, err := waitForFormatErasure(true, endpoints, 1, 1, 16, "", "")
 	if err != nil {
-		t.Fatalf("Unable to format disks for erasure, %s", err)
+		t.Fatalf("Unable to format drives for erasure, %s", err)
 	}
 
 	ep := PoolEndpoints{Endpoints: endpoints}

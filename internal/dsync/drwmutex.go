@@ -59,7 +59,8 @@ const (
 	// dRWMutexRefreshInterval - default the interval between two refresh calls
 	drwMutexRefreshInterval = 10 * time.Second
 
-	lockRetryInterval = 1 * time.Second
+	// maximum time to sleep before retrying a failed blocking lock()
+	lockRetryInterval = 50 * time.Millisecond
 
 	drwMutexInfinite = 1<<63 - 1
 )
@@ -142,7 +143,8 @@ func (dm *DRWMutex) Lock(id, source string) {
 
 // Options lock options.
 type Options struct {
-	Timeout time.Duration
+	Timeout       time.Duration
+	RetryInterval time.Duration
 }
 
 // GetLock tries to get a write lock on dm before the timeout elapses.
@@ -236,7 +238,11 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 				return locked
 			}
 
-			time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryInterval)))
+			lockRetryInterval := dm.lockRetryInterval
+			if opts.RetryInterval > 0 {
+				lockRetryInterval = opts.RetryInterval
+			}
+			time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 		}
 	}
 }

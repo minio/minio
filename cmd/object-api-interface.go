@@ -82,7 +82,6 @@ type ObjectOptions struct {
 	// mainly set for certain WRITE operations.
 	SkipDecommissioned bool
 
-	WalkAscending   bool                     // return Walk results in ascending order of versions
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
 	// IndexCB will return any index created but the compression.

@@ -305,20 +305,20 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 				switch err {
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.
-					logger.Info("Waiting for the first server to format the disks (elapsed %s)\n", getElapsedTime())
+					logger.Info("Waiting for the first server to format the drives (elapsed %s)\n", getElapsedTime())
 					continue
 				case errFirstDiskWait:
 					// Fresh setup, wait for other servers to come up.
-					logger.Info("Waiting for all other servers to be online to format the disks (elapses %s)\n", getElapsedTime())
+					logger.Info("Waiting for all other servers to be online to format the drives (elapses %s)\n", getElapsedTime())
 					continue
 				case errErasureReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+					logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
 						len(endpoints)/2, getElapsedTime())
 					continue
 				case errErasureWriteQuorum:
 					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n",
+					logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
 						(len(endpoints)/2)+1, getElapsedTime())
 					continue
 				case errErasureV3ThisEmpty:

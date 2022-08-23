@@ -28,7 +28,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -161,121 +160,6 @@ func (ies *IAMEtcdStore) loadIAMConfigBytes(ctx context.Context, path string) ([
 
 func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error {
 	return deleteKeyEtcd(ctx, ies.client, path)
-}
-
-func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context) error {
-	basePrefix := iamConfigUsersPrefix
-	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	r, err := ies.client.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	users := etcdKvsToSet(basePrefix, r.Kvs)
-	for _, user := range users.ToSlice() {
-		{
-			// 1. check if there is a policy file in the old loc.
-			oldPolicyPath := pathJoin(basePrefix, user, iamPolicyFile)
-			var policyName string
-			err := ies.loadIAMConfig(ctx, &policyName, oldPolicyPath)
-			if err != nil {
-				switch err {
-				case errConfigNotFound:
-					// No mapped policy or already migrated.
-				default:
-					// corrupt data/read error, etc
-				}
-				goto next
-			}
-
-			// 2. copy policy to new loc.
-			mp := newMappedPolicy(policyName)
-			userType := regUser
-			path := getMappedPolicyPath(user, userType, false)
-			if err := ies.saveIAMConfig(ctx, mp, path); err != nil {
-				return err
-			}
-
-			// 3. delete policy file in old loc.
-			deleteKeyEtcd(ctx, ies.client, oldPolicyPath)
-		}
-
-	next:
-		// 4. check if user identity has old format.
-		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		var cred auth.Credentials
-		if err := ies.loadIAMConfig(ctx, &cred, identityPath); err != nil {
-			switch err {
-			case errConfigNotFound:
-				// This case should not happen.
-			default:
-				// corrupt file or read error
-			}
-			continue
-		}
-
-		// If the file is already in the new format,
-		// then the parsed auth.Credentials will have
-		// the zero value for the struct.
-		var zeroCred auth.Credentials
-		if cred.Equal(zeroCred) {
-			// nothing to do
-			continue
-		}
-
-		// Found a id file in old format. Copy value
-		// into new format and save it.
-		cred.AccessKey = user
-		u := newUserIdentity(cred)
-		if err := ies.saveIAMConfig(ctx, u, identityPath); err != nil {
-			logger.LogIf(ctx, err)
-			return err
-		}
-
-		// Nothing to delete as identity file location
-		// has not changed.
-	}
-	return nil
-}
-
-func (ies *IAMEtcdStore) migrateToV1(ctx context.Context) error {
-	var iamFmt iamFormat
-	path := getIAMFormatFilePath()
-	if err := ies.loadIAMConfig(ctx, &iamFmt, path); err != nil {
-		switch err {
-		case errConfigNotFound:
-			// Need to migrate to V1.
-		default:
-			// if IAM format
-			return err
-		}
-	}
-
-	if iamFmt.Version >= iamFormatVersion1 {
-		// Nothing to do.
-		return nil
-	}
-
-	if err := ies.migrateUsersConfigToV1(ctx); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	// Save iam format to version 1.
-	if err := ies.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	return nil
-}
-
-// Should be called under config migration lock
-func (ies *IAMEtcdStore) migrateBackendFormat(ctx context.Context) error {
-	ies.Lock()
-	defer ies.Unlock()
-	return ies.migrateToV1(ctx)
 }
 
 func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {

@@ -80,7 +80,7 @@ func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
 		return j, nil
 	}
 
-	return nil, errors.New("no local disk found")
+	return nil, errors.New("no local drive found")
 }
 
 // rotate rotates the journal. If a read-only journal already exists it does
@@ -237,7 +237,7 @@ func (jd *tierDiskJournal) Open() error {
 	}
 
 	var err error
-	jd.file, err = os.OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0o666)
+	jd.file, err = OpenFile(jd.JournalPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY|writeMode, 0o666)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (jd *tierDiskJournal) Open() error {
 }
 
 func (jd *tierDiskJournal) OpenRO() (io.ReadCloser, error) {
-	file, err := os.Open(jd.ReadOnlyPath())
+	file, err := Open(jd.ReadOnlyPath())
 	if err != nil {
 		return nil, err
 	}

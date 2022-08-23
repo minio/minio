@@ -195,9 +195,12 @@ func (client *peerRESTClient) GetMemInfo(ctx context.Context) (info madmin.MemIn
 }
 
 // GetMetrics - fetch metrics from a remote node.
-func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricType) (info madmin.RealtimeMetrics, err error) {
+func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricType, diskMap map[string]struct{}) (info madmin.RealtimeMetrics, err error) {
 	values := make(url.Values)
 	values.Set(peerRESTTypes, strconv.FormatUint(uint64(t), 10))
+	for disk := range diskMap {
+		values.Set(peerRESTDisk, disk)
+	}
 	respBody, err := client.callWithContext(ctx, peerRESTMethodMetrics, values, nil, -1)
 	if err != nil {
 		return
@@ -422,16 +425,18 @@ type binaryInfo struct {
 	URL         *url.URL
 	Sha256Sum   []byte
 	ReleaseInfo string
+	BinaryFile  []byte
 }
 
-// DownloadBinary - sends download binary message to remote peers.
-func (client *peerRESTClient) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) error {
+// VerifyBinary - sends verify binary message to remote peers.
+func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, readerInput []byte) error {
 	values := make(url.Values)
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(binaryInfo{
 		URL:         u,
 		Sha256Sum:   sha256Sum,
 		ReleaseInfo: releaseInfo,
+		BinaryFile:  readerInput,
 	}); err != nil {
 		return err
 	}

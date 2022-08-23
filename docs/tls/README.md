@@ -47,7 +47,7 @@ Download [`certgen`](https://github.com/minio/certgen/releases/latest) for your 
 `certgen` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
 
 ```sh
-./certgen -ca -host "10.10.0.3,10.10.0.4,10.10.0.5"
+./certgen -host "10.10.0.3,10.10.0.4,10.10.0.5"
 ```
 
 A response similar to this one should be displayed:
@@ -85,8 +85,6 @@ Alternatively, use the following command to generate a private ECDSA key protect
 ```sh
 openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
 ```
-
-**Note:** NIST curves P-384 and P-521 are not currently supported.
 
 #### 3.2.2 Generate a private key with RSA
 

@@ -152,12 +152,24 @@ func parseDirEnt(buf []byte) (consumed int, name []byte, typ os.FileMode, err er
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
 func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) error {
-	f, err := Open(dirPath)
+	f, err := OpenFile(dirPath, readMode, 0o666)
 	if err != nil {
 		if osErrToFileErr(err) == errFileNotFound {
 			return nil
 		}
-		return osErrToFileErr(err)
+		if !osIsPermission(err) {
+			return osErrToFileErr(err)
+		}
+		// There may be permission error when dirPath
+		// is at the root of the disk mount that may
+		// not have the permissions to avoid 'noatime'
+		f, err = Open(dirPath)
+		if err != nil {
+			if osErrToFileErr(err) == errFileNotFound {
+				return nil
+			}
+			return osErrToFileErr(err)
+		}
 	}
 	defer f.Close()
 
@@ -232,9 +244,18 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 // Return count entries at the directory dirPath and all entries
 // if count is set to -1
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := OpenFile(dirPath, readMode, 0)
+	f, err := OpenFile(dirPath, readMode, 0o666)
 	if err != nil {
-		return nil, osErrToFileErr(err)
+		if !osIsPermission(err) {
+			return nil, osErrToFileErr(err)
+		}
+		// There may be permission error when dirPath
+		// is at the root of the disk mount that may
+		// not have the permissions to avoid 'noatime'
+		f, err = Open(dirPath)
+		if err != nil {
+			return nil, osErrToFileErr(err)
+		}
 	}
 	defer f.Close()
 

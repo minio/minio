@@ -188,7 +188,8 @@ Description of the configuration parameters used above -
 - `buckets[].policy` - can be one of none|download|upload|public
 - `buckets[].purge` - purge if bucket exists already
 
-33# Create policies after install
+### Create policies after install
+
 Install the chart, specifying the policies you want to create after install:
 
 ```bash

@@ -261,6 +261,413 @@ func (z *BucketReplicationResyncStatus) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *MRFReplicateEntries) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "e":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Entries")
+				return
+			}
+			if z.Entries == nil {
+				z.Entries = make(map[string]MRFReplicateEntry, zb0002)
+			} else if len(z.Entries) > 0 {
+				for key := range z.Entries {
+					delete(z.Entries, key)
+				}
+			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 MRFReplicateEntry
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Entries")
+					return
+				}
+				var zb0003 uint32
+				zb0003, err = dc.ReadMapHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "Entries", za0001)
+					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "Entries", za0001)
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "b":
+						za0002.Bucket, err = dc.ReadString()
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001, "Bucket")
+							return
+						}
+					case "o":
+						za0002.Object, err = dc.ReadString()
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001, "Object")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001)
+							return
+						}
+					}
+				}
+				z.Entries[za0001] = za0002
+			}
+		case "v":
+			z.Version, err = dc.ReadInt()
+			if err != nil {
+				err = msgp.WrapError(err, "Version")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *MRFReplicateEntries) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "e"
+	err = en.Append(0x82, 0xa1, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteMapHeader(uint32(len(z.Entries)))
+	if err != nil {
+		err = msgp.WrapError(err, "Entries")
+		return
+	}
+	for za0001, za0002 := range z.Entries {
+		err = en.WriteString(za0001)
+		if err != nil {
+			err = msgp.WrapError(err, "Entries")
+			return
+		}
+		// map header, size 2
+		// write "b"
+		err = en.Append(0x82, 0xa1, 0x62)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(za0002.Bucket)
+		if err != nil {
+			err = msgp.WrapError(err, "Entries", za0001, "Bucket")
+			return
+		}
+		// write "o"
+		err = en.Append(0xa1, 0x6f)
+		if err != nil {
+			return
+		}
+		err = en.WriteString(za0002.Object)
+		if err != nil {
+			err = msgp.WrapError(err, "Entries", za0001, "Object")
+			return
+		}
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt(z.Version)
+	if err != nil {
+		err = msgp.WrapError(err, "Version")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MRFReplicateEntries) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "e"
+	o = append(o, 0x82, 0xa1, 0x65)
+	o = msgp.AppendMapHeader(o, uint32(len(z.Entries)))
+	for za0001, za0002 := range z.Entries {
+		o = msgp.AppendString(o, za0001)
+		// map header, size 2
+		// string "b"
+		o = append(o, 0x82, 0xa1, 0x62)
+		o = msgp.AppendString(o, za0002.Bucket)
+		// string "o"
+		o = append(o, 0xa1, 0x6f)
+		o = msgp.AppendString(o, za0002.Object)
+	}
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendInt(o, z.Version)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MRFReplicateEntries) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "e":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Entries")
+				return
+			}
+			if z.Entries == nil {
+				z.Entries = make(map[string]MRFReplicateEntry, zb0002)
+			} else if len(z.Entries) > 0 {
+				for key := range z.Entries {
+					delete(z.Entries, key)
+				}
+			}
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 MRFReplicateEntry
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Entries")
+					return
+				}
+				var zb0003 uint32
+				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Entries", za0001)
+					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Entries", za0001)
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "b":
+						za0002.Bucket, bts, err = msgp.ReadStringBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001, "Bucket")
+							return
+						}
+					case "o":
+						za0002.Object, bts, err = msgp.ReadStringBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001, "Object")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Entries", za0001)
+							return
+						}
+					}
+				}
+				z.Entries[za0001] = za0002
+			}
+		case "v":
+			z.Version, bts, err = msgp.ReadIntBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Version")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MRFReplicateEntries) Msgsize() (s int) {
+	s = 1 + 2 + msgp.MapHeaderSize
+	if z.Entries != nil {
+		for za0001, za0002 := range z.Entries {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + 1 + 2 + msgp.StringPrefixSize + len(za0002.Bucket) + 2 + msgp.StringPrefixSize + len(za0002.Object)
+		}
+	}
+	s += 2 + msgp.IntSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *MRFReplicateEntry) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "b":
+			z.Bucket, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Bucket")
+				return
+			}
+		case "o":
+			z.Object, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Object")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z MRFReplicateEntry) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "b"
+	err = en.Append(0x82, 0xa1, 0x62)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Bucket)
+	if err != nil {
+		err = msgp.WrapError(err, "Bucket")
+		return
+	}
+	// write "o"
+	err = en.Append(0xa1, 0x6f)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Object)
+	if err != nil {
+		err = msgp.WrapError(err, "Object")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MRFReplicateEntry) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "b"
+	o = append(o, 0x82, 0xa1, 0x62)
+	o = msgp.AppendString(o, z.Bucket)
+	// string "o"
+	o = append(o, 0xa1, 0x6f)
+	o = msgp.AppendString(o, z.Object)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MRFReplicateEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "b":
+			z.Bucket, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Bucket")
+				return
+			}
+		case "o":
+			z.Object, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Object")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MRFReplicateEntry) Msgsize() (s int) {
+	s = 1 + 2 + msgp.StringPrefixSize + len(z.Bucket) + 2 + msgp.StringPrefixSize + len(z.Object)
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *ReplicateDecision) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field

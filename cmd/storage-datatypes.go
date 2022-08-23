@@ -40,9 +40,12 @@ type DiskInfo struct {
 	Used       uint64
 	UsedInodes uint64
 	FreeInodes uint64
+	Major      uint32
+	Minor      uint32
 	FSType     string
 	RootDisk   bool
 	Healing    bool
+	Scanning   bool
 	Endpoint   string
 	MountPath  string
 	ID         string

@@ -21,6 +21,7 @@
 package disk
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 )
@@ -41,8 +42,13 @@ func GetInfo(path string) (info Info, err error) {
 		FSType: getFSType(s.Fstypename[:]),
 	}
 	if info.Free > info.Total {
-		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
+		return info, fmt.Errorf("detected free space (%d) > total drive space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
 	}
 	info.Used = info.Total - info.Free
 	return info, nil
+}
+
+// GetAllDrivesIOStats returns IO stats of all drives found in the machine
+func GetAllDrivesIOStats() (info AllDrivesIOStats, err error) {
+	return nil, errors.New("operation unsupported")
 }

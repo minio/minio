@@ -263,7 +263,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
-			err = fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with disk ID mismatch", c.url.Host)
+			err = fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with drive ID mismatch", c.url.Host)
 			logger.LogOnceIf(ctx, err, c.url.Host)
 			c.MarkOffline(err)
 		}

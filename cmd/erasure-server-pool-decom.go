@@ -457,7 +457,7 @@ func (p *poolMeta) updateAfter(ctx context.Context, idx int, pools []*erasureSet
 	now := UTCNow()
 	if now.Sub(p.Pools[idx].LastUpdate) >= duration {
 		if serverDebugLog {
-			console.Debugf("decommission: persisting poolMeta on disk: threshold:%s, poolMeta:%#v\n", now.Sub(p.Pools[idx].LastUpdate), p.Pools[idx])
+			console.Debugf("decommission: persisting poolMeta on drive: threshold:%s, poolMeta:%#v\n", now.Sub(p.Pools[idx].LastUpdate), p.Pools[idx])
 		}
 		p.Pools[idx].LastUpdate = now
 		if err := p.save(ctx, pools); err != nil {
@@ -681,7 +681,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		set := set
 		disks := set.getOnlineDisks()
 		if len(disks) == 0 {
-			logger.LogIf(GlobalContext, fmt.Errorf("no online disks found for set with endpoints %s",
+			logger.LogIf(GlobalContext, fmt.Errorf("no online drives found for set with endpoints %s",
 				set.getEndpoints()))
 			continue
 		}
@@ -804,11 +804,14 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						logger.LogIf(ctx, err)
 						continue
 					}
+					stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
 					if err = z.decommissionObject(ctx, bi.Name, gr); err != nil {
+						stopFn(err)
 						failure = true
 						logger.LogIf(ctx, err)
 						continue
 					}
+					stopFn(nil)
 					failure = false
 					break
 				}
@@ -823,6 +826,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 			// if all versions were decommissioned, then we can delete the object versions.
 			if decommissionedCount == len(fivs.Versions) {
+				stopFn := globalDecommissionMetrics.log(decomMetricDecommissionRemoveObject, idx, bi.Name, entry.name)
 				_, err := set.DeleteObject(ctx,
 					bi.Name,
 					encodeDirObject(entry.name),
@@ -830,6 +834,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						DeletePrefix: true, // use prefix delete to delete all versions at once.
 					},
 				)
+				stopFn(err)
 				auditLogDecom(ctx, "DecomDeleteObject", bi.Name, entry.name, "", err)
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -885,6 +890,47 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 	return nil
 }
 
+//msgp:ignore decomMetrics
+type decomMetrics struct{}
+
+var globalDecommissionMetrics decomMetrics
+
+//msgp:ignore decomMetric
+//go:generate stringer -type=decomMetric -trimprefix=decomMetric $GOFILE
+type decomMetric uint8
+
+const (
+	decomMetricDecommissionBucket decomMetric = iota
+	decomMetricDecommissionObject
+	decomMetricDecommissionRemoveObject
+)
+
+func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.Duration, path string, err error) madmin.TraceInfo {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	}
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceDecommission,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  fmt.Sprintf("decommission.%s (pool-id=%d)", d.String(), poolIdx),
+		Duration:  duration,
+		Path:      path,
+		Error:     errStr,
+	}
+}
+
+func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func(err error) {
+	startTime := time.Now()
+	return func(err error) {
+		duration := time.Since(startTime)
+		if globalTrace.NumSubscribers(madmin.TraceDecommission) > 0 {
+			globalTrace.Publish(decomTrace(d, poolIdx, startTime, duration, strings.Join(paths, " "), err))
+		}
+	}
+}
+
 func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx int) error {
 	pool := z.serverPools[idx]
 	for _, bucket := range z.poolMeta.PendingBuckets(idx) {
@@ -902,9 +948,13 @@ func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx i
 		if serverDebugLog {
 			console.Debugln("decommission: currently on bucket", bucket.Name)
 		}
+		stopFn := globalDecommissionMetrics.log(decomMetricDecommissionBucket, idx, bucket.Name)
 		if err := z.decommissionPool(ctx, idx, pool, bucket); err != nil {
+			stopFn(err)
 			return err
 		}
+		stopFn(nil)
+
 		z.poolMetaMutex.Lock()
 		z.poolMeta.BucketDone(idx, bucket)
 		z.poolMeta.save(ctx, z.serverPools)

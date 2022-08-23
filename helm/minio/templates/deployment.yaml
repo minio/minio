@@ -82,13 +82,11 @@ spec:
             - name: minio-user
               mountPath: "/tmp/credentials"
               readOnly: true
-            {{- if .Values.persistence.enabled }}
             - name: export
               mountPath: {{ .Values.mountPath }}
-              {{- if .Values.persistence.subPath }}
+              {{- if and .Values.persistence.enabled .Values.persistence.subPath }}
               subPath: "{{ .Values.persistence.subPath }}"
               {{- end }}
-            {{- end }}
             {{- if .Values.extraSecret }}
             - name: extra-secret
               mountPath: "/tmp/minio-config-env"
@@ -117,6 +115,24 @@ spec:
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
+            {{- end}}
+            {{- if .Values.oidc.enabled }}
+            - name: MINIO_IDENTITY_OPENID_CONFIG_URL
+              value: {{ .Values.oidc.configUrl }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_ID
+              value: {{ .Values.oidc.clientId }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
+              value: {{ .Values.oidc.clientSecret }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
+              value: {{ .Values.oidc.claimName }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_PREFIX
+              value: {{ .Values.oidc.claimPrefix }}
+            - name: MINIO_IDENTITY_OPENID_SCOPES
+              value: {{ .Values.oidc.scopes }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
+            - name: MINIO_IDENTITY_OPENID_COMMENT
+              value: {{ .Values.oidc.comment }}
             {{- end}}
             {{- if .Values.etcd.endpoints }}
             - name: MINIO_ETCD_ENDPOINTS

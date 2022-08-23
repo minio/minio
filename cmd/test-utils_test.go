@@ -1898,7 +1898,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	nDisks := 16
 	erasureDisks, err := getRandomDisks(nDisks)
 	if err != nil {
-		t.Fatalf("Initialization of disks for Erasure setup: %s", err)
+		t.Fatalf("Initialization of drives for Erasure setup: %s", err)
 	}
 	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(erasureDisks...))
 	if err != nil {

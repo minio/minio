@@ -129,10 +129,10 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO())
 			if derr != nil && info.RootDisk {
-				return nil, nil, fmt.Errorf("Disk: %s is a root disk", disk)
+				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
 			}
 		}
-		return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
+		return nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
 
 	return disk, format, nil
@@ -147,7 +147,7 @@ func findDiskIndexByDiskID(refFormat *formatErasureV3, diskID string) (int, int,
 		return -1, -1, errDiskNotFound
 	}
 	if diskID == offlineDiskUUID {
-		return -1, -1, fmt.Errorf("diskID: %s is offline", diskID)
+		return -1, -1, fmt.Errorf("DriveID: %s is offline", diskID)
 	}
 	for i := 0; i < len(refFormat.Erasure.Sets); i++ {
 		for j := 0; j < len(refFormat.Erasure.Sets[0]); j++ {
@@ -157,7 +157,7 @@ func findDiskIndexByDiskID(refFormat *formatErasureV3, diskID string) (int, int,
 		}
 	}
 
-	return -1, -1, fmt.Errorf("diskID: %s not found", diskID)
+	return -1, -1, fmt.Errorf("DriveID: %s not found", diskID)
 }
 
 // findDiskIndex - returns the i,j'th position of the input `format` against the reference
@@ -170,7 +170,7 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 	}
 
 	if format.Erasure.This == offlineDiskUUID {
-		return -1, -1, fmt.Errorf("diskID: %s is offline", format.Erasure.This)
+		return -1, -1, fmt.Errorf("DriveID: %s is offline", format.Erasure.This)
 	}
 
 	for i := 0; i < len(refFormat.Erasure.Sets); i++ {
@@ -181,7 +181,7 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 		}
 	}
 
-	return -1, -1, fmt.Errorf("diskID: %s not found", format.Erasure.This)
+	return -1, -1, fmt.Errorf("DriveID: %s not found", format.Erasure.This)
 }
 
 // connectDisks - attempt to connect all the endpoints, loads format
@@ -239,7 +239,7 @@ func (s *erasureSets) connectDisks() {
 			s.erasureDisksMu.Lock()
 			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
 				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
-					err = fmt.Errorf("Detected unexpected disk ordering refusing to use the disk: expecting %s, found %s, refusing to use the disk",
+					err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive: expecting %s, found %s, refusing to use the drive",
 						currentDisk.Endpoint(), disk.Endpoint())
 					printEndpointError(endpoint, err, false)
 					disk.Close()
@@ -300,7 +300,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 			return
 		case <-monitor.C:
 			if serverDebugLog {
-				console.Debugln("running disk monitoring")
+				console.Debugln("running drive monitoring")
 			}
 
 			s.connectDisks()
@@ -446,7 +446,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 						return
 					}
 					if m != i || n != j {
-						logger.LogIf(ctx, fmt.Errorf("Detected unexpected disk ordering refusing to use the disk - poolID: %s, found disk mounted at (set=%s, disk=%s) expected mount at (set=%s, disk=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
+						logger.LogIf(ctx, fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
 						s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
 						return
 					}
@@ -1240,7 +1240,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 		if storageDisks[i] != nil && infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
-			logger.LogIf(GlobalContext, fmt.Errorf("Disk `%s` is part of root disk, will not be used", storageDisks[i]))
+			logger.LogIf(GlobalContext, fmt.Errorf("Drive `%s` is part of root drive, will not be used", storageDisks[i]))
 			storageDisks[i] = nil
 		}
 	}
@@ -1314,7 +1314,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				continue
 			}
 			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Disk %s failed to write updated 'format.json': %v", storageDisks[index], err))
+				logger.LogIf(ctx, fmt.Errorf("Drive %s failed to write updated 'format.json': %v", storageDisks[index], err))
 				tmpNewFormats[index] = nil // this disk failed to write new format
 			}
 		}

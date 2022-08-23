@@ -542,7 +542,7 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
 	}
 	if err = c.saveToDisk(ctx, state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }
@@ -1103,6 +1103,9 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 		} else {
 			_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+			if err == nil && updReq.Status != madmin.GroupEnabled {
+				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
+			}
 		}
 	}
 	if err != nil {
@@ -2002,7 +2005,7 @@ func (c *SiteReplicationSys) isEnabled() bool {
 	return c.enabled
 }
 
-var errMissingSRConfig = fmt.Errorf("Site not found in site replication configuration")
+var errMissingSRConfig = fmt.Errorf("unable to find site replication configuration")
 
 // RemovePeerCluster - removes one or more clusters from site replication configuration.
 func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) (st madmin.ReplicateRemoveStatus, err error) {
@@ -2054,7 +2057,8 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				return
 			}
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
-				if errors.As(err, &errMissingSRConfig) {
+				if errors.Is(err, errMissingSRConfig) {
+					// ignore if peer is already removed.
 					return
 				}
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
@@ -2143,7 +2147,7 @@ func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI Ob
 	}
 
 	if err := c.saveToDisk(ctx, state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }
@@ -2210,7 +2214,13 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 // Other helpers
 
 func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient, error) {
-	epURL, _ := url.Parse(endpoint)
+	epURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	if globalBucketTargetSys.isOffline(epURL) {
+		return nil, RemoteTargetConnectionErr{Endpoint: epURL.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", epURL.String())}
+	}
 	client, err := madmin.New(epURL.Host, accessKey, secretKey, epURL.Scheme == "https")
 	if err != nil {
 		return nil, err
@@ -2224,6 +2234,10 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	if globalBucketTargetSys.isOffline(ep) {
+		return nil, RemoteTargetConnectionErr{Endpoint: ep.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", ep.String())}
+	}
+
 	return minioClient.New(ep.Host, &minioClient.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",
@@ -3492,7 +3506,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 		}
 	}
 	if err := c.saveToDisk(ctx, c.state); err != nil {
-		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to disk on %s: %v", ourName, err))
+		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	return nil
 }
@@ -4680,7 +4694,6 @@ func (c *SiteReplicationSys) healGroups(ctx context.Context, objAPI ObjectLayer,
 			continue
 		}
 		peerName := info.Sites[dID].Name
-
 		if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemGroupInfo,
 			GroupInfo: &madmin.SRGroupInfo{

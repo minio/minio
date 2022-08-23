@@ -79,7 +79,7 @@ type formatErasureV1 struct {
 	formatMetaV1
 	Erasure struct {
 		Version string `json:"version"` // Version of 'xl' format.
-		Disk    string `json:"disk"`    // Disk field carries assigned disk uuid.
+		Disk    string `json:"drive"`   // Disk field carries assigned disk uuid.
 		// JBOD field carries the input disk order generated the first
 		// time when fresh disks were supplied.
 		JBOD []string `json:"jbod"`
@@ -199,7 +199,7 @@ func formatErasureMigrate(export string) ([]byte, fs.FileInfo, error) {
 
 	version, err := formatGetBackendErasureVersion(formatData)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Disk %s: %w", export, err)
+		return nil, nil, fmt.Errorf("Drive %s: %w", export, err)
 	}
 
 	migrate := func(formatPath string, formatData []byte) ([]byte, fs.FileInfo, error) {
@@ -217,7 +217,7 @@ func formatErasureMigrate(export string) ([]byte, fs.FileInfo, error) {
 	case formatErasureVersionV1:
 		formatData, err = formatErasureMigrateV1ToV2(formatData, version)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Disk %s: %w", export, err)
+			return nil, nil, fmt.Errorf("Drive %s: %w", export, err)
 		}
 		// Migrate successful v1 => v2, proceed to v2 => v3
 		version = formatErasureVersionV2
@@ -225,7 +225,7 @@ func formatErasureMigrate(export string) ([]byte, fs.FileInfo, error) {
 	case formatErasureVersionV2:
 		formatData, err = formatErasureMigrateV2ToV3(formatData, export, version)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Disk %s: %w", export, err)
+			return nil, nil, fmt.Errorf("Drive %s: %w", export, err)
 		}
 		// Migrate successful v2 => v3, v3 is latest
 		// version = formatXLVersionV3
@@ -438,14 +438,14 @@ func checkFormatErasureValues(formats []*formatErasureV3, disks []StorageAPI, se
 			return err
 		}
 		if len(formats) != len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]) {
-			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
+			return fmt.Errorf("%s drive is already being used in another erasure deployment. (Number of drives specified: %d but the number of drives found in the %s drive's format.json: %d)",
 				disks[i], len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
 		}
 		// Only if custom erasure drive count is set, verify if the
 		// set_drive_count was manually set - we need to honor what is
 		// present on the drives.
 		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
-			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", disks[i], len(formatErasure.Erasure.Sets[0]), setDriveCount)
+			return fmt.Errorf("%s drive is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", disks[i], len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
 	}
 	return nil
@@ -628,7 +628,7 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 			}
 		}
 	}
-	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.Erasure.Sets)
+	return fmt.Errorf("DriveID %s not found in any drive sets %s", this, format.Erasure.Sets)
 }
 
 // saveFormatErasureAll - populates `format.json` on disks in its order.

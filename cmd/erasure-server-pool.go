@@ -380,19 +380,15 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	return serverPools
 }
 
-// poolObjInfo represents the state of an object per pool
-type poolObjInfo struct {
-	PoolIndex int
-	ObjInfo   ObjectInfo
-	Err       error
+// PoolObjInfo represents the state of current object version per pool
+type PoolObjInfo struct {
+	Index   int
+	ObjInfo ObjectInfo
+	Err     error
 }
 
-func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, bucket, object string, opts ObjectOptions) (idx int, err error) {
-	if z.SinglePool() {
-		return 0, nil
-	}
-
-	poolObjInfos := make([]poolObjInfo, len(z.serverPools))
+func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bucket, object string, opts ObjectOptions) (PoolObjInfo, error) {
+	poolObjInfos := make([]PoolObjInfo, len(z.serverPools))
 	poolOpts := make([]ObjectOptions, len(z.serverPools))
 	for i := range z.serverPools {
 		poolOpts[i] = opts
@@ -404,8 +400,8 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 		go func(i int, pool *erasureSets, opts ObjectOptions) {
 			defer wg.Done()
 			// remember the pool index, we may sort the slice original index might be lost.
-			pinfo := poolObjInfo{
-				PoolIndex: i,
+			pinfo := PoolObjInfo{
+				Index: i,
 			}
 			// do not remove this check as it can lead to inconsistencies
 			// for all callers of bucket replication.
@@ -429,19 +425,19 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 	for _, pinfo := range poolObjInfos {
 		// skip all objects from suspended pools if asked by the
 		// caller.
-		if z.IsSuspended(pinfo.PoolIndex) && opts.SkipDecommissioned {
+		if z.IsSuspended(pinfo.Index) && opts.SkipDecommissioned {
 			continue
 		}
 
 		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
-			return -1, pinfo.Err
+			return pinfo, pinfo.Err
 		}
 
 		if isErrObjectNotFound(pinfo.Err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
 			if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
-				return pinfo.PoolIndex, nil
+				return pinfo, nil
 			}
 
 			// objInfo is not valid, truly the object doesn't
@@ -449,10 +445,18 @@ func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, buc
 			continue
 		}
 
-		return pinfo.PoolIndex, nil
+		return pinfo, nil
 	}
 
-	return -1, toObjectErr(errFileNotFound, bucket, object)
+	return PoolObjInfo{}, toObjectErr(errFileNotFound, bucket, object)
+}
+
+func (z *erasureServerPools) getPoolIdxExistingWithOpts(ctx context.Context, bucket, object string, opts ObjectOptions) (idx int, err error) {
+	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, opts)
+	if err != nil {
+		return -1, err
+	}
+	return pinfo.Index, nil
 }
 
 // getPoolIdxExistingNoLock returns the (first) found object pool index containing an object.
@@ -999,16 +1003,36 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	}
 
 	object = encodeDirObject(object)
-	if z.SinglePool() {
-		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
-	}
 
-	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
+	// Acquire a write lock before deleting the object.
+	lk := z.NewNSLock(bucket, object)
+	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
 	if err != nil {
+		return ObjectInfo{}, err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx.Cancel)
+
+	gopts := opts
+	gopts.NoLock = true
+	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, gopts)
+	if err != nil {
+		switch err.(type) {
+		case InsufficientReadQuorum:
+			return objInfo, InsufficientWriteQuorum{}
+		}
 		return objInfo, err
 	}
 
-	return z.serverPools[idx].DeleteObject(ctx, bucket, object, opts)
+	// Delete marker already present we are not going to create new delete markers.
+	if pinfo.ObjInfo.DeleteMarker && opts.VersionID == "" {
+		pinfo.ObjInfo.Name = decodeDirObject(object)
+		return pinfo.ObjInfo, nil
+	}
+
+	objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+	objInfo.Name = decodeDirObject(object)
+	return objInfo, err
 }
 
 func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
@@ -1034,64 +1058,84 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	ctx = lkctx.Context()
 	defer multiDeleteLock.Unlock(lkctx.Cancel)
 
-	if z.SinglePool() {
-		deleteObjects, dErrs := z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
-		for i := range deleteObjects {
-			deleteObjects[i].ObjectName = decodeDirObject(deleteObjects[i].ObjectName)
-		}
-		return deleteObjects, dErrs
-	}
-
 	// Fetch location of up to 10 objects concurrently.
 	poolObjIdxMap := map[int][]ObjectToDelete{}
 	origIndexMap := map[int][]int{}
 
+	// Always perform 1/10th of the number of objects per delete
+	concurrent := len(objects) / 10
+	if concurrent <= 10 {
+		// if we cannot get 1/10th then choose the number of
+		// objects as concurrent.
+		concurrent = len(objects)
+	}
+
 	var mu sync.Mutex
-	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(10)
+	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(concurrent)
 	for j, obj := range objects {
 		j := j
 		obj := obj
 		eg.Go(func() error {
-			idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
+			pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
 				NoLock: true,
 			})
 			if err != nil {
 				derrs[j] = err
+				dobjects[j] = DeletedObject{
+					ObjectName: obj.ObjectName,
+				}
 				return nil
 			}
+
+			// Delete marker already present we are not going to create new delete markers.
+			if pinfo.ObjInfo.DeleteMarker && obj.VersionID == "" {
+				dobjects[j] = DeletedObject{
+					DeleteMarker:          pinfo.ObjInfo.DeleteMarker,
+					DeleteMarkerVersionID: pinfo.ObjInfo.VersionID,
+					DeleteMarkerMTime:     DeleteMarkerMTime{pinfo.ObjInfo.ModTime},
+					ObjectName:            pinfo.ObjInfo.Name,
+				}
+				return nil
+			}
+
+			idx := pinfo.Index
+
 			mu.Lock()
+			defer mu.Unlock()
+
 			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
 			origIndexMap[idx] = append(origIndexMap[idx], j)
-			mu.Unlock()
 			return nil
 		}, j)
 	}
 
 	eg.Wait() // wait to check all the pools.
 
-	// Delete concurrently in all server pools.
-	var wg sync.WaitGroup
-	wg.Add(len(z.serverPools))
-	for idx, pool := range z.serverPools {
-		go func(idx int, pool *erasureSets) {
-			defer wg.Done()
-			objs := poolObjIdxMap[idx]
-			if len(objs) > 0 {
-				orgIndexes := origIndexMap[idx]
-				deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
-				mu.Lock()
-				for i, derr := range errs {
-					if derr != nil {
-						derrs[orgIndexes[i]] = derr
+	if len(poolObjIdxMap) > 0 {
+		// Delete concurrently in all server pools.
+		var wg sync.WaitGroup
+		wg.Add(len(z.serverPools))
+		for idx, pool := range z.serverPools {
+			go func(idx int, pool *erasureSets) {
+				defer wg.Done()
+				objs := poolObjIdxMap[idx]
+				if len(objs) > 0 {
+					orgIndexes := origIndexMap[idx]
+					deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
+					mu.Lock()
+					for i, derr := range errs {
+						if derr != nil {
+							derrs[orgIndexes[i]] = derr
+						}
+						deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
+						dobjects[orgIndexes[i]] = deletedObjects[i]
 					}
-					deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
-					dobjects[orgIndexes[i]] = deletedObjects[i]
+					mu.Unlock()
 				}
-				mu.Unlock()
-			}
-		}(idx, pool)
+			}(idx, pool)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
 
 	return dobjects, derrs
 }
@@ -1178,7 +1222,6 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
 	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -1189,6 +1232,8 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 		Versioned:   true,
 	}
+	// set bucket metadata in opts
+	opts.setBucketMeta(ctx)
 
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
@@ -1235,12 +1280,16 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
-
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	lc, _ := globalLifecycleSys.Get(bucket)
-
-	// Check if bucket is object locked.
-	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	opts := listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
+		Marker:      marker,
+		InclDeleted: false,
+		AskDisks:    globalAPIConfig.getListQuorum(),
+	}
+	opts.setBucketMeta(ctx)
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -1252,8 +1301,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		// to avoid the need for ListObjects().
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
-			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
+			if opts.Lifecycle != nil {
+				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
@@ -1264,18 +1313,6 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
-	}
-
-	opts := listPathOptions{
-		Bucket:      bucket,
-		Prefix:      prefix,
-		Separator:   delimiter,
-		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
-		Marker:      marker,
-		InclDeleted: false,
-		AskDisks:    globalAPIConfig.getListQuorum(),
-		Lifecycle:   lc,
-		Retention:   rcfg,
 	}
 
 	merged, err := z.listPath(ctx, &opts)
@@ -1769,7 +1806,9 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 	}
 
 	// Attempt heal on the bucket metadata, ignore any failures
-	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket, bucketMetadataFile), "", opts)
+	hopts := opts
+	hopts.Recreate = false
+	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket, bucketMetadataFile), "", hopts)
 
 	for _, pool := range z.serverPools {
 		result, err := pool.HealBucket(ctx, bucket, opts)
@@ -1832,18 +1871,17 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							cancel()
 							return
 						}
-						if opts.WalkAscending {
-							for i := len(fivs.Versions) - 1; i >= 0; i-- {
-								version := fivs.Versions[i]
-								versioned := vcfg != nil && vcfg.Versioned(version.Name)
 
-								results <- version.ToObjectInfo(bucket, version.Name, versioned)
-							}
-							return
-						}
+						versionsSorter(fivs.Versions).reverse()
+
 						for _, version := range fivs.Versions {
 							versioned := vcfg != nil && vcfg.Versioned(version.Name)
-							results <- version.ToObjectInfo(bucket, version.Name, versioned)
+
+							select {
+							case <-ctx.Done():
+								return
+							case results <- version.ToObjectInfo(bucket, version.Name, versioned):
+							}
 						}
 					}
 
@@ -1885,6 +1923,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 
 					if err := listPathRaw(ctx, lopts); err != nil {
 						logger.LogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
+						cancel()
 						return
 					}
 				}()
@@ -1905,7 +1944,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 
 	disks, _ := set.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
-		return errors.New("listAndHeal: No non-healing disks found")
+		return errors.New("listAndHeal: No non-healing drives found")
 	}
 
 	// How to resolve partial results.
@@ -2096,7 +2135,7 @@ func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx 
 			}
 		}
 	}
-	return -1, -1, -1, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
+	return -1, -1, -1, fmt.Errorf("DriveID(%s) %w", id, errDiskNotFound)
 }
 
 // HealthOptions takes input options to return sepcific information

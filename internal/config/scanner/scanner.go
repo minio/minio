@@ -52,11 +52,11 @@ type Config struct {
 var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   Delay,
-		Value: "10",
+		Value: "2",
 	},
 	config.KV{
 		Key:   MaxWait,
-		Value: "15s",
+		Value: "5s",
 	},
 	config.KV{
 		Key:   Cycle,

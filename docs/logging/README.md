@@ -128,7 +128,7 @@ NOTE:
       "hosts": {
         "poolId": 1,
         "setId": 1,
-        "disks": [
+        "drives": [
           "/mnt/data1",
           "/mnt/data2",
           "/mnt/data3",

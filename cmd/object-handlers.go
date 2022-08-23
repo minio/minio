@@ -417,12 +417,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
-
+	var proxy proxyResult
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
 		var (
 			reader *GetObjectReader
-			proxy  proxyResult
 			perr   error
 		)
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
@@ -491,6 +490,10 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 	}
 
+	// Queue failed/pending replication automatically
+	if !proxy.Proxy {
+		QueueReplicationHeal(ctx, bucket, objInfo)
+	}
 	// filter object lock metadata if permission does not permit
 	getRetPerms := checkRequestAuthType(ctx, r, policy.GetObjectRetentionAction, bucket, object)
 	legalHoldPerms := checkRequestAuthType(ctx, r, policy.GetObjectLegalHoldAction, bucket, object)
@@ -659,11 +662,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	rangeHeader := r.Header.Get(xhttp.Range)
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	var proxy proxyResult
 	if err != nil {
-		var (
-			proxy proxyResult
-			oi    ObjectInfo
-		)
+		var oi ObjectInfo
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
@@ -690,6 +691,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 				}
 			}
+			QueueReplicationHeal(ctx, bucket, objInfo)
 			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 			return
 		}
@@ -712,6 +714,11 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 			return
 		}
+	}
+
+	// Queue failed/pending replication automatically
+	if !proxy.Proxy {
+		QueueReplicationHeal(ctx, bucket, objInfo)
 	}
 
 	// filter object lock metadata if permission does not permit

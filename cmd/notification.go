@@ -356,8 +356,8 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	return
 }
 
-// DownloadBinary - asks remote peers to download a new binary from the URL and to verify the checksum
-func (sys *NotificationSys) DownloadBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string) []NotificationPeerErr {
+// VerifyBinary - asks remote peers to verify the checksum
+func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, reader []byte) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -365,7 +365,7 @@ func (sys *NotificationSys) DownloadBinary(ctx context.Context, u *url.URL, sha2
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.DownloadBinary(ctx, u, sha256Sum, releaseInfo)
+			return client.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -449,7 +449,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 			serverBF, err := client.cycleServerBloomFilter(ctx, req)
 			if false && intDataUpdateTracker.debug {
 				b, _ := json.MarshalIndent(serverBF, "", "  ")
-				logger.Info("Disk %v, Bloom filter: %v", client.host.Name, string(b))
+				logger.Info("Drive %v, Bloom filter: %v", client.host.Name, string(b))
 			}
 			// Keep lock while checking result.
 			mu.Lock()
@@ -904,7 +904,7 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 }
 
 // GetMetrics - Get metrics from all peers.
-func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, hosts map[string]struct{}) []madmin.RealtimeMetrics {
+func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) []madmin.RealtimeMetrics {
 	reply := make([]madmin.RealtimeMetrics, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
@@ -922,7 +922,7 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t)
+			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, disks)
 			return err
 		}, index)
 	}

@@ -82,7 +82,7 @@ func (o *MultipartInfo) KMSKeyID() string { return kmsKeyIDFromMetadata(o.UserDe
 // metadata, if any. It returns an empty ID if no key ID is
 // present.
 func kmsKeyIDFromMetadata(metadata map[string]string) string {
-	const ARNPrefix = "arn:aws:kms:"
+	const ARNPrefix = crypto.ARNPrefix
 	if len(metadata) == 0 {
 		return ""
 	}

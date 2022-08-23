@@ -471,14 +471,12 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	if etcdCfg.Enabled {
-		if globalEtcdClient == nil {
-			globalEtcdClient, err = etcd.New(etcdCfg)
-			if err != nil {
-				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize etcd config")
-				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
-				}
+		globalEtcdClient, err = etcd.New(etcdCfg)
+		if err != nil {
+			if globalIsGateway {
+				logger.FatalIf(err, "Unable to initialize etcd config")
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 			}
 		}
 
@@ -486,7 +484,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			if globalDNSConfig != nil {
 				// if global DNS is already configured, indicate with a warning, incase
 				// users are confused.
-				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", globalDNSConfig))
+				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
 			} else {
 				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
@@ -517,16 +515,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
-
-	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
-	}
-
-	// Initialize remote instance transport once.
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
-	})
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
@@ -560,56 +548,19 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
-	globalOpenIDConfig, err = openid.LookupConfig(s,
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
-	}
-
-	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-		globalRootCAs)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
-	}
-
-	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
-	}
-	globalAuthNPlugin = idplugin.New(authNPluginCfg)
-
-	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err))
-	}
-	if authZPluginCfg.URL == nil {
-		opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-			NewGatewayHTTPTransport(), xhttp.DrainBody)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
-		} else {
-			authZPluginCfg.URL = opaCfg.URL
-			authZPluginCfg.AuthToken = opaCfg.AuthToken
-			authZPluginCfg.Transport = opaCfg.Transport
-			authZPluginCfg.CloseRespFn = opaCfg.CloseRespFn
-		}
-	}
-
-	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
-
 	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
+	transport := NewGatewayHTTPTransport()
+
+	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, transport, false)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), NewGatewayHTTPTransport(), true)
+	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), transport, true)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
@@ -636,6 +587,11 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			setDriveCounts = objAPI.SetDriveCounts()
 		}
 		globalAPIConfig.init(apiConfig, setDriveCounts)
+
+		// Initialize remote instance transport once.
+		getRemoteInstanceTransportOnce.Do(func() {
+			getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
+		})
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 		if err != nil {
@@ -678,8 +634,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.HTTP[n] = l
 			}
 		}
-		err = logger.UpdateSystemTargets(loggerCfg)
-		if err != nil {
+		if err = logger.UpdateSystemTargets(loggerCfg); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
 		}
 	case config.AuditWebhookSubSys:
@@ -697,8 +652,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			}
 		}
 
-		err = logger.UpdateAuditWebhookTargets(loggerCfg)
-		if err != nil {
+		if err = logger.UpdateAuditWebhookTargets(loggerCfg); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %w", err))
 		}
 	case config.AuditKafkaSubSys:
@@ -712,8 +666,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-		err = logger.UpdateAuditKafkaTargets(loggerCfg)
-		if err != nil {
+		if err = logger.UpdateAuditKafkaTargets(loggerCfg); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
 		}
 	case config.StorageClassSubSys:
@@ -852,7 +805,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(GlobalContext, objAPI, globalServerConfig)
+	return saveServerConfig(GlobalContext, objAPI, srvCfg)
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
