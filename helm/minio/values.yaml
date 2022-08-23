@@ -297,8 +297,8 @@ policies: []
 #         - "s3:ListBucketMultipartUploads"
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -333,8 +333,8 @@ users:
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -375,8 +375,8 @@ buckets:
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
 makeBucketJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -398,8 +398,8 @@ customCommands:
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
