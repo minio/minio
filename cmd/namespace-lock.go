@@ -166,7 +166,8 @@ func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout
 
 	newCtx, cancel := context.WithCancel(ctx)
 	if !di.rwMutex.GetLock(newCtx, cancel, di.opsID, lockSource, dsync.Options{
-		Timeout: timeout.Timeout(),
+		Timeout:       timeout.Timeout(),
+		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
 		cancel()
@@ -195,7 +196,8 @@ func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeou
 
 	newCtx, cancel := context.WithCancel(ctx)
 	if !di.rwMutex.GetRLock(ctx, cancel, di.opsID, lockSource, dsync.Options{
-		Timeout: timeout.Timeout(),
+		Timeout:       timeout.Timeout(),
+		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
 		cancel()

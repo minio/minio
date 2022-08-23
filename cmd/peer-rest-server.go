@@ -426,10 +426,17 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 		types = madmin.MetricsAll
 	}
 
+	diskMap := make(map[string]struct{})
+	if r.Form != nil {
+		for _, disk := range r.Form[peerRESTDisk] {
+			diskMap[disk] = struct{}{}
+		}
+	}
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	info := collectLocalMetrics(types, nil)
+	info := collectLocalMetrics(types, nil, diskMap)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }

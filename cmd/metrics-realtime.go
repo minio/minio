@@ -22,23 +22,35 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/disk"
 )
 
-func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m madmin.RealtimeMetrics) {
+func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
 	if types == madmin.MetricsNone {
 		return
 	}
+
 	if len(hosts) > 0 {
 		if _, ok := hosts[globalMinioAddr]; !ok {
 			return
 		}
 	}
+
+	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
+		m.ByDisk = make(map[string]madmin.DiskMetric)
+		aggr := madmin.DiskMetric{
+			CollectedAt: time.Now(),
+		}
+		for name, disk := range collectLocalDisksMetrics(disks) {
+			m.ByDisk[name] = disk
+			aggr.Merge(&disk)
+		}
+		m.Aggregated.Disk = &aggr
+	}
+
 	if types.Contains(madmin.MetricsScanner) {
 		metrics := globalScannerMetrics.report()
 		m.Aggregated.Scanner = &metrics
-	}
-	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
-		m.Aggregated.Disk = collectDiskMetrics()
 	}
 	if types.Contains(madmin.MetricsOS) {
 		metrics := globalOSMetrics.report()
@@ -53,55 +65,89 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}) (m 
 	return m
 }
 
-func collectDiskMetrics() *madmin.DiskMetric {
+func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskMetric {
 	objLayer := newObjectLayerFn()
-	disks := madmin.DiskMetric{
-		CollectedAt: time.Now(),
-	}
-
 	if objLayer == nil {
 		return nil
 	}
+
+	metrics := make(map[string]madmin.DiskMetric)
+
+	procStats, procErr := disk.GetAllDrivesIOStats()
+	if procErr != nil {
+		return metrics
+	}
+
 	// only need Disks information in server mode.
 	storageInfo, errs := objLayer.LocalStorageInfo(GlobalContext)
-	for _, err := range errs {
-		if err != nil {
-			disks.Merge(&madmin.DiskMetric{NDisks: 1, Offline: 1})
+
+	for i, d := range storageInfo.Disks {
+		if len(disks) != 0 {
+			_, ok := disks[d.Endpoint]
+			if !ok {
+				continue
+			}
 		}
-	}
-	for i, disk := range storageInfo.Disks {
+
 		if errs[i] != nil {
+			metrics[d.Endpoint] = madmin.DiskMetric{NDisks: 1, Offline: 1}
 			continue
 		}
-		var d madmin.DiskMetric
-		d.NDisks = 1
-		if disk.Healing {
-			d.Healing++
+
+		var dm madmin.DiskMetric
+		dm.NDisks = 1
+		if d.Healing {
+			dm.Healing++
 		}
-		if disk.Metrics != nil {
-			d.LifeTimeOps = make(map[string]uint64, len(disk.Metrics.APICalls))
-			for k, v := range disk.Metrics.APICalls {
+		if d.Metrics != nil {
+			dm.LifeTimeOps = make(map[string]uint64, len(d.Metrics.APICalls))
+			for k, v := range d.Metrics.APICalls {
 				if v != 0 {
-					d.LifeTimeOps[k] = v
+					dm.LifeTimeOps[k] = v
 				}
 			}
-			d.LastMinute.Operations = make(map[string]madmin.TimedAction, len(disk.Metrics.APICalls))
-			for k, v := range disk.Metrics.LastMinute {
+			dm.LastMinute.Operations = make(map[string]madmin.TimedAction, len(d.Metrics.APICalls))
+			for k, v := range d.Metrics.LastMinute {
 				if v.Count != 0 {
-					d.LastMinute.Operations[k] = v
+					dm.LastMinute.Operations[k] = v
 				}
 			}
 		}
-		disks.Merge(&d)
+
+		// get disk
+		if procErr == nil {
+			st := procStats[disk.DevID{Major: d.Major, Minor: d.Minor}]
+			dm.IOStats = madmin.DiskIOStats{
+				ReadIOs:        st.ReadIOs,
+				ReadMerges:     st.ReadMerges,
+				ReadSectors:    st.ReadSectors,
+				ReadTicks:      st.ReadTicks,
+				WriteIOs:       st.WriteIOs,
+				WriteMerges:    st.WriteMerges,
+				WriteSectors:   st.WriteSectors,
+				WriteTicks:     st.WriteTicks,
+				CurrentIOs:     st.CurrentIOs,
+				TotalTicks:     st.TotalTicks,
+				ReqTicks:       st.ReqTicks,
+				DiscardIOs:     st.DiscardIOs,
+				DiscardMerges:  st.DiscardMerges,
+				DiscardSectors: st.DiscardSectors,
+				DiscardTicks:   st.DiscardTicks,
+				FlushIOs:       st.FlushIOs,
+				FlushTicks:     st.FlushTicks,
+			}
+		}
+
+		metrics[d.Endpoint] = dm
 	}
-	return &disks
+	return metrics
 }
 
-func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, hosts map[string]struct{}) (m madmin.RealtimeMetrics) {
+func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
 	if !globalIsDistErasure {
 		return
 	}
-	all := globalNotificationSys.GetMetrics(ctx, types, hosts)
+	all := globalNotificationSys.GetMetrics(ctx, types, hosts, disks)
 	for _, remote := range all {
 		m.Merge(&remote)
 	}

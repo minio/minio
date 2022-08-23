@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -200,8 +201,11 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				UsedSpace:      info.Used,
 				AvailableSpace: info.Free,
 				UUID:           info.ID,
+				Major:          info.Major,
+				Minor:          info.Minor,
 				RootDisk:       info.RootDisk,
 				Healing:        info.Healing,
+				Scanning:       info.Scanning,
 				State:          diskErrToDriveState(err),
 				FreeInodes:     info.FreeInodes,
 			}
@@ -438,6 +442,13 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 	// that objects that are not present in all disks are accounted and ILM applied.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	r.Shuffle(len(disks), func(i, j int) { disks[i], disks[j] = disks[j], disks[i] })
+
+	// Restrict parallelism for disk usage scanner
+	// upto GOMAXPROCS if GOMAXPROCS is < len(disks)
+	maxProcs := runtime.GOMAXPROCS(0)
+	if maxProcs < len(disks) {
+		disks = disks[:maxProcs]
+	}
 
 	// Start one scanner per disk
 	var wg sync.WaitGroup

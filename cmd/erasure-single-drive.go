@@ -1223,7 +1223,7 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-func (es *erasureSingle) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
+func (es *erasureSingle) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {
 	return es.disk.DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
 }
 
@@ -1447,7 +1447,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	goi, writeQuorum, gerr := es.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	goi, _, gerr := es.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
 		case InsufficientReadQuorum:
@@ -1459,6 +1459,11 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 		} else {
 			return objInfo, gerr
 		}
+	}
+
+	// Do not create new delete markers.
+	if goi.DeleteMarker && opts.VersionID == "" {
+		return goi, nil
 	}
 
 	if opts.Expiration.Expire {
@@ -1557,7 +1562,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 			// delete marker. Add delete marker, since we don't have
 			// any version specified explicitly. Or if a particular
 			// version id needs to be replicated.
-			if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
+			if err = es.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
 			return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
@@ -1576,7 +1581,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
-	if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, dfi, opts.DeleteMarker); err != nil {
+	if err = es.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1813,14 +1818,7 @@ func (es *erasureSingle) TransitionObject(ctx context.Context, bucket, object st
 	fi.TransitionVersionID = string(rv)
 	eventName := event.ObjectTransitionComplete
 
-	// we now know the number of blocks this object needs for data and parity.
-	// writeQuorum is dataBlocks + 1
-	writeQuorum := fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		writeQuorum++
-	}
-
-	if err = es.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+	if err = es.deleteObjectVersion(ctx, bucket, object, fi, false); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 
@@ -2859,11 +2857,16 @@ func (es *erasureSingle) AbortMultipartUpload(ctx context.Context, bucket, objec
 func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
 
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	lc, _ := globalLifecycleSys.Get(bucket)
-
-	// Check if bucket is object locked.
-	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	opts := listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
+		Marker:      marker,
+		InclDeleted: false,
+		AskDisks:    globalAPIConfig.getListQuorum(),
+	}
+	opts.setBucketMeta(ctx)
 
 	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
 		// Optimization for certain applications like
@@ -2875,8 +2878,8 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 		// to avoid the need for ListObjects().
 		objInfo, err := es.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
-			if lc != nil {
-				action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
+			if opts.Lifecycle != nil {
+				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
@@ -2887,18 +2890,6 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
-	}
-
-	opts := listPathOptions{
-		Bucket:      bucket,
-		Prefix:      prefix,
-		Separator:   delimiter,
-		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
-		Marker:      marker,
-		InclDeleted: false,
-		AskDisks:    globalAPIConfig.getListQuorum(),
-		Lifecycle:   lc,
-		Retention:   rcfg,
 	}
 
 	merged, err := es.listPath(ctx, &opts)
@@ -2959,7 +2950,6 @@ func (es *erasureSingle) ListObjectVersions(ctx context.Context, bucket, prefix,
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
 	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -2970,6 +2960,7 @@ func (es *erasureSingle) ListObjectVersions(ctx context.Context, bucket, prefix,
 		AskDisks:    "strict",
 		Versioned:   true,
 	}
+	opts.setBucketMeta(ctx)
 
 	merged, err := es.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
@@ -3016,12 +3007,12 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 		return err
 	}
 
+	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
 		defer close(results)
-
-		versioned := opts.Versioned || opts.VersionSuspended
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -3037,15 +3028,17 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 					cancel()
 					return
 				}
-				if opts.WalkAscending {
-					for i := len(fivs.Versions) - 1; i >= 0; i-- {
-						version := fivs.Versions[i]
-						results <- version.ToObjectInfo(bucket, version.Name, versioned)
-					}
-					return
-				}
+
+				versionsSorter(fivs.Versions).reverse()
+
 				for _, version := range fivs.Versions {
-					results <- version.ToObjectInfo(bucket, version.Name, versioned)
+					versioned := vcfg != nil && vcfg.Versioned(version.Name)
+
+					select {
+					case <-ctx.Done():
+						return
+					case results <- version.ToObjectInfo(bucket, version.Name, versioned):
+					}
 				}
 			}
 
@@ -3087,6 +3080,7 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 
 			if err := listPathRaw(ctx, lopts); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
+				cancel()
 				return
 			}
 		}()

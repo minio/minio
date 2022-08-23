@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -100,6 +101,9 @@ type xlStorage struct {
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
+
+	// Indicate of NSScanner is in progress in this disk
+	scanning int32
 
 	formatFileInfo  os.FileInfo
 	formatLegacy    bool
@@ -423,6 +427,9 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 }
 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+	atomic.AddInt32(&s.scanning, 1)
+	defer atomic.AddInt32(&s.scanning, -1)
+
 	// Updates must be closed before we return.
 	defer close(updates)
 	var lc *lifecycle.Lifecycle
@@ -576,6 +583,8 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			if err != nil {
 				return dcinfo, err
 			}
+			dcinfo.Major = di.Major
+			dcinfo.Minor = di.Minor
 			dcinfo.Total = di.Total
 			dcinfo.Free = di.Free
 			dcinfo.Used = di.Used
@@ -587,6 +596,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			// - if we found an unformatted disk (no 'format.json')
 			// - if we found healing tracker 'healing.bin'
 			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
+			dcinfo.Scanning = atomic.LoadInt32(&s.scanning) == 1
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}

@@ -196,8 +196,9 @@ const (
 	ErrInvalidTagDirective
 	// Add new error codes here.
 
-	// SSE-S3 related API errors
+	// SSE-S3/SSE-KMS related API errors
 	ErrInvalidEncryptionMethod
+	ErrInvalidEncryptionKeyID
 
 	// Server-Side-Encryption (with Customer provided key) related API errors.
 	ErrInsecureSSECustomerRequest
@@ -887,7 +888,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationRemoteConnectionError: {
 		Code:           "XMinioAdminReplicationRemoteConnectionError",
-		Description:    "Remote service connection error - please check remote service credentials and target bucket",
+		Description:    "Remote service connection error",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationBandwidthLimitError: {
@@ -1070,6 +1071,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidEncryptionMethod: {
 		Code:           "InvalidRequest",
 		Description:    "The encryption method specified is not supported",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidEncryptionKeyID: {
+		Code:           "InvalidRequest",
+		Description:    "The specified KMS KeyID contains unsupported characters",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInsecureSSECustomerRequest: {
@@ -1921,6 +1927,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionParameters
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
+	case crypto.ErrInvalidEncryptionKeyID:
+		apiErr = ErrInvalidEncryptionKeyID
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
 	case crypto.ErrMissingCustomerKey:
@@ -2066,7 +2074,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrRemoteDestinationNotFoundError
 	case BucketRemoteTargetNotFound:
 		apiErr = ErrRemoteTargetNotFoundError
-	case BucketRemoteConnectionErr:
+	case RemoteTargetConnectionErr:
 		apiErr = ErrReplicationRemoteConnectionError
 	case BucketRemoteAlreadyExists:
 		apiErr = ErrBucketRemoteAlreadyExists

@@ -290,7 +290,7 @@ func initAllSubsystems() {
 	}
 
 	// Create new bucket replication subsytem
-	globalBucketTargetSys = NewBucketTargetSys()
+	globalBucketTargetSys = NewBucketTargetSys(GlobalContext)
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
@@ -567,21 +567,24 @@ func serverMain(ctx *cli.Context) {
 		logger.LogIf(GlobalContext, err)
 	}
 
-	if globalBrowserEnabled {
-		srv, err := initConsoleServer()
-		if err != nil {
-			logger.FatalIf(err, "Unable to initialize console service")
-		}
-
-		setConsoleSrv(srv)
-
-		go func() {
-			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
-		}()
-	}
-
 	// Initialize users credentials and policies in background right after config has initialized.
-	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+	go func() {
+		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+
+		// Initialize
+		if globalBrowserEnabled {
+			srv, err := initConsoleServer()
+			if err != nil {
+				logger.FatalIf(err, "Unable to initialize console service")
+			}
+
+			setConsoleSrv(srv)
+
+			go func() {
+				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
+			}()
+		}
+	}()
 
 	// Background all other operations such as initializing bucket metadata etc.
 	go func() {

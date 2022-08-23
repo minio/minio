@@ -76,6 +76,9 @@ var (
 	// ErrIncompatibleEncryptionMethod indicates that both SSE-C headers and SSE-S3 headers were specified, and are incompatible
 	// The client needs to remove the SSE-S3 header or the SSE-C headers
 	ErrIncompatibleEncryptionMethod = Errorf("Server side encryption specified with both SSE-C and SSE-S3 headers")
+
+	// ErrInvalidEncryptionKeyID returns error when KMS key id contains invalid characters
+	ErrInvalidEncryptionKeyID = Errorf("KMS KeyID contains unsupported characters")
 )
 
 var (
