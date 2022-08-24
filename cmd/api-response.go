@@ -89,7 +89,8 @@ type ListVersionsResponse struct {
 	IsTruncated bool
 
 	CommonPrefixes []CommonPrefix
-	Versions       []ObjectVersion
+	DeleteMarkers  []DeleteMarkerVersion `xml:"DeleteMarker,omitempty"`
+	Versions       []ObjectVersion       `xml:"Version,omitempty"`
 
 	// Encoding type used to encode object keys in the response.
 	EncodingType string `xml:"EncodingType,omitempty"`
@@ -247,50 +248,80 @@ type ObjectVersion struct {
 	Object
 	IsLatest  bool
 	VersionID string `xml:"VersionId"`
-
-	isDeleteMarker bool
 }
 
-// MarshalXML - marshal ObjectVersion
-func (o ObjectVersion) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if o.isDeleteMarker {
-		start.Name.Local = "DeleteMarker"
-	} else {
-		start.Name.Local = "Version"
+// DeleteMarkerVersion container for delete marker metadata
+type DeleteMarkerVersion struct {
+	Key          string
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+
+	// Owner of the object.
+	Owner Owner
+
+	IsLatest  bool
+	VersionID string `xml:"VersionId"`
+}
+
+// Metadata metadata items implemented to ensure XML marshaling works.
+type Metadata struct {
+	Items []struct {
+		Key   string
+		Value string
 	}
-
-	type objectVersionWrapper ObjectVersion
-	return e.EncodeElement(objectVersionWrapper(o), start)
 }
 
-// StringMap is a map[string]string
-type StringMap map[string]string
+// Set add items, duplicate items get replaced.
+func (s *Metadata) Set(k, v string) {
+	for i, item := range s.Items {
+		if item.Key == k {
+			s.Items[i] = struct {
+				Key   string
+				Value string
+			}{
+				Key:   k,
+				Value: v,
+			}
+			return
+		}
+	}
+	s.Items = append(s.Items, struct {
+		Key   string
+		Value string
+	}{
+		Key:   k,
+		Value: v,
+	})
+}
+
+type xmlKeyEntry struct {
+	XMLName xml.Name
+	Value   string `xml:",chardata"`
+}
 
 // MarshalXML - StringMap marshals into XML.
-func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	tokens := []xml.Token{start}
-
-	for key, value := range s {
-		t := xml.StartElement{}
-		t.Name = xml.Name{
-			Space: "",
-			Local: key,
-		}
-		tokens = append(tokens, t, xml.CharData(value), xml.EndElement{Name: t.Name})
+func (s *Metadata) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if s == nil {
+		return nil
 	}
 
-	tokens = append(tokens, xml.EndElement{
-		Name: start.Name,
-	})
+	if len(s.Items) == 0 {
+		return nil
+	}
 
-	for _, t := range tokens {
-		if err := e.EncodeToken(t); err != nil {
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+
+	for _, item := range s.Items {
+		if err := e.Encode(xmlKeyEntry{
+			XMLName: xml.Name{Local: item.Key},
+			Value:   item.Value,
+		}); err != nil {
 			return err
 		}
 	}
 
-	// flush to ensure tokens are written
-	return e.Flush()
+	return e.EncodeToken(start.End())
 }
 
 // Object container for object metadata
@@ -307,7 +338,7 @@ type Object struct {
 	StorageClass string
 
 	// UserMetadata user-defined metadata
-	UserMetadata StringMap `xml:"UserMetadata,omitempty"`
+	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -438,6 +469,8 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
+	deleteMarkers := make([]DeleteMarkerVersion, 0, len(resp.Objects))
+
 	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
@@ -445,10 +478,25 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 	data := ListVersionsResponse{}
 
 	for _, object := range resp.Objects {
-		content := ObjectVersion{}
 		if object.Name == "" {
 			continue
 		}
+
+		if object.DeleteMarker {
+			deleteMarker := DeleteMarkerVersion{
+				Key:          s3EncodeName(object.Name, encodingType),
+				LastModified: object.ModTime.UTC().Format(iso8601TimeFormat),
+				Owner:        owner,
+				VersionID:    object.VersionID,
+			}
+			if deleteMarker.VersionID == "" {
+				deleteMarker.VersionID = nullVersionID
+			}
+			deleteMarker.IsLatest = object.IsLatest
+			deleteMarkers = append(deleteMarkers, deleteMarker)
+			continue
+		}
+		content := ObjectVersion{}
 		content.Key = s3EncodeName(object.Name, encodingType)
 		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
 		if object.ETag != "" {
@@ -466,12 +514,12 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 			content.VersionID = nullVersionID
 		}
 		content.IsLatest = object.IsLatest
-		content.isDeleteMarker = object.DeleteMarker
 		versions = append(versions, content)
 	}
 
 	data.Name = bucket
 	data.Versions = versions
+	data.DeleteMarkers = deleteMarkers
 	data.EncodingType = encodingType
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.KeyMarker = s3EncodeName(marker, encodingType)
@@ -569,14 +617,14 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		}
 		content.Owner = owner
 		if metadata {
-			content.UserMetadata = make(StringMap)
+			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
 			case crypto.S3:
-				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.S3KMS:
-				content.UserMetadata[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionKMS
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
 			case crypto.SSEC:
-				content.UserMetadata[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
 			}
 			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
 				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
@@ -588,7 +636,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 					continue
 				}
-				content.UserMetadata[k] = v
+				content.UserMetadata.Set(k, v)
 			}
 		}
 		contents = append(contents, content)

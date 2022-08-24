@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -3066,6 +3067,16 @@ func (api objectAPIHandlers) GetObjectRetentionHandler(w http.ResponseWriter, r 
 	})
 }
 
+// ObjectTagSet key value tags
+type ObjectTagSet struct {
+	Tags []tags.Tag `xml:"Tag"`
+}
+
+type objectTagging struct {
+	XMLName xml.Name      `xml:"Tagging"`
+	TagSet  *ObjectTagSet `xml:"TagSet"`
+}
+
 // GetObjectTaggingHandler - GET object tagging
 func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObjectTagging")
@@ -3103,7 +3114,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Get object tags
-	tags, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
+	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -3113,7 +3124,20 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
 	}
 
-	writeSuccessResponseXML(w, encodeResponse(tags))
+	otags := &objectTagging{
+		TagSet: &ObjectTagSet{},
+	}
+
+	var list []tags.Tag
+	for k, v := range ot.ToMap() {
+		list = append(list, tags.Tag{
+			Key:   k,
+			Value: v,
+		})
+	}
+	otags.TagSet.Tags = list
+
+	writeSuccessResponseXML(w, encodeResponse(otags))
 }
 
 // PutObjectTaggingHandler - PUT object tagging
