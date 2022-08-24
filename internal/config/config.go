@@ -1221,8 +1221,10 @@ type SubsysInfo struct {
 	EnvMap map[string]EnvPair
 }
 
-// GetSubsysInfo returns `SubsysInfo`s for all targets for the subsystem.
-func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
+// GetSubsysInfo returns `SubsysInfo`s for all targets for the subsystem, when
+// target is empty. Otherwise returns `SubsysInfo` for the desired target only.
+// To request the default target only, target must be set to `Default`.
+func (c Config) GetSubsysInfo(subSys, target string) ([]SubsysInfo, error) {
 	// Check if config param requested is valid.
 	defKVS1, ok := DefaultKVS[subSys]
 	if !ok {
@@ -1232,6 +1234,20 @@ func (c Config) GetSubsysInfo(subSys string) ([]SubsysInfo, error) {
 	targets, err := c.GetAvailableTargets(subSys)
 	if err != nil {
 		return nil, err
+	}
+
+	if target != "" {
+		found := false
+		for _, t := range targets {
+			if t == target {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, Errorf("there is no target `%s` for subsystem `%s`", target, subSys)
+		}
+		targets = []string{target}
 	}
 
 	// The `Comment` configuration variable is optional but is available to be
