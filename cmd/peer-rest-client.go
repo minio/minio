@@ -341,9 +341,10 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 }
 
 // LoadPolicyMapping - reload a specific policy mapping
-func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, isGroup bool) error {
+func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, userType IAMUserType, isGroup bool) error {
 	values := make(url.Values)
 	values.Set(peerRESTUserOrGroup, userOrGroup)
+	values.Set(peerRESTUserType, strconv.Itoa(int(userType)))
 	if isGroup {
 		values.Set(peerRESTIsGroup, "")
 	}

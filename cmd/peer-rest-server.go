@@ -125,8 +125,15 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	userType := -1
+	userTypeStr, err := strconv.Atoi(vars[peerRESTUserType])
+	if err != nil {
+		s.writeErrorResponse(w, fmt.Errorf("user-type `%d` is invalid: %w", userTypeStr, err))
+		return
+	}
+
 	_, isGroup := r.Form[peerRESTIsGroup]
-	if err := globalIAMSys.LoadPolicyMapping(r.Context(), objAPI, userOrGroup, isGroup); err != nil {
+	if err := globalIAMSys.LoadPolicyMapping(r.Context(), objAPI, userOrGroup, IAMUserType(userType), isGroup); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

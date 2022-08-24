@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-08-13T21-54-44Z
+  tag: RELEASE.2022-08-22T23-53-06Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-08-11T00-30-48Z
+  tag: RELEASE.2022-08-23T05-45-20Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed or gateway.
@@ -45,6 +45,12 @@ ignoreChartChecksums: false
 
 ## Additional arguments to pass to minio binary
 extraArgs: []
+
+## Additional volumes to minio container
+extraVolumes: []
+
+## Additional volumeMounts to minio container
+extraVolumeMounts: []
 
 ## Internal port number for MinIO S3 API container
 ## Change service.port to change external port number
@@ -297,8 +303,8 @@ policies: []
 #         - "s3:ListBucketMultipartUploads"
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -333,8 +339,8 @@ users:
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -375,8 +381,8 @@ buckets:
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
 makeBucketJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -398,8 +404,8 @@ customCommands:
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:
-  podAnnotations:
-  annotations:
+  podAnnotations: {}
+  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
