@@ -168,7 +168,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				entries[i] = entries[i][:len(entry)-1]
 				continue
 			}
-			// Do do not retain the file.
+			// Do not retain the file.
 			entries[i] = ""
 
 			if contextCanceled(ctx) {
