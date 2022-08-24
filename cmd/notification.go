@@ -171,7 +171,7 @@ func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr 
 }
 
 // LoadPolicyMapping - reloads a policy mapping across all peers
-func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, isGroup bool) []NotificationPeerErr {
+func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, userType IAMUserType, isGroup bool) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -179,7 +179,7 @@ func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, isGroup bool) 
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.LoadPolicyMapping(userOrGroup, isGroup)
+			return client.LoadPolicyMapping(userOrGroup, userType, isGroup)
 		}, idx, *client.host)
 	}
 	return ng.Wait()

@@ -130,6 +130,9 @@ spec:
               mountPath: "/tmp/minio-config-env"
             {{- end }}
             {{- include "minio.tlsKeysVolumeMount" . | indent 12 }}
+            {{- if .Values.extraVolumeMounts }}
+              {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
           ports:
             - name: {{ $scheme }}
               containerPort: {{ .Values.minioAPIPort }}
@@ -207,6 +210,9 @@ spec:
             secretName: {{ .Values.extraSecret }}
         {{- end }}
         {{- include "minio.tlsKeysVolume" . | indent 8 }}
+        {{- if .Values.extraVolumes }}
+          {{ toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
 {{- if .Values.persistence.enabled }}
   volumeClaimTemplates:
   {{- if gt $drivesPerNode 1 }}

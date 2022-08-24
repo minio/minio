@@ -48,13 +48,14 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.20.0
-	github.com/minio/madmin-go v1.4.23
+	github.com/minio/madmin-go v1.4.24
 	github.com/minio/minio-go/v7 v7.0.34
 	github.com/minio/pkg v1.3.0
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
 	github.com/minio/sio v0.3.0
+	github.com/minio/xxml v0.0.3
 	github.com/minio/zipindex v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats-server/v2 v2.7.4

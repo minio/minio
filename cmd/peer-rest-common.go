@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v25" // Update /metrics
+	peerRESTVersion       = "v26" // Add user-type to LoadPolicyMapping
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -82,6 +82,7 @@ const (
 	peerRESTUserTemp     = "user-temp"
 	peerRESTPolicy       = "policy"
 	peerRESTUserOrGroup  = "user-or-group"
+	peerRESTUserType     = "user-type"
 	peerRESTIsGroup      = "is-group"
 	peerRESTSignal       = "signal"
 	peerRESTSubSys       = "sub-sys"

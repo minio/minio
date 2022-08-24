@@ -105,7 +105,8 @@ type IAMSys struct {
 type IAMUserType int
 
 const (
-	regUser IAMUserType = iota
+	unknownIAMUserType IAMUserType = iota - 1
+	regUser
 	stsUser
 	svcUser
 )
@@ -134,15 +135,9 @@ func (sys *IAMSys) LoadPolicy(ctx context.Context, objAPI ObjectLayer, policyNam
 
 // LoadPolicyMapping - loads the mapped policy for a user or group
 // from storage into server memory.
-func (sys *IAMSys) LoadPolicyMapping(ctx context.Context, objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
+func (sys *IAMSys) LoadPolicyMapping(ctx context.Context, objAPI ObjectLayer, userOrGroup string, userType IAMUserType, isGroup bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
-	}
-
-	// In case of LDAP, policy mappings are only applicable to sts users.
-	userType := regUser
-	if sys.usersSysType == LDAPUsersSysType {
-		userType = stsUser
 	}
 
 	return sys.store.PolicyMappingNotificationHandler(ctx, userOrGroup, isGroup, userType)
@@ -169,7 +164,7 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	if sys.ldapConfig.Enabled {
-		sys.EnableLDAPSys()
+		sys.SetUsersSysType(LDAPUsersSysType)
 	}
 
 	if etcdClient == nil {
@@ -1437,16 +1432,10 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	}
 }
 
-// PolicyDBSet - sets a policy for a user or group in the PolicyDB.
-func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup bool) (updatedAt time.Time, err error) {
+// PolicyDBSet - sets a policy for a user or group in the PolicyDB - the user doesn't have to exist since sometimes they are virtuals
+func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userType IAMUserType, isGroup bool) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
-	}
-
-	// Determine user-type based on IDP mode.
-	userType := regUser
-	if sys.usersSysType == LDAPUsersSysType {
-		userType = stsUser
 	}
 
 	updatedAt, err = sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
@@ -1456,7 +1445,7 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, isGroup
 
 	// Notify all other MinIO peers to reload policy
 	if !sys.HasWatcher() {
-		for _, nerr := range globalNotificationSys.LoadPolicyMapping(name, isGroup) {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(name, userType, isGroup) {
 			if nerr.Err != nil {
 				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 				logger.LogIf(ctx, nerr.Err)
@@ -1789,9 +1778,14 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	return sys.GetCombinedPolicy(policies...).IsAllowed(args)
 }
 
-// EnableLDAPSys - enable ldap system users type.
-func (sys *IAMSys) EnableLDAPSys() {
-	sys.usersSysType = LDAPUsersSysType
+// SetUsersSysType - sets the users system type, regular or LDAP.
+func (sys *IAMSys) SetUsersSysType(t UsersSysType) {
+	sys.usersSysType = t
+}
+
+// GetUsersSysType - returns the users system type for this IAM
+func (sys *IAMSys) GetUsersSysType() UsersSysType {
+	return sys.usersSysType
 }
 
 // NewIAMSys - creates new config system object.
