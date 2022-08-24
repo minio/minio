@@ -134,7 +134,7 @@ type ObjectPartInfo struct {
 	ActualSize int64             `json:"actualSize"` // Original size of the part without compression or encryption bytes.
 	ModTime    time.Time         `json:"modTime"`    // Date and time at which the part was uploaded.
 	Index      []byte            `json:"index,omitempty" msg:"index,omitempty"`
-	CRC        map[string]string `json:"crc,omitempty" msg:"crc,omitempty"`
+	Checksums  map[string]string `json:"crc,omitempty" msg:"crc,omitempty"` // Content Checksums
 }
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.

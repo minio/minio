@@ -717,7 +717,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		ActualSize: data.ActualSize(),
 		ModTime:    UTCNow(),
 		Index:      index,
-		CRC:        r.ContentCRC(),
+		Checksums:  r.ContentCRC(),
 	}
 
 	partMsg, err := part.MarshalMsg(nil)
@@ -738,10 +738,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		LastModified:   part.ModTime,
 		Size:           part.Size,
 		ActualSize:     part.ActualSize,
-		ChecksumCRC32:  part.CRC["CRC32"],
-		ChecksumCRC32C: part.CRC["CRC32C"],
-		ChecksumSHA1:   part.CRC["SHA1"],
-		ChecksumSHA256: part.CRC["SHA256"],
+		ChecksumCRC32:  part.Checksums["CRC32"],
+		ChecksumCRC32C: part.Checksums["CRC32C"],
+		ChecksumSHA1:   part.Checksums["SHA1"],
+		ChecksumSHA256: part.Checksums["SHA256"],
 	}, nil
 }
 
@@ -931,10 +931,10 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 			LastModified:   part.ModTime,
 			ActualSize:     part.ActualSize,
 			Size:           part.Size,
-			ChecksumCRC32:  part.CRC["CRC32"],
-			ChecksumCRC32C: part.CRC["CRC32C"],
-			ChecksumSHA1:   part.CRC["SHA1"],
-			ChecksumSHA256: part.CRC["SHA256"],
+			ChecksumCRC32:  part.Checksums["CRC32"],
+			ChecksumCRC32C: part.Checksums["CRC32C"],
+			ChecksumSHA1:   part.Checksums["SHA1"],
+			ChecksumSHA256: part.Checksums["SHA256"],
 		})
 		if len(result.Parts) >= maxParts {
 			break
@@ -1107,7 +1107,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return oi, invp
 		}
 		if checksumType.IsSet() {
-			crc := gotPart.CRC[checksumType.String()]
+			crc := gotPart.Checksums[checksumType.String()]
 			if crc == "" {
 				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
@@ -1144,7 +1144,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			ActualSize: gotPart.ActualSize,
 			ModTime:    gotPart.ModTime,
 			Index:      gotPart.Index,
-			CRC:        nil, // Not transferred since we do not need it.
+			Checksums:  nil, // Not transferred since we do not need it.
 		}
 	}
 
