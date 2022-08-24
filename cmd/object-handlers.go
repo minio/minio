@@ -791,12 +791,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		}
 	}
 
-	fmt.Println("HeadObject")
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		fmt.Println("Adding", objInfo.Checksum)
 		hash.AddChecksumHeader(w, objInfo.Checksum)
-	} else {
-		fmt.Println("header:", r.Header.Get(xhttp.AmzChecksumMode))
 	}
 
 	// Set standard object headers.
