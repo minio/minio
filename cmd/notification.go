@@ -26,7 +26,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,49 +34,18 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
 	bucketBandwidth "github.com/minio/minio/internal/bucket/bandwidth"
-	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/minio/internal/event"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
-	"github.com/minio/pkg/bucket/policy"
 	xnet "github.com/minio/pkg/net"
 )
 
+// This file contains peer related notifications. For sending notifications to
+// external systems, see event-notification.go
+
 // NotificationSys - notification system.
 type NotificationSys struct {
-	sync.RWMutex
-	targetList                 *event.TargetList
-	targetResCh                chan event.TargetIDResult
-	bucketRulesMap             map[string]event.RulesMap
-	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	peerClients                []*peerRESTClient // Excludes self
-	allPeerClients             []*peerRESTClient // Includes nil client for self
-}
-
-// GetARNList - returns available ARNs.
-func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
-	arns := []string{}
-	if sys == nil {
-		return arns
-	}
-	region := globalSite.Region
-	for targetID, target := range sys.targetList.TargetMap() {
-		// httpclient target is part of ListenNotification
-		// which doesn't need to be listed as part of the ARN list
-		// This list is only meant for external targets, filter
-		// this out pro-actively.
-		if !strings.HasPrefix(targetID.ID, "httpclient+") {
-			if onlyActive && !target.HasQueueStore() {
-				if _, err := target.IsActive(); err != nil {
-					continue
-				}
-			}
-			arns = append(arns, targetID.ToARN(region).String())
-		}
-	}
-
-	return arns
+	peerClients    []*peerRESTClient // Excludes self
+	allPeerClients []*peerRESTClient // Includes nil client for self
 }
 
 // NotificationPeerErr returns error associated for a remote peer.
@@ -550,7 +518,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
-	globalNotificationSys.RemoveNotification(bucketName)
+	globalEventNotifier.RemoveNotification(bucketName)
 	globalBucketConnStats.delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
@@ -682,150 +650,6 @@ func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
 		}
 	}
-}
-
-// Loads notification policies for all buckets into NotificationSys.
-func (sys *NotificationSys) set(bucket BucketInfo, meta BucketMetadata) {
-	config := meta.notificationConfig
-	if config == nil {
-		return
-	}
-	config.SetRegion(globalSite.Region)
-	if err := config.Validate(globalSite.Region, globalNotificationSys.targetList); err != nil {
-		if _, ok := err.(*event.ErrARNNotFound); !ok {
-			logger.LogIf(GlobalContext, err)
-		}
-	}
-	sys.AddRulesMap(bucket.Name, config.ToRulesMap())
-}
-
-// InitBucketTargets - initializes notification system from notification.xml of all buckets.
-func (sys *NotificationSys) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, notifications are not supported - except NAS gateway.
-	if globalIsGateway && !objAPI.IsNotificationSupported() {
-		return nil
-	}
-
-	logger.LogIf(ctx, sys.targetList.Add(globalConfigTargetList.Targets()...))
-
-	go func() {
-		for res := range sys.targetResCh {
-			if res.Err != nil {
-				reqInfo := &logger.ReqInfo{}
-				reqInfo.AppendTags("targetID", res.ID.Name)
-				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID.String())
-			}
-		}
-	}()
-
-	return nil
-}
-
-// AddRulesMap - adds rules map for bucket name.
-func (sys *NotificationSys) AddRulesMap(bucketName string, rulesMap event.RulesMap) {
-	sys.Lock()
-	defer sys.Unlock()
-
-	rulesMap = rulesMap.Clone()
-
-	for _, targetRulesMap := range sys.bucketRemoteTargetRulesMap[bucketName] {
-		rulesMap.Add(targetRulesMap)
-	}
-
-	// Do not add for an empty rulesMap.
-	if len(rulesMap) == 0 {
-		delete(sys.bucketRulesMap, bucketName)
-	} else {
-		sys.bucketRulesMap[bucketName] = rulesMap
-	}
-}
-
-// RemoveRulesMap - removes rules map for bucket name.
-func (sys *NotificationSys) RemoveRulesMap(bucketName string, rulesMap event.RulesMap) {
-	sys.Lock()
-	defer sys.Unlock()
-
-	sys.bucketRulesMap[bucketName].Remove(rulesMap)
-	if len(sys.bucketRulesMap[bucketName]) == 0 {
-		delete(sys.bucketRulesMap, bucketName)
-	}
-}
-
-// ConfiguredTargetIDs - returns list of configured target id's
-func (sys *NotificationSys) ConfiguredTargetIDs() []event.TargetID {
-	if sys == nil {
-		return nil
-	}
-
-	sys.RLock()
-	defer sys.RUnlock()
-
-	var targetIDs []event.TargetID
-	for _, rmap := range sys.bucketRulesMap {
-		for _, rules := range rmap {
-			for _, targetSet := range rules {
-				for id := range targetSet {
-					targetIDs = append(targetIDs, id)
-				}
-			}
-		}
-	}
-	// Filter out targets configured via env
-	var tIDs []event.TargetID
-	for _, targetID := range targetIDs {
-		if !globalEnvTargetList.Exists(targetID) {
-			tIDs = append(tIDs, targetID)
-		}
-	}
-	return tIDs
-}
-
-// RemoveNotification - removes all notification configuration for bucket name.
-func (sys *NotificationSys) RemoveNotification(bucketName string) {
-	sys.Lock()
-	defer sys.Unlock()
-
-	delete(sys.bucketRulesMap, bucketName)
-
-	targetIDSet := event.NewTargetIDSet()
-	for targetID := range sys.bucketRemoteTargetRulesMap[bucketName] {
-		targetIDSet[targetID] = struct{}{}
-		delete(sys.bucketRemoteTargetRulesMap[bucketName], targetID)
-	}
-	sys.targetList.Remove(targetIDSet)
-
-	delete(sys.bucketRemoteTargetRulesMap, bucketName)
-}
-
-// RemoveAllRemoteTargets - closes and removes all notification targets.
-func (sys *NotificationSys) RemoveAllRemoteTargets() {
-	sys.Lock()
-	defer sys.Unlock()
-
-	for _, targetMap := range sys.bucketRemoteTargetRulesMap {
-		targetIDSet := event.NewTargetIDSet()
-		for k := range targetMap {
-			targetIDSet[k] = struct{}{}
-		}
-		sys.targetList.Remove(targetIDSet)
-	}
-}
-
-// Send - sends event data to all matching targets.
-func (sys *NotificationSys) Send(args eventArgs) {
-	sys.RLock()
-	targetIDSet := sys.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
-	sys.RUnlock()
-
-	if len(targetIDSet) == 0 {
-		return
-	}
-
-	sys.targetList.Send(args.ToEvent(true), targetIDSet, sys.targetResCh)
 }
 
 // GetCPUs - Get all CPU information.
@@ -1190,115 +1014,9 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
 	remote, all := newPeerRestClients(endpoints)
 	return &NotificationSys{
-		targetList:                 event.NewTargetList(),
-		targetResCh:                make(chan event.TargetIDResult),
-		bucketRulesMap:             make(map[string]event.RulesMap),
-		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		peerClients:                remote,
-		allPeerClients:             all,
+		peerClients:    remote,
+		allPeerClients: all,
 	}
-}
-
-type eventArgs struct {
-	EventName    event.Name
-	BucketName   string
-	Object       ObjectInfo
-	ReqParams    map[string]string
-	RespElements map[string]string
-	Host         string
-	UserAgent    string
-}
-
-// ToEvent - converts to notification event.
-func (args eventArgs) ToEvent(escape bool) event.Event {
-	eventTime := UTCNow()
-	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
-
-	respElements := map[string]string{
-		"x-amz-request-id": args.RespElements["requestId"],
-		"x-minio-origin-endpoint": func() string {
-			if globalMinioEndpoint != "" {
-				return globalMinioEndpoint
-			}
-			return getAPIEndpoints()[0]
-		}(), // MinIO specific custom elements.
-	}
-	// Add deployment as part of
-	if globalDeploymentID != "" {
-		respElements["x-minio-deployment-id"] = globalDeploymentID
-	}
-	if args.RespElements["content-length"] != "" {
-		respElements["content-length"] = args.RespElements["content-length"]
-	}
-	keyName := args.Object.Name
-	if escape {
-		keyName = url.QueryEscape(args.Object.Name)
-	}
-	newEvent := event.Event{
-		EventVersion:      "2.0",
-		EventSource:       "minio:s3",
-		AwsRegion:         args.ReqParams["region"],
-		EventTime:         eventTime.Format(event.AMZTimeFormat),
-		EventName:         args.EventName,
-		UserIdentity:      event.Identity{PrincipalID: args.ReqParams["principalId"]},
-		RequestParameters: args.ReqParams,
-		ResponseElements:  respElements,
-		S3: event.Metadata{
-			SchemaVersion:   "1.0",
-			ConfigurationID: "Config",
-			Bucket: event.Bucket{
-				Name:          args.BucketName,
-				OwnerIdentity: event.Identity{PrincipalID: args.ReqParams["principalId"]},
-				ARN:           policy.ResourceARNPrefix + args.BucketName,
-			},
-			Object: event.Object{
-				Key:       keyName,
-				VersionID: args.Object.VersionID,
-				Sequencer: uniqueID,
-			},
-		},
-		Source: event.Source{
-			Host:      args.Host,
-			UserAgent: args.UserAgent,
-		},
-	}
-
-	if args.EventName != event.ObjectRemovedDelete && args.EventName != event.ObjectRemovedDeleteMarkerCreated {
-		newEvent.S3.Object.ETag = args.Object.ETag
-		newEvent.S3.Object.Size = args.Object.Size
-		newEvent.S3.Object.ContentType = args.Object.ContentType
-		newEvent.S3.Object.UserMetadata = make(map[string]string, len(args.Object.UserDefined))
-		for k, v := range args.Object.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
-				continue
-			}
-			newEvent.S3.Object.UserMetadata[k] = v
-		}
-	}
-
-	return newEvent
-}
-
-func sendEvent(args eventArgs) {
-	args.Object.Size, _ = args.Object.GetActualSize()
-
-	// avoid generating a notification for REPLICA creation event.
-	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
-		return
-	}
-	// remove sensitive encryption entries in metadata.
-	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
-	crypto.RemoveInternalEntries(args.Object.UserDefined)
-
-	// globalNotificationSys is not initialized in gateway mode.
-	if globalNotificationSys == nil {
-		return
-	}
-	if globalHTTPListen.NumSubscribers(args.EventName) > 0 {
-		globalHTTPListen.Publish(args.ToEvent(false))
-	}
-
-	globalNotificationSys.Send(args)
 }
 
 // GetBandwidthReports - gets the bandwidth report from all nodes including self.

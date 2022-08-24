@@ -512,7 +512,7 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	globalReplicationStats.Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
-	globalNotificationSys.RemoveNotification(bucketName)
+	globalEventNotifier.RemoveNotification(bucketName)
 	globalBucketConnStats.delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
@@ -605,7 +605,7 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	globalBucketMetadataSys.Set(bucketName, meta)
 
 	if meta.notificationConfig != nil {
-		globalNotificationSys.AddRulesMap(bucketName, meta.notificationConfig.ToRulesMap())
+		globalEventNotifier.AddRulesMap(bucketName, meta.notificationConfig.ToRulesMap())
 	}
 
 	if meta.bucketTargetConfig != nil {
@@ -702,7 +702,7 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
+	globalEventNotifier.AddRulesMap(bucketName, rulesMap)
 }
 
 // Return disk IDs of all the local disks.
