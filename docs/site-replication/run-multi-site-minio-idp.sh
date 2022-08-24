@@ -335,7 +335,7 @@ kill -9 ${site1_pid}
 ./mc rb minio2/bucket2
 # Restart minio1 instance
 minio server --config-dir /tmp/minio-internal --address ":9001" /tmp/minio-internal-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
-sleep 30
+sleep 40
 
 # Test whether most recent tag update on minio2 is replicated to minio1
 val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key )
