@@ -163,7 +163,7 @@ func printEventNotifiers() {
 		return
 	}
 
-	arns := globalNotificationSys.GetARNList(true)
+	arns := globalEventNotifier.GetARNList(true)
 	if len(arns) == 0 {
 		return
 	}

@@ -452,7 +452,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 			sys.metadataMap[buckets[index].Name] = meta
 			sys.Unlock()
 
-			globalNotificationSys.set(buckets[index], meta) // set notification targets
+			globalEventNotifier.set(buckets[index], meta) // set notification targets
 
 			globalBucketTargetSys.set(buckets[index], meta) // set remote replication targets
 
