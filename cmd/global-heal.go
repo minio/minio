@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -21,14 +21,17 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/jobtokens"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 	"github.com/minio/pkg/wildcard"
 )
 
@@ -161,6 +164,8 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 	}
 }
 
+const envHealWorkers = "_MINIO_HEAL_WORKERS"
+
 // healErasureSet lists and heals all objects in a specific erasure set
 func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, tracker *healingTracker) error {
 	bgSeq := mustGetHealSequence(ctx)
@@ -181,6 +186,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 	}
 
+	// numHealers - number of concurrent heal jobs, defaults to 1
+	numHealers, err := strconv.Atoi(env.Get(envHealWorkers, "1"))
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("invalid %s value %v, defaulting to 1", envHealWorkers, err))
+	}
+	if numHealers < 1 {
+		numHealers = 1
+	}
+	// jt will never be nil since we ensure that numHealers > 0
+	jt, _ := jobtokens.New(numHealers)
 	var retErr error
 	// Heal all buckets with all objects
 	for _, bucket := range healBuckets {
@@ -229,6 +244,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		healEntry := func(entry metaCacheEntry) {
+			defer jt.Give()
+
 			if entry.name == "" && len(entry.metadata) == 0 {
 				// ignore entries that don't have metadata.
 				return
@@ -308,14 +325,17 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			bucket:    bucket,
 		}
 
-		err := listPathRaw(ctx, listPathRawOptions{
+		err = listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			bucket:         bucket,
 			recursive:      true,
 			forwardTo:      forwardTo,
 			minDisks:       1,
 			reportNotFound: false,
-			agreed:         healEntry,
+			agreed: func(entry metaCacheEntry) {
+				jt.Take()
+				go healEntry(entry)
+			},
 			partial: func(entries metaCacheEntries, _ []error) {
 				entry, ok := entries.resolve(&resolver)
 				if !ok {
@@ -323,10 +343,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// proceed to heal nonetheless.
 					entry, _ = entries.firstFound()
 				}
-				healEntry(*entry)
+				jt.Take()
+				go healEntry(*entry)
 			},
 			finished: nil,
 		})
+		jt.Wait() // synchronize all the concurrent heal jobs
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the
