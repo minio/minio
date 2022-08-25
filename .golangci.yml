@@ -1,6 +1,12 @@
 linters-settings:
   golint:
     min-confidence: 0
+  gofumpt:
+    lang-version: "1.17"
+
+    # Choose whether or not to use the extra rules that are disabled
+    # by default
+    extra-rules: false
 
   misspell:
     locale: US
@@ -23,14 +29,6 @@ linters:
     - gofumpt
     - tenv
     - durationcheck
-
-linters-settings:
-  gofumpt:
-    lang-version: "1.17"
-
-    # Choose whether or not to use the extra rules that are disabled
-    # by default
-    extra-rules: false
 
 issues:
   exclude-use-default: false
