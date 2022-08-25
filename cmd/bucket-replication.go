@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -45,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/tinylib/msgp/msgp"
 )
 
 const (
@@ -1401,6 +1403,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	go pool.updateResyncStatus(ctx, o)
 	go pool.processMRF()
 	go pool.persistMRF()
+	go pool.saveStatsToDisk()
 	return pool
 }
 
@@ -1530,6 +1533,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 	case healCh <- ri:
 	case ch <- ri:
 	default:
+		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing number of replicate object workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), string(replicationSubsystem))
 	}
 }
@@ -1567,6 +1571,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		})
 	case ch <- doi:
 	default:
+		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
 		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing number of replicate workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), string(replicationSubsystem))
 	}
 }
@@ -1921,6 +1926,8 @@ func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketSta
 				FailedSize:     stat.FailedSize + oldst.FailedSize,
 				ReplicatedSize: stat.ReplicatedSize + oldst.ReplicatedSize,
 				Latency:        stat.Latency.merge(oldst.Latency),
+				PendingCount:   stat.PendingCount + oldst.PendingCount,
+				PendingSize:    stat.PendingSize + oldst.PendingSize,
 			}
 		}
 	}
@@ -1937,6 +1944,8 @@ func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketSta
 		st.ReplicatedSize += stat.ReplicatedSize
 		st.FailedSize += stat.FailedSize
 		st.FailedCount += stat.FailedCount
+		st.PendingSize += stat.PendingSize
+		st.PendingCount += stat.PendingCount
 	}
 	s = BucketReplicationStats{
 		Stats: make(map[string]*BucketReplicationStat, len(stats)),
@@ -1962,11 +1971,15 @@ func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketSta
 		// happen since data usage picture can lag behind actual usage state at the time of cluster start
 		st.FailedSize = int64(math.Max(float64(tgtstat.FailedSize), 0))
 		st.FailedCount = int64(math.Max(float64(tgtstat.FailedCount), 0))
+		st.PendingSize = int64(math.Max(float64(tgtstat.PendingSize), 0))
+		st.PendingCount = int64(math.Max(float64(tgtstat.PendingCount), 0))
 		st.Latency = tgtstat.Latency
 
 		s.Stats[arn] = &st
 		s.FailedSize += st.FailedSize
 		s.FailedCount += st.FailedCount
+		s.PendingCount += st.PendingCount
+		s.PendingSize += st.PendingSize
 	}
 	// normalize overall stats
 	s.ReplicaSize = int64(math.Max(float64(totReplicaSize), float64(u.ReplicaSize)))
@@ -2682,4 +2695,83 @@ func (p *ReplicationPool) queueMRFHeal(file string) error {
 		QueueReplicationHeal(p.ctx, e.Bucket, oi)
 	}
 	return nil
+}
+
+// load replication stats from disk
+func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationStats, e error) {
+	data, err := readConfig(p.ctx, p.objLayer, replicationStatsPath)
+	if err != nil && err != errConfigNotFound {
+		return rs, err
+	}
+
+	if len(data) <= 4 {
+		return map[string]BucketReplicationStats{}, nil
+	}
+	// Read repl stats meta header
+	switch binary.LittleEndian.Uint16(data[0:2]) {
+	case replStatsMetaFormat:
+	default:
+		return rs, fmt.Errorf("replication stats: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
+	}
+	switch binary.LittleEndian.Uint16(data[2:4]) {
+	case replStatsVersion:
+	default:
+		return rs, fmt.Errorf("replication stats: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
+	}
+	ss := BucketStatsMap{}
+	if _, err = ss.UnmarshalMsg(data[4:]); err != nil {
+		return rs, err
+	}
+	rs = make(map[string]BucketReplicationStats, len(ss))
+	for bucket, st := range ss {
+		rs[bucket] = st.ReplicationStats
+	}
+
+	return rs, nil
+}
+
+func (p *ReplicationPool) saveStatsToDisk() {
+	if p == nil || p.objLayer == nil {
+		return
+	}
+	sTimer := time.NewTimer(replStatsSaveInterval)
+	defer sTimer.Stop()
+	for {
+		select {
+		case <-sTimer.C:
+			dui, err := loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
+			if err == nil && !dui.LastUpdate.IsZero() {
+				globalReplicationStats.saveUsage(dui.BucketsUsage)
+			}
+			p.saveStats(p.ctx, dui.BucketsUsage)
+			sTimer.Reset(replStatsSaveInterval)
+		case <-p.ctx.Done():
+			p.saveStats(context.Background(), globalReplicationStats.getUsage())
+			return
+		}
+	}
+}
+
+// save replication stats to .minio.sys/buckets/replication/stats.bin
+func (p *ReplicationPool) saveStats(ctx context.Context, ui map[string]BucketUsageInfo) error {
+	stats := getAllLatestReplicationStats(ui)
+	if len(stats) == 0 {
+		return nil
+	}
+	bucketStatsMap := make(map[string]BucketStats, len(stats))
+	for k, v := range stats {
+		bucketStatsMap[k] = BucketStats{
+			ReplicationStats: v,
+		}
+	}
+
+	var buf bytes.Buffer
+	msgp.Encode(&buf, BucketStatsMap(bucketStatsMap))
+	data := make([]byte, buf.Len()+4)
+
+	// Initialize the replication stats meta header.
+	binary.LittleEndian.PutUint16(data[0:2], replStatsMetaFormat)
+	binary.LittleEndian.PutUint16(data[2:4], replStatsVersion)
+	copy(data[4:], buf.Bytes())
+	return saveConfig(ctx, p.objLayer, replicationStatsPath, data)
 }

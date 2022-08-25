@@ -38,8 +38,10 @@ func (b *BucketReplicationStats) hasReplicationUsage() bool {
 type ReplicationStats struct {
 	Cache      map[string]*BucketReplicationStats
 	UsageCache map[string]*BucketReplicationStats
+	Usageinfo  map[string]BucketUsageInfo
 	sync.RWMutex
 	ulock sync.RWMutex
+	dlock sync.RWMutex
 }
 
 // Delete deletes in-memory replication statistics for a bucket.
@@ -92,14 +94,23 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration t
 		bs.Stats[arn] = b
 	}
 	switch status {
+	case replication.Pending:
+		if opType.IsDataReplication() && prevStatus != status {
+			b.PendingSize += n
+			b.PendingCount++
+		}
 	case replication.Completed:
 		switch prevStatus { // adjust counters based on previous state
+		case replication.Pending:
+			b.PendingCount--
 		case replication.Failed:
 			b.FailedCount--
 		}
-		if opType == replication.ObjectReplicationType {
+		if opType.IsDataReplication() {
 			b.ReplicatedSize += n
 			switch prevStatus {
+			case replication.Pending:
+				b.PendingSize -= n
 			case replication.Failed:
 				b.FailedSize -= n
 			}
@@ -108,10 +119,12 @@ func (r *ReplicationStats) Update(bucket string, arn string, n int64, duration t
 			}
 		}
 	case replication.Failed:
-		if opType == replication.ObjectReplicationType {
+		if opType.IsDataReplication() {
 			if prevStatus == replication.Pending {
 				b.FailedSize += n
 				b.FailedCount++
+				b.PendingSize -= n
+				b.PendingCount--
 			}
 		}
 	case replication.Replica:
@@ -178,6 +191,17 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 
 // load replication metrics at cluster start from initial data usage
 func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
+	m := make(map[string]*BucketReplicationStats)
+	var replStatsFound bool
+	if stats, err := globalReplicationPool.loadStatsFromDisk(); err == nil {
+		for b, st := range stats {
+			m[b] = &st
+		}
+		r.ulock.Lock()
+		r.UsageCache = m
+		replStatsFound = true
+		r.ulock.Unlock()
+	}
 	rTimer := time.NewTimer(time.Minute)
 	defer rTimer.Stop()
 	var (
@@ -199,8 +223,13 @@ outer:
 			rTimer.Reset(time.Minute)
 		}
 	}
-
-	m := make(map[string]*BucketReplicationStats)
+	// cache initial bucket usage
+	if replStatsFound {
+		r.dlock.Lock()
+		defer r.dlock.Unlock()
+		r.Usageinfo = dui.BucketsUsage
+		return
+	}
 	for bucket, usage := range dui.BucketsUsage {
 		b := &BucketReplicationStats{
 			Stats: make(map[string]*BucketReplicationStat, len(usage.ReplicationInfo)),
@@ -219,6 +248,22 @@ outer:
 		}
 	}
 	r.ulock.Lock()
-	defer r.ulock.Unlock()
 	r.UsageCache = m
+	r.ulock.Unlock()
+
+	r.dlock.Lock()
+	defer r.dlock.Unlock()
+	r.Usageinfo = dui.BucketsUsage
+}
+
+func (r *ReplicationStats) saveUsage(ui map[string]BucketUsageInfo) {
+	r.dlock.Lock()
+	defer r.dlock.Unlock()
+	r.Usageinfo = ui
+}
+
+func (r *ReplicationStats) getUsage() map[string]BucketUsageInfo {
+	r.dlock.RLock()
+	defer r.dlock.RUnlock()
+	return r.Usageinfo
 }
