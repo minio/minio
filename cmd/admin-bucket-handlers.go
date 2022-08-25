@@ -845,7 +845,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		}
 		switch fileName {
 		case bucketNotificationConfig:
-			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region, globalNotificationSys.targetList)
+			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region, globalEventNotifier.targetList)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
 				continue
@@ -862,7 +862,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			rulesMap := config.ToRulesMap()
-			globalNotificationSys.AddRulesMap(bucket, rulesMap)
+			globalEventNotifier.AddRulesMap(bucket, rulesMap)
 			rpt.SetStatus(bucket, fileName, nil)
 		case bucketPolicyConfig:
 			// Error out if Content-Length is beyond allowed size.

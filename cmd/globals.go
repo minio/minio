@@ -188,7 +188,9 @@ var (
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
 
-	globalNotificationSys  *NotificationSys
+	globalNotificationSys *NotificationSys
+
+	globalEventNotifier    *EventNotifier
 	globalConfigTargetList *event.TargetList
 	// globalEnvTargetList has list of targets configured via env.
 	globalEnvTargetList *event.TargetList

@@ -25,6 +25,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"reflect"
 	"sort"
@@ -1201,7 +1202,7 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 		}
 	}
 
-	_, err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, mapping.IsGroup)
+	_, err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, IAMUserType(mapping.UserType), mapping.IsGroup)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1751,6 +1752,34 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 		}
 	}
 
+	// Followed by group policy mapping
+	{
+		// Replicate policy mappings on local to all peers.
+		groupPolicyMap := make(map[string]MappedPolicy)
+		globalIAMSys.store.rlock()
+		errG := globalIAMSys.store.loadMappedPolicies(ctx, unknownIAMUserType, true, groupPolicyMap)
+		globalIAMSys.store.runlock()
+		if errG != nil {
+			return errSRBackendIssue(errG)
+		}
+
+		for group, mp := range groupPolicyMap {
+			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemPolicyMapping,
+				PolicyMapping: &madmin.SRPolicyMapping{
+					UserOrGroup: group,
+					UserType:    -1,
+					IsGroup:     true,
+					Policy:      mp.Policies,
+				},
+				UpdatedAt: mp.UpdatedAt,
+			})
+			if err != nil {
+				return errSRIAMError(err)
+			}
+		}
+	}
+
 	// Service accounts are the static accounts that should be synced with
 	// valid claims.
 	{
@@ -1812,10 +1841,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	{
 		// Replicate policy mappings on local to all peers.
 		userPolicyMap := make(map[string]MappedPolicy)
-		groupPolicyMap := make(map[string]MappedPolicy)
 		globalIAMSys.store.rlock()
 		errU := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
-		errG := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
 		globalIAMSys.store.runlock()
 		if errU != nil {
 			return errSRBackendIssue(errU)
@@ -1826,26 +1853,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
 					UserOrGroup: user,
+					UserType:    int(regUser),
 					IsGroup:     false,
-					Policy:      mp.Policies,
-				},
-				UpdatedAt: mp.UpdatedAt,
-			})
-			if err != nil {
-				return errSRIAMError(err)
-			}
-		}
-
-		if errG != nil {
-			return errSRBackendIssue(errG)
-		}
-
-		for group, mp := range groupPolicyMap {
-			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemPolicyMapping,
-				PolicyMapping: &madmin.SRPolicyMapping{
-					UserOrGroup: group,
-					IsGroup:     true,
 					Policy:      mp.Policies,
 				},
 				UpdatedAt: mp.UpdatedAt,
@@ -1859,41 +1868,21 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	// and finally followed by policy mappings for for STS users.
 	{
 		// Replicate policy mappings on local to all peers.
-		userPolicyMap := make(map[string]MappedPolicy)
-		groupPolicyMap := make(map[string]MappedPolicy)
+		stsPolicyMap := make(map[string]MappedPolicy)
 		globalIAMSys.store.rlock()
-		errU := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
-		errG := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
+		errU := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, stsPolicyMap)
 		globalIAMSys.store.runlock()
 		if errU != nil {
 			return errSRBackendIssue(errU)
 		}
 
-		for user, mp := range userPolicyMap {
+		for user, mp := range stsPolicyMap {
 			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
 					UserOrGroup: user,
+					UserType:    int(stsUser),
 					IsGroup:     false,
-					Policy:      mp.Policies,
-				},
-				UpdatedAt: mp.UpdatedAt,
-			})
-			if err != nil {
-				return errSRIAMError(err)
-			}
-		}
-
-		if errG != nil {
-			return errSRBackendIssue(errG)
-		}
-
-		for group, mp := range groupPolicyMap {
-			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemPolicyMapping,
-				PolicyMapping: &madmin.SRPolicyMapping{
-					UserOrGroup: group,
-					IsGroup:     true,
 					Policy:      mp.Policies,
 				},
 				UpdatedAt: mp.UpdatedAt,
@@ -3513,7 +3502,37 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 
 const siteHealTimeInterval = 10 * time.Second
 
+var siteReplicationHealLockTimeout = newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
+	timeout:       30 * time.Second,
+	minimum:       10 * time.Second,
+	retryInterval: time.Second,
+})
+
 func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI ObjectLayer) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Run the site replication healing in a loop
+	for {
+		c.healRoutine(ctx, objAPI)
+		duration := time.Duration(r.Float64() * float64(time.Minute))
+		if duration < time.Second {
+			// Make sure to sleep atleast a second to avoid high CPU ticks.
+			duration = time.Second
+		}
+		time.Sleep(duration)
+	}
+}
+
+func (c *SiteReplicationSys) healRoutine(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only one node running site replication on the cluster.
+	locker := objAPI.NewNSLock(minioMetaBucket, "site-replication/heal.lock")
+	lkctx, err := locker.GetLock(ctx, siteReplicationHealLockTimeout)
+	if err != nil {
+		return
+	}
+	ctx = lkctx.Context()
+	defer lkctx.Cancel()
+	// No unlock for "leader" lock.
+
 	healTimer := time.NewTimer(siteHealTimeInterval)
 	defer healTimer.Stop()
 
@@ -4323,16 +4342,10 @@ func (c *SiteReplicationSys) healIAMSystem(ctx context.Context, objAPI ObjectLay
 		c.healGroups(ctx, objAPI, group, info)
 	}
 	for user := range info.UserStats {
-		c.healUserPolicies(ctx, objAPI, user, info, false)
+		c.healUserPolicies(ctx, objAPI, user, info)
 	}
 	for group := range info.GroupStats {
-		c.healGroupPolicies(ctx, objAPI, group, info, false)
-	}
-	for user := range info.UserStats {
-		c.healUserPolicies(ctx, objAPI, user, info, true)
-	}
-	for group := range info.GroupStats {
-		c.healGroupPolicies(ctx, objAPI, group, info, true)
+		c.healGroupPolicies(ctx, objAPI, group, info)
 	}
 
 	return nil
@@ -4394,7 +4407,7 @@ func (c *SiteReplicationSys) healPolicies(ctx context.Context, objAPI ObjectLaye
 }
 
 // heal user policy mappings present on this site to peers, provided current cluster has the most recent update.
-func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo, svcAcct bool) error {
+func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo) error {
 	// create user policy mapping on peer cluster if missing
 	us := info.UserStats[user]
 
@@ -4454,7 +4467,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 }
 
 // heal group policy mappings present on this site to peers, provided current cluster has the most recent update.
-func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI ObjectLayer, group string, info srStatusInfo, svcAcct bool) error {
+func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI ObjectLayer, group string, info srStatusInfo) error {
 	// create group policy mapping on peer cluster if missing
 	gs := info.GroupStats[group]
 

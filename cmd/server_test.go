@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1616,6 +1617,81 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+	}
+
+	for _, testCase := range testCases {
+		// create listObjectsV1 request with valid parameters
+		request, err = newTestSignedRequest(http.MethodGet, testCase.getURL, 0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		// execute the HTTP request.
+		response, err = s.client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+
+		getContent, err := ioutil.ReadAll(response.Body)
+		c.Assert(err, nil)
+
+		for _, expectedStr := range testCase.expectedStrings {
+			c.Assert(strings.Contains(string(getContent), expectedStr), true)
+		}
+	}
+}
+
+// TestListObjectsSpecialCharactersHandler - Setting valid parameters to List Objects
+// and then asserting the response with the expected one.
+func (s *TestSuiteCommon) TestListObjectsSpecialCharactersHandler(c *check) {
+	if runtime.GOOS == globalWindowsOSName {
+		c.Skip("skip special character test for windows")
+	}
+
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+
+	// execute the HTTP request to create bucket.
+	response, err := s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	for _, objectName := range []string{"foo bar 1", "foo bar 2", "foo \x01 bar"} {
+		buffer := bytes.NewReader([]byte("Hello World"))
+		request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
+			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+
+		response, err = s.client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+	}
+
+	testCases := []struct {
+		getURL          string
+		expectedStrings []string
+	}{
+		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", ""), []string{"<Key>foo bar 1</Key>", "<Key>foo bar 2</Key>", "<Key>foo &#x1; bar</Key>"}},
+		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>", "<Key>foo+%01+bar</Key>"}},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+			[]string{
+				"<Key>foo bar 1</Key>",
+				"<Key>foo bar 2</Key>",
+				"<Key>foo &#x1; bar</Key>",
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
+			},
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
+			[]string{
+				"<Key>foo bar 1</Key>",
+				"<Key>foo bar 2</Key>",
+				"<Key>foo &#x1; bar</Key>",
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
+			},
+		},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>", "<Key>foo+%01+bar</Key>"}},
 	}
 
 	for _, testCase := range testCases {

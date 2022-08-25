@@ -120,7 +120,7 @@ function start_minio_16drive() {
 	cat "${WORK_DIR}/server1.log"
 	echo "FAILED"
 	mkdir -p inspects
-	(cd inspects; "${WORK_DIR}/mc" admin inspect minio/healing-shard-bucket/unaligned/**)
+	(cd inspects; "${WORK_DIR}/mc" support inspect minio/healing-shard-bucket/unaligned/**)
 
 	"${WORK_DIR}/mc" mb play/inspects
 	"${WORK_DIR}/mc" mirror inspects play/inspects
@@ -140,7 +140,7 @@ function start_minio_16drive() {
 	cat "${WORK_DIR}/server1.log"
 	echo "FAILED"
 	mkdir -p inspects
-	(cd inspects; "${WORK_DIR}/mc" admin inspect minio/healing-shard-bucket/unaligned/**)
+	(cd inspects; "${WORK_DIR}/mc" support inspect minio/healing-shard-bucket/unaligned/**)
 
 	"${WORK_DIR}/mc" mb play/inspects
 	"${WORK_DIR}/mc" mirror inspects play/inspects

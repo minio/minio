@@ -1879,7 +1879,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		Mode:         string(mode),
 		Domain:       domain,
 		Region:       globalSite.Region,
-		SQSARN:       globalNotificationSys.GetARNList(false),
+		SQSARN:       globalEventNotifier.GetARNList(false),
 		DeploymentID: globalDeploymentID,
 		Buckets:      buckets,
 		Objects:      objects,

@@ -316,7 +316,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		}
 		logger.FatalIf(globalBucketMetadataSys.Init(GlobalContext, buckets, newObject), "Unable to initialize bucket metadata")
 
-		logger.FatalIf(globalNotificationSys.InitBucketTargets(GlobalContext, newObject), "Unable to initialize bucket targets for notification system")
+		logger.FatalIf(globalEventNotifier.InitBucketTargets(GlobalContext, newObject), "Unable to initialize bucket targets for notification system")
 	}
 
 	if globalCacheConfig.Enabled {
