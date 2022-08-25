@@ -360,6 +360,9 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			nonLocalPeerWithBuckets = v.Name
 		}
 	}
+	if selfIdx == -1 {
+		return madmin.ReplicateAddStatus{}, errSRBackendIssue(fmt.Errorf("global deployment ID %s mismatch, expected one of %s", globalDeploymentID, deploymentIDsSet))
+	}
 	if !currDeploymentIDsSet.IsEmpty() {
 		// If current cluster is already SR enabled and no new site being added ,fail.
 		if currDeploymentIDsSet.Equals(deploymentIDsSet) {
