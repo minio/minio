@@ -23,11 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -1511,23 +1513,62 @@ type ReplicationPool struct {
 	mrfSaveCh               chan MRFReplicateEntry
 	saveStateCh             chan struct{}
 
-	workerSize    int
-	mrfWorkerSize int
-	resyncState   replicationResyncState
-	workerWg      sync.WaitGroup
-	mrfWorkerWg   sync.WaitGroup
-	once          sync.Once
-	mu            sync.Mutex
+	workerSize       int
+	mrfWorkerSize    int
+	activeWorkers    int32
+	activeMRFWorkers int32
+	priority         string
+	resyncState      replicationResyncState
+	workerWg         sync.WaitGroup
+	mrfWorkerWg      sync.WaitGroup
+	once             sync.Once
+	mu               sync.RWMutex
 }
+
+const (
+	// WorkerMaxLimit max number of workers per node for "fast" mode
+	WorkerMaxLimit = 500
+
+	// WorkerMinLimit min number of workers per node for "slow" mode
+	WorkerMinLimit = 50
+
+	// WorkerAutoDefault is default number of workers for "auto" mode
+	WorkerAutoDefault = 100
+
+	// MRFWorkerMaxLimit max number of mrf workers per node for "fast" mode
+	MRFWorkerMaxLimit = 8
+
+	// MRFWorkerMinLimit min number of mrf workers per node for "slow" mode
+	MRFWorkerMinLimit = 2
+
+	// MRFWorkerAutoDefault is default number of mrf workers for "auto" mode
+	MRFWorkerAutoDefault = 4
+)
 
 // NewReplicationPool creates a pool of replication workers of specified size
 func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts) *ReplicationPool {
+	var workers, failedWorkers int
+	priority := "auto"
+	if opts.Priority != "" {
+		priority = opts.Priority
+	}
+	switch priority {
+	case "fast":
+		workers = WorkerMaxLimit
+		failedWorkers = MRFWorkerMaxLimit
+	case "slow":
+		workers = WorkerMinLimit
+		failedWorkers = MRFWorkerMinLimit
+	default:
+		workers = WorkerAutoDefault
+		failedWorkers = MRFWorkerAutoDefault
+	}
 	pool := &ReplicationPool{
 		replicaCh:               make(chan ReplicateObjectInfo, 100000),
 		replicaDeleteCh:         make(chan DeletedObjectReplicationInfo, 100000),
 		mrfReplicaCh:            make(chan ReplicateObjectInfo, 100000),
-		workerKillCh:            make(chan struct{}, opts.Workers),
-		mrfWorkerKillCh:         make(chan struct{}, opts.FailedWorkers),
+		workerKillCh:            make(chan struct{}, workers),
+		mrfWorkerKillCh:         make(chan struct{}, failedWorkers),
 		existingReplicaCh:       make(chan ReplicateObjectInfo, 100000),
 		existingReplicaDeleteCh: make(chan DeletedObjectReplicationInfo, 100000),
 		resyncState:             replicationResyncState{statusMap: make(map[string]BucketReplicationResyncStatus)},
@@ -1535,10 +1576,11 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		saveStateCh:             make(chan struct{}, 1),
 		ctx:                     ctx,
 		objLayer:                o,
+		priority:                priority,
 	}
 
-	pool.ResizeWorkers(opts.Workers)
-	pool.ResizeFailedWorkers(opts.FailedWorkers)
+	pool.ResizeWorkers(workers)
+	pool.ResizeFailedWorkers(failedWorkers)
 	go pool.AddExistingObjectReplicateWorker()
 	go pool.updateResyncStatus(ctx, o)
 	go pool.processMRF()
@@ -1559,7 +1601,9 @@ func (p *ReplicationPool) AddMRFWorker() {
 			if !ok {
 				return
 			}
+			atomic.AddInt32(&p.activeMRFWorkers, 1)
 			replicateObject(p.ctx, oi, p.objLayer)
+			atomic.AddInt32(&p.activeMRFWorkers, -1)
 		case <-p.mrfWorkerKillCh:
 			return
 		}
@@ -1577,12 +1621,17 @@ func (p *ReplicationPool) AddWorker() {
 			if !ok {
 				return
 			}
+			atomic.AddInt32(&p.activeWorkers, 1)
 			replicateObject(p.ctx, oi, p.objLayer)
+			atomic.AddInt32(&p.activeWorkers, -1)
+
 		case doi, ok := <-p.replicaDeleteCh:
 			if !ok {
 				return
 			}
+			atomic.AddInt32(&p.activeWorkers, 1)
 			replicateDelete(p.ctx, doi, p.objLayer)
+			atomic.AddInt32(&p.activeWorkers, -1)
 		case <-p.workerKillCh:
 			return
 		}
@@ -1609,6 +1658,16 @@ func (p *ReplicationPool) AddExistingObjectReplicateWorker() {
 	}
 }
 
+// ActiveWorkers returns the number of active workers handling replication traffic.
+func (p *ReplicationPool) ActiveWorkers() int {
+	return int(atomic.LoadInt32(&p.activeWorkers))
+}
+
+// ActiveMRFWorkers returns the number of active workers handling replication failures.
+func (p *ReplicationPool) ActiveMRFWorkers() int {
+	return int(atomic.LoadInt32(&p.activeMRFWorkers))
+}
+
 // ResizeWorkers sets replication workers pool to new size
 func (p *ReplicationPool) ResizeWorkers(n int) {
 	p.mu.Lock()
@@ -1625,6 +1684,33 @@ func (p *ReplicationPool) ResizeWorkers(n int) {
 	}
 }
 
+// ResizeWorkerPriority sets replication failed workers pool size
+func (p *ReplicationPool) ResizeWorkerPriority(pri string) {
+	var workers, mrfWorkers int
+	p.mu.Lock()
+	switch pri {
+	case "fast":
+		workers = WorkerMaxLimit
+		mrfWorkers = MRFWorkerMaxLimit
+	case "slow":
+		workers = WorkerMinLimit
+		mrfWorkers = MRFWorkerMinLimit
+	default:
+		workers = WorkerAutoDefault
+		mrfWorkers = MRFWorkerAutoDefault
+		if p.workerSize < WorkerAutoDefault {
+			workers = int(math.Min(float64(p.workerSize+1), WorkerAutoDefault))
+		}
+		if p.mrfWorkerSize < MRFWorkerAutoDefault {
+			mrfWorkers = int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerAutoDefault))
+		}
+	}
+	p.priority = pri
+	p.mu.Unlock()
+	p.ResizeWorkers(workers)
+	p.ResizeFailedWorkers(mrfWorkers)
+}
+
 // ResizeFailedWorkers sets replication failed workers pool size
 func (p *ReplicationPool) ResizeFailedWorkers(n int) {
 	p.mu.Lock()
@@ -1639,14 +1725,6 @@ func (p *ReplicationPool) ResizeFailedWorkers(n int) {
 		p.mrfWorkerSize--
 		go func() { p.mrfWorkerKillCh <- struct{}{} }()
 	}
-}
-
-// suggestedWorkers recommends an increase in number of workers to meet replication load.
-func (p *ReplicationPool) suggestedWorkers(failQueue bool) int {
-	if failQueue {
-		return int(float64(p.mrfWorkerSize) * ReplicationWorkerMultiplier)
-	}
-	return int(float64(p.workerSize) * ReplicationWorkerMultiplier)
 }
 
 func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
@@ -1675,7 +1753,23 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 	case ch <- ri:
 	default:
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
-		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing number of replicate object workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), string(replicationSubsystem))
+		p.mu.RLock()
+		switch p.priority {
+		case "fast":
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic"), string(replicationSubsystem))
+		case "slow":
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
+		default:
+			if p.ActiveWorkers() < WorkerMaxLimit {
+				workers := int(math.Min(float64(p.workerSize+1), WorkerMaxLimit))
+				p.ResizeWorkers(workers)
+			}
+			if p.ActiveMRFWorkers() < MRFWorkerMaxLimit {
+				workers := int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerMaxLimit))
+				p.ResizeFailedWorkers(workers)
+			}
+		}
+		p.mu.RUnlock()
 	}
 }
 
@@ -1713,19 +1807,29 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 	case ch <- doi:
 	default:
 		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
-		logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing number of replicate workers with `mc admin config set api replication_workers=%d`", p.suggestedWorkers(false)), string(replicationSubsystem))
+		p.mu.RLock()
+		switch p.priority {
+		case "fast":
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes"), string(replicationSubsystem))
+		case "slow":
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
+		default:
+			if p.ActiveWorkers() < WorkerMaxLimit {
+				workers := int(math.Min(float64(p.workerSize+1), WorkerMaxLimit))
+				p.ResizeWorkers(workers)
+			}
+		}
+		p.mu.RUnlock()
 	}
 }
 
 type replicationPoolOpts struct {
-	Workers       int
-	FailedWorkers int
+	Priority string
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	globalReplicationPool = NewReplicationPool(ctx, objectAPI, replicationPoolOpts{
-		Workers:       globalAPIConfig.getReplicationWorkers(),
-		FailedWorkers: globalAPIConfig.getReplicationFailedWorkers(),
+		Priority: globalAPIConfig.getReplicationPriority(),
 	})
 	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 	go globalReplicationStats.loadInitialReplicationMetrics(ctx)

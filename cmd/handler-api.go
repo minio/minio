@@ -41,10 +41,9 @@ type apiConfig struct {
 	listQuorum       string
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
-	totalDriveCount          int
-	replicationWorkers       int
-	replicationFailedWorkers int
-	transitionWorkers        int
+	totalDriveCount     int
+	replicationPriority string
+	transitionWorkers   int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -137,12 +136,11 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.ListQuorum
 	if globalReplicationPool != nil &&
-		cfg.ReplicationWorkers != t.replicationWorkers {
-		globalReplicationPool.ResizeFailedWorkers(cfg.ReplicationFailedWorkers)
-		globalReplicationPool.ResizeWorkers(cfg.ReplicationWorkers)
+		cfg.ReplicationPriority != t.replicationPriority {
+		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority)
 	}
-	t.replicationFailedWorkers = cfg.ReplicationFailedWorkers
-	t.replicationWorkers = cfg.ReplicationWorkers
+	t.replicationPriority = cfg.ReplicationPriority
+
 	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
@@ -289,18 +287,11 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (t *apiConfig) getReplicationFailedWorkers() int {
+func (t *apiConfig) getReplicationPriority() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	return t.replicationFailedWorkers
-}
-
-func (t *apiConfig) getReplicationWorkers() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.replicationWorkers
+	return t.replicationPriority
 }
 
 func (t *apiConfig) getTransitionWorkers() int {
