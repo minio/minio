@@ -1038,7 +1038,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 	var checksumCombined []byte
 
-	var partI ObjectPartInfo
 	for i, part := range partInfoFiles {
 		partID := parts[i].PartNumber
 		if part.Error != "" || !part.Exists {
@@ -1047,6 +1046,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 		}
 
+		var partI ObjectPartInfo
 		_, err := partI.UnmarshalMsg(part.Data)
 		if err != nil {
 			// Maybe crash or similar.
@@ -1120,11 +1120,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
 				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
 			}
-			if wantCS[checksumType.String()] != gotPart.Checksums[checksumType.String()] {
+			if wantCS[checksumType.String()] != crc {
 				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
 					ExpETag:    wantCS[checksumType.String()],
-					GotETag:    gotPart.Checksums[checksumType.String()],
+					GotETag:    crc,
 				}
 			}
 			cs := hash.NewChecksumString(checksumType.String(), crc)
