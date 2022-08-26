@@ -253,13 +253,13 @@ func genFormatCacheInvalidDisksOrder() []*formatCacheV2 {
 }
 
 // Wrapper for calling FormatCache tests - validates
-//  - valid format
-//  - unrecognized version number
-//  - unrecognized format tag
-//  - unrecognized cache version
-//  - wrong number of Disks entries
-//  - invalid This uuid
-//  - invalid Disks order
+//   - valid format
+//   - unrecognized version number
+//   - unrecognized format tag
+//   - unrecognized cache version
+//   - wrong number of Disks entries
+//   - invalid This uuid
+//   - invalid Disks order
 func TestFormatCache(t *testing.T) {
 	formatInputCases := [][]*formatCacheV1{
 		genFormatCacheValid(),

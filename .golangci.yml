@@ -1,8 +1,9 @@
 linters-settings:
   golint:
     min-confidence: 0
+
   gofumpt:
-    lang-version: "1.17"
+    lang-version: "1.18"
 
     # Choose whether or not to use the extra rules that are disabled
     # by default
@@ -20,11 +21,10 @@ linters:
     - govet
     - revive
     - ineffassign
-    - deadcode
     - gomodguard
     - gofmt
     - unconvert
-    - varcheck
+    - unused
     - gocritic
     - gofumpt
     - tenv

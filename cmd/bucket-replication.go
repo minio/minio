@@ -1377,7 +1377,6 @@ type ReplicationPool struct {
 	mrfWorkerWg   sync.WaitGroup
 	once          sync.Once
 	mu            sync.Mutex
-	mrfMutex      sync.Mutex
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size

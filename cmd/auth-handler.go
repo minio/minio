@@ -288,9 +288,10 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 }
 
 // Check request auth type verifies the incoming http request
-// - validates the request signature
-// - validates the policy action if anonymous tests bucket policies if any,
-//   for authenticated requests validates IAM policies.
+//   - validates the request signature
+//   - validates the policy action if anonymous tests bucket policies if any,
+//     for authenticated requests validates IAM policies.
+//
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
 	_, _, s3Err = checkRequestAuthTypeCredential(ctx, r, action, bucketName, objectName)
@@ -298,9 +299,10 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 }
 
 // Check request auth type verifies the incoming http request
-// - validates the request signature
-// - validates the policy action if anonymous tests bucket policies if any,
-//   for authenticated requests validates IAM policies.
+//   - validates the request signature
+//   - validates the policy action if anonymous tests bucket policies if any,
+//     for authenticated requests validates IAM policies.
+//
 // returns APIErrorCode if any to be replied to the client.
 // Additionally returns the accessKey used in the request, and if this request is by an admin.
 func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (cred auth.Credentials, owner bool, s3Err APIErrorCode) {

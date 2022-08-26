@@ -27,7 +27,8 @@ import (
 
 // Target is the entity that we will receive
 // a single log entry and Send it to the log target
-//   e.g. Send the log to a http server
+//
+//	e.g. Send the log to a http server
 type Target interface {
 	String() string
 	Endpoint() string
@@ -126,8 +127,9 @@ func initKafkaTargets(cfgMap map[string]kafka.Config) (tgts []Target, err error)
 }
 
 // Split targets into two groups:
-//  group1 contains all targets of type t
-//  group2 contains the remaining targets
+//
+//	group1 contains all targets of type t
+//	group2 contains the remaining targets
 func splitTargets(targets []Target, t types.TargetType) (group1 []Target, group2 []Target) {
 	for _, target := range targets {
 		if target.Type() == t {
