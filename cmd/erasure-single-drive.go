@@ -919,7 +919,7 @@ func (es *erasureSingle) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1163,7 +1163,7 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -2441,7 +2441,7 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// Add the current part.
-	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), fi.ModTime, index)
+	fi.AddObjectPart(partID, md5hex, n, data.ActualSize(), fi.ModTime, index, nil)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {

@@ -918,7 +918,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		}
 
 		// Add the current part.
-		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index, partI.Checksums)
 	}
 
 	// Only parts with higher part numbers will be listed.
@@ -1064,7 +1064,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 
 		// Add the current part.
-		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index, partI.Checksums)
 	}
 
 	// Calculate full object size.
@@ -1101,16 +1101,30 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		if gotPart.ETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
-				ExpETag:    currentFI.Parts[partIdx].ETag,
+				ExpETag:    gotPart.ETag,
 				GotETag:    part.ETag,
 			}
 			return oi, invp
 		}
+
 		if checksumType.IsSet() {
 			crc := gotPart.Checksums[checksumType.String()]
 			if crc == "" {
 				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
+				}
+			}
+			wantCS := map[string]string{
+				hash.ChecksumCRC32.String():  part.ChecksumCRC32,
+				hash.ChecksumCRC32C.String(): part.ChecksumCRC32C,
+				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
+				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
+			}
+			if wantCS[checksumType.String()] != gotPart.Checksums[checksumType.String()] {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+					ExpETag:    wantCS[checksumType.String()],
+					GotETag:    gotPart.Checksums[checksumType.String()],
 				}
 			}
 			cs := hash.NewChecksumString(checksumType.String(), crc)

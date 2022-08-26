@@ -146,7 +146,7 @@ var ErrInvalidChecksum = errors.New("invalid checksum")
 // AddChecksum will add checksum checks as specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html
 // Returns ErrInvalidChecksum if a problem with the checksum is found.
-func (r *Reader) AddChecksum(req *http.Request) error {
+func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
 	cs, err := GetContentChecksum(req)
 	if err != nil {
 		return ErrInvalidChecksum
@@ -155,7 +155,7 @@ func (r *Reader) AddChecksum(req *http.Request) error {
 		return nil
 	}
 	r.contentHash = *cs
-	if cs.Type.Trailing() {
+	if cs.Type.Trailing() || ignoreValue {
 		// Ignore until we have trailing headers.
 		return nil
 	}

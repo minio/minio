@@ -334,11 +334,11 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 				} else {
 					t = ChecksumInvalid
 				}
+				return ChecksumNone, ""
 			}
 		}
 		return t, s
 	}
-
 	checkType := func(c ChecksumType) {
 		if got := r.Header.Get(c.Key()); got != "" {
 			// If already set, invalid
