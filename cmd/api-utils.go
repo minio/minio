@@ -35,8 +35,8 @@ func shouldEscape(c byte) bool {
 
 // s3URLEncode is based on Golang's url.QueryEscape() code,
 // while considering some S3 exceptions:
-//	- Avoid encoding '/' and '*'
-//	- Force encoding of '~'
+//   - Avoid encoding '/' and '*'
+//   - Force encoding of '~'
 func s3URLEncode(s string) string {
 	spaceCount, hexCount := 0, 0
 	for i := 0; i < len(s); i++ {
