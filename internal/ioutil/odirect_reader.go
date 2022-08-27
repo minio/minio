@@ -40,9 +40,9 @@ type ODirectReader struct {
 
 // Block sizes constant.
 const (
-	BlockSizeSmall       = 128 * humanize.KiByte // Default r/w block size for smaller objects.
-	BlockSizeLarge       = 2 * humanize.MiByte   // Default r/w block size for larger objects.
-	BlockSizeReallyLarge = 4 * humanize.MiByte   // Default write block size for objects per shard >= 64MiB
+	BlockSizeSmall       = 32 * humanize.KiByte // Default r/w block size for smaller objects.
+	BlockSizeLarge       = 2 * humanize.MiByte  // Default r/w block size for larger objects.
+	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default write block size for objects per shard >= 64MiB
 )
 
 // O_DIRECT aligned sync.Pool's

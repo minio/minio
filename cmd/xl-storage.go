@@ -1849,31 +1849,13 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		}
 	}()
 
-	if fileSize >= 0 && fileSize <= smallFileThreshold {
-		// For streams smaller than 128KiB we simply write them as O_DSYNC (fdatasync)
-		// and not O_DIRECT to avoid the complexities of aligned I/O.
-		w, err := s.openFileSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
-		if err != nil {
-			return err
-		}
-		defer w.Close()
+	return s.writeAllDirect(ctx, filePath, fileSize, r, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
+}
 
-		written, err := io.Copy(w, r)
-		if err != nil {
-			return osErrToFileErr(err)
-		}
-
-		if written < fileSize {
-			return errLessData
-		} else if written > fileSize {
-			return errMoreData
-		}
-
-		return nil
-	}
-
+func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSize int64, r io.Reader, flags int) (err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
+	parentFilePath := pathutil.Dir(filePath)
 	if err = mkdirAll(parentFilePath, 0o777); err != nil {
 		return osErrToFileErr(err)
 	}
@@ -1881,24 +1863,23 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	odirectEnabled := s.oDirect
 	var w *os.File
 	if odirectEnabled {
-		w, err = OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
+		w, err = OpenFileDirectIO(filePath, flags, 0o666)
 	} else {
-		w, err = OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o666)
+		w, err = OpenFile(filePath, flags, 0o666)
 	}
 	if err != nil {
 		return osErrToFileErr(err)
 	}
-
-	defer func() {
-		Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
-		w.Close()
-	}()
+	defer w.Close()
 
 	var bufp *[]byte
 	if fileSize > 0 && fileSize >= largestFileThreshold {
 		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
+	} else if fileSize <= smallFileThreshold {
+		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
+		defer xioutil.ODirectPoolSmall.Put(bufp)
 	} else {
 		bufp = xioutil.ODirectPoolLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolLarge.Put(bufp)
@@ -1920,7 +1901,8 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		return errMoreData
 	}
 
-	return nil
+	// Only interested in flushing the size_t not mtime/atime
+	return Fdatasync(w)
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
@@ -1934,11 +1916,22 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 		return err
 	}
 
+	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+
 	var w *os.File
 	if sync {
-		w, err = s.openFileSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		// Perform directIO along with fdatasync for larger xl.meta, mostly when
+		// xl.meta has "inlined data" we prefer writing O_DIRECT and then doing
+		// fdatasync() at the end instead of opening the file with O_DSYNC.
+		//
+		// This is an optimization mainly to ensure faster I/O.
+		if len(b) > xioutil.DirectioAlignSize {
+			r := bytes.NewReader(b)
+			return s.writeAllDirect(ctx, filePath, r.Size(), r, flags)
+		}
+		w, err = s.openFileSync(filePath, flags)
 	} else {
-		w, err = s.openFileNoSync(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+		w, err = s.openFileNoSync(filePath, flags)
 	}
 	if err != nil {
 		return err
