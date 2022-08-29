@@ -30,7 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -232,6 +232,7 @@ const (
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
+	ErrContentChecksumMismatch
 
 	// Add new extended error codes here.
 
@@ -392,6 +393,8 @@ const (
 	ErrAccountNotEligible
 	ErrAdminServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
+
+	ErrInvalidChecksum
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1160,6 +1163,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The provided 'x-amz-content-sha256' header does not match what was computed.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrContentChecksumMismatch: {
+		Code:           "XAmzContentChecksumMismatch",
+		Description:    "The provided 'x-amz-checksum' header does not match what was computed.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	// MinIO extensions.
 	ErrStorageFull: {
@@ -1874,6 +1882,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid according to Policy: Policy Condition failed",
 		HTTPStatusCode: http.StatusForbidden,
 	},
+	ErrInvalidChecksum: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid checksum provided.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -2046,6 +2059,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSignatureDoesNotMatch
 	case hash.SHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
+	case hash.ChecksumMismatch:
+		apiErr = ErrContentChecksumMismatch
 	case ObjectTooLarge:
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:

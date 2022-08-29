@@ -26,6 +26,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/hash"
 	"github.com/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -58,6 +59,8 @@ type ObjectOptions struct {
 	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
+
+	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.
@@ -222,7 +225,7 @@ type ObjectLayer interface {
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
-	NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error)
+	NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (result *NewMultipartUploadResult, err error)
 	CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
 		startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (info PartInfo, err error)
 	PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error)

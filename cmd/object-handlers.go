@@ -519,6 +519,10 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 	}
 
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+		hash.AddChecksumHeader(w, objInfo.Checksum)
+	}
+
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -781,6 +785,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
+	}
+
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+		hash.AddChecksumHeader(w, objInfo.Checksum)
 	}
 
 	// Set standard object headers.
@@ -1740,7 +1748,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-
+		if err = actualReader.AddChecksum(r, false); err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+			return
+		}
 		// Set compression metrics.
 		var s2c io.ReadCloser
 		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
@@ -1756,6 +1767,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := hashReader.AddChecksum(r, size < 0); err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 		return
 	}
 
@@ -1895,7 +1910,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
@@ -1915,6 +1929,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
+	// Do not send checksums in events to avoid leaks.
+	hash.TransferChecksumHeader(w, r)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -2049,6 +2065,10 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	hreader, err := hash.NewReader(reader, size, md5hex, sha256hex, size)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err = hreader.AddChecksum(r, false); err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 		return
 	}
 
@@ -2220,6 +2240,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	}
 
 	w.Header()[xhttp.ETag] = []string{`"` + hex.EncodeToString(hreader.MD5Current()) + `"`}
+	hash.TransferChecksumHeader(w, r)
 	writeSuccessResponseHeadersOnly(w)
 }
 

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -266,6 +267,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 		}
 	}
+	hash.AddChecksumHeader(w, objInfo.Checksum)
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {

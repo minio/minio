@@ -32,6 +32,7 @@ import (
 
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -325,7 +326,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // '.minio.sys/multipart/bucket/object/uploads.json' on all the
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
-func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
+func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	userDefined := cloneMSS(opts.UserDefined)
 
 	onlineDisks := er.getDisks()
@@ -352,7 +353,6 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	if parityOrig != parityDrives {
 		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
-
 	dataDrives := len(onlineDisks) - parityDrives
 
 	// we now know the number of blocks this object needs for data and parity.
@@ -382,6 +382,10 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
+	if opts.WantChecksum != nil && opts.WantChecksum.Type.IsSet() {
+		userDefined[hash.MinIOMultipartChecksum] = opts.WantChecksum.Type.String()
+	}
+
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
@@ -402,11 +406,12 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
+		return nil, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
-
-	// Return success.
-	return uploadID, nil
+	return &NewMultipartUploadResult{
+		UploadID:     uploadID,
+		ChecksumAlgo: userDefined[hash.MinIOMultipartChecksum],
+	}, nil
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a
@@ -414,7 +419,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
+func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	auditObjectErasureSet(ctx, object, &er)
 
 	return er.newMultipartUpload(ctx, bucket, object, opts)
@@ -590,9 +595,18 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Pick one from the first valid metadata.
 	fi, err := pickValidFileInfo(pctx, partsMetadata, modTime, writeQuorum)
 	if err != nil {
-		return pi, err
+		return pi, toObjectErr(err)
 	}
 
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		if r.ContentCRCType().String() != cs {
+			return pi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum missing"),
+			}
+		}
+	}
 	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
 
 	// Need a unique name for the part being written in minioMetaBucket to
@@ -703,6 +717,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		ActualSize: data.ActualSize(),
 		ModTime:    UTCNow(),
 		Index:      index,
+		Checksums:  r.ContentCRC(),
 	}
 
 	partMsg, err := part.MarshalMsg(nil)
@@ -718,11 +733,15 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Return success.
 	return PartInfo{
-		PartNumber:   part.Number,
-		ETag:         part.ETag,
-		LastModified: part.ModTime,
-		Size:         part.Size,
-		ActualSize:   part.ActualSize,
+		PartNumber:     part.Number,
+		ETag:           part.ETag,
+		LastModified:   part.ModTime,
+		Size:           part.Size,
+		ActualSize:     part.ActualSize,
+		ChecksumCRC32:  part.Checksums["CRC32"],
+		ChecksumCRC32C: part.Checksums["CRC32C"],
+		ChecksumSHA1:   part.Checksums["SHA1"],
+		ChecksumSHA256: part.Checksums["SHA256"],
 	}, nil
 }
 
@@ -872,6 +891,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
 	result.UserDefined = cloneMSS(fi.Metadata)
+	result.ChecksumAlgorithm = fi.Metadata[hash.MinIOMultipartChecksum]
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(partInfoFiles) == 0 || maxParts == 0 {
@@ -898,7 +918,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		}
 
 		// Add the current part.
-		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index, partI.Checksums)
 	}
 
 	// Only parts with higher part numbers will be listed.
@@ -906,11 +926,15 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.Parts = make([]PartInfo, 0, len(parts))
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
-			PartNumber:   part.Number,
-			ETag:         part.ETag,
-			LastModified: part.ModTime,
-			ActualSize:   part.ActualSize,
-			Size:         part.Size,
+			PartNumber:     part.Number,
+			ETag:           part.ETag,
+			LastModified:   part.ModTime,
+			ActualSize:     part.ActualSize,
+			Size:           part.Size,
+			ChecksumCRC32:  part.Checksums["CRC32"],
+			ChecksumCRC32C: part.Checksums["CRC32C"],
+			ChecksumSHA1:   part.Checksums["SHA1"],
+			ChecksumSHA256: part.Checksums["SHA256"],
 		})
 		if len(result.Parts) >= maxParts {
 			break
@@ -1000,7 +1024,20 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	var partI ObjectPartInfo
+	// Checksum type set when upload started.
+	var checksumType hash.ChecksumType
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		checksumType = hash.NewChecksumType(cs)
+		if opts.WantChecksum != nil && !opts.WantChecksum.Type.Is(checksumType) {
+			return oi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum type mismatch"),
+			}
+		}
+	}
+	var checksumCombined []byte
+
 	for i, part := range partInfoFiles {
 		partID := parts[i].PartNumber
 		if part.Error != "" || !part.Exists {
@@ -1009,6 +1046,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 		}
 
+		var partI ObjectPartInfo
 		_, err := partI.UnmarshalMsg(part.Data)
 		if err != nil {
 			// Maybe crash or similar.
@@ -1026,7 +1064,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 
 		// Add the current part.
-		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index)
+		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index, partI.Checksums)
 	}
 
 	// Calculate full object size.
@@ -1056,42 +1094,85 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
+		gotPart := currentFI.Parts[partIdx]
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		if currentFI.Parts[partIdx].ETag != part.ETag {
+		if gotPart.ETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
-				ExpETag:    currentFI.Parts[partIdx].ETag,
+				ExpETag:    gotPart.ETag,
 				GotETag:    part.ETag,
 			}
 			return oi, invp
+		}
+
+		if checksumType.IsSet() {
+			crc := gotPart.Checksums[checksumType.String()]
+			if crc == "" {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			wantCS := map[string]string{
+				hash.ChecksumCRC32.String():  part.ChecksumCRC32,
+				hash.ChecksumCRC32C.String(): part.ChecksumCRC32C,
+				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
+				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
+			}
+			if wantCS[checksumType.String()] != crc {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+					ExpETag:    wantCS[checksumType.String()],
+					GotETag:    crc,
+				}
+			}
+			cs := hash.NewChecksumString(checksumType.String(), crc)
+			if !cs.Valid() {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			checksumCombined = append(checksumCombined, cs.Raw()...)
 		}
 
 		// All parts except the last part has to be at least 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentFI.Parts[partIdx].ActualSize,
+				PartSize:   gotPart.ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
 
 		// Save for total object size.
-		objectSize += currentFI.Parts[partIdx].Size
+		objectSize += gotPart.Size
 
 		// Save the consolidated actual size.
-		objectActualSize += currentFI.Parts[partIdx].ActualSize
+		objectActualSize += gotPart.ActualSize
 
 		// Add incoming parts.
 		fi.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			Size:       currentFI.Parts[partIdx].Size,
-			ActualSize: currentFI.Parts[partIdx].ActualSize,
-			ModTime:    currentFI.Parts[partIdx].ModTime,
-			Index:      currentFI.Parts[partIdx].Index,
+			Size:       gotPart.Size,
+			ActualSize: gotPart.ActualSize,
+			ModTime:    gotPart.ModTime,
+			Index:      gotPart.Index,
+			Checksums:  nil, // Not transferred since we do not need it.
 		}
 	}
+
+	if opts.WantChecksum != nil {
+		err := opts.WantChecksum.Matches(checksumCombined)
+		if err != nil {
+			return oi, err
+		}
+	}
+	if checksumType.IsSet() {
+		cs := hash.NewChecksumFromData(checksumType, checksumCombined)
+		fi.Checksum = map[string]string{cs.Type.String(): cs.Encoded}
+	}
+	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize

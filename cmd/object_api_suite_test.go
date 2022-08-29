@@ -95,10 +95,12 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	uploadID, err := obj.NewMultipartUpload(context.Background(), "bucket", "key", opts)
+	res, err := obj.NewMultipartUpload(context.Background(), "bucket", "key", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	uploadID := res.UploadID
+
 	// Create a byte array of 5MiB.
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*humanize.MiByte/16)
 	completedParts := CompleteMultipartUpload{}
@@ -139,10 +141,11 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	uploadID, err := obj.NewMultipartUpload(context.Background(), "bucket", "key", opts)
+	res, err := obj.NewMultipartUpload(context.Background(), "bucket", "key", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	uploadID := res.UploadID
 
 	parts := make(map[int]string)
 	metadata := make(map[string]string)

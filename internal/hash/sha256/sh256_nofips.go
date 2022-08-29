@@ -32,3 +32,6 @@ func New() hash.Hash { return nofipssha256.New() }
 
 // Sum256 returns the SHA256 checksum of the data.
 func Sum256(data []byte) [nofipssha256.Size]byte { return nofipssha256.Sum256(data) }
+
+// Size is the size of a SHA256 checksum in bytes.
+const Size = nofipssha256.Size

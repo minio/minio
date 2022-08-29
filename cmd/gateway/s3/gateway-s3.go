@@ -607,13 +607,13 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 }
 
 // NewMultipartUpload upload object in multiple parts
-func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
+func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket, object string, o minio.ObjectOptions) (result *minio.NewMultipartUploadResult, err error) {
 	var tagMap map[string]string
 	userDefined := minio.CloneMSS(o.UserDefined)
 	if tagStr, ok := userDefined[xhttp.AmzObjectTagging]; ok {
 		tagObj, err := tags.Parse(tagStr, true)
 		if err != nil {
-			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+			return nil, minio.ErrorRespToObjectError(err, bucket, object)
 		}
 		tagMap = tagObj.ToMap()
 		delete(userDefined, xhttp.AmzObjectTagging)
@@ -624,11 +624,11 @@ func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, objec
 		ServerSideEncryption: o.ServerSideEncryption,
 		UserTags:             tagMap,
 	}
-	uploadID, err = l.Client.NewMultipartUpload(ctx, bucket, object, opts)
+	uploadID, err := l.Client.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
-		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	return uploadID, nil
+	return &minio.NewMultipartUploadResult{UploadID: uploadID}, nil
 }
 
 // PutObjectPart puts a part of object in bucket

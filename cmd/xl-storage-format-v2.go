@@ -36,6 +36,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
@@ -637,6 +638,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
 		fi.TransitionTier = string(sc)
+	}
+	if crcs := j.MetaSys[ReservedMetadataPrefixLower+"crc"]; len(crcs) > 0 {
+		fi.Checksum = hash.ReadCheckSums(crcs)
 	}
 	return fi, nil
 }
@@ -1535,6 +1539,16 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 		if fi.TransitionTier != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+		}
+		if len(fi.Checksum) > 0 {
+			res := make([]byte, 0, len(fi.Checksum)*40)
+			for k, v := range fi.Checksum {
+				crc := hash.NewChecksumString(k, v)
+				if crc.Valid() {
+					res = crc.AppendTo(res)
+				}
+			}
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+"crc"] = res
 		}
 	}
 

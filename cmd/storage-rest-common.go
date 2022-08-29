@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v47" // Added ReadMultiple
+	storageRESTVersion       = "v48" // Added Checksums
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

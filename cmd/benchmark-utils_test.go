@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 // Benchmark utility functions for ObjectLayer.PutObject().
@@ -85,12 +85,12 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 
 	// PutObjectPart returns etag of the object inserted.
 	// etag variable is assigned with that value.
-	var etag, uploadID string
+	var etag string
 	// get text data generated for number of bytes equal to object size.
 	textData := generateBytesData(objSize)
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for NewMultipartUpload.
-	uploadID, err = obj.NewMultipartUpload(context.Background(), bucket, object, ObjectOptions{})
+	res, err := obj.NewMultipartUpload(context.Background(), bucket, object, ObjectOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			}
 			md5hex := getMD5Hash(textPartData)
 			var partInfo PartInfo
-			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, uploadID, j,
+			partInfo, err = obj.PutObjectPart(context.Background(), bucket, object, res.UploadID, j,
 				mustGetPutObjReader(b, bytes.NewReader(textPartData), int64(len(textPartData)), md5hex, sha256hex), ObjectOptions{})
 			if err != nil {
 				b.Fatal(err)

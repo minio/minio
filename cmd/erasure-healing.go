@@ -514,6 +514,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			partModTime := latestMeta.Parts[partIndex].ModTime
 			partNumber := latestMeta.Parts[partIndex].Number
 			partIdx := latestMeta.Parts[partIndex].Index
+			partChecksums := latestMeta.Parts[partIndex].Checksums
 			tillOffset := erasure.ShardFileOffset(0, partSize, partSize)
 			readers := make([]io.ReaderAt, len(latestDisks))
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
@@ -567,7 +568,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 
 				partsMetadata[i].DataDir = dstDataDir
-				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx)
+				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
 				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 					PartNumber: partNumber,
 					Algorithm:  checksumAlgo,

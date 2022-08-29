@@ -229,6 +229,10 @@ type FileInfo struct {
 	// This is mainly used for detecting a particular issue
 	// reported in https://github.com/minio/minio/pull/13803
 	DiskMTime time.Time `msg:"dmt"`
+
+	// Combined checksum when object was uploaded.
+	// Format is type:base64(checksum).
+	Checksum map[string]string `msg:"cs,allownil"`
 }
 
 // Equals checks if fi(FileInfo) matches ofi(FileInfo)

@@ -48,3 +48,13 @@ type ErrSizeMismatch struct {
 func (e ErrSizeMismatch) Error() string {
 	return fmt.Sprintf("Size mismatch: got %d, want %d", e.Got, e.Want)
 }
+
+// ChecksumMismatch - when content checksum does not match with what was sent from client.
+type ChecksumMismatch struct {
+	Want string
+	Got  string
+}
+
+func (e ChecksumMismatch) Error() string {
+	return "Bad checksum: Want " + e.Want + " does not match calculated " + e.Got
+}

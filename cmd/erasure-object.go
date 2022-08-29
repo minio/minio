@@ -837,7 +837,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -962,6 +962,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
+	fi.Checksum = opts.WantChecksum.AsMap()
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1105,7 +1106,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex)
+		// No need to add checksum to part. We already have it on the object.
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1911,7 +1913,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 	}
 
-	uploadID, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
+	res, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
 	if err != nil {
 		return setRestoreHeaderFn(oi, err)
 	}
@@ -1931,7 +1933,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
-		pInfo, err := er.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
+		pInfo, err := er.PutObjectPart(ctx, bucket, object, res.UploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
@@ -1943,7 +1945,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{
 		MTime: oi.ModTime,
 	})
 	return setRestoreHeaderFn(oi, err)
