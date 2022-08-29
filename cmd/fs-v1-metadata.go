@@ -82,7 +82,7 @@ func (c FSChecksumInfoV1) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-// UnmarshalJSON unmarshals the the given data into the FSChecksumInfoV1 struct
+// UnmarshalJSON unmarshals the given data into the FSChecksumInfoV1 struct
 func (c *FSChecksumInfoV1) UnmarshalJSON(data []byte) error {
 	type checksuminfo struct {
 		Algorithm string   `json:"algorithm"`

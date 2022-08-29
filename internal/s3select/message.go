@@ -64,7 +64,7 @@ var recordsHeader = []byte{
 
 const (
 	// Chosen for compatibility with AWS JAVA SDK
-	// It has a a buffer size of 128K:
+	// It has a buffer size of 128K:
 	// https://github.com/aws/aws-sdk-java/blob/master/aws-java-sdk-s3/src/main/java/com/amazonaws/services/s3/internal/eventstreaming/MessageDecoder.java#L26
 	// but we must make sure there is always space to add 256 bytes:
 	// https://github.com/aws/aws-sdk-java/blob/master/aws-java-sdk-s3/src/main/java/com/amazonaws/services/s3/model/SelectObjectContentEventStream.java#L197
