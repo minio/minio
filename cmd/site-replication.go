@@ -3322,8 +3322,11 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 					return info, errSRBackendIssue(err)
 				}
 				for _, svcAcct := range svcAccts {
-					info.UserInfoMap[svcAcct.AccessKey] = madmin.UserInfo{
-						Status: madmin.AccountStatus(svcAcct.Status),
+					// report all non-root user accounts for syncing
+					if svcAcct.ParentUser != "" && svcAcct.ParentUser != globalActiveCred.AccessKey {
+						info.UserInfoMap[svcAcct.AccessKey] = madmin.UserInfo{
+							Status: madmin.AccountStatus(svcAcct.Status),
+						}
 					}
 				}
 				tempAccts, err := globalIAMSys.ListTempAccounts(ctx, user)
