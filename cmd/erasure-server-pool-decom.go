@@ -656,6 +656,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 }
 
 // versionsSorter sorts FileInfo slices by version.
+//
 //msgp:ignore versionsSorter
 type versionsSorter []FileInfo
 

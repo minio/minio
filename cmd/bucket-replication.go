@@ -197,7 +197,7 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 
 	// Disable server-side replication on object prefixes which are excluded
 	// from versioning via the MinIO bucket versioning extension.
-	if globalBucketVersioningSys.PrefixSuspended(bucket, object) {
+	if !globalBucketVersioningSys.PrefixEnabled(bucket, object) {
 		return
 	}
 
@@ -490,7 +490,11 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		MTime:             dobj.DeleteMarkerMTime.Time,
 		DeleteReplication: drs,
 		Versioned:         globalBucketVersioningSys.PrefixEnabled(bucket, dobj.ObjectName),
-		VersionSuspended:  globalBucketVersioningSys.PrefixSuspended(bucket, dobj.ObjectName),
+		// Objects matching prefixes should not leave delete markers,
+		// dramatically reduces namespace pollution while keeping the
+		// benefits of replication, make sure to apply version suspension
+		// only at bucket level instead.
+		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
 	})
 	if err != nil && !isErrVersionNotFound(err) { // VersionNotFound would be reported by pool that object version is missing on.
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, dobj.ObjectName, versionID, err))
@@ -1373,7 +1377,6 @@ type ReplicationPool struct {
 	mrfWorkerWg   sync.WaitGroup
 	once          sync.Once
 	mu            sync.Mutex
-	mrfMutex      sync.Mutex
 }
 
 // NewReplicationPool creates a pool of replication workers of specified size

@@ -34,20 +34,22 @@ var etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
 // operation should not proceed. Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
+//
+//	x-amz-copy-source-if-modified-since
+//	x-amz-copy-source-if-unmodified-since
+//	x-amz-copy-source-if-match
+//	x-amz-copy-source-if-none-match
 func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	return checkCopyObjectPreconditions(ctx, w, r, objInfo)
 }
 
 // Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
 // Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
+//
+//	x-amz-copy-source-if-modified-since
+//	x-amz-copy-source-if-unmodified-since
+//	x-amz-copy-source-if-match
+//	x-amz-copy-source-if-none-match
 func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodPut {
@@ -129,10 +131,11 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 
 // Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
 // Preconditions supported are:
-//  If-Modified-Since
-//  If-Unmodified-Since
-//  If-Match
-//  If-None-Match
+//
+//	If-Modified-Since
+//	If-Unmodified-Since
+//	If-Match
+//	If-None-Match
 func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

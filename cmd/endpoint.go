@@ -702,6 +702,17 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		}
 	}
 
+	// Add missing port in all endpoints.
+	for i := range endpoints {
+		_, port, err := net.SplitHostPort(endpoints[i].Host)
+		if err != nil {
+			endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
+		} else if endpoints[i].IsLocal && serverAddrPort != port {
+			// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
+			endpoints[i].IsLocal = false
+		}
+	}
+
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
 		// If all endpoints have same port number, Just treat it as local erasure setup
@@ -716,17 +727,6 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 		// Even though all endpoints are local, but those endpoints use different ports.
 		// This means it is DistErasure setup.
-	}
-
-	// Add missing port in all endpoints.
-	for i := range endpoints {
-		_, port, err := net.SplitHostPort(endpoints[i].Host)
-		if err != nil {
-			endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
-		} else if endpoints[i].IsLocal && serverAddrPort != port {
-			// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
-			endpoints[i].IsLocal = false
-		}
 	}
 
 	uniqueArgs := set.NewStringSet()

@@ -170,7 +170,11 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 		return opts, err
 	}
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
-	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
+	// Objects matching prefixes should not leave delete markers,
+	// dramatically reduces namespace pollution while keeping the
+	// benefits of replication, make sure to apply version suspension
+	// only at bucket level instead.
+	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
 		switch delMarker {

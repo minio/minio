@@ -75,6 +75,9 @@ spec:
             - key: {{ .Values.tls.publicCrt }}
               path: CAs/public.crt
         {{ end }}
+        {{- if .Values.makeUserJob.extraVolumes }}
+          {{- toYaml .Values.makeUserJob.extraVolumes | nindent 8 }}
+        {{- end }}
       containers:
       - name: minio-mc
         image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
@@ -97,6 +100,9 @@ spec:
           - name: cert-secret-volume-mc
             mountPath: {{ .Values.configPathmc }}certs
           {{ end }}
+          {{- if .Values.makeUserJob.extraVolumeMounts }}
+            {{- toYaml .Values.makeUserJob.extraVolumeMounts | nindent 10 }}
+          {{- end }}
         resources:
 {{ toYaml .Values.makeUserJob.resources | indent 10 }}
 {{- end }}

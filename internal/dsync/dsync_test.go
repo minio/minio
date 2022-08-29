@@ -206,7 +206,6 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 }
 
 // Test refreshing lock - refresh should always return true
-//
 func TestSuccessfulLockRefresh(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")

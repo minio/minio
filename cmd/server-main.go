@@ -249,8 +249,11 @@ func initAllSubsystems() {
 	globalBackgroundHealState = newHealState(false)
 	globalHealStateLK.Unlock()
 
-	// Create new notification system and initialize notification peer targets
+	// Initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
+
+	// Create new notification system
+	globalEventNotifier = NewEventNotifier()
 
 	// Create new bucket metadata system.
 	if globalBucketMetadataSys == nil {
@@ -630,7 +633,7 @@ func serverMain(ctx *cli.Context) {
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize bucket notification targets.
-		globalNotificationSys.InitBucketTargets(GlobalContext, newObject)
+		globalEventNotifier.InitBucketTargets(GlobalContext, newObject)
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {

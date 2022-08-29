@@ -26,9 +26,10 @@ import (
 )
 
 // healTask represents what to heal along with options
-//   path: '/' =>  Heal disk formats along with metadata
-//   path: 'bucket/' or '/bucket/' => Heal bucket
-//   path: 'bucket/object' => Heal object
+//
+//	path: '/' =>  Heal disk formats along with metadata
+//	path: 'bucket/' or '/bucket/' => Heal bucket
+//	path: 'bucket/object' => Heal object
 type healTask struct {
 	bucket    string
 	object    string

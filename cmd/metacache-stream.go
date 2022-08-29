@@ -184,6 +184,9 @@ func (w *metacacheWriter) stream() (chan<- metaCacheEntry, error) {
 				continue
 			}
 			err = w.mw.WriteBytes(o.metadata)
+			if w.reuseBlocks || o.reusable {
+				metaDataPoolPut(o.metadata)
+			}
 			if err != nil {
 				w.streamErr = err
 				continue

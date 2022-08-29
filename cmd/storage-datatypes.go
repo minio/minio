@@ -22,6 +22,7 @@ import (
 )
 
 // DeleteOptions represents the disk level delete options available for the APIs
+//
 //msgp:ignore DeleteOptions
 type DeleteOptions struct {
 	Recursive bool
@@ -32,8 +33,11 @@ type DeleteOptions struct {
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
-//msgp:tuple DiskInfo
 // The above means that any added/deleted fields are incompatible.
+//
+// The above means that any added/deleted fields are incompatible.
+//
+//msgp:tuple DiskInfo
 type DiskInfo struct {
 	Total      uint64
 	Free       uint64
@@ -65,8 +69,11 @@ type DiskMetrics struct {
 type VolsInfo []VolInfo
 
 // VolInfo - represents volume stat information.
-//msgp:tuple VolInfo
 // The above means that any added/deleted fields are incompatible.
+//
+// The above means that any added/deleted fields are incompatible.
+//
+//msgp:tuple VolInfo
 type VolInfo struct {
 	// Name of the volume.
 	Name string
@@ -77,6 +84,8 @@ type VolInfo struct {
 
 // FilesInfo represent a list of files, additionally
 // indicates if the list is last.
+//
+//msgp:tuple FileInfo
 type FilesInfo struct {
 	Files       []FileInfo
 	IsTruncated bool
@@ -91,8 +100,11 @@ func (f FileInfoVersions) Size() (size int64) {
 }
 
 // FileInfoVersions represent a list of versions for a given file.
-//msgp:tuple FileInfoVersions
 // The above means that any added/deleted fields are incompatible.
+//
+// The above means that any added/deleted fields are incompatible.
+//
+//msgp:tuple FileInfoVersions
 type FileInfoVersions struct {
 	// Name of the volume.
 	Volume string `msg:"v,omitempty"`
@@ -136,7 +148,6 @@ type RawFileInfo struct {
 }
 
 // FileInfo - represents file stat information.
-//msgp:tuple FileInfo
 // The above means that any added/deleted fields are incompatible.
 // Make sure to bump the internode version at storage-rest-common.go
 type FileInfo struct {
@@ -239,10 +250,10 @@ func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
 }
 
 // GetDataDir returns an expected dataDir given FileInfo
-// - deleteMarker returns "delete-marker"
-// - returns "legacy" if FileInfo is XLV1 and DataDir is
-//   empty, returns DataDir otherwise
-// - returns "dataDir"
+//   - deleteMarker returns "delete-marker"
+//   - returns "legacy" if FileInfo is XLV1 and DataDir is
+//     empty, returns DataDir otherwise
+//   - returns "dataDir"
 func (fi FileInfo) GetDataDir() string {
 	if fi.Deleted {
 		return "delete-marker"
