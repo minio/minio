@@ -285,6 +285,29 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
+	if globalTrace.NumSubscribers(madmin.TraceHealing) != 0 {
+		startTime := time.Now()
+		defer func() {
+			tr := madmin.TraceInfo{
+				TraceType: madmin.TraceHealing,
+				Time:      startTime,
+				NodeName:  globalLocalNodeName,
+				FuncName:  "heal.checkVersion",
+				Duration:  time.Since(startTime),
+				Message:   fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode),
+				Path:      fmt.Sprintf("%s/%s", bucket, object),
+			}
+			if versionID != "" && versionID != "null" {
+				tr.Path += " v-" + versionID
+			}
+			if err != nil {
+				tr.Error = err.Error()
+			} else {
+				tr.HealResult = &result
+			}
+			globalTrace.Publish(tr)
+		}()
+	}
 	// Initialize heal result object
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemObject,

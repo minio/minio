@@ -222,3 +222,5 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
+
+replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20220830094240-17a19a73d7b8
