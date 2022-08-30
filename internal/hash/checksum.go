@@ -136,7 +136,7 @@ func (c ChecksumType) String() string {
 	case c.Is(ChecksumSHA256):
 		return "SHA256"
 	case c.Is(ChecksumNone):
-		return "<none>"
+		return ""
 	}
 	return "invalid"
 }
