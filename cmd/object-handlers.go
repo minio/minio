@@ -520,7 +520,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.Checksum)
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
 	}
 
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
@@ -788,7 +788,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.Checksum)
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
 	}
 
 	// Set standard object headers.
@@ -1850,6 +1850,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			if opts.IndexCB != nil {
 				opts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, opts.IndexCB)
 			}
+			opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 		}
 	}
 

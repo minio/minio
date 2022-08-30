@@ -603,7 +603,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 			return pi, InvalidArgument{
 				Bucket: bucket,
 				Object: fi.Name,
-				Err:    fmt.Errorf("checksum missing"),
+				Err:    fmt.Errorf("checksum missing, want %s, got %s", cs, r.ContentCRCType().String()),
 			}
 		}
 	}
@@ -1170,7 +1170,10 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 	if checksumType.IsSet() {
 		cs := hash.NewChecksumFromData(checksumType, checksumCombined)
-		fi.Checksum = map[string]string{cs.Type.String(): cs.Encoded}
+		fi.Checksum = cs.AppendTo(nil)
+		if opts.EncryptFn != nil {
+			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+		}
 	}
 	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
 

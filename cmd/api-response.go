@@ -704,16 +704,17 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
 func generateCompleteMultpartUploadResponse(bucket, key, location string, oi ObjectInfo) CompleteMultipartUploadResponse {
+	cs := oi.decryptChecksums()
 	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
 		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
 		ETag:           "\"" + oi.ETag + "\"",
-		ChecksumSHA1:   oi.Checksum[hash.ChecksumSHA1.String()],
-		ChecksumSHA256: oi.Checksum[hash.ChecksumSHA256.String()],
-		ChecksumCRC32:  oi.Checksum[hash.ChecksumCRC32.String()],
-		ChecksumCRC32C: oi.Checksum[hash.ChecksumCRC32C.String()],
+		ChecksumSHA1:   cs[hash.ChecksumSHA1.String()],
+		ChecksumSHA256: cs[hash.ChecksumSHA256.String()],
+		ChecksumCRC32:  cs[hash.ChecksumCRC32.String()],
+		ChecksumCRC32C: cs[hash.ChecksumCRC32C.String()],
 	}
 	return c
 }

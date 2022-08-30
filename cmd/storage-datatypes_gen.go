@@ -778,43 +778,10 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	if dc.IsNil() {
-		err = dc.ReadNil()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		z.Checksum = nil
-	} else {
-		var zb0004 uint32
-		zb0004, err = dc.ReadMapHeader()
-		if err != nil {
-			err = msgp.WrapError(err, "Checksum")
-			return
-		}
-		if z.Checksum == nil {
-			z.Checksum = make(map[string]string, zb0004)
-		} else if len(z.Checksum) > 0 {
-			for key := range z.Checksum {
-				delete(z.Checksum, key)
-			}
-		}
-		for zb0004 > 0 {
-			zb0004--
-			var za0004 string
-			var za0005 string
-			za0004, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum")
-				return
-			}
-			za0005, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum", za0004)
-				return
-			}
-			z.Checksum[za0004] = za0005
-		}
+	z.Checksum, err = dc.ReadBytes(z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
 	}
 	return
 }
@@ -980,29 +947,10 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	if z.Checksum == nil { // allownil: if nil
-		err = en.WriteNil()
-		if err != nil {
-			return
-		}
-	} else {
-		err = en.WriteMapHeader(uint32(len(z.Checksum)))
-		if err != nil {
-			err = msgp.WrapError(err, "Checksum")
-			return
-		}
-		for za0004, za0005 := range z.Checksum {
-			err = en.WriteString(za0004)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum")
-				return
-			}
-			err = en.WriteString(za0005)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum", za0004)
-				return
-			}
-		}
+	err = en.WriteBytes(z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
 	}
 	return
 }
@@ -1058,15 +1006,7 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendBool(o, z.Fresh)
 	o = msgp.AppendInt(o, z.Idx)
 	o = msgp.AppendTime(o, z.DiskMTime)
-	if z.Checksum == nil { // allownil: if nil
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendMapHeader(o, uint32(len(z.Checksum)))
-		for za0004, za0005 := range z.Checksum {
-			o = msgp.AppendString(o, za0004)
-			o = msgp.AppendString(o, za0005)
-		}
-	}
+	o = msgp.AppendBytes(o, z.Checksum)
 	return
 }
 
@@ -1254,39 +1194,10 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	if msgp.IsNil(bts) {
-		bts = bts[1:]
-		z.Checksum = nil
-	} else {
-		var zb0004 uint32
-		zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err, "Checksum")
-			return
-		}
-		if z.Checksum == nil {
-			z.Checksum = make(map[string]string, zb0004)
-		} else if len(z.Checksum) > 0 {
-			for key := range z.Checksum {
-				delete(z.Checksum, key)
-			}
-		}
-		for zb0004 > 0 {
-			var za0004 string
-			var za0005 string
-			zb0004--
-			za0004, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum")
-				return
-			}
-			za0005, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksum", za0004)
-				return
-			}
-			z.Checksum[za0004] = za0005
-		}
+	z.Checksum, bts, err = msgp.ReadBytesBytes(bts, z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
 	}
 	o = bts
 	return
@@ -1305,13 +1216,7 @@ func (z *FileInfo) Msgsize() (s int) {
 	for za0003 := range z.Parts {
 		s += z.Parts[za0003].Msgsize()
 	}
-	s += z.Erasure.Msgsize() + msgp.BoolSize + z.ReplicationState.Msgsize() + msgp.BytesPrefixSize + len(z.Data) + msgp.IntSize + msgp.TimeSize + msgp.BoolSize + msgp.IntSize + msgp.TimeSize + msgp.MapHeaderSize
-	if z.Checksum != nil {
-		for za0004, za0005 := range z.Checksum {
-			_ = za0005
-			s += msgp.StringPrefixSize + len(za0004) + msgp.StringPrefixSize + len(za0005)
-		}
-	}
+	s += z.Erasure.Msgsize() + msgp.BoolSize + z.ReplicationState.Msgsize() + msgp.BytesPrefixSize + len(z.Data) + msgp.IntSize + msgp.TimeSize + msgp.BoolSize + msgp.IntSize + msgp.TimeSize + msgp.BytesPrefixSize + len(z.Checksum)
 	return
 }
 

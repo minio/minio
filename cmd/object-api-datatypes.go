@@ -179,8 +179,9 @@ type ObjectInfo struct {
 	//  The modtime of the successor object version if any
 	SuccessorModTime time.Time
 
-	// User-Defined object tags
-	Checksum map[string]string
+	// Checksums added on upload.
+	// Encoded, maybe encrypted.
+	Checksum []byte
 }
 
 // ArchiveInfo returns any saved zip archive meta information
