@@ -106,7 +106,7 @@ const (
 	skipVerify = "skip_verify"
 )
 
-// DefaultKVS is the the default K/V config system for
+// DefaultKVS is the default K/V config system for
 // the STS TLS API.
 var DefaultKVS = config.KVS{
 	config.KV{

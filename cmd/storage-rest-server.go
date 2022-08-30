@@ -947,7 +947,7 @@ type httpStreamResponse struct {
 	err   error
 }
 
-// Write part of the the streaming response.
+// Write part of the streaming response.
 // Note that upstream errors are currently not forwarded, but may be in the future.
 func (h *httpStreamResponse) Write(b []byte) (int, error) {
 	if len(b) == 0 || h.err != nil {
