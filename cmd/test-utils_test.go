@@ -99,11 +99,11 @@ func TestMain(m *testing.M) {
 	// Set as non-distributed.
 	globalIsDistErasure = false
 
-	if !testing.Verbose() {
-		// Disable printing console messages during tests.
-		color.Output = ioutil.Discard
-		logger.Disable = true
-	}
+	// Disable printing console messages during tests.
+	color.Output = ioutil.Discard
+	// Minimum is error logs for testing
+	logger.MinimumLogLevel = logger.ErrorLvl
+
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())
 
@@ -1577,7 +1577,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	unknownSignTestStr := "Unknown HTTP signature test"
 
 	// simple function which returns a message which gives the context of the test
-	// and then followed by the the actual error message.
+	// and then followed by the actual error message.
 	failTestStr := func(testType, failMsg string) string {
 		return fmt.Sprintf("MinIO %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
