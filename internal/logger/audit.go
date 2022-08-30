@@ -45,6 +45,8 @@ type ResponseWriter struct {
 	StartTime       time.Time
 	// number of bytes written
 	bytesWritten int
+	// number of bytes of response headers written
+	headerBytesWritten int
 	// Internal recording buffer
 	headers bytes.Buffer
 	body    bytes.Buffer
@@ -86,10 +88,10 @@ func (lrw *ResponseWriter) Write(p []byte) (int, error) {
 // Write the headers into the given buffer
 func (lrw *ResponseWriter) writeHeaders(w io.Writer, statusCode int, headers http.Header) {
 	n, _ := fmt.Fprintf(w, "%d %s\n", statusCode, http.StatusText(statusCode))
-	lrw.bytesWritten += n
+	lrw.headerBytesWritten += n
 	for k, v := range headers {
 		n, _ := fmt.Fprintf(w, "%s: %s\n", k, v[0])
-		lrw.bytesWritten += n
+		lrw.headerBytesWritten += n
 	}
 }
 
@@ -122,9 +124,14 @@ func (lrw *ResponseWriter) Flush() {
 	lrw.ResponseWriter.(http.Flusher).Flush()
 }
 
-// Size - reutrns the number of bytes written
+// Size - returns  the number of bytes written
 func (lrw *ResponseWriter) Size() int {
 	return lrw.bytesWritten
+}
+
+// HeaderSize - returns the number of bytes of response headers written
+func (lrw *ResponseWriter) HeaderSize() int {
+	return lrw.headerBytesWritten
 }
 
 const contextAuditKey = contextKeyType("audit-entry")
@@ -187,6 +194,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			timeToResponse  time.Duration
 			timeToFirstByte time.Duration
 			outputBytes     int64 = -1 // -1: unknown output bytes
+			headerBytes     int64
 		)
 
 		var st *ResponseWriter
@@ -204,6 +212,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			timeToResponse = time.Now().UTC().Sub(st.StartTime)
 			timeToFirstByte = st.TimeToFirstByte
 			outputBytes = int64(st.Size())
+			headerBytes = int64(st.HeaderSize())
 		}
 
 		entry.API.Name = reqInfo.API
@@ -220,6 +229,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.StatusCode = statusCode
 		entry.API.InputBytes = r.ContentLength
 		entry.API.OutputBytes = outputBytes
+		entry.API.HeaderBytes = headerBytes
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.Tags = reqInfo.GetTagsMap()
 		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
