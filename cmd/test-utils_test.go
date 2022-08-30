@@ -99,11 +99,11 @@ func TestMain(m *testing.M) {
 	// Set as non-distributed.
 	globalIsDistErasure = false
 
-	if !testing.Verbose() {
-		// Disable printing console messages during tests.
-		color.Output = ioutil.Discard
-		logger.Disable = true
-	}
+	// Disable printing console messages during tests.
+	color.Output = ioutil.Discard
+	// Minimum is error logs for testing
+	logger.MinimumLogLevel = logger.ErrorLvl
+
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())
 

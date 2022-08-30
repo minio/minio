@@ -158,7 +158,7 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 		message = fmt.Sprint(args...)
 	}
 	logJSON, err := json.Marshal(&log.Entry{
-		Level:   InformationLvl.String(),
+		Level:   InfoLvl.String(),
 		Message: message,
 		Time:    time.Now().UTC(),
 	})
@@ -214,10 +214,16 @@ func (i errorMsg) pretty(msg string, args ...interface{}) {
 
 // Error :
 func Error(msg string, data ...interface{}) {
+	if MinimumLogLevel > ErrorLvl {
+		return
+	}
 	consoleLog(errorm, msg, data...)
 }
 
 // Info :
 func Info(msg string, data ...interface{}) {
+	if MinimumLogLevel > InfoLvl {
+		return
+	}
 	consoleLog(info, msg, data...)
 }

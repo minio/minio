@@ -38,15 +38,12 @@ import (
 // HighwayHash key for logging in anonymous mode
 var magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
 
-// Disable disables all logging, false by default. (used for "go test")
-var Disable = false
-
-// Level type
-type Level int8
+// LogLevel type
+type LogLevel int8
 
 // Enumerated level types
 const (
-	InformationLvl Level = iota + 1
+	InfoLvl LogLevel = iota + 1
 	ErrorLvl
 	FatalLvl
 
@@ -54,6 +51,9 @@ const (
 	Minio       = madmin.LogKindMinio
 	All         = madmin.LogKindAll
 )
+
+// MinimumLogLevel holds the minimum logging level to print - info by default
+var MinimumLogLevel = InfoLvl
 
 var trimStrings []string
 
@@ -67,9 +67,9 @@ var matchingFuncNames = [...]string{
 	// add more here ..
 }
 
-func (level Level) String() string {
+func (level LogLevel) String() string {
 	switch level {
-	case InformationLvl:
+	case InfoLvl:
 		return "INFO"
 	case ErrorLvl:
 		return "ERROR"
@@ -341,7 +341,7 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 // consoleLogIf prints a detailed error message during
 // the execution of the server.
 func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
-	if Disable {
+	if MinimumLogLevel > ErrorLvl {
 		return
 	}
 
@@ -354,7 +354,7 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 // logIf prints a detailed error message during
 // the execution of the server.
 func logIf(ctx context.Context, err error, errKind ...interface{}) {
-	if Disable {
+	if MinimumLogLevel > ErrorLvl {
 		return
 	}
 

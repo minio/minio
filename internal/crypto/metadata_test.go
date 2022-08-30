@@ -313,8 +313,8 @@ var s3CreateMetadataTests = []struct {
 }
 
 func TestS3CreateMetadata(t *testing.T) {
-	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
-	logger.Disable = true
+	defer func(l logger.LogLevel) { logger.MinimumLogLevel = l }(logger.MinimumLogLevel)
+	logger.MinimumLogLevel = logger.ErrorLvl
 	for i, test := range s3CreateMetadataTests {
 		metadata := S3.CreateMetadata(nil, test.KeyID, test.SealedDataKey, test.SealedKey)
 		keyID, kmsKey, sealedKey, err := S3.ParseMetadata(metadata)
@@ -358,8 +358,8 @@ var ssecCreateMetadataTests = []struct {
 }
 
 func TestSSECCreateMetadata(t *testing.T) {
-	defer func(disableLog bool) { logger.Disable = disableLog }(logger.Disable)
-	logger.Disable = true
+	defer func(l logger.LogLevel) { logger.MinimumLogLevel = l }(logger.MinimumLogLevel)
+	logger.MinimumLogLevel = logger.ErrorLvl
 	for i, test := range ssecCreateMetadataTests {
 		metadata := SSEC.CreateMetadata(nil, test.SealedKey)
 		sealedKey, err := SSEC.ParseMetadata(metadata)
