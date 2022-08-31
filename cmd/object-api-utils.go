@@ -716,7 +716,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			}
 			// Decompression reader.
 			var dopts []s2.ReaderOption
-			if off > 0 {
+			if off > 0 || decOff > 0 {
 				// We are not starting at the beginning, so ignore stream identifiers.
 				dopts = append(dopts, s2.ReaderIgnoreStreamIdentifier())
 			}
