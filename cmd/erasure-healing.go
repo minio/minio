@@ -33,6 +33,15 @@ import (
 
 const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
 
+//go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
+
+type healingMetric uint8
+
+const (
+	healingMetricBucket healingMetric = iota
+	healingMetricObject
+)
+
 // AcceptableDelta returns 'true' if the fi.DiskMTime is under
 // acceptable delta of "delta" duration with maxTime.
 //
@@ -84,7 +93,7 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace("heal.checkBucket", startTime, bucket, "", "", opts, err, &res)
+			healTrace(healingMetricBucket, startTime, bucket, "", "", opts, err, &res)
 		}()
 	}
 
@@ -295,7 +304,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace("heal.checkVersion", startTime, bucket, object, versionID, opts, err, &result)
+			healTrace(healingMetricObject, startTime, bucket, object, versionID, opts, err, &result)
 		}()
 	}
 	// Initialize heal result object
@@ -1013,18 +1022,18 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 }
 
 // healTrace sends healing results to trace output.
-func healTrace(funcName string, startTime time.Time, bucket, object, versionID string, opts madmin.HealOpts, err error, result *madmin.HealResultItem) {
+func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts madmin.HealOpts, err error, result *madmin.HealResultItem) {
 	tr := madmin.TraceInfo{
 		TraceType: madmin.TraceHealing,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  funcName,
+		FuncName:  "heal." + funcName.String(),
 		Duration:  time.Since(startTime),
 		Message:   fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode),
-		Path:      fmt.Sprintf("%s/%s", bucket, object),
+		Path:      pathJoin(bucket, decodeDirObject(object)),
 	}
 	if versionID != "" && versionID != "null" {
-		tr.Path += " v-" + versionID
+		tr.Path += " v=" + versionID
 	}
 	if err != nil {
 		tr.Error = err.Error()

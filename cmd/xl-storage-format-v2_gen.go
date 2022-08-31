@@ -343,6 +343,7 @@ func (z *xlMetaDataDirDecoder) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	if z.ObjectV2 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -389,6 +390,7 @@ func (z *xlMetaDataDirDecoder) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	if z.ObjectV2 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -572,6 +574,7 @@ func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	if z.MetaSys == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
@@ -637,6 +640,7 @@ func (z *xlMetaV2DeleteMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	if z.MetaSys == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
@@ -1060,6 +1064,7 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(18)
 	var zb0001Mask uint32 /* 18 bits */
+	_ = zb0001Mask
 	if z.PartIndices == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2000
@@ -1357,6 +1362,7 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(18)
 	var zb0001Mask uint32 /* 18 bits */
+	_ = zb0001Mask
 	if z.PartIndices == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2000
@@ -1890,6 +1896,7 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
 	if z.ObjectV1 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -1996,6 +2003,7 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
 	if z.ObjectV1 == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
