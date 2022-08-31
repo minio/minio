@@ -234,6 +234,11 @@ type KV struct {
 	Value string `json:"value"`
 }
 
+// Empty - return if kv is empty
+func (kv KV) Empty() bool {
+	return kv.Key == "" && kv.Value == ""
+}
+
 // KVS - is a shorthand for some wrapper functions
 // to operate on list of key values.
 type KVS []KV
@@ -277,6 +282,9 @@ func (kvs KVS) Keys() []string {
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for _, kv := range kvs {
+		if kv.Empty() {
+			continue
+		}
 		// Do not need to print if state is on
 		if kv.Key == Enable && kv.Value == EnableOn {
 			continue
@@ -344,6 +352,7 @@ func (kvs *KVS) Delete(key string) {
 	for i, kv := range *kvs {
 		if kv.Key == key {
 			*kvs = append((*kvs)[:i], (*kvs)[i+1:]...)
+			*kvs = append(*kvs, KV{})
 			return
 		}
 	}
@@ -578,7 +587,7 @@ func CheckValidKeys(subSys string, kv KVS, validKVS KVS) error {
 		// Comment is a valid key, its also fully optional
 		// ignore it since it is a valid key for all
 		// sub-systems.
-		if kv.Key == Comment {
+		if kv.Key == Comment || kv.Empty() {
 			continue
 		}
 		if _, ok := validKVS.Lookup(kv.Key); !ok {
