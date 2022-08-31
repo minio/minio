@@ -215,7 +215,10 @@ func NewChecksumString(alg, value string) *Checksum {
 
 // AppendTo will append the checksum to b.
 // ReadCheckSums reads the values back.
-func (c Checksum) AppendTo(b []byte) []byte {
+func (c *Checksum) AppendTo(b []byte) []byte {
+	if c == nil {
+		return nil
+	}
 	var tmp [binary.MaxVarintLen32]byte
 	n := binary.PutUvarint(tmp[:], uint64(c.Type))
 	crc := c.Raw()

@@ -389,8 +389,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	rawReader := hashReader
-	pReader := NewPutObjReader(rawReader)
+	pReader := NewPutObjReader(hashReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
@@ -446,14 +445,21 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if err := hashReader.AddChecksum(r, true); err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+			return
+		}
+
 		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+
 		if idxCb != nil {
 			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
 		}
+		opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 	}
 	opts.IndexCB = idxCb
 

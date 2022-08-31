@@ -78,6 +78,9 @@ type ObjectOptions struct {
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
 
+	// Provides a per object encryption function, allowing metadata encryption.
+	EncryptFn objectMetaEncryptFn
+
 	// SkipDecommissioned set to 'true' if the call requires skipping the pool being decommissioned.
 	// mainly set for certain WRITE operations.
 	SkipDecommissioned bool

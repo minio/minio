@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -37,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
@@ -1051,4 +1053,61 @@ func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
 	mac.Write([]byte(path.Join(bucket, object)))
 	mac.Sum(key[:0])
 	return key
+}
+
+type (
+	objectMetaEncryptFn func(baseKey string, data []byte) []byte
+	objectMetaDecryptFn func(baseKey string, data []byte) ([]byte, error)
+)
+
+// metadataEncrypter returns a function that will read data from input,
+// encrypt it using the provided key and return the result.
+// 0 sized inputs are passed through.
+func metadataEncrypter(key crypto.ObjectKey) objectMetaEncryptFn {
+	return func(baseKey string, data []byte) []byte {
+		if len(data) == 0 {
+			return data
+		}
+		var buffer bytes.Buffer
+		mac := hmac.New(sha256.New, key[:])
+		mac.Write([]byte(baseKey))
+		if _, err := sio.Encrypt(&buffer, bytes.NewReader(data), sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()}); err != nil {
+			logger.CriticalIf(context.Background(), errors.New("unable to encrypt using object key"))
+		}
+		return buffer.Bytes()
+	}
+}
+
+// metadataDecrypter reverses metadataEncrypter.
+func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
+	return func(baseKey string, input []byte) ([]byte, error) {
+		if len(input) == 0 {
+			return input, nil
+		}
+
+		key, err := decryptObjectInfo(nil, o.Bucket, o.Name, o.UserDefined)
+		if err != nil {
+			return nil, err
+		}
+		mac := hmac.New(sha256.New, key)
+		mac.Write([]byte(baseKey))
+		return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
+	}
+}
+
+// decryptChecksums will attempt to decode checksums and return it/them if set.
+func (o *ObjectInfo) decryptChecksums() map[string]string {
+	data := o.Checksum
+	if len(data) == 0 {
+		return nil
+	}
+	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
+		decrypted, err := o.metadataDecrypter()("object-checksum", data)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return nil
+		}
+		data = decrypted
+	}
+	return hash.ReadCheckSums(data)
 }

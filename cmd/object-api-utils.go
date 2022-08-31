@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -44,15 +43,12 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/wildcard"
-	"github.com/minio/sio"
 )
 
 const (
@@ -720,7 +716,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 			}
 			// Decompression reader.
 			var dopts []s2.ReaderOption
-			if off > 0 {
+			if off > 0 || decOff > 0 {
 				// We are not starting at the beginning, so ignore stream identifiers.
 				dopts = append(dopts, s2.ReaderIgnoreStreamIdentifier())
 			}
@@ -845,6 +841,8 @@ func (g *GetObjectReader) Close() error {
 	return nil
 }
 
+// compressionIndexEncrypter returns a function that will read data from input,
+// encrypt it using the provided key and return the result.
 func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func() []byte {
 	var data []byte
 	var fetched bool
@@ -853,31 +851,13 @@ func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func()
 			data = input()
 			fetched = true
 		}
-		if len(data) == 0 {
-			return data
-		}
-		var buffer bytes.Buffer
-		mac := hmac.New(sha256.New, key[:])
-		mac.Write([]byte("compression-index"))
-		if _, err := sio.Encrypt(&buffer, bytes.NewReader(data), sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()}); err != nil {
-			logger.CriticalIf(context.Background(), errors.New("unable to encrypt compression index using object key"))
-		}
-		return buffer.Bytes()
+		return metadataEncrypter(key)("compression-index", data)
 	}
 }
 
+// compressionIndexDecrypt reverses compressionIndexEncrypter.
 func (o *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
-	if len(input) == 0 {
-		return input, nil
-	}
-
-	key, err := decryptObjectInfo(nil, o.Bucket, o.Name, o.UserDefined)
-	if err != nil {
-		return nil, err
-	}
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte("compression-index"))
-	return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
+	return o.metadataDecrypter()("compression-index", input)
 }
 
 // SealMD5CurrFn seals md5sum with object encryption key and returns sealed
