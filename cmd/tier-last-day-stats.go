@@ -38,6 +38,10 @@ func (l *lastDayTierStats) addStats(ts tierStats) {
 
 // forwardTo moves time to t, clearing entries between last update and t.
 func (l *lastDayTierStats) forwardTo(t time.Time) {
+	if t.IsZero() {
+		t = time.Now()
+	}
+
 	since := t.Sub(l.UpdatedAt).Hours()
 	// within the hour since l.UpdatedAt
 	if since < 1 {
@@ -45,15 +49,17 @@ func (l *lastDayTierStats) forwardTo(t time.Time) {
 	}
 
 	idx, lastIdx := t.Hour(), l.UpdatedAt.Hour()
-	l.UpdatedAt = t
+
+	l.UpdatedAt = t // update to the latest time index
 
 	if since >= 24 {
 		l.Bins = [24]tierStats{}
 		return
 	}
 
-	for ; lastIdx != idx; lastIdx++ {
-		l.Bins[(lastIdx+1)%24] = tierStats{}
+	for lastIdx != idx {
+		lastIdx = (lastIdx + 1) % 24
+		l.Bins[lastIdx] = tierStats{}
 	}
 }
 
