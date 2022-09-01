@@ -2401,8 +2401,8 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 
 // QueueReplicationHeal is a wrapper for queueReplicationHeal
 func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
-	// un-versioned case
-	if oi.VersionID == "" {
+	// un-versioned or a prefix
+	if oi.VersionID == "" || oi.ModTime.IsZero() {
 		return
 	}
 	rcfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
@@ -2416,8 +2416,8 @@ func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
 // queueReplicationHeal enqueues objects that failed replication OR eligible for resyncing through
 // an ongoing resync operation or via existing objects replication configuration setting.
 func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcfg replicationConfig) (roi ReplicateObjectInfo) {
-	// un-versioned case
-	if oi.VersionID == "" {
+	// un-versioned or a prefix
+	if oi.VersionID == "" || oi.ModTime.IsZero() {
 		return roi
 	}
 
