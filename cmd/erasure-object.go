@@ -502,17 +502,26 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		}, index)
 	}
 
+	ignoredErrs := []error{
+		errFileNotFound,
+		errVolumeNotFound,
+		errFileVersionNotFound,
+		errDiskNotFound,
+	}
+
 	errs := g.Wait()
 	for index, err := range errs {
 		if err == nil {
 			continue
 		}
-		if !IsErr(err, []error{
-			errFileNotFound,
-			errVolumeNotFound,
-			errFileVersionNotFound,
-			errDiskNotFound,
-		}...) {
+		if bucket == minioMetaBucket {
+			// minioMetaBucket "reads" for .metacache are not written with O_SYNC
+			// so there is a potential for them to not fully committed to stable
+			// storage leading to unexpected EOFs. Allow these failures to
+			// be ignored since the caller already ignores them in streamMetadataParts()
+			ignoredErrs = append(ignoredErrs, io.ErrUnexpectedEOF, io.EOF)
+		}
+		if !IsErr(err, ignoredErrs...) {
 			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], bucket, object, err),
 				disks[index].String())
