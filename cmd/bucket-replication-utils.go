@@ -767,8 +767,11 @@ func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	}
 }
 
+func getReplicationStatsPath(nodeName string) string {
+	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + nodeName + ".stats"
+}
+
 const (
-	replicationStatsPath  = bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + "stats.bin"
 	replStatsMetaFormat   = 1
 	replStatsVersionV1    = 1
 	replStatsVersion      = replStatsVersionV1

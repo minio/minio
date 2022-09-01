@@ -549,8 +549,7 @@ func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http
 			ReplicationStats: v,
 		}
 	}
-
-	logger.LogIf(r.Context(), msgp.Encode(w, BucketStatsMap(bucketStatsMap)))
+	logger.LogIf(r.Context(), msgp.Encode(w, &BucketStatsMap{Stats: bucketStatsMap, Timestamp: UTCNow()}))
 }
 
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only

@@ -18,13 +18,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"path"
 	"reflect"
@@ -46,7 +44,6 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/tinylib/msgp/msgp"
 )
 
 const (
@@ -1371,6 +1368,7 @@ type ReplicationPool struct {
 	existingReplicaCh       chan ReplicateObjectInfo
 	existingReplicaDeleteCh chan DeletedObjectReplicationInfo
 	mrfSaveCh               chan MRFReplicateEntry
+	saveStateCh             chan struct{}
 
 	workerSize    int
 	mrfWorkerSize int
@@ -1393,6 +1391,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		existingReplicaDeleteCh: make(chan DeletedObjectReplicationInfo, 100000),
 		resyncState:             replicationResyncState{statusMap: make(map[string]BucketReplicationResyncStatus)},
 		mrfSaveCh:               make(chan MRFReplicateEntry, 100000),
+		saveStateCh:             make(chan struct{}, 1),
 		ctx:                     ctx,
 		objLayer:                o,
 	}
@@ -1529,6 +1528,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 			close(p.replicaCh)
 			close(p.mrfReplicaCh)
 			close(p.existingReplicaCh)
+			close(p.saveStateCh)
 		})
 	case healCh <- ri:
 	case ch <- ri:
@@ -1889,108 +1889,6 @@ func resyncTarget(oi ObjectInfo, arn string, resetID string, resetBeforeDate tim
 	}
 	rd.Replicate = newReset && oi.ModTime.Before(resetBeforeDate)
 	return
-}
-
-func getAllLatestReplicationStats(bucketsUsage map[string]BucketUsageInfo) (bucketsReplicationStats map[string]BucketReplicationStats) {
-	peerBucketStatsList := globalNotificationSys.GetClusterAllBucketStats(GlobalContext)
-	bucketsReplicationStats = make(map[string]BucketReplicationStats, len(bucketsUsage))
-
-	for bucket, u := range bucketsUsage {
-		bucketStats := make([]BucketStats, len(peerBucketStatsList))
-		for i, peerBucketStats := range peerBucketStatsList {
-			bucketStat, ok := peerBucketStats[bucket]
-			if !ok {
-				continue
-			}
-			bucketStats[i] = bucketStat
-		}
-		bucketsReplicationStats[bucket] = calculateBucketReplicationStats(bucket, u, bucketStats)
-	}
-
-	return bucketsReplicationStats
-}
-
-func calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketStats []BucketStats) (s BucketReplicationStats) {
-	// accumulate cluster bucket stats
-	stats := make(map[string]*BucketReplicationStat)
-	var totReplicaSize int64
-	for _, bucketStat := range bucketStats {
-		totReplicaSize += bucketStat.ReplicationStats.ReplicaSize
-		for arn, stat := range bucketStat.ReplicationStats.Stats {
-			oldst := stats[arn]
-			if oldst == nil {
-				oldst = &BucketReplicationStat{}
-			}
-			stats[arn] = &BucketReplicationStat{
-				FailedCount:    stat.FailedCount + oldst.FailedCount,
-				FailedSize:     stat.FailedSize + oldst.FailedSize,
-				ReplicatedSize: stat.ReplicatedSize + oldst.ReplicatedSize,
-				Latency:        stat.Latency.merge(oldst.Latency),
-				PendingCount:   stat.PendingCount + oldst.PendingCount,
-				PendingSize:    stat.PendingSize + oldst.PendingSize,
-			}
-		}
-	}
-
-	// add initial usage stat to cluster stats
-	usageStat := globalReplicationStats.GetInitialUsage(bucket)
-	totReplicaSize += usageStat.ReplicaSize
-	for arn, stat := range usageStat.Stats {
-		st, ok := stats[arn]
-		if !ok {
-			st = &BucketReplicationStat{}
-			stats[arn] = st
-		}
-		st.ReplicatedSize += stat.ReplicatedSize
-		st.FailedSize += stat.FailedSize
-		st.FailedCount += stat.FailedCount
-		st.PendingSize += stat.PendingSize
-		st.PendingCount += stat.PendingCount
-	}
-	s = BucketReplicationStats{
-		Stats: make(map[string]*BucketReplicationStat, len(stats)),
-	}
-	var latestTotReplicatedSize int64
-	for _, st := range u.ReplicationInfo {
-		latestTotReplicatedSize += int64(st.ReplicatedSize)
-	}
-	// normalize computed real time stats with latest usage stat
-	for arn, tgtstat := range stats {
-		st := BucketReplicationStat{}
-		bu, ok := u.ReplicationInfo[arn]
-		if !ok {
-			bu = BucketTargetUsageInfo{}
-		}
-		// use in memory replication stats if it is ahead of usage info.
-		st.ReplicatedSize = int64(bu.ReplicatedSize)
-		if tgtstat.ReplicatedSize >= int64(bu.ReplicatedSize) {
-			st.ReplicatedSize = tgtstat.ReplicatedSize
-		}
-		s.ReplicatedSize += st.ReplicatedSize
-		// Reset FailedSize and FailedCount to 0 for negative overflows which can
-		// happen since data usage picture can lag behind actual usage state at the time of cluster start
-		st.FailedSize = int64(math.Max(float64(tgtstat.FailedSize), 0))
-		st.FailedCount = int64(math.Max(float64(tgtstat.FailedCount), 0))
-		st.PendingSize = int64(math.Max(float64(tgtstat.PendingSize), 0))
-		st.PendingCount = int64(math.Max(float64(tgtstat.PendingCount), 0))
-		st.Latency = tgtstat.Latency
-
-		s.Stats[arn] = &st
-		s.FailedSize += st.FailedSize
-		s.FailedCount += st.FailedCount
-		s.PendingCount += st.PendingCount
-		s.PendingSize += st.PendingSize
-	}
-	// normalize overall stats
-	s.ReplicaSize = int64(math.Max(float64(totReplicaSize), float64(u.ReplicaSize)))
-	s.ReplicatedSize = int64(math.Max(float64(s.ReplicatedSize), float64(latestTotReplicatedSize)))
-	return s
-}
-
-// get the most current of in-memory replication stats  and data usage info from crawler.
-func getLatestReplicationStats(bucket string, u BucketUsageInfo) (s BucketReplicationStats) {
-	bucketStats := globalNotificationSys.GetClusterBucketStats(GlobalContext, bucket)
-	return calculateBucketReplicationStats(bucket, u, bucketStats)
 }
 
 const resyncTimeInterval = time.Minute * 1
@@ -2533,7 +2431,6 @@ func (p *ReplicationPool) persistMRF() {
 			logger.LogOnceIf(p.ctx, fmt.Errorf("Unable to persist replication failures to disk:%w", err), string(replicationSubsystem))
 		}
 		entries = make(map[string]MRFReplicateEntry)
-		return
 	}
 	for {
 		select {
@@ -2542,6 +2439,9 @@ func (p *ReplicationPool) persistMRF() {
 			mTimer.Reset(mrfTimeInterval)
 		case <-p.ctx.Done():
 			close(p.mrfSaveCh)
+			saveMRFToDisk(true)
+			return
+		case <-p.saveStateCh:
 			saveMRFToDisk(true)
 			return
 		case e, ok := <-p.mrfSaveCh:
@@ -2699,12 +2599,16 @@ func (p *ReplicationPool) queueMRFHeal(file string) error {
 
 // load replication stats from disk
 func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationStats, e error) {
-	data, err := readConfig(p.ctx, p.objLayer, replicationStatsPath)
-	if err != nil && err != errConfigNotFound {
+	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName))
+	if err != nil {
+		if !errors.Is(err, errConfigNotFound) {
+			return rs, nil
+		}
 		return rs, err
 	}
 
 	if len(data) <= 4 {
+		logger.LogIf(p.ctx, fmt.Errorf("replication stats: no data"))
 		return map[string]BucketReplicationStats{}, nil
 	}
 	// Read repl stats meta header
@@ -2722,8 +2626,8 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 	if _, err = ss.UnmarshalMsg(data[4:]); err != nil {
 		return rs, err
 	}
-	rs = make(map[string]BucketReplicationStats, len(ss))
-	for bucket, st := range ss {
+	rs = make(map[string]BucketReplicationStats, len(ss.Stats))
+	for bucket, st := range ss.Stats {
 		rs[bucket] = st.ReplicationStats
 	}
 
@@ -2741,37 +2645,42 @@ func (p *ReplicationPool) saveStatsToDisk() {
 		case <-sTimer.C:
 			dui, err := loadDataUsageFromBackend(GlobalContext, newObjectLayerFn())
 			if err == nil && !dui.LastUpdate.IsZero() {
-				globalReplicationStats.saveUsage(dui.BucketsUsage)
+				globalReplicationStats.getAllLatest(dui.BucketsUsage)
 			}
-			p.saveStats(p.ctx, dui.BucketsUsage)
+			p.saveStats(p.ctx)
 			sTimer.Reset(replStatsSaveInterval)
 		case <-p.ctx.Done():
-			p.saveStats(context.Background(), globalReplicationStats.getUsage())
 			return
 		}
 	}
 }
 
-// save replication stats to .minio.sys/buckets/replication/stats.bin
-func (p *ReplicationPool) saveStats(ctx context.Context, ui map[string]BucketUsageInfo) error {
-	stats := getAllLatestReplicationStats(ui)
-	if len(stats) == 0 {
+// save replication stats to .minio.sys/buckets/replication/node-name.stats
+func (p *ReplicationPool) saveStats(ctx context.Context) error {
+	bsm := globalReplicationStats.getAllCachedLatest()
+	if len(bsm.Stats) == 0 {
 		return nil
 	}
-	bucketStatsMap := make(map[string]BucketStats, len(stats))
-	for k, v := range stats {
-		bucketStatsMap[k] = BucketStats{
-			ReplicationStats: v,
-		}
-	}
-
-	var buf bytes.Buffer
-	msgp.Encode(&buf, BucketStatsMap(bucketStatsMap))
-	data := make([]byte, buf.Len()+4)
-
-	// Initialize the replication stats meta header.
+	data := make([]byte, 4, 4+bsm.Msgsize())
+	// Add the replication stats meta header.
 	binary.LittleEndian.PutUint16(data[0:2], replStatsMetaFormat)
 	binary.LittleEndian.PutUint16(data[2:4], replStatsVersion)
-	copy(data[4:], buf.Bytes())
-	return saveConfig(ctx, p.objLayer, replicationStatsPath, data)
+	// Add data
+	data, err := bsm.MarshalMsg(data)
+	if err != nil {
+		return err
+	}
+	return saveConfig(ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName), data)
+}
+
+// SaveState saves replication stats and mrf data before server restart
+func (p *ReplicationPool) SaveState(ctx context.Context) error {
+	go func() {
+		select {
+		case p.saveStateCh <- struct{}{}:
+		case <-p.ctx.Done():
+			return
+		}
+	}()
+	return p.saveStats(ctx)
 }

@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -52,7 +53,10 @@ func (rl *ReplicationLatency) update(size int64, duration time.Duration) {
 }
 
 // BucketStatsMap captures bucket statistics for all buckets
-type BucketStatsMap map[string]BucketStats
+type BucketStatsMap struct {
+	Stats     map[string]BucketStats
+	Timestamp time.Time
+}
 
 // BucketStats bucket statistics
 type BucketStats struct {
@@ -125,4 +129,12 @@ func (bs *BucketReplicationStat) hasReplicationUsage() bool {
 		bs.FailedCount > 0 ||
 		bs.PendingCount > 0 ||
 		bs.PendingSize > 0
+}
+
+func (brs BucketReplicationStats) String() string {
+	s := "ReplicatedSize=" + fmt.Sprintf("%d", brs.ReplicatedSize) + "+\n ReplicaSize=" + fmt.Sprintf("%d", brs.ReplicaSize)
+	for arn, st := range brs.Stats {
+		s += "\n arn: " + arn + " ReplicatedSize=" + fmt.Sprintf("%d", st.ReplicatedSize) + "  +::ReplicaSize=" + fmt.Sprintf("%d", st.ReplicaSize)
+	}
+	return s
 }
