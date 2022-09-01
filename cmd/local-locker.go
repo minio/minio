@@ -127,16 +127,17 @@ func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	err = nil
-
 	for _, resource := range args.Resources {
-		if !l.canTakeUnlock(resource) {
-			// Unless it is a write lock reject it.
-			err = fmt.Errorf("unlock attempted on a read locked entity: %s", resource)
-			continue
-		}
-		lri, ok := l.lockMap[resource]
-		if ok {
+		if lri, ok := l.lockMap[resource]; ok {
+			if !l.canTakeUnlock(resource) {
+				// Unless it is a write lock reject it.
+				err = fmt.Errorf("unlock attempted on a read locked entity: %s", resource)
+				continue
+			}
 			reply = l.removeEntry(resource, args, &lri) || reply
+		} else {
+			// return true if lock not exits.
+			reply = true
 		}
 	}
 	return
