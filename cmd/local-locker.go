@@ -60,15 +60,6 @@ func (l *localLocker) String() string {
 	return globalEndpoints.Localhost()
 }
 
-func (l *localLocker) canTakeUnlock(resources ...string) bool {
-	for _, resource := range resources {
-		if !isWriteLock(l.lockMap[resource]) {
-			return false
-		}
-	}
-	return true
-}
-
 func (l *localLocker) canTakeLock(resources ...string) bool {
 	for _, resource := range resources {
 		_, lockTaken := l.lockMap[resource]
@@ -129,12 +120,12 @@ func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool
 	err = nil
 
 	for _, resource := range args.Resources {
-		if !l.canTakeUnlock(resource) {
+		lri, ok := l.lockMap[resource]
+		if ok && !isWriteLock(lri) {
 			// Unless it is a write lock reject it.
 			err = fmt.Errorf("unlock attempted on a read locked entity: %s", resource)
 			continue
 		}
-		lri, ok := l.lockMap[resource]
 		if ok {
 			reply = l.removeEntry(resource, args, &lri) || reply
 		}
