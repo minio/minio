@@ -229,8 +229,10 @@ func (m *mrfState) healRoutine() {
 				delete(m.pendingOps, u)
 				m.mu.Unlock()
 
-				// Log healing error if any
-				logger.LogIf(m.ctx, err)
+				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+					// Log healing error if any
+					logger.LogIf(m.ctx, err)
+				}
 			}
 
 			waitForLowHTTPReq()
