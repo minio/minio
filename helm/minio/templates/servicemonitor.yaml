@@ -1,4 +1,4 @@
-{{- if .Values.metrics.serviceMonitor.enabled }}
+{{- if and .Values.metrics.serviceMonitor.enabled .Values.metrics.serviceMonitor.includeNode}}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -35,7 +35,7 @@ spec:
     - port: http
       scheme: http
     {{- end }}
-      path: /minio/v2/metrics/cluster
+      path: /minio/v2/metrics/node
       {{- if .Values.metrics.serviceMonitor.interval }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       {{- end }}
@@ -58,4 +58,58 @@ spec:
       app: {{ include "minio.name" . }}
       release: {{ .Release.Name }}
       monitoring: "true"
+{{- end }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: {{ template "minio.fullname" . }}-cluster
+  {{- if .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{ else }}
+  namespace: {{ .Release.Namespace | quote }}
+  {{- end }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.metrics.serviceMonitor.additionalLabels }}
+{{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
+    {{- end }}
+spec:
+  jobName: {{ template "minio.fullname" . }}
+  prober:
+    url: {{ template "minio.fullname" . }}.{{ .Release.Namespace }}:{{ .Values.service.port }}
+    path: /minio/v2/metrics/cluster
+    {{- if .Values.tls.enabled }}
+    scheme: https
+    tlsConfig:
+      ca:
+        secret:
+          name: {{ .Values.tls.certSecret }}
+          key: {{ .Values.tls.publicCrt }}
+      serverName: {{ template "minio.fullname" . }}
+    {{ else }}
+    scheme: http
+    {{- end }}
+  {{- if .Values.metrics.serviceMonitor.relabelConfigsCluster }}
+{{ toYaml .Values.metrics.serviceMonitor.relabelConfigsCluster | indent 2 }}
+  {{- end }}
+  targets:
+    staticConfig:
+      static:
+      - {{ template "minio.fullname" . }}.{{ .Release.Namespace }}
+      {{- if not .Values.metrics.serviceMonitor.public }}
+      {{- if .Values.metrics.serviceMonitor.interval }}
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      {{- end }}
+      {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- end }}
+      bearerTokenSecret:
+        name: {{ template "minio.fullname" . }}-prometheus
+        key: token
+      {{- end }}
 {{- end }}

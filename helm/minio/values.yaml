@@ -476,10 +476,17 @@ serviceAccount:
 metrics:
   serviceMonitor:
     enabled: false
+    # scrape each node/pod individually for additional metrics
+    includeNode: false 
     public: true
     additionalLabels: {}
-    annotations: {}
+    # for node metrics
     relabelConfigs: {}
+    # for cluster metrics
+    relabelConfigsCluster: {}
+      # metricRelabelings:
+      #   - regex: (server|pod)
+      #     action: labeldrop
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s
