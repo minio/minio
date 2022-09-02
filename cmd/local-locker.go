@@ -60,15 +60,6 @@ func (l *localLocker) String() string {
 	return globalEndpoints.Localhost()
 }
 
-func (l *localLocker) canTakeUnlock(resources ...string) bool {
-	for _, resource := range resources {
-		if !isWriteLock(l.lockMap[resource]) {
-			return false
-		}
-	}
-	return true
-}
-
 func (l *localLocker) canTakeLock(resources ...string) bool {
 	for _, resource := range resources {
 		_, lockTaken := l.lockMap[resource]
