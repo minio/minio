@@ -1987,25 +1987,32 @@ func (p *ReplicationPool) updateResyncStatus(ctx context.Context, objectAPI Obje
 	resyncTimer := time.NewTimer(resyncTimeInterval)
 	defer resyncTimer.Stop()
 
+	// For each bucket name, store the last timestamp of the
+	// successful save of replication status in the backend disks.
+	lastResyncStatusSave := make(map[string]time.Time)
+
 	for {
 		select {
 		case <-resyncTimer.C:
-			now := UTCNow()
 			p.resyncState.RLock()
 			for bucket, brs := range p.resyncState.statusMap {
 				var updt bool
+				// Save the replication status if one resync to any bucket target is still not finished
 				for _, st := range brs.TargetsMap {
-					// if resync in progress or just ended, needs to save to disk
-					if st.EndTime.Equal(timeSentinel) || now.Sub(st.EndTime) <= resyncTimeInterval {
+					if st.EndTime.Equal(timeSentinel) {
 						updt = true
 						break
 					}
 				}
+				// Save the replication status if a new stats update is found and not saved in the backend yet
+				if brs.LastUpdate.After(lastResyncStatusSave[bucket]) {
+					updt = true
+				}
 				if updt {
-					brs.LastUpdate = now
 					if err := saveResyncStatus(ctx, bucket, brs, objectAPI); err != nil {
 						logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to drive for %s - %w", bucket, err))
-						continue
+					} else {
+						lastResyncStatusSave[bucket] = brs.LastUpdate
 					}
 				}
 			}
@@ -2031,6 +2038,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 		st.EndTime = UTCNow()
 		st.ResyncStatus = resyncStatus
 		m.TargetsMap[arn] = st
+		m.LastUpdate = UTCNow()
 		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}()
@@ -2140,6 +2148,7 @@ func resyncBucket(ctx context.Context, bucket, arn string, heal bool, objectAPI 
 			st.ReplicatedSize += roi.Size
 		}
 		m.TargetsMap[arn] = st
+		m.LastUpdate = UTCNow()
 		globalReplicationPool.resyncState.statusMap[bucket] = m
 		globalReplicationPool.resyncState.Unlock()
 	}
@@ -2401,8 +2410,8 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 
 // QueueReplicationHeal is a wrapper for queueReplicationHeal
 func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
-	// un-versioned case
-	if oi.VersionID == "" {
+	// un-versioned or a prefix
+	if oi.VersionID == "" || oi.ModTime.IsZero() {
 		return
 	}
 	rcfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
@@ -2416,8 +2425,8 @@ func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
 // queueReplicationHeal enqueues objects that failed replication OR eligible for resyncing through
 // an ongoing resync operation or via existing objects replication configuration setting.
 func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcfg replicationConfig) (roi ReplicateObjectInfo) {
-	// un-versioned case
-	if oi.VersionID == "" {
+	// un-versioned or a prefix
+	if oi.VersionID == "" || oi.ModTime.IsZero() {
 		return roi
 	}
 
