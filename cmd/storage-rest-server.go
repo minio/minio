@@ -710,6 +710,12 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	encoder.Encode(dErrsResp)
 }
 
+// RenameDataResp - RenameData()'s response.
+type RenameDataResp struct {
+	Signature uint64
+	Err       error
+}
+
 // RenameDataHandler - renames a meta object and data dir to destination.
 func (s *storageRESTServer) RenameDataHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -732,10 +738,20 @@ func (s *storageRESTServer) RenameDataHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err := s.storage.RenameData(r.Context(), srcVolume, srcFilePath, fi, dstVolume, dstFilePath)
-	if err != nil {
-		s.writeErrorResponse(w, err)
+	setEventStreamHeaders(w)
+	encoder := gob.NewEncoder(w)
+	done := keepHTTPResponseAlive(w)
+
+	sign, err := s.storage.RenameData(r.Context(), srcVolume, srcFilePath, fi, dstVolume, dstFilePath)
+	done(nil)
+
+	resp := &RenameDataResp{
+		Signature: sign,
 	}
+	if err != nil {
+		resp.Err = StorageErr(err.Error())
+	}
+	encoder.Encode(resp)
 }
 
 // RenameFileHandler - rename a file.

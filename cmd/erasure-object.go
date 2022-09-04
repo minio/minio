@@ -712,6 +712,8 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	for index := range disks {
 		metadata[index].SetTierFreeVersionID(fvID)
 	}
+
+	diskVersions := make([]uint64, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -719,6 +721,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
+
 			// Pick one FileInfo for a disk at index.
 			fi := metadata[index]
 			// Assign index when index is initialized
@@ -726,15 +729,35 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 				fi.Erasure.Index = index + 1
 			}
 
-			if fi.IsValid() {
-				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			if !fi.IsValid() {
+				return errFileCorrupt
 			}
-			return errFileCorrupt
+			sign, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			if err != nil {
+				return err
+			}
+			diskVersions[index] = sign
+			return nil
 		}, index)
 	}
 
 	// Wait for all renames to finish.
 	errs := g.Wait()
+
+	versions := reduceCommonVersions(diskVersions, writeQuorum)
+	if versions == 0 {
+		err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+		if err == nil {
+			err = errErasureWriteQuorum
+		}
+		return nil, err
+	}
+
+	for index, dversions := range diskVersions {
+		if versions != dversions {
+			errs[index] = errFileCorrupt
+		}
+	}
 
 	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.

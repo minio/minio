@@ -85,7 +85,7 @@ type StorageAPI interface {
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
 	ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error)
-	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error
+	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error)
 
 	// File operations.
 	ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error)
@@ -216,8 +216,8 @@ func (p *unrecognizedDisk) RenameFile(ctx context.Context, srcVolume, srcPath, d
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) error {
-	return errDiskNotFound
+func (p *unrecognizedDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error) {
+	return 0, errDiskNotFound
 }
 
 func (p *unrecognizedDisk) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
