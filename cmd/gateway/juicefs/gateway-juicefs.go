@@ -542,12 +542,16 @@ func (n *JfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	tmp := n.tpath(dstBucket, "tmp", minio.MustGetUUID())
 	_ = n.mkdirAll(ctx, path.Dir(tmp), os.FileMode(n.gConf.DirMode))
-	_, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
+	f, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
 	if eno != 0 {
 		logger.Errorf("create %s: %s", tmp, eno)
 		return
 	}
-	defer func() { _ = n.fs.Delete(mctx, tmp) }()
+
+	defer func() {
+		_ = f.Close(mctx)
+		_ = n.fs.Delete(mctx, tmp)
+	}()
 
 	_, eno = n.fs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
 	if eno != 0 {
@@ -933,12 +937,15 @@ func (n *JfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 
 	tmp := n.ppath(bucket, uploadID, "complete")
 	_ = n.fs.Delete(mctx, tmp)
-	_, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
+	f, eno := n.fs.Create(mctx, tmp, n.gConf.Mode)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 		logger.Errorf("create complete: %s", err)
 		return
 	}
+	defer func() {
+		_ = f.Close(mctx)
+	}()
 	var total uint64
 	for _, part := range parts {
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
