@@ -446,7 +446,7 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (sign uint64, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTSrcVolume, srcVolume)
 	values.Set(storageRESTSrcPath, srcPath)
@@ -455,13 +455,26 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 
 	var reader bytes.Buffer
 	if err = msgp.Encode(&reader, &fi); err != nil {
-		return err
+		return 0, err
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodRenameData, values, &reader, -1)
 	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return 0, err
+	}
 
-	return err
+	respReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return 0, err
+	}
+
+	resp := &RenameDataResp{}
+	if err = gob.NewDecoder(respReader).Decode(resp); err != nil {
+		return 0, err
+	}
+
+	return resp.Signature, toStorageErr(resp.Err)
 }
 
 // where we keep old *Readers

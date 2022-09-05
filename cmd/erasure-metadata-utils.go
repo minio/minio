@@ -27,6 +27,30 @@ import (
 	"github.com/minio/minio/internal/sync/errgroup"
 )
 
+// figure out the most commonVersions across disk that satisfies
+// the 'writeQuorum' this function returns '0' if quorum cannot
+// be achieved and disks have too many inconsistent versions.
+func reduceCommonVersions(diskVersions []uint64, writeQuorum int) (commonVersions uint64) {
+	diskVersionsCount := make(map[uint64]int)
+	for _, versions := range diskVersions {
+		diskVersionsCount[versions]++
+	}
+
+	max := 0
+	for versions, count := range diskVersionsCount {
+		if max < count {
+			max = count
+			commonVersions = versions
+		}
+	}
+
+	if max >= writeQuorum {
+		return commonVersions
+	}
+
+	return 0
+}
+
 // Returns number of errors that occurred the most (incl. nil) and the
 // corresponding error value. NB When there is more than one error value that
 // occurs maximum number of times, the error value returned depends on how
