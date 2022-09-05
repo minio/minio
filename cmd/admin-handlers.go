@@ -2683,22 +2683,6 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	return nil
 }
 
-type clusterInfo struct {
-	DeploymentID string `json:"deployment_id"`
-	ClusterName  string `json:"cluster_name"`
-	UsedCapacity uint64 `json:"used_capacity"`
-	Info         struct {
-		MinioVersion    string `json:"minio_version"`
-		PoolsCount      int    `json:"pools_count"`
-		ServersCount    int    `json:"servers_count"`
-		DrivesCount     int    `json:"drives_count"`
-		BucketsCount    uint64 `json:"buckets_count"`
-		ObjectsCount    uint64 `json:"objects_count"`
-		TotalDriveSpace uint64 `json:"total_drive_space"`
-		UsedDriveSpace  uint64 `json:"used_drive_space"`
-	} `json:"info"`
-}
-
 func embedFileInZip(zipWriter *zip.Writer, name string, data []byte) error {
 	// Send profiling data to zip as file
 	header, zerr := zip.FileInfoHeader(dummyFileInfo{
@@ -2735,16 +2719,16 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	resultCh := make(chan clusterInfo)
+	resultCh := make(chan madmin.ClusterRegistrationInfo)
 	go func() {
-		ci := clusterInfo{}
-		ci.Info.PoolsCount = len(globalEndpoints)
-		ci.Info.ServersCount = len(globalEndpoints.Hostnames())
+		ci := madmin.ClusterRegistrationInfo{}
+		ci.Info.NoOfServerPools = len(globalEndpoints)
+		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
 		ci.Info.MinioVersion = Version
 
 		si, _ := objectAPI.StorageInfo(ctx)
 
-		ci.Info.DrivesCount = len(si.Disks)
+		ci.Info.NoOfDrives = len(si.Disks)
 		for _, disk := range si.Disks {
 			ci.Info.TotalDriveSpace += disk.TotalSpace
 			ci.Info.UsedDriveSpace += disk.UsedSpace
@@ -2753,11 +2737,11 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 		dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
 
 		ci.UsedCapacity = dataUsageInfo.ObjectsTotalSize
-		ci.Info.BucketsCount = dataUsageInfo.BucketsCount
-		ci.Info.ObjectsCount = dataUsageInfo.ObjectsTotalCount
+		ci.Info.NoOfBuckets = dataUsageInfo.BucketsCount
+		ci.Info.NoOfObjects = dataUsageInfo.ObjectsTotalCount
 
 		ci.DeploymentID = globalDeploymentID
-		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.ServersCount, ci.Info.DrivesCount, ci.Info.MinioVersion)
+		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.NoOfServers, ci.Info.NoOfDrives, ci.Info.MinioVersion)
 		resultCh <- ci
 	}()
 
