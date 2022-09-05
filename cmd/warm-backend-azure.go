@@ -62,7 +62,7 @@ func (az *warmBackendAzure) Put(ctx context.Context, object string, r io.Reader,
 	blobURL := az.serviceURL.NewContainerURL(az.Bucket).NewBlockBlobURL(az.getDest(object))
 	// set tier if specified -
 	if az.StorageClass != "" {
-		if _, err := blobURL.SetTier(ctx, az.tier(), azblob.LeaseAccessConditions{}); err != nil {
+		if _, err := blobURL.SetTier(ctx, az.tier(), azblob.LeaseAccessConditions{}, azblob.RehydratePriorityStandard); err != nil {
 			return "", azureToObjectError(err, az.Bucket, object)
 		}
 	}
@@ -78,7 +78,7 @@ func (az *warmBackendAzure) Get(ctx context.Context, object string, rv remoteVer
 		return nil, InvalidRange{}
 	}
 	blobURL := az.serviceURL.NewContainerURL(az.Bucket).NewBlobURL(az.getDest(object))
-	blob, err := blobURL.Download(ctx, opts.startOffset, opts.length, azblob.BlobAccessConditions{}, false)
+	blob, err := blobURL.Download(ctx, opts.startOffset, opts.length, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
 		return nil, azureToObjectError(err, az.Bucket, object)
 	}
