@@ -388,10 +388,12 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	if err != nil || interval < time.Second {
 		interval = defaultMetricsInterval
 	}
+
 	n, err := strconv.Atoi(r.Form.Get("n"))
 	if err != nil || n <= 0 {
 		n = math.MaxInt32
 	}
+
 	var types madmin.MetricType
 	if t, _ := strconv.ParseUint(r.Form.Get("types"), 10, 64); t != 0 {
 		types = madmin.MetricType(t)
@@ -428,6 +430,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	defer ticker.Stop()
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
+	enc := json.NewEncoder(w)
 	for n > 0 {
 		var m madmin.RealtimeMetrics
 		mLocal := collectLocalMetrics(types, hostMap, diskMap)
@@ -446,14 +449,9 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		m.Final = n <= 1
+
 		// Marshal API response
-		jsonBytes, err := json.Marshal(m)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		_, err = w.Write(jsonBytes)
-		if err != nil {
+		if err := enc.Encode(&m); err != nil {
 			n = 0
 		}
 
