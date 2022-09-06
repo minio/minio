@@ -266,9 +266,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				bytes: sz,
 			}
 		}
-		entryCh := make(chan healEntryResult)
+
+		// Collect updates to tracker from concurrent healEntry calls
+		results := make(chan healEntryResult)
 		go func() {
-			for res := range entryCh {
+			for res := range results {
 				if res.entryDone {
 					tracker.Object = res.name
 					if time.Since(tracker.LastUpdate) > time.Minute {
@@ -284,12 +286,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					tracker.ItemsFailed++
 					tracker.BytesFailed += res.bytes
 				}
-
 			}
 		}()
 
-		// Note: healEntry shouldn't directly update tracker. All updates to
-		// tracker must go via entryCh.
+		// Note: updates from healEntry to tracker must be sent on results channel.
 		healEntry := func(entry metaCacheEntry) {
 			defer jt.Give()
 
@@ -316,6 +316,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				}
 			}
 
+			var result healEntryResult
 			fivs, err := entry.fileInfoVersions(bucket)
 			if err != nil {
 				err := bgSeq.queueHealTask(healSource{
@@ -324,12 +325,18 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					versionID: "",
 				}, madmin.HealItemObject)
 				if err != nil {
-					entryCh <- healEntryFailure(0)
+					result = healEntryFailure(0)
 					logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
-					entryCh <- healEntrySuccess(0)
+					result = healEntrySuccess(0)
 				}
-				bgSeq.logHeal(madmin.HealItemObject)
+
+				select {
+				case <-ctx.Done():
+					return
+				case results <- result:
+				}
+
 				return
 			}
 
@@ -343,18 +350,28 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						Remove:   healDeleteDangling,
 					}); err != nil {
 					// If not deleted, assume they failed.
-					entryCh <- healEntryFailure(uint64(version.Size))
+					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
 						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
 					} else {
 						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
 				} else {
-					entryCh <- healEntrySuccess(uint64(version.Size))
+					result = healEntrySuccess(uint64(version.Size))
 				}
 				bgSeq.logHeal(madmin.HealItemObject)
+
+				select {
+				case <-ctx.Done():
+					return
+				case results <- result:
+				}
 			}
-			entryCh <- healEntryDone(entry.name)
+			select {
+			case <-ctx.Done():
+				return
+			case results <- healEntryDone(entry.name):
+			}
 
 			// Wait and proceed if there are active requests
 			waitForLowHTTPReq()
@@ -391,7 +408,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			finished: nil,
 		})
 		jt.Wait() // synchronize all the concurrent heal jobs
-		close(entryCh)
+		close(results)
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the
