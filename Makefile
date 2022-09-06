@@ -89,6 +89,7 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
+	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
 verify-healing-with-root-disks: ## verify healing root disks
 	@echo "Verify healing with root drives"
