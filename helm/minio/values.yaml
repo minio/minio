@@ -52,6 +52,9 @@ extraVolumes: []
 ## Additional volumeMounts to minio container
 extraVolumeMounts: []
 
+## Additional sidecar containers
+extraContainers: []
+
 ## Internal port number for MinIO S3 API container
 ## Change service.port to change external port number
 minioAPIPort: "9000"
