@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
@@ -127,17 +128,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		SuccessorModTime: fi.SuccessorModTime,
 	}
 
-	// Update expires
-	var (
-		t time.Time
-		e error
-	)
-
-	const nonStandardHTTPTimeFormat = "Mon, 2 Jan 2006 15:04:05 GMT"
 	if exp, ok := fi.Metadata["expires"]; ok {
-		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
-			objInfo.Expires = t.UTC()
-		} else if t, e = time.Parse(nonStandardHTTPTimeFormat, exp); e == nil {
+		if t, err := amztime.ParseHeader(exp); err == nil {
 			objInfo.Expires = t.UTC()
 		}
 	}

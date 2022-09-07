@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -78,7 +79,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	// since the specified time otherwise return 412 (precondition failed).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfModifiedSince)
 	if ifModifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
 				writeHeaders()
@@ -92,7 +93,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	// modified since the specified time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
@@ -172,7 +173,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// otherwise return a 304 (not modified).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.IfModifiedSince)
 	if ifModifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
 				writeHeaders()
@@ -186,7 +187,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
