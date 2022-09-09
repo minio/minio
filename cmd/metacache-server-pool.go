@@ -231,7 +231,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 
 	go func(o listPathOptions) {
 		defer wg.Done()
-		o.Limit = 0
+		o.StopDiskAtLimit = true
 		listErr = z.listMerged(listCtx, o, filterCh)
 		o.debugln("listMerged returned with", listErr)
 	}(*o)
