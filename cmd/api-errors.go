@@ -176,6 +176,7 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrBucketAlreadyExists
+	ErrTooManyBuckets
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
@@ -682,6 +683,11 @@ var errorCodes = errorCodeMap{
 	ErrSignatureVersionNotSupported: {
 		Code:           "InvalidRequest",
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrTooManyBuckets: {
+		Code:           "TooManyBuckets",
+		Description:    "You have attempted to create more buckets than allowed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketNotEmpty: {

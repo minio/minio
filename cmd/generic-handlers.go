@@ -53,6 +53,9 @@ const (
 
 	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxUserDataSize = 2 * 1024
+
+	// maxBuckets upto 500000 for any MinIO deployment.
+	maxBuckets = 500 * 1000
 )
 
 // ReservedMetadataPrefix is the prefix of a metadata key which

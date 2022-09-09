@@ -769,6 +769,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// check if client is attempting to create more buckets than allowed maximum.
+	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
+		apiErr := errorCodes.ToAPIErr(ErrTooManyBuckets)
+		apiErr.Description = fmt.Sprintf("You have attempted to create %d buckets than allowed %d", currBuckets+1, maxBuckets)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
+
 	opts := MakeBucketOptions{
 		Location:    location,
 		LockEnabled: objectLockEnabled,
