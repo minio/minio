@@ -45,6 +45,14 @@ type BucketMetadataSys struct {
 	metadataMap map[string]BucketMetadata
 }
 
+// Count returns number of bucket metadata map entries.
+func (sys *BucketMetadataSys) Count() int {
+	sys.RLock()
+	defer sys.RUnlock()
+
+	return len(sys.metadataMap)
+}
+
 // Remove bucket metadata from memory.
 func (sys *BucketMetadataSys) Remove(bucket string) {
 	if globalIsGateway {
