@@ -47,7 +47,7 @@ type KMS interface {
 
 	// ListKeys List all key names that match the specified pattern. In particular,
 	// the pattern * lists all keys.
-	ListKeys(ctx context.Context, pattern string) ([]KMSKey, error)
+	ListKeys(ctx context.Context, pattern string) ([]Key, error)
 
 	// GenerateKey generates a new data encryption key using the
 	// key referenced by the key ID.
@@ -158,13 +158,14 @@ type Identity struct {
 	CreatedBy string
 }
 
+// SelfIdentity describes the identity of the requester.
 type SelfIdentity struct {
 	Identity *Identity
 	Policy   *kes.Policy
 }
 
-// KMSKey describes a cryptographic key.
-type KMSKey struct {
+// Key describes a cryptographic key.
+type Key struct {
 	Name      string
 	CreatedAt time.Time
 	CreatedBy string
