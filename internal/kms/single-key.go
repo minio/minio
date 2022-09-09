@@ -40,7 +40,7 @@ import (
 // Parse parses s as single-key KMS. The given string
 // is expected to have the following format:
 //
-//	<key-id>:<base64-key>
+//     <key-id>:<base64-key>
 //
 // The returned KMS implementation uses the parsed
 // key ID and key to derive new DEKs and decrypt ciphertext.
@@ -97,6 +97,14 @@ func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
 
 func (secretKey) CreateKey(context.Context, string) error {
 	return errors.New("kms: creating keys is not supported")
+}
+
+func (secretKey) DeleteKey(context.Context, string) error {
+	return errors.New("kms: deleting keys is not supported")
+}
+
+func (secretKey) ListKeys(context.Context, string) ([]KMSKey, error) {
+	return nil, errors.New("kms: list keys is not supported")
 }
 
 func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Context) (DEK, error) {
@@ -177,6 +185,14 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 	}, nil
 }
 
+func (kms secretKey) ImportKey(ctx context.Context, keyID string, bytes []byte) error {
+	return errors.New("kms: import key is not supported")
+}
+
+func (kms secretKey) EncryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error) {
+	return nil, errors.New("kms: encrypt key is not supported")
+}
+
 func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error) {
 	if keyID != kms.keyID {
 		return nil, fmt.Errorf("kms: key %q does not exist", keyID)
@@ -249,4 +265,44 @@ type encryptedKey struct {
 	IV        []byte `json:"iv"`
 	Nonce     []byte `json:"nonce"`
 	Bytes     []byte `json:"bytes"`
+}
+
+func (kms secretKey) DescribePolicy(ctx context.Context, policy string) (*PolicyInfo, error) {
+	return nil, errors.New("kms: describe policy is not supported")
+}
+
+func (kms secretKey) DeletePolicy(ctx context.Context, policy string) error {
+	return errors.New("kms: delete policy is not supported")
+}
+
+func (kms secretKey) AssignPolicy(ctx context.Context, policy, identity string) error {
+	return errors.New("kms: assign policy is not supported")
+}
+
+func (secretKey) ListPolicies(context.Context, string) ([]PolicyInfo, error) {
+	return nil, errors.New("kms: list policies is not supported")
+}
+
+func (secretKey) SetPolicy(ctx context.Context, policy, data string) error {
+	return errors.New("kms: write policy is not supported")
+}
+
+func (secretKey) GetPolicy(ctx context.Context, policy string) (*kes.Policy, error) {
+	return nil, errors.New("kms: get policy is not supported")
+}
+
+func (kms secretKey) DescribeIdentity(ctx context.Context, identity string) (*Identity, error) {
+	return nil, errors.New("kms: describe identity is not supported")
+}
+
+func (kms secretKey) DescribeSelfIdentity(ctx context.Context) (*SelfIdentity, error) {
+	return nil, errors.New("kms: describe self identity is not supported")
+}
+
+func (kms secretKey) DeleteIdentity(ctx context.Context, policy string) error {
+	return errors.New("kms: delete identity is not supported")
+}
+
+func (secretKey) ListIdentities(context.Context, string) ([]Identity, error) {
+	return nil, errors.New("kms: list identities is not supported")
 }
