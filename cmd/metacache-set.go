@@ -768,7 +768,8 @@ func (es *erasureSingle) listPathInner(ctx context.Context, o listPathOptions, r
 
 	var limit int
 	if o.Limit > 0 && o.StopDiskAtLimit {
-		limit = o.Limit
+		// Over-read by 1 to know if we truncate results.
+		limit = o.Limit + 1
 	}
 
 	ctxDone := ctx.Done()
@@ -841,8 +842,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	}
 	var limit int
 	if o.Limit > 0 && o.StopDiskAtLimit {
-		// Over-read by 1 + 1 for every 16 in limit to give some space for resolver.
-		limit = o.Limit + 1 + (o.Limit / 16)
+		// Over-read by 2 + 1 for every 16 in limit to give some space for resolver
+		// And know if we have truncated.
+		limit = o.Limit + 2 + (o.Limit / 16)
 	}
 	ctxDone := ctx.Done()
 	return listPathRaw(ctx, listPathRawOptions{
