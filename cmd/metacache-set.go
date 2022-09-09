@@ -104,6 +104,10 @@ type listPathOptions struct {
 
 	// Replication configuration
 	Replication replicationConfig
+
+	// StopDiskAtLimit will stop listing on each disk when limit number off objects has been returned.
+	StopDiskAtLimit bool
+
 	// pool and set of where the cache is located.
 	pool, set int
 }
@@ -762,6 +766,12 @@ func (es *erasureSingle) listPathInner(ctx context.Context, o listPathOptions, r
 		resolver.requestedVersions = 1
 	}
 
+	var limit int
+	if o.Limit > 0 && o.StopDiskAtLimit {
+		// Over-read by 1 to know if we truncate results.
+		limit = o.Limit + 1
+	}
+
 	ctxDone := ctx.Done()
 	return listPathRaw(ctx, listPathRawOptions{
 		disks:        []StorageAPI{es.disk},
@@ -771,6 +781,7 @@ func (es *erasureSingle) listPathInner(ctx context.Context, o listPathOptions, r
 		filterPrefix: o.FilterPrefix,
 		minDisks:     1,
 		forwardTo:    o.Marker,
+		perDiskLimit: limit,
 		agreed: func(entry metaCacheEntry) {
 			select {
 			case <-ctxDone:
@@ -829,7 +840,12 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	if !o.Versioned {
 		resolver.requestedVersions = 1
 	}
-
+	var limit int
+	if o.Limit > 0 && o.StopDiskAtLimit {
+		// Over-read by 2 + 1 for every 16 in limit to give some space for resolver
+		// And know if we have truncated.
+		limit = o.Limit + 2 + (o.Limit / 16)
+	}
 	ctxDone := ctx.Done()
 	return listPathRaw(ctx, listPathRawOptions{
 		disks:         disks,
@@ -840,6 +856,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 		filterPrefix:  o.FilterPrefix,
 		minDisks:      listingQuorum,
 		forwardTo:     o.Marker,
+		perDiskLimit:  limit,
 		agreed: func(entry metaCacheEntry) {
 			select {
 			case <-ctxDone:
@@ -1153,6 +1170,10 @@ type listPathRawOptions struct {
 	minDisks       int
 	reportNotFound bool
 
+	// perDiskLimit will limit each disk to return n objects.
+	// If <= 0 all results will be returned until canceled.
+	perDiskLimit int
+
 	// Callbacks with results:
 	// If set to nil, it will not be called.
 
@@ -1227,6 +1248,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				werr = errDiskNotFound
 			} else {
 				werr = d.WalkDir(ctx, WalkDirOptions{
+					Limit:          opts.perDiskLimit,
 					Bucket:         opts.bucket,
 					BaseDir:        opts.path,
 					Recursive:      opts.recursive,
@@ -1246,6 +1268,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				// askDisks is less than total
 				// number of disks per set.
 				werr = fd.WalkDir(ctx, WalkDirOptions{
+					Limit:          opts.perDiskLimit,
 					Bucket:         opts.bucket,
 					BaseDir:        opts.path,
 					Recursive:      opts.recursive,
