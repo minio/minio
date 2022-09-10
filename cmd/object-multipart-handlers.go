@@ -176,6 +176,18 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
+		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+			if objectAPI.IsEncryptionSupported() {
+				if _, err := DecryptObjectInfo(&oi, r); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+					return true
+				}
+			}
+			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+		}
+	}
+
 	checksumType := hash.NewChecksumType(r.Header.Get(xhttp.AmzChecksumAlgo))
 	if checksumType.Is(hash.ChecksumInvalid) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)

@@ -915,6 +915,16 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	if opts.CheckPrecondFn != nil {
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err != nil {
+			return objInfo, err
+		}
+		if opts.CheckPrecondFn(obj) {
+			return objInfo, PreConditionFailed{}
+		}
+	}
+
 	data := r.Reader
 
 	userDefined := cloneMSS(opts.UserDefined)
@@ -1146,11 +1156,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		})
 	}
 
-	if userDefined["etag"] == "" {
-		userDefined["etag"] = r.MD5CurrentHexString()
-		if opts.PreserveETag != "" {
-			userDefined["etag"] = opts.PreserveETag
-		}
+	userDefined["etag"] = r.MD5CurrentHexString()
+	if opts.PreserveETag != "" {
+		userDefined["etag"] = opts.PreserveETag
 	}
 
 	// Guess content-type from the extension if possible.

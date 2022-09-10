@@ -283,13 +283,11 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 	}
 
-	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
-	if etag != "" {
-		if metadata == nil {
-			metadata = make(map[string]string, 1)
-		}
-		metadata["etag"] = etag
+	if metadata == nil {
+		metadata = make(map[string]string)
 	}
+
+	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
 
 	wantCRC, err := hash.GetContentChecksum(r)
 	if err != nil {
@@ -310,6 +308,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			Versioned:            versioned,
 			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
+			PreserveETag:         etag,
 			WantChecksum:         wantCRC,
 		}, nil
 	}

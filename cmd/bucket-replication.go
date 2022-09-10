@@ -946,7 +946,12 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		wg.Add(1)
 		go func(index int, tgt *TargetClient) {
 			defer wg.Done()
-			rinfos.Targets[index] = replicateObjectToTarget(ctx, ri, objectAPI, tgt)
+			if ri.OpType == replication.ObjectReplicationType {
+				// all incoming calls go through optimized path.
+				rinfos.Targets[index] = ri.replicateObject(ctx, objectAPI, tgt)
+			} else {
+				rinfos.Targets[index] = ri.replicateAll(ctx, objectAPI, tgt)
+			}
 		}(i, tgt)
 	}
 	wg.Wait()
@@ -1013,30 +1018,16 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	}
 }
 
-// replicateObjectToTarget replicates the specified version of the object to destination bucket
+// replicateObject replicates object data for specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
-func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
+func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
 	startTime := time.Now()
 	objInfo := ri.ObjectInfo.Clone()
 	bucket := objInfo.Bucket
 	object := objInfo.Name
-	var (
-		closeOnDefer bool
-		gr           *GetObjectReader
-		size         int64
-		err          error
-	)
 	sz, _ := objInfo.GetActualSize()
-	// set defaults for replication action based on operation being performed - actual
-	// replication action can only be determined after stat on remote. This default is
-	// needed for updating replication metrics correctly when target is offline.
-	var rAction replicationAction
-	switch ri.OpType {
-	case replication.MetadataReplicationType:
-		rAction = replicateMetadata
-	default:
-		rAction = replicateAll
-	}
+
+	rAction := replicateAll
 	rinfo = replicatedTargetInfo{
 		Size:                  sz,
 		Arn:                   tgt.ARN,
@@ -1051,6 +1042,7 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		rinfo.ReplicationResynced = true
 		return
 	}
+
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, tgt.ARN))
 		sendEvent(eventArgs{
@@ -1065,7 +1057,7 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
-	gr, err = objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID:        objInfo.VersionID,
 		Versioned:        versioned,
 		VersionSuspended: versionSuspended,
@@ -1082,15 +1074,159 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 		}
 		return
 	}
-	defer func() {
-		if closeOnDefer {
-			gr.Close()
-		}
-	}()
-	closeOnDefer = true
+	defer gr.Close()
 
 	objInfo = gr.ObjInfo
-	size, err = objInfo.GetActualSize()
+
+	size, err := objInfo.GetActualSize()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return
+	}
+
+	if tgt.Bucket == "" {
+		logger.LogIf(ctx, fmt.Errorf("Unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return rinfo
+	}
+	defer func() {
+		if rinfo.ReplicationStatus == replication.Completed && ri.OpType == replication.ExistingObjectReplicationType && tgt.ResetID != "" {
+			rinfo.ResyncTimestamp = fmt.Sprintf("%s;%s", UTCNow().Format(http.TimeFormat), tgt.ResetID)
+			rinfo.ReplicationResynced = true
+		}
+		rinfo.Duration = time.Since(startTime)
+	}()
+
+	rinfo.ReplicationStatus = replication.Completed
+	rinfo.Size = size
+	rinfo.ReplicationAction = rAction
+	// use core client to avoid doing multipart on PUT
+	c := &miniogo.Core{Client: tgt.Client}
+
+	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s err:%w", bucket, err))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return
+	}
+
+	var headerSize int
+	for k, v := range putOpts.Header() {
+		headerSize += len(k) + len(v)
+	}
+
+	opts := &bandwidth.MonitorReaderOptions{
+		Bucket:     objInfo.Bucket,
+		HeaderSize: headerSize,
+	}
+	newCtx := ctx
+	if globalBucketMonitor.IsThrottled(bucket) {
+		var cancel context.CancelFunc
+		newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
+		defer cancel()
+	}
+	r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
+	if objInfo.isMultipart() {
+		if err := replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
+			r, objInfo, putOpts); err != nil {
+			if minio.ToErrorResponse(err).Code != "PreConditionFailed" {
+				rinfo.ReplicationStatus = replication.Failed
+				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+			}
+		}
+	} else {
+		if _, err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts); err != nil {
+			if minio.ToErrorResponse(err).Code != "PreConditionFailed" {
+				rinfo.ReplicationStatus = replication.Failed
+				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+			}
+		}
+	}
+	return
+}
+
+// replicateAll replicates metadata for specified version of the object to destination bucket
+// if the destination version is missing it automatically does fully copy as well.
+// The source object is then updated to reflect the replication status.
+func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI ObjectLayer, tgt *TargetClient) (rinfo replicatedTargetInfo) {
+	startTime := time.Now()
+	objInfo := ri.ObjectInfo.Clone()
+	bucket := objInfo.Bucket
+	object := objInfo.Name
+	sz, _ := objInfo.GetActualSize()
+
+	// set defaults for replication action based on operation being performed - actual
+	// replication action can only be determined after stat on remote. This default is
+	// needed for updating replication metrics correctly when target is offline.
+	rAction := replicateMetadata
+
+	rinfo = replicatedTargetInfo{
+		Size:                  sz,
+		Arn:                   tgt.ARN,
+		PrevReplicationStatus: objInfo.TargetReplicationStatus(tgt.ARN),
+		ReplicationStatus:     replication.Failed,
+		OpType:                ri.OpType,
+		ReplicationAction:     rAction,
+	}
+
+	if ri.ObjectInfo.TargetReplicationStatus(tgt.ARN) == replication.Completed && !ri.ExistingObjResync.Empty() && !ri.ExistingObjResync.mustResyncTarget(tgt.ARN) {
+		rinfo.ReplicationStatus = replication.Completed
+		rinfo.ReplicationResynced = true
+		return
+	}
+
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, tgt.ARN))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+		return
+	}
+
+	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
+	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
+
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+		VersionID:        objInfo.VersionID,
+		Versioned:        versioned,
+		VersionSuspended: versionSuspended,
+	})
+	if err != nil {
+		if !isErrObjectNotFound(err) {
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				Host:       "Internal: [Replication]",
+			})
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+		}
+		return
+	}
+	defer gr.Close()
+
+	objInfo = gr.ObjInfo
+
+	size, err := objInfo.GetActualSize()
 	if err != nil {
 		logger.LogIf(ctx, err)
 		sendEvent(eventArgs{
@@ -1149,8 +1285,6 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 				// as Completed.
 				//
 				// Note: Replication Stats would have been updated despite metadata update failure.
-				gr.Close()
-				closeOnDefer = false
 				rinfo.ReplicationAction = rAction
 				rinfo.ReplicationStatus = replication.Completed
 			}
@@ -1221,8 +1355,6 @@ func replicateObjectToTarget(ctx context.Context, ri ReplicateObjectInfo, object
 			}
 		}
 	}
-	gr.Close()
-	closeOnDefer = false
 	return
 }
 
