@@ -169,6 +169,8 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 	}
 
 	// JWT specific values
+	//
+	// Add all string claims
 	for k, v := range claims {
 		vStr, ok := v.(string)
 		if ok {
@@ -180,6 +182,21 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 				args["username"] = []string{vStr}
 			default:
 				args[k] = []string{vStr}
+			}
+		}
+	}
+	// Add groups claim which could be a list. This will ensure that the claim
+	// `jwt:groups` works.
+	if grpsVal, ok := claims["groups"]; ok {
+		if grpsIs, ok := grpsVal.([]interface{}); ok {
+			grps := []string{}
+			for _, gI := range grpsIs {
+				if g, ok := gI.(string); ok {
+					grps = append(grps, g)
+				}
+			}
+			if len(grps) > 0 {
+				args["groups"] = grps
 			}
 		}
 	}
