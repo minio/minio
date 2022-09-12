@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v26" // Add user-type to LoadPolicyMapping
+	peerRESTVersion       = "v27" // change in GetAllBucketStats response.
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix

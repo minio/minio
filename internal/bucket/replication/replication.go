@@ -138,6 +138,15 @@ func (t Type) Valid() bool {
 	return t > 0
 }
 
+// IsDataReplication returns true if content being replicated
+func (t Type) IsDataReplication() bool {
+	switch t {
+	case ObjectReplicationType, HealReplicationType, ExistingObjectReplicationType:
+		return true
+	}
+	return false
+}
+
 // ObjectOpts provides information to deduce whether replication
 // can be triggered on the resultant object.
 type ObjectOpts struct {

@@ -217,7 +217,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	if err = enc.Encode(getLatestReplicationStats(bucket, usageInfo)); err != nil {
+	if err = enc.Encode(globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

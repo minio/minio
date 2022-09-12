@@ -1661,7 +1661,7 @@ func getBucketUsageMetrics() *MetricsGroup {
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
-		bucketReplStats := getAllLatestReplicationStats(dataUsageInfo.BucketsUsage)
+		bucketReplStats := globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
 			stats := bucketReplStats[bucket]
 
