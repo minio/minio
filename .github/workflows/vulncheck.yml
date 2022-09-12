@@ -1,0 +1,17 @@
+name: VulnCheck
+on:
+  pull_request:
+    branches:
+    - master
+  push:
+    branches:
+    - master
+jobs:
+  vulncheck:
+    name: Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v3
+    - name: Check for vulnerabilities
+      uses: kmulvey/govulncheck-action@v1.0.0
