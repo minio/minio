@@ -263,7 +263,7 @@ func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
 	values := make(url.Values)
 	respBody, err := client.call(peerRESTMethodGetAllBucketStats, values, nil, -1)
 	if err != nil {
-		return nil, err
+		return BucketStatsMap{}, err
 	}
 
 	bsMap := BucketStatsMap{}
