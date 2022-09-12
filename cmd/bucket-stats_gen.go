@@ -794,74 +794,109 @@ func (z *BucketStats) Msgsize() (s int) {
 
 // DecodeMsg implements msgp.Decodable
 func (z *BucketStatsMap) DecodeMsg(dc *msgp.Reader) (err error) {
-	var zb0003 uint32
-	zb0003, err = dc.ReadMapHeader()
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	if (*z) == nil {
-		(*z) = make(BucketStatsMap, zb0003)
-	} else if len((*z)) > 0 {
-		for key := range *z {
-			delete((*z), key)
-		}
-	}
-	for zb0003 > 0 {
-		zb0003--
-		var zb0001 string
-		var zb0002 BucketStats
-		zb0001, err = dc.ReadString()
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		var field []byte
-		_ = field
-		var zb0004 uint32
-		zb0004, err = dc.ReadMapHeader()
-		if err != nil {
-			err = msgp.WrapError(err, zb0001)
-			return
-		}
-		for zb0004 > 0 {
-			zb0004--
-			field, err = dc.ReadMapKeyPtr()
+		switch msgp.UnsafeString(field) {
+		case "Stats":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
-				err = msgp.WrapError(err, zb0001)
+				err = msgp.WrapError(err, "Stats")
 				return
 			}
-			switch msgp.UnsafeString(field) {
-			case "ReplicationStats":
-				err = zb0002.ReplicationStats.DecodeMsg(dc)
-				if err != nil {
-					err = msgp.WrapError(err, zb0001, "ReplicationStats")
-					return
-				}
-			default:
-				err = dc.Skip()
-				if err != nil {
-					err = msgp.WrapError(err, zb0001)
-					return
+			if z.Stats == nil {
+				z.Stats = make(map[string]BucketStats, zb0002)
+			} else if len(z.Stats) > 0 {
+				for key := range z.Stats {
+					delete(z.Stats, key)
 				}
 			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 BucketStats
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Stats")
+					return
+				}
+				var zb0003 uint32
+				zb0003, err = dc.ReadMapHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "Stats", za0001)
+					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "Stats", za0001)
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ReplicationStats":
+						err = za0002.ReplicationStats.DecodeMsg(dc)
+						if err != nil {
+							err = msgp.WrapError(err, "Stats", za0001, "ReplicationStats")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "Stats", za0001)
+							return
+						}
+					}
+				}
+				z.Stats[za0001] = za0002
+			}
+		case "Timestamp":
+			z.Timestamp, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "Timestamp")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
 		}
-		(*z)[zb0001] = zb0002
 	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z BucketStatsMap) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteMapHeader(uint32(len(z)))
+func (z *BucketStatsMap) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "Stats"
+	err = en.Append(0x82, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x73)
 	if err != nil {
-		err = msgp.WrapError(err)
 		return
 	}
-	for zb0005, zb0006 := range z {
-		err = en.WriteString(zb0005)
+	err = en.WriteMapHeader(uint32(len(z.Stats)))
+	if err != nil {
+		err = msgp.WrapError(err, "Stats")
+		return
+	}
+	for za0001, za0002 := range z.Stats {
+		err = en.WriteString(za0001)
 		if err != nil {
-			err = msgp.WrapError(err)
+			err = msgp.WrapError(err, "Stats")
 			return
 		}
 		// map header, size 1
@@ -870,102 +905,148 @@ func (z BucketStatsMap) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = zb0006.ReplicationStats.EncodeMsg(en)
+		err = za0002.ReplicationStats.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, zb0005, "ReplicationStats")
+			err = msgp.WrapError(err, "Stats", za0001, "ReplicationStats")
 			return
 		}
+	}
+	// write "Timestamp"
+	err = en.Append(0xa9, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.Timestamp)
+	if err != nil {
+		err = msgp.WrapError(err, "Timestamp")
+		return
 	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z BucketStatsMap) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *BucketStatsMap) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendMapHeader(o, uint32(len(z)))
-	for zb0005, zb0006 := range z {
-		o = msgp.AppendString(o, zb0005)
+	// map header, size 2
+	// string "Stats"
+	o = append(o, 0x82, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x73)
+	o = msgp.AppendMapHeader(o, uint32(len(z.Stats)))
+	for za0001, za0002 := range z.Stats {
+		o = msgp.AppendString(o, za0001)
 		// map header, size 1
 		// string "ReplicationStats"
 		o = append(o, 0x81, 0xb0, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x73)
-		o, err = zb0006.ReplicationStats.MarshalMsg(o)
+		o, err = za0002.ReplicationStats.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, zb0005, "ReplicationStats")
+			err = msgp.WrapError(err, "Stats", za0001, "ReplicationStats")
 			return
 		}
 	}
+	// string "Timestamp"
+	o = append(o, 0xa9, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
+	o = msgp.AppendTime(o, z.Timestamp)
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *BucketStatsMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var zb0003 uint32
-	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	if (*z) == nil {
-		(*z) = make(BucketStatsMap, zb0003)
-	} else if len((*z)) > 0 {
-		for key := range *z {
-			delete((*z), key)
-		}
-	}
-	for zb0003 > 0 {
-		var zb0001 string
-		var zb0002 BucketStats
-		zb0003--
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		var field []byte
-		_ = field
-		var zb0004 uint32
-		zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err, zb0001)
-			return
-		}
-		for zb0004 > 0 {
-			zb0004--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
+		switch msgp.UnsafeString(field) {
+		case "Stats":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, zb0001)
+				err = msgp.WrapError(err, "Stats")
 				return
 			}
-			switch msgp.UnsafeString(field) {
-			case "ReplicationStats":
-				bts, err = zb0002.ReplicationStats.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, zb0001, "ReplicationStats")
-					return
-				}
-			default:
-				bts, err = msgp.Skip(bts)
-				if err != nil {
-					err = msgp.WrapError(err, zb0001)
-					return
+			if z.Stats == nil {
+				z.Stats = make(map[string]BucketStats, zb0002)
+			} else if len(z.Stats) > 0 {
+				for key := range z.Stats {
+					delete(z.Stats, key)
 				}
 			}
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 BucketStats
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Stats")
+					return
+				}
+				var zb0003 uint32
+				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Stats", za0001)
+					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Stats", za0001)
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ReplicationStats":
+						bts, err = za0002.ReplicationStats.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Stats", za0001, "ReplicationStats")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Stats", za0001)
+							return
+						}
+					}
+				}
+				z.Stats[za0001] = za0002
+			}
+		case "Timestamp":
+			z.Timestamp, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Timestamp")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
 		}
-		(*z)[zb0001] = zb0002
 	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z BucketStatsMap) Msgsize() (s int) {
-	s = msgp.MapHeaderSize
-	if z != nil {
-		for zb0005, zb0006 := range z {
-			_ = zb0006
-			s += msgp.StringPrefixSize + len(zb0005) + 1 + 17 + zb0006.ReplicationStats.Msgsize()
+func (z *BucketStatsMap) Msgsize() (s int) {
+	s = 1 + 6 + msgp.MapHeaderSize
+	if z.Stats != nil {
+		for za0001, za0002 := range z.Stats {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + 1 + 17 + za0002.ReplicationStats.Msgsize()
 		}
 	}
+	s += 10 + msgp.TimeSize
 	return
 }
 

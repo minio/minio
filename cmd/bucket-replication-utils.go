@@ -766,3 +766,14 @@ func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 		versionID: ri.VersionID,
 	}
 }
+
+func getReplicationStatsPath(nodeName string) string {
+	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + nodeName + ".stats"
+}
+
+const (
+	replStatsMetaFormat   = 1
+	replStatsVersionV1    = 1
+	replStatsVersion      = replStatsVersionV1
+	replStatsSaveInterval = time.Minute * 5
+)

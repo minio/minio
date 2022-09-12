@@ -569,14 +569,17 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	}
 
 	replicationStatsList := globalReplicationStats.GetAll()
-	bucketStatsMap := make(map[string]BucketStats, len(replicationStatsList))
+	bucketStatsMap := BucketStatsMap{
+		Stats:     make(map[string]BucketStats, len(replicationStatsList)),
+		Timestamp: UTCNow(),
+	}
 	for k, replicationStats := range replicationStatsList {
-		bucketStatsMap[k] = BucketStats{
+		bucketStatsMap.Stats[k] = BucketStats{
 			ReplicationStats: replicationStats,
 		}
 	}
 
-	replicationStats = append(replicationStats, BucketStatsMap(bucketStatsMap))
+	replicationStats = append(replicationStats, bucketStatsMap)
 	return replicationStats
 }
 
