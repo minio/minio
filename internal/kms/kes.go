@@ -170,24 +170,10 @@ func (c *kesClient) DeleteKey(ctx context.Context, keyID string) error {
 
 // ListKeys List all key names that match the specified pattern. In particular,
 // the pattern * lists all keys.
-func (c *kesClient) ListKeys(ctx context.Context, pattern string) ([]KMSKey, error) {
+func (c *kesClient) ListKeys(ctx context.Context, pattern string) (*kes.KeyIterator, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	keys, err := c.client.ListKeys(ctx, pattern)
-	if err != nil {
-		return nil, err
-	}
-	values := []KMSKey{}
-	for keys.Next() {
-		k := keys.Value()
-		values = append(values, KMSKey{
-			Name:      k.Name,
-			CreatedAt: k.CreatedAt,
-			CreatedBy: k.CreatedBy.String(),
-		})
-	}
-	return values, nil
+	return c.client.ListKeys(ctx, pattern)
 }
 
 // GenerateKey generates a new data encryption key using
@@ -294,18 +280,10 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 
 // DescribePolicy describes a policy by returning its metadata.
 // e.g. who created the policy at which point in time.
-func (c *kesClient) DescribePolicy(ctx context.Context, policy string) (*PolicyInfo, error) {
+func (c *kesClient) DescribePolicy(ctx context.Context, policy string) (*kes.PolicyInfo, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	p, err := c.client.DescribePolicy(ctx, policy)
-	if err != nil {
-		return nil, err
-	}
-	return &PolicyInfo{
-		Name:      p.Name,
-		CreatedAt: p.CreatedAt,
-		CreatedBy: p.CreatedBy.String(),
-	}, nil
+	return c.client.DescribePolicy(ctx, policy)
 }
 
 // AssignPolicy assigns a policy to an identity.
@@ -329,24 +307,10 @@ func (c *kesClient) DeletePolicy(ctx context.Context, policy string) error {
 
 // ListPolicies list all policy metadata that match the specified pattern.
 // In particular, the pattern * lists all policy metadata.
-func (c *kesClient) ListPolicies(ctx context.Context, pattern string) ([]PolicyInfo, error) {
+func (c *kesClient) ListPolicies(ctx context.Context, pattern string) (*kes.PolicyIterator, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	policies, err := c.client.ListPolicies(ctx, pattern)
-	if err != nil {
-		return nil, err
-	}
-	values := []PolicyInfo{}
-	for policies.Next() {
-		p := policies.Value()
-		values = append(values, PolicyInfo{
-			Name:      p.Name,
-			CreatedAt: p.CreatedAt,
-			CreatedBy: p.CreatedBy.String(),
-		})
-	}
-	return values, nil
+	return c.client.ListPolicies(ctx, pattern)
 }
 
 // SetPolicy creates or updates a policy.
@@ -365,41 +329,19 @@ func (c *kesClient) GetPolicy(ctx context.Context, policy string) (*kes.Policy, 
 
 // DescribeIdentity describes an identity by returning its metadata.
 // e.g. which policy is currently assigned and whether its an admin identity.
-func (c *kesClient) DescribeIdentity(ctx context.Context, identity string) (*Identity, error) {
+func (c *kesClient) DescribeIdentity(ctx context.Context, identity string) (*kes.IdentityInfo, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	i, err := c.client.DescribeIdentity(ctx, kes.Identity(identity))
-	if err != nil {
-		return nil, err
-	}
-	return &Identity{
-		Identity:  i.Identity.String(),
-		IsAdmin:   i.IsAdmin,
-		CreatedAt: i.CreatedAt,
-		CreatedBy: i.CreatedBy.String(),
-	}, nil
+	return c.client.DescribeIdentity(ctx, kes.Identity(identity))
 }
 
 // DescribeSelfIdentity describes the identity issuing the request.
 // It infers the identity from the TLS client certificate used to authenticate.
 // It returns the identity and policy information for the client identity.
-func (c *kesClient) DescribeSelfIdentity(ctx context.Context) (*SelfIdentity, error) {
+func (c *kesClient) DescribeSelfIdentity(ctx context.Context) (*kes.IdentityInfo, *kes.Policy, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	identity, policy, err := c.client.DescribeSelf(ctx)
-	if err != nil {
-		return nil, err
-	}
-	i := &Identity{
-		Identity:  identity.Identity.String(),
-		IsAdmin:   identity.IsAdmin,
-		CreatedAt: identity.CreatedAt,
-		CreatedBy: identity.CreatedBy.String(),
-	}
-	return &SelfIdentity{
-		Identity: i,
-		Policy:   policy,
-	}, nil
+	return c.client.DescribeSelf(ctx)
 }
 
 // DeleteIdentity deletes an identity from KMS.
@@ -413,24 +355,8 @@ func (c *kesClient) DeleteIdentity(ctx context.Context, identity string) error {
 
 // ListIdentities list all identity metadata that match the specified pattern.
 // In particular, the pattern * lists all identity metadata.
-func (c *kesClient) ListIdentities(ctx context.Context, pattern string) ([]Identity, error) {
+func (c *kesClient) ListIdentities(ctx context.Context, pattern string) (*kes.IdentityIterator, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	keys, err := c.client.ListIdentities(ctx, pattern)
-	if err != nil {
-		return nil, err
-	}
-	values := []Identity{}
-	for keys.Next() {
-		i := keys.Value()
-		values = append(values, Identity{
-			Identity:  i.Identity.String(),
-			IsAdmin:   i.IsAdmin,
-			CreatedAt: i.CreatedAt,
-			Policy:    i.Policy,
-			CreatedBy: i.CreatedBy.String(),
-		})
-	}
-	return values, nil
+	return c.client.ListIdentities(ctx, pattern)
 }

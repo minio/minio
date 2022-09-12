@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding"
 	"encoding/json"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/kes"
@@ -39,16 +38,6 @@ type KMS interface {
 	// CreateKey creates a new key at the KMS with the given key ID.
 	CreateKey(ctx context.Context, keyID string) error
 
-	// DeleteKey deletes a key at the KMS with the given key ID.
-	// Please note that is a dangerous operation.
-	// Once a key has been deleted all data that has been encrypted with it cannot be decrypted
-	// anymore, and therefore, is lost.
-	DeleteKey(ctx context.Context, keyID string) error
-
-	// ListKeys List all key names that match the specified pattern. In particular,
-	// the pattern * lists all keys.
-	ListKeys(ctx context.Context, pattern string) ([]Key, error)
-
 	// GenerateKey generates a new data encryption key using the
 	// key referenced by the key ID.
 	//
@@ -63,13 +52,6 @@ type KMS interface {
 	// a particular DEK. The context may be nil.
 	GenerateKey(ctx context.Context, keyID string, context Context) (DEK, error)
 
-	// ImportKey imports a cryptographic key into the KMS.
-	ImportKey(ctx context.Context, keyID string, bytes []byte) error
-
-	// EncryptKey Encrypts and authenticates a (small) plaintext with the cryptographic key
-	// The plaintext must not exceed 1 MB
-	EncryptKey(keyID string, plaintext []byte, context Context) ([]byte, error)
-
 	// DecryptKey decrypts the ciphertext with the key referenced
 	// by the key ID. The context must match the context value
 	// used to generate the ciphertext.
@@ -79,41 +61,6 @@ type KMS interface {
 	// by the key ID. The contexts must match the context value
 	// used to generate the ciphertexts.
 	DecryptAll(ctx context.Context, keyID string, ciphertext [][]byte, context []Context) ([][]byte, error)
-
-	// DescribePolicy describes a policy by returning its metadata.
-	// e.g. who created the policy at which point in time.
-	DescribePolicy(ctx context.Context, policy string) (*PolicyInfo, error)
-	// AssignPolicy assigns a policy to an identity.
-	// An identity can have at most one policy while the same policy can be assigned to multiple identities.
-	// The assigned policy defines which API calls this identity can perform.
-	// It's not possible to assign a policy to the admin identity.
-	// Further, an identity cannot assign a policy to itself.
-	AssignPolicy(ctx context.Context, policy, identity string) error
-	// SetPolicy creates or updates a policy.
-	SetPolicy(ctx context.Context, policy, data string) error
-	// GetPolicy gets a policy from KMS.
-	GetPolicy(ctx context.Context, policy string) (*kes.Policy, error)
-	// ListPolicies list all policy metadata that match the specified pattern.
-	// In particular, the pattern * lists all policy metadata.
-	ListPolicies(ctx context.Context, pattern string) ([]PolicyInfo, error)
-	// DeletePolicy	deletes a policy from KMS.
-	// All identities that have been assigned to this policy will lose all authorization privileges.
-	DeletePolicy(ctx context.Context, policy string) error
-
-	// DescribeIdentity describes an identity by returning its metadata.
-	// e.g. which policy is currently assigned and whether its an admin identity.
-	DescribeIdentity(ctx context.Context, identity string) (*Identity, error)
-	// DescribeSelfIdentity describes the identity issuing the request.
-	// It infers the identity from the TLS client certificate used to authenticate.
-	// It returns the identity and policy information for the client identity.
-	DescribeSelfIdentity(ctx context.Context) (*SelfIdentity, error)
-	// 	DeleteIdentity deletes an identity from KMS.
-	// The client certificate that corresponds to the identity is no longer authorized to perform any API operations.
-	// The admin identity cannot be deleted.
-	DeleteIdentity(ctx context.Context, identity string) error
-	// ListIdentities list all identity metadata that match the specified pattern.
-	// In particular, the pattern * lists all identity metadata.
-	ListIdentities(ctx context.Context, pattern string) ([]Identity, error)
 }
 
 // Status describes the current state of a KMS.
@@ -140,35 +87,6 @@ type DEK struct {
 	KeyID      string
 	Plaintext  []byte
 	Ciphertext []byte
-}
-
-// PolicyInfo describes a KMS policy.
-type PolicyInfo struct {
-	Name      string
-	CreatedAt time.Time
-	CreatedBy string
-}
-
-// Identity describes a KMS identity.
-type Identity struct {
-	Identity  string
-	IsAdmin   bool
-	Policy    string
-	CreatedAt time.Time
-	CreatedBy string
-}
-
-// SelfIdentity describes the identity of the requester.
-type SelfIdentity struct {
-	Identity *Identity
-	Policy   *kes.Policy
-}
-
-// Key describes a cryptographic key.
-type Key struct {
-	Name      string
-	CreatedAt time.Time
-	CreatedBy string
 }
 
 var (
