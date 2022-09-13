@@ -1550,6 +1550,36 @@ func TestCSVRanges(t *testing.T) {
 </SelectObjectContentRequest>`),
 		},
 		{
+			name: "var-field-count",
+			input: []byte(`id,time,num,num2,text
+1,2010-01-01T,7867786,4565.908123
+2,2017-01-02T03:04Z,-5, 0.765111,Some some
+`),
+			// Since we are doing offset, no headers are used.
+			wantResult: `{"id":"1","time":"2010-01-01T","num":"7867786","num2":"4565.908123"}
+{"id":"2","time":"2017-01-02T03:04Z","num":"-5","num2":" 0.765111","text":"Some some"}`,
+			wantErr: false,
+			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>SELECT * from s3object</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <CSV>
+        <FileHeaderInfo>USE</FileHeaderInfo>
+	    <QuoteCharacter>"</QuoteCharacter>
+        </CSV>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`),
+		},
+		{
 			name:  "error-after-eof",
 			input: testInput,
 			// Since we are doing offset, no headers are used.
