@@ -41,7 +41,7 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 Example: Start MinIO server in a 12 drives setup, using MinIO binary.
 
 ```sh
-minio server /data{1...12}
+minio server /data{1..12}
 ```
 
 Example: Start MinIO server in a 8 drives setup, using MinIO Docker image.
