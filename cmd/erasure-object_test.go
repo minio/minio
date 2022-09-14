@@ -1183,7 +1183,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 			return disks
 		}
 		sets.erasureDisksMu.Unlock()
-		_, err = z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(testCase.content), int64(len(testCase.content)), "", ""),
+		got, err := z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(testCase.content), int64(len(testCase.content)), "", ""),
 			ObjectOptions{Versioned: testCase.versioned})
 		if err != nil {
 			t.Fatalf("Test %d: Failed to upload the final object: %v", i+1, err)
@@ -1193,7 +1193,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 		sets.erasureDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI { return origErasureDisks }
 		sets.erasureDisksMu.Unlock()
-		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{})
+		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{VersionID: got.VersionID})
 		if err != nil {
 			t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 		}
