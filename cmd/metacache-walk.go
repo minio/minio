@@ -89,6 +89,15 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	defer close(out)
 	var objsReturned int
 
+	objReturned := func(metadata []byte) {
+		if opts.Limit <= 0 {
+			return
+		}
+		if m, _, _ := isIndexedMetaV2(metadata); m != nil && !m.IsLatestDeleteMarker() {
+			objsReturned++
+		}
+	}
+
 	// Fast exit track to check if we are listing an object with
 	// a trailing slash, this will avoid to list the object content.
 	if HasSuffix(opts.BaseDir, SlashSeparator) {
@@ -103,7 +112,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				name:     opts.BaseDir,
 				metadata: metadata,
 			}
-			objsReturned++
+			objReturned(metadata)
 		} else {
 			st, sterr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
 			if sterr == nil && st.Mode().IsRegular() {
@@ -156,13 +165,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return nil
 			}
 			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
-				// Do do not retain the file, since it doesn't
+				// Do not retain the file, since it doesn't
 				// match the prefix.
 				entries[i] = ""
 				continue
 			}
 			if len(forward) > 0 && entry < forward {
-				// Do do not retain the file, since its
+				// Do not retain the file, since its
 				// lexially smaller than 'forward'
 				entries[i] = ""
 				continue
@@ -205,7 +214,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
 				meta.name = decodeDirObject(meta.name)
-				objsReturned++
+
+				objReturned(meta.metadata)
 				out <- meta
 				return nil
 			}
@@ -225,7 +235,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
-				objsReturned++
+				objReturned(meta.metadata)
+
 				out <- meta
 				return nil
 			}
@@ -289,14 +300,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if isDirObj {
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
-				objsReturned++
+				objReturned(meta.metadata)
+
 				out <- meta
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
-					objsReturned++
+					objReturned(meta.metadata)
+
 					out <- meta
 					continue
 				}
