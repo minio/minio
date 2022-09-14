@@ -81,6 +81,12 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 	}
 
 	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
+	if err != nil {
+		if errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) || errors.Is(err, errInvalidArgument) {
+			return rCfg, err
+		}
+		logger.CriticalIf(ctx, err)
+	}
 	return rCfg, err
 }
 
@@ -2325,7 +2331,7 @@ func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo) {
 	if oi.VersionID == "" || oi.ModTime.IsZero() {
 		return
 	}
-	rcfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	rcfg, _ := getReplicationConfig(ctx, bucket)
 	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	queueReplicationHeal(ctx, bucket, oi, replicationConfig{
 		Config:  rcfg,
