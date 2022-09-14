@@ -85,6 +85,12 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) (prefer *me
 		return other, false
 	}
 
+	if other.isDir() || e.isDir() {
+		if e.isDir() {
+			return e, other.isDir() == e.isDir()
+		}
+		return other, other.isDir() == e.isDir()
+	}
 	eVers, eErr := e.xlmeta()
 	oVers, oErr := other.xlmeta()
 	if eErr != nil || oErr != nil {
