@@ -272,6 +272,7 @@ scanner  manage namespace scanning for usage calculation, lifecycle, healing and
 ARGS:
 delay     (float)     scanner delay multiplier, defaults to '10.0'
 max_wait  (duration)  maximum wait time between operations, defaults to '15s'
+cycle     (duration)  time duration between scanner cycles
 ```
 
 Example: the following setting will decrease the scanner speed by a factor of 3, reducing the system resource use, but increasing the latency of updates being reflected.
