@@ -1205,6 +1205,13 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	}
 }
 
+func (c *check) mustListBuckets(ctx context.Context, client *minio.Client) {
+	_, err := client.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("user was unable to list buckets: %v", err)
+	}
+}
+
 func (c *check) mustNotUpload(ctx context.Context, client *minio.Client, bucket string) {
 	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
 	if e, ok := err.(minio.ErrorResponse); ok {
