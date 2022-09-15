@@ -234,6 +234,26 @@ type FileInfo struct {
 	Checksum []byte `msg:"cs,allownil"`
 }
 
+// WriteQuorum returns expected write quorum for this FileInfo
+func (fi FileInfo) WriteQuorum(dquorum int) int {
+	if fi.Deleted {
+		return dquorum
+	}
+	quorum := fi.Erasure.DataBlocks
+	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
+		quorum++
+	}
+	return quorum
+}
+
+// ReadQuorum returns expected read quorum for this FileInfo
+func (fi FileInfo) ReadQuorum(dquorum int) int {
+	if fi.Deleted {
+		return dquorum
+	}
+	return fi.Erasure.DataBlocks
+}
+
 // Equals checks if fi(FileInfo) matches ofi(FileInfo)
 func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
 	if !fi.MetadataEquals(ofi) {
