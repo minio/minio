@@ -327,6 +327,24 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // disks. `uploads.json` carries metadata regarding on-going multipart
 // operation(s) on the object.
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
+	if opts.CheckPrecondFn != nil {
+		// Lock the object before reading.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return nil, err
+		}
+		rctx := lkctx.Context()
+		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
+		lk.RUnlock(lkctx.Cancel)
+		if err != nil {
+			return nil, err
+		}
+		if opts.CheckPrecondFn(obj) {
+			return nil, PreConditionFailed{}
+		}
+	}
+
 	userDefined := cloneMSS(opts.UserDefined)
 
 	onlineDisks := er.getDisks()

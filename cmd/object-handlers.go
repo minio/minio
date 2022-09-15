@@ -1786,6 +1786,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	opts.IndexCB = idxCb
 
+	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
+		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+			if objectAPI.IsEncryptionSupported() {
+				if _, err := DecryptObjectInfo(&oi, r); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+					return true
+				}
+			}
+			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+		}
+	}
+
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
 	}
