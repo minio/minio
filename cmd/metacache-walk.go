@@ -53,6 +53,9 @@ type WalkDirOptions struct {
 
 	// ForwardTo will forward to the given object path.
 	ForwardTo string
+
+	// Limit the number of returned objects if > 0.
+	Limit int
 }
 
 // WalkDir will traverse a directory and return all entries found.
@@ -84,6 +87,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		return err
 	}
 	defer close(out)
+	var objsReturned int
+
+	objReturned := func(metadata []byte) {
+		if opts.Limit <= 0 {
+			return
+		}
+		if m, _, _ := isIndexedMetaV2(metadata); m != nil && !m.IsLatestDeleteMarker() {
+			objsReturned++
+		}
+	}
 
 	// Fast exit track to check if we are listing an object with
 	// a trailing slash, this will avoid to list the object content.
@@ -93,12 +106,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			xlStorageFormatFile))
 		if err == nil {
 			// if baseDir is already a directory object, consider it
-			// as part of the list call, this is a AWS S3 specific
+			// as part of the list call, this is AWS S3 specific
 			// behavior.
 			out <- metaCacheEntry{
 				name:     opts.BaseDir,
 				metadata: metadata,
 			}
+			objReturned(metadata)
 		} else {
 			st, sterr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
 			if sterr == nil && st.Mode().IsRegular() {
@@ -123,6 +137,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if contextCanceled(ctx) {
 			return ctx.Err()
 		}
+		if opts.Limit > 0 && objsReturned >= opts.Limit {
+			return nil
+		}
 
 		s.walkMu.Lock()
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
@@ -144,14 +161,17 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
+			if opts.Limit > 0 && objsReturned >= opts.Limit {
+				return nil
+			}
 			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
-				// Do do not retain the file, since it doesn't
+				// Do not retain the file, since it doesn't
 				// match the prefix.
 				entries[i] = ""
 				continue
 			}
 			if len(forward) > 0 && entry < forward {
-				// Do do not retain the file, since its
+				// Do not retain the file, since its
 				// lexially smaller than 'forward'
 				entries[i] = ""
 				continue
@@ -194,6 +214,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
 				meta.name = decodeDirObject(meta.name)
+
+				objReturned(meta.metadata)
 				out <- meta
 				return nil
 			}
@@ -213,6 +235,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
+				objReturned(meta.metadata)
+
 				out <- meta
 				return nil
 			}
@@ -234,6 +258,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 
 		for _, entry := range entries {
+			if opts.Limit > 0 && objsReturned >= opts.Limit {
+				return nil
+			}
 			if entry == "" {
 				continue
 			}
@@ -273,12 +300,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if isDirObj {
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
+				objReturned(meta.metadata)
+
 				out <- meta
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
+					objReturned(meta.metadata)
+
 					out <- meta
 					continue
 				}
@@ -299,6 +330,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 		// If directory entry left on stack, pop it now.
 		for len(dirStack) > 0 {
+			if opts.Limit > 0 && objsReturned >= opts.Limit {
+				return nil
+			}
+			if contextCanceled(ctx) {
+				return ctx.Err()
+			}
 			pop := dirStack[len(dirStack)-1]
 			out <- metaCacheEntry{name: pop}
 			if opts.Recursive {

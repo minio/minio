@@ -51,8 +51,10 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 // we need to remove this trailing "/" for objects and retain "/" for prefixes before
 // sorting because the trailing "/" can affect the sorting results for certain cases.
 // Ex. lets say entries = ["a-b/", "a/"] and both are objects.
-//     sorting with out trailing "/" = ["a", "a-b"]
-//     sorting with trailing "/"     = ["a-b/", "a/"]
+//
+//	sorting with out trailing "/" = ["a", "a-b"]
+//	sorting with trailing "/"     = ["a-b/", "a/"]
+//
 // Hence if entries[] does not have a case like the above example then isLeaf() check
 // can be delayed till the entry is pushed into the TreeWalkResult channel.
 // delayIsLeafCheck() returns true if isLeaf can be delayed or false if
@@ -86,10 +88,10 @@ type ListDirFunc func(bucket, prefixDir, prefixEntry string) (emptyDir bool, ent
 // IsLeafFunc - A function isLeaf of type isLeafFunc is used to detect if an
 // entry is a leaf entry. There are 2 scenarios where isLeaf should behave
 // differently depending on the backend:
-// 1. FS backend object listing - isLeaf is true if the entry
-//    has no trailing "/"
-// 2. Erasure backend object listing - isLeaf is true if the entry
-//    is a directory and contains xl.meta
+//  1. FS backend object listing - isLeaf is true if the entry
+//     has no trailing "/"
+//  2. Erasure backend object listing - isLeaf is true if the entry
+//     is a directory and contains xl.meta
 type IsLeafFunc func(string, string) bool
 
 // IsLeafDirFunc - A function isLeafDir of type isLeafDirFunc is used to detect

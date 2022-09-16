@@ -216,10 +216,13 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 //
 // -- if input storage class is empty then standard is assumed
 // -- if input is RRS but RRS is not configured default '2' parity
-//    for RRS is assumed
+//
+//	for RRS is assumed
+//
 // -- if input is STANDARD but STANDARD is not configured '0' parity
-//    is returned, the caller is expected to choose the right parity
-//    at that point.
+//
+//	is returned, the caller is expected to choose the right parity
+//	at that point.
 func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	ConfigLock.RLock()
 	defer ConfigLock.RUnlock()

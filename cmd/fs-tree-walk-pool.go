@@ -100,12 +100,12 @@ func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult,
 
 // Set - adds a treeWalk to the treeWalkPool.
 // Also starts a timer go-routine that ends when:
-// 1) time.After() expires after t.timeOut seconds.
-//    The expiration is needed so that the treeWalk go-routine resources are freed after a timeout
-//    if the S3 client does only partial listing of objects.
-// 2) Release() signals the timer go-routine to end on endTimerCh.
-//    During listing the timer should not timeout and end the treeWalk go-routine, hence the
-//    timer go-routine should be ended.
+//  1. time.After() expires after t.timeOut seconds.
+//     The expiration is needed so that the treeWalk go-routine resources are freed after a timeout
+//     if the S3 client does only partial listing of objects.
+//  2. Release() signals the timer go-routine to end on endTimerCh.
+//     During listing the timer should not timeout and end the treeWalk go-routine, hence the
+//     timer go-routine should be ended.
 func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -24,7 +24,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -33,20 +35,22 @@ var etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
 // operation should not proceed. Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
+//
+//	x-amz-copy-source-if-modified-since
+//	x-amz-copy-source-if-unmodified-since
+//	x-amz-copy-source-if-match
+//	x-amz-copy-source-if-none-match
 func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	return checkCopyObjectPreconditions(ctx, w, r, objInfo)
 }
 
 // Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
 // Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
+//
+//	x-amz-copy-source-if-modified-since
+//	x-amz-copy-source-if-unmodified-since
+//	x-amz-copy-source-if-match
+//	x-amz-copy-source-if-none-match
 func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodPut {
@@ -75,7 +79,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	// since the specified time otherwise return 412 (precondition failed).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfModifiedSince)
 	if ifModifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
 				writeHeaders()
@@ -89,7 +93,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	// modified since the specified time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
@@ -126,12 +130,61 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	return false
 }
 
+// Validates the preconditions. Returns true if PUT operation should not proceed.
+// Preconditions supported are:
+//
+//	x-minio-source-mtime
+//	x-minio-source-etag
+func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
+	// Return false for methods other than PUT.
+	if r.Method != http.MethodPut {
+		return false
+	}
+	// If the object doesn't have a modtime (IsZero), or the modtime
+	// is obviously garbage (Unix time == 0), then ignore modtimes
+	// and don't process the If-Modified-Since header.
+	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
+		return false
+	}
+
+	// If top level is a delete marker proceed to upload.
+	if objInfo.DeleteMarker {
+		return false
+	}
+
+	// Headers to be set of object content is not going to be written to the client.
+	writeHeaders := func() {
+		// set common headers
+		setCommonHeaders(w)
+
+		// set object-related metadata headers
+		w.Header().Set(xhttp.LastModified, objInfo.ModTime.UTC().Format(http.TimeFormat))
+
+		if objInfo.ETag != "" {
+			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+		}
+	}
+
+	etagMatch := opts.PreserveETag != "" && isETagEqual(objInfo.ETag, opts.PreserveETag)
+	vidMatch := opts.VersionID != "" && opts.VersionID == objInfo.VersionID
+	mtimeMatch := !opts.MTime.IsZero() && objInfo.ModTime.Unix() >= opts.MTime.Unix()
+	if etagMatch && vidMatch && mtimeMatch {
+		writeHeaders()
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
+		return true
+	}
+
+	// Object content should be persisted.
+	return false
+}
+
 // Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
 // Preconditions supported are:
-//  If-Modified-Since
-//  If-Unmodified-Since
-//  If-Match
-//  If-None-Match
+//
+//	If-Modified-Since
+//	If-Unmodified-Since
+//	If-Match
+//	If-None-Match
 func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -168,7 +221,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// otherwise return a 304 (not modified).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.IfModifiedSince)
 	if ifModifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
 				writeHeaders()
@@ -182,7 +235,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
 				writeHeaders()
@@ -263,6 +316,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 		}
 	}
+	hash.AddChecksumHeader(w, objInfo.decryptChecksums())
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {

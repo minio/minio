@@ -24,6 +24,7 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"net/http"
 
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/hash/sha256"
@@ -45,6 +46,10 @@ type Reader struct {
 
 	checksum      etag.ETag
 	contentSHA256 []byte
+
+	// Content checksum
+	contentHash   Checksum
+	contentHasher hash.Hash
 
 	sha256 hash.Hash
 }
@@ -83,7 +88,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		if r.bytesRead > 0 {
 			return nil, errors.New("hash: already read from hash reader")
 		}
-		if len(r.checksum) != 0 && len(MD5) != 0 && !etag.Equal(r.checksum, etag.ETag(MD5)) {
+		if len(r.checksum) != 0 && len(MD5) != 0 && !etag.Equal(r.checksum, MD5) {
 			return nil, BadDigest{
 				ExpectedMD5:   r.checksum.String(),
 				CalculatedMD5: md5Hex,
@@ -99,7 +104,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 			return nil, ErrSizeMismatch{Want: r.size, Got: size}
 		}
 
-		r.checksum = etag.ETag(MD5)
+		r.checksum = MD5
 		r.contentSHA256 = SHA256
 		if r.size < 0 && size >= 0 {
 			r.src = etag.Wrap(io.LimitReader(r.src, size), r.src)
@@ -114,25 +119,51 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	if size >= 0 {
 		r := io.LimitReader(src, size)
 		if _, ok := src.(etag.Tagger); !ok {
-			src = etag.NewReader(r, etag.ETag(MD5))
+			src = etag.NewReader(r, MD5)
 		} else {
 			src = etag.Wrap(r, src)
 		}
 	} else if _, ok := src.(etag.Tagger); !ok {
-		src = etag.NewReader(src, etag.ETag(MD5))
+		src = etag.NewReader(src, MD5)
 	}
-	var hash hash.Hash
+	var h hash.Hash
 	if len(SHA256) != 0 {
-		hash = sha256.New()
+		h = sha256.New()
 	}
 	return &Reader{
 		src:           src,
 		size:          size,
 		actualSize:    actualSize,
-		checksum:      etag.ETag(MD5),
+		checksum:      MD5,
 		contentSHA256: SHA256,
-		sha256:        hash,
+		sha256:        h,
 	}, nil
+}
+
+// ErrInvalidChecksum is returned when an invalid checksum is provided in headers.
+var ErrInvalidChecksum = errors.New("invalid checksum")
+
+// AddChecksum will add checksum checks as specified in
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html
+// Returns ErrInvalidChecksum if a problem with the checksum is found.
+func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
+	cs, err := GetContentChecksum(req)
+	if err != nil {
+		return ErrInvalidChecksum
+	}
+	if cs == nil {
+		return nil
+	}
+	r.contentHash = *cs
+	if cs.Type.Trailing() || ignoreValue {
+		// Ignore until we have trailing headers.
+		return nil
+	}
+	r.contentHasher = cs.Type.Hasher()
+	if r.contentHasher == nil {
+		return ErrInvalidChecksum
+	}
+	return nil
 }
 
 func (r *Reader) Read(p []byte) (int, error) {
@@ -140,6 +171,9 @@ func (r *Reader) Read(p []byte) (int, error) {
 	r.bytesRead += int64(n)
 	if r.sha256 != nil {
 		r.sha256.Write(p[:n])
+	}
+	if r.contentHasher != nil {
+		r.contentHasher.Write(p[:n])
 	}
 
 	if err == io.EOF { // Verify content SHA256, if set.
@@ -149,6 +183,15 @@ func (r *Reader) Read(p []byte) (int, error) {
 					ExpectedSHA256:   hex.EncodeToString(r.contentSHA256),
 					CalculatedSHA256: hex.EncodeToString(sum),
 				}
+			}
+		}
+		if r.contentHasher != nil {
+			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw(), sum) {
+				err := ChecksumMismatch{
+					Want: r.contentHash.Encoded,
+					Got:  base64.StdEncoding.EncodeToString(sum),
+				}
+				return n, err
 			}
 		}
 	}
@@ -221,6 +264,19 @@ func (r *Reader) MD5Base64String() string {
 // SHA256HexString returns a hex representation of the SHA256.
 func (r *Reader) SHA256HexString() string {
 	return hex.EncodeToString(r.contentSHA256)
+}
+
+// ContentCRCType returns the content checksum type.
+func (r *Reader) ContentCRCType() ChecksumType {
+	return r.contentHash.Type
+}
+
+// ContentCRC returns the content crc if set.
+func (r *Reader) ContentCRC() map[string]string {
+	if r.contentHash.Type == ChecksumNone || !r.contentHash.Valid() {
+		return nil
+	}
+	return map[string]string{r.contentHash.Type.String(): r.contentHash.Encoded}
 }
 
 var _ io.Closer = (*Reader)(nil) // compiler check

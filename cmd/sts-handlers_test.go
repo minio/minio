@@ -1095,6 +1095,28 @@ func TestIAMWithOpenIDWithRolePolicyServerSuite(t *testing.T) {
 	}
 }
 
+func TestIAMWithOpenIDWithRolePolicyWithPolicyVariablesServerSuite(t *testing.T) {
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				openIDServer := os.Getenv(EnvTestOpenIDServer)
+				if openIDServer == "" {
+					c.Skip("Skipping OpenID test as no OpenID server is provided.")
+				}
+
+				suite.SetUpSuite(c)
+				suite.SetUpOpenID(c, openIDServer, "projecta,projectb,projectaorb")
+				suite.TestOpenIDSTSWithRolePolicyWithPolVar(c, testRoleARNs[0], testRoleMap[testRoleARNs[0]])
+				suite.TearDownSuite(c)
+			},
+		)
+	}
+}
+
 const (
 	testRoleARN  = "arn:minio:iam:::role/nOybJqMNzNmroqEKq5D0EUsRZw0"
 	testRoleARN2 = "arn:minio:iam:::role/domXb70kze7Ugc1SaxaeFchhLP4"
@@ -1246,6 +1268,186 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+}
+
+// Constants for Policy Variables test.
+var (
+	policyProjectA = `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                        "s3:GetBucketLocation",
+                        "s3:ListAllMyBuckets"
+                      ],
+            "Resource": "arn:aws:s3:::*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::projecta",
+                "arn:aws:s3:::projecta/*"
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "jwt:groups": [
+                        "projecta"
+                    ]
+                }
+            }
+        }
+    ]
+}
+`
+	policyProjectB = `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                        "s3:GetBucketLocation",
+                        "s3:ListAllMyBuckets"
+                      ],
+            "Resource": "arn:aws:s3:::*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::projectb",
+                "arn:aws:s3:::projectb/*"
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "jwt:groups": [
+                        "projectb"
+                    ]
+                }
+            }
+        }
+    ]
+}
+`
+	policyProjectAorB = `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                        "s3:GetBucketLocation",
+                        "s3:ListAllMyBuckets"
+                      ],
+            "Resource": "arn:aws:s3:::*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::projectaorb",
+                "arn:aws:s3:::projectaorb/*"
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "jwt:groups": [
+                        "projecta",
+                        "projectb"
+                    ]
+                }
+            }
+        }
+    ]
+}`
+
+	policyProjectsMap = map[string]string{
+		// grants access to bucket `projecta` if user is in group `projecta`
+		"projecta": policyProjectA,
+
+		// grants access to bucket `projectb` if user is in group `projectb`
+		"projectb": policyProjectB,
+
+		// grants access to bucket `projectaorb` if user is in either group
+		// `projecta` or `projectb`
+		"projectaorb": policyProjectAorB,
+	}
+)
+
+func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicyWithPolVar(c *check, roleARN string, clientApp OpenIDClientAppParams) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Create project buckets
+	buckets := []string{"projecta", "projectb", "projectaorb", "other"}
+	for _, bucket := range buckets {
+		err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+		if err != nil {
+			c.Fatalf("bucket create error: %v", err)
+		}
+	}
+
+	// Create policies
+	for polName, polContent := range policyProjectsMap {
+		err := s.adm.AddCannedPolicy(ctx, polName, []byte(polContent))
+		if err != nil {
+			c.Fatalf("policy add error: %v", err)
+		}
+	}
+
+	makeSTSClient := func(user, password string) *minio.Client {
+		// Generate web identity JWT by interacting with OpenID IDP.
+		token, err := MockOpenIDTestUserInteraction(ctx, clientApp, user, password)
+		if err != nil {
+			c.Fatalf("mock user err: %v", err)
+		}
+
+		// Generate STS credential.
+		webID := cr.STSWebIdentity{
+			Client:      s.TestSuiteCommon.client,
+			STSEndpoint: s.endPoint,
+			GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+				return &cr.WebIdentityToken{
+					Token: token,
+				}, nil
+			},
+			RoleARN: roleARN,
+		}
+
+		value, err := webID.Retrieve()
+		if err != nil {
+			c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+		}
+		// fmt.Printf("value: %#v\n", value)
+
+		minioClient, err := minio.New(s.endpoint, &minio.Options{
+			Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+			Secure:    s.secure,
+			Transport: s.TestSuiteCommon.client.Transport,
+		})
+		if err != nil {
+			c.Fatalf("Error initializing client: %v", err)
+		}
+
+		return minioClient
+	}
+
+	// user dillon's groups attribute is ["projecta", "projectb"]
+	dillonClient := makeSTSClient("dillon@example.io", "dillon")
+	// Validate client's permissions
+	c.mustListBuckets(ctx, dillonClient)
+	c.mustListObjects(ctx, dillonClient, "projecta")
+	c.mustListObjects(ctx, dillonClient, "projectb")
+	c.mustListObjects(ctx, dillonClient, "projectaorb")
+	c.mustNotListObjects(ctx, dillonClient, "other")
+
+	// this user's groups attribute is ["projectb"]
+	lisaClient := makeSTSClient("ejones@example.io", "liza")
+	// Validate client's permissions
+	c.mustListBuckets(ctx, lisaClient)
+	c.mustNotListObjects(ctx, lisaClient, "projecta")
+	c.mustListObjects(ctx, lisaClient, "projectb")
+	c.mustListObjects(ctx, lisaClient, "projectaorb")
+	c.mustNotListObjects(ctx, lisaClient, "other")
 }
 
 func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {

@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/mimedb"
+	"github.com/minio/pkg/wildcard"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -502,17 +503,26 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		}, index)
 	}
 
+	ignoredErrs := []error{
+		errFileNotFound,
+		errVolumeNotFound,
+		errFileVersionNotFound,
+		errDiskNotFound,
+	}
+
 	errs := g.Wait()
 	for index, err := range errs {
 		if err == nil {
 			continue
 		}
-		if !IsErr(err, []error{
-			errFileNotFound,
-			errVolumeNotFound,
-			errFileVersionNotFound,
-			errDiskNotFound,
-		}...) {
+		if bucket == minioMetaBucket {
+			// minioMetaBucket "reads" for .metacache are not written with O_SYNC
+			// so there is a potential for them to not fully committed to stable
+			// storage leading to unexpected EOFs. Allow these failures to
+			// be ignored since the caller already ignores them in streamMetadataParts()
+			ignoredErrs = append(ignoredErrs, io.ErrUnexpectedEOF, io.EOF)
+		}
+		if !IsErr(err, ignoredErrs...) {
 			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], bucket, object, err),
 				disks[index].String())
@@ -673,10 +683,7 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
 	}
 
-	wquorum = fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		wquorum++
-	}
+	wquorum = fi.WriteQuorum(er.defaultWQuorum())
 
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
@@ -703,6 +710,8 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	for index := range disks {
 		metadata[index].SetTierFreeVersionID(fvID)
 	}
+
+	diskVersions := make([]uint64, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -710,6 +719,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
+
 			// Pick one FileInfo for a disk at index.
 			fi := metadata[index]
 			// Assign index when index is initialized
@@ -717,19 +727,34 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 				fi.Erasure.Index = index + 1
 			}
 
-			if fi.IsValid() {
-				return disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			if !fi.IsValid() {
+				return errFileCorrupt
 			}
-			return errFileCorrupt
+			sign, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			if err != nil {
+				return err
+			}
+			diskVersions[index] = sign
+			return nil
 		}, index)
 	}
 
 	// Wait for all renames to finish.
 	errs := g.Wait()
 
-	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
-	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	if err == nil {
+		versions := reduceCommonVersions(diskVersions, writeQuorum)
+		for index, dversions := range diskVersions {
+			if versions != dversions {
+				errs[index] = errFileNeedsHealing
+			}
+		}
+		err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	}
+
+	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
+	// otherwise return failure.
 	return evalDisks(disks, errs), err
 }
 
@@ -837,7 +862,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -886,6 +911,16 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
+
+	if opts.CheckPrecondFn != nil {
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err != nil {
+			return objInfo, err
+		}
+		if opts.CheckPrecondFn(obj) {
+			return objInfo, PreConditionFailed{}
+		}
+	}
 
 	data := r.Reader
 
@@ -962,6 +997,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
+	fi.Checksum = opts.WantChecksum.AppendTo(nil)
+	if opts.EncryptFn != nil {
+		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+	}
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1105,7 +1144,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		} else {
 			partsMetadata[i].Data = nil
 		}
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex)
+		// No need to add checksum to part. We already have it on the object.
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1113,11 +1153,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		})
 	}
 
-	if userDefined["etag"] == "" {
-		userDefined["etag"] = r.MD5CurrentHexString()
-		if opts.PreserveETag != "" {
-			userDefined["etag"] = opts.PreserveETag
-		}
+	userDefined["etag"] = r.MD5CurrentHexString()
+	if opts.PreserveETag != "" {
+		userDefined["etag"] = opts.PreserveETag
 	}
 
 	// Guess content-type from the extension if possible.
@@ -1141,16 +1179,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Rename the successfully written temporary object to final location.
-	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum); err != nil {
-		if errors.Is(err, errFileNotFound) {
-			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
-		}
-		logger.LogIf(ctx, err)
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	defer NSUpdated(bucket, object)
-
+	onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -1173,6 +1202,57 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			break
 		}
 	}
+
+	healEntry := func(entry metaCacheEntry) error {
+		if entry.isDir() {
+			return nil
+		}
+		// We might land at .metacache, .trash, .multipart
+		// no need to heal them skip, only when bucket
+		// is '.minio.sys'
+		if bucket == minioMetaBucket {
+			if wildcard.Match("buckets/*/.metacache/*", entry.name) {
+				return nil
+			}
+			if wildcard.Match("tmp/*", entry.name) {
+				return nil
+			}
+			if wildcard.Match("multipart/*", entry.name) {
+				return nil
+			}
+			if wildcard.Match("tmp-old/*", entry.name) {
+				return nil
+			}
+		}
+		fivs, err := entry.fileInfoVersions(bucket)
+		if err != nil {
+			_, err = er.HealObject(ctx, bucket, entry.name, "", madmin.HealOpts{NoLock: true})
+			return err
+		}
+
+		for _, version := range fivs.Versions {
+			_, err = er.HealObject(ctx, bucket, version.Name, version.VersionID, madmin.HealOpts{NoLock: true})
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err != nil {
+		if errors.Is(err, errFileNotFound) {
+			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+		}
+		if errors.Is(err, errFileNeedsHealing) && !opts.Speedtest {
+			listAndHeal(ctx, bucket, object, &er, healEntry)
+		} else {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	}
+
+	defer NSUpdated(bucket, object)
 
 	fi.ReplicationState = opts.PutReplicationState()
 	online = countOnlineDisks(onlineDisks)
@@ -1911,7 +1991,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 	}
 
-	uploadID, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
+	res, err := er.NewMultipartUpload(ctx, bucket, object, ropts)
 	if err != nil {
 		return setRestoreHeaderFn(oi, err)
 	}
@@ -1931,7 +2011,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
-		pInfo, err := er.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
+		pInfo, err := er.PutObjectPart(ctx, bucket, object, res.UploadID, partInfo.Number, NewPutObjReader(hr), ObjectOptions{})
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
@@ -1943,7 +2023,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = er.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{
 		MTime: oi.ModTime,
 	})
 	return setRestoreHeaderFn(oi, err)

@@ -155,6 +155,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 		metadata[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 	}
+
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
 	for k, v := range encMetadata {
@@ -174,18 +175,42 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
+	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
+		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+			if objectAPI.IsEncryptionSupported() {
+				if _, err := DecryptObjectInfo(&oi, r); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+					return true
+				}
+			}
+			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+		}
+	}
+
+	checksumType := hash.NewChecksumType(r.Header.Get(xhttp.AmzChecksumAlgo))
+	if checksumType.Is(hash.ChecksumInvalid) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)
+		return
+	} else if checksumType.IsSet() && !checksumType.Is(hash.ChecksumTrailing) {
+		opts.WantChecksum = &hash.Checksum{Type: checksumType}
+	}
+
 	newMultipartUpload := objectAPI.NewMultipartUpload
 	if api.CacheAPI() != nil {
 		newMultipartUpload = api.CacheAPI().NewMultipartUpload
 	}
 
-	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
+	res, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	response := generateInitiateMultipartUploadResponse(bucket, object, uploadID)
+	response := generateInitiateMultipartUploadResponse(bucket, object, res.UploadID)
+	if res.ChecksumAlgo != "" {
+		w.Header().Set(xhttp.AmzChecksumAlgo, res.ChecksumAlgo)
+	}
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write success response.
@@ -350,6 +375,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if err = actualReader.AddChecksum(r, false); err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+			return
+		}
 
 		// Set compression metrics.
 		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
@@ -367,8 +396,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	rawReader := hashReader
-	pReader := NewPutObjReader(rawReader)
+	if err := hashReader.AddChecksum(r, size < 0); err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+		return
+	}
+
+	pReader := NewPutObjReader(hashReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
@@ -424,14 +457,21 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if err := hashReader.AddChecksum(r, true); err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+			return
+		}
+
 		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+
 		if idxCb != nil {
 			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
 		}
+		opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 	}
 	opts.IndexCB = idxCb
 
@@ -476,6 +516,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.
 	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
+	hash.TransferChecksumHeader(w, r)
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -664,7 +705,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo)
 	var encodedSuccessResponse []byte
 	if !headerWritten {
 		encodedSuccessResponse = encodeResponse(response)

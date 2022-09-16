@@ -605,6 +605,36 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Index")
 				return
 			}
+		case "crc":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Checksums")
+				return
+			}
+			if z.Checksums == nil {
+				z.Checksums = make(map[string]string, zb0002)
+			} else if len(z.Checksums) > 0 {
+				for key := range z.Checksums {
+					delete(z.Checksums, key)
+				}
+			}
+			for zb0002 > 0 {
+				zb0002--
+				var za0001 string
+				var za0002 string
+				za0001, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums")
+					return
+				}
+				za0002, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums", za0001)
+					return
+				}
+				z.Checksums[za0001] = za0002
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -619,11 +649,16 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
 	if z.Index == nil {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if z.Checksums == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -695,6 +730,30 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	if (zb0001Mask & 0x40) == 0 { // if not empty
+		// write "crc"
+		err = en.Append(0xa3, 0x63, 0x72, 0x63)
+		if err != nil {
+			return
+		}
+		err = en.WriteMapHeader(uint32(len(z.Checksums)))
+		if err != nil {
+			err = msgp.WrapError(err, "Checksums")
+			return
+		}
+		for za0001, za0002 := range z.Checksums {
+			err = en.WriteString(za0001)
+			if err != nil {
+				err = msgp.WrapError(err, "Checksums")
+				return
+			}
+			err = en.WriteString(za0002)
+			if err != nil {
+				err = msgp.WrapError(err, "Checksums", za0001)
+				return
+			}
+		}
+	}
 	return
 }
 
@@ -702,11 +761,16 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
 	if z.Index == nil {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if z.Checksums == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -732,6 +796,15 @@ func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 		// string "index"
 		o = append(o, 0xa5, 0x69, 0x6e, 0x64, 0x65, 0x78)
 		o = msgp.AppendBytes(o, z.Index)
+	}
+	if (zb0001Mask & 0x40) == 0 { // if not empty
+		// string "crc"
+		o = append(o, 0xa3, 0x63, 0x72, 0x63)
+		o = msgp.AppendMapHeader(o, uint32(len(z.Checksums)))
+		for za0001, za0002 := range z.Checksums {
+			o = msgp.AppendString(o, za0001)
+			o = msgp.AppendString(o, za0002)
+		}
 	}
 	return
 }
@@ -790,6 +863,36 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Index")
 				return
 			}
+		case "crc":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Checksums")
+				return
+			}
+			if z.Checksums == nil {
+				z.Checksums = make(map[string]string, zb0002)
+			} else if len(z.Checksums) > 0 {
+				for key := range z.Checksums {
+					delete(z.Checksums, key)
+				}
+			}
+			for zb0002 > 0 {
+				var za0001 string
+				var za0002 string
+				zb0002--
+				za0001, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums")
+					return
+				}
+				za0002, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums", za0001)
+					return
+				}
+				z.Checksums[za0001] = za0002
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -804,7 +907,13 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ObjectPartInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.ETag) + 7 + msgp.IntSize + 5 + msgp.Int64Size + 11 + msgp.Int64Size + 8 + msgp.TimeSize + 6 + msgp.BytesPrefixSize + len(z.Index)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.ETag) + 7 + msgp.IntSize + 5 + msgp.Int64Size + 11 + msgp.Int64Size + 8 + msgp.TimeSize + 6 + msgp.BytesPrefixSize + len(z.Index) + 4 + msgp.MapHeaderSize
+	if z.Checksums != nil {
+		for za0001, za0002 := range z.Checksums {
+			_ = za0002
+			s += msgp.StringPrefixSize + len(za0001) + msgp.StringPrefixSize + len(za0002)
+		}
+	}
 	return
 }
 

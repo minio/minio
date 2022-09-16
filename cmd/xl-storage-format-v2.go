@@ -638,6 +638,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
 		fi.TransitionTier = string(sc)
 	}
+	if crcs := j.MetaSys[ReservedMetadataPrefixLower+"crc"]; len(crcs) > 0 {
+		fi.Checksum = crcs
+	}
 	return fi, nil
 }
 
@@ -1535,6 +1538,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 		if fi.TransitionTier != "" {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+		}
+		if len(fi.Checksum) > 0 {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+"crc"] = fi.Checksum
 		}
 	}
 

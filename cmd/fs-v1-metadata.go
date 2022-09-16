@@ -23,12 +23,11 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	pathutil "path"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/amztime"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/lock"
 	"github.com/minio/minio/internal/logger"
@@ -82,7 +81,7 @@ func (c FSChecksumInfoV1) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-// UnmarshalJSON unmarshals the the given data into the FSChecksumInfoV1 struct
+// UnmarshalJSON unmarshals the given data into the FSChecksumInfoV1 struct
 func (c *FSChecksumInfoV1) UnmarshalJSON(data []byte) error {
 	type checksuminfo struct {
 		Algorithm string   `json:"algorithm"`
@@ -175,12 +174,9 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
-	var (
-		t time.Time
-		e error
-	)
+
 	if exp, ok := m.Meta["expires"]; ok {
-		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
+		if t, e := amztime.ParseHeader(exp); e == nil {
 			objInfo.Expires = t.UTC()
 		}
 	}

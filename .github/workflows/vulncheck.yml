@@ -1,0 +1,26 @@
+name: VulnCheck
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+jobs:
+  vulncheck:
+    name: Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+          check-latest: true
+      - name: Get official govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        shell: bash
+      - name: Run govulncheck
+        run: govulncheck ./...
+        shell: bash

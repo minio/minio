@@ -1,0 +1,108 @@
+{{- $global := . -}}
+{{- if .Values.users }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "minio.fullname" . }}-make-user-job
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: {{ template "minio.name" . }}-make-user-job
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+{{- with .Values.makeUserJob.annotations }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ template "minio.name" . }}-job
+        release: {{ .Release.Name }}
+{{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 8 }}
+{{- end }}
+{{- if .Values.makeUserJob.podAnnotations }}
+      annotations:
+{{ toYaml .Values.makeUserJob.podAnnotations | indent 8 }}
+{{- end }}
+    spec:
+      restartPolicy: OnFailure
+{{- include "minio.imagePullSecrets" . | indent 6 }}
+{{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.makeUserJob.nodeSelector | indent 8 }}
+{{- end }}
+{{- with .Values.makeUserJob.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- with .Values.makeUserJob.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- if .Values.makeUserJob.securityContext.enabled }}
+      securityContext:
+        runAsUser: {{ .Values.makeUserJob.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.makeUserJob.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.makeUserJob.securityContext.fsGroup }}
+{{- end }}
+      volumes:
+        - name: minio-configuration
+          projected:
+            sources:
+            - configMap:
+                name: {{ template "minio.fullname" . }}
+            - secret:
+                name: {{ template "minio.secretName" . }}
+            {{- range .Values.users }}
+            {{- if .existingSecret }}
+            - secret:
+                name: {{ tpl .existingSecret $global }}
+                items:
+                  - key: {{ .existingSecretKey }}
+                    path: secrets/{{ tpl .existingSecretKey $global }}
+            {{- end }}
+            {{- end }}
+        {{- if .Values.tls.enabled }}
+        - name: cert-secret-volume-mc
+          secret:
+            secretName: {{ .Values.tls.certSecret }}
+            items:
+            - key: {{ .Values.tls.publicCrt }}
+              path: CAs/public.crt
+        {{ end }}
+        {{- if .Values.makeUserJob.extraVolumes }}
+          {{- toYaml .Values.makeUserJob.extraVolumes | nindent 8 }}
+        {{- end }}
+      containers:
+      - name: minio-mc
+        image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+        imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
+        {{- if .Values.makeUserJob.exitCommand }}
+        command: ["/bin/sh", "-c"]
+        args: ["/bin/sh /config/add-user; x=$(echo $?); {{ .Values.makeUserJob.exitCommand }} && exit $x" ]
+        {{- else }}
+        command: ["/bin/sh", "/config/add-user"]
+        {{- end }}
+        env:
+          - name: MINIO_ENDPOINT
+            value: {{ template "minio.fullname" . }}
+          - name: MINIO_PORT
+            value: {{ .Values.service.port | quote }}
+        volumeMounts:
+          - name: minio-configuration
+            mountPath: /config
+          {{- if .Values.tls.enabled }}
+          - name: cert-secret-volume-mc
+            mountPath: {{ .Values.configPathmc }}certs
+          {{ end }}
+          {{- if .Values.makeUserJob.extraVolumeMounts }}
+            {{- toYaml .Values.makeUserJob.extraVolumeMounts | nindent 10 }}
+          {{- end }}
+        resources:
+{{ toYaml .Values.makeUserJob.resources | indent 10 }}
+{{- end }}

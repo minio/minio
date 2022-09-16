@@ -1769,7 +1769,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 
 	}
 
-	// Formualting the result data set to be expected from ListObjects call inside the tests,
+	// Formulating the result data set to be expected from ListObjects call inside the tests,
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
 
 	resultCases := []ListObjectsInfo{

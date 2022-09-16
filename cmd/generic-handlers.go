@@ -27,10 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xnet "github.com/minio/pkg/net"
 
-	"github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
@@ -52,6 +53,9 @@ const (
 
 	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxUserDataSize = 2 * 1024
+
+	// maxBuckets upto 500000 for any MinIO deployment.
+	maxBuckets = 500 * 1000
 )
 
 // ReservedMetadataPrefix is the prefix of a metadata key which
@@ -241,17 +245,6 @@ func isAdminReq(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, adminPathPrefix)
 }
 
-// Supported amz date formats.
-var amzDateFormats = []string{
-	// Do not change this order, x-amz-date format is usually in
-	// iso8601Format rest are meant for relaxed handling of other
-	// odd SDKs that might be out there.
-	iso8601Format,
-	time.RFC1123,
-	time.RFC1123Z,
-	// Add new AMZ date formats here.
-}
-
 // Supported Amz date headers.
 var amzDateHeaders = []string{
 	// Do not chane this order, x-amz-date value should be
@@ -260,24 +253,17 @@ var amzDateHeaders = []string{
 	"date",
 }
 
-// parseAmzDate - parses date string into supported amz date formats.
-func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
-	for _, dateFormat := range amzDateFormats {
-		amzDate, err := time.Parse(dateFormat, amzDateStr)
-		if err == nil {
-			return amzDate, ErrNone
-		}
-	}
-	return time.Time{}, ErrMalformedDate
-}
-
 // parseAmzDateHeader - parses supported amz date headers, in
 // supported amz date formats.
 func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	for _, amzDateHeader := range amzDateHeaders {
 		amzDateStr := req.Header.Get(amzDateHeader)
 		if amzDateStr != "" {
-			return parseAmzDate(amzDateStr)
+			t, err := amztime.Parse(amzDateStr)
+			if err != nil {
+				return time.Time{}, ErrMalformedDate
+			}
+			return t, ErrNone
 		}
 	}
 	// Date header missing.

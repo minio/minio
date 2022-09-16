@@ -31,6 +31,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/amztime"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/event"
@@ -422,6 +423,36 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo)
 	return tier, objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
 }
 
+type auditTierOp struct {
+	Tier             string `json:"tier"`
+	TimeToResponseNS int64  `json:"timeToResponseNS"`
+	OutputBytes      int64  `json:"tx,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+func auditTierActions(ctx context.Context, tier string, bytes int64) func(err error) {
+	startTime := time.Now()
+	return func(err error) {
+		// Record only when audit targets configured.
+		if len(logger.AuditTargets()) == 0 {
+			return
+		}
+
+		op := auditTierOp{
+			Tier:        tier,
+			OutputBytes: bytes,
+		}
+
+		if err == nil {
+			op.TimeToResponseNS = time.Since(startTime).Nanoseconds()
+		} else {
+			op.Error = err.Error()
+		}
+
+		logger.GetReqInfo(ctx).AppendTags("tierStats", op)
+	}
+}
+
 // getTransitionedObjectReader returns a reader from the transitioned tier.
 func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, oi ObjectInfo, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	tgtClient, err := globalTierConfigMgr.getDriver(oi.TransitionedObject.Tier)
@@ -441,12 +472,13 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		gopts.length = length
 	}
 
+	timeTierAction := auditTierActions(ctx, oi.TransitionedObject.Tier, length)
 	reader, err := tgtClient.Get(ctx, oi.TransitionedObject.Name, remoteVersionID(oi.TransitionedObject.VersionID), gopts)
 	if err != nil {
 		return nil, err
 	}
 	closer := func() {
-		reader.Close()
+		timeTierAction(reader.Close())
 	}
 	return fn(reader, h, closer)
 }
@@ -755,7 +787,7 @@ func parseRestoreObjStatus(restoreHdr string) (restoreObjStatus, error) {
 		if strings.TrimSpace(expiryTokens[0]) != "expiry-date" {
 			return restoreObjStatus{}, errRestoreHDRMalformed
 		}
-		expiry, err := time.Parse(http.TimeFormat, strings.Trim(expiryTokens[1], `"`))
+		expiry, err := amztime.ParseHeader(strings.Trim(expiryTokens[1], `"`))
 		if err != nil {
 			return restoreObjStatus{}, errRestoreHDRMalformed
 		}

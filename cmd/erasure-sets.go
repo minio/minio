@@ -1079,7 +1079,7 @@ func (s *erasureSets) ListMultipartUploads(ctx context.Context, bucket, prefix, 
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (s *erasureSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
+func (s *erasureSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error) {
 	set := s.getHashedSet(object)
 	return set.NewMultipartUpload(ctx, bucket, object, opts)
 }

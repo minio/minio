@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
@@ -63,7 +63,8 @@ func getChunkSignature(cred auth.Credentials, seedSignature string, region strin
 }
 
 // calculateSeedSignature - Calculate seed signature in accordance with
-//     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+//   - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+//
 // returns signature, error otherwise if the signature mismatches or any other
 // error while parsing and validating.
 func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature string, region string, date time.Time, errCode APIErrorCode) {
@@ -195,7 +196,8 @@ func (cr *s3ChunkedReader) Close() (err error) {
 
 // Now, we read one chunk from the underlying reader.
 // A chunk has the following format:
-//   <chunk-size-as-hex> + ";chunk-signature=" + <signature-as-hex> + "\r\n" + <payload> + "\r\n"
+//
+//	<chunk-size-as-hex> + ";chunk-signature=" + <signature-as-hex> + "\r\n" + <payload> + "\r\n"
 //
 // First, we read the chunk size but fail if it is larger
 // than 16 MiB. We must not accept arbitrary large chunks.
@@ -414,7 +416,8 @@ const s3ChunkSignatureStr = ";chunk-signature="
 
 // parses3ChunkExtension removes any s3 specific chunk-extension from buf.
 // For example,
-//     "10000;chunk-signature=..." => "10000", "chunk-signature=..."
+//
+//	"10000;chunk-signature=..." => "10000", "chunk-signature=..."
 func parseS3ChunkExtension(buf []byte) ([]byte, []byte) {
 	buf = trimTrailingWhitespace(buf)
 	semi := bytes.Index(buf, []byte(s3ChunkSignatureStr))

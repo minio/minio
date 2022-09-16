@@ -125,9 +125,11 @@ func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 
 // WriteJSON - encodes to JSON data.
 func (r *Record) WriteJSON(writer io.Writer) error {
-	var kvs jstream.KVS = make([]jstream.KV, len(r.columnNames))
-	for i := 0; i < len(r.columnNames); i++ {
-		kvs[i] = jstream.KV{Key: r.columnNames[i], Value: r.csvRecord[i]}
+	var kvs jstream.KVS = make([]jstream.KV, 0, len(r.columnNames))
+	for i, cn := range r.columnNames {
+		if i < len(r.csvRecord) {
+			kvs = append(kvs, jstream.KV{Key: cn, Value: r.csvRecord[i]})
+		}
 	}
 	return json.NewEncoder(writer).Encode(kvs)
 }

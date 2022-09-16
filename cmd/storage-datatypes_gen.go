@@ -602,8 +602,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 27 {
-		err = msgp.ArrayError{Wanted: 27, Got: zb0001}
+	if zb0001 != 28 {
+		err = msgp.ArrayError{Wanted: 28, Got: zb0001}
 		return
 	}
 	z.Volume, err = dc.ReadString()
@@ -778,13 +778,18 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
+	z.Checksum, err = dc.ReadBytes(z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 27
-	err = en.Append(0xdc, 0x0, 0x1b)
+	// array header, size 28
+	err = en.Append(0xdc, 0x0, 0x1c)
 	if err != nil {
 		return
 	}
@@ -942,14 +947,19 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
+	err = en.WriteBytes(z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 27
-	o = append(o, 0xdc, 0x0, 0x1b)
+	// array header, size 28
+	o = append(o, 0xdc, 0x0, 0x1c)
 	o = msgp.AppendString(o, z.Volume)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendString(o, z.VersionID)
@@ -996,6 +1006,7 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendBool(o, z.Fresh)
 	o = msgp.AppendInt(o, z.Idx)
 	o = msgp.AppendTime(o, z.DiskMTime)
+	o = msgp.AppendBytes(o, z.Checksum)
 	return
 }
 
@@ -1007,8 +1018,8 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 27 {
-		err = msgp.ArrayError{Wanted: 27, Got: zb0001}
+	if zb0001 != 28 {
+		err = msgp.ArrayError{Wanted: 28, Got: zb0001}
 		return
 	}
 	z.Volume, bts, err = msgp.ReadStringBytes(bts)
@@ -1183,6 +1194,11 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
+	z.Checksum, bts, err = msgp.ReadBytesBytes(bts, z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
+	}
 	o = bts
 	return
 }
@@ -1200,7 +1216,7 @@ func (z *FileInfo) Msgsize() (s int) {
 	for za0003 := range z.Parts {
 		s += z.Parts[za0003].Msgsize()
 	}
-	s += z.Erasure.Msgsize() + msgp.BoolSize + z.ReplicationState.Msgsize() + msgp.BytesPrefixSize + len(z.Data) + msgp.IntSize + msgp.TimeSize + msgp.BoolSize + msgp.IntSize + msgp.TimeSize
+	s += z.Erasure.Msgsize() + msgp.BoolSize + z.ReplicationState.Msgsize() + msgp.BytesPrefixSize + len(z.Data) + msgp.IntSize + msgp.TimeSize + msgp.BoolSize + msgp.IntSize + msgp.TimeSize + msgp.BytesPrefixSize + len(z.Checksum)
 	return
 }
 

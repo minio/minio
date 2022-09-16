@@ -56,15 +56,14 @@ func (r wrapReader) ETag() ETag {
 // It is mainly used to provide a high-level io.Reader
 // access to the ETag computed by a low-level io.Reader:
 //
-//   content := etag.NewReader(r.Body, nil)
+//	content := etag.NewReader(r.Body, nil)
 //
-//   compressedContent := Compress(content)
-//   encryptedContent := Encrypt(compressedContent)
+//	compressedContent := Compress(content)
+//	encryptedContent := Encrypt(compressedContent)
 //
-//   // Now, we need an io.Reader that can access
-//   // the ETag computed over the content.
-//   reader := etag.Wrap(encryptedContent, content)
-//
+//	// Now, we need an io.Reader that can access
+//	// the ETag computed over the content.
+//	reader := etag.Wrap(encryptedContent, content)
 func Wrap(wrapped, content io.Reader) io.Reader {
 	if t, ok := content.(Tagger); ok {
 		return wrapReader{

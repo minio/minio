@@ -587,7 +587,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	}
 
 	if objInfo.isMultipart() {
-		uploadID, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
+		res, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
 			VersionID:   objInfo.VersionID,
 			MTime:       objInfo.ModTime,
 			UserDefined: objInfo.UserDefined,
@@ -595,14 +595,14 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		if err != nil {
 			return fmt.Errorf("decommissionObject: NewMultipartUpload() %w", err)
 		}
-		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, uploadID, ObjectOptions{})
+		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, res.UploadID, ObjectOptions{})
 		parts := make([]CompletePart, len(objInfo.Parts))
 		for i, part := range objInfo.Parts {
 			hr, err := hash.NewReader(gr, part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 			}
-			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, uploadID,
+			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, res.UploadID,
 				part.Number,
 				NewPutObjReader(hr),
 				ObjectOptions{
@@ -615,11 +615,15 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 				return fmt.Errorf("decommissionObject: PutObjectPart() %w", err)
 			}
 			parts[i] = CompletePart{
-				ETag:       pi.ETag,
-				PartNumber: pi.PartNumber,
+				ETag:           pi.ETag,
+				PartNumber:     pi.PartNumber,
+				ChecksumCRC32:  pi.ChecksumCRC32,
+				ChecksumCRC32C: pi.ChecksumCRC32C,
+				ChecksumSHA256: pi.ChecksumSHA256,
+				ChecksumSHA1:   pi.ChecksumSHA1,
 			}
 		}
-		_, err = z.CompleteMultipartUpload(ctx, bucket, objInfo.Name, uploadID, parts, ObjectOptions{
+		_, err = z.CompleteMultipartUpload(ctx, bucket, objInfo.Name, res.UploadID, parts, ObjectOptions{
 			MTime: objInfo.ModTime,
 		})
 		if err != nil {
@@ -652,6 +656,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 }
 
 // versionsSorter sorts FileInfo slices by version.
+//
 //msgp:ignore versionsSorter
 type versionsSorter []FileInfo
 

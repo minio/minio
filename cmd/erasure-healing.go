@@ -33,6 +33,15 @@ import (
 
 const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
 
+//go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
+
+type healingMetric uint8
+
+const (
+	healingMetricBucket healingMetric = iota
+	healingMetricObject
+)
+
 // AcceptableDelta returns 'true' if the fi.DiskMTime is under
 // acceptable delta of "delta" duration with maxTime.
 //
@@ -79,6 +88,13 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	writeQuorum := len(storageDisks) - er.defaultParityCount
 	if writeQuorum == er.defaultParityCount {
 		writeQuorum++
+	}
+
+	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
+		startTime := time.Now()
+		defer func() {
+			healTrace(healingMetricBucket, startTime, bucket, "", "", opts, err, &res)
+		}()
 	}
 
 	// Initialize sync waitgroup.
@@ -285,6 +301,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
+	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
+		startTime := time.Now()
+		defer func() {
+			healTrace(healingMetricObject, startTime, bucket, object, versionID, opts, err, &result)
+		}()
+	}
 	// Initialize heal result object
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemObject,
@@ -514,6 +536,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			partModTime := latestMeta.Parts[partIndex].ModTime
 			partNumber := latestMeta.Parts[partIndex].Number
 			partIdx := latestMeta.Parts[partIndex].Index
+			partChecksums := latestMeta.Parts[partIndex].Checksums
 			tillOffset := erasure.ShardFileOffset(0, partSize, partSize)
 			readers := make([]io.ReaderAt, len(latestDisks))
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
@@ -567,7 +590,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 
 				partsMetadata[i].DataDir = dstDataDir
-				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx)
+				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
 				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 					PartNumber: partNumber,
 					Algorithm:  checksumAlgo,
@@ -602,7 +625,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		partsMetadata[i].Erasure.Index = i + 1
 
 		// Attempt a rename now from healed data to final location.
-		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
+		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
 			logger.LogIf(ctx, err)
 			return result, err
 		}
@@ -996,4 +1019,26 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 		hr, err = er.healObject(healCtx, bucket, object, versionID, opts)
 	}
 	return hr, toObjectErr(err, bucket, object, versionID)
+}
+
+// healTrace sends healing results to trace output.
+func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts madmin.HealOpts, err error, result *madmin.HealResultItem) {
+	tr := madmin.TraceInfo{
+		TraceType: madmin.TraceHealing,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  "heal." + funcName.String(),
+		Duration:  time.Since(startTime),
+		Message:   fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode),
+		Path:      pathJoin(bucket, decodeDirObject(object)),
+	}
+	if versionID != "" && versionID != "null" {
+		tr.Path += " v=" + versionID
+	}
+	if err != nil {
+		tr.Error = err.Error()
+	} else {
+		tr.HealResult = result
+	}
+	globalTrace.Publish(tr)
 }

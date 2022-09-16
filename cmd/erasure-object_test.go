@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/storageclass"
 )
 
@@ -58,18 +58,18 @@ func TestRepeatPutObjectPart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uploadID, err := objLayer.NewMultipartUpload(ctx, "bucket1", "mpartObj1", opts)
+	res, err := objLayer.NewMultipartUpload(ctx, "bucket1", "mpartObj1", opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fiveMBBytes := bytes.Repeat([]byte("a"), 5*humanize.MiByte)
 	md5Hex := getMD5Hash(fiveMBBytes)
-	_, err = objLayer.PutObjectPart(ctx, "bucket1", "mpartObj1", uploadID, 1, mustGetPutObjReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
+	_, err = objLayer.PutObjectPart(ctx, "bucket1", "mpartObj1", res.UploadID, 1, mustGetPutObjReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// PutObjectPart should succeed even if part already exists. ref: https://github.com/minio/minio/issues/1930
-	_, err = objLayer.PutObjectPart(ctx, "bucket1", "mpartObj1", uploadID, 1, mustGetPutObjReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
+	_, err = objLayer.PutObjectPart(ctx, "bucket1", "mpartObj1", res.UploadID, 1, mustGetPutObjReader(t, bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1183,7 +1183,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 			return disks
 		}
 		sets.erasureDisksMu.Unlock()
-		_, err = z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(testCase.content), int64(len(testCase.content)), "", ""),
+		got, err := z.PutObject(ctx, testCase.bucket, testCase.object, mustGetPutObjReader(t, bytes.NewReader(testCase.content), int64(len(testCase.content)), "", ""),
 			ObjectOptions{Versioned: testCase.versioned})
 		if err != nil {
 			t.Fatalf("Test %d: Failed to upload the final object: %v", i+1, err)
@@ -1193,7 +1193,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 		sets.erasureDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI { return origErasureDisks }
 		sets.erasureDisksMu.Unlock()
-		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{})
+		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{VersionID: got.VersionID})
 		if err != nil {
 			t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 		}

@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
@@ -1141,6 +1141,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 }
 
 func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) madmin.Credentials {
+	c.Helper()
 	randUser := mustGetUUID()
 	randPass := mustGetUUID()
 	err := admClnt.AddUser(ctx, randUser, randPass)
@@ -1154,6 +1155,7 @@ func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClie
 }
 
 func (c *check) mustGetIAMUserInfo(ctx context.Context, admClnt *madmin.AdminClient, accessKey string) madmin.UserInfo {
+	c.Helper()
 	ui, err := admClnt.GetUserInfo(ctx, accessKey)
 	if err != nil {
 		c.Fatalf("should be able to get user info: %v", err)
@@ -1162,6 +1164,7 @@ func (c *check) mustGetIAMUserInfo(ctx context.Context, admClnt *madmin.AdminCli
 }
 
 func (c *check) mustNotCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) {
+	c.Helper()
 	randUser := mustGetUUID()
 	randPass := mustGetUUID()
 	err := admClnt.AddUser(ctx, randUser, randPass)
@@ -1171,6 +1174,7 @@ func (c *check) mustNotCreateIAMUser(ctx context.Context, admClnt *madmin.AdminC
 }
 
 func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) madmin.Credentials {
+	c.Helper()
 	cr, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: tgtUser,
 	})
@@ -1181,6 +1185,7 @@ func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admCln
 }
 
 func (c *check) mustNotCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) {
+	c.Helper()
 	_, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: tgtUser,
 	})
@@ -1190,6 +1195,7 @@ func (c *check) mustNotCreateSvcAccount(ctx context.Context, tgtUser string, adm
 }
 
 func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if !ok || v.Err == nil {
@@ -1198,6 +1204,7 @@ func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bu
 }
 
 func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
 	v, ok := <-res
 	if ok && v.Err != nil {
@@ -1205,7 +1212,16 @@ func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucke
 	}
 }
 
+func (c *check) mustListBuckets(ctx context.Context, client *minio.Client) {
+	c.Helper()
+	_, err := client.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("user was unable to list buckets: %v", err)
+	}
+}
+
 func (c *check) mustNotUpload(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
 	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
 	if e, ok := err.(minio.ErrorResponse); ok {
 		if e.Code == "AccessDenied" {
@@ -1221,6 +1237,7 @@ func (c *check) assertSvcAccS3Access(ctx context.Context, s *TestSuiteIAM, cr ma
 }
 
 func (c *check) assertSvcAccAppearsInListing(ctx context.Context, madmClient *madmin.AdminClient, parentAK, svcAK string) {
+	c.Helper()
 	listResp, err := madmClient.ListServiceAccounts(ctx, parentAK)
 	if err != nil {
 		c.Fatalf("unable to list svc accounts: %v", err)
@@ -1246,6 +1263,7 @@ func (c *check) assertSvcAccInfoQueryable(ctx context.Context, madmClient *madmi
 // bucket. It creates a session policy that restricts listing on the bucket and
 // then enables it again in a session policy update call.
 func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	c.Helper()
 	svcAK, svcSK := mustGenerateCredentials(c)
 
 	// This policy does not allow listing objects.
@@ -1301,6 +1319,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
 }
 
 func (c *check) assertSvcAccSecretKeyAndStatusUpdate(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	c.Helper()
 	svcAK, svcSK := mustGenerateCredentials(c)
 	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: accessKey,
@@ -1337,6 +1356,7 @@ func (c *check) assertSvcAccSecretKeyAndStatusUpdate(ctx context.Context, s *Tes
 }
 
 func (c *check) assertSvcAccDeletion(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+	c.Helper()
 	svcAK, svcSK := mustGenerateCredentials(c)
 	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		TargetUser: accessKey,
@@ -1357,6 +1377,7 @@ func (c *check) assertSvcAccDeletion(ctx context.Context, s *TestSuiteIAM, madmC
 }
 
 func mustGenerateCredentials(c *check) (string, string) {
+	c.Helper()
 	ak, sk, err := auth.GenerateCredentials()
 	if err != nil {
 		c.Fatalf("unable to generate credentials: %v", err)

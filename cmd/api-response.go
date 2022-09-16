@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -163,6 +164,12 @@ type Part struct {
 	LastModified string
 	ETag         string
 	Size         int64
+
+	// Checksum values
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // ListPartsResponse - format for list parts response.
@@ -184,6 +191,7 @@ type ListPartsResponse struct {
 	MaxParts             int
 	IsTruncated          bool
 
+	ChecksumAlgorithm string
 	// List of parts.
 	Parts []Part `xml:"Part"`
 }
@@ -381,6 +389,11 @@ type CompleteMultipartUploadResponse struct {
 	Bucket   string
 	Key      string
 	ETag     string
+
+	ChecksumCRC32  string
+	ChecksumCRC32C string
+	ChecksumSHA1   string
+	ChecksumSHA256 string
 }
 
 // DeleteError structure.
@@ -690,14 +703,20 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 }
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
-func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) CompleteMultipartUploadResponse {
-	return CompleteMultipartUploadResponse{
+func generateCompleteMultpartUploadResponse(bucket, key, location string, oi ObjectInfo) CompleteMultipartUploadResponse {
+	cs := oi.decryptChecksums()
+	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
 		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
-		ETag: "\"" + etag + "\"",
+		ETag:           "\"" + oi.ETag + "\"",
+		ChecksumSHA1:   cs[hash.ChecksumSHA1.String()],
+		ChecksumSHA256: cs[hash.ChecksumSHA256.String()],
+		ChecksumCRC32:  cs[hash.ChecksumCRC32.String()],
+		ChecksumCRC32C: cs[hash.ChecksumCRC32C.String()],
 	}
+	return c
 }
 
 // generates ListPartsResponse from ListPartsInfo.
@@ -722,6 +741,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker
 	listPartsResponse.IsTruncated = partsInfo.IsTruncated
 	listPartsResponse.NextPartNumberMarker = partsInfo.NextPartNumberMarker
+	listPartsResponse.ChecksumAlgorithm = partsInfo.ChecksumAlgorithm
 
 	listPartsResponse.Parts = make([]Part, len(partsInfo.Parts))
 	for index, part := range partsInfo.Parts {
@@ -730,6 +750,10 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
 		newPart.LastModified = part.LastModified.UTC().Format(iso8601TimeFormat)
+		newPart.ChecksumCRC32 = part.ChecksumCRC32
+		newPart.ChecksumCRC32C = part.ChecksumCRC32C
+		newPart.ChecksumSHA1 = part.ChecksumSHA1
+		newPart.ChecksumSHA256 = part.ChecksumSHA256
 		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse

@@ -19,8 +19,8 @@ help: ## print this help
 
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
-	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.45.2
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.7-0.20211026165309-e818a1881b0e
+	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@f3635b96e4838a6c773babb65ef35297fe5fe2f9
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio
@@ -89,6 +89,7 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
+	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
 verify-healing-with-root-disks: ## verify healing root disks
 	@echo "Verify healing with root drives"

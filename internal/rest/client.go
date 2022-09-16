@@ -211,6 +211,26 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 	return req, nil
 }
 
+type respBodyMonitor struct {
+	io.ReadCloser
+}
+
+func (r respBodyMonitor) Read(p []byte) (n int, err error) {
+	n, err = r.ReadCloser.Read(p)
+	if err != nil && err != io.EOF {
+		atomic.AddUint64(&networkErrsCounter, 1)
+	}
+	return
+}
+
+func (r respBodyMonitor) Close() (err error) {
+	err = r.ReadCloser.Close()
+	if err != nil {
+		atomic.AddUint64(&networkErrsCounter, 1)
+	}
+	return
+}
+
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	urlStr := c.url.String()
@@ -285,6 +305,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 			return nil, errors.New(string(b))
 		}
 		return nil, errors.New(resp.Status)
+	}
+	if !c.NoMetrics && !c.ExpectTimeouts {
+		resp.Body = &respBodyMonitor{resp.Body}
 	}
 	return resp.Body, nil
 }

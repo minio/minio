@@ -200,11 +200,13 @@ func TestDataUpdateTracker(t *testing.T) {
 	}
 
 	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-
 	// Reload...
 	dut = newDataUpdateTracker()
 	dut.start(ctx, tmpDir)
+	defer func() {
+		cancel()
+		<-dut.saveExited
+	}()
 
 	if dut.current() != 2 {
 		t.Fatal("current idx after load not preserved. want 2, got:", dut.current())
