@@ -167,6 +167,9 @@ type FileInfo struct {
 	// a deleted marker for a versioned bucket.
 	Deleted bool `msg:"del"`
 
+	// RemoteData indicates this contains parts of a remote object.
+	RemoteData bool `msg:"rv"`
+
 	// TransitionStatus is set to Pending/Complete for transitioned
 	// entries based on state of transition
 	TransitionStatus string `msg:"ts"`

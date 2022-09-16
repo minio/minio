@@ -135,6 +135,7 @@ type ObjectPartInfo struct {
 	ModTime    time.Time         `json:"modTime"`    // Date and time at which the part was uploaded.
 	Index      []byte            `json:"index,omitempty" msg:"index,omitempty"`
 	Checksums  map[string]string `json:"crc,omitempty" msg:"crc,omitempty"` // Content Checksums
+	Placement  PartPlacement     `json:"placement" msg:"placement"`         // Placement
 }
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.

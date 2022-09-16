@@ -88,7 +88,7 @@ func (x *xlMetaV2) AddFreeVersion(fi FileInfo) error {
 	}
 
 	for i, version := range x.versions {
-		if version.header.VersionID != uv || version.header.Type != ObjectType {
+		if version.header.VersionID != uv || (version.header.Type != ObjectType && version.header.Type != RemoteDataType) {
 			continue
 		}
 		// if uv has tiered content we add a

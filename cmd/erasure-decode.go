@@ -37,6 +37,7 @@ type parallelReader struct {
 	shardFileSize int64
 	buf           [][]byte
 	readerToBuf   []int
+	errs          []error
 }
 
 // newParallelReader returns parallelReader.
@@ -45,6 +46,7 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 	for i := range r2b {
 		r2b[i] = i
 	}
+	errs := make([]error, len(readers))
 	return &parallelReader{
 		readers:       readers,
 		orgReaders:    readers,
@@ -54,6 +56,7 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 		shardFileSize: e.ShardFileSize(totalLength),
 		buf:           make([][]byte, len(readers)),
 		readerToBuf:   r2b,
+		errs:          errs,
 	}
 }
 
@@ -164,6 +167,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			p.buf[bufIdx] = p.buf[bufIdx][:p.shardSize]
 			n, err := rr.ReadAt(p.buf[bufIdx], p.offset)
 			if err != nil {
+				p.errs[i] = err
 				if errors.Is(err, errFileNotFound) {
 					atomic.StoreInt32(&missingPartsHeal, 1)
 				} else if errors.Is(err, errFileCorrupt) {

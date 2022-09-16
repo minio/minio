@@ -605,7 +605,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				}
 
 				partsMetadata[i].DataDir = dstDataDir
-				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
+				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums, 0)
 				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 					PartNumber: partNumber,
 					Algorithm:  checksumAlgo,

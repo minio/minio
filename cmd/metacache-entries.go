@@ -687,6 +687,7 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 				bestIdx = otherIdx
 				continue
 			}
+
 			// We should make sure to avoid objects and directories
 			// of this fashion such as
 			//  - foo-1

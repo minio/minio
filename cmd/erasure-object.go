@@ -288,11 +288,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	return fn(pr, h, pipeCloser, nsUnlocker)
 }
 
-func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
-	// Reorder online disks based on erasure distribution order.
-	// Reorder parts metadata based on erasure distribution order.
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
-
+func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) (err error) {
 	// For negative length read everything.
 	if length < 0 {
 		length = fi.Size - startOffset
@@ -342,6 +338,15 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 
 		partNumber := fi.Parts[partIndex].Number
 
+		// Reorder disks based on erasure distribution order.
+		// Reorder parts metadata based on erasure distribution order.
+		disks := onlineDisks
+		if pidx := fi.Parts[partIndex].Placement.setIdx(); pidx != er.setIndex {
+			disks = er.setByIdx(pidx).getDisks()
+		}
+
+		sonlineDisks, smetaArr := shuffleDisksAndPartsMetadataByIndex(disks, metaArr, fi)
+
 		// Save the current part name and size.
 		partSize := fi.Parts[partIndex].Size
 
@@ -353,18 +358,18 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 
 		tillOffset := erasure.ShardFileOffset(partOffset, partLength, partSize)
 		// Get the checksums of the current part.
-		readers := make([]io.ReaderAt, len(onlineDisks))
-		prefer := make([]bool, len(onlineDisks))
-		for index, disk := range onlineDisks {
+		readers := make([]io.ReaderAt, len(sonlineDisks))
+		prefer := make([]bool, len(sonlineDisks))
+		for index, disk := range sonlineDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			if !metaArr[index].IsValid() {
+			if !smetaArr[index].IsValid() {
 				continue
 			}
-			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
+			checksumInfo := smetaArr[index].Erasure.GetChecksumInfo(partNumber)
 			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
-			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
+			readers[index] = newBitrotReader(disk, smetaArr[index].Data, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 
 			// Prefer local disks
@@ -409,7 +414,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 		}
 		for i, r := range readers {
 			if r == nil {
-				onlineDisks[i] = OfflineDisk
+				sonlineDisks[i] = OfflineDisk
 			}
 		}
 		// Track total bytes read from disk and written to the client.
@@ -886,6 +891,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 
 	modTime := UTCNow()
 
+	partPL := newPartPlacement(uint16(er.poolIndex), uint16(er.setIndex))
 	for i, w := range writers {
 		if w == nil {
 			// Make sure to avoid writing to disks which we couldn't complete in erasure.Encode()
@@ -893,7 +899,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		partsMetadata[i].Data = inlineBuffers[i].Bytes()
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, index, nil, partPL)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1206,6 +1212,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		modTime = UTCNow()
 	}
 
+	partPL := newPartPlacement(uint16(er.poolIndex), uint16(er.setIndex))
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1217,7 +1224,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			partsMetadata[i].Data = nil
 		}
 		// No need to add checksum to part. We already have it on the object.
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil, partPL)
 		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 			PartNumber: 1,
 			Algorithm:  DefaultBitrotAlgorithm,
@@ -1346,8 +1353,23 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		writeQuorums[i] = len(storageDisks)/2 + 1
 	}
 
+	infos := make([]ObjectInfo, len(objects))
 	versionsMap := make(map[string]FileInfoVersions, len(objects))
+
 	for i := range objects {
+		var err error
+		infos[i], _, err = er.getObjectInfoAndQuorum(ctx, bucket, objects[i].ObjectName, ObjectOptions{
+			VersionID:        objects[i].VersionID,
+			Versioned:        opts.Versioned,
+			VersionSuspended: opts.VersionSuspended,
+		})
+		if err != nil {
+			if !isErrMethodNotAllowed(err) && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+				errs[i] = err
+				continue
+			}
+		}
+
 		// Construct the FileInfo data that needs to be preserved on the disk.
 		vr := FileInfo{
 			Name:             objects[i].ObjectName,
@@ -1357,6 +1379,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			Idx: i,
 		}
 		vr.SetTierFreeVersionID(mustGetUUID())
+
 		// VersionID is not set means delete is not specific about
 		// any version, look for if the bucket is versioned or not.
 		if objects[i].VersionID == "" {
@@ -1398,6 +1421,20 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				ReplicationState:      vr.ReplicationState,
 			}
 		} else {
+			defer func() {
+				if errs[i] == nil && infos[i].DataDir != "" {
+					var wg sync.WaitGroup
+					wg.Add(len(infos[i].Parts))
+					for _, part := range infos[i].Parts {
+						go func(part ObjectPartInfo) {
+							defer wg.Done()
+							er.setByIdx(part.Placement.setIdx()).deleteAll(ctx, bucket, pathJoin(vr.Name, infos[i].DataDir))
+						}(part)
+					}
+					wg.Wait()
+				}
+			}()
+
 			dobjects[i] = DeletedObject{
 				ObjectName:       vr.Name,
 				VersionID:        vr.VersionID,
@@ -1449,6 +1486,9 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	// Reduce errors for each object
 	for objIndex := range objects {
+		if errs[objIndex] != nil {
+			continue
+		}
 		diskErrs := make([]error, len(storageDisks))
 		// Iterate over disks to fetch the error
 		// of deleting of the current object
@@ -1643,6 +1683,26 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		modTime = UTCNow()
 	}
 	fvID := mustGetUUID()
+
+	if !deleteMarker {
+		defer func() {
+			if err != nil {
+				return
+			}
+			if goi.DataDir == "" {
+				return
+			}
+			var wg sync.WaitGroup
+			wg.Add(len(goi.Parts))
+			for _, part := range goi.Parts {
+				go func(part ObjectPartInfo) {
+					defer wg.Done()
+					er.setByIdx(part.Placement.setIdx()).deleteAll(ctx, bucket, pathJoin(object, goi.DataDir))
+				}(part)
+			}
+			wg.Wait()
+		}()
+	}
 
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		if !deleteMarker {

@@ -62,7 +62,7 @@ const (
 	// Bumping this is informational, but should be done
 	// if any change is made to the data stored, bumping this
 	// will allow to detect the exact version later.
-	xlVersionMinor = 3
+	xlVersionMinor = 4
 )
 
 func init() {
@@ -110,7 +110,8 @@ const (
 	ObjectType         VersionType = 1
 	DeleteType         VersionType = 2
 	LegacyType         VersionType = 3
-	lastVersionType    VersionType = 4
+	RemoteDataType     VersionType = 4
+	lastVersionType    VersionType = 5
 )
 
 func (e VersionType) valid() bool {
@@ -152,6 +153,73 @@ type xlMetaV2DeleteMarker struct {
 	MetaSys   map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,omitempty"` // Delete marker internal metadata
 }
 
+// PartPlacement is an interleaved part & set numbers.
+// The interleaves bits of sets and pools to produce the smallest
+// combined number assuming that both are typically small.
+// The value of 0 indicates placement is same as metadata.
+type PartPlacement uint64
+
+func newPartPlacement(poolIdx, setIdx uint16) PartPlacement {
+	var placement uint64
+	set, pool := uint64(setIdx), uint64(poolIdx)
+	offset := 0
+	for set != 0 || pool != 0 {
+		val := (set & 1) | ((pool & 1) << 1)
+		placement |= (val << offset)
+		set >>= 1
+		pool >>= 1
+		offset += 2
+	}
+	placement = placement<<1 | 1
+	return PartPlacement(placement)
+}
+
+func (p PartPlacement) isSet() bool {
+	return p > 0
+}
+
+func (p PartPlacement) setIdx() int {
+	var res uint64
+	offset := 0
+	p >>= 1 // Discard the lowest bit
+	for p != 0 {
+		res |= uint64(p&1) << offset
+		p >>= 2
+		offset++
+	}
+	return int(res)
+}
+
+func (p PartPlacement) poolIdx() int {
+	var res uint64
+	p >>= 2 // Discard 2 to get odd bits.
+	offset := 0
+	for p != 0 {
+		res |= uint64(p&1) << offset
+		p >>= 2
+		offset++
+	}
+	return int(res)
+}
+
+func (p PartPlacement) poolSet() (int, int) {
+	var resLow, resHigh uint64
+	offset := 0
+	p >>= 1 // Discard the lowest bit
+	for p != 0 {
+		resLow |= uint64(p&1) << offset
+		resHigh |= uint64(p&2) << offset
+		p >>= 2
+		offset++
+	}
+	return int(resHigh >> 1), int(resLow)
+}
+
+func (p PartPlacement) String() string {
+	pool, set := p.poolSet()
+	return fmt.Sprintf("Pool %d, Set %d", pool, set)
+}
+
 // xlMetaV2Object defines the data struct for object journal type
 type xlMetaV2Object struct {
 	VersionID          [16]byte          `json:"ID" msg:"ID"`                                    // Version ID
@@ -168,6 +236,7 @@ type xlMetaV2Object struct {
 	PartSizes          []int64           `json:"PartSizes" msg:"PartSizes"`                      // Part Sizes
 	PartActualSizes    []int64           `json:"PartASizes,omitempty" msg:"PartASizes,allownil"` // Part ActualSizes (compression)
 	PartIndices        [][]byte          `json:"PartIndices,omitempty" msg:"PartIdx,omitempty"`  // Part Indexes (compression)
+	PartPlacement      []PartPlacement   `json:"PartPlacement,omitempty" msg:"PartPl,allownil"`  // Part Placement of remote parts.
 	Size               int64             `json:"Size" msg:"Size"`                                // Object version size
 	ModTime            int64             `json:"MTime" msg:"MTime"`                              // Object version modified time
 	MetaSys            map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,allownil"`       // Object version internal metadata
@@ -316,7 +385,7 @@ func (j xlMetaV2Version) Valid() bool {
 	case LegacyType:
 		return j.ObjectV1 != nil &&
 			j.ObjectV1.valid()
-	case ObjectType:
+	case ObjectType, RemoteDataType:
 		return j.ObjectV2 != nil &&
 			j.ObjectV2.ErasureAlgorithm.valid() &&
 			j.ObjectV2.BitrotChecksumAlgo.valid() &&
@@ -335,11 +404,13 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 	if j.FreeVersion() {
 		flags |= xlFlagFreeVersion
 	}
-	if j.Type == ObjectType && j.ObjectV2.UsesDataDir() {
-		flags |= xlFlagUsesDataDir
-	}
-	if j.Type == ObjectType && j.ObjectV2.InlineData() {
-		flags |= xlFlagInlineData
+	if j.Type == ObjectType || j.Type == RemoteDataType {
+		if j.ObjectV2.UsesDataDir() {
+			flags |= xlFlagUsesDataDir
+		}
+		if j.ObjectV2.InlineData() {
+			flags |= xlFlagInlineData
+		}
 	}
 	return xlMetaV2VersionHeader{
 		VersionID: j.getVersionID(),
@@ -374,7 +445,7 @@ var signatureErr = [4]byte{'e', 'r', 'r', 0}
 // getSignature will return a signature that is expected to be the same across all disks.
 func (j xlMetaV2Version) getSignature() [4]byte {
 	switch j.Type {
-	case ObjectType:
+	case ObjectType, RemoteDataType:
 		return j.ObjectV2.Signature()
 	case DeleteType:
 		return j.DeleteMarker.Signature()
@@ -387,7 +458,7 @@ func (j xlMetaV2Version) getSignature() [4]byte {
 // getModTime will return the ModTime of the underlying version.
 func (j xlMetaV2Version) getModTime() time.Time {
 	switch j.Type {
-	case ObjectType:
+	case ObjectType, RemoteDataType:
 		return time.Unix(0, j.ObjectV2.ModTime)
 	case DeleteType:
 		return time.Unix(0, j.DeleteMarker.ModTime)
@@ -400,7 +471,7 @@ func (j xlMetaV2Version) getModTime() time.Time {
 // getVersionID will return the versionID of the underlying version.
 func (j xlMetaV2Version) getVersionID() [16]byte {
 	switch j.Type {
-	case ObjectType:
+	case ObjectType, RemoteDataType:
 		return j.ObjectV2.VersionID
 	case DeleteType:
 		return j.DeleteMarker.VersionID
@@ -416,8 +487,9 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string) (fi FileInfo, err erro
 		return fi, errFileNotFound
 	}
 	switch j.Type {
-	case ObjectType:
+	case ObjectType, RemoteDataType:
 		fi, err = j.ObjectV2.ToFileInfo(volume, path)
+		fi.RemoteData = j.Type == RemoteDataType
 	case DeleteType:
 		fi, err = j.DeleteMarker.ToFileInfo(volume, path)
 	case LegacyType:
@@ -589,6 +661,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		if len(j.PartIndices) == len(fi.Parts) {
 			fi.Parts[i].Index = j.PartIndices[i]
 		}
+		if len(j.PartPlacement) == len(fi.Parts) {
+			fi.Parts[i].Placement = j.PartPlacement[i]
+		}
 	}
 	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
 	for i := range fi.Parts {
@@ -735,7 +810,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		case 0:
 			err = readMore(size)
 			return buf, err
-		case 1, 2, 3:
+		case 1, 2, 3, 4:
 			sz, tmp, err := msgp.ReadBytesHeader(tmp)
 			if err != nil {
 				return nil, fmt.Errorf("readXLMetaNoData(read_meta): uknown metadata version %w", err)
@@ -1206,7 +1281,7 @@ func (x *xlMetaV2) getDataDirs() ([]string, error) {
 			return nil, err
 		}
 		switch ver.header.Type {
-		case ObjectType:
+		case ObjectType, RemoteDataType:
 			if obj.ObjectV2 == nil {
 				return nil, errors.New("obj.ObjectV2 unexpectedly nil")
 			}
@@ -1362,7 +1437,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.addVersion(ventry)
 			}
 			return "", err
-		case ObjectType:
+		case ObjectType, RemoteDataType:
 			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
 				if err != nil {
@@ -1379,7 +1454,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 	}
 
 	for i, version := range x.versions {
-		if version.header.Type != ObjectType || version.header.VersionID != uv {
+		if version.header.Type != ObjectType && version.header.Type != RemoteDataType || version.header.VersionID != uv {
 			continue
 		}
 		ver, err := x.getIdx(i)
@@ -1465,7 +1540,7 @@ func (x *xlMetaV2) UpdateObjectVersion(fi FileInfo) error {
 			if version.header.VersionID == uv {
 				return errMethodNotAllowed
 			}
-		case ObjectType:
+		case ObjectType, RemoteDataType:
 			if version.header.VersionID == uv {
 				ver, err := x.getIdx(i)
 				if err != nil {
@@ -1528,6 +1603,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 	} else {
 		ventry.Type = ObjectType
+		if fi.RemoteData {
+			ventry.Type = RemoteDataType
+		}
 		ventry.ObjectV2 = &xlMetaV2Object{
 			VersionID:          uv,
 			DataDir:            dd,
@@ -1561,6 +1639,13 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 				break
 			}
 		}
+		for i := range fi.Parts {
+			// Only add placement if any.
+			if fi.Parts[i].Placement.isSet() {
+				ventry.ObjectV2.PartPlacement = make([]PartPlacement, len(fi.Parts))
+				break
+			}
+		}
 		for i := range fi.Erasure.Distribution {
 			ventry.ObjectV2.ErasureDist[i] = uint8(fi.Erasure.Distribution[i])
 		}
@@ -1574,6 +1659,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
 			if len(ventry.ObjectV2.PartIndices) > 0 {
 				ventry.ObjectV2.PartIndices[i] = fi.Parts[i].Index
+			}
+			if len(ventry.ObjectV2.PartPlacement) > 0 {
+				ventry.ObjectV2.PartPlacement[i] = fi.Parts[i].Placement
 			}
 		}
 
@@ -1626,17 +1714,7 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			continue
 		}
 		switch x.versions[i].header.Type {
-		case LegacyType:
-			// This would convert legacy type into new ObjectType
-			// this means that we are basically purging the `null`
-			// version of the object.
-			return x.setIdx(i, ventry)
-		case ObjectType:
-			return x.setIdx(i, ventry)
-		case DeleteType:
-			// Allowing delete marker to replaced with proper
-			// object data type as well, this is not S3 complaint
-			// behavior but kept here for future flexibility.
+		case LegacyType, ObjectType, RemoteDataType, DeleteType:
 			return x.setIdx(i, ventry)
 		}
 	}
@@ -1653,7 +1731,7 @@ func (x *xlMetaV2) SharedDataDirCount(versionID [16]byte, dataDir [16]byte) int 
 	var sameDataDirCount int
 	var decoded xlMetaDataDirDecoder
 	for _, version := range x.versions {
-		if version.header.Type != ObjectType || version.header.VersionID == versionID || !version.header.UsesDataDir() {
+		if (version.header.Type != ObjectType && version.header.Type != RemoteDataType) || version.header.VersionID == versionID || !version.header.UsesDataDir() {
 			continue
 		}
 		_, err := decoded.UnmarshalMsg(version.meta)
