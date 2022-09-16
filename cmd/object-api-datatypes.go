@@ -188,6 +188,10 @@ type ObjectInfo struct {
 	// List of individual parts, maximum size of upto 10,000
 	Parts []ObjectPartInfo `json:"-"`
 
+	// DataDir where the actual data lives on the disk
+	// only set when data is not inlined.
+	DataDir string `json:"-"`
+
 	// Implements writer and reader used by CopyObject API
 	Writer       io.WriteCloser `json:"-" msg:"-"`
 	Reader       *hash.Reader   `json:"-" msg:"-"`

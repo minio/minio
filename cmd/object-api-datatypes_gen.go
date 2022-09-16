@@ -1340,9 +1340,9 @@ func (z NewMultipartUploadResult) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *ObjectInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 33
+	// map header, size 34
 	// string "Bucket"
-	o = append(o, 0xde, 0x0, 0x21, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	o = append(o, 0xde, 0x0, 0x22, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	o = msgp.AppendString(o, z.Bucket)
 	// string "Name"
 	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
@@ -1433,6 +1433,9 @@ func (z *ObjectInfo) MarshalMsg(b []byte) (o []byte, err error) {
 			return
 		}
 	}
+	// string "DataDir"
+	o = append(o, 0xa7, 0x44, 0x61, 0x74, 0x61, 0x44, 0x69, 0x72)
+	o = msgp.AppendString(o, z.DataDir)
 	// string "AccTime"
 	o = append(o, 0xa7, 0x41, 0x63, 0x63, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTime(o, z.AccTime)
@@ -1674,6 +1677,12 @@ func (z *ObjectInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "DataDir":
+			z.DataDir, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DataDir")
+				return
+			}
 		case "AccTime":
 			z.AccTime, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
@@ -1765,7 +1774,7 @@ func (z *ObjectInfo) Msgsize() (s int) {
 	for za0003 := range z.Parts {
 		s += z.Parts[za0003].Msgsize()
 	}
-	s += 8 + msgp.TimeSize + 7 + msgp.BoolSize + 27 + msgp.StringPrefixSize + len(z.VersionPurgeStatusInternal) + 19 + z.VersionPurgeStatus.Msgsize() + 12 + msgp.IntSize + 17 + msgp.TimeSize + 9 + msgp.BytesPrefixSize + len(z.Checksum) + 8 + msgp.BoolSize + 11 + msgp.IntSize + 13 + msgp.IntSize
+	s += 8 + msgp.StringPrefixSize + len(z.DataDir) + 8 + msgp.TimeSize + 7 + msgp.BoolSize + 27 + msgp.StringPrefixSize + len(z.VersionPurgeStatusInternal) + 19 + z.VersionPurgeStatus.Msgsize() + 12 + msgp.IntSize + 17 + msgp.TimeSize + 9 + msgp.BytesPrefixSize + len(z.Checksum) + 8 + msgp.BoolSize + 11 + msgp.IntSize + 13 + msgp.IntSize
 	return
 }
 

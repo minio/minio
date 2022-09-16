@@ -635,6 +635,12 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Checksums[za0001] = za0002
 			}
+		case "placement":
+			err = z.Placement.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Placement")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -649,8 +655,8 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
 	_ = zb0001Mask
 	if z.Index == nil {
 		zb0001Len--
@@ -754,6 +760,16 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
+	// write "placement"
+	err = en.Append(0xa9, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x6d, 0x65, 0x6e, 0x74)
+	if err != nil {
+		return
+	}
+	err = z.Placement.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Placement")
+		return
+	}
 	return
 }
 
@@ -761,8 +777,8 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
 	_ = zb0001Mask
 	if z.Index == nil {
 		zb0001Len--
@@ -805,6 +821,13 @@ func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, za0001)
 			o = msgp.AppendString(o, za0002)
 		}
+	}
+	// string "placement"
+	o = append(o, 0xa9, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x6d, 0x65, 0x6e, 0x74)
+	o, err = z.Placement.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Placement")
+		return
 	}
 	return
 }
@@ -893,6 +916,12 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Checksums[za0001] = za0002
 			}
+		case "placement":
+			bts, err = z.Placement.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Placement")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -914,6 +943,7 @@ func (z *ObjectPartInfo) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0001) + msgp.StringPrefixSize + len(za0002)
 		}
 	}
+	s += 10 + z.Placement.Msgsize()
 	return
 }
 

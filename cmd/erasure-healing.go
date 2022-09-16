@@ -553,7 +553,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				}
 
 				partsMetadata[i].DataDir = dstDataDir
-				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
+				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums, 0)
 				if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
 					partsMetadata[i].Data = inlineBuffers[i].Bytes()
 					partsMetadata[i].SetInlineData()

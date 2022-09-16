@@ -94,6 +94,11 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		versionID = nullVersionID
 	}
 
+	var dataDir string
+	if !fi.InlineData() {
+		dataDir = fi.DataDir
+	}
+
 	objInfo := ObjectInfo{
 		IsDir:            HasSuffix(object, SlashSeparator),
 		Bucket:           bucket,
@@ -111,6 +116,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		NumVersions:      fi.NumVersions,
 		SuccessorModTime: fi.SuccessorModTime,
 		CacheControl:     fi.Metadata["cache-control"],
+		DataDir:          dataDir,
 	}
 
 	if exp, ok := fi.Metadata["expires"]; ok {
@@ -225,7 +231,7 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, actualSize int64, modTime time.Time, idx []byte, checksums map[string]string) {
+func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, actualSize int64, modTime time.Time, idx []byte, checksums map[string]string, placement PartPlacement) {
 	partInfo := ObjectPartInfo{
 		Number:     partNumber,
 		ETag:       partETag,
@@ -234,6 +240,7 @@ func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, act
 		ModTime:    modTime,
 		Index:      idx,
 		Checksums:  checksums,
+		Placement:  placement,
 	}
 
 	// Update part info if it already exists.

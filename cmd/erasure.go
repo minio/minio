@@ -52,6 +52,9 @@ type erasureObjects struct {
 	setIndex  int
 	poolIndex int
 
+	setPlacement func(input string) *erasureObjects
+	setByIdx     func(idx int) *erasureObjects
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 

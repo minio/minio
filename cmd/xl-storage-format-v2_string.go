@@ -12,12 +12,13 @@ func _() {
 	_ = x[ObjectType-1]
 	_ = x[DeleteType-2]
 	_ = x[LegacyType-3]
-	_ = x[lastVersionType-4]
+	_ = x[ObjectTypeRemoteData-4]
+	_ = x[lastVersionType-5]
 }
 
-const _VersionType_name = "invalidVersionTypeObjectTypeDeleteTypeLegacyTypelastVersionType"
+const _VersionType_name = "invalidVersionTypeObjectTypeDeleteTypeLegacyTypeObjectTypeRemoteDatalastVersionType"
 
-var _VersionType_index = [...]uint8{0, 18, 28, 38, 48, 63}
+var _VersionType_index = [...]uint8{0, 18, 28, 38, 48, 68, 83}
 
 func (i VersionType) String() string {
 	if i >= VersionType(len(_VersionType_index)-1) {

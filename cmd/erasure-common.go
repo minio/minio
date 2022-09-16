@@ -95,7 +95,8 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 	for i := range resps {
 		resps[i] = make(chan ReadMultipleResp, len(req.Files))
 	}
-	g := errgroup.WithNErrs(len(disks))
+
+	g := errgroup.WithNErrs(len(req.Files)).WithConcurrency(32)
 	// Read files in parallel across disks.
 	for index := range disks {
 		index := index
