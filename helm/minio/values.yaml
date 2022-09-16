@@ -380,6 +380,7 @@ customCommandJob:
   # Command to run after the main command on exit
   exitCommand: ""
 
+## Merge jobs
 postInstallJob:
   podAnnotations: {}
   annotations: {}
@@ -391,8 +392,6 @@ postInstallJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  # Command to run after the main command on exit
-  exitCommand: ""
   
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed
