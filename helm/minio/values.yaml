@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-09-01T23-53-36Z
+  tag: RELEASE.2022-08-22T23-53-06Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-08-28T20-08-11Z
+  tag: RELEASE.2022-08-23T05-45-20Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed or gateway.
@@ -303,21 +303,9 @@ policies: []
 #         - "s3:ListBucketMultipartUploads"
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
-  podAnnotations: {}
-  annotations: {}
-  securityContext:
-    enabled: false
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -341,21 +329,9 @@ users:
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
-  podAnnotations: {}
-  annotations: {}
-  securityContext:
-    enabled: false
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -385,21 +361,9 @@ buckets:
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
 makeBucketJob:
-  podAnnotations: {}
-  annotations: {}
-  securityContext:
-    enabled: false
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
   
@@ -410,6 +374,13 @@ customCommands:
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:
+  resources:
+    requests:
+      memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
+
+postInstallJob:
   podAnnotations: {}
   annotations: {}
   securityContext:
@@ -417,9 +388,6 @@ customCommandJob:
     runAsUser: 1000
     runAsGroup: 1000
     fsGroup: 1000
-  resources:
-    requests:
-      memory: 128Mi
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -476,17 +444,10 @@ serviceAccount:
 metrics:
   serviceMonitor:
     enabled: false
-    # scrape each node/pod individually for additional metrics
-    includeNode: false 
     public: true
     additionalLabels: {}
-    # for node metrics
+    annotations: {}
     relabelConfigs: {}
-    # for cluster metrics
-    relabelConfigsCluster: {}
-      # metricRelabelings:
-      #   - regex: (server|pod)
-      #     action: labeldrop
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s
