@@ -326,3 +326,5 @@ require (
 replace github.com/vbauerster/mpb/v7 v7.0.3 => github.com/juicedata/mpb/v7 v7.0.4-0.20220719014258-68df1356cfba
 
 replace xorm.io/xorm v1.0.7 => gitea.com/davies/xorm v1.0.8-0.20220528043536-552d84d1b34a
+
+replace maze.io/x/duration v0.0.0-20160924141736-faac084b6075 => github.com/juicedata/duration v0.0.0-20220916024255-e5d060e609c4
