@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:13-alpine
+    container_name: postgres-db
+    restart: always
+    command: -c "log_statement=all"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+  api:
+    container_name: logsearchapi
+    image: ahmedzidan204/logsearchapi:v1.0.0 #change to 0chain registry 
+    # build:
+    #   context: .
+    depends_on:
+      - db
+    ports:
+      - 8080:8080
+    environment:
+      LOGSEARCH_PG_CONN_STR: "postgres://postgres:postgres@postgres-db/postgres?sslmode=disable"
+      LOGSEARCH_AUDIT_AUTH_TOKEN: 12345
+      MINIO_LOG_QUERY_AUTH_TOKEN: 12345
+      LOGSEARCH_DISK_CAPACITY_GB: 5
+    links:
+      - db
+volumes:
+  db:
+    driver: local
