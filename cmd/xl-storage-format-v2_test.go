@@ -1058,3 +1058,26 @@ func TestXMinIOHealingSkip(t *testing.T) {
 		t.Fatal("Expected fi.Healing to be false")
 	}
 }
+
+func TestPlacement(t *testing.T) {
+	rng := rand.New(rand.NewSource(1000))
+	for i := 0; i < 10000; i++ {
+		pool, set := uint16(rng.Uint32()), uint16(rng.Uint32())
+		p := newPartPlacement(pool, set)
+		gotSet := p.setIdx()
+		if gotSet != int(set) {
+			t.Errorf("want set %b, got %b, p: %b", set, gotSet, p)
+		}
+		gotPool := p.poolIdx()
+		if gotPool != int(pool) {
+			t.Errorf("want pool %b, got %b, p: %b", pool, gotPool, p)
+		}
+		gotPool, gotSet = p.poolSet()
+		if gotSet != int(set) {
+			t.Errorf("want set %b, got %b, p: %b", set, gotSet, p)
+		}
+		if gotPool != int(pool) {
+			t.Errorf("want pool %b, got %b, p: %b", pool, gotPool, p)
+		}
+	}
+}
