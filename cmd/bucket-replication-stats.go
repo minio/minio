@@ -270,6 +270,13 @@ func (r *ReplicationStats) getAllLatest(bucketsUsage map[string]BucketUsageInfo)
 }
 
 func (r *ReplicationStats) calculateBucketReplicationStats(bucket string, u BucketUsageInfo, bucketStats []BucketStats) (s BucketReplicationStats) {
+	if r == nil {
+		s = BucketReplicationStats{
+			Stats: make(map[string]*BucketReplicationStat),
+		}
+		return s
+	}
+
 	// accumulate cluster bucket stats
 	stats := make(map[string]*BucketReplicationStat)
 	var totReplicaSize int64
