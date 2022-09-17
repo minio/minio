@@ -444,7 +444,7 @@ metrics:
   serviceMonitor:
     enabled: false
     # scrape each node/pod individually for additional metrics
-    includeNode: false
+    includeNode: false 
     public: true
     additionalLabels: {}
     # for node metrics
