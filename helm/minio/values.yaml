@@ -453,7 +453,7 @@ metrics:
     relabelConfigsCluster: {}
       # metricRelabelings:
       #   - regex: (server|pod)
-    #     action: labeldrop
+      #     action: labeldrop
     # namespace: monitoring
     # interval: 30s
     # scrapeTimeout: 10s
