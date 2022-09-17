@@ -66,7 +66,7 @@ type BucketStats struct {
 // BucketReplicationStats represents inline replication statistics
 // such as pending, failed and completed bytes in total for a bucket
 type BucketReplicationStats struct {
-	Stats map[string]*BucketReplicationStat
+	Stats map[string]*BucketReplicationStat `json:",omitempty"`
 	// Pending size in bytes
 	PendingSize int64 `json:"pendingReplicationSize"`
 	// Completed size in bytes
