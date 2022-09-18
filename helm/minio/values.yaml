@@ -32,10 +32,10 @@ mcImage:
 mode: distributed ## other supported values are "standalone", "gateway"
 
 ## Additional labels to include with deployment or statefulset
-additionalLabels: []
+additionalLabels: {}
 
 ## Additional annotations to include with deployment or statefulset
-additionalAnnotations: []
+additionalAnnotations: {}
 
 ## Typically the deployment/statefulset includes checksums of secrets/config,
 ## So that when these change on a subsequent helm install, the deployment/statefulset
