@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -206,7 +205,7 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 		}
 	}
 
-	if _, err = ioutil.ReadFile(pathJoin(fsDirs[0], bucketName, "dir/obj1", "xl.meta")); err == nil {
+	if _, err = os.ReadFile(pathJoin(fsDirs[0], bucketName, "dir/obj1", "xl.meta")); err == nil {
 		t.Fatalf("xl.meta still present after removal")
 	}
 }
@@ -543,7 +542,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 	}
 	if gr != nil {
-		_, err = io.Copy(ioutil.Discard, gr)
+		_, err = io.Copy(io.Discard, gr)
 		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
 			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
 		}
@@ -588,7 +587,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			}
 		}
 		if gr != nil {
-			_, err = io.Copy(ioutil.Discard, gr)
+			_, err = io.Copy(io.Discard, gr)
 			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
 				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
 			}

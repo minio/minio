@@ -24,7 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -388,7 +388,7 @@ func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
 	req.ContentLength = int64(len(buf))
 	sum := sha256.Sum256(buf)
 	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum[:]))
-	req.Body = ioutil.NopCloser(bytes.NewReader(buf))
+	req.Body = io.NopCloser(bytes.NewReader(buf))
 	req = signer.SignV4(*req, accessKey, secretKey, "", "")
 
 	// 3.1 Execute the request.

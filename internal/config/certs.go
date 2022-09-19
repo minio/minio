@@ -23,7 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"io/ioutil"
+	"os"
 
 	"github.com/minio/pkg/env"
 )
@@ -37,7 +37,7 @@ const EnvCertPassword = "MINIO_CERT_PASSWD"
 func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err error) {
 	// Read certificate file.
 	var data []byte
-	if data, err = ioutil.ReadFile(certFile); err != nil {
+	if data, err = os.ReadFile(certFile); err != nil {
 		return nil, err
 	}
 
@@ -71,11 +71,11 @@ func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 // from the provided paths. The private key may be encrypted and is
 // decrypted using the ENV_VAR: MINIO_CERT_PASSWD.
 func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
-	certPEMBlock, err := ioutil.ReadFile(certFile)
+	certPEMBlock, err := os.ReadFile(certFile)
 	if err != nil {
 		return tls.Certificate{}, ErrSSLUnexpectedError(err)
 	}
-	keyPEMBlock, err := ioutil.ReadFile(keyFile)
+	keyPEMBlock, err := os.ReadFile(keyFile)
 	if err != nil {
 		return tls.Certificate{}, ErrSSLUnexpectedError(err)
 	}

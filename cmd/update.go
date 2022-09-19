@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -334,7 +333,7 @@ func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content
 		}
 	}
 
-	contentBytes, err := ioutil.ReadAll(resp.Body)
+	contentBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return content, AdminError{
 			Code:       AdminUpdateUnexpectedFailure,
@@ -522,7 +521,7 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 	}
 
 	// convert a Reader to bytes
-	binaryFile, err := ioutil.ReadAll(reader)
+	binaryFile, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

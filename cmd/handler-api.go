@@ -18,8 +18,8 @@
 package cmd
 
 import (
-	"io/ioutil"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -56,7 +56,7 @@ type apiConfig struct {
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
 
 func cgroupLimit(limitFile string) (limit uint64) {
-	buf, err := ioutil.ReadFile(limitFile)
+	buf, err := os.ReadFile(limitFile)
 	if err != nil {
 		return 9223372036854771712
 	}

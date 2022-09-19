@@ -24,7 +24,6 @@ import (
 	"flag"
 	"fmt"
 	"hash/crc32"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -97,7 +96,7 @@ func main() {
 
 	if file != "" {
 		distrib := make([][]string, setCount)
-		b, err := ioutil.ReadFile(file)
+		b, err := os.ReadFile(file)
 		if err != nil {
 			log.Fatalln(err)
 		}

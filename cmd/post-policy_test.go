@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -222,7 +222,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		}
 		if testCase.malformedBody {
 			// Change the request body.
-			req.Body = ioutil.NopCloser(bytes.NewReader([]byte("Hello,")))
+			req.Body = io.NopCloser(bytes.NewReader([]byte("Hello,")))
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.

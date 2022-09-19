@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/minio/minio/internal/config"
@@ -194,7 +193,7 @@ func (o *Opa) IsAllowed(args iampolicy.Args) (bool, error) {
 	defer o.args.CloseRespFn(resp.Body)
 
 	// Read the body to be saved later.
-	opaRespBytes, err := ioutil.ReadAll(resp.Body)
+	opaRespBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, err
 	}

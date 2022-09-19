@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -79,7 +79,7 @@ FLAGS:
 						return err
 					}
 
-					b, err := ioutil.ReadAll(r)
+					b, err := io.ReadAll(r)
 					if err != nil {
 						return err
 					}
@@ -105,7 +105,7 @@ FLAGS:
 			fmt.Println(string(b))
 			return nil
 		}
-		b, err := ioutil.ReadFile(file)
+		b, err := os.ReadFile(file)
 		if err != nil {
 			return err
 		}

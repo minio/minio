@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -122,7 +121,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
+	if err = os.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,7 +139,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatalf("expected version: %s, got: %s", formatErasureVersionV3, migratedVersion)
 	}
 
-	b, err = ioutil.ReadFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
+	b, err = os.ReadFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +169,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
+	if err = os.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -190,7 +189,7 @@ func TestFormatErasureMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = ioutil.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
+	if err = os.WriteFile(pathJoin(rootPath, minioMetaBucket, formatConfigFile), b, os.FileMode(0o644)); err != nil {
 		t.Fatal(err)
 	}
 

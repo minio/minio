@@ -23,7 +23,6 @@ package cmd
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -32,7 +31,7 @@ import (
 
 // Return error if Atime is disabled on the O/S
 func checkAtimeSupport(dir string) (err error) {
-	file, err := ioutil.TempFile(dir, "prefix")
+	file, err := os.CreateTemp(dir, "prefix")
 	if err != nil {
 		return
 	}
@@ -45,7 +44,7 @@ func checkAtimeSupport(dir string) (err error) {
 	// add a sleep to ensure atime change is detected
 	time.Sleep(10 * time.Millisecond)
 
-	if _, err = io.Copy(ioutil.Discard, file); err != nil {
+	if _, err = io.Copy(io.Discard, file); err != nil {
 		return
 	}
 

@@ -1,5 +1,4 @@
 //go:build testrunmain
-// +build testrunmain
 
 /*
  * MinIO Object Storage (c) 2021 MinIO, Inc.
@@ -39,8 +38,9 @@ import (
 // 1. As an alternative you can also run the system under test by just by calling "go test"
 // $ APP_ARGS="server /tmp/test" go test -cover -tags testrunmain -covermode count -coverpkg="./..." -coverprofile=coverage.cov
 //
-// 2. Run System-Tests (when using GitBash prefix this line with MSYS_NO_PATHCONV=1)
-//    Note the SERVER_ENDPOINT must be reachable from inside the docker container (so don't use localhost!)
+//  2. Run System-Tests (when using GitBash prefix this line with MSYS_NO_PATHCONV=1)
+//     Note the SERVER_ENDPOINT must be reachable from inside the docker container (so don't use localhost!)
+//
 // $ podman run -e MINT_MODE=full -e SERVER_ENDPOINT=192.168.47.11:9000 -e ACCESS_KEY=minioadmin -e SECRET_KEY=minioadmin -v /tmp/mint/log:/mint/log minio/mint
 //
 // 3. Stop system under test by sending SIGTERM

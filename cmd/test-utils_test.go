@@ -38,7 +38,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net"
@@ -100,7 +99,7 @@ func TestMain(m *testing.M) {
 	globalIsDistErasure = false
 
 	// Disable printing console messages during tests.
-	color.Output = ioutil.Discard
+	color.Output = io.Discard
 	// Minimum is error logs for testing
 	logger.MinimumLogLevel = logger.ErrorLvl
 
@@ -530,12 +529,12 @@ func truncateChunkByHalfSigv4(req *http.Request) (*http.Request, error) {
 
 	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
 		hexChunkSize, chunkSignature))
-	newChunk, err := ioutil.ReadAll(bufReader)
+	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
 	}
 	newReq := req
-	newReq.Body = ioutil.NopCloser(
+	newReq.Body = io.NopCloser(
 		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk[:len(newChunk)/2]},
 			[]byte(""))),
 	)
@@ -552,14 +551,14 @@ func malformDataSigV4(req *http.Request, newByte byte) (*http.Request, error) {
 
 	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
 		hexChunkSize, chunkSignature))
-	newChunk, err := ioutil.ReadAll(bufReader)
+	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
 	}
 
 	newChunk[0] = newByte
 	newReq := req
-	newReq.Body = ioutil.NopCloser(
+	newReq.Body = io.NopCloser(
 		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk},
 			[]byte(""))),
 	)
@@ -579,13 +578,13 @@ func malformChunkSizeSigV4(req *http.Request, badSize int64) (*http.Request, err
 	newHexChunkSize := []byte(fmt.Sprintf("%x", n))
 	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
 		newHexChunkSize, chunkSignature))
-	newChunk, err := ioutil.ReadAll(bufReader)
+	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
 	}
 
 	newReq := req
-	newReq.Body = ioutil.NopCloser(
+	newReq.Body = io.NopCloser(
 		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk},
 			[]byte(""))),
 	)
@@ -711,10 +710,10 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 	}
 
 	if body == nil {
-		// this is added to avoid panic during ioutil.ReadAll(req.Body).
+		// this is added to avoid panic during io.ReadAll(req.Body).
 		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
 		// This is very similar to https://github.com/golang/go/issues/7527.
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
+		req.Body = io.NopCloser(bytes.NewReader([]byte("")))
 	}
 
 	contentLength := calculateStreamContentLength(dataLength, chunkSize)
@@ -728,7 +727,7 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 	body.Seek(0, 0)
 
 	// Add body
-	req.Body = ioutil.NopCloser(body)
+	req.Body = io.NopCloser(body)
 	req.ContentLength = contentLength
 
 	return req, nil
@@ -779,7 +778,7 @@ func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize in
 		}
 
 	}
-	req.Body = ioutil.NopCloser(bytes.NewReader(stream))
+	req.Body = io.NopCloser(bytes.NewReader(stream))
 	return req, nil
 }
 
@@ -1077,7 +1076,7 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	case body == nil:
 		hashedPayload = getSHA256Hash([]byte{})
 	default:
-		payloadBytes, err := ioutil.ReadAll(body)
+		payloadBytes, err := io.ReadAll(body)
 		if err != nil {
 			return nil, err
 		}
@@ -1455,7 +1454,7 @@ func getListenNotificationURL(endPoint, bucketName string, prefixes, suffixes, e
 func getRandomDisks(N int) ([]string, error) {
 	var erasureDisks []string
 	for i := 0; i < N; i++ {
-		path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+		path, err := os.MkdirTemp(globalTestTmpDir, "minio-")
 		if err != nil {
 			// Remove directories created so far.
 			removeRoots(erasureDisks)
@@ -1586,14 +1585,14 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	rec := httptest.NewRecorder()
 	// reading the body to preserve it so that it can be used again for second attempt of sending unsigned HTTP request.
 	// If the body is read in the handler the same request cannot be made use of.
-	buf, err := ioutil.ReadAll(anonReq.Body)
+	buf, err := io.ReadAll(anonReq.Body)
 	if err != nil {
 		t.Fatal(failTestStr(anonTestStr, err.Error()))
 	}
 
 	// creating 2 read closer (to set as request body) from the body content.
-	readerOne := ioutil.NopCloser(bytes.NewBuffer(buf))
-	readerTwo := ioutil.NopCloser(bytes.NewBuffer(buf))
+	readerOne := io.NopCloser(bytes.NewBuffer(buf))
+	readerTwo := io.NopCloser(bytes.NewBuffer(buf))
 
 	anonReq.Body = readerOne
 
@@ -1610,7 +1609,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	if anonReq.Method != http.MethodHead {
 		// read the response body.
 		var actualContent []byte
-		actualContent, err = ioutil.ReadAll(rec.Body)
+		actualContent, err = io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
@@ -1640,7 +1639,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// verify the response body for `ErrAccessDenied` message =.
 	if anonReq.Method != http.MethodHead {
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		actualContent, err := io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
@@ -1692,7 +1691,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	// for other type of HTTP requests compare the response body content with the expected one.
 	if req.Method != http.MethodHead {
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		actualContent, err := io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("MinIO %s: Failed parsing response body: <ERROR> %v", instanceType, err)
 		}
@@ -2234,7 +2233,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 
 	checkRespErr := func(rec *httptest.ResponseRecorder, exp int) {
 		if rec.Code != exp {
-			b, err := ioutil.ReadAll(rec.Body)
+			b, err := io.ReadAll(rec.Body)
 			t.Fatalf("Expected: %v, Got: %v, Body: %s, err: %v", exp, rec.Code, string(b), err)
 		}
 	}

@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	pathutil "path"
 
@@ -216,7 +215,7 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		return 0, err
 	}
 
-	fsMetaBuf, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
+	fsMetaBuf, err = io.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return 0, err

@@ -37,7 +37,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/ioutil"
 )
 
 func TestReadXLMetaNoData(t *testing.T) {
@@ -405,7 +404,7 @@ func TestDeleteVersionWithSharedDataDir(t *testing.T) {
 }
 
 func Benchmark_mergeXLV2Versions(b *testing.B) {
-	data, err := ioutil.ReadFile("testdata/xl.meta-v1.2.zst")
+	data, err := os.ReadFile("testdata/xl.meta-v1.2.zst")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -454,7 +453,7 @@ func Benchmark_mergeXLV2Versions(b *testing.B) {
 }
 
 func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
-	data, err := ioutil.ReadFile("testdata/xl.meta-v1.2.zst")
+	data, err := os.ReadFile("testdata/xl.meta-v1.2.zst")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -501,7 +500,7 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 
 func Test_xlMetaV2Shallow_Load(t *testing.T) {
 	// Load Legacy
-	data, err := ioutil.ReadFile("testdata/xl.meta-v1.2.zst")
+	data, err := os.ReadFile("testdata/xl.meta-v1.2.zst")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +560,7 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 }
 
 func Test_mergeXLV2Versions(t *testing.T) {
-	dataZ, err := ioutil.ReadFile("testdata/xl-meta-consist.zip")
+	dataZ, err := os.ReadFile("testdata/xl-meta-consist.zip")
 	if err != nil {
 		t.Fatal(err)
 	}

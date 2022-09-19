@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	slashpath "path"
 	"runtime"
@@ -145,7 +144,7 @@ func createPermDeniedFile(t *testing.T) (permDeniedDir string) {
 		t.Fatalf(fmt.Sprintf("Unable to create temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err))
 	}
 
-	if err = ioutil.WriteFile(slashpath.Join(permDeniedDir, "mybucket", "myobject"), []byte(""), 0o400); err != nil {
+	if err = os.WriteFile(slashpath.Join(permDeniedDir, "mybucket", "myobject"), []byte(""), 0o400); err != nil {
 		t.Fatalf(fmt.Sprintf("Unable to create file %v. %v", slashpath.Join(permDeniedDir, "mybucket", "myobject"), err))
 	}
 
@@ -197,7 +196,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 
 	// Should give false for not-a-directory.
 	dir2 := slashpath.Join(tmp, "file")
-	err := ioutil.WriteFile(dir2, []byte("hello"), 0o777)
+	err := os.WriteFile(dir2, []byte("hello"), 0o777)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +253,7 @@ func TestXLStorageReadVersion(t *testing.T) {
 		t.Fatalf("Unable to cfgreate xlStorage test setup, %s", err)
 	}
 
-	xlMeta, _ := ioutil.ReadFile("testdata/xl.meta")
+	xlMeta, _ := os.ReadFile("testdata/xl.meta")
 
 	// Create files for the test cases.
 	if err = xlStorage.MakeVol(context.Background(), "exists"); err != nil {
@@ -472,7 +471,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 
 	// Setup test environment.
 	// Create a file.
-	if err := ioutil.WriteFile(slashpath.Join(path, "vol-as-file"), []byte{}, os.ModePerm); err != nil {
+	if err := os.WriteFile(slashpath.Join(path, "vol-as-file"), []byte{}, os.ModePerm); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Create a directory.
@@ -566,7 +565,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 	if err = os.Mkdir(vol, 0o777); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
-	if err = ioutil.WriteFile(slashpath.Join(vol, "test-file"), []byte{}, os.ModePerm); err != nil {
+	if err = os.WriteFile(slashpath.Join(vol, "test-file"), []byte{}, os.ModePerm); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -1328,7 +1327,7 @@ func TestXLStorageFormatFileChange(t *testing.T) {
 	}
 
 	// Change the format.json such that "this" is changed to "randomid".
-	if err = ioutil.WriteFile(pathJoin(xlStorage.String(), minioMetaBucket, formatConfigFile), []byte(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"randomid","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","randomid","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`), 0o644); err != nil {
+	if err = os.WriteFile(pathJoin(xlStorage.String(), minioMetaBucket, formatConfigFile), []byte(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"randomid","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","randomid","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`), 0o644); err != nil {
 		t.Fatalf("ioutil.WriteFile failed with %s", err)
 	}
 
