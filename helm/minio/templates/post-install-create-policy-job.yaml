@@ -68,6 +68,9 @@ spec:
         {{- if .Values.makePolicyJob.extraVolumes }}
           {{- toYaml .Values.makePolicyJob.extraVolumes | nindent 8 }}
         {{- end }}
+{{ if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+{{- end }}
       containers:
       - name: minio-mc
         image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
