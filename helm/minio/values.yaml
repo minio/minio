@@ -32,10 +32,10 @@ mcImage:
 mode: distributed ## other supported values are "standalone", "gateway"
 
 ## Additional labels to include with deployment or statefulset
-additionalLabels: []
+additionalLabels: {}
 
 ## Additional annotations to include with deployment or statefulset
-additionalAnnotations: []
+additionalAnnotations: {}
 
 ## Typically the deployment/statefulset includes checksums of secrets/config,
 ## So that when these change on a subsequent helm install, the deployment/statefulset
@@ -301,6 +301,21 @@ policies: []
 #         - "s3:GetBucketLocation"
 #         - "s3:ListBucket"
 #         - "s3:ListBucketMultipartUploads"
+## conditionsexample policy creates all access to example bucket with aws:username="johndoe" and source ip range 10.0.0.0/8 and 192.168.0.0/24 only
+# - name: conditionsexample
+#   statements:
+#     - resources:
+#       - 'arn:aws:s3:::example/*'
+#       actions:
+#       - 's3:*'
+#       conditions:
+#         - StringEquals: '"aws:username": "johndoe"'
+#         - IpAddress: |
+#             "aws:SourceIp": [
+#               "10.0.0.0/8",
+#               "192.168.0.0/24"
+#             ]
+#
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
   podAnnotations: {}

@@ -683,10 +683,7 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
 	}
 
-	wquorum = fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		wquorum++
-	}
+	wquorum = fi.WriteQuorum(er.defaultWQuorum())
 
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
@@ -914,6 +911,16 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
+
+	if opts.CheckPrecondFn != nil {
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err != nil {
+			return objInfo, err
+		}
+		if opts.CheckPrecondFn(obj) {
+			return objInfo, PreConditionFailed{}
+		}
+	}
 
 	data := r.Reader
 
@@ -1146,11 +1153,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		})
 	}
 
-	if userDefined["etag"] == "" {
-		userDefined["etag"] = r.MD5CurrentHexString()
-		if opts.PreserveETag != "" {
-			userDefined["etag"] = opts.PreserveETag
-		}
+	userDefined["etag"] = r.MD5CurrentHexString()
+	if opts.PreserveETag != "" {
+		userDefined["etag"] = opts.PreserveETag
 	}
 
 	// Guess content-type from the extension if possible.

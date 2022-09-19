@@ -795,10 +795,7 @@ func (es *erasureSingle) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 		return objInfo, 1, toObjectErr(err, bucket, object)
 	}
 
-	wquorum = fi.Erasure.DataBlocks
-	if fi.Erasure.DataBlocks == fi.Erasure.ParityBlocks {
-		wquorum++
-	}
+	wquorum = fi.WriteQuorum(1)
 
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
