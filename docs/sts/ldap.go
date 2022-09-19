@@ -24,7 +24,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -82,7 +82,7 @@ func main() {
 		if f, err := os.Open(sessionPolicyFile); err != nil {
 			log.Fatalf("Unable to open session policy file: %v", sessionPolicyFile, err)
 		} else {
-			bs, err := ioutil.ReadAll(f)
+			bs, err := io.ReadAll(f)
 			if err != nil {
 				log.Fatalf("Error reading session policy file: %v", err)
 			}

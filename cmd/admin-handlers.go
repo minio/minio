@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -758,7 +757,7 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	// read request body
-	io.CopyN(ioutil.Discard, r.Body, 1)
+	io.CopyN(io.Discard, r.Body, 1)
 
 	globalProfilerMu.Lock()
 

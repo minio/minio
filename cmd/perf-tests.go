@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -185,7 +184,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 				fbr := firstByteRecorder{
 					r: r,
 				}
-				n, err := io.Copy(ioutil.Discard, &fbr)
+				n, err := io.Copy(io.Discard, &fbr)
 				r.Close()
 				if err == nil {
 					response := time.Since(t)

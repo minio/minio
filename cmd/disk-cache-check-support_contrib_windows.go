@@ -21,7 +21,6 @@ package cmd
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 
 	"github.com/djherbis/atime"
@@ -30,7 +29,7 @@ import (
 
 // Return error if Atime is disabled on the O/S
 func checkAtimeSupport(dir string) (err error) {
-	file, err := ioutil.TempFile(dir, "prefix")
+	file, err := os.CreateTemp(dir, "prefix")
 	if err != nil {
 		return
 	}

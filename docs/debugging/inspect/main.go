@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -49,7 +48,7 @@ func main() {
 			File string `json:"file"`
 			Key  string `json:"key"`
 		}{}
-		got, err := ioutil.ReadAll(os.Stdin)
+		got, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fatalErr(err)
 		}

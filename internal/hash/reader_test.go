@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -32,7 +31,7 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = io.Copy(ioutil.Discard, r)
+	_, err = io.Copy(io.Discard, r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +192,7 @@ func TestHashReaderVerification(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test %q: Initializing reader failed %s", testCase.desc, err)
 			}
-			_, err = io.Copy(ioutil.Discard, r)
+			_, err = io.Copy(io.Discard, r)
 			if err != nil {
 				if err.Error() != testCase.err.Error() {
 					t.Errorf("Test %q: Expected error %s, got error %s", testCase.desc, testCase.err, err)

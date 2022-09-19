@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -267,7 +266,7 @@ func TestFSDeletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ioutil.WriteFile(pathJoin(path, "success-vol", "not-empty", "file"), []byte("data"), 0o777)
+	err = os.WriteFile(pathJoin(path, "success-vol", "not-empty", "file"), []byte("data"), 0o777)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +362,7 @@ func BenchmarkFSDeleteFile(b *testing.B) {
 	// We need to create and delete the file sequentially inside the benchmark.
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		err = ioutil.WriteFile(filename, []byte("data"), 0o777)
+		err = os.WriteFile(filename, []byte("data"), 0o777)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -540,7 +539,7 @@ func TestFSRemoveMeta(t *testing.T) {
 func TestFSIsFile(t *testing.T) {
 	filePath := pathJoin(t.TempDir(), "tmpfile")
 
-	if err := ioutil.WriteFile(filePath, nil, 0o777); err != nil {
+	if err := os.WriteFile(filePath, nil, 0o777); err != nil {
 		t.Fatalf("Unable to create file %s", filePath)
 	}
 

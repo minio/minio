@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -246,7 +246,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 		return nil, err
 	}
 
-	if err = ioutil.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0o666); err != nil {
+	if err = os.WriteFile(pathJoin(uploadIDDir, fs.metaJSONFile), fsMetaBytes, 0o666); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
@@ -525,7 +525,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	}
 	defer rc.Close()
 
-	fsMetaBytes, err := ioutil.ReadAll(rc)
+	fsMetaBytes, err := io.ReadAll(rc)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object)
 	}

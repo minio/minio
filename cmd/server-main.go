@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -35,7 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
@@ -516,7 +515,7 @@ func serverMain(ctx *cli.Context) {
 		UseIdleTimeout(ctx.Duration("idle-timeout")).
 		UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
 		UseBaseContext(GlobalContext).
-		UseCustomLogger(log.New(ioutil.Discard, "", 0)) // Turn-off random logging by Go stdlib
+		UseCustomLogger(log.New(io.Discard, "", 0)) // Turn-off random logging by Go stdlib
 
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)

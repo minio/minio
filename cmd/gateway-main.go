@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -279,7 +279,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		UseTLSConfig(newTLSConfig(getCert)).
 		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
 		UseBaseContext(GlobalContext).
-		UseCustomLogger(log.New(ioutil.Discard, "", 0)) // Turn-off random logging by Go stdlib
+		UseCustomLogger(log.New(io.Discard, "", 0)) // Turn-off random logging by Go stdlib
 
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)

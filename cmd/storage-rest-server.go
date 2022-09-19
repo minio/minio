@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os/user"
 	"path"
@@ -943,7 +942,7 @@ func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
 		case 0:
 			return reader, nil
 		case 1:
-			errorText, err := ioutil.ReadAll(reader)
+			errorText, err := io.ReadAll(reader)
 			if err != nil {
 				return nil, err
 			}
@@ -1077,7 +1076,7 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 			}
 			return err
 		case 1:
-			errorText, err := ioutil.ReadAll(respBody)
+			errorText, err := io.ReadAll(respBody)
 			if err != nil {
 				return err
 			}

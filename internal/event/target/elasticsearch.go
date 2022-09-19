@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -449,7 +448,7 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 			err := fmt.Errorf("Create index err: %s", res.String())
 			return err
 		}
-		io.Copy(ioutil.Discard, resp.Body)
+		io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 	return nil
@@ -462,7 +461,7 @@ func (c *esClientV7) ping(ctx context.Context, _ ElasticsearchArgs) (bool, error
 	if err != nil {
 		return false, errNotConnected
 	}
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	return !resp.IsError(), nil
 }
@@ -476,7 +475,7 @@ func (c *esClientV7) entryExists(ctx context.Context, index string, key string) 
 	if err != nil {
 		return false, err
 	}
-	io.Copy(ioutil.Discard, res.Body)
+	io.Copy(io.Discard, res.Body)
 	res.Body.Close()
 	return !res.IsError(), nil
 }
@@ -493,7 +492,7 @@ func (c *esClientV7) removeEntry(ctx context.Context, index string, key string) 
 			return err
 		}
 		defer res.Body.Close()
-		defer io.Copy(ioutil.Discard, res.Body)
+		defer io.Copy(io.Discard, res.Body)
 		if res.IsError() {
 			return fmt.Errorf("Delete err: %s", res.String())
 		}
@@ -522,7 +521,7 @@ func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, 
 		return err
 	}
 	defer res.Body.Close()
-	defer io.Copy(ioutil.Discard, res.Body)
+	defer io.Copy(io.Discard, res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Update err: %s", res.String())
 	}
@@ -549,7 +548,7 @@ func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event
 		return err
 	}
 	defer res.Body.Close()
-	defer io.Copy(ioutil.Discard, res.Body)
+	defer io.Copy(io.Discard, res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Add err: %s", res.String())
 	}

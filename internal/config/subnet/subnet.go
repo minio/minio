@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -62,7 +61,7 @@ func (c Config) Post(reqURL string, payload interface{}) (string, error) {
 	}
 	defer xhttp.DrainBody(resp.Body)
 
-	respBytes, err := ioutil.ReadAll(io.LimitReader(resp.Body, respBodyLimit))
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, respBodyLimit))
 	if err != nil {
 		return "", err
 	}
