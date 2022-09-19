@@ -544,9 +544,6 @@ func serverMain(ctx *cli.Context) {
 	initHealMRF(GlobalContext, newObject)
 	initBackgroundExpiry(GlobalContext, newObject)
 
-	// Initialize the internal state of the event notifier
-	globalEventNotifier.Init(newObject)
-
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
 		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
 			globalActiveCred)

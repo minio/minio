@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
@@ -32,28 +31,14 @@ import (
 	"github.com/minio/pkg/bucket/policy"
 )
 
-const (
-	// Values for bootstrap level
-	eventNotifierInitializing     uint32 = iota + 1 // initialized but without targets
-	eventNotifierFullyInitialized                   // initialized with targets
-)
-
 // EventNotifier - notifies external systems about events in MinIO.
 type EventNotifier struct {
-	// Store events in a queue since the object layer can be ready
-	// before the config subsystem is ready and do not have yet
-	// the list of the configured notification targets
-	bootstrapLevel   uint32
-	bootQueue        chan eventArgs
-	bootMu           sync.Mutex
-	bootQueueClosing bool
-
+	sync.RWMutex
 	targetList                 *event.TargetList
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-
-	sync.RWMutex
+	eventsQueue                chan eventArgs
 }
 
 // NewEventNotifier - creates new event notification object.
@@ -64,7 +49,7 @@ func NewEventNotifier() *EventNotifier {
 		targetResCh:                make(chan event.TargetIDResult),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		bootQueue:                  make(chan eventArgs, 10000),
+		eventsQueue:                make(chan eventArgs, 10000),
 	}
 }
 
@@ -108,30 +93,26 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
-// Init initializes the internal state of the event notifier
-// and it should b ealways called before InitBucketTargets()
-func (evnot *EventNotifier) Init(objAPI ObjectLayer) {
-	// In gateway mode, notifications are not supported - except NAS gateway.
-	if globalIsGateway && !objAPI.IsNotificationSupported() {
-		atomic.StoreUint32(&evnot.bootstrapLevel, eventNotifierFullyInitialized)
-		go evnot.flushBootQueue()
-		return
-	}
-
-	// Delay setting the bootstrap level to fully initialized until all targets are initialized
-	atomic.StoreUint32(&evnot.bootstrapLevel, eventNotifierInitializing)
-}
-
 // InitBucketTargets - initializes event notification system from notification.xml of all buckets.
 func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
-	defer func() {
-		atomic.StoreUint32(&evnot.bootstrapLevel, eventNotifierFullyInitialized)
-		go evnot.flushBootQueue()
-	}()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	// In gateway mode, notifications are not supported - except NAS gateway.
+	if globalIsGateway && !objAPI.IsNotificationSupported() {
+		return nil
+	}
 
 	if err := evnot.targetList.Add(globalConfigTargetList.Targets()...); err != nil {
 		return err
 	}
+
+	go func() {
+		for e := range evnot.eventsQueue {
+			evnot.Send(e)
+		}
+	}()
 
 	go func() {
 		for res := range evnot.targetResCh {
@@ -230,40 +211,8 @@ func (evnot *EventNotifier) RemoveAllRemoteTargets() {
 	}
 }
 
-func (evnot *EventNotifier) sendToBootQueue(args eventArgs) {
-	select {
-	case evnot.bootQueue <- args:
-	default:
-	}
-}
-
-func (evnot *EventNotifier) flushBootQueue() {
-	evnot.bootMu.Lock()
-	evnot.bootQueueClosing = true
-	close(evnot.bootQueue)
-	evnot.bootMu.Unlock()
-
-	for event := range evnot.bootQueue {
-		evnot.send(event)
-	}
-}
-
-// Send - sends event data to all matching targets.
+// Send - sends the event to all registered notification targets
 func (evnot *EventNotifier) Send(args eventArgs) {
-	if atomic.LoadUint32(&evnot.bootstrapLevel) < eventNotifierFullyInitialized {
-		evnot.bootMu.Lock()
-		closing := evnot.bootQueueClosing
-		evnot.bootMu.Unlock()
-		if !closing {
-			evnot.sendToBootQueue(args)
-			return
-		}
-	}
-
-	evnot.send(args)
-}
-
-func (evnot *EventNotifier) send(args eventArgs) {
 	evnot.RLock()
 	targetIDSet := evnot.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	evnot.RUnlock()
