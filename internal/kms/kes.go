@@ -158,6 +158,24 @@ func (c *kesClient) CreateKey(ctx context.Context, keyID string) error {
 	return c.client.CreateKey(ctx, keyID)
 }
 
+// DeleteKey deletes a key at the KMS with the given key ID.
+// Please note that is a dangerous operation.
+// Once a key has been deleted all data that has been encrypted with it cannot be decrypted
+// anymore, and therefore, is lost.
+func (c *kesClient) DeleteKey(ctx context.Context, keyID string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DeleteKey(ctx, keyID)
+}
+
+// ListKeys List all key names that match the specified pattern. In particular,
+// the pattern * lists all keys.
+func (c *kesClient) ListKeys(ctx context.Context, pattern string) (*kes.KeyIterator, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.ListKeys(ctx, pattern)
+}
+
 // GenerateKey generates a new data encryption key using
 // the key at the KES server referenced by the key ID.
 //
@@ -186,6 +204,26 @@ func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Con
 		Plaintext:  dek.Plaintext,
 		Ciphertext: dek.Ciphertext,
 	}, nil
+}
+
+// ImportKey imports a cryptographic key into the KMS.
+func (c *kesClient) ImportKey(ctx context.Context, keyID string, bytes []byte) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.ImportKey(ctx, keyID, bytes)
+}
+
+// EncryptKey Encrypts and authenticates a (small) plaintext with the cryptographic key
+// The plaintext must not exceed 1 MB
+func (c *kesClient) EncryptKey(keyID string, plaintext []byte, ctx Context) ([]byte, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	ctxBytes, err := ctx.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	return c.client.Encrypt(context.Background(), keyID, plaintext, ctxBytes)
 }
 
 // DecryptKey decrypts the ciphertext with the key at the KES
@@ -238,4 +276,87 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 		plaintexts = append(plaintexts, plaintext)
 	}
 	return plaintexts, nil
+}
+
+// DescribePolicy describes a policy by returning its metadata.
+// e.g. who created the policy at which point in time.
+func (c *kesClient) DescribePolicy(ctx context.Context, policy string) (*kes.PolicyInfo, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DescribePolicy(ctx, policy)
+}
+
+// AssignPolicy assigns a policy to an identity.
+// An identity can have at most one policy while the same policy can be assigned to multiple identities.
+// The assigned policy defines which API calls this identity can perform.
+// It's not possible to assign a policy to the admin identity.
+// Further, an identity cannot assign a policy to itself.
+func (c *kesClient) AssignPolicy(ctx context.Context, policy, identity string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.AssignPolicy(ctx, policy, kes.Identity(identity))
+}
+
+// DeletePolicy	deletes a policy from KMS.
+// All identities that have been assigned to this policy will lose all authorization privileges.
+func (c *kesClient) DeletePolicy(ctx context.Context, policy string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DeletePolicy(ctx, policy)
+}
+
+// ListPolicies list all policy metadata that match the specified pattern.
+// In particular, the pattern * lists all policy metadata.
+func (c *kesClient) ListPolicies(ctx context.Context, pattern string) (*kes.PolicyIterator, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.ListPolicies(ctx, pattern)
+}
+
+// SetPolicy creates or updates a policy.
+func (c *kesClient) SetPolicy(ctx context.Context, policy, data string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.SetPolicy(ctx, policy, &kes.Policy{Allow: []string{"*"}, Info: kes.PolicyInfo{Name: "my-app2"}})
+}
+
+// GetPolicy gets a policy from KMS.
+func (c *kesClient) GetPolicy(ctx context.Context, policy string) (*kes.Policy, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.GetPolicy(ctx, policy)
+}
+
+// DescribeIdentity describes an identity by returning its metadata.
+// e.g. which policy is currently assigned and whether its an admin identity.
+func (c *kesClient) DescribeIdentity(ctx context.Context, identity string) (*kes.IdentityInfo, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DescribeIdentity(ctx, kes.Identity(identity))
+}
+
+// DescribeSelfIdentity describes the identity issuing the request.
+// It infers the identity from the TLS client certificate used to authenticate.
+// It returns the identity and policy information for the client identity.
+func (c *kesClient) DescribeSelfIdentity(ctx context.Context) (*kes.IdentityInfo, *kes.Policy, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DescribeSelf(ctx)
+}
+
+// DeleteIdentity deletes an identity from KMS.
+// The client certificate that corresponds to the identity is no longer authorized to perform any API operations.
+// The admin identity cannot be deleted.
+func (c *kesClient) DeleteIdentity(ctx context.Context, identity string) error {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.DeleteIdentity(ctx, kes.Identity(identity))
+}
+
+// ListIdentities list all identity metadata that match the specified pattern.
+// In particular, the pattern * lists all identity metadata.
+func (c *kesClient) ListIdentities(ctx context.Context, pattern string) (*kes.IdentityIterator, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.client.ListIdentities(ctx, pattern)
 }
