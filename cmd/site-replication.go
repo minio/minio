@@ -239,7 +239,7 @@ func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLaye
 	c.Lock()
 	defer c.Unlock()
 	c.state = srState(sdata.SRState)
-	c.enabled = true
+	c.enabled = len(c.state.Peers) != 0
 	return nil
 }
 
@@ -270,6 +270,27 @@ func (c *SiteReplicationSys) saveToDisk(ctx context.Context, state srState) erro
 	defer c.Unlock()
 	c.state = state
 	c.enabled = len(c.state.Peers) != 0
+	return nil
+}
+
+func (c *SiteReplicationSys) removeFromDisk(ctx context.Context) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	if err := deleteConfig(ctx, objAPI, getSRStateFilePath()); err != nil {
+		return err
+	}
+
+	for _, err := range globalNotificationSys.ReloadSiteReplicationConfig(ctx) {
+		logger.LogIf(ctx, err)
+	}
+
+	c.Lock()
+	defer c.Unlock()
+	c.state = srState{}
+	c.enabled = false
 	return nil
 }
 
@@ -2060,14 +2081,40 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	}
 	wg.Wait()
 
+	errdID := ""
 	for dID, err := range errs {
 		if err != nil {
-			return madmin.ReplicateRemoveStatus{
-				ErrDetail: err.Error(),
-				Status:    madmin.ReplicateRemoveStatusPartial,
-			}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", c.state.Peers[dID].Name, err))
+			if !rreq.RemoveAll {
+				return madmin.ReplicateRemoveStatus{
+					ErrDetail: err.Error(),
+					Status:    madmin.ReplicateRemoveStatusPartial,
+				}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", c.state.Peers[dID].Name, err))
+			}
+			errdID = dID
 		}
 	}
+
+	// force local config to be cleared even if peers failed since the remote targets are deleted
+	// by now from the replication config and user intended to forcibly clear all site replication
+	if rreq.RemoveAll {
+		if err = c.removeFromDisk(ctx); err != nil {
+			return madmin.ReplicateRemoveStatus{
+				Status:    madmin.ReplicateRemoveStatusPartial,
+				ErrDetail: fmt.Sprintf("unable to remove cluster-replication state on local: %v", err),
+			}, nil
+		}
+		if errdID != "" {
+			err := errs[errdID]
+			return madmin.ReplicateRemoveStatus{
+				Status:    madmin.ReplicateRemoveStatusPartial,
+				ErrDetail: err.Error(),
+			}, nil
+		}
+		return madmin.ReplicateRemoveStatus{
+			Status: madmin.ReplicateRemoveStatusSuccess,
+		}, nil
+	}
+
 	// Update cluster state
 	var state srState
 	if len(updatedPeers) > 1 {
