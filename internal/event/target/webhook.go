@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -135,7 +134,7 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 		}
 		return false, err
 	}
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	// No network failure i.e response from the target means its up
 	return true, nil
@@ -194,7 +193,7 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 		return err
 	}
 	defer resp.Body.Close()
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		target.Close()

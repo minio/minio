@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	goioutil "io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -63,7 +62,7 @@ func TestDeadlineWriter(t *testing.T) {
 }
 
 func TestCloseOnWriter(t *testing.T) {
-	writer := WriteOnClose(goioutil.Discard)
+	writer := WriteOnClose(io.Discard)
 	if writer.HasWritten() {
 		t.Error("WriteOnCloser must not be marked as HasWritten")
 	}
@@ -72,7 +71,7 @@ func TestCloseOnWriter(t *testing.T) {
 		t.Error("WriteOnCloser must be marked as HasWritten")
 	}
 
-	writer = WriteOnClose(goioutil.Discard)
+	writer = WriteOnClose(io.Discard)
 	writer.Close()
 	if !writer.HasWritten() {
 		t.Error("WriteOnCloser must be marked as HasWritten")
@@ -81,7 +80,7 @@ func TestCloseOnWriter(t *testing.T) {
 
 // Test for AppendFile.
 func TestAppendFile(t *testing.T) {
-	f, err := goioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +89,7 @@ func TestAppendFile(t *testing.T) {
 	f.WriteString("aaaaaaaaaa")
 	f.Close()
 
-	f, err = goioutil.TempFile("", "")
+	f, err = os.CreateTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +102,7 @@ func TestAppendFile(t *testing.T) {
 		t.Error(err)
 	}
 
-	b, err := goioutil.ReadFile(name1)
+	b, err := os.ReadFile(name1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -130,7 +129,7 @@ func TestSkipReader(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		r := NewSkipReader(testCase.src, testCase.skipLen)
-		b, err := goioutil.ReadAll(r)
+		b, err := io.ReadAll(r)
 		if err != nil {
 			t.Errorf("Case %d: Unexpected err %v", i, err)
 		}
@@ -141,7 +140,7 @@ func TestSkipReader(t *testing.T) {
 }
 
 func TestSameFile(t *testing.T) {
-	f, err := goioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Errorf("Error creating tmp file: %v", err)
 	}
@@ -159,7 +158,7 @@ func TestSameFile(t *testing.T) {
 	if !SameFile(fi1, fi2) {
 		t.Fatal("Expected the files to be same")
 	}
-	if err = goioutil.WriteFile(tmpFile, []byte("aaa"), 0o644); err != nil {
+	if err = os.WriteFile(tmpFile, []byte("aaa"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	fi2, err = os.Stat(tmpFile)

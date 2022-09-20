@@ -18,7 +18,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -26,7 +25,7 @@ import (
 func createTempFile(prefix, content string) (tempFile string, err error) {
 	var tmpfile *os.File
 
-	if tmpfile, err = ioutil.TempFile("", prefix); err != nil {
+	if tmpfile, err = os.CreateTemp("", prefix); err != nil {
 		return tempFile, err
 	}
 

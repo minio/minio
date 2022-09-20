@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	pathutil "path"
@@ -379,7 +378,7 @@ func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.diskPath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
-	b, err := ioutil.ReadFile(healingFile)
+	b, err := os.ReadFile(healingFile)
 	if err != nil {
 		return nil
 	}
@@ -676,7 +675,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	}
 
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
-	b, err := ioutil.ReadFile(formatFile)
+	b, err := os.ReadFile(formatFile)
 	if err != nil {
 		// If the disk is still not initialized.
 		if osIsNotExist(err) {
@@ -1471,7 +1470,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 	// Get size for precise allocation.
 	stat, err := f.Stat()
 	if err != nil {
-		buf, err = ioutil.ReadAll(r)
+		buf, err = io.ReadAll(r)
 		return buf, dmTime, osErrToFileErr(err)
 	}
 	if stat.IsDir() {

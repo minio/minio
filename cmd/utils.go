@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -301,7 +300,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 	// library creates to store profiling data.
 	switch madmin.ProfilerType(profilerType) {
 	case madmin.ProfilerCPU:
-		dirPath, err := ioutil.TempDir("", "profile")
+		dirPath, err := os.MkdirTemp("", "profile")
 		if err != nil {
 			return nil, err
 		}
@@ -331,7 +330,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		if n := runtime.NumGoroutine(); n > 10000 && !globalIsCICD {
 			return nil, fmt.Errorf("unable to perform CPU IO profile with %d goroutines", n)
 		}
-		dirPath, err := ioutil.TempDir("", "profile")
+		dirPath, err := os.MkdirTemp("", "profile")
 		if err != nil {
 			return nil, err
 		}
@@ -396,7 +395,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerTrace:
-		dirPath, err := ioutil.TempDir("", "profile")
+		dirPath, err := os.MkdirTemp("", "profile")
 		if err != nil {
 			return nil, err
 		}
@@ -1184,7 +1183,7 @@ func MockOpenIDTestUserInteraction(ctx context.Context, pro OpenIDClientAppParam
 		return "", fmt.Errorf("request err: %v", err)
 	}
 	// {
-	// 	bodyBuf, err := ioutil.ReadAll(resp.Body)
+	// 	bodyBuf, err := io.ReadAll(resp.Body)
 	// 	if err != nil {
 	// 		return "", fmt.Errorf("Error reading body: %v", err)
 	// 	}
@@ -1206,7 +1205,7 @@ func MockOpenIDTestUserInteraction(ctx context.Context, pro OpenIDClientAppParam
 		return "", fmt.Errorf("post form err: %v", err)
 	}
 	// fmt.Printf("resp: %#v %#v\n", resp.StatusCode, resp.Header)
-	// bodyBuf, err := ioutil.ReadAll(resp.Body)
+	// bodyBuf, err := io.ReadAll(resp.Body)
 	// if err != nil {
 	// 	return "", fmt.Errorf("Error reading body: %v", err)
 	// }

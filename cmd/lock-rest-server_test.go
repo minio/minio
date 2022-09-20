@@ -20,7 +20,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -49,7 +49,7 @@ func BenchmarkLockArgs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req.Body = ioutil.NopCloser(bytes.NewReader(argBytes))
+		req.Body = io.NopCloser(bytes.NewReader(argBytes))
 		getLockArgs(req)
 	}
 }
@@ -68,7 +68,7 @@ func BenchmarkLockArgsOld(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte(`obj.txt`)))
+		req.Body = io.NopCloser(bytes.NewReader([]byte(`obj.txt`)))
 		getLockArgsOld(req)
 	}
 }

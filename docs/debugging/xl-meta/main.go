@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -80,7 +79,7 @@ FLAGS:
 	app.Action = func(c *cli.Context) error {
 		ndjson := c.Bool("ndjson")
 		decode := func(r io.Reader, file string) ([]byte, error) {
-			b, err := ioutil.ReadAll(r)
+			b, err := io.ReadAll(r)
 			if err != nil {
 				return nil, err
 			}
@@ -189,7 +188,7 @@ FLAGS:
 					}
 				}, file)
 				err := data.files(func(name string, data []byte) {
-					err = ioutil.WriteFile(fmt.Sprintf("%s-%s.data", file, name), data, os.ModePerm)
+					err = os.WriteFile(fmt.Sprintf("%s-%s.data", file, name), data, os.ModePerm)
 					if err != nil {
 						fmt.Println(err)
 					}

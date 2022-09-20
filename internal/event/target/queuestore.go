@@ -19,7 +19,6 @@ package target
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -87,7 +86,7 @@ func (store *QueueStore) write(key string, e event.Event) error {
 	}
 
 	path := filepath.Join(store.directory, key+eventExt)
-	if err := ioutil.WriteFile(path, eventData, os.FileMode(0o770)); err != nil {
+	if err := os.WriteFile(path, eventData, os.FileMode(0o770)); err != nil {
 		return err
 	}
 
@@ -124,7 +123,7 @@ func (store *QueueStore) Get(key string) (event event.Event, err error) {
 	}(store)
 
 	var eventData []byte
-	eventData, err = ioutil.ReadFile(filepath.Join(store.directory, key+eventExt))
+	eventData, err = os.ReadFile(filepath.Join(store.directory, key+eventExt))
 	if err != nil {
 		return event, err
 	}
@@ -179,14 +178,22 @@ func (store *QueueStore) List() ([]string, error) {
 // list lock less.
 func (store *QueueStore) list() ([]string, error) {
 	var names []string
-	files, err := ioutil.ReadDir(store.directory)
+	files, err := os.ReadDir(store.directory)
 	if err != nil {
 		return names, err
 	}
 
 	// Sort the dentries.
 	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().Before(files[j].ModTime())
+		ii, err := files[i].Info()
+		if err != nil {
+			return false
+		}
+		ji, err := files[j].Info()
+		if err != nil {
+			return true
+		}
+		return ii.ModTime().Before(ji.ModTime())
 	})
 
 	for _, file := range files {

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -421,7 +420,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 			// get old cached metadata
 			oldMetaPath := pathJoin(oldCacheBucketsPath, bucket, object, cacheMetaJSONFile)
 			metaPath := pathJoin(destdir, cacheMetaJSONFile)
-			metaBytes, err := ioutil.ReadFile(oldMetaPath)
+			metaBytes, err := os.ReadFile(oldMetaPath)
 			if err != nil {
 				return err
 			}
@@ -459,7 +458,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 				return err
 			}
 
-			if err = ioutil.WriteFile(metaPath, jsonData, 0o644); err != nil {
+			if err = os.WriteFile(metaPath, jsonData, 0o644); err != nil {
 				return err
 			}
 		}

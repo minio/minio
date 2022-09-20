@@ -22,7 +22,6 @@ import (
 	"crypto/hmac"
 	"encoding/hex"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -83,12 +82,12 @@ func skipContentSha256Cksum(r *http.Request) bool {
 // Returns SHA256 for calculating canonical-request.
 func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 	if stype == serviceSTS {
-		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, stsRequestBodyLimit))
+		payload, err := io.ReadAll(io.LimitReader(r.Body, stsRequestBodyLimit))
 		if err != nil {
 			logger.CriticalIf(GlobalContext, err)
 		}
 		sum256 := sha256.Sum256(payload)
-		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+		r.Body = io.NopCloser(bytes.NewReader(payload))
 		return hex.EncodeToString(sum256[:])
 	}
 

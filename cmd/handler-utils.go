@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -305,7 +304,7 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 			b.WriteString(v)
 		}
 		fileSize = int64(b.Len())
-		filePart = ioutil.NopCloser(b)
+		filePart = io.NopCloser(b)
 		return filePart, fileName, fileSize, formValues, nil
 	}
 

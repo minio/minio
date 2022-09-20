@@ -27,7 +27,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -564,7 +563,7 @@ func readFromSecret(sp string) (string, error) {
 	if isFile(pathJoin("/run/secrets/", sp)) {
 		sp = pathJoin("/run/secrets/", sp)
 	}
-	credBuf, err := ioutil.ReadFile(sp)
+	credBuf, err := os.ReadFile(sp)
 	if err != nil {
 		if os.IsNotExist(err) { // ignore if file doesn't exist.
 			return "", nil

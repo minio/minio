@@ -23,7 +23,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -352,7 +351,7 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 
 	for _, disk := range disks {
 		tmpMetaDir := path.Join(disk, minioMetaTmpBucket)
-		files, err := ioutil.ReadDir(tmpMetaDir)
+		files, err := os.ReadDir(tmpMetaDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -431,9 +430,9 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 
 	for _, disk := range disks {
 		tmpMetaDir := path.Join(disk, minioMetaTmpBucket)
-		files, err := ioutil.ReadDir(tmpMetaDir)
+		files, err := os.ReadDir(tmpMetaDir)
 		if err != nil {
-			// Its OK to have non-existen tmpMetaDir.
+			// It's OK to have non-existing tmpMetaDir.
 			if osIsNotExist(err) {
 				continue
 			}
