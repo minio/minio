@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
@@ -279,10 +280,6 @@ var (
 
 func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) error {
 	switch subSys {
-	case config.CredentialsSubSys:
-		if _, err := config.LookupCreds(s[config.CredentialsSubSys][config.Default]); err != nil {
-			return err
-		}
 	case config.SiteSubSys:
 		if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
 			return err
@@ -798,6 +795,13 @@ func newServerConfig() config.Config {
 func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
 	srvCfg := newServerConfig()
+
+	if globalActiveCred.IsValid() && !globalActiveCred.Equal(auth.DefaultCredentials) {
+		kvs := srvCfg[config.CredentialsSubSys][config.Default]
+		kvs.Set(config.AccessKey, globalActiveCred.AccessKey)
+		kvs.Set(config.SecretKey, globalActiveCred.SecretKey)
+		srvCfg[config.CredentialsSubSys][config.Default] = kvs
+	}
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
