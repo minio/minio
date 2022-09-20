@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
@@ -363,7 +362,7 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
-	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
+	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, io.NopCloser(reader), size)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
 		return err
@@ -541,7 +540,7 @@ func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, pat
 		return nil, err
 	}
 	defer xhttp.DrainBody(respBody)
-	return ioutil.ReadAll(respBody)
+	return io.ReadAll(respBody)
 }
 
 // ReadFileStream - returns a reader for the requested file.

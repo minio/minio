@@ -19,7 +19,6 @@ package etag
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
@@ -139,7 +138,7 @@ var readerTests = []struct { // Reference values computed by: echo <content> | m
 func TestReader(t *testing.T) {
 	for i, test := range readerTests {
 		reader := NewReader(strings.NewReader(test.Content), test.ETag)
-		if _, err := io.Copy(ioutil.Discard, reader); err != nil {
+		if _, err := io.Copy(io.Discard, reader); err != nil {
 			t.Fatalf("Test %d: read failed: %v", i, err)
 		}
 		if ETag := reader.ETag(); !Equal(ETag, test.ETag) {

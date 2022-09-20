@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -319,7 +318,7 @@ func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Re
 }
 
 func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptionKey string) error {
-	data, err := ioutil.ReadAll(body)
+	data, err := io.ReadAll(body)
 	if err != nil {
 		return SRError{
 			Cause: err,

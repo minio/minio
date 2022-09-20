@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -851,7 +850,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 // Caches the object to disk
 func (c *diskCache) put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly, writeback bool) (oi ObjectInfo, err error) {
 	if !c.diskSpaceAvailable(size) {
-		io.Copy(ioutil.Discard, data)
+		io.Copy(io.Discard, data)
 		return oi, errDiskFull
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
@@ -1311,7 +1310,7 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 func (c *diskCache) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data io.Reader, size int64, opts ObjectOptions) (partInfo PartInfo, err error) {
 	oi := PartInfo{}
 	if !c.diskSpaceAvailable(size) {
-		io.Copy(ioutil.Discard, data)
+		io.Copy(io.Discard, data)
 		return oi, errDiskFull
 	}
 	cachePath := getMultipartCacheSHADir(c.dir, bucket, object)

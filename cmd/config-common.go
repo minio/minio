@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/minio/minio/internal/hash"
@@ -41,7 +41,7 @@ func readConfigWithMetadata(ctx context.Context, store objectIO, configFile stri
 	}
 	defer r.Close()
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	if err != nil {
 		return nil, ObjectInfo{}, err
 	}

@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -184,7 +183,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			return
 		}
 	} else {
-		rc = ioutil.NopCloser(bytes.NewReader([]byte{}))
+		rc = io.NopCloser(bytes.NewReader([]byte{}))
 	}
 
 	defer rc.Close()
@@ -317,7 +316,7 @@ func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucke
 		if err != nil {
 			return nil, ObjectInfo{}, err
 		}
-		b, err := ioutil.ReadAll(gr)
+		b, err := io.ReadAll(gr)
 		gr.Close()
 		if err != nil {
 			return nil, ObjectInfo{}, err

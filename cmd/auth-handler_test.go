@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,7 +43,7 @@ func TestGetRequestAuthType(t *testing.T) {
 		req   *http.Request
 		authT authType
 	}
-	nopCloser := ioutil.NopCloser(io.LimitReader(&nullReader{}, 1024))
+	nopCloser := io.NopCloser(io.LimitReader(&nullReader{}, 1024))
 	testCases := []testCase{
 		// Test case - 1
 		// Check for generic signature v4 header.
@@ -406,7 +405,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	for i, testCase := range testCases {
 		s3Error := isReqAuthenticated(ctx, testCase.req, globalSite.Region, serviceS3)
 		if s3Error != testCase.s3Error {
-			if _, err := ioutil.ReadAll(testCase.req.Body); toAPIErrorCode(ctx, err) != testCase.s3Error {
+			if _, err := io.ReadAll(testCase.req.Body); toAPIErrorCode(ctx, err) != testCase.s3Error {
 				t.Fatalf("Test %d: Unexpected S3 error: want %d - got %d (got after reading request %s)", i, testCase.s3Error, s3Error, toAPIError(ctx, err).Code)
 			}
 		}

@@ -29,7 +29,6 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -540,7 +539,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
 		}
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		actualContent, err := io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed reading response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -584,7 +583,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 
 		// read the response body.
-		actualContent, err = ioutil.ReadAll(recV2.Body)
+		actualContent, err = io.ReadAll(recV2.Body)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to read response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -739,7 +738,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		// Check response code (we make only valid requests in
 		// this test)
 		if rec.Code != http.StatusPartialContent && rec.Code != http.StatusOK {
-			bd, err1 := ioutil.ReadAll(rec.Body)
+			bd, err1 := io.ReadAll(rec.Body)
 			t.Fatalf("%s Object: %s Case %d ByteRange: %s: Got response status `%d` and body: %s,%v",
 				instanceType, object, i+1, byteRange, rec.Code, string(bd), err1)
 		}
@@ -922,7 +921,7 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 
 		// Check response code (we make only valid requests in this test)
 		if rec.Code != http.StatusPartialContent && rec.Code != http.StatusOK {
-			bd, err1 := ioutil.ReadAll(rec.Body)
+			bd, err1 := io.ReadAll(rec.Body)
 			t.Fatalf("%s Object: %s ObjectIndex %d PartNumber: %d: Got response status `%d` and body: %s,%v",
 				instanceType, object, oindex, partNumber, rec.Code, string(bd), err1)
 		}
@@ -1245,7 +1244,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				i+1, instanceType, testCase.expectedRespStatus, rec.Code, testCase.fault)
 		}
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		actualContent, err := io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -3078,7 +3077,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		}
 
 		// read the response body.
-		actualContent, err = ioutil.ReadAll(rec.Body)
+		actualContent, err = io.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("Test %d : MinIO %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -3490,7 +3489,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 
 	// Get uploadID of the mulitpart upload initiated.
 	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	mpartRespBytes, err := io.ReadAll(rec.Result().Body)
 	if err != nil {
 		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
 	}
@@ -3531,7 +3530,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 		apiRouter.ServeHTTP(rec, req)
 
 		if test.expectedErr != noAPIErr {
-			errBytes, err := ioutil.ReadAll(rec.Result().Body)
+			errBytes, err := io.ReadAll(rec.Result().Body)
 			if err != nil {
 				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
 					i+1, instanceType, bucketName, testObject, err)
@@ -3796,7 +3795,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 				if rec.Code != http.StatusOK {
 					var errBytes []byte
 					// read the response body.
-					errBytes, err = ioutil.ReadAll(rec.Result().Body)
+					errBytes, err = io.ReadAll(rec.Result().Body)
 					if err != nil {
 						t.Fatalf("%s, Failed to read error response from upload part request \"%s\"/\"%s\": <ERROR> %v.",
 							reqType, bucketName, test.objectName, err)
@@ -3878,7 +3877,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 
 	// Get uploadID of the mulitpart upload initiated.
 	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	mpartRespBytes, err := io.ReadAll(rec.Result().Body)
 	if err != nil {
 		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
 	}
@@ -4103,7 +4102,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 
 					var errBytes []byte
 					// read the response body.
-					errBytes, err = ioutil.ReadAll(rec.Result().Body)
+					errBytes, err = io.ReadAll(rec.Result().Body)
 					if err != nil {
 						t.Fatalf("%s,Failed to read error response list object parts request %s/%s: <ERROR> %v", reqType, bucketName, testObject, err)
 					}

@@ -21,16 +21,16 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -154,7 +154,7 @@ func (srv *Server) Shutdown() error {
 		select {
 		case <-shutdownTimer.C:
 			// Write all running goroutines.
-			tmp, err := ioutil.TempFile("", "minio-goroutines-*.txt")
+			tmp, err := os.CreateTemp("", "minio-goroutines-*.txt")
 			if err == nil {
 				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
 				tmp.Close()

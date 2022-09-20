@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -220,7 +219,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	adminTestBed.router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		resp, _ := ioutil.ReadAll(rec.Body)
+		resp, _ := io.ReadAll(rec.Body)
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
 			http.StatusOK, rec.Code, string(resp))
 	}

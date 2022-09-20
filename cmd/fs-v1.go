@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/user"
@@ -868,7 +867,7 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 
 	rc, _, err := fsOpenFile(ctx, fsMetaPath, 0)
 	if err == nil {
-		fsMetaBuf, rerr := ioutil.ReadAll(rc)
+		fsMetaBuf, rerr := io.ReadAll(rc)
 		rc.Close()
 		if rerr == nil {
 			json := jsoniter.ConfigCompatibleWithStandardLibrary

@@ -23,11 +23,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"sync"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -203,7 +203,7 @@ func formatErasureMigrate(export string) ([]byte, fs.FileInfo, error) {
 	}
 
 	migrate := func(formatPath string, formatData []byte) ([]byte, fs.FileInfo, error) {
-		if err = ioutil.WriteFile(formatPath, formatData, 0o666); err != nil {
+		if err = os.WriteFile(formatPath, formatData, 0o666); err != nil {
 			return nil, nil, err
 		}
 		formatFi, err := Lstat(formatPath)

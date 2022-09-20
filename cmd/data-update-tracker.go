@@ -24,7 +24,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -296,7 +295,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		}
 		for _, drive := range drives {
 			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
-			err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
+			err := os.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
 			if err != nil {
 				if osIsNotExist(err) {
 					continue
