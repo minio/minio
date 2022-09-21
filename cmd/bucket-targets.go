@@ -108,7 +108,6 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
 				m := map[string]epHealth{}
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
 					var online bool
@@ -121,6 +120,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 						Online:   online,
 					}
 				}
+				cancel()
 				sys.hMutex.Lock()
 				sys.hc = m
 				sys.hMutex.Unlock()
