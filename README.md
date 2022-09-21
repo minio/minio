@@ -128,7 +128,7 @@ You can also connect using any S3-compatible tool, such as the MinIO Client `mc`
 Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.18](https://golang.org/dl/#stable)
 
 ```sh
-GO111MODULE=on go install github.com/minio/minio@latest
+go install github.com/minio/minio@latest
 ```
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Console, an embedded web-based object browser built into MinIO Server. Point a web browser running on the host machine to <http://127.0.0.1:9000> and log in with the root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
