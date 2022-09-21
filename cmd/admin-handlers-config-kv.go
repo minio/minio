@@ -309,7 +309,12 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	delServerConfigHistory(ctx, objectAPI, restoreID)
+	if err = delServerConfigHistory(ctx, objectAPI, restoreID); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // ListConfigHistoryKVHandler - lists all the KV ids.
