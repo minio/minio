@@ -543,12 +543,6 @@ func serverMain(ctx *cli.Context) {
 	initHealMRF(GlobalContext, newObject)
 	initBackgroundExpiry(GlobalContext, newObject)
 
-	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
-			globalActiveCred)
-		logger.Info(color.RedBold(msg))
-	}
-
 	if !globalCLIContext.StrictS3Compat {
 		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 	}
@@ -567,6 +561,19 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		logger.LogIf(GlobalContext, err)
+	}
+
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+			globalActiveCred)
+		logger.Info(color.RedBold(msg))
+	}
+
+	savedCreds, _ := config.LookupCreds(globalServerConfig[config.CredentialsSubSys][config.Default])
+	if globalActiveCred.Equal(auth.DefaultCredentials) && !globalActiveCred.Equal(savedCreds) {
+		msg := fmt.Sprintf("WARNING: Detected credentials changed to '%s', please set them back to previously set values",
+			globalActiveCred)
+		logger.Info(color.RedBold(msg))
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
