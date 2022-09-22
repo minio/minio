@@ -245,6 +245,12 @@ func isAdminReq(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, adminPathPrefix)
 }
 
+// Check to allow access to the reserved "bucket" `/minio` for KMS
+// API requests.
+func isKMSReq(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, kmsPathPrefix)
+}
+
 // Supported Amz date headers.
 var amzDateHeaders = []string{
 	// Do not chane this order, x-amz-date value should be
@@ -428,12 +434,11 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// For all other requests reject access to reserved buckets
 		bucketName, _ := request2BucketObjectName(r)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
+			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) && !isKMSReq(r) {
 				if ok {
 					tc.funcName = "handler.ValidRequest"
 					tc.responseRecorder.LogErrBody = true
 				}
-
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
 			}
