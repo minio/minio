@@ -80,17 +80,19 @@ metadata:
     {{- end }}
 spec:
   jobName: {{ template "minio.fullname" . }}
+  {{- if .Values.tls.enabled }}
+  tlsConfig:
+    ca:
+      secret:
+        name: {{ .Values.tls.certSecret }}
+        key: {{ .Values.tls.publicCrt }}
+    serverName: {{ template "minio.fullname" . }}
+  {{- end }}
   prober:
     url: {{ template "minio.fullname" . }}.{{ .Release.Namespace }}:{{ .Values.service.port }}
     path: /minio/v2/metrics/cluster
     {{- if .Values.tls.enabled }}
     scheme: https
-    tlsConfig:
-      ca:
-        secret:
-          name: {{ .Values.tls.certSecret }}
-          key: {{ .Values.tls.publicCrt }}
-      serverName: {{ template "minio.fullname" . }}
     {{ else }}
     scheme: http
     {{- end }}
