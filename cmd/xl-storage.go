@@ -261,36 +261,19 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 	s.formatData = formatData
 	s.formatFileInfo = formatFi
 
-	if len(s.formatData) == 0 { // Unformatted disk check if O_DIRECT is supported.
-		// Check if backend is writable and supports O_DIRECT
-		uuid := mustGetUUID()
-		filePath := pathJoin(s.diskPath, ".writable-check-"+uuid+".tmp")
-		w, err := s.openFileDirect(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
-		if err != nil {
-			// relax single drive mode without O_DIRECT support
-			if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
-				s.oDirect = false
-			} else {
-				return s, err
-			}
-		}
-		_, err = w.Write(alignedBuf)
-		w.Close()
-		if err != nil {
-			if isSysErrInvalidArg(err) {
-				err = errUnsupportedDisk
-			}
-			// relax single drive mode without O_DIRECT support
-			if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
-				s.oDirect = false
-			} else {
-				return s, err
-			}
+	// Return an error if ODirect is not supported
+	// unless it is a single erasure disk mode
+	if err := s.checkODirectDiskSupport(); err == nil {
+		s.oDirect = true
+	} else {
+		if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
+			s.oDirect = false
 		} else {
-			s.oDirect = true
+			return s, err
 		}
-		renameAll(filePath, pathJoin(s.diskPath, minioMetaTmpDeletedBucket, uuid))
+	}
 
+	if len(s.formatData) == 0 {
 		// Create all necessary bucket folders if possible.
 		if err = makeFormatErasureMetaVolumes(s); err != nil {
 			return nil, err
@@ -304,7 +287,6 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		s.diskID = format.Erasure.This
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
-		s.oDirect = true
 	}
 
 	// Success.
@@ -386,6 +368,29 @@ func (s *xlStorage) Healing() *healingTracker {
 	_, err = h.UnmarshalMsg(b)
 	logger.LogIf(GlobalContext, err)
 	return &h
+}
+
+// checkODirectDiskSupport asks the disk to write some data
+// with O_DIRECT support, return an error if any and return
+// errUnsupportedDisk if there is no O_DIRECT support
+func (s *xlStorage) checkODirectDiskSupport() error {
+	// Check if backend is writable and supports O_DIRECT
+	uuid := mustGetUUID()
+	filePath := pathJoin(s.diskPath, ".writable-check-"+uuid+".tmp")
+	defer renameAll(filePath, pathJoin(s.diskPath, minioMetaTmpDeletedBucket, uuid))
+
+	w, err := s.openFileDirect(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(alignedBuf)
+	w.Close()
+	if err != nil {
+		if isSysErrInvalidArg(err) {
+			err = errUnsupportedDisk
+		}
+	}
+	return err
 }
 
 // readsMetadata and returns disk mTime information for xl.meta

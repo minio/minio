@@ -712,3 +712,32 @@ func TestMaxNoncurrentBackwardCompat(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLifecycleConfigWithID(t *testing.T) {
+	r := bytes.NewReader([]byte(`<LifecycleConfiguration>
+								  <Rule>
+	                              <ID>rule-1</ID>
+		                          <Filter>
+		                             <Prefix>prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          <Rule>
+		                          <Filter>
+		                             <Prefix>another-prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          </LifecycleConfiguration>`))
+	lc, err := ParseLifecycleConfigWithID(r)
+	if err != nil {
+		t.Fatalf("Expected parsing to succeed but failed with %v", err)
+	}
+	for _, rule := range lc.Rules {
+		if rule.ID == "" {
+			t.Fatalf("Expected all rules to have a unique id assigned %#v", rule)
+		}
+	}
+}

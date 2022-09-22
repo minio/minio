@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -174,6 +175,22 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 
 	}
 	return false
+}
+
+// ParseLifecycleConfigWithID - parses for a Lifecycle config and assigns
+// unique id to rules with empty ID.
+func ParseLifecycleConfigWithID(r io.Reader) (*Lifecycle, error) {
+	var lc Lifecycle
+	if err := xml.NewDecoder(r).Decode(&lc); err != nil {
+		return nil, err
+	}
+	// assign a unique id for rules with empty ID
+	for i := range lc.Rules {
+		if lc.Rules[i].ID == "" {
+			lc.Rules[i].ID = uuid.New().String()
+		}
+	}
+	return &lc, nil
 }
 
 // ParseLifecycleConfig - parses data in given reader to Lifecycle.
