@@ -109,6 +109,6 @@ NAS gateway implementation allows symlinks on regular files.
 
 ## Explore Further
 
-- [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
-- [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
-- [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)
+- [`mc` command-line interface](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+- [`aws` command-line interface](https://min.io/docs/minio/linux/integrations/aws-cli-with-minio.html)
+- [`minio-go` Go SDK](https://min.io/docs/minio/linux/developers/go/minio-go.html)
