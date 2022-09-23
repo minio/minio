@@ -79,7 +79,7 @@ func TestEncryptRequest(t *testing.T) {
 	}
 }
 
-var decryptObjectInfoTests = []struct {
+var decryptObjectMetaTests = []struct {
 	info    ObjectInfo
 	request *http.Request
 	expErr  error
@@ -122,7 +122,7 @@ var decryptObjectInfoTests = []struct {
 }
 
 func TestDecryptObjectInfo(t *testing.T) {
-	for i, test := range decryptObjectInfoTests {
+	for i, test := range decryptObjectMetaTests {
 		if encrypted, err := DecryptObjectInfo(&test.info, test.request); err != test.expErr {
 			t.Errorf("Test %d: Decryption returned wrong error code: got %d , want %d", i, err, test.expErr)
 		} else if _, enc := crypto.IsEncrypted(test.info.UserDefined); encrypted && enc != encrypted {

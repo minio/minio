@@ -2534,7 +2534,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		key, err = decryptObjectInfo(key, dstBucket, dstObject, mi.UserDefined)
+		key, err = decryptObjectMeta(key, dstBucket, dstObject, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
