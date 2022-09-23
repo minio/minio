@@ -730,9 +730,12 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		putOpts.Mode = rmode
 	}
 	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
-		rdate, err := time.Parse(time.RFC3339, retainDateStr)
+		rdate, err := time.Parse(iso8601TimeFormat, retainDateStr)
 		if err != nil {
-			return putOpts, err
+			rdate, err = time.Parse(time.RFC3339, retainDateStr)
+			if err != nil {
+				return putOpts, err
+			}
 		}
 		putOpts.RetainUntilDate = rdate
 		// set retention timestamp in opts
