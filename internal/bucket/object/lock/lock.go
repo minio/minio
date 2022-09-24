@@ -25,10 +25,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 
 	"github.com/beevik/ntp"
+	xhttp "github.com/minio/minio/internal/http"
+
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
@@ -411,6 +414,7 @@ func ParseObjectLockRetentionHeaders(h http.Header) (rmode RetMode, r RetentionD
 	if err != nil {
 		return rmode, r, ErrInvalidRetentionDate
 	}
+	_, replReq := h[textproto.CanonicalMIMEHeaderKey(xhttp.MinIOSourceReplicationRequest)]
 
 	t, err := UTCNowNTP()
 	if err != nil {
@@ -418,7 +422,7 @@ func ParseObjectLockRetentionHeaders(h http.Header) (rmode RetMode, r RetentionD
 		return rmode, r, ErrPastObjectLockRetainDate
 	}
 
-	if retDate.Before(t) {
+	if retDate.Before(t) && !replReq {
 		return rmode, r, ErrPastObjectLockRetainDate
 	}
 
