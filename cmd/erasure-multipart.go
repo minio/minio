@@ -32,6 +32,7 @@ import (
 
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -982,7 +983,27 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 		}
 	}
+
 	var checksumCombined []byte
+
+	// However, in case of encryption, the persisted part ETags don't match
+	// what we have sent to the client during PutObjectPart. The reason is
+	// that ETags are encrypted. Hence, the client will send a list of complete
+	// part ETags of which non can match the ETag of any part. For example
+	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
+	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
+	//
+	// Therefore, we adjust all ETags sent by the client to match what is stored
+	// on the backend.
+	kind, isEncrypted := crypto.IsEncrypted(fi.Metadata)
+
+	var objectEncryptionKey []byte
+	if isEncrypted && kind == crypto.S3 {
+		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
+		if err != nil {
+			return oi, err
+		}
+	}
 
 	for i, part := range partInfoFiles {
 		partID := parts[i].PartNumber
@@ -1042,21 +1063,22 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
-		gotPart := currentFI.Parts[partIdx]
+		expPart := currentFI.Parts[partIdx]
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		if gotPart.ETag != part.ETag {
+		expETag := tryDecryptETag(objectEncryptionKey, expPart.ETag, kind != crypto.S3)
+		if expETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
-				ExpETag:    gotPart.ETag,
+				ExpETag:    expETag,
 				GotETag:    part.ETag,
 			}
 			return oi, invp
 		}
 
 		if checksumType.IsSet() {
-			crc := gotPart.Checksums[checksumType.String()]
+			crc := expPart.Checksums[checksumType.String()]
 			if crc == "" {
 				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
@@ -1088,24 +1110,24 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   gotPart.ActualSize,
+				PartSize:   expPart.ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
 
 		// Save for total object size.
-		objectSize += gotPart.Size
+		objectSize += expPart.Size
 
 		// Save the consolidated actual size.
-		objectActualSize += gotPart.ActualSize
+		objectActualSize += expPart.ActualSize
 
 		// Add incoming parts.
 		fi.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			Size:       gotPart.Size,
-			ActualSize: gotPart.ActualSize,
-			ModTime:    gotPart.ModTime,
-			Index:      gotPart.Index,
+			Size:       expPart.Size,
+			ActualSize: expPart.ActualSize,
+			ModTime:    expPart.ModTime,
+			Index:      expPart.Index,
 			Checksums:  nil, // Not transferred since we do not need it.
 		}
 	}
