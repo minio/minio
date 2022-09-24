@@ -215,6 +215,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 		removeRoots(fsDirs)
 		return nil, nil, err
 	}
+
 	return obj, fsDirs, nil
 }
 
@@ -501,6 +502,8 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)
+
+	applyDynamicConfigForSubSys(context.Background(), obj, globalServerConfig, config.StorageClassSubSys)
 
 	// Save config.
 	return saveServerConfig(context.Background(), obj, globalServerConfig)
@@ -1742,6 +1745,10 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, ErasureSDStr, bucketFS, fsAPIRouter, credentials, t)
 
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+
 	objLayer, erasureDisks, err := prepareErasure16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
@@ -1752,6 +1759,13 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
 	// Executing the object layer tests for Erasure.
 	objAPITest(objLayer, ErasureTestStr, bucketErasure, erAPIRouter, credentials, t)
 

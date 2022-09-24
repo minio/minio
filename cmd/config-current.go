@@ -69,7 +69,6 @@ func initHelp() {
 		config.LoggerWebhookSubSys:  logger.DefaultLoggerWebhookKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
-		config.HealSubSys:           heal.DefaultKVS,
 		config.ScannerSubSys:        scanner.DefaultKVS,
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
@@ -79,6 +78,7 @@ func initHelp() {
 	}
 	if globalIsErasure {
 		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
+		kvs[config.HealSubSys] = heal.DefaultKVS
 	}
 	config.RegisterDefaultKVS(kvs)
 
@@ -124,10 +124,6 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
-		},
-		config.HelpKV{
-			Key:         config.HealSubSys,
-			Description: "manage object healing frequency and bitrot verification checks",
 		},
 		config.HelpKV{
 			Key:         config.ScannerSubSys,
@@ -213,12 +209,13 @@ func initHelp() {
 	}
 
 	if globalIsErasure {
-		helpSubSys = append(helpSubSys, config.HelpKV{})
-		copy(helpSubSys[2:], helpSubSys[1:])
-		helpSubSys[1] = config.HelpKV{
+		helpSubSys = append(helpSubSys, config.HelpKV{
 			Key:         config.StorageClassSubSys,
 			Description: "define object level redundancy",
-		}
+		}, config.HelpKV{
+			Key:         config.HealSubSys,
+			Description: "manage object healing frequency and bitrot verification checks",
+		})
 	}
 
 	helpMap := map[string]config.HelpKVS{
@@ -289,14 +286,12 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.StorageClassSubSys:
-		if globalIsErasure {
-			if objAPI == nil {
-				return errServerNotInitialized
-			}
-			for _, setDriveCount := range objAPI.SetDriveCounts() {
-				if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
-					return err
-				}
+		if objAPI == nil {
+			return errServerNotInitialized
+		}
+		for _, setDriveCount := range objAPI.SetDriveCounts() {
+			if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
+				return err
 			}
 		}
 	case config.CacheSubSys:
@@ -573,16 +568,18 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 }
 
 func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s config.Config, subSys string) error {
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	setDriveCounts := objAPI.SetDriveCounts()
 	switch subSys {
 	case config.APISubSys:
 		apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 		}
-		var setDriveCounts []int
-		if objAPI != nil {
-			setDriveCounts = objAPI.SetDriveCounts()
-		}
+
 		globalAPIConfig.init(apiConfig, setDriveCounts)
 
 		// Initialize remote instance transport once.
@@ -595,10 +592,8 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to setup Compression: %w", err)
 		}
 		// Validate if the object layer supports compression.
-		if objAPI != nil {
-			if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
-				return fmt.Errorf("Backend does not support compression")
-			}
+		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
 		}
 		globalCompressConfigMu.Lock()
 		globalCompressConfig = cmpCfg
@@ -667,19 +662,16 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
 		}
 	case config.StorageClassSubSys:
-		if globalIsErasure && objAPI != nil {
-			setDriveCounts := objAPI.SetDriveCounts()
-			for i, setDriveCount := range setDriveCounts {
-				sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
-				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
-					break
-				}
-				// if we validated all setDriveCounts and it was successful
-				// proceed to store the correct storage class globally.
-				if i == len(setDriveCounts)-1 {
-					globalStorageClass.Update(sc)
-				}
+		for i, setDriveCount := range setDriveCounts {
+			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
+				break
+			}
+			// if we validated all setDriveCounts and it was successful
+			// proceed to store the correct storage class globally.
+			if i == len(setDriveCounts)-1 {
+				globalStorageClass.Update(sc)
 			}
 		}
 	case config.CallhomeSubSys:

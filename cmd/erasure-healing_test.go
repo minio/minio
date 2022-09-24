@@ -230,6 +230,13 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer obj.Shutdown(context.Background())
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureServerPools)

@@ -246,6 +246,9 @@ outer:
 }
 
 func (r *ReplicationStats) getAllCachedLatest() BucketStatsMap {
+	if r == nil {
+		return BucketStatsMap{}
+	}
 	r.dlock.RLock()
 	defer r.dlock.RUnlock()
 	return r.mostRecentStats
