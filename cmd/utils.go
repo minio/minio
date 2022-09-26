@@ -56,7 +56,6 @@ import (
 	ioutilx "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
 	"golang.org/x/oauth2"
@@ -1014,13 +1013,6 @@ func decodeDirObject(object string) string {
 		return strings.TrimSuffix(object, globalDirSuffix) + slashSeparator
 	}
 	return object
-}
-
-// This is used by metrics to show the number of failed RPC calls
-// between internodes
-func loadAndResetRPCNetworkErrsCounter() uint64 {
-	defer rest.ResetNetworkErrsCounter()
-	return rest.GetNetworkErrsCounter()
 }
 
 // Helper method to return total number of nodes in cluster
