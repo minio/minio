@@ -2534,7 +2534,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		key, err = decryptObjectInfo(key, dstBucket, dstObject, mi.UserDefined)
+		key, err = decryptObjectMeta(key, dstBucket, dstObject, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -2998,7 +2998,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 			}
 			if objRetention.Mode.Valid() {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
-				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(iso8601TimeFormat)
 			} else {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""

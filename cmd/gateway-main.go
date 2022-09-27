@@ -220,17 +220,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
-	// Initialize server config.
-	srvCfg := newServerConfig()
-
-	// Override any values from ENVs.
-	lookupConfigs(srvCfg, nil)
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
-
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	// avoid URL path encoding minio/minio#8950
@@ -251,11 +240,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Add API router.
 	registerAPIRouter(router)
-
-	// Enable bucket forwarding handler only if bucket federation is enabled.
-	if globalDNSConfig != nil && globalBucketFederation {
-		globalHandlers = append(globalHandlers, setBucketForwardingHandler)
-	}
 
 	// Use all the middlewares
 	router.Use(globalHandlers...)
@@ -306,6 +290,17 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
+
+	// Initialize server config.
+	srvCfg := newServerConfig()
+
+	// Override any values from ENVs.
+	lookupConfigs(srvCfg, newObject)
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
 
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 

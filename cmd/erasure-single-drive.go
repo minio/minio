@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -2677,6 +2678,25 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, err
 	}
 
+	// However, in case of encryption, the persisted part ETags don't match
+	// what we have sent to the client during PutObjectPart. The reason is
+	// that ETags are encrypted. Hence, the client will send a list of complete
+	// part ETags of which non can match the ETag of any part. For example
+	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
+	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
+	//
+	// Therefore, we adjust all ETags sent by the client to match what is stored
+	// on the backend.
+	kind, isEncrypted := crypto.IsEncrypted(fi.Metadata)
+
+	var objectEncryptionKey []byte
+	if isEncrypted && kind == crypto.S3 {
+		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
+		if err != nil {
+			return oi, err
+		}
+	}
+
 	// Calculate full object size.
 	var objectSize int64
 
@@ -2707,10 +2727,11 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		if currentFI.Parts[partIdx].ETag != part.ETag {
+		expETag := tryDecryptETag(objectEncryptionKey, currentFI.Parts[partIdx].ETag, kind != crypto.S3)
+		if expETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
-				ExpETag:    currentFI.Parts[partIdx].ETag,
+				ExpETag:    expETag,
 				GotETag:    part.ETag,
 			}
 			return oi, invp

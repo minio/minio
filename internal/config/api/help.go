@@ -63,16 +63,10 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         apiReplicationWorkers,
-			Description: `set the number of replication workers` + defaultHelpPostfix(apiReplicationWorkers),
+			Key:         apiReplicationPriority,
+			Description: `set replication priority` + defaultHelpPostfix(apiReplicationPriority),
 			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         apiReplicationFailedWorkers,
-			Description: `set the number of replication workers for recently failed replicas` + defaultHelpPostfix(apiReplicationFailedWorkers),
-			Optional:    true,
-			Type:        "number",
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         apiTransitionWorkers,

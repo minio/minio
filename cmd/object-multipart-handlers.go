@@ -427,7 +427,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, mi.UserDefined)
+		key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -646,47 +646,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	multipartETag := etag.Multipart(completeETags...)
 	opts.UserDefined["etag"] = multipartETag.String()
 
-	// However, in case of encryption, the persisted part ETags don't match
-	// what we have sent to the client during PutObjectPart. The reason is
-	// that ETags are encrypted. Hence, the client will send a list of complete
-	// part ETags of which non can match the ETag of any part. For example
-	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
-	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
-	//
-	// Therefore, we adjust all ETags sent by the client to match what is stored
-	// on the backend.
-	// TODO(klauspost): This should be done while object is finalized instead of fetching the data twice
-	if objectAPI.IsEncryptionSupported() {
-		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-
-		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
-			// Only fetch parts in between first and last.
-			// We already checked if we have at least one part.
-			start := complMultipartUpload.Parts[0].PartNumber
-			maxParts := complMultipartUpload.Parts[len(complMultipartUpload.Parts)-1].PartNumber - start + 1
-			listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, start-1, maxParts, ObjectOptions{})
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
-			sort.Slice(listPartsInfo.Parts, func(i, j int) bool {
-				return listPartsInfo.Parts[i].PartNumber < listPartsInfo.Parts[j].PartNumber
-			})
-			for i := range listPartsInfo.Parts {
-				for j := range complMultipartUpload.Parts {
-					if listPartsInfo.Parts[i].PartNumber == complMultipartUpload.Parts[j].PartNumber {
-						complMultipartUpload.Parts[j].ETag = listPartsInfo.Parts[i].ETag
-						continue
-					}
-				}
-			}
-		}
-	}
-
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(ctx, w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
@@ -854,7 +813,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
 		var objectEncryptionKey []byte
 		if kind == crypto.S3 {
-			objectEncryptionKey, err = decryptObjectInfo(nil, bucket, object, listPartsInfo.UserDefined)
+			objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, listPartsInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
