@@ -116,7 +116,6 @@ func TestGetFileInfoVersions(t *testing.T) {
 		Volume:           "volume",
 		Name:             "object-name",
 		VersionID:        "756100c6-b393-4981-928a-d49bbc164741",
-		IsLatest:         true,
 		Deleted:          false,
 		TransitionStatus: "",
 		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",
@@ -181,10 +180,10 @@ func TestGetFileInfoVersions(t *testing.T) {
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
-		if versions[i].IsLatest {
+		if versions[i].MoreRecent == 0 {
 			return true
 		}
-		if versions[j].IsLatest {
+		if versions[j].MoreRecent == 0 {
 			return false
 		}
 		return versions[i].ModTime.After(versions[j].ModTime)

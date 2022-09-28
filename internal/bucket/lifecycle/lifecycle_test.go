@@ -230,6 +230,7 @@ func TestComputeActions(t *testing.T) {
 		isExpiredDelMarker     bool
 		expectedAction         Action
 		isNoncurrent           bool
+		moreRecent             int // number of versions more recent than this version
 		objectSuccessorModTime time.Time
 		versionID              string
 	}{
@@ -421,13 +422,27 @@ func TestComputeActions(t *testing.T) {
 			objectSuccessorModTime: time.Now().Add(-1 * time.Nanosecond).UTC(),
 			versionID:              uuid.New().String(),
 		},
-		// Lifecycle rules with NewerNoncurrentVersions specified must return NoneAction.
+		// Lifecycle rules with NewerNoncurrentVersions specified will return DeleteVersionAction
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
-			objectName:     "foodir/fooobject",
-			versionID:      uuid.NewString(),
-			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
-			expectedAction: NoneAction,
+			inputConfig:            `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:             "foodir/fooobject",
+			versionID:              uuid.NewString(),
+			objectModTime:          time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			objectSuccessorModTime: time.Now().UTC().Add(-10 * 24 * time.Hour),
+			isNoncurrent:           true,
+			moreRecent:             6, // note: this incl. current version too
+			expectedAction:         DeleteVersionAction,
+		},
+		// Lifecycle rules with NewerNoncurrentVersions specified will return NoneAction, since there aren't enough versions of this object.
+		{
+			inputConfig:            `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			objectName:             "foodir/fooobject",
+			versionID:              uuid.NewString(),
+			objectModTime:          time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			objectSuccessorModTime: time.Now().UTC().Add(-10 * 24 * time.Hour),
+			isNoncurrent:           true,
+			moreRecent:             5, // note: this incl. current version too
+			expectedAction:         NoneAction,
 		},
 		// Disabled rules with NewerNoncurrentVersions shouldn't affect outcome.
 		{
@@ -441,8 +456,9 @@ func TestComputeActions(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		tc := tc
+		i := i
 		t.Run("", func(t *testing.T) {
 			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
 			if err != nil {
@@ -453,12 +469,13 @@ func TestComputeActions(t *testing.T) {
 				UserTags:         tc.objectTags,
 				ModTime:          tc.objectModTime,
 				DeleteMarker:     tc.isExpiredDelMarker,
-				NumVersions:      1,
+				NumVersions:      tc.moreRecent + 1,
+				MoreRecent:       tc.moreRecent,
 				IsLatest:         !tc.isNoncurrent,
 				SuccessorModTime: tc.objectSuccessorModTime,
 				VersionID:        tc.versionID,
 			}); resultAction != tc.expectedAction {
-				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
+				t.Fatalf("%d: Expected action: `%v`, got: `%v`", i+1, tc.expectedAction, resultAction)
 			}
 		})
 
@@ -652,8 +669,7 @@ func TestTransitionTier(t *testing.T) {
 }
 
 func TestNoncurrentVersionsLimit(t *testing.T) {
-	// test that the lowest max noncurrent versions limit is returned among
-	// matching rules
+	// verify that the first applicable newernoncurrentversions rule's values are returned
 	var rules []Rule
 	for i := 1; i <= 10; i++ {
 		rules = append(rules, Rule{
@@ -668,8 +684,8 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
-		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
+	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 1 {
+		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 1) but got (%s, %d, %d)", ruleID, days, lim)
 	}
 }
 

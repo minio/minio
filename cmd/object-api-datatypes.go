@@ -111,6 +111,10 @@ type ObjectInfo struct {
 	// latest can be true for delete marker or a version.
 	IsLatest bool
 
+	// MoreRecent is the number of versions that are more recent than this
+	// version.
+	MoreRecent int
+
 	// DeleteMarker indicates if the versionId corresponds
 	// to a delete marker on an object.
 	DeleteMarker bool

@@ -1233,9 +1233,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	// we are adding a new version to this object under the namespace lock, so this is the latest version.
-	fi.IsLatest = true
-
 	// Success, return object info.
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }

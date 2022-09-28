@@ -817,6 +817,7 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 		ModTime:          oi.ModTime,
 		IsLatest:         oi.IsLatest,
 		NumVersions:      oi.NumVersions,
+		MoreRecent:       oi.MoreRecent,
 		DeleteMarker:     oi.DeleteMarker,
 		SuccessorModTime: oi.SuccessorModTime,
 		RestoreOngoing:   oi.RestoreOngoing,

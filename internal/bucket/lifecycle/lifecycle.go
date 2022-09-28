@@ -296,6 +296,7 @@ type ObjectOpts struct {
 	IsLatest         bool
 	DeleteMarker     bool
 	NumVersions      int
+	MoreRecent       int // number of versions more recent than this object
 	SuccessorModTime time.Time
 	TransitionStatus string
 	RestoreOngoing   bool
@@ -336,15 +337,14 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 
-		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
-			// Skip rules with newer noncurrent versions specified.
-			// These rules are not handled at an individual version
-			// level. ComputeAction applies only to a specific
-			// version.
-			if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
+		if !rule.NoncurrentVersionExpiration.IsNull() {
+			if obj.IsLatest {
 				continue
 			}
-			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() {
+			if toRetain := rule.NoncurrentVersionExpiration.NewerNoncurrentVersions; toRetain > 0 && obj.MoreRecent <= toRetain {
+				continue
+			}
+			if obj.VersionID != "" && !obj.SuccessorModTime.IsZero() {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().UTC().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
@@ -519,8 +519,9 @@ func (lc Lifecycle) TransitionTier(obj ObjectOpts) string {
 	return ""
 }
 
-// NoncurrentVersionsExpirationLimit returns the maximum limit on number of
-// noncurrent versions across rules.
+// NoncurrentVersionsExpirationLimit returns the rule ID, noncurrent versions to
+// be retained and the number of noncurrent days of the first rule that applies,
+// per S3 behavior.
 func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, int, int) {
 	var lim int
 	var days int
@@ -529,18 +530,7 @@ func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, i
 		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 {
 			continue
 		}
-		// Pick the highest number of NewerNoncurrentVersions value
-		// among overlapping rules.
-		if lim == 0 || lim < rule.NoncurrentVersionExpiration.NewerNoncurrentVersions {
-			lim = rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
-		}
-		// Pick the earliest applicable NoncurrentDays among overlapping
-		// rules. Note: ruleID is that of the rule which determines the
-		// time of expiry.
-		if ndays := int(rule.NoncurrentVersionExpiration.NoncurrentDays); days == 0 || days > ndays {
-			days = ndays
-			ruleID = rule.ID
-		}
+		return rule.ID, int(rule.NoncurrentVersionExpiration.NoncurrentDays), rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
 	}
 	return ruleID, days, lim
 }

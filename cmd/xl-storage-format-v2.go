@@ -1638,7 +1638,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		}
 	}
 	var succModTime int64
-	isLatest := true
+	var moreRecent int
 	nonFreeVersions := len(x.versions)
 	found := false
 	for _, ver := range x.versions {
@@ -1656,7 +1656,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 
 		// We need a specific version, skip...
 		if versionID != "" && uv != header.VersionID {
-			isLatest = false
+			moreRecent++
 			succModTime = header.ModTime
 			continue
 		}
@@ -1670,7 +1670,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		if fi, err = version.ToFileInfo(volume, path); err != nil {
 			return fi, err
 		}
-		fi.IsLatest = isLatest
+		fi.MoreRecent = moreRecent
 		if succModTime != 0 {
 			fi.SuccessorModTime = time.Unix(0, succModTime)
 		}
@@ -1693,7 +1693,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 	versions := make([]FileInfo, 0, len(x.versions))
 	var err error
-
+	var moreRecent int
 	var dst xlMetaV2Version
 	for _, version := range x.versions {
 		_, err = dst.unmarshalV(x.metaV, version.meta)
@@ -1705,17 +1705,20 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 			return versions, err
 		}
 		fi.NumVersions = len(x.versions)
+		fi.MoreRecent = moreRecent
 		versions = append(versions, fi)
+
+		if !dst.FreeVersion() {
+			moreRecent++
+		}
 	}
 
 	for i := range versions {
 		versions[i].NumVersions = len(versions)
+		versions[i].MoreRecent = i
 		if i > 0 {
 			versions[i].SuccessorModTime = versions[i-1].ModTime
 		}
-	}
-	if len(versions) > 0 {
-		versions[0].IsLatest = true
 	}
 	return versions, nil
 }
@@ -1926,7 +1929,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 	}
 	var header xlMetaV2VersionHeader
 	var succModTime int64
-	isLatest := true
+	var moreRecent int
 	nonFreeVersions := versions
 	found := false
 	err = decodeVersions(buf, versions, func(idx int, hdr, meta []byte) error {
@@ -1947,7 +1950,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 
 		// We need a specific version, skip...
 		if versionID != "" && uv != header.VersionID {
-			isLatest = false
+			moreRecent++
 			succModTime = header.ModTime
 			return nil
 		}
@@ -1961,7 +1964,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 		if fi, err = version.ToFileInfo(volume, path); err != nil {
 			return err
 		}
-		fi.IsLatest = isLatest
+		fi.MoreRecent = moreRecent
 		if succModTime != 0 {
 			fi.SuccessorModTime = time.Unix(0, succModTime)
 		}
@@ -1988,7 +1991,7 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 		return nil, err
 	}
 	var succModTime time.Time
-	isLatest := true
+	var moreRecent int
 	dst := make([]FileInfo, 0, vers)
 	var xl xlMetaV2Version
 	err = decodeVersions(buf, vers, func(idx int, hdr, meta []byte) error {
@@ -1998,17 +2001,20 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 		if !xl.Valid() {
 			return errFileCorrupt
 		}
+
 		fi, err := xl.ToFileInfo(volume, path)
 		if err != nil {
 			return err
 		}
-		fi.IsLatest = isLatest
 		fi.SuccessorModTime = succModTime
 		fi.NumVersions = vers
-		isLatest = false
+		fi.MoreRecent = moreRecent
 		succModTime = xl.getModTime()
 
 		dst = append(dst, fi)
+		if !xl.FreeVersion() {
+			moreRecent++
+		}
 		return nil
 	})
 	return dst, err

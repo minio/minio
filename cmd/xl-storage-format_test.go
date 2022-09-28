@@ -328,7 +328,6 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 		Volume:           "volume",
 		Name:             "object-name",
 		VersionID:        "756100c6-b393-4981-928a-d49bbc164741",
-		IsLatest:         true,
 		Deleted:          false,
 		TransitionStatus: "PENDING",
 		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",

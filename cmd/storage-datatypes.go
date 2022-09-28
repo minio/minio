@@ -160,8 +160,8 @@ type FileInfo struct {
 	// Version of the file.
 	VersionID string `msg:"vid,omitempty"`
 
-	// Indicates if the version is the latest
-	IsLatest bool `msg:"is"`
+	// MoreRecent holds the number of versions more recent than this version
+	MoreRecent int `msg:"mr"`
 
 	// Deleted is set when this FileInfo represents
 	// a deleted marker for a versioned bucket.

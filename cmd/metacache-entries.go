@@ -203,11 +203,10 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 		if len(e.cached.versions) == 0 {
 			// This special case is needed to handle xlMeta.versions == 0
 			return FileInfo{
-				Volume:   bucket,
-				Name:     e.name,
-				Deleted:  true,
-				IsLatest: true,
-				ModTime:  timeSentinel1970,
+				Volume:  bucket,
+				Name:    e.name,
+				Deleted: true,
+				ModTime: timeSentinel1970,
 			}, nil
 		}
 		return e.cached.ToFileInfo(bucket, e.name, "")

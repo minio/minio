@@ -65,11 +65,10 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 		// This special case is needed to handle len(xlMeta.versions) == 0
 		versions = []FileInfo{
 			{
-				Volume:   volume,
-				Name:     path,
-				Deleted:  true,
-				IsLatest: true,
-				ModTime:  timeSentinel1970,
+				Volume:  volume,
+				Name:    path,
+				Deleted: true,
+				ModTime: timeSentinel1970,
 			},
 		}
 	}
@@ -101,7 +100,6 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 				Name:      path,
 				VersionID: versionID,
 				Deleted:   true,
-				IsLatest:  true,
 				ModTime:   timeSentinel1970,
 			}, nil
 		}
@@ -117,7 +115,6 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 				Name:      path,
 				VersionID: versionID,
 				Deleted:   true,
-				IsLatest:  true,
 				ModTime:   timeSentinel1970,
 			}, nil
 		}

@@ -60,7 +60,6 @@ func TestFreeVersion(t *testing.T) {
 		Volume:           "volume",
 		Name:             "object-name",
 		VersionID:        "00000000-0000-0000-0000-000000000001",
-		IsLatest:         true,
 		Deleted:          false,
 		TransitionStatus: "",
 		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",

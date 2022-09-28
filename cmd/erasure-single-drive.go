@@ -473,7 +473,6 @@ func (es *erasureSingle) CopyObject(ctx context.Context, srcBucket, srcObject, d
 			// preserve destination versionId if specified.
 			if versionID == "" {
 				versionID = mustGetUUID()
-				fi.IsLatest = true // we are creating a new version so this is latest.
 			}
 			modTime = UTCNow()
 		}
@@ -1214,9 +1213,6 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 
 	fi.ReplicationState = opts.PutReplicationState()
 	online = countOnlineDisks(onlineDisks)
-
-	// we are adding a new version to this object under the namespace lock, so this is the latest version.
-	fi.IsLatest = true
 
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
@@ -2832,9 +2828,6 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			break
 		}
 	}
-
-	// we are adding a new version to this object under the namespace lock, so this is the latest version.
-	fi.IsLatest = true
 
 	// Success, return object info.
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
