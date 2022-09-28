@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -110,7 +111,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 
 	go func() {
 		for e := range evnot.eventsQueue {
-			evnot.Send(e)
+			evnot.send(e)
 		}
 	}()
 
@@ -213,6 +214,16 @@ func (evnot *EventNotifier) RemoveAllRemoteTargets() {
 
 // Send - sends the event to all registered notification targets
 func (evnot *EventNotifier) Send(args eventArgs) {
+	select {
+	case evnot.eventsQueue <- args:
+	default:
+		// A new goroutine is created for each notification job, eventsQueue is
+		// drained quickly and is not expected to be filled with any scenario.
+		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
+	}
+}
+
+func (evnot *EventNotifier) send(args eventArgs) {
 	evnot.RLock()
 	targetIDSet := evnot.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	evnot.RUnlock()
