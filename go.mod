@@ -18,7 +18,6 @@ require (
 	github.com/cosnicolaou/pbzip2 v1.0.1
 	github.com/dchest/siphash v1.2.3
 	github.com/djherbis/atime v1.1.0
-	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/elastic/go-elasticsearch/v7 v7.17.1
@@ -43,7 +42,7 @@ require (
 	github.com/lib/pq v1.10.7
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.23.0
-	github.com/minio/console v0.20.3
+	github.com/minio/console v0.20.4
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
@@ -89,7 +88,6 @@ require (
 	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	google.golang.org/api v0.96.0
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -224,5 +222,6 @@ require (
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
