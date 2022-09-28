@@ -47,7 +47,7 @@ type Store interface {
 }
 
 // replayEvents - Reads the events from the store and replays.
-func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce logger.LogOnce, id event.TargetID) <-chan string {
+func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce logger.LogOnce, id string) <-chan string {
 	eventKeyCh := make(chan string)
 
 	go func() {
@@ -59,7 +59,7 @@ func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce logger.LogOnce
 		for {
 			names, err := store.List()
 			if err != nil {
-				loggerOnce(context.Background(), fmt.Errorf("eventStore.List() failed with: %w", err), id.String())
+				loggerOnce(context.Background(), fmt.Errorf("eventStore.List() failed with: %w", err), id)
 			} else {
 				for _, name := range names {
 					select {
@@ -140,4 +140,13 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 			return
 		}
 	}
+}
+
+func streamEventsFromStore(store Store, target event.Target, doneCh <-chan struct{}, loggerOnce logger.LogOnce) {
+	go func() {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(store, doneCh, loggerOnce, target.ID().String())
+		// Send events from the store.
+		sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+	}()
 }

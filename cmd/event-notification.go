@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -38,16 +39,18 @@ type EventNotifier struct {
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
+	eventsQueue                chan eventArgs
 }
 
 // NewEventNotifier - creates new event notification object.
 func NewEventNotifier() *EventNotifier {
-	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
+	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.InitBucketTargets()
 	return &EventNotifier{
 		targetList:                 event.NewTargetList(),
 		targetResCh:                make(chan event.TargetIDResult),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
+		eventsQueue:                make(chan eventArgs, 10000),
 	}
 }
 
@@ -64,7 +67,7 @@ func (evnot *EventNotifier) GetARNList(onlyActive bool) []string {
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
 		if !strings.HasPrefix(targetID.ID, "httpclient+") {
-			if onlyActive && !target.HasQueueStore() {
+			if onlyActive {
 				if _, err := target.IsActive(); err != nil {
 					continue
 				}
@@ -91,7 +94,7 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
-// InitBucketTargets - initializes notification system from notification.xml of all buckets.
+// InitBucketTargets - initializes event notification system from notification.xml of all buckets.
 func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -102,7 +105,15 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		return nil
 	}
 
-	logger.LogIf(ctx, evnot.targetList.Add(globalConfigTargetList.Targets()...))
+	if err := evnot.targetList.Add(globalConfigTargetList.Targets()...); err != nil {
+		return err
+	}
+
+	go func() {
+		for e := range evnot.eventsQueue {
+			evnot.send(e)
+		}
+	}()
 
 	go func() {
 		for res := range evnot.targetResCh {
@@ -166,14 +177,8 @@ func (evnot *EventNotifier) ConfiguredTargetIDs() []event.TargetID {
 			}
 		}
 	}
-	// Filter out targets configured via env
-	var tIDs []event.TargetID
-	for _, targetID := range targetIDs {
-		if !globalEnvTargetList.Exists(targetID) {
-			tIDs = append(tIDs, targetID)
-		}
-	}
-	return tIDs
+
+	return targetIDs
 }
 
 // RemoveNotification - removes all notification configuration for bucket name.
@@ -207,8 +212,18 @@ func (evnot *EventNotifier) RemoveAllRemoteTargets() {
 	}
 }
 
-// Send - sends event data to all matching targets.
+// Send - sends the event to all registered notification targets
 func (evnot *EventNotifier) Send(args eventArgs) {
+	select {
+	case evnot.eventsQueue <- args:
+	default:
+		// A new goroutine is created for each notification job, eventsQueue is
+		// drained quickly and is not expected to be filled with any scenario.
+		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
+	}
+}
+
+func (evnot *EventNotifier) send(args eventArgs) {
 	evnot.RLock()
 	targetIDSet := evnot.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	evnot.RUnlock()

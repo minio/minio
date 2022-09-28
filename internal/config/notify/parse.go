@@ -42,361 +42,210 @@ const (
 // ErrTargetsOffline - Indicates single/multiple target failures.
 var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
 
-// TestNotificationTargets is similar to GetNotificationTargets()
-// avoids explicit registration.
-func TestNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, targetIDs []event.TargetID) error {
-	test := true
-	returnOnTargetError := true
-	targets, err := RegisterNotificationTargets(ctx, cfg, transport, targetIDs, test, returnOnTargetError)
-	if err == nil {
-		// Close all targets since we are only testing connections.
-		for _, t := range targets.TargetMap() {
-			_ = t.Close()
-		}
-	}
-
-	return err
-}
-
 // TestSubSysNotificationTargets - tests notification targets of given subsystem
-func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, targetIDs []event.TargetID, subSys string) error {
+func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, subSys string, transport *http.Transport) error {
 	if err := checkValidNotificationKeysForSubSys(subSys, cfg[subSys]); err != nil {
 		return err
 	}
-	targetList := event.NewTargetList()
-	targetsOffline, err := fetchSubSysTargets(ctx, cfg, transport, true, true, subSys, targetList)
-	if err == nil {
-		// Close all targets since we are only testing connections.
-		for _, t := range targetList.TargetMap() {
-			_ = t.Close()
-		}
-	}
 
-	if targetsOffline {
-		return ErrTargetsOffline
-	}
-
-	return err
-}
-
-// GetNotificationTargets registers and initializes all notification
-// targets, returns error if any.
-func GetNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, test bool) (*event.TargetList, error) {
-	returnOnTargetError := false
-	return RegisterNotificationTargets(ctx, cfg, transport, nil, test, returnOnTargetError)
-}
-
-// RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
-// A new notification target is added like below
-// * Add a new target in pkg/event/target package.
-// * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
-// * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
-	targetList, err := FetchRegisteredTargets(ctx, cfg, transport, test, returnOnTargetError)
+	targetList, err := fetchSubSysTargets(ctx, cfg, subSys, transport)
 	if err != nil {
-		return targetList, err
+		return err
 	}
 
-	if test {
-		// Verify if user is trying to disable already configured
-		// notification targets, based on their target IDs
-		for _, targetID := range targetIDs {
-			if !targetList.Exists(targetID) {
-				return nil, config.Errorf(
-					"Unable to disable currently configured targets '%v'",
-					targetID)
-			}
+	for _, target := range targetList {
+		defer target.Close()
+	}
+
+	for _, target := range targetList {
+		yes, err := target.IsActive()
+		if err != nil || !yes {
+			return ErrTargetsOffline
 		}
 	}
 
-	return targetList, nil
+	return nil
 }
 
-func fetchSubSysTargets(ctx context.Context, cfg config.Config,
-	transport *http.Transport, test bool, returnOnTargetError bool,
-	subSys string, targetList *event.TargetList,
-) (targetsOffline bool, err error) {
-	targetsOffline = false
+func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, transport *http.Transport) (targets []event.Target, err error) {
 	if err := checkValidNotificationKeysForSubSys(subSys, cfg[subSys]); err != nil {
-		return targetsOffline, err
+		return nil, err
 	}
 
 	switch subSys {
 	case config.NotifyAMQPSubSys:
 		amqpTargets, err := GetNotifyAMQP(cfg[config.NotifyAMQPSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range amqpTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewAMQPTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewAMQPTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyESSubSys:
 		esTargets, err := GetNotifyES(cfg[config.NotifyESSubSys], transport)
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range esTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewElasticsearchTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewElasticsearchTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
+
 		}
 	case config.NotifyKafkaSubSys:
 		kafkaTargets, err := GetNotifyKafka(cfg[config.NotifyKafkaSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range kafkaTargets {
 			if !args.Enable {
 				continue
 			}
 			args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
-			newTarget, err := target.NewKafkaTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewKafkaTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
+
 		}
 
 	case config.NotifyMQTTSubSys:
 		mqttTargets, err := GetNotifyMQTT(cfg[config.NotifyMQTTSubSys], transport.TLSClientConfig.RootCAs)
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range mqttTargets {
 			if !args.Enable {
 				continue
 			}
 			args.RootCAs = transport.TLSClientConfig.RootCAs
-			newTarget, err := target.NewMQTTTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewMQTTTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyMySQLSubSys:
 		mysqlTargets, err := GetNotifyMySQL(cfg[config.NotifyMySQLSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range mysqlTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewMySQLTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewMySQLTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyNATSSubSys:
 		natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys], transport.TLSClientConfig.RootCAs)
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range natsTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewNATSTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewNATSTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyNSQSubSys:
 		nsqTargets, err := GetNotifyNSQ(cfg[config.NotifyNSQSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range nsqTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewNSQTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewNSQTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyPostgresSubSys:
 		postgresTargets, err := GetNotifyPostgres(cfg[config.NotifyPostgresSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range postgresTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewPostgreSQLTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewPostgreSQLTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyRedisSubSys:
 		redisTargets, err := GetNotifyRedis(cfg[config.NotifyRedisSubSys])
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range redisTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewRedisTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
+			t, err := target.NewRedisTarget(id, args, logger.LogOnceIf)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
 	case config.NotifyWebhookSubSys:
 		webhookTargets, err := GetNotifyWebhook(cfg[config.NotifyWebhookSubSys], transport)
 		if err != nil {
-			return targetsOffline, err
+			return nil, err
 		}
 		for id, args := range webhookTargets {
 			if !args.Enable {
 				continue
 			}
-			newTarget, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport, test)
+			t, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport)
 			if err != nil {
-				targetsOffline = true
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-				_ = newTarget.Close()
+				return nil, err
 			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				if returnOnTargetError {
-					return targetsOffline, err
-				}
-			}
+			targets = append(targets, t)
 		}
-
 	}
-	return targetsOffline, nil
+	return targets, nil
 }
 
-// FetchRegisteredTargets - Returns a set of configured TargetList
-// If `returnOnTargetError` is set to true, The function returns when a target initialization fails
-// Else, the function will return a complete TargetList irrespective of errors
-func FetchRegisteredTargets(ctx context.Context, cfg config.Config, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
+// FetchEnabledTargets - Returns a set of configured TargetList
+func FetchEnabledTargets(ctx context.Context, cfg config.Config, transport *http.Transport) (_ *event.TargetList, err error) {
 	targetList := event.NewTargetList()
-	var targetsOffline bool
-
-	defer func() {
-		// Automatically close all connections to targets when an error occur.
-		// Close all the targets if returnOnTargetError is set
-		// Else, close only the failed targets
-		if err != nil && returnOnTargetError {
-			for _, t := range targetList.TargetMap() {
-				_ = t.Close()
+	for _, subSys := range config.NotifySubSystems.ToSlice() {
+		targets, err := fetchSubSysTargets(ctx, cfg, subSys, transport)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range targets {
+			if err = targetList.Add(t); err != nil {
+				return nil, err
 			}
 		}
-	}()
-
-	for _, subSys := range config.NotifySubSystems.ToSlice() {
-		if targetsOffline, err = fetchSubSysTargets(ctx, cfg, transport, test, returnOnTargetError, subSys, targetList); err != nil {
-			return targetList, err
-		}
-		if targetsOffline {
-			return targetList, ErrTargetsOffline
-		}
 	}
-
 	return targetList, nil
 }
 

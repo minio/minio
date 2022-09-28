@@ -145,6 +145,8 @@ func (m MySQLArgs) Validate() error {
 
 // MySQLTarget - MySQL target.
 type MySQLTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       MySQLArgs
 	updateStmt *sql.Stmt
@@ -154,6 +156,8 @@ type MySQLTarget struct {
 	store      Store
 	firstPing  bool
 	loggerOnce logger.LogOnce
+
+	quitCh chan struct{}
 }
 
 // ID - returns target ID.
@@ -161,24 +165,15 @@ func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
 }
 
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *MySQLTarget) HasQueueStore() bool {
-	return target.store != nil
-}
-
 // IsActive - Return true if target is up and active
 func (target *MySQLTarget) IsActive() (bool, error) {
-	if target.db == nil {
-		db, sErr := sql.Open("mysql", target.args.DSN)
-		if sErr != nil {
-			return false, sErr
-		}
-		target.db = db
-		if target.args.MaxOpenConnections > 0 {
-			// Set the maximum connections limit
-			target.db.SetMaxOpenConns(target.args.MaxOpenConnections)
-		}
+	if err := target.init(); err != nil {
+		return false, err
 	}
+	return target.isActive()
+}
+
+func (target *MySQLTarget) isActive() (bool, error) {
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
 			return false, errNotConnected
@@ -190,10 +185,14 @@ func (target *MySQLTarget) IsActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the SQL connection is active.
 func (target *MySQLTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -244,7 +243,11 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to MySQL.
 func (target *MySQLTarget) Send(eventKey string) error {
-	_, err := target.IsActive()
+	if err := target.init(); err != nil {
+		return err
+	}
+
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -281,6 +284,7 @@ func (target *MySQLTarget) Send(eventKey string) error {
 
 // Close - closes underneath connections to MySQL database.
 func (target *MySQLTarget) Close() error {
+	close(target.quitCh)
 	if target.updateStmt != nil {
 		// FIXME: log returned error. ignore time being.
 		_ = target.updateStmt.Close()
@@ -333,8 +337,68 @@ func (target *MySQLTarget) executeStmts() error {
 	return nil
 }
 
+func (target *MySQLTarget) init() error {
+	return target.lazyInit.Do(target.initMySQL)
+}
+
+func (target *MySQLTarget) initMySQL() error {
+	args := target.args
+
+	db, err := sql.Open("mysql", args.DSN)
+	if err != nil {
+		target.loggerOnce(context.Background(), err, target.ID().String())
+		return err
+	}
+	target.db = db
+
+	if args.MaxOpenConnections > 0 {
+		// Set the maximum connections limit
+		target.db.SetMaxOpenConns(args.MaxOpenConnections)
+	}
+
+	err = target.db.Ping()
+	if err != nil {
+		if !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID().String())
+		}
+	} else {
+		if err = target.executeStmts(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID().String())
+		} else {
+			target.firstPing = true
+		}
+	}
+
+	if err != nil {
+		target.db.Close()
+		return err
+	}
+
+	yes, err := target.isActive()
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return errNotConnected
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
 // NewMySQLTarget - creates new MySQL target.
-func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*MySQLTarget, error) {
+func NewMySQLTarget(id string, args MySQLArgs, loggerOnce logger.LogOnce) (*MySQLTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of MySQL `%s`: %w", id, err)
+		}
+	}
+
 	if args.DSN == "" {
 		config := mysql.Config{
 			User:                 args.User,
@@ -349,57 +413,12 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 		args.DSN = config.FormatDSN()
 	}
 
-	target := &MySQLTarget{
+	return &MySQLTarget{
 		id:         event.TargetID{ID: id, Name: "mysql"},
 		args:       args,
 		firstPing:  false,
+		store:      store,
 		loggerOnce: loggerOnce,
-	}
-
-	db, err := sql.Open("mysql", args.DSN)
-	if err != nil {
-		target.loggerOnce(context.Background(), err, target.ID().String())
-		return target, err
-	}
-	target.db = db
-
-	if args.MaxOpenConnections > 0 {
-		// Set the maximum connections limit
-		target.db.SetMaxOpenConns(args.MaxOpenConnections)
-	}
-
-	var store Store
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID().String())
-			return target, oErr
-		}
-		target.store = store
-	}
-
-	err = target.db.Ping()
-	if err != nil {
-		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
-		}
-	} else {
-		if err = target.executeStmts(); err != nil {
-			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
-		}
-		target.firstPing = true
-	}
-
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
-	}
-
-	return target, nil
+		quitCh:     make(chan struct{}),
+	}, nil
 }
