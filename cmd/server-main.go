@@ -638,8 +638,8 @@ func serverMain(ctx *cli.Context) {
 		// Initialize site replication manager.
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
-		// Initialize bucket notification targets.
-		globalEventNotifier.InitBucketTargets(GlobalContext, newObject)
+		// Initialize bucket notification system
+		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {

@@ -2555,20 +2555,6 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 		lambdaMap[targetID.Name] = list
 	}
 
-	for _, tgt := range globalEnvTargetList.Targets() {
-		targetIDStatus := make(map[string]madmin.Status)
-		active, _ := tgt.IsActive()
-		targetID := tgt.ID()
-		if active {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOnline)}
-		} else {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOffline)}
-		}
-		list := lambdaMap[targetID.Name]
-		list = append(list, targetIDStatus)
-		lambdaMap[targetID.Name] = list
-	}
-
 	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))
 	counter := 0
 	for key, value := range lambdaMap {

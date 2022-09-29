@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -127,6 +128,20 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+
+	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
+		if !objectAPI.IsTaggingSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
+		}
+
+		if _, err := tags.ParseObjectTags(objTags); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		metadata[xhttp.AmzObjectTagging] = objTags
 	}
 
 	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)

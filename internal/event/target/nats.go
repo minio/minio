@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -212,6 +213,8 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 
 // NATSTarget - NATS target.
 type NATSTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       NATSArgs
 	natsConn   *nats.Conn
@@ -219,6 +222,7 @@ type NATSTarget struct {
 	jstream    nats.JetStream
 	store      Store
 	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
@@ -226,13 +230,15 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *NATSTarget) HasQueueStore() bool {
-	return target.store != nil
-}
-
 // IsActive - Return true if target is up and active
 func (target *NATSTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+	return target.isActive()
+}
+
+func (target *NATSTarget) isActive() (bool, error) {
 	var connErr error
 	if target.args.Streaming.Enable {
 		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
@@ -270,10 +276,14 @@ func (target *NATSTarget) IsActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -311,7 +321,11 @@ func (target *NATSTarget) send(eventData event.Event) error {
 
 // Send - sends event to Nats.
 func (target *NATSTarget) Send(eventKey string) error {
-	_, err := target.IsActive()
+	if err := target.init(); err != nil {
+		return err
+	}
+
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -335,6 +349,7 @@ func (target *NATSTarget) Send(eventKey string) error {
 
 // Close - closes underneath connections to NATS server.
 func (target *NATSTarget) Close() (err error) {
+	close(target.quitCh)
 	if target.stanConn != nil {
 		// closing the streaming connection does not close the provided NATS connection.
 		if target.stanConn.NatsConn() != nil {
@@ -350,66 +365,73 @@ func (target *NATSTarget) Close() (err error) {
 	return nil
 }
 
-// NewNATSTarget - creates new NATS target.
-func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*NATSTarget, error) {
-	var natsConn *nats.Conn
-	var stanConn stan.Conn
-	var jstream nats.JetStream
+func (target *NATSTarget) init() error {
+	return target.lazyInit.Do(target.initNATS)
+}
+
+func (target *NATSTarget) initNATS() error {
+	args := target.args
 
 	var err error
-
-	var store Store
-
-	target := &NATSTarget{
-		id:         event.TargetID{ID: id, Name: "nats"},
-		args:       args,
-		loggerOnce: loggerOnce,
-	}
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID().String())
-			return target, oErr
-		}
-		target.store = store
-	}
-
 	if args.Streaming.Enable {
 		target.loggerOnce(context.Background(), errors.New("NATS Streaming is deprecated please migrate to JetStream"), target.ID().String())
-
+		var stanConn stan.Conn
 		stanConn, err = args.connectStan()
 		target.stanConn = stanConn
 	} else {
+		var natsConn *nats.Conn
 		natsConn, err = args.connectNats()
 		target.natsConn = natsConn
 	}
-
 	if err != nil {
-		if store == nil || err.Error() != nats.ErrNoServers.Error() {
+		if err.Error() != nats.ErrNoServers.Error() {
 			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
 		}
+		return err
 	}
 
 	if target.natsConn != nil && args.JetStream.Enable {
+		var jstream nats.JetStream
 		jstream, err = target.natsConn.JetStream()
 		if err != nil {
-			if store == nil || err.Error() != nats.ErrNoServers.Error() {
+			if err.Error() != nats.ErrNoServers.Error() {
 				target.loggerOnce(context.Background(), err, target.ID().String())
-				return target, err
 			}
+			return err
 		}
 		target.jstream = jstream
 	}
 
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
+	yes, err := target.isActive()
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return errNotConnected
 	}
 
-	return target, nil
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
+// NewNATSTarget - creates new NATS target.
+func NewNATSTarget(id string, args NATSArgs, loggerOnce logger.LogOnce) (*NATSTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of NATS `%s`: %w", id, err)
+		}
+	}
+
+	return &NATSTarget{
+		id:         event.TargetID{ID: id, Name: "nats"},
+		args:       args,
+		loggerOnce: loggerOnce,
+		store:      store,
+		quitCh:     make(chan struct{}),
+	}, nil
 }

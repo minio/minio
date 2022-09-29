@@ -121,5 +121,5 @@ These credentials can now be used to perform MinIO API operations.
 
 ## Explore Further
 
-- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)
