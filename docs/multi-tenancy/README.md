@@ -64,4 +64,4 @@ minio server --address :9003 http://192.168.10.1{1...4}/data/tenant3
 
 ## Cloud Scale Deployment
 
-A container orchestration platform (e.g. Kubernetes) is recommended for large-scale, multi-tenant MinIO deployments. See the [MinIO Deployment Quickstart Guide](https://docs.min.io/docs/minio-deployment-quickstart-guide) to get started with MinIO on orchestration platforms.
+A container orchestration platform (e.g. Kubernetes) is recommended for large-scale, multi-tenant MinIO deployments. See the [MinIO Deployment Quickstart Guide](https://min.io/docs/minio/container/index.html#quickstart-for-linux) to get started with MinIO on orchestration platforms.

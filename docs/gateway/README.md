@@ -1,5 +1,8 @@
 # MinIO Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
+**The MinIO Gateway has been deprecated as of February 2022 and removed from MinIO files as of July 2022.**
+**See https://blog.min.io/deprecation-of-the-minio-gateway/ for more information.**
+
 ## Support
 
 Gateway implementations are frozen and are not accepting any new features. Please reports any bugs at <https://github.com/minio/minio/issues> . If you are an existing customer please login to <https://subnet.min.io> for production support.

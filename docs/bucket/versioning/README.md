@@ -201,7 +201,7 @@ public class IsVersioningEnabled {
 
 ## Explore Further
 
-- [Use `minio-java` SDK with MinIO Server](https://docs.minio.io/docs/java-client-quickstart-guide.html)
-- [Object Lock and Immutablity Guide](https://docs.minio.io/docs/minio-bucket-object-lock-guide.html)
-- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
-- [The MinIO documentation website](https://docs.min.io)
+- [Use `minio-java` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/java/minio-java.html)
+- [Object Lock and Immutablity Guide](https://min.io/docs/minio/linux/administration/object-management/object-retention.html)
+- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

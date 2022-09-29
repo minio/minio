@@ -6,7 +6,7 @@ MinIO stores all its config as part of the server deployment, config is erasure 
 
 ### Certificate Directory
 
-TLS certificates by default are expected to be stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS certificates by default are expected to be stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://min.io/docs/minio/linux/operations/network-encryption.html).
 
 Following is a sample directory structure for MinIO server with TLS certificates.
 
@@ -181,7 +181,7 @@ MINIO_API_REMOTE_TRANSPORT_DEADLINE  (duration)  set the deadline for API reques
 
 #### Notifications
 
-Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://docs.min.io/docs/minio-bucket-notification-guide.html).
+Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://min.io/docs/minio/linux/administration/monitoring.html#bucket-notifications).
 
 ```
 notify_webhook        publish bucket notifications to webhook endpoints
@@ -345,5 +345,5 @@ minio server /data
 
 ## Explore Further
 
-* [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
-* [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)
+* [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linux)
+* [Configure MinIO Server with TLS](https://min.io/docs/minio/linux/operations/network-encryption.htmls)

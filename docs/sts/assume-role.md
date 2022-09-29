@@ -89,7 +89,7 @@ export MINIO_ROOT_PASSWORD=minio123
 minio server ~/test
 ```
 
-Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
+Create new users following the multi-user guide [here](https://min.io/docs/minio/linux/administration/identity-access-management.html)
 
 ### Testing an example with awscli tool
 
@@ -134,5 +134,5 @@ SessionToken: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiIyN1lEUllFT
 
 ## Explore Further
 
-- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

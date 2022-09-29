@@ -295,12 +295,14 @@ func TestReplicate(t *testing.T) {
 		{ObjectOpts{Name: "xa/c5test", UserTags: "k1=v1", Replica: false}, cfgs[4], true}, // 40. replica syncing disabled, this object is NOT a replica
 	}
 
-	for i, testCase := range testCases {
-		result := testCase.c.Replicate(testCase.opts)
-
-		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.opts.Name, func(t *testing.T) {
+			result := testCase.c.Replicate(testCase.opts)
+			if result != testCase.expectedResult {
+				t.Errorf("expected: %v, got: %v", testCase.expectedResult, result)
+			}
+		})
 	}
 }
 

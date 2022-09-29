@@ -199,7 +199,7 @@ func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
 		if !strings.HasPrefix(obj.Name, rule.Prefix()) {
 			continue
 		}
-		if rule.Filter.TestTags(strings.Split(obj.UserTags, "&")) {
+		if rule.Filter.TestTags(obj.UserTags) {
 			rules = append(rules, rule)
 		}
 	}
