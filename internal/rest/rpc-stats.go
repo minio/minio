@@ -71,7 +71,7 @@ func setupReqStatsUpdate(req *http.Request) (*http.Request, func()) {
 		if ds := atomic.LoadInt64(&dialStart); ds > 0 {
 			if de := atomic.LoadInt64(&dialEnd); de == 0 {
 				atomic.AddUint64(&globalStats.tcpDialErrs, 1)
-			} else {
+			} else if de >= ds {
 				atomic.AddUint64(&globalStats.tcpDialCount, 1)
 				atomic.AddUint64(&globalStats.tcpDialTotalDur, uint64(dialEnd-dialStart))
 			}
