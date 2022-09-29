@@ -9,7 +9,7 @@ Disk caching feature here refers to the use of caching disks to store content cl
 
 ### 1. Prerequisites
 
-Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
+Install MinIO - [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linuxe).
 
 ### 2. Run MinIO gateway with cache
 
@@ -34,13 +34,12 @@ In the example above this means that  `MINIO_CACHE_WATERMARK_LOW` is effectively
 
 ### 3. Test your setup
 
-To test this setup, access the MinIO gateway via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from all the MinIO endpoints.
+To test this setup, access the MinIO gateway via browser or [`mc`](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart). You’ll see the uploaded files are accessible from all the MinIO endpoints.
 
 ## Explore Further
 
 - [Disk cache design](https://github.com/minio/minio/blob/master/docs/disk-caching/DESIGN.md)
-- [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with MinIO Server](https://docs.min.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
-- [The MinIO documentation website](https://docs.min.io)
+- [Use `mc` with MinIO Server](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+- [Use `aws-cli` with MinIO Server](https://min.io/docs/minio/linux/integrations/aws-cli-with-minio.html)
+- [Use `minio-go` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/go/minio-go.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

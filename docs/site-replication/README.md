@@ -25,7 +25,7 @@ The following Bucket features will **not be replicated**, is designed to differ 
 - All sites **must** have the same deployment credentials (i.e. `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`).
 - **Removing a site** is not allowed from a set of replicated sites once configured.
 - All sites must be using the **same** external IDP(s) if any.
-- For [SSE-S3 or SSE-KMS encryption via KMS](https://docs.min.io/docs/minio-kms-quickstart-guide.html "MinIO KMS Guide"), all sites **must**  have access to a central KMS deployment. This can be achieved via a central KES server or multiple KES servers (say one per site) connected via a central KMS (Vault) server.
+- For [SSE-S3 or SSE-KMS encryption via KMS](https://min.io/docs/minio/linux/operations/server-side-encryption.html "MinIO KMS Guide"), all sites **must**  have access to a central KMS deployment. This can be achieved via a central KES server or multiple KES servers (say one per site) connected via a central KMS (Vault) server.
 
 ## Configuring Site Replication
 

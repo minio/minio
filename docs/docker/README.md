@@ -8,7 +8,7 @@ Docker installed on your machine. Download the relevant installer from [here](ht
 
 ## Run Standalone MinIO on Docker
 
-*Note*: Standalone MinIO is intended for early development and evaluation. For production clusters, deploy a [Distributed](https://docs.min.io/minio/baremetal/installation/deployment-and-management.html) MinIO deployment.
+*Note*: Standalone MinIO is intended for early development and evaluation. For production clusters, deploy a [Distributed](https://min.io/docs/minio/container/operations/install-deploy-manage/deploy-minio-single-node-multi-drive.html) MinIO deployment.
 
 MinIO needs a persistent volume to store configuration and application data. For testing purposes, you can launch MinIO by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
 
@@ -53,9 +53,11 @@ docker run \
   quay.io/minio/minio server /data --console-address ":9001"
 ```
 
-## Run Distributed MinIO on Docker
+## Run Distributed MinIO on Containers
 
-Distributed MinIO can be deployed via [Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose). This means Docker Compose lets you quickly get started with Distributed MinIO on your computer - ideal for development, testing, staging environments. We recommend kubernetes based deployment for production level deployment <https://github.com/minio/operator>.
+We recommend kubernetes based deployment for production level deployment <https://github.com/minio/operator>.
+
+See the [Kubernetes documentation](https://min.io/docs/minio/kubernetes/upstream/index.html) for more information.
 
 ## MinIO Docker Tips
 
@@ -209,6 +211,5 @@ docker stats <container_id>
 
 ## Explore Further
 
-* [Deploy MinIO on Docker Compose](https://docs.min.io/docs/deploy-minio-on-docker-compose)
-* [Distributed MinIO Quickstart Guide](https://docs.min.io/docs/distributed-minio-quickstart-guide)
-* [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
+* [Distributed MinIO Quickstart Guide](https://min.io/docs/minio/container/operations/install-deploy-manage/deploy-minio-single-node-multi-drive.html)
+* [MinIO Erasure Code QuickStart Guide](https://min.io/docs/minio/container/operations/concepts/erasure-coding.html)

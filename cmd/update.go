@@ -424,10 +424,10 @@ func getLatestReleaseTime(u *url.URL, timeout time.Duration, mode string) (sha25
 
 const (
 	// Kubernetes deployment doc link.
-	kubernetesDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-kubernetes"
+	kubernetesDeploymentDoc = "https://min.io/docs/minio/kubernetes/upstream/index.html#quickstart-for-kubernetes"
 
 	// Mesos deployment doc link.
-	mesosDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-dc-os"
+	mesosDeploymentDoc = "https://min.io/docs/minio/kubernetes/upstream/index.html#quickstart-for-kubernetes"
 )
 
 func getDownloadURL(releaseTag string) (downloadURL string) {
