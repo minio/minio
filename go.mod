@@ -2,11 +2,11 @@ module github.com/minio/minio
 
 replace github.com/minio/minio/ => ./
 
-replace github.com/minio/console v0.15.4 => github.com/mantle-labs/console v0.0.1
 
 go 1.17
 
 require (
+	github.com/mantle-labs/console v0.0.1
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
