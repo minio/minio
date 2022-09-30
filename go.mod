@@ -1,5 +1,8 @@
 module github.com/minio/minio
-replace github.com/minio/minio/cmd/mantle => ./cmd/mantle
+
+replace github.com/minio/minio/ => ./
+
+replace github.com/minio/console v0.15.4 => github.com/mantle-labs/console v0.0.0-20220930194056-8c67d42e4792
 
 go 1.17
 
