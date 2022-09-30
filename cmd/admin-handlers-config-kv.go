@@ -82,6 +82,11 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err = validateConfig(cfg, subSys); err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		return
+	}
+
 	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
