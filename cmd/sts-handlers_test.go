@@ -174,7 +174,7 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
 	c.mustGetObject(ctx, uClient, bucket, object)
 
-	// Validate that the client cannot remove any objects
+	// Validate that the client can remove objects
 	if err = minioClient.RemoveObjectTagging(ctx, bucket, object, minio.RemoveObjectTaggingOptions{}); err != nil {
 		c.Fatalf("user is unable to delete the object tags: %v", err)
 	}
