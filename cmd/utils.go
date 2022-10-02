@@ -810,10 +810,6 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
-	prefix := likelyUnescapeGeneric(vars["prefix"], url.QueryUnescape)
-	if prefix != "" {
-		object = prefix
-	}
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(xhttp.AmzRequestID),

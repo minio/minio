@@ -187,23 +187,25 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Take read lock on object, here so subsequent lower-level
+	// calls do not need to.
+	lock := objectAPI.NewNSLock(bucket, object)
+	lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	ctx = lkctx.Context()
+	defer lock.RUnlock(lkctx.Cancel)
+
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
-	} else {
-		// Take read lock on object, here so subsequent lower-level
-		// calls do not need to.
-		lock := objectAPI.NewNSLock(bucket, object)
-		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		ctx = lkctx.Context()
-		defer lock.RUnlock(lkctx.Cancel)
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	gopts := opts
+	gopts.NoLock = true // We already have a lock, we can live with it.
+	objInfo, err := getObjectInfo(ctx, bucket, object, gopts)
 	if err != nil {
 		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
 			// Versioning enabled quite possibly object is deleted might be delete-marker
@@ -342,7 +344,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
@@ -442,6 +444,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			}
 		}
 		if reader == nil || !proxy.Proxy {
+			// validate if the request indeed was authorized, if it wasn't we need to return "ErrAccessDenied"
+			// instead of any namespace related error.
+			if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+				return
+			}
 			if isErrPreconditionFailed(err) {
 				return
 			}
@@ -473,6 +481,15 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	defer gr.Close()
 
 	objInfo := gr.ObjInfo
+
+	if objInfo.UserTags != "" {
+		r.Header.Set(xhttp.AmzObjectTagging, objInfo.UserTags)
+	}
+
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
 
 	if !proxy.Proxy { // apply lifecycle rules only for local requests
 		// Automatically remove the object/version is an expiry lifecycle rule can be applied

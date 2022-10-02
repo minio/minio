@@ -1203,6 +1203,34 @@ func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bu
 	}
 }
 
+func (c *check) mustPutObjectWithTags(ctx context.Context, client *minio.Client, bucket, object string) {
+	c.Helper()
+	_, err := client.PutObject(ctx, bucket, object, bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{
+		UserTags: map[string]string{
+			"security": "public",
+			"virus":    "true",
+		},
+	})
+	if err != nil {
+		c.Fatalf("user was unable to upload the object: %v", err)
+	}
+}
+
+func (c *check) mustGetObject(ctx context.Context, client *minio.Client, bucket, object string) {
+	c.Helper()
+
+	r, err := client.GetObject(ctx, bucket, object, minio.GetObjectOptions{})
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+	defer r.Close()
+
+	_, err = io.Copy(io.Discard, r)
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+}
+
 func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucket string) {
 	c.Helper()
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})

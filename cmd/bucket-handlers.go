@@ -300,7 +300,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction)
 	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -731,7 +731,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.CreateBucketAction, bucket, "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.CreateBucketAction)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
