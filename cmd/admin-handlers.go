@@ -411,6 +411,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
+	jobID := r.Form.Get("by-jobID")
 
 	hosts := strings.Split(r.Form.Get("hosts"), ",")
 	byHost := strings.EqualFold(r.Form.Get("by-host"), "true")
@@ -432,12 +433,20 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	enc := json.NewEncoder(w)
 	for n > 0 {
 		var m madmin.RealtimeMetrics
-		mLocal := collectLocalMetrics(types, hostMap, diskMap)
+		mLocal := collectLocalMetrics(types, collectMetricsOpts{
+			hosts: hostMap,
+			disks: diskMap,
+			jobID: jobID,
+		})
 		m.Merge(&mLocal)
 
 		// Allow half the interval for collecting remote...
 		cctx, cancel := context.WithTimeout(ctx, interval/2)
-		mRemote := collectRemoteMetrics(cctx, types, hostMap, diskMap)
+		mRemote := collectRemoteMetrics(cctx, types, collectMetricsOpts{
+			hosts: hostMap,
+			disks: diskMap,
+			jobID: jobID,
+		})
 		cancel()
 		m.Merge(&mRemote)
 		if !byHost {
@@ -449,7 +458,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 
 		m.Final = n <= 1
 
-		// Marshal API response
+		// Marshal API reesponse
 		if err := enc.Encode(&m); err != nil {
 			n = 0
 		}

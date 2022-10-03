@@ -1875,12 +1875,22 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						versionsSorter(fivs.Versions).reverse()
 
 						for _, version := range fivs.Versions {
+							send := true
+							if opts.WalkFilter != nil && !opts.WalkFilter(version) {
+								send = false
+							}
+
+							if !send {
+								continue
+							}
+
 							versioned := vcfg != nil && vcfg.Versioned(version.Name)
+							objInfo := version.ToObjectInfo(bucket, version.Name, versioned)
 
 							select {
 							case <-ctx.Done():
 								return
-							case results <- version.ToObjectInfo(bucket, version.Name, versioned):
+							case results <- objInfo:
 							}
 						}
 					}
@@ -1904,7 +1914,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						path:           path,
 						filterPrefix:   filterPrefix,
 						recursive:      true,
-						forwardTo:      "",
+						forwardTo:      opts.WalkMarker,
 						minDisks:       1,
 						reportNotFound: false,
 						agreed:         loadEntry,
