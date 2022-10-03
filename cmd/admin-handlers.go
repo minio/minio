@@ -1959,11 +1959,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
-	if query.Get(string(madmin.HealthDataTypePerfNet)) != "" ||
-		query.Get(string(madmin.HealthDataTypePerfDrive)) != "" ||
-		query.Get(string(madmin.HealthDataTypePerfObj)) != "" {
-		deadline = 1 * time.Hour
-	}
 	if dstr := r.Form.Get("deadline"); dstr != "" {
 		var err error
 		deadline, err = time.ParseDuration(dstr)
@@ -2225,87 +2220,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	getAndWriteDrivePerfInfo := func() {
-		if query.Get(string(madmin.HealthDataTypePerfDrive)) == "true" {
-			opts := madmin.DriveSpeedTestOpts{
-				Serial:    false,
-				BlockSize: 4 * humanize.MiByte,
-				FileSize:  1 * humanize.GiByte,
-			}
-
-			localDPI := driveSpeedTest(ctx, opts)
-			healthInfo.Perf.DrivePerf = append(healthInfo.Perf.DrivePerf, localDPI)
-
-			perfCh := globalNotificationSys.DriveSpeedTest(ctx, opts)
-			for perfInfo := range perfCh {
-				healthInfo.Perf.DrivePerf = append(healthInfo.Perf.DrivePerf, perfInfo)
-			}
-			partialWrite(healthInfo)
-		}
-	}
-
-	getAndWriteObjPerfInfo := func() {
-		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
-			concurrent := 32
-
-			storageInfo, _ := objectAPI.StorageInfo(ctx)
-
-			size := 64 * humanize.MiByte
-			autotune := true
-
-			sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
-			if !sufficientCapacity {
-				healthInfo.Perf.Error = capacityErrMsg
-				partialWrite(healthInfo)
-				return
-			}
-
-			if !canAutotune {
-				autotune = false
-			}
-
-			bucketExists, err := makeObjectPerfBucket(ctx, objectAPI, globalObjectPerfBucket)
-			if err != nil {
-				healthInfo.Perf.Error = "Unable to create bucket: " + err.Error()
-				partialWrite(healthInfo)
-				return
-			}
-
-			if !bucketExists {
-				defer deleteObjectPerfBucket(objectAPI)
-			}
-
-			opts := speedTestOpts{
-				objectSize:       size,
-				concurrencyStart: concurrent,
-				duration:         10 * time.Second,
-				autotune:         autotune,
-			}
-
-			perfCh := objectSpeedTest(ctx, opts)
-			for perfInfo := range perfCh {
-				healthInfo.Perf.ObjPerf = append(healthInfo.Perf.ObjPerf, perfInfo)
-			}
-			partialWrite(healthInfo)
-		}
-	}
-
-	getAndWriteNetPerfInfo := func() {
-		if query.Get(string(madmin.HealthDataTypePerfObj)) == "true" {
-			if !globalIsDistErasure {
-				return
-			}
-
-			netPerf := globalNotificationSys.Netperf(ctx, time.Second*10)
-			for _, np := range netPerf {
-				np.Endpoint = anonAddr(np.Endpoint)
-				healthInfo.Perf.NetPerf = append(healthInfo.Perf.NetPerf, np)
-			}
-
-			partialWrite(healthInfo)
-		}
-	}
-
 	anonymizeNetwork := func(network map[string]string) map[string]string {
 		anonNetwork := map[string]string{}
 		for endpoint, status := range network {
@@ -2335,9 +2249,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		getAndWriteMemInfo()
 		getAndWriteProcInfo()
 		getAndWriteMinioConfig()
-		getAndWriteDrivePerfInfo()
-		getAndWriteObjPerfInfo()
-		getAndWriteNetPerfInfo()
 		getAndWriteSysErrors()
 		getAndWriteSysServices()
 		getAndWriteSysConfig()
