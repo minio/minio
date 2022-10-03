@@ -3341,6 +3341,12 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			if usrErr != nil {
 				return info, errSRBackendIssue(usrErr)
 			}
+			globalIAMSys.store.rlock()
+			svcErr := globalIAMSys.store.loadMappedPolicies(ctx, svcUser, false, userPolicyMap)
+			globalIAMSys.store.runlock()
+			if svcErr != nil {
+				return info, errSRBackendIssue(svcErr)
+			}
 		}
 		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
 		for user, mp := range userPolicyMap {
@@ -3357,33 +3363,42 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				info.UserInfoMap[opts.EntityValue] = ui
 			}
 		} else {
-			//  get users/group info on local.
-			userInfoMap, err := globalIAMSys.ListUsers(ctx)
-			if err != nil {
-				return info, errSRBackendIssue(err)
+			userAccounts := make(map[string]UserIdentity)
+			globalIAMSys.store.rlock()
+			uerr := globalIAMSys.store.loadUsers(ctx, regUser, userAccounts)
+			globalIAMSys.store.runlock()
+			if uerr != nil {
+				return info, errSRBackendIssue(uerr)
 			}
-			for user, ui := range userInfoMap {
-				info.UserInfoMap[user] = ui
-				svcAccts, err := globalIAMSys.ListServiceAccounts(ctx, user)
-				if err != nil {
-					return info, errSRBackendIssue(err)
+
+			globalIAMSys.store.rlock()
+			serr := globalIAMSys.store.loadUsers(ctx, svcUser, userAccounts)
+			globalIAMSys.store.runlock()
+			if serr != nil {
+				return info, errSRBackendIssue(serr)
+			}
+
+			globalIAMSys.store.rlock()
+			terr := globalIAMSys.store.loadUsers(ctx, stsUser, userAccounts)
+			globalIAMSys.store.runlock()
+			if terr != nil {
+				return info, errSRBackendIssue(terr)
+			}
+
+			for k, v := range userAccounts {
+				if k == siteReplicatorSvcAcc {
+					// skip the site replicate svc account as it is
+					// already replicated.
+					continue
 				}
-				for _, svcAcct := range svcAccts {
-					// report all non-root user accounts for syncing
-					if svcAcct.ParentUser != "" && svcAcct.ParentUser != globalActiveCred.AccessKey {
-						info.UserInfoMap[svcAcct.AccessKey] = madmin.UserInfo{
-							Status: madmin.AccountStatus(svcAcct.Status),
-						}
-					}
+
+				if v.Credentials.ParentUser != "" && v.Credentials.ParentUser == globalActiveCred.AccessKey {
+					// skip all root user service accounts.
+					continue
 				}
-				tempAccts, err := globalIAMSys.ListTempAccounts(ctx, user)
-				if err != nil {
-					return info, errSRBackendIssue(err)
-				}
-				for _, tempAcct := range tempAccts {
-					info.UserInfoMap[tempAcct.Credentials.AccessKey] = madmin.UserInfo{
-						Status: madmin.AccountStatus(tempAcct.Credentials.Status),
-					}
+
+				info.UserInfoMap[k] = madmin.UserInfo{
+					Status: madmin.AccountStatus(v.Credentials.Status),
 				}
 			}
 		}
@@ -4387,7 +4402,6 @@ func (c *SiteReplicationSys) healIAMSystem(ctx context.Context, objAPI ObjectLay
 	for policy := range info.PolicyStats {
 		c.healPolicies(ctx, objAPI, policy, info)
 	}
-
 	for user := range info.UserStats {
 		c.healUsers(ctx, objAPI, user, info)
 	}
@@ -4581,7 +4595,8 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 	return nil
 }
 
-// heal user accounts of local users that are present on this site, provided current cluster has the most recent update.
+// heal all users and their service accounts that are present on this site,
+// provided current cluster has the most recent update.
 func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, user string, info srStatusInfo) error {
 	// create user if missing; fix user policy mapping if missing
 	us := info.UserStats[user]
@@ -4632,7 +4647,6 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 		creds := u.Credentials
-		// heal only the user accounts that are local users
 		if creds.IsServiceAccount() {
 			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, creds.AccessKey)
 			if err != nil {

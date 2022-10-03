@@ -774,7 +774,7 @@ func (sys *IAMSys) ListUsers(ctx context.Context) (map[string]madmin.UserInfo, e
 }
 
 // ListLDAPUsers - list LDAP users which has
-func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -783,16 +783,19 @@ func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
 		return nil, errIAMActionNotAllowed
 	}
 
-	<-sys.configLoaded
-
-	ldapUsers := make(map[string]madmin.UserInfo)
-	for user, policy := range sys.store.GetUsersWithMappedPolicies() {
-		ldapUsers[user] = madmin.UserInfo{
-			PolicyName: policy,
-			Status:     madmin.AccountEnabled,
+	select {
+	case <-sys.configLoaded:
+		ldapUsers := make(map[string]madmin.UserInfo)
+		for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+			ldapUsers[user] = madmin.UserInfo{
+				PolicyName: policy,
+				Status:     madmin.AccountEnabled,
+			}
 		}
+		return ldapUsers, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	return ldapUsers, nil
 }
 
 // IsTempUser - returns if given key is a temporary user.
