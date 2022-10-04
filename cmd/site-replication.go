@@ -3392,7 +3392,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 	if opts.Groups || opts.Entity == madmin.SRGroupEntity {
 		// Replicate policy mappings on local to all peers.
 		groupPolicyMap := make(map[string]MappedPolicy)
-		if opts.Entity == madmin.SRUserEntity {
+		if opts.Entity == madmin.SRGroupEntity {
 			if mp, ok := globalIAMSys.store.GetMappedPolicy(opts.EntityValue, true); ok {
 				groupPolicyMap[opts.EntityValue] = mp
 			}
