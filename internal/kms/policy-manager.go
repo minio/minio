@@ -37,7 +37,7 @@ type PolicyManager interface {
 	AssignPolicy(ctx context.Context, policy, identity string) error
 
 	// SetPolicy creates or updates a policy.
-	SetPolicy(ctx context.Context, policy, data string) error
+	SetPolicy(ctx context.Context, policy string, policyItem *kes.Policy) error
 
 	// GetPolicy gets a policy from KMS.
 	GetPolicy(ctx context.Context, policy string) (*kes.Policy, error)

@@ -54,26 +54,26 @@ func GetRPCStats() RPCStats {
 
 // Return a function which update the global stats related to tcp connections
 func setupReqStatsUpdate(req *http.Request) (*http.Request, func()) {
-	var dialStart, dialEnd time.Time
+	var dialStart, dialEnd int64
 
 	trace := &httptrace.ClientTrace{
 		ConnectStart: func(network, addr string) {
-			dialStart = time.Now()
+			atomic.StoreInt64(&dialStart, time.Now().UnixNano())
 		},
 		ConnectDone: func(network, addr string, err error) {
 			if err == nil {
-				dialEnd = time.Now()
+				atomic.StoreInt64(&dialEnd, time.Now().UnixNano())
 			}
 		},
 	}
 
 	return req.WithContext(httptrace.WithClientTrace(req.Context(), trace)), func() {
-		if !dialStart.IsZero() {
-			if dialEnd.IsZero() {
+		if ds := atomic.LoadInt64(&dialStart); ds > 0 {
+			if de := atomic.LoadInt64(&dialEnd); de == 0 {
 				atomic.AddUint64(&globalStats.tcpDialErrs, 1)
-			} else {
+			} else if de >= ds {
 				atomic.AddUint64(&globalStats.tcpDialCount, 1)
-				atomic.AddUint64(&globalStats.tcpDialTotalDur, uint64(dialEnd.Sub(dialStart)))
+				atomic.AddUint64(&globalStats.tcpDialTotalDur, uint64(dialEnd-dialStart))
 			}
 		}
 	}

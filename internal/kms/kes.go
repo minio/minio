@@ -314,10 +314,10 @@ func (c *kesClient) ListPolicies(ctx context.Context, pattern string) (*kes.Poli
 }
 
 // SetPolicy creates or updates a policy.
-func (c *kesClient) SetPolicy(ctx context.Context, policy, data string) error {
+func (c *kesClient) SetPolicy(ctx context.Context, policy string, policyItem *kes.Policy) error {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.client.SetPolicy(ctx, policy, &kes.Policy{Allow: []string{"*"}, Info: kes.PolicyInfo{Name: "my-app2"}})
+	return c.client.SetPolicy(ctx, policy, policyItem)
 }
 
 // GetPolicy gets a policy from KMS.

@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"sort"
 	"strings"
 
@@ -684,7 +685,14 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 				bestIdx = otherIdx
 				continue
 			}
-			if best.name == other.name {
+			// We should make sure to avoid objects and directories
+			// of this fashion such as
+			//  - foo-1
+			//  - foo-1/
+			// we should avoid this situation by making sure that
+			// we compare the `foo-1/` after path.Clean() to
+			// de-dup the entries.
+			if path.Clean(best.name) == path.Clean(other.name) {
 				if compareMeta(best, other) {
 					// Replace "best"
 					if err := selectFrom(bestIdx); err != nil {
