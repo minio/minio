@@ -457,18 +457,6 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 	return minioReleaseURL + "minio"
 }
 
-func getUpdateReaderFromFile(u *url.URL) (io.ReadCloser, error) {
-	r, err := os.Open(u.Path)
-	if err != nil {
-		return nil, AdminError{
-			Code:       AdminUpdateUnexpectedFailure,
-			Message:    err.Error(),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	return r, nil
-}
-
 func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string) (io.ReadCloser, error) {
 	clnt := &http.Client{
 		Transport: transport,
@@ -514,10 +502,7 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 			return nil, err
 		}
 	} else {
-		reader, err = getUpdateReaderFromFile(u)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
 
 	// convert a Reader to bytes
