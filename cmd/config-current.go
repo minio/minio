@@ -335,12 +335,12 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.IdentityLDAPSubSys:
-		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default], globalRootCAs)
+		cfg, err := xldap.Lookup(s, globalRootCAs)
 		if err != nil {
 			return err
 		}
-		if cfg.Enabled {
-			conn, cerr := cfg.Connect()
+		if cfg.Enabled() {
+			conn, cerr := cfg.LDAP.Connect()
 			if cerr != nil {
 				return cerr
 			}
