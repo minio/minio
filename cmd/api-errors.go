@@ -30,6 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -274,6 +275,8 @@ const (
 	ErrAdminNoSuchConfigTarget
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
+	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPValidation
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -1286,6 +1289,16 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigDuplicateKeys: {
 		Code:           "XMinioAdminConfigDuplicateKeys",
 		Description:    "JSON configuration provided has objects with duplicate keys",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigInvalidIDPType: {
+		Code:           "XMinioAdminConfigInvalidIDPType",
+		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigLDAPValidation: {
+		Code:           "XMinioAdminConfigLDAPValidation",
+		Description:    "LDAP Configuration validation failed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigNotificationTargetsFailed: {

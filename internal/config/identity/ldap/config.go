@@ -19,8 +19,11 @@ package ldap
 
 import (
 	"crypto/x509"
+	"errors"
+	"sort"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/ldap"
 )
@@ -215,4 +218,62 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	}
 
 	return l, nil
+}
+
+// GetConfigList - returns a list of LDAP configurations.
+func (l *Config) GetConfigList(s config.Config) ([]madmin.IDPListItem, error) {
+	ldapConfigs, err := s.GetAvailableTargets(config.IdentityLDAPSubSys)
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, ldapConfigs will only have a single entry for the default
+	// configuration.
+
+	var res []madmin.IDPListItem
+	for _, cfg := range ldapConfigs {
+		res = append(res, madmin.IDPListItem{
+			Type:    "ldap",
+			Name:    cfg,
+			Enabled: l.Enabled(),
+		})
+	}
+
+	return res, nil
+}
+
+// ErrProviderConfigNotFound - represents a non-existing provider error.
+var ErrProviderConfigNotFound = errors.New("provider configuration not found")
+
+// GetConfigInfo - returns config details for an LDAP configuration.
+func (l *Config) GetConfigInfo(s config.Config, cfgName string) ([]madmin.IDPCfgInfo, error) {
+	// For now only a single LDAP config is supported.
+	if cfgName != madmin.Default {
+		return nil, ErrProviderConfigNotFound
+	}
+	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityLDAPSubSys, cfgName)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]madmin.IDPCfgInfo, 0, len(kvsrcs))
+	for _, kvsrc := range kvsrcs {
+		// skip default values.
+		if kvsrc.Src == config.ValueSourceDef {
+			continue
+		}
+		res = append(res, madmin.IDPCfgInfo{
+			Key:   kvsrc.Key,
+			Value: kvsrc.Value,
+			IsCfg: true,
+			IsEnv: kvsrc.Src == config.ValueSourceEnv,
+		})
+	}
+
+	// sort the structs by the key
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Key < res[j].Key
+	})
+
+	return res, nil
 }
