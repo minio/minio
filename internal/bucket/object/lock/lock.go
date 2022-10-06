@@ -45,6 +45,10 @@ const (
 
 	// RetCompliance - compliance mode.
 	RetCompliance RetMode = "COMPLIANCE"
+
+	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+
 )
 
 // Valid - returns if retention mode is valid
@@ -452,7 +456,7 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 		tillStr, ok = meta[AmzObjectLockRetainUntilDate]
 	}
 	if ok {
-		if t, e := time.Parse(time.RFC3339, tillStr); e == nil {
+		if t, e := time.Parse(iso8601TimeFormat, tillStr); e == nil {
 			retainTill = RetentionDate{t.UTC()}
 		}
 	}
