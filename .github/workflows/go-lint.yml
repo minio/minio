@@ -28,24 +28,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
-      - uses: actions/cache@v2
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.go-version }}-go-
-      - uses: actions/cache@v2
-        if: matrix.os == 'windows-latest'
-        with:
-          path: |
-            %LocalAppData%\go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.go-version }}-go-
       - name: Build on ${{ matrix.os }}
         if: matrix.os == 'windows-latest'
         env:

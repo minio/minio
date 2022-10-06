@@ -80,14 +80,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.go-version }}-go-
       - name: Test LDAP/OpenID/Etcd combo
         env:
           LDAP_TEST_SERVER: ${{ matrix.ldap }}
