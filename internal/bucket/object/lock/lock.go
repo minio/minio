@@ -47,7 +47,7 @@ const (
 	RetCompliance RetMode = "COMPLIANCE"
 
 	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with millisecond precision.
 
 )
 
