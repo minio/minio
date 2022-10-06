@@ -473,6 +473,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	}
 
 	meta := newBucketMetadata(bucket)
+	meta.SetCreatedAt(opts.CreatedAt)
 	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
 	}
