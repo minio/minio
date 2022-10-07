@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	xxml "github.com/minio/xxml"
 )
 
 const (
@@ -90,8 +91,7 @@ type ListVersionsResponse struct {
 	IsTruncated bool
 
 	CommonPrefixes []CommonPrefix
-	DeleteMarkers  []DeleteMarkerVersion `xml:"DeleteMarker,omitempty"`
-	Versions       []ObjectVersion       `xml:"Version,omitempty"`
+	Versions       []ObjectVersion
 
 	// Encoding type used to encode object keys in the response.
 	EncodingType string `xml:"EncodingType,omitempty"`
@@ -256,6 +256,19 @@ type ObjectVersion struct {
 	Object
 	IsLatest  bool
 	VersionID string `xml:"VersionId"`
+
+	isDeleteMarker bool
+}
+
+// MarshalXML - marshal ObjectVersion
+func (o ObjectVersion) MarshalXML(e *xxml.Encoder, start xxml.StartElement) error {
+	if o.isDeleteMarker {
+		start.Name.Local = "DeleteMarker"
+	} else {
+		start.Name.Local = "Version"
+	}
+	type objectVersionWrapper ObjectVersion
+	return e.EncodeElement(objectVersionWrapper(o), start)
 }
 
 // DeleteMarkerVersion container for delete marker metadata
@@ -482,7 +495,6 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
-	deleteMarkers := make([]DeleteMarkerVersion, 0, len(resp.Objects))
 
 	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
@@ -492,21 +504,6 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 
 	for _, object := range resp.Objects {
 		if object.Name == "" {
-			continue
-		}
-
-		if object.DeleteMarker {
-			deleteMarker := DeleteMarkerVersion{
-				Key:          s3EncodeName(object.Name, encodingType),
-				LastModified: object.ModTime.UTC().Format(iso8601TimeFormat),
-				Owner:        owner,
-				VersionID:    object.VersionID,
-			}
-			if deleteMarker.VersionID == "" {
-				deleteMarker.VersionID = nullVersionID
-			}
-			deleteMarker.IsLatest = object.IsLatest
-			deleteMarkers = append(deleteMarkers, deleteMarker)
 			continue
 		}
 		content := ObjectVersion{}
@@ -527,12 +524,12 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 			content.VersionID = nullVersionID
 		}
 		content.IsLatest = object.IsLatest
+		content.isDeleteMarker = object.DeleteMarker
 		versions = append(versions, content)
 	}
 
 	data.Name = bucket
 	data.Versions = versions
-	data.DeleteMarkers = deleteMarkers
 	data.EncodingType = encodingType
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.KeyMarker = s3EncodeName(marker, encodingType)
