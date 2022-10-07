@@ -960,7 +960,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	versionID := oi.VersionID
 	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
-	action := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi, false)
+	action := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi)
 	if i.debug {
 		if versionID != "" {
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, action)
@@ -1106,9 +1106,9 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 	return size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo, debug bool) (action lifecycle.Action) {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) (action lifecycle.Action) {
 	action = lc.ComputeAction(obj.ToLifecycleOpts())
-	if debug {
+	if serverDebugLog {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
 	}
 
@@ -1123,7 +1123,7 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 			return lifecycle.NoneAction
 		}
 		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
-			if debug {
+			if serverDebugLog {
 				if obj.VersionID != "" {
 					console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", obj.Name, obj.VersionID)
 				} else {
