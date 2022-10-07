@@ -1321,6 +1321,13 @@ func getMakeBucketURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
 }
 
+// return URL for creating the bucket.
+func getBucketVersioningConfigURL(endPoint, bucketName string) string {
+	vals := make(url.Values)
+	vals.Set("versioning", "")
+	return makeTestTargetURL(endPoint, bucketName, "", vals)
+}
+
 // return URL for listing buckets.
 func getListBucketURL(endPoint string) string {
 	return makeTestTargetURL(endPoint, "", "", url.Values{})
@@ -1366,6 +1373,19 @@ func getListObjectsV1URL(endPoint, bucketName, prefix, maxKeys, encodingType str
 	if encodingType != "" {
 		queryValue.Set("encoding-type", encodingType)
 	}
+	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
+}
+
+// return URL for listing objects in the bucket with V1 legacy API.
+func getListObjectVersionsURL(endPoint, bucketName, prefix, maxKeys, encodingType string) string {
+	queryValue := url.Values{}
+	if maxKeys != "" {
+		queryValue.Set("max-keys", maxKeys)
+	}
+	if encodingType != "" {
+		queryValue.Set("encoding-type", encodingType)
+	}
+	queryValue.Set("versions", "")
 	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
 }
 
