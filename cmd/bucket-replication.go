@@ -1068,7 +1068,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		VersionSuspended: versionSuspended,
 	})
 	if err != nil {
-		if !isErrObjectNotFound(err) {
+		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -1216,7 +1216,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		VersionSuspended: versionSuspended,
 	})
 	if err != nil {
-		if !isErrObjectNotFound(err) {
+		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
