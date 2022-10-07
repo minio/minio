@@ -1074,20 +1074,22 @@ func (s *peerRESTServer) LoadRebalanceMetaHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	startRebalanceStr := r.Form.Get(peerRESTStartRebalance)
-	startRebalance, err := strconv.ParseBool(startRebalanceStr)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-	}
-
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
 	pools, ok := objAPI.(*erasureServerPools)
 	if !ok {
+		s.writeErrorResponse(w, errors.New("not a multiple pools setup"))
 		return
+	}
+
+	startRebalanceStr := r.Form.Get(peerRESTStartRebalance)
+	startRebalance, err := strconv.ParseBool(startRebalanceStr)
+	if err != nil {
+		s.writeErrorResponse(w, err)
 	}
 
 	if err := pools.loadRebalanceMeta(r.Context()); err != nil {

@@ -296,7 +296,7 @@ func (z *rebalanceMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "id":
-			err = dc.ReadExactBytes((z.ID)[:])
+			z.ID, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "ID")
 				return
@@ -319,21 +319,21 @@ func (z *rebalanceMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 			} else {
 				z.PoolStats = make([]*rebalanceStats, zb0002)
 			}
-			for za0002 := range z.PoolStats {
+			for za0001 := range z.PoolStats {
 				if dc.IsNil() {
 					err = dc.ReadNil()
 					if err != nil {
-						err = msgp.WrapError(err, "PoolStats", za0002)
+						err = msgp.WrapError(err, "PoolStats", za0001)
 						return
 					}
-					z.PoolStats[za0002] = nil
+					z.PoolStats[za0001] = nil
 				} else {
-					if z.PoolStats[za0002] == nil {
-						z.PoolStats[za0002] = new(rebalanceStats)
+					if z.PoolStats[za0001] == nil {
+						z.PoolStats[za0001] = new(rebalanceStats)
 					}
-					err = z.PoolStats[za0002].DecodeMsg(dc)
+					err = z.PoolStats[za0001].DecodeMsg(dc)
 					if err != nil {
-						err = msgp.WrapError(err, "PoolStats", za0002)
+						err = msgp.WrapError(err, "PoolStats", za0001)
 						return
 					}
 				}
@@ -367,7 +367,7 @@ func (z *rebalanceMeta) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes((z.ID)[:])
+	err = en.WriteString(z.ID)
 	if err != nil {
 		err = msgp.WrapError(err, "ID")
 		return
@@ -392,16 +392,16 @@ func (z *rebalanceMeta) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "PoolStats")
 		return
 	}
-	for za0002 := range z.PoolStats {
-		if z.PoolStats[za0002] == nil {
+	for za0001 := range z.PoolStats {
+		if z.PoolStats[za0001] == nil {
 			err = en.WriteNil()
 			if err != nil {
 				return
 			}
 		} else {
-			err = z.PoolStats[za0002].EncodeMsg(en)
+			err = z.PoolStats[za0001].EncodeMsg(en)
 			if err != nil {
-				err = msgp.WrapError(err, "PoolStats", za0002)
+				err = msgp.WrapError(err, "PoolStats", za0001)
 				return
 			}
 		}
@@ -418,20 +418,20 @@ func (z *rebalanceMeta) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendTime(o, z.StoppedAt)
 	// string "id"
 	o = append(o, 0xa2, 0x69, 0x64)
-	o = msgp.AppendBytes(o, (z.ID)[:])
+	o = msgp.AppendString(o, z.ID)
 	// string "pf"
 	o = append(o, 0xa2, 0x70, 0x66)
 	o = msgp.AppendFloat64(o, z.PercentFreeGoal)
 	// string "rss"
 	o = append(o, 0xa3, 0x72, 0x73, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.PoolStats)))
-	for za0002 := range z.PoolStats {
-		if z.PoolStats[za0002] == nil {
+	for za0001 := range z.PoolStats {
+		if z.PoolStats[za0001] == nil {
 			o = msgp.AppendNil(o)
 		} else {
-			o, err = z.PoolStats[za0002].MarshalMsg(o)
+			o, err = z.PoolStats[za0001].MarshalMsg(o)
 			if err != nil {
-				err = msgp.WrapError(err, "PoolStats", za0002)
+				err = msgp.WrapError(err, "PoolStats", za0001)
 				return
 			}
 		}
@@ -464,7 +464,7 @@ func (z *rebalanceMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "id":
-			bts, err = msgp.ReadExactBytes(bts, (z.ID)[:])
+			z.ID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ID")
 				return
@@ -487,20 +487,20 @@ func (z *rebalanceMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else {
 				z.PoolStats = make([]*rebalanceStats, zb0002)
 			}
-			for za0002 := range z.PoolStats {
+			for za0001 := range z.PoolStats {
 				if msgp.IsNil(bts) {
 					bts, err = msgp.ReadNilBytes(bts)
 					if err != nil {
 						return
 					}
-					z.PoolStats[za0002] = nil
+					z.PoolStats[za0001] = nil
 				} else {
-					if z.PoolStats[za0002] == nil {
-						z.PoolStats[za0002] = new(rebalanceStats)
+					if z.PoolStats[za0001] == nil {
+						z.PoolStats[za0001] = new(rebalanceStats)
 					}
-					bts, err = z.PoolStats[za0002].UnmarshalMsg(bts)
+					bts, err = z.PoolStats[za0001].UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "PoolStats", za0002)
+						err = msgp.WrapError(err, "PoolStats", za0001)
 						return
 					}
 				}
@@ -519,12 +519,12 @@ func (z *rebalanceMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *rebalanceMeta) Msgsize() (s int) {
-	s = 1 + 7 + msgp.TimeSize + 3 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 3 + msgp.Float64Size + 4 + msgp.ArrayHeaderSize
-	for za0002 := range z.PoolStats {
-		if z.PoolStats[za0002] == nil {
+	s = 1 + 7 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ID) + 3 + msgp.Float64Size + 4 + msgp.ArrayHeaderSize
+	for za0001 := range z.PoolStats {
+		if z.PoolStats[za0001] == nil {
 			s += msgp.NilSize
 		} else {
-			s += z.PoolStats[za0002].Msgsize()
+			s += z.PoolStats[za0001].Msgsize()
 		}
 	}
 	return

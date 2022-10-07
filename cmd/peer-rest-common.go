@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v28" // Added /loadrebalancemeta
+	peerRESTVersion = "v28" // Added Rebalance peer APIs
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"

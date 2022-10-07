@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
@@ -122,7 +122,7 @@ type rebalanceMeta struct {
 	cancel          context.CancelFunc `msg:"-"` // to be invoked on rebalance-stop
 	lastRefreshedAt time.Time          `msg:"-"`
 	StoppedAt       time.Time          `msg:"stopTs"` // Time when rebalance-stop was issued.
-	ID              [16]byte           `msg:"id"`     // ID of the ongoing rebalance operation
+	ID              string             `msg:"id"`     // ID of the ongoing rebalance operation
 	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
 	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
 }
@@ -164,9 +164,9 @@ func (z *erasureServerPools) loadRebalanceMeta(ctx context.Context) error {
 
 // initRebalanceMeta initializes rebalance metadata for a new rebalance
 // operation and saves it in the object store.
-func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []string) (arn uuid.UUID, err error) {
+func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []string) (arn string, err error) {
 	r := &rebalanceMeta{
-		ID:        [16]byte(uuid.New()),
+		ID:        shortuuid.New(),
 		PoolStats: make([]*rebalanceStats, len(z.serverPools)),
 	}
 
@@ -418,8 +418,6 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				traceMsg = fmt.Sprintf("stopped at %s", now)
 
 			case <-timer.C:
-				timer.Reset(randSleepFor())
-
 				traceMsg = fmt.Sprintf("saved at %s", time.Now())
 			}
 
@@ -427,6 +425,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			err := z.saveRebalanceStats(ctx, poolIdx, rebalSaveStats)
 			stopFn(err)
 			logger.LogIf(ctx, err)
+			timer.Reset(randSleepFor())
 
 			if rebalDone {
 				return
@@ -497,7 +496,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	wStr := env.Get(envRebalanceWorkers, strconv.Itoa(len(pool.sets)))
 	workerSize, err := strconv.Atoi(wStr)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("invalid %s value: %v, defaulting to %d", envRebalanceWorkers, err, len(pool.sets)))
+		logger.LogIf(ctx, fmt.Errorf("invalid %s value: %s err: %v, defaulting to %d", envRebalanceWorkers, wStr, err, len(pool.sets)))
 		workerSize = len(pool.sets)
 	}
 	workers := make(chan struct{}, workerSize)
@@ -517,7 +516,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			action := evalActionFromLifecycle(ctx, *lc, lr, objInfo, false)
+			action := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			switch action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)

@@ -23,10 +23,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
+)
+
+var (
+	errRebalanceDecommissionAlreadyRunning = errors.New("Rebalance cannot be started, decommission is aleady in progress")
+	errDecommissionRebalanceAlreadyRunning = errors.New("Decommission cannot be started, rebalance is already in progress")
 )
 
 func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +52,11 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 	pools, ok := objectAPI.(*erasureServerPools)
 	if !ok {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	if pools.IsRebalanceStarted() {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errDecommissionRebalanceAlreadyRunning), r.URL)
 		return
 	}
 
@@ -231,6 +240,11 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if pools.IsDecommissionRunning() {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errRebalanceDecommissionAlreadyRunning), r.URL)
+		return
+	}
+
 	if pools.IsRebalanceStarted() {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
@@ -247,7 +261,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		buckets = append(buckets, bInfo.Name)
 	}
 
-	var id uuid.UUID
+	var id string
 	if id, err = pools.initRebalanceMeta(ctx, buckets); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -257,7 +271,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 	pools.StartRebalance()
 
 	b, err := json.Marshal(struct {
-		ID uuid.UUID `json:"id"`
+		ID string `json:"id"`
 	}{ID: id})
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)

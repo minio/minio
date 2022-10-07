@@ -582,6 +582,19 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 	return nil
 }
 
+func (z *erasureServerPools) IsDecommissionRunning() bool {
+	z.poolMetaMutex.RLock()
+	defer z.poolMetaMutex.RUnlock()
+	meta := z.poolMeta
+	for _, pool := range meta.Pools {
+		if pool.Decommission != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket string, gr *GetObjectReader) (err error) {
 	objInfo := gr.ObjInfo
 

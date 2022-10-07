@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type rebalPoolProgress struct {
@@ -43,7 +41,7 @@ type rebalancePoolStatus struct {
 
 // rebalanceAdminStatus holds rebalance status related information exported to mc, console, etc.
 type rebalanceAdminStatus struct {
-	ID        uuid.UUID             // identifies the ongoing rebalance operation by a uuid
+	ID        string                // identifies the ongoing rebalance operation by a uuid
 	Pools     []rebalancePoolStatus `json:"pools"` // contains all pools, including inactive
 	StoppedAt time.Time             `json:"stoppedAt,omitempty"`
 }
@@ -69,7 +67,7 @@ func rebalanceStatus(ctx context.Context, z *erasureServerPools) (r rebalanceAdm
 
 	stopTime := meta.StoppedAt
 	r = rebalanceAdminStatus{
-		ID:        uuid.UUID(meta.ID),
+		ID:        meta.ID,
 		StoppedAt: meta.StoppedAt,
 		Pools:     make([]rebalancePoolStatus, len(meta.PoolStats)),
 	}
