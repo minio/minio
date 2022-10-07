@@ -625,7 +625,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 
 		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
 		if o.Lifecycle != nil {
-			action := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo, false)
+			action := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
 			switch action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
