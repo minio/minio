@@ -439,6 +439,96 @@ func TestComputeActions(t *testing.T) {
 			isNoncurrent:           true,
 			expectedAction:         DeleteVersionAction,
 		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                             <Rule>
+                               <ID>Rule 1</ID>
+                               <Filter>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Expiration>
+                                 <Days>365</Days>
+                               </Expiration>
+                             </Rule>
+                             <Rule>
+                               <ID>Rule 2</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Transition>
+                                 <StorageClass>STANDARD_IA</StorageClass>
+                                 <Days>30</Days>
+                               </Transition>
+                              </Rule>
+                          </LifecycleConfiguration>`,
+			objectName:     "logs/obj-1",
+			objectModTime:  time.Now().UTC().Add(-31 * 24 * time.Hour),
+			expectedAction: TransitionAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                             <Rule>
+                               <ID>Rule 1</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Expiration>
+                                 <Days>365</Days>
+                               </Expiration>
+                             </Rule>
+                             <Rule>
+                               <ID>Rule 2</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Transition>
+                                 <StorageClass>STANDARD_IA</StorageClass>
+                                 <Days>365</Days>
+                               </Transition>
+                             </Rule>
+                          </LifecycleConfiguration>`,
+			objectName:     "logs/obj-1",
+			objectModTime:  time.Now().UTC().Add(-366 * 24 * time.Hour),
+			expectedAction: DeleteAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>Rule 1</ID>
+                              <Filter>
+                                <Tag>
+                                   <Key>tag1</Key>
+                                   <Value>value1</Value>
+                                </Tag>
+                              </Filter>
+                              <Status>Enabled</Status>
+                              <Transition>
+                                <StorageClass>GLACIER</StorageClass>
+                                <Days>365</Days>
+                              </Transition>
+                            </Rule>
+                            <Rule>
+                              <ID>Rule 2</ID>
+                              <Filter>
+                                <Tag>
+                                   <Key>tag2</Key>
+                                   <Value>value2</Value>
+                                </Tag>
+                              </Filter>
+                              <Status>Enabled</Status>
+                              <Expiration>
+                                <Days>14</Days>
+                              </Expiration>
+                             </Rule>
+                         </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectTags:     "tag1=value1&tag2=value2",
+			objectModTime:  time.Now().UTC().Add(-15 * 24 * time.Hour),
+			expectedAction: DeleteAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -461,7 +551,6 @@ func TestComputeActions(t *testing.T) {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
 		})
-
 	}
 }
 
@@ -668,8 +757,8 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
-		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
+	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 1 {
+		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 1) but got (%s, %d, %d)", ruleID, days, lim)
 	}
 }
 
