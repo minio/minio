@@ -1231,6 +1231,19 @@ func (c *check) mustGetObject(ctx context.Context, client *minio.Client, bucket,
 	}
 }
 
+func (c *check) mustHeadObject(ctx context.Context, client *minio.Client, bucket, object string, tagCount int) {
+	c.Helper()
+
+	oinfo, err := client.StatObject(ctx, bucket, object, minio.StatObjectOptions{})
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+
+	if oinfo.UserTagCount != tagCount {
+		c.Fatalf("expected tagCount: %d, got %d", tagCount, oinfo.UserTagCount)
+	}
+}
+
 func (c *check) mustListObjects(ctx context.Context, client *minio.Client, bucket string) {
 	c.Helper()
 	res := client.ListObjects(ctx, bucket, minio.ListObjectsOptions{})
