@@ -577,11 +577,11 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSettings {
 	s := madmin.IDPSettings{}
 	s.LDAP = madmin.LDAPSettings{
-		IsLDAPEnabled:          globalLDAPConfig.Enabled,
-		LDAPUserDNSearchBase:   globalLDAPConfig.UserDNSearchBaseDistName,
-		LDAPUserDNSearchFilter: globalLDAPConfig.UserDNSearchFilter,
-		LDAPGroupSearchBase:    globalLDAPConfig.GroupSearchBaseDistName,
-		LDAPGroupSearchFilter:  globalLDAPConfig.GroupSearchFilter,
+		IsLDAPEnabled:          globalLDAPConfig.Enabled(),
+		LDAPUserDNSearchBase:   globalLDAPConfig.LDAP.UserDNSearchBaseDistName,
+		LDAPUserDNSearchFilter: globalLDAPConfig.LDAP.UserDNSearchFilter,
+		LDAPGroupSearchBase:    globalLDAPConfig.LDAP.GroupSearchBaseDistName,
+		LDAPGroupSearchFilter:  globalLDAPConfig.LDAP.GroupSearchFilter,
 	}
 	s.OpenID = globalOpenIDConfig.GetSettings()
 	if s.OpenID.Enabled {

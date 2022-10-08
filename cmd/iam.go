@@ -163,7 +163,7 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if sys.ldapConfig.Enabled {
+	if sys.ldapConfig.Enabled() {
 		sys.SetUsersSysType(LDAPUsersSysType)
 	}
 
@@ -222,8 +222,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
-	ldapCfg := s[config.IdentityLDAPSubSys][config.Default]
-
 	var err error
 	globalOpenIDConfig, err = openid.LookupConfig(s,
 		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
@@ -232,7 +230,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	// Initialize if LDAP is enabled
-	globalLDAPConfig, err = xldap.Lookup(ldapCfg, globalRootCAs)
+	globalLDAPConfig, err = xldap.Lookup(s, globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
@@ -347,7 +345,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case sys.ldapConfig.Enabled:
+	case sys.ldapConfig.Enabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()

@@ -202,7 +202,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// Enable if LDAP is enabled.
-	if globalLDAPConfig.Enabled {
+	if globalLDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)

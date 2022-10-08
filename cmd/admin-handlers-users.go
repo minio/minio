@@ -657,7 +657,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
-		if globalLDAPConfig.Enabled {
+		if globalLDAPConfig.Enabled() {
 			opts.claims[ldapUserN] = targetUser // simple username
 			targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
 			if err != nil {
@@ -2086,7 +2086,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 				// In case of LDAP we need to resolve the targetUser to a DN and
 				// query their groups:
-				if globalLDAPConfig.Enabled {
+				if globalLDAPConfig.Enabled() {
 					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
 					targetUser, _, err := globalLDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
 					if err != nil {

@@ -855,5 +855,5 @@ type serverConfigV33 struct {
 		// Add new external policy enforcements here.
 	} `json:"policy"`
 
-	LDAPServerConfig xldap.Config `json:"ldapserverconfig"`
+	LDAPServerConfig xldap.LegacyConfig `json:"ldapserverconfig"`
 }
