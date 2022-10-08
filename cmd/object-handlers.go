@@ -651,6 +651,44 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		return
 	}
 
+	// Check for auth type to return S3 compatible error.
+	// type to return the correct error (NoSuchKey vs AccessDenied)
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+		if getRequestAuthType(r) == authTypeAnonymous {
+			// As per "Permission" section in
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
+			// If the object you request does not exist,
+			// the error Amazon S3 returns depends on
+			// whether you also have the s3:ListBucket
+			// permission.
+			// * If you have the s3:ListBucket permission
+			//   on the bucket, Amazon S3 will return an
+			//   HTTP status code 404 ("no such key")
+			//   error.
+			// * if you don’t have the s3:ListBucket
+			//   permission, Amazon S3 will return an HTTP
+			//   status code 403 ("access denied") error.`
+			if globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.ListBucketAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, "", "", nil),
+				IsOwner:         false,
+			}) {
+				getObjectInfo := objectAPI.GetObjectInfo
+				if api.CacheAPI() != nil {
+					getObjectInfo = api.CacheAPI().GetObjectInfo
+				}
+
+				_, err = getObjectInfo(ctx, bucket, object, opts)
+				if toAPIError(ctx, err).Code == "NoSuchKey" {
+					s3Error = ErrNoSuchKey
+				}
+			}
+		}
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		return
+	}
+
 	// Get request range.
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get(xhttp.Range)
@@ -676,38 +714,13 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		}
 	}
 
-	if err == nil && objInfo.UserTags != "" {
+	if objInfo.UserTags != "" {
 		// Set this such that authorization policies can be applied on the object tags.
 		r.Header.Set(xhttp.AmzObjectTagging, objInfo.UserTags)
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
-		if getRequestAuthType(r) == authTypeAnonymous {
-			// As per "Permission" section in
-			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
-			// If the object you request does not exist,
-			// the error Amazon S3 returns depends on
-			// whether you also have the s3:ListBucket
-			// permission.
-			// * If you have the s3:ListBucket permission
-			//   on the bucket, Amazon S3 will return an
-			//   HTTP status code 404 ("no such key")
-			//   error.
-			// * if you don’t have the s3:ListBucket
-			//   permission, Amazon S3 will return an HTTP
-			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
-				Action:          policy.ListBucketAction,
-				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
-				IsOwner:         false,
-			}) {
-				if toAPIError(ctx, err).Code == "NoSuchKey" {
-					s3Error = ErrNoSuchKey
-				}
-			}
-		}
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 

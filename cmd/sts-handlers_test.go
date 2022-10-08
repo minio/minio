@@ -173,6 +173,7 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 	// Validate sts creds can access the object
 	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
 	c.mustGetObject(ctx, uClient, bucket, object)
+	c.mustHeadObject(ctx, uClient, bucket, object, 2)
 
 	// Validate that the client can remove objects
 	if err = minioClient.RemoveObjectTagging(ctx, bucket, object, minio.RemoveObjectTaggingOptions{}); err != nil {
