@@ -2264,7 +2264,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 		if query.Get("minioinfo") == "true" {
 			infoMessage := getServerInfo(ctx, r)
-			servers := []madmin.ServerInfo{}
+			servers := make([]madmin.ServerInfo, 0, len(infoMessage.Servers))
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
 				servers = append(servers, madmin.ServerInfo{
@@ -2283,6 +2283,11 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 						Frees:      server.MemStats.Frees,
 						HeapAlloc:  server.MemStats.HeapAlloc,
 					},
+					GoMaxProcs:     server.GoMaxProcs,
+					NumCPU:         server.NumCPU,
+					RuntimeVersion: server.RuntimeVersion,
+					GCStats:        server.GCStats,
+					MinioEnvVars:   server.MinioEnvVars,
 				})
 			}
 
