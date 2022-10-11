@@ -268,6 +268,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectLayer, c *miniogo.Core, srcObjInfo ObjectInfo, retry bool) error {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
+	tgtPrefix := r.Target.Prefix
 	srcObject := srcObjInfo.Name
 
 	if retry { // when we are retrying avoid copying if necessary.
@@ -299,11 +300,11 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 	}
 
 	if objInfo.isMultipart() {
-		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, objInfo.Name, rd, objInfo, putOpts); err != nil {
+		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, objInfo, putOpts); err != nil {
 			return err
 		}
 	} else {
-		if _, err = c.PutObject(ctx, tgtBucket, objInfo.Name, rd, size, "", "", putOpts); err != nil {
+		if _, err = c.PutObject(ctx, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, size, "", "", putOpts); err != nil {
 			return err
 		}
 	}
