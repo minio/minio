@@ -112,6 +112,32 @@ func listObjectModtimes(partsMetadata []FileInfo, errs []error) (modTimes []time
 	return modTimes
 }
 
+func listObjectDDirs(partsMetadata []FileInfo, errs []error) (ddirs []string) {
+	ddirs = make([]string, len(partsMetadata))
+	for index, metadata := range partsMetadata {
+		if errs[index] != nil {
+			continue
+		}
+		ddirs[index] = metadata.DataDir
+	}
+	return ddirs
+}
+
+func commonDDir(ddirs []string) (commonDDir string) {
+	occMap := make(map[string]int)
+	for _, ddir := range ddirs {
+		occMap[ddir]++
+	}
+	var maxOcc int
+	for ddir, occ := range occMap {
+		if occ > maxOcc {
+			maxOcc = occ
+			commonDDir = ddir
+		}
+	}
+	return
+}
+
 func filterOnlineDisksInplace(fi FileInfo, partsMetadata []FileInfo, onlineDisks []StorageAPI) {
 	for i, meta := range partsMetadata {
 		if fi.XLV1 == meta.XLV1 {
@@ -195,21 +221,26 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
+	dDirs := listObjectDDirs(partsMetadata, errs)
 
 	// Count all latest updated FileInfo values
 	var count int
 	var latestFileInfo FileInfo
 
-	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
+	// Reduce list of modtimes and DataDir to the common ones
 	modTime := commonTime(modTimes)
+	dDir := commonDDir(dDirs)
 
 	if modTime.IsZero() || modTime.Equal(timeSentinel) {
 		return FileInfo{}, errErasureReadQuorum
 	}
 
-	// Interate through all the modTimes and count the FileInfo(s) with latest time.
-	for index, t := range modTimes {
-		if partsMetadata[index].IsValid() && t.Equal(modTime) {
+	// Interate through all the parts meta to pick the FileInfo(s) with latest time and data-dir
+	for index, meta := range partsMetadata {
+		if errs[index] != nil {
+			continue
+		}
+		if partsMetadata[index].IsValid() && meta.ModTime.Equal(modTime) && meta.DataDir == dDir {
 			latestFileInfo = partsMetadata[index]
 			count++
 		}
@@ -219,6 +250,12 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 		return FileInfo{}, errErasureReadQuorum
 	}
 
+	// Further check if minimum required FileInfo{} for Delete Marker
+	if count < len(partsMetadata)/2 {
+		return FileInfo{}, errErasureReadQuorum
+	}
+
+	// Further check for actual object/version with associated data
 	if count < latestFileInfo.Erasure.DataBlocks {
 		return FileInfo{}, errErasureReadQuorum
 	}
