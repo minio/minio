@@ -48,7 +48,7 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.0
-	github.com/minio/madmin-go v1.5.3
+	github.com/minio/madmin-go v1.6.2
 	github.com/minio/minio-go/v7 v7.0.40-0.20220928095841-8848d8affe8a
 	github.com/minio/pkg v1.5.0
 	github.com/minio/selfupdate v0.5.0
@@ -226,5 +226,3 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/minio/madmin-go => github.com/klauspost/madmin-go v1.0.15-0.20221010094139-df7a6fe9de79
