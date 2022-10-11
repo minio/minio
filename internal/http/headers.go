@@ -91,6 +91,14 @@ const (
 	AmzBucketReplicationStatus    = "X-Amz-Replication-Status"
 	AmzSnowballExtract            = "X-Amz-Meta-Snowball-Auto-Extract"
 
+	// MinIOSnowballIgnoreDirs will skip creating empty directory objects.
+	MinIOSnowballIgnoreDirs = "X-Amz-Meta-Minio-Snowball-Ignore-Dirs"
+	// MinIOSnowballIgnoreErrors will ignore recoverable errors, typically single files failing to upload.
+	// An error will be printed to console instead.
+	MinIOSnowballIgnoreErrors = "X-Amz-Meta-Minio-Snowball-Ignore-Errors"
+	// MinIOSnowballPrefix will apply this prefix (plus / at end) to all extracted objects
+	MinIOSnowballPrefix = "X-Amz-Meta-Minio-Snowball-Prefix"
+
 	// Object lock enabled
 	AmzObjectLockEnabled = "x-amz-bucket-object-lock-enabled"
 

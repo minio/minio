@@ -1052,6 +1052,13 @@ var poolBuf8k = sync.Pool{
 	},
 }
 
+var poolBuf128k = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 128<<10)
+		return b
+	},
+}
+
 // waitForHTTPStream will wait for responses where
 // streamHTTPResponse has been used.
 // The returned reader contains the payload and must be closed if no error is returned.
