@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -104,6 +105,29 @@ type untarOptions struct {
 	ignoreDirs bool
 	ignoreErrs bool
 	prefixAll  string
+}
+
+// disconnectReader will ensure that no reads can take place on
+// the upstream reader after close has been called.
+type disconnectReader struct {
+	r  io.Reader
+	mu sync.Mutex
+}
+
+func (d *disconnectReader) Read(p []byte) (n int, err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.r != nil {
+		return d.r.Read(p)
+	}
+	return 0, errors.New("reader closed")
+}
+
+func (d *disconnectReader) Close() error {
+	d.mu.Lock()
+	d.r = nil
+	d.mu.Unlock()
+	return nil
 }
 
 func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, info os.FileInfo, name string) error, o untarOptions) error {
@@ -212,12 +236,14 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 			}
 			wg.Add(1)
 			go func(name string, fi fs.FileInfo, b []byte) {
+				rc := disconnectReader{r: bytes.NewReader(b)}
 				defer func() {
+					rc.Close()
 					<-asyncWriters
 					wg.Done()
 					poolBuf128k.Put(b)
 				}()
-				if err := putObject(bytes.NewReader(b), fi, name); err != nil {
+				if err := putObject(&rc, fi, name); err != nil {
 					if o.ignoreErrs {
 						logger.LogIf(ctx, err)
 						return
@@ -233,12 +259,15 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 		}
 
 		// Sync upload.
-		if err := putObject(tarReader, header.FileInfo(), name); err != nil {
+		rc := disconnectReader{r: tarReader}
+		if err := putObject(&rc, header.FileInfo(), name); err != nil {
+			rc.Close()
 			if o.ignoreErrs {
 				logger.LogIf(ctx, err)
 				continue
 			}
 			return err
 		}
+		rc.Close()
 	}
 }
