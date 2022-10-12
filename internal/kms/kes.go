@@ -139,11 +139,28 @@ func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 	}, nil
 }
 
+// Metrics retrieves server metrics in the Prometheus exposition format.
 func (c *kesClient) Metrics(ctx context.Context) (kes.Metric, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	return c.client.Metrics(ctx)
+}
+
+// Version retrieves version information
+func (c *kesClient) Version(ctx context.Context) (string, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return c.client.Version(ctx)
+}
+
+// APIs retrieves a list of supported API endpoints
+func (c *kesClient) APIs(ctx context.Context) ([]kes.API, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return c.client.APIs(ctx)
 }
 
 // CreateKey tries to create a new key at the KMS with the
