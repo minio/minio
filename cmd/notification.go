@@ -315,12 +315,12 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	// Send profiling data to zip as file
 	for typ, data := range data {
 		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data)
-		if err != nil {
-			logger.LogIf(ctx, err)
-		}
+		logger.LogIf(ctx, err)
+	}
+	if b := getClusterMetaInfo(ctx); len(b) > 0 {
+		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b))
 	}
 
-	appendClusterMetaInfoToZip(ctx, zipWriter)
 	return
 }
 

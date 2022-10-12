@@ -23,12 +23,11 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"os"
 
 	"github.com/secure-io/sio-go"
 )
 
-func extractInspectV1(keyHex string, r *os.File, w io.Writer) error {
+func extractInspectV1(keyHex string, r io.Reader, w io.Writer) error {
 	id, err := hex.DecodeString(keyHex[:8])
 	if err != nil {
 		return err
@@ -52,6 +51,5 @@ func extractInspectV1(keyHex string, r *os.File, w io.Writer) error {
 	nonce := make([]byte, stream.NonceSize())
 	encr := stream.DecryptReader(r, nonce, nil)
 	_, err = io.Copy(w, encr)
-	fmt.Println("azerty")
 	return err
 }

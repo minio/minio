@@ -22,7 +22,6 @@ import (
 	"context"
 	crand "crypto/rand"
 	"crypto/rsa"
-	"crypto/sha512"
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
@@ -49,6 +48,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/estream"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -2590,13 +2590,14 @@ func embedFileInZip(zipWriter *zip.Writer, name string, data []byte) error {
 	return err
 }
 
-// appendClusterMetaInfoToZip gets information of the current cluster and embedded
-// it in the passed zipwriter, This is not a critical function and it is allowed
-// to fail with a ten seconds timeout.
-func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
+// getClusterMetaInfo gets information of the current cluster and
+// returns it.
+// This is not a critical function, and it is allowed
+// to fail with a ten seconds timeout, returning nil.
+func getClusterMetaInfo(ctx context.Context) []byte {
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
-		return
+		return nil
 	}
 
 	// Add a ten seconds timeout because getting profiling data
@@ -2632,29 +2633,25 @@ func appendClusterMetaInfoToZip(ctx context.Context, zipWriter *zip.Writer) {
 
 	select {
 	case <-ctx.Done():
-		return
+		return nil
 	case ci := <-resultCh:
-		out, err := json.MarshalIndent(ci, "", "   ")
+		out, err := json.MarshalIndent(ci, "", "  ")
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return
+			return nil
 		}
-		err = embedFileInZip(zipWriter, "cluster.info", out)
-		if err != nil {
-			logger.LogIf(ctx, err)
-		}
+		return out
 	}
 }
 
 func bytesToPublicKey(pub []byte) (*rsa.PublicKey, error) {
 	block, _ := pem.Decode(pub)
-	ifc, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if block != nil {
+		pub = block.Bytes
+	}
+	key, err := x509.ParsePKCS1PublicKey(pub)
 	if err != nil {
 		return nil, err
-	}
-	key, ok := ifc.(*rsa.PublicKey)
-	if !ok {
-		return nil, errors.New("not an RSA public key")
 	}
 	return key, nil
 }
@@ -2724,64 +2721,85 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	var key [32]byte
-	// MUST use crypto/rand
-	n, err := crand.Read(key[:])
-	if err != nil || n != len(key) {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	// Write a version for making *incompatible* changes.
 	// The AdminClient will reject any version it does not know.
-	if publicKey == nil {
-		w.Write([]byte{1})
-		w.Write(key[:])
-	} else {
-		w.Write([]byte{2})
-	}
-
-	archiveW := zip.NewWriter(w)
-	defer archiveW.Close()
-
+	var inspectZipW *zip.Writer
 	if publicKey != nil {
-		cipherKey, err := rsa.EncryptOAEP(sha512.New(), crand.Reader, publicKey, key[:], nil)
+		w.WriteHeader(200)
+		stream := estream.NewWriter(w)
+		defer stream.Close()
+
+		clusterKey, err := bytesToPublicKey(subnetAdminPublicKey)
 		if err != nil {
-			// Too late to write an error over HTTP
+			logger.LogIf(ctx, stream.AddError(err.Error()))
+			return
+		}
+		err = stream.AddKeyEncrypted(clusterKey)
+		if err != nil {
+			logger.LogIf(ctx, stream.AddError(err.Error()))
+			return
+		}
+		if b := getClusterMetaInfo(ctx); len(b) > 0 {
+			w, err := stream.AddEncryptedStream("cluster.info", nil)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return
+			}
+			w.Write(b)
+			w.Close()
+		}
+
+		// Add new key for inspect data.
+		if err := stream.AddKeyEncrypted(publicKey); err != nil {
+			logger.LogIf(ctx, stream.AddError(err.Error()))
+			return
+		}
+		encStream, err := stream.AddEncryptedStream("inspect.zip", nil)
+		if err != nil {
+			logger.LogIf(ctx, stream.AddError(err.Error()))
+			return
+		}
+		defer encStream.Close()
+
+		inspectZipW = zip.NewWriter(encStream)
+		defer inspectZipW.Close()
+	} else {
+		// Legacy: Remove if we stop supporting inspection without public key.
+		var key [32]byte
+		// MUST use crypto/rand
+		n, err := crand.Read(key[:])
+		if err != nil || n != len(key) {
+			logger.LogIf(ctx, err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Write a version for making *incompatible* changes.
+		// The AdminClient will reject any version it does not know.
+		if publicKey == nil {
+			w.Write([]byte{1})
+			w.Write(key[:])
+		}
+
+		stream, err := sio.AES_256_GCM.Stream(key[:])
+		if err != nil {
 			logger.LogIf(ctx, err)
 			return
 		}
-		err = embedFileInZip(archiveW, "key.enc", cipherKey)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return
+		// Zero nonce, we only use each key once, and 32 bytes is plenty.
+		nonce := make([]byte, stream.NonceSize())
+		encw := stream.EncryptWriter(w, nonce, nil)
+		defer encw.Close()
+
+		// Initialize a zip writer which will provide a zipped content
+		// of profiling data of all nodes
+		inspectZipW = zip.NewWriter(encw)
+		defer inspectZipW.Close()
+
+		if b := getClusterMetaInfo(ctx); len(b) > 0 {
+			logger.LogIf(ctx, embedFileInZip(inspectZipW, "cluster.info", b))
 		}
 	}
-
-	dataW, err := archiveW.CreateHeader(&zip.FileHeader{
-		Name: "data.zip",
-		// data.zip will be already compressed,
-		// no need to compress again this file.
-		Method: zip.Store,
-	})
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return
-	}
-
-	stream, err := sio.AES_256_GCM.Stream(key[:])
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return
-	}
-	// Zero nonce, we only use each key once, and 32 bytes is plenty.
-	nonce := make([]byte, stream.NonceSize())
-	encw := stream.EncryptWriter(dataW, nonce, nil)
-
-	// Initialize a zip writer which will provide a zipped content
-	// of profiling data of all nodes
-	dataZipW := zip.NewWriter(encw)
 
 	rawDataFn := func(r io.Reader, host, disk, filename string, si StatInfo) error {
 		// Prefix host+disk
@@ -2811,17 +2829,17 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			return nil
 		}
 		header.Method = zip.Deflate
-		zwriter, zerr := dataZipW.CreateHeader(header)
+		zwriter, zerr := inspectZipW.CreateHeader(header)
 		if zerr != nil {
 			logger.LogIf(ctx, zerr)
 			return nil
 		}
-		if _, err = io.Copy(zwriter, r); err != nil {
+		if _, err := io.Copy(zwriter, r); err != nil {
 			logger.LogIf(ctx, err)
 		}
 		return nil
 	}
-	err = o.GetRawData(ctx, volume, file, rawDataFn)
+	err := o.GetRawData(ctx, volume, file, rawDataFn)
 	if !errors.Is(err, errFileNotFound) {
 		logger.LogIf(ctx, err)
 	}
@@ -2834,22 +2852,16 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		logger.LogIf(ctx, err)
 	}
 
-	logger.LogIf(ctx, dataZipW.Close())
-	logger.LogIf(ctx, encw.Close())
-
 	// save args passed to inspect command
-	inspectArgs := []string{fmt.Sprintf(" Inspect path: %s%s%s\n", volume, slashSeparator, file)}
-	cmdLine := []string{"Server command line args: "}
+	var sb bytes.Buffer
+	fmt.Fprintf(&sb, "Inspect path: %s%s%s\n", volume, slashSeparator, file)
+	sb.WriteString("Server command line args:")
 	for _, pool := range globalEndpoints {
-		cmdLine = append(cmdLine, pool.CmdLine)
+		sb.WriteString(" ")
+		sb.WriteString(pool.CmdLine)
 	}
-	cmdLine = append(cmdLine, "\n")
-	inspectArgs = append(inspectArgs, cmdLine...)
-	inspectArgsBytes := []byte(strings.Join(inspectArgs, " "))
-	embedFileInZip(archiveW, "inspect-input.txt", inspectArgsBytes)
-
-	// Add clusterInfo
-	appendClusterMetaInfoToZip(ctx, archiveW)
+	sb.WriteString("\n")
+	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes()))
 }
 
 func createHostAnonymizerForFSMode() map[string]string {

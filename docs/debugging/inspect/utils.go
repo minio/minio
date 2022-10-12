@@ -20,13 +20,23 @@ package main
 import (
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"log"
 )
 
 func bytesToPrivateKey(priv []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(priv)
-	return x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Try PEM
+	if block, _ := pem.Decode(priv); block != nil {
+		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	}
+	// Try base 64
+	dst := make([]byte, base64.StdEncoding.DecodedLen(len(priv)))
+	if n, err := base64.StdEncoding.Decode(dst, priv); err == nil {
+		return x509.ParsePKCS1PrivateKey(dst[:n])
+	}
+	// Try Raw, return error
+	return x509.ParsePKCS1PrivateKey(priv)
 }
 
 func fatalErr(err error) {

@@ -18,81 +18,60 @@
 package main
 
 import (
-	"archive/zip"
-	"bytes"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha512"
+	"errors"
+	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
-	"github.com/secure-io/sio-go"
+	"github.com/minio/madmin-go/estream"
 )
 
-func extractInspectV2(privKeyPath string, r *os.File, w io.Writer) error {
-	privKeyBytes, err := ioutil.ReadFile(privKeyPath)
+func extractInspectV2(pk []byte, r io.Reader, w io.Writer) error {
+	privKey, err := bytesToPrivateKey(pk)
 	if err != nil {
-		return err
-	}
-	privKey, err := bytesToPrivateKey(privKeyBytes)
-	if err != nil {
-		return err
+		return fmt.Errorf("decoding key returned: %w", err)
 	}
 
-	st, err := r.Stat()
+	sr, err := estream.NewReader(r)
 	if err != nil {
 		return err
 	}
 
-	archive, err := zip.NewReader(r, st.Size())
-	if err != nil {
-		return err
+	sr.SetPrivateKey(privKey)
+	sr.ReturnNonDecryptable(true)
+
+	// Debug corrupted streams.
+	if false {
+		sr.SkipEncrypted(true)
+		return sr.DebugStream(os.Stdout)
 	}
 
-	var key []byte
-
-	// Extract key from key.enc inside the archive
-	for _, f := range archive.File {
-		if f.Name == "key.enc" {
-			zr, err := f.Open()
+	for {
+		stream, err := sr.NextStream()
+		if err != nil {
+			if err == io.EOF {
+				return errors.New("no data found on stream")
+			}
+			if errors.Is(err, estream.ErrNoKey) {
+				if stream.Name == "inspect.zip" {
+					return errors.New("incorrect private key")
+				}
+				if err := stream.Skip(); err != nil {
+					return fmt.Errorf("stream skip: %w", err)
+				}
+				continue
+			}
+			return fmt.Errorf("next stream: %w", err)
+		}
+		if stream.Name == "inspect.zip" {
+			_, err := io.Copy(w, stream)
 			if err != nil {
-				return err
+				return fmt.Errorf("reading inspect stream: %w", err)
 			}
-			cipherKeyBuf := bytes.NewBuffer([]byte{})
-			if _, err := io.Copy(cipherKeyBuf, zr); err != nil {
-				zr.Close()
-				return err
-			}
-			zr.Close()
-			if k, err := rsa.DecryptOAEP(sha512.New(), rand.Reader, privKey, cipherKeyBuf.Bytes(), nil); err != nil {
-				return err
-			} else {
-				key = k
-			}
+			return nil
+		}
+		if err := stream.Skip(); err != nil {
+			return fmt.Errorf("stream skip: %w", err)
 		}
 	}
-
-	for _, f := range archive.File {
-		if f.Name == "data.zip" {
-			zd, err := f.Open()
-			if err != nil {
-				return err
-			}
-			stream, err := sio.AES_256_GCM.Stream(key)
-			if err != nil {
-				return err
-			}
-			// Zero nonce, we only use each key once, and 32 bytes is plenty.
-			nonce := make([]byte, stream.NonceSize())
-			encr := stream.DecryptReader(zd, nonce, nil)
-			_, err = io.Copy(w, encr)
-			if err != nil {
-				return err
-			}
-
-		}
-	}
-
-	return nil
 }
