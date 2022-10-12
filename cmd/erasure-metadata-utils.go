@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
+	"strings"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -165,18 +167,23 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 		}, index)
 	}
 
+	ignoredErrs := []error{
+		errFileNotFound,
+		errVolumeNotFound,
+		errFileVersionNotFound,
+		errDiskNotFound,
+		errUnformattedDisk,
+	}
+	if strings.HasPrefix(bucket, minioMetaBucket) {
+		// listing object might be truncated, ignore such errors from logging.
+		ignoredErrs = append(ignoredErrs, io.ErrUnexpectedEOF)
+	}
 	errs := g.Wait()
 	for index, err := range errs {
 		if err == nil {
 			continue
 		}
-		if !IsErr(err, []error{
-			errFileNotFound,
-			errVolumeNotFound,
-			errFileVersionNotFound,
-			errDiskNotFound,
-			errUnformattedDisk,
-		}...) {
+		if !IsErr(err, ignoredErrs...) {
 			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], bucket, object, err),
 				disks[index].String())
