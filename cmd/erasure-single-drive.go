@@ -344,7 +344,14 @@ func (es *erasureSingle) GetBucketInfo(ctx context.Context, bucket string, opts 
 		}
 		return bi, toObjectErr(err, bucket)
 	}
-	return BucketInfo{Name: volInfo.Name, Created: volInfo.Created}, nil
+	bi = BucketInfo{Name: volInfo.Name, Created: volInfo.Created}
+	meta, err := globalBucketMetadataSys.Get(bucket)
+	if err == nil {
+		bi.Created = meta.Created
+		bi.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+		bi.ObjectLocking = meta.LockEnabled
+	}
+	return bi, nil
 }
 
 // DeleteBucket - deletes a bucket.

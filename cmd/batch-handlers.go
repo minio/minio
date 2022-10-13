@@ -217,6 +217,8 @@ type BatchJobReplicateV1 struct {
 	Flags      BatchJobReplicateFlags  `yaml:"flags" json:"flags"`
 	Target     BatchJobReplicateTarget `yaml:"target" json:"target"`
 	Source     BatchJobReplicateSource `yaml:"source" json:"source"`
+
+	clnt *miniogo.Core `msg:"-"`
 }
 
 // BatchJobRequest this is an internal data structure not for external consumption.
@@ -640,6 +642,17 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	return nil
 }
 
+//msgp:ignore batchReplicationJobError
+type batchReplicationJobError struct {
+	Code           string
+	Description    string
+	HTTPStatusCode int
+}
+
+func (e batchReplicationJobError) Error() string {
+	return e.Description
+}
+
 // Validate validates the job definition input
 func (r *BatchJobReplicateV1) Validate(ctx context.Context, o ObjectLayer) error {
 	if r == nil {
@@ -654,8 +667,15 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, o ObjectLayer) error
 		return errInvalidArgument
 	}
 
-	_, err := o.GetBucketInfo(ctx, r.Source.Bucket, BucketOptions{})
+	info, err := o.GetBucketInfo(ctx, r.Source.Bucket, BucketOptions{})
 	if err != nil {
+		if isErrBucketNotFound(err) {
+			return batchReplicationJobError{
+				Code:           "NoSuchSourceBucket",
+				Description:    "The specified source bucket does not exist",
+				HTTPStatusCode: http.StatusNotFound,
+			}
+		}
 		return err
 	}
 
@@ -695,6 +715,44 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, o ObjectLayer) error
 		return err
 	}
 
+	u, err := url.Parse(r.Target.Endpoint)
+	if err != nil {
+		return err
+	}
+
+	cred := r.Target.Creds
+
+	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
+		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+		Secure:    u.Scheme == "https",
+		Transport: getRemoteInstanceTransport,
+	})
+	if err != nil {
+		return err
+	}
+
+	vcfg, err := c.GetBucketVersioning(ctx, r.Target.Bucket)
+	if err != nil {
+		if miniogo.ToErrorResponse(err).Code == "NoSuchBucket" {
+			return batchReplicationJobError{
+				Code:           "NoSuchTargetBucket",
+				Description:    "The specified target bucket does not exist",
+				HTTPStatusCode: http.StatusNotFound,
+			}
+		}
+		return err
+	}
+
+	if info.Versioning && !vcfg.Enabled() {
+		return batchReplicationJobError{
+			Code: "InvalidBucketState",
+			Description: fmt.Sprintf("The source '%s' has versioning enabled, target '%s' must have versioning enabled",
+				r.Source.Bucket, r.Target.Bucket),
+			HTTPStatusCode: http.StatusBadRequest,
+		}
+	}
+
+	r.clnt = c
 	return nil
 }
 

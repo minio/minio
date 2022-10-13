@@ -79,6 +79,9 @@ type BucketInfo struct {
 	// Date and time when the bucket was created.
 	Created time.Time
 	Deleted time.Time
+
+	// Bucket features enabled
+	Versioning, ObjectLocking bool
 }
 
 // ObjectInfo - represents object metadata.
