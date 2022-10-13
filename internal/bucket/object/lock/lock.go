@@ -36,6 +36,9 @@ import (
 	"github.com/minio/pkg/env"
 )
 
+// Enabled indicates object locking is enabled
+const Enabled = "Enabled"
+
 // RetMode - object retention mode.
 type RetMode string
 
@@ -239,7 +242,7 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 		return err
 	}
 
-	if parsedConfig.ObjectLockEnabled != "Enabled" {
+	if parsedConfig.ObjectLockEnabled != Enabled {
 		return fmt.Errorf("only 'Enabled' value is allowed to ObjectLockEnabled element")
 	}
 
@@ -250,7 +253,7 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 // ToRetention - convert to Retention type.
 func (config *Config) ToRetention() Retention {
 	r := Retention{
-		LockEnabled: config.ObjectLockEnabled == "Enabled",
+		LockEnabled: config.ObjectLockEnabled == Enabled,
 	}
 	if config.Rule != nil {
 		r.Mode = config.Rule.DefaultRetention.Mode
@@ -289,7 +292,7 @@ func ParseObjectLockConfig(reader io.Reader) (*Config, error) {
 // NewObjectLockConfig returns a initialized lock.Config struct
 func NewObjectLockConfig() *Config {
 	return &Config{
-		ObjectLockEnabled: "Enabled",
+		ObjectLockEnabled: Enabled,
 	}
 }
 
