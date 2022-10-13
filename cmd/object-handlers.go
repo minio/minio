@@ -740,6 +740,15 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			}
 			QueueReplicationHeal(ctx, bucket, objInfo)
 		}
+		// do an additional verification whether object exists when opts.DeleteMarker is set by source
+		// cluster as part of delete marker replication
+		if opts.DeleteMarker && opts.ProxyHeaderSet {
+			opts.VersionID = ""
+			goi, gerr := getObjectInfo(ctx, bucket, object, opts)
+			if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
+				w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
+			}
+		}
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
