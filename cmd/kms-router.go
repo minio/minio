@@ -52,6 +52,9 @@ func registerKMSRouter(router *mux.Router) {
 	for _, version := range KMSVersions {
 		// KMS Status APIs
 		kmsRouter.Methods(http.MethodGet).Path(version + "/status").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSStatusHandler)))
+		kmsRouter.Methods(http.MethodGet).Path(version + "/metrics").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSMetricsHandler)))
+		kmsRouter.Methods(http.MethodGet).Path(version + "/apis").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSAPIsHandler)))
+		kmsRouter.Methods(http.MethodGet).Path(version + "/version").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSVersionHandler)))
 		// KMS Key APIs
 		kmsRouter.Methods(http.MethodPost).Path(version+"/key/create").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSCreateKeyHandler))).Queries("key-id", "{key-id:.*}")
 		kmsRouter.Methods(http.MethodPost).Path(version+"/key/import").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSImportKeyHandler))).Queries("key-id", "{key-id:.*}")

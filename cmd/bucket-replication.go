@@ -2654,6 +2654,10 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 const mrfTimeInterval = 5 * time.Minute
 
 func (p *ReplicationPool) persistMRF() {
+	if !p.initialized() {
+		return
+	}
+
 	var mu sync.Mutex
 	entries := make(map[string]MRFReplicateEntry)
 	mTimer := time.NewTimer(mrfTimeInterval)
@@ -2706,7 +2710,7 @@ func (p *ReplicationPool) persistMRF() {
 }
 
 func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
-	if p == nil {
+	if !p.initialized() {
 		return
 	}
 	select {
@@ -2718,6 +2722,10 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 
 // save mrf entries to mrf_<uuid>.bin
 func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string]MRFReplicateEntry) error {
+	if !p.initialized() {
+		return nil
+	}
+
 	if len(entries) == 0 {
 		return nil
 	}
@@ -2743,6 +2751,10 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 // load mrf entries from disk
 func (p *ReplicationPool) loadMRF(fileName string) (re MRFReplicateEntries, e error) {
+	if !p.initialized() {
+		return re, nil
+	}
+
 	data, err := readConfig(p.ctx, p.objLayer, fileName)
 	if err != nil && err != errConfigNotFound {
 		return re, err
@@ -2779,7 +2791,7 @@ func (p *ReplicationPool) loadMRF(fileName string) (re MRFReplicateEntries, e er
 }
 
 func (p *ReplicationPool) processMRF() {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return
 	}
 	pTimer := time.NewTimer(mrfTimeInterval)
@@ -2822,7 +2834,7 @@ func (p *ReplicationPool) processMRF() {
 
 // process sends error logs to the heal channel for an attempt to heal replication.
 func (p *ReplicationPool) queueMRFHeal(file string) error {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return errServerNotInitialized
 	}
 
@@ -2844,6 +2856,10 @@ func (p *ReplicationPool) queueMRFHeal(file string) error {
 
 // load replication stats from disk
 func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationStats, e error) {
+	if !p.initialized() {
+		return map[string]BucketReplicationStats{}, nil
+	}
+
 	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName))
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
@@ -2879,8 +2895,12 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 	return rs, nil
 }
 
+func (p *ReplicationPool) initialized() bool {
+	return !(p == nil || p.objLayer == nil)
+}
+
 func (p *ReplicationPool) saveStatsToDisk() {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return
 	}
 	sTimer := time.NewTimer(replStatsSaveInterval)
@@ -2902,6 +2922,9 @@ func (p *ReplicationPool) saveStatsToDisk() {
 
 // save replication stats to .minio.sys/buckets/replication/node-name.stats
 func (p *ReplicationPool) saveStats(ctx context.Context) error {
+	if !p.initialized() {
+		return nil
+	}
 	bsm := globalReplicationStats.getAllCachedLatest()
 	if len(bsm.Stats) == 0 {
 		return nil
@@ -2920,6 +2943,9 @@ func (p *ReplicationPool) saveStats(ctx context.Context) error {
 
 // SaveState saves replication stats and mrf data before server restart
 func (p *ReplicationPool) SaveState(ctx context.Context) error {
+	if !p.initialized() {
+		return nil
+	}
 	go func() {
 		select {
 		case p.saveStateCh <- struct{}{}:
