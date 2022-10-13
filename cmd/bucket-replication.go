@@ -568,17 +568,25 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		return
 	}
 	// early return if already replicated delete marker for existing object replication/ healing delete markers
-	if dobj.DeleteMarkerVersionID != "" && (dobj.OpType == replication.ExistingObjectReplicationType || dobj.OpType == replication.HealReplicationType) {
-		if _, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+	if dobj.DeleteMarkerVersionID != "" {
+		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
+				ReplicationDeleteMarker: true,
 			},
-		}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+		})
+		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
 			if dobj.VersionID == "" {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
+		}
+		// mark delete marker replication as failed if target cluster not ready to receive
+		// this request yet (object version not replicated yet)
+		if err != nil && !toi.ReplicationReady {
+			rinfo.ReplicationStatus = replication.Failed
+			return
 		}
 	}
 
@@ -1897,7 +1905,9 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	if opts.VersionSuspended {
 		return &madmin.BucketTargets{}
 	}
-
+	if !opts.ProxyRequest {
+		return &madmin.BucketTargets{}
+	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
 		return &madmin.BucketTargets{}
