@@ -40,6 +40,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/wildcard"
 	"gopkg.in/yaml.v2"
 )
@@ -732,7 +733,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, "admin:ListBatchJobs")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListBatchJobsAction)
 	if objectAPI == nil {
 		return
 	}
@@ -784,7 +785,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, "admin:DescribeBatchJob")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DescribeBatchJobAction)
 	if objectAPI == nil {
 		return
 	}
@@ -821,7 +822,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, creds := validateAdminReq(ctx, w, r, "admin:StartBatchJob")
+	objectAPI, creds := validateAdminReq(ctx, w, r, iampolicy.StartBatchJobAction)
 	if objectAPI == nil {
 		return
 	}

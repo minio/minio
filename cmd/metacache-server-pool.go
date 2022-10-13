@@ -375,7 +375,9 @@ func (es *erasureSingle) listPath(ctx context.Context, o *listPathOptions) (entr
 		entries.truncate(0)
 		o.ID = ""
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
+			if !(isErrObjectNotFound(err) || errors.Is(err, IncompleteBody{}) || isErrVersionNotFound(err)) {
+				logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
+			}
 		}
 	}
 
