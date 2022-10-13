@@ -124,40 +124,31 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 //
 //	"/.dockerenv":      "file",
 func IsDocker() bool {
-	if !globalIsCICD {
-		_, err := os.Stat("/.dockerenv")
-		if osIsNotExist(err) {
-			return false
-		}
-
-		// Log error, as we will not propagate it to caller
-		logger.LogIf(GlobalContext, err)
-
-		return err == nil
+	_, err := os.Stat("/.dockerenv")
+	if osIsNotExist(err) {
+		return false
 	}
-	return false
+
+	// Log error, as we will not propagate it to caller
+	logger.LogIf(GlobalContext, err)
+
+	return err == nil
 }
 
 // IsDCOS returns true if minio is running in DCOS.
 func IsDCOS() bool {
-	if !globalIsCICD {
-		// http://mesos.apache.org/documentation/latest/docker-containerizer/
-		// Mesos docker containerizer sets this value
-		return env.Get("MESOS_CONTAINER_NAME", "") != ""
-	}
-	return false
+	// http://mesos.apache.org/documentation/latest/docker-containerizer/
+	// Mesos docker containerizer sets this value
+	return env.Get("MESOS_CONTAINER_NAME", "") != ""
 }
 
 // IsKubernetes returns true if minio is running in kubernetes.
 func IsKubernetes() bool {
-	if !globalIsCICD {
-		// Kubernetes env used to validate if we are
-		// indeed running inside a kubernetes pod
-		// is KUBERNETES_SERVICE_HOST
-		// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_pods.go#L541
-		return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
-	}
-	return false
+	// Kubernetes env used to validate if we are
+	// indeed running inside a kubernetes pod
+	// is KUBERNETES_SERVICE_HOST
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_pods.go#L541
+	return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
 }
 
 // IsBOSH returns true if minio is deployed from a bosh package
