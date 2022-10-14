@@ -39,7 +39,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.12
-	github.com/juicedata/juicefs v1.0.0
+	github.com/juicedata/juicefs v1.0.2
 	github.com/klauspost/compress v1.14.4
 	github.com/klauspost/cpuid/v2 v2.0.11
 	github.com/klauspost/pgzip v1.2.5
