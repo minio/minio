@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/bandwidth"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
@@ -117,14 +118,21 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
 		if checkRemote { // validate remote bucket
-			if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
+			found, err := clnt.BucketExists(ctx, arn.Bucket)
+			if err != nil {
 				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
+			}
+			if !found {
+				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, BucketRemoteTargetNotFound{Bucket: arn.Bucket})
 			}
 			if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 				if ret.LockEnabled {
 					lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
-					if err != nil || lock != "Enabled" {
+					if err != nil {
 						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
+					}
+					if lock != objectlock.Enabled {
+						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, nil)
 					}
 				}
 			}
