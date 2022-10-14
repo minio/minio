@@ -34,7 +34,10 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationContraint(t *testing.T) {
-	obj, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

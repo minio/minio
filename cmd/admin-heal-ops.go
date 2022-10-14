@@ -100,14 +100,14 @@ type allHealState struct {
 }
 
 // newHealState - initialize global heal state management
-func newHealState(cleanup bool) *allHealState {
+func newHealState(ctx context.Context, cleanup bool) *allHealState {
 	hstate := &allHealState{
 		healSeqMap:     make(map[string]*healSequence),
 		healLocalDisks: make(map[Endpoint]bool),
 		healStatus:     make(map[string]healingTracker),
 	}
 	if cleanup {
-		go hstate.periodicHealSeqsClean(GlobalContext)
+		go hstate.periodicHealSeqsClean(ctx)
 	}
 	return hstate
 }
