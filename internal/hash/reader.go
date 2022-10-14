@@ -186,7 +186,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 			}
 		}
 		if r.contentHasher != nil {
-			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw(), sum) {
+			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw, sum) {
 				err := ChecksumMismatch{
 					Want: r.contentHash.Encoded,
 					Got:  base64.StdEncoding.EncodeToString(sum),
