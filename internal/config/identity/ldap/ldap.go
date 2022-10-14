@@ -128,6 +128,16 @@ func (l Config) IsLDAPUserDN(user string) bool {
 	return false
 }
 
+// IsLDAPGroupDN determines if the given string could be a group DN from LDAP.
+func (l Config) IsLDAPGroupDN(user string) bool {
+	for _, baseDN := range l.LDAP.GroupSearchBaseDistNames {
+		if strings.HasSuffix(user, ","+baseDN) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetNonEligibleUserDistNames - find user accounts (DNs) that are no longer
 // present in the LDAP server or do not meet filter criteria anymore
 func (l *Config) GetNonEligibleUserDistNames(userDistNames []string) ([]string, error) {
