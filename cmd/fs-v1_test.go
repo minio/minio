@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,17 +30,19 @@ import (
 // TestNewFS - tests initialization of all input disks
 // and constructs a valid `FS` object layer.
 func TestNewFS(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Do not attempt to create this path, the test validates
 	// so that NewFSObjectLayer initializes non existing paths
 	// and successfully returns initialized object layer.
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	_, err := NewFSObjectLayer("")
+	_, err := NewFSObjectLayer(ctx, "")
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = NewFSObjectLayer(disk)
+	_, err = NewFSObjectLayer(ctx, disk)
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Drive is not in FS format."
 		if err.Error() == errMsg {
