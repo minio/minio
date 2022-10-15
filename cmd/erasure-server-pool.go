@@ -1588,6 +1588,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		meta, err := globalBucketMetadataSys.Get(bucket)
 		if err == nil {
 			bucketInfo.Created = meta.Created
+			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+			bucketInfo.ObjectLocking = meta.LockEnabled
 		}
 		return bucketInfo, nil
 	}
@@ -1602,6 +1604,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		meta, err := globalBucketMetadataSys.Get(bucket)
 		if err == nil {
 			bucketInfo.Created = meta.Created
+			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+			bucketInfo.ObjectLocking = meta.LockEnabled
 		}
 		return bucketInfo, nil
 	}

@@ -344,7 +344,14 @@ func (es *erasureSingle) GetBucketInfo(ctx context.Context, bucket string, opts 
 		}
 		return bi, toObjectErr(err, bucket)
 	}
-	return BucketInfo{Name: volInfo.Name, Created: volInfo.Created}, nil
+	bi = BucketInfo{Name: volInfo.Name, Created: volInfo.Created}
+	meta, err := globalBucketMetadataSys.Get(bucket)
+	if err == nil {
+		bi.Created = meta.Created
+		bi.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+		bi.ObjectLocking = meta.LockEnabled
+	}
+	return bi, nil
 }
 
 // DeleteBucket - deletes a bucket.
@@ -1010,6 +1017,11 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
+	fi.Checksum = opts.WantChecksum.AppendTo(nil)
+	if opts.EncryptFn != nil {
+		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+	}
+
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -2586,6 +2598,7 @@ func (es *erasureSingle) ListObjectParts(ctx context.Context, bucket, object, up
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
 	result.UserDefined = cloneMSS(fi.Metadata)
+	result.ChecksumAlgorithm = fi.Metadata[hash.MinIOMultipartChecksum]
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(fi.Parts) == 0 || maxParts == 0 {
@@ -2606,10 +2619,15 @@ func (es *erasureSingle) ListObjectParts(ctx context.Context, bucket, object, up
 	count := maxParts
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
-			PartNumber:   part.Number,
-			ETag:         part.ETag,
-			LastModified: fi.ModTime,
-			Size:         part.Size,
+			PartNumber:     part.Number,
+			ETag:           part.ETag,
+			LastModified:   fi.ModTime,
+			ActualSize:     part.ActualSize,
+			Size:           part.Size,
+			ChecksumCRC32:  part.Checksums["CRC32"],
+			ChecksumCRC32C: part.Checksums["CRC32C"],
+			ChecksumSHA1:   part.Checksums["SHA1"],
+			ChecksumSHA256: part.Checksums["SHA256"],
 		})
 		count--
 		if count == 0 {
@@ -2678,6 +2696,21 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, err
 	}
 
+	// Checksum type set when upload started.
+	var checksumType hash.ChecksumType
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		checksumType = hash.NewChecksumType(cs)
+		if opts.WantChecksum != nil && !opts.WantChecksum.Type.Is(checksumType) {
+			return oi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum type mismatch"),
+			}
+		}
+	}
+
+	var checksumCombined []byte
+
 	// However, in case of encryption, the persisted part ETags don't match
 	// what we have sent to the client during PutObjectPart. The reason is
 	// that ETags are encrypted. Hence, the client will send a list of complete
@@ -2724,6 +2757,7 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
+		expPart := currentFI.Parts[partIdx]
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
@@ -2737,27 +2771,58 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			return oi, invp
 		}
 
+		if checksumType.IsSet() {
+			crc := expPart.Checksums[checksumType.String()]
+			if crc == "" {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			wantCS := map[string]string{
+				hash.ChecksumCRC32.String():  part.ChecksumCRC32,
+				hash.ChecksumCRC32C.String(): part.ChecksumCRC32C,
+				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
+				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
+			}
+			if wantCS[checksumType.String()] != crc {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+					ExpETag:    wantCS[checksumType.String()],
+					GotETag:    crc,
+				}
+			}
+			cs := hash.NewChecksumString(checksumType.String(), crc)
+			if !cs.Valid() {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			checksumCombined = append(checksumCombined, cs.Raw...)
+		}
+
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentFI.Parts[partIdx].ActualSize,
+				PartSize:   expPart.ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
 
 		// Save for total object size.
-		objectSize += currentFI.Parts[partIdx].Size
+		objectSize += expPart.Size
 
 		// Save the consolidated actual size.
-		objectActualSize += currentFI.Parts[partIdx].ActualSize
+		objectActualSize += expPart.ActualSize
 
 		// Add incoming parts.
 		fi.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			Size:       currentFI.Parts[partIdx].Size,
-			ActualSize: currentFI.Parts[partIdx].ActualSize,
-			Index:      currentFI.Parts[partIdx].Index,
+			Size:       expPart.Size,
+			ActualSize: expPart.ActualSize,
+			ModTime:    expPart.ModTime,
+			Index:      expPart.Index,
+			Checksums:  nil, // Not transferred since we do not need it.
 		}
 	}
 

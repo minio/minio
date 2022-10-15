@@ -1103,7 +1103,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 					PartNumber: part.PartNumber,
 				}
 			}
-			checksumCombined = append(checksumCombined, cs.Raw()...)
+			checksumCombined = append(checksumCombined, cs.Raw...)
 		}
 
 		// All parts except the last part has to be at least 5MB.
