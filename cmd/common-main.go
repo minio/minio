@@ -236,6 +236,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 			Userinfo:                cfg.ClaimUserinfo,
 			RedirectCallbackDynamic: cfg.RedirectURIDynamic,
 			RedirectCallback:        callback,
+			RoleArn:                 cfg.GetRoleArn(),
 		}
 	}
 	return m
