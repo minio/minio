@@ -284,7 +284,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	newObject = NewGatewayLayerWithLocker(newObject)
 
 	// Calls all New() for all sub-systems.
-	initAllSubsystems()
+	initAllSubsystems(GlobalContext)
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()

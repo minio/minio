@@ -107,7 +107,6 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 func diskErrToDriveState(err error) (state string) {
-	state = madmin.DriveStateUnknown
 	switch {
 	case errors.Is(err, errDiskNotFound):
 		state = madmin.DriveStateOffline
@@ -121,7 +120,10 @@ func diskErrToDriveState(err error) (state string) {
 		state = madmin.DriveStateFaulty
 	case err == nil:
 		state = madmin.DriveStateOk
+	default:
+		state = fmt.Sprintf("%s (cause: %s)", madmin.DriveStateUnknown, err)
 	}
+
 	return
 }
 
@@ -184,18 +186,19 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 	for index := range disks {
 		index := index
 		g.Go(func() error {
+			diskEndpoint := endpoints[index].String()
 			if disks[index] == OfflineDisk {
 				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
-					Endpoint: endpoints[index].String(),
+					Endpoint: diskEndpoint,
 				}
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
 			di := madmin.Disk{
-				Endpoint:       info.Endpoint,
+				Endpoint:       diskEndpoint,
 				DrivePath:      info.MountPath,
 				TotalSpace:     info.Total,
 				UsedSpace:      info.Used,

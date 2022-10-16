@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -27,7 +28,10 @@ import (
 
 // Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,10 +158,12 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 // Test if a config migration from v2 to v33 is successfully done
 func TestServerConfigMigrateV2toV33(t *testing.T) {
 	rootPath := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	globalConfigDir = &ConfigDir{path: rootPath}
 
-	objLayer, fsDir, err := prepareFS()
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

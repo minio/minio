@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/bandwidth"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
@@ -117,14 +118,21 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
 		if checkRemote { // validate remote bucket
-			if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
+			found, err := clnt.BucketExists(ctx, arn.Bucket)
+			if err != nil {
 				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
+			}
+			if !found {
+				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, BucketRemoteTargetNotFound{Bucket: arn.Bucket})
 			}
 			if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 				if ret.LockEnabled {
 					lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
-					if err != nil || lock != "Enabled" {
+					if err != nil {
 						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
+					}
+					if lock != objectlock.Enabled {
+						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, nil)
 					}
 				}
 			}
@@ -568,17 +576,25 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		return
 	}
 	// early return if already replicated delete marker for existing object replication/ healing delete markers
-	if dobj.DeleteMarkerVersionID != "" && (dobj.OpType == replication.ExistingObjectReplicationType || dobj.OpType == replication.HealReplicationType) {
-		if _, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+	if dobj.DeleteMarkerVersionID != "" {
+		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
+				ReplicationDeleteMarker: true,
 			},
-		}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+		})
+		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
 			if dobj.VersionID == "" {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
+		}
+		// mark delete marker replication as failed if target cluster not ready to receive
+		// this request yet (object version not replicated yet)
+		if err != nil && !toi.ReplicationReady {
+			rinfo.ReplicationStatus = replication.Failed
+			return
 		}
 	}
 
@@ -1897,7 +1913,9 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	if opts.VersionSuspended {
 		return &madmin.BucketTargets{}
 	}
-
+	if !opts.ProxyRequest {
+		return &madmin.BucketTargets{}
+	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
 		return &madmin.BucketTargets{}
