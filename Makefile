@@ -51,7 +51,7 @@ test-race: verifiers build ## builds minio, runs linters, tests (race)
 
 test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
-	@CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
+	@CGO_ENABLED=1 go test -tags kqueue -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
@@ -85,6 +85,10 @@ verify-healing: ## verify healing and replacing disks with minio binary
 build: checks ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+
+s3-gateway-test: checks
+	@echo "Running s3gateway tests"
+	@(env bash $(PWD)/cmd/gateway/s3gateway_test.sh)
 
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \

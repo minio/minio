@@ -1,0 +1,37 @@
+name: juicefs gateway test
+
+on:
+  pull_request:
+    branches:
+      - gateway
+
+jobs:
+  gateway-juicefs-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18.x
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: format fs and start minio juicefs gateway
+        shell: bash
+        run:  |
+          curl -sSL https://d.juicefs.com/install | sh -
+          sudo apt-get install -y redis-tools redis-server
+          juicefs format 'redis://127.0.0.1:6379/1' s3gateway
+          make
+          export MINIO_ROOT_USER=testUser
+          export MINIO_ROOT_PASSWORD=testUserPassword
+          ./minio  gateway  juicefs --multi-buckets --keep-etag --address 127.0.0.1:9008 "redis://localhost:6379/1" > minio.log 2>&1 &
+          sleep 2
+          make s3-gateway-test
+          

@@ -3,7 +3,7 @@ name: IAM integration
 on:
   pull_request:
     branches:
-    - master
+    - gateway
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -50,7 +50,7 @@ jobs:
       # are turned off - i.e. if ldap="", then ldap server is not enabled for
       # the tests.
       matrix:
-        go-version: [1.17.x]
+        go-version: [1.18.x]
         ldap: ["", "localhost:389"]
         etcd: ["", "http://localhost:2379"]
         openid: ["", "http://127.0.0.1:5556/dex"]
