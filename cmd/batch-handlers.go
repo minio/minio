@@ -28,6 +28,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"github.com/minio/madmin-go"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -105,7 +107,7 @@ func (kv BatchJobReplicateKV) Match(ikv BatchJobReplicateKV) bool {
 	if kv.Empty() {
 		return true
 	}
-	if kv.Key == ikv.Key {
+	if strings.EqualFold(kv.Key, ikv.Key) {
 		return wildcard.Match(kv.Value, ikv.Value)
 	}
 	return false
@@ -554,6 +556,47 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 		if !r.Flags.Filter.CreatedBefore.IsZero() && r.Flags.Filter.CreatedBefore.After(info.ModTime) {
 			// skip all objects that are created after the specified time.
+			return false
+		}
+
+		if len(r.Flags.Filter.Tags) > 0 {
+			// Only parse object tags if tags filter is specified.
+			tagMap := map[string]string{}
+			tagStr := info.Metadata[xhttp.AmzObjectTagging]
+			if len(tagStr) != 0 {
+				t, err := tags.ParseObjectTags(tagStr)
+				if err != nil {
+					return false
+				}
+				tagMap = t.ToMap()
+			}
+
+			for _, kv := range r.Flags.Filter.Tags {
+				for t, v := range tagMap {
+					if kv.Match(BatchJobReplicateKV{Key: t, Value: v}) {
+						return true
+					}
+				}
+			}
+
+			// None of the provided tags filter match skip the object
+			return false
+		}
+
+		if len(r.Flags.Filter.Metadata) > 0 {
+			for _, kv := range r.Flags.Filter.Metadata {
+				for k, v := range info.Metadata {
+					if !strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") && !isStandardHeader(k) {
+						continue
+					}
+					// We only need to match x-amz-meta or standardHeaders
+					if kv.Match(BatchJobReplicateKV{Key: k, Value: v}) {
+						return true
+					}
+				}
+			}
+
+			// None of the provided metadata filters match skip the object.
 			return false
 		}
 
