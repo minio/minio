@@ -175,7 +175,9 @@ func minioConfigToConsoleFeatures() {
 	if globalMinioEndpoint != "" {
 		os.Setenv("CONSOLE_MINIO_SERVER", globalMinioEndpoint)
 	} else {
-		os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
+		// Explicitly set 127.0.0.1 so Console will automatically bypass TLS verification to the local S3 API.
+		// This will save users from providing a certificate with IP or FQDN SAN that points to the local host.
+		os.Setenv("CONSOLE_MINIO_SERVER", fmt.Sprintf("%s://127.0.0.1:%s", getURLScheme(globalIsTLS), globalMinioPort))
 	}
 	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
