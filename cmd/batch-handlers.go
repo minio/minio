@@ -595,12 +595,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, result)
 			success := true
 			if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
-				stopFn(err)
 				if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
 					// object must be deleted concurrently, allow
 					// these failures but do not count them
 					continue
 				}
+				stopFn(err)
 				logger.LogIf(ctx, err)
 				success = false
 			} else {
