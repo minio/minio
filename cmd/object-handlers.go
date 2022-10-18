@@ -2282,8 +2282,15 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 		return nil
 	}
+	var opts untarOptions
+	opts.ignoreDirs = strings.EqualFold(r.Header.Get(xhttp.MinIOSnowballIgnoreDirs), "true")
+	opts.ignoreErrs = strings.EqualFold(r.Header.Get(xhttp.MinIOSnowballIgnoreErrors), "true")
+	opts.prefixAll = r.Header.Get(xhttp.MinIOSnowballPrefix)
+	if opts.prefixAll != "" {
+		opts.prefixAll = trimLeadingSlash(pathJoin(opts.prefixAll, slashSeparator))
+	}
 
-	if err = untar(hreader, putObjectTar); err != nil {
+	if err = untar(ctx, hreader, putObjectTar, opts); err != nil {
 		apiErr := errorCodes.ToAPIErr(s3Err)
 		// If not set, convert or use BadRequest
 		if s3Err == ErrNone {
