@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.0.1
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.10
+	github.com/klauspost/compress v1.15.11
 	github.com/klauspost/cpuid/v2 v2.1.1
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
@@ -43,14 +43,14 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.24.0
-	github.com/minio/console v0.20.6-0.20221003060434-413870e995a9
+	github.com/minio/console v0.21.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.0
-	github.com/minio/madmin-go v1.6.2
-	github.com/minio/minio-go/v7 v7.0.40-0.20220928095841-8848d8affe8a
-	github.com/minio/pkg v1.5.0
+	github.com/minio/madmin-go v1.6.3
+	github.com/minio/minio-go/v7 v7.0.41-0.20221013203648-8257e7003b5e
+	github.com/minio/pkg v1.5.2
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
@@ -84,7 +84,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.5
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
-	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
@@ -167,7 +167,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/minio/colorjson v1.0.2 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20221001175248-68ca2bf457e4 // indirect
+	github.com/minio/mc v0.0.0-20221007160339-ec8687d57e36 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -214,7 +214,7 @@ require (
 	golang.org/x/net v0.0.0-20220909164309-bea034e7d591 // indirect
 	golang.org/x/sync v0.0.0-20220907140024-f12130a52804 // indirect
 	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.3.8 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

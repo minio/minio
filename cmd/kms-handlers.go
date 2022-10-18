@@ -67,6 +67,105 @@ func (a kmsAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Request)
 	writeSuccessResponseJSON(w, resp)
 }
 
+// KMSMetricsHandler - POST /minio/kms/v1/metrics
+func (a kmsAPIHandlers) KMSMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSMetrics")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSMetricsAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	metrics, err := GlobalKMS.Metrics(ctx)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if res, err := json.Marshal(metrics); err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+	} else {
+		writeSuccessResponseJSON(w, res)
+	}
+}
+
+// KMSAPIsHandler - POST /minio/kms/v1/apis
+func (a kmsAPIHandlers) KMSAPIsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSAPIs")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSAPIAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	manager, ok := GlobalKMS.(kms.StatusManager)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	apis, err := manager.APIs(ctx)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if res, err := json.Marshal(apis); err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+	} else {
+		writeSuccessResponseJSON(w, res)
+	}
+}
+
+type versionResponse struct {
+	Version string `json:"version"`
+}
+
+// KMSVersionHandler - POST /minio/kms/v1/version
+func (a kmsAPIHandlers) KMSVersionHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSVersion")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSVersionAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	manager, ok := GlobalKMS.(kms.StatusManager)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	version, err := manager.Version(ctx)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	res := &versionResponse{Version: version}
+	v, err := json.Marshal(res)
+	if err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, v)
+}
+
 // KMSCreateKeyHandler - POST /minio/kms/v1/key/create?key-id=<master-key-id>
 func (a kmsAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSCreateKey")

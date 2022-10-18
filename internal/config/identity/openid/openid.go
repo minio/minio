@@ -116,6 +116,18 @@ var (
 			Key:   Scopes,
 			Value: "",
 		},
+		config.KV{
+			Key:   Vendor,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakRealm,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
 	}
 )
 

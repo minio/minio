@@ -938,7 +938,10 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 		ScanMode: scanMode,
 	}
 	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
-	if err != nil && !errors.Is(err, NotImplemented{}) {
+	if err != nil {
+		if errors.Is(err, NotImplemented{}) || isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			err = nil
+		}
 		logger.LogIf(ctx, err)
 		return 0
 	}

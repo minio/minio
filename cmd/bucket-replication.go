@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/bandwidth"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
@@ -117,14 +118,21 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
 		if checkRemote { // validate remote bucket
-			if found, err := clnt.BucketExists(ctx, arn.Bucket); !found {
+			found, err := clnt.BucketExists(ctx, arn.Bucket)
+			if err != nil {
 				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
+			}
+			if !found {
+				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, BucketRemoteTargetNotFound{Bucket: arn.Bucket})
 			}
 			if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 				if ret.LockEnabled {
 					lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, arn.Bucket)
-					if err != nil || lock != "Enabled" {
+					if err != nil {
 						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, err)
+					}
+					if lock != objectlock.Enabled {
+						return sameTarget, errorCodes.ToAPIErrWithErr(ErrReplicationDestinationMissingLock, nil)
 					}
 				}
 			}
@@ -568,17 +576,25 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		return
 	}
 	// early return if already replicated delete marker for existing object replication/ healing delete markers
-	if dobj.DeleteMarkerVersionID != "" && (dobj.OpType == replication.ExistingObjectReplicationType || dobj.OpType == replication.HealReplicationType) {
-		if _, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+	if dobj.DeleteMarkerVersionID != "" {
+		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
+				ReplicationDeleteMarker: true,
 			},
-		}); isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+		})
+		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
 			if dobj.VersionID == "" {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
+		}
+		// mark delete marker replication as failed if target cluster not ready to receive
+		// this request yet (object version not replicated yet)
+		if err != nil && !toi.ReplicationReady {
+			rinfo.ReplicationStatus = replication.Failed
+			return
 		}
 	}
 
@@ -1897,7 +1913,9 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	if opts.VersionSuspended {
 		return &madmin.BucketTargets{}
 	}
-
+	if !opts.ProxyRequest {
+		return &madmin.BucketTargets{}
+	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
 		return &madmin.BucketTargets{}
@@ -2654,6 +2672,10 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 const mrfTimeInterval = 5 * time.Minute
 
 func (p *ReplicationPool) persistMRF() {
+	if !p.initialized() {
+		return
+	}
+
 	var mu sync.Mutex
 	entries := make(map[string]MRFReplicateEntry)
 	mTimer := time.NewTimer(mrfTimeInterval)
@@ -2706,7 +2728,7 @@ func (p *ReplicationPool) persistMRF() {
 }
 
 func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
-	if p == nil {
+	if !p.initialized() {
 		return
 	}
 	select {
@@ -2718,6 +2740,10 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 
 // save mrf entries to mrf_<uuid>.bin
 func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string]MRFReplicateEntry) error {
+	if !p.initialized() {
+		return nil
+	}
+
 	if len(entries) == 0 {
 		return nil
 	}
@@ -2743,6 +2769,10 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 // load mrf entries from disk
 func (p *ReplicationPool) loadMRF(fileName string) (re MRFReplicateEntries, e error) {
+	if !p.initialized() {
+		return re, nil
+	}
+
 	data, err := readConfig(p.ctx, p.objLayer, fileName)
 	if err != nil && err != errConfigNotFound {
 		return re, err
@@ -2779,7 +2809,7 @@ func (p *ReplicationPool) loadMRF(fileName string) (re MRFReplicateEntries, e er
 }
 
 func (p *ReplicationPool) processMRF() {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return
 	}
 	pTimer := time.NewTimer(mrfTimeInterval)
@@ -2822,7 +2852,7 @@ func (p *ReplicationPool) processMRF() {
 
 // process sends error logs to the heal channel for an attempt to heal replication.
 func (p *ReplicationPool) queueMRFHeal(file string) error {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return errServerNotInitialized
 	}
 
@@ -2844,6 +2874,10 @@ func (p *ReplicationPool) queueMRFHeal(file string) error {
 
 // load replication stats from disk
 func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationStats, e error) {
+	if !p.initialized() {
+		return map[string]BucketReplicationStats{}, nil
+	}
+
 	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName))
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
@@ -2879,8 +2913,12 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 	return rs, nil
 }
 
+func (p *ReplicationPool) initialized() bool {
+	return !(p == nil || p.objLayer == nil)
+}
+
 func (p *ReplicationPool) saveStatsToDisk() {
-	if p == nil || p.objLayer == nil {
+	if !p.initialized() {
 		return
 	}
 	sTimer := time.NewTimer(replStatsSaveInterval)
@@ -2902,6 +2940,9 @@ func (p *ReplicationPool) saveStatsToDisk() {
 
 // save replication stats to .minio.sys/buckets/replication/node-name.stats
 func (p *ReplicationPool) saveStats(ctx context.Context) error {
+	if !p.initialized() {
+		return nil
+	}
 	bsm := globalReplicationStats.getAllCachedLatest()
 	if len(bsm.Stats) == 0 {
 		return nil
@@ -2920,6 +2961,9 @@ func (p *ReplicationPool) saveStats(ctx context.Context) error {
 
 // SaveState saves replication stats and mrf data before server restart
 func (p *ReplicationPool) SaveState(ctx context.Context) error {
+	if !p.initialized() {
+		return nil
+	}
 	go func() {
 		select {
 		case p.saveStateCh <- struct{}{}:

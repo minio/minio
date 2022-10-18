@@ -899,6 +899,7 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 }
 
 func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis ...FileInfo) error {
+	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err != errFileNotFound {
@@ -910,6 +911,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		if err != nil {
 			return err
 		}
+		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
@@ -921,14 +923,14 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
-	if !isXL2V1Format(buf) {
+	if legacyJSON {
 		// Delete the meta file, if there are no more versions the
 		// top level parent is automatically removed.
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true, false)
 	}
 
 	var xlMeta xlMetaV2
-	if err = xlMeta.Load(buf); err != nil {
+	if err = xlMeta.LoadOrConvert(buf); err != nil {
 		return err
 	}
 
@@ -1038,6 +1040,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		})
 	}
 
+	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err != errFileNotFound {
@@ -1056,6 +1059,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			}
 			return err
 		}
+		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
@@ -1070,14 +1074,14 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	if !isXL2V1Format(buf) {
+	if legacyJSON {
 		// Delete the meta file, if there are no more versions the
 		// top level parent is automatically removed.
 		return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true, false)
 	}
 
 	var xlMeta xlMetaV2
-	if err := xlMeta.Load(buf); err != nil {
+	if err = xlMeta.LoadOrConvert(buf); err != nil {
 		return err
 	}
 
