@@ -10,7 +10,7 @@ MC="/usr/bin/mc --insecure"
 
 # AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
 # Special characters for example : ',",<,>,{,}
-MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_srvacct_tmp"
+MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_svcacct_tmp"
 
 # connectToMinio
 # Use a check-sleep-check loop to wait for MinIO service to be available
