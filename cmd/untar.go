@@ -172,11 +172,11 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 	for {
 		if !o.ignoreErrs {
 			asyncErrMu.Lock()
-			if asyncErr != nil {
-				defer asyncErrMu.Unlock()
-				return asyncErr
-			}
+			err := asyncErr
 			asyncErrMu.Unlock()
+			if err != nil {
+				return err
+			}
 		}
 
 		header, err := tarReader.Next()
