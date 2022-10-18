@@ -108,7 +108,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 
 func diskErrToDriveState(err error) (state string) {
 	switch {
-	case errors.Is(err, errDiskNotFound):
+	case errors.Is(err, errDiskNotFound) || errors.Is(err, context.DeadlineExceeded):
 		state = madmin.DriveStateOffline
 	case errors.Is(err, errCorruptedFormat):
 		state = madmin.DriveStateCorrupt
