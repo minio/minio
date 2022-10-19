@@ -396,6 +396,8 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1892,6 +1894,16 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyAlreadyAttached: {
+		Code:           "PolicyAlreadyAttached",
+		Description:    "The specified policy is already attached.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPolicyNotAttached: {
+		Code:           "PolicyNotAttached",
+		Description:    "The specified policy is not found.",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	// Add your error structure here.
 }

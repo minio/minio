@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -209,6 +210,92 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := json.Marshal(userInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, data)
+}
+
+// GetUserPolicies - GET /minio/admin/v3/list-user-policies
+func (a adminAPIHandlers) GetUserPolicies(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetUserPolicies")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	name := vars["accessKey"]
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	checkDenyOnly := false
+	if name == cred.AccessKey {
+		// Check that there is no explicit deny - otherwise it's allowed
+		// to view one's own info.
+		checkDenyOnly = true
+	}
+
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          iampolicy.GetUserAdminAction,
+		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+		DenyOnly:        checkDenyOnly,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
+	userPolicies, err := globalIAMSys.GetUserPolicies(ctx, name)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(userPolicies)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, data)
+}
+
+// GetGroupPolicies - GET /minio/admin/v3/list-group-policies
+func (a adminAPIHandlers) GetGroupPolicies(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetGroupPolicies")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetGroupAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	group := vars["group"]
+
+	groupPolicies, err := globalIAMSys.PolicyDBGet(group, true)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(groupPolicies)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1563,6 +1650,327 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			UserType:    int(userType),
 			IsGroup:     isGroup,
 			Policy:      policyName,
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// AttachPolicyToUser - PUT /minio/admin/v3/attach-user-policies?policiesToAdd=xxx&accessKey=?
+func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AttachPolicyToUser")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	policiesToAdd := vars["policiesToAdd"]
+	accessKey := vars["accessKey"]
+
+	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	if err != nil && err != errNoSuchUser {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
+	// Validate that user exists.
+	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
+		_, ok := globalIAMSys.GetUser(ctx, accessKey)
+		if !ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
+		}
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	// Check if policy is already attached to user.
+	policiesSlice := strings.Split(policiesToAdd, ",")
+	for _, p := range policiesSlice {
+		if _, ok := policyMap[p]; ok {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
+			return
+		}
+	}
+
+	existingPolicies = append(existingPolicies, policiesSlice...)
+	newPolicies := strings.Join(existingPolicies, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, accessKey, newPolicies, userType, false)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: accessKey,
+			UserType:    int(userType),
+			IsGroup:     false,
+			Policy:      policiesToAdd,
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// DetachPolicyFromUser - PUT /minio/admin/v3/attach-user-policies?policiesToDetach=xxx&accessKey=?
+func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DetachPolicyFromUser")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	policiesToDetach := vars["policiesToDetach"]
+	accessKey := vars["accessKey"]
+
+	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	if err != nil && err != errNoSuchUser {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
+	// Validate that user exists.
+	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
+		_, ok := globalIAMSys.GetUser(ctx, accessKey)
+		if !ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
+		}
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	// Check if policy is already attached to user.
+	policiesSlice := strings.Split(policiesToDetach, ",")
+	for _, p := range policiesSlice {
+		if _, ok := policyMap[p]; ok {
+			delete(policyMap, p)
+		} else {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyNotAttached), r.URL)
+			return
+		}
+	}
+
+	newPoliciesSl := []string{}
+	for p := range policyMap {
+		newPoliciesSl = append(newPoliciesSl, p)
+	}
+
+	newPolicies := strings.Join(newPoliciesSl, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, accessKey, newPolicies, userType, false)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: accessKey,
+			UserType:    int(userType),
+			IsGroup:     false,
+			Policy:      policiesToDetach,
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// AttachPolicyToGroup - PUT /minio/admin/v3/attach-group-policies?policiesToAdd=xxx&group=?
+func (a adminAPIHandlers) AttachPolicyToGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AttachPolicyToGroup")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	policiesToAdd := vars["policiesToAdd"]
+	group := vars["group"]
+
+	// Validate that group exists.
+	_, err := globalIAMSys.GetGroupDescription(group)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	existingPolicies, err := globalIAMSys.PolicyDBGet(group, true)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policiesSlice := strings.Split(policiesToAdd, ",")
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	// Check if policy is already attached to user.
+	for _, p := range policiesSlice {
+		if _, ok := policyMap[p]; ok {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
+			return
+		}
+	}
+
+	existingPolicies = append(existingPolicies, policiesSlice...)
+	newPolicies := strings.Join(existingPolicies, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, group, newPolicies, userType, true)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: group,
+			UserType:    int(userType),
+			IsGroup:     true,
+			Policy:      policiesToAdd,
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// DetachPolicyFromGroup - PUT /minio/admin/v3/detach-group-policies?policiesToDetach=xxx&group=?
+func (a adminAPIHandlers) DetachPolicyFromGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DetachPolicyFromGroup")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	policiesToDetach := vars["policiesToDetach"]
+	group := vars["group"]
+
+	// Validate that group exists.
+	_, err := globalIAMSys.GetGroupDescription(group)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	existingPolicies, err := globalIAMSys.PolicyDBGet(group, true)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	// Check if policy is already attached to user.
+	policiesSlice := strings.Split(policiesToDetach, ",")
+	for _, p := range policiesSlice {
+		if _, ok := policyMap[p]; ok {
+			delete(policyMap, p)
+		} else {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyNotAttached), r.URL)
+			return
+		}
+	}
+
+	newPoliciesSl := []string{}
+	for p := range policyMap {
+		newPoliciesSl = append(newPoliciesSl, p)
+	}
+
+	newPolicies := strings.Join(newPoliciesSl, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, group, newPolicies, userType, true)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: group,
+			UserType:    int(userType),
+			IsGroup:     true,
+			Policy:      policiesToDetach,
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {
