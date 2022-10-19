@@ -34,6 +34,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/color"
@@ -117,8 +118,7 @@ func initMetaVolumePANFS(fsPath, fsUUID string) error {
 }
 
 // NewPANFSObjectLayer - initialize new panfs object layer.
-func NewPANFSObjectLayer(fsPath string) (ObjectLayer, error) {
-	ctx := GlobalContext
+func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}

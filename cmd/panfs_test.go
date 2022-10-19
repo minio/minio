@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,17 +30,19 @@ import (
 // TestNewPANFS - tests initialization of all input disks
 // and constructs a valid `PANFS` object layer.
 func TestNewPANFS(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Do not attempt to create this path, the test validates
 	// so that NewPANFSObjectLayer initializes non existing paths
 	// and successfully returns initialized object layer.
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	_, err := NewPANFSObjectLayer("")
+	_, err := NewPANFSObjectLayer(ctx, "")
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = NewPANFSObjectLayer(disk)
+	_, err = NewPANFSObjectLayer(ctx, disk)
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Drive is not in FS format."
 		if err.Error() == errMsg {
