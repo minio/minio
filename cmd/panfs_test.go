@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/madmin-go"
 )
 
 // TestNewPANFS - tests initialization of all input disks

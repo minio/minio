@@ -17,6 +17,8 @@
 
 package cmd
 
+import "github.com/minio/madmin-go"
+
 // Gateway name backends
 const (
 	NASBackendGateway   = "nas"

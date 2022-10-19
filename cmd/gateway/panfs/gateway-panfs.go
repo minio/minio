@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	minio "github.com/minio/minio/cmd"
 )
 
