@@ -392,6 +392,10 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 
 // get ObjectOptions for CompleteMultipart calls
 func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+	opts, err = getDefaultOpts(r.Header, false, nil)
+	if err != nil {
+		return opts, err
+	}
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {

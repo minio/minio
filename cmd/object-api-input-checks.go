@@ -112,7 +112,14 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 				KeyMarker:      keyMarker,
 			}
 		}
-		if _, err := uuid.Parse(uploadIDMarker); err != nil {
+		uslc := strings.SplitN(uploadIDMarker, ".", 2)
+		if len(uslc) != 2 || uslc[0] != globalDeploymentID {
+			return MalformedUploadID{
+				UploadID: uploadIDMarker,
+			}
+		}
+
+		if _, err := uuid.Parse(uslc[1]); err != nil {
 			logger.LogIf(ctx, err)
 			return MalformedUploadID{
 				UploadID: uploadIDMarker,

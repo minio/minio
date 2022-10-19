@@ -2193,7 +2193,7 @@ func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].Metadata = opts.UserDefined
 	}
 
-	uploadID := mustGetUUID()
+	uploadID := fmt.Sprintf("%s.%s", globalDeploymentID, mustGetUUID())
 	uploadIDPath := es.getUploadIDDir(bucket, object, uploadID)
 
 	// Write updated `xl.meta` to all disks.

@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"reflect"
 	"sort"
@@ -35,11 +36,14 @@ import (
 
 	"github.com/minio/madmin-go"
 	minioClient "github.com/minio/minio-go/v7"
+	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/replication"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
 	bktpolicy "github.com/minio/pkg/bucket/policy"
@@ -354,10 +358,8 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		currDeploymentIDsSet = set.NewStringSet()
 		err                  error
 	)
-	currSites, err = c.GetClusterInfo(ctx)
-	if err != nil {
-		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
-	}
+	currSites = c.GetClusterInfo(ctx)
+
 	for _, v := range currSites.Sites {
 		currDeploymentIDsSet.Add(v.DeploymentID)
 	}
@@ -619,11 +621,11 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 }
 
 // GetClusterInfo - returns site replication information.
-func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.SiteReplicationInfo, err error) {
+func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.SiteReplicationInfo) {
 	c.RLock()
 	defer c.RUnlock()
 	if !c.enabled {
-		return info, nil
+		return info
 	}
 
 	info.Enabled = true
@@ -637,7 +639,7 @@ func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.Si
 	})
 
 	info.ServiceAccountAccessKey = c.state.ServiceAccountAccessKey
-	return info, nil
+	return info
 }
 
 const (
@@ -835,6 +837,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				Type:            madmin.ReplicationService,
 				Region:          "",
 				ReplicationSync: false,
+				DeploymentID:    peer.DeploymentID,
 			}
 			bucketTarget.Arn = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget)
 			err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, false)
@@ -2025,9 +2028,9 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	if !c.isEnabled() {
 		return st, errSRNotEnabled
 	}
-	info, err := c.GetClusterInfo(ctx)
-	if err != nil {
-		return st, errSRBackendIssue(err)
+	info := c.GetClusterInfo(ctx)
+	if !info.Enabled {
+		return st, errSRNotEnabled
 	}
 	peerMap := make(map[string]madmin.PeerInfo)
 	var rmvEndpoints []string
@@ -3463,10 +3466,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 // EditPeerCluster - edits replication configuration and updates peer endpoint.
 func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.PeerInfo) (madmin.ReplicateEditStatus, error) {
-	sites, err := c.GetClusterInfo(ctx)
-	if err != nil {
-		return madmin.ReplicateEditStatus{}, errSRBackendIssue(err)
-	}
+	sites := c.GetClusterInfo(ctx)
 	if !sites.Enabled {
 		return madmin.ReplicateEditStatus{}, errSRNotEnabled
 	}
@@ -3474,6 +3474,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	var (
 		found     bool
 		admClient *madmin.AdminClient
+		err       error
 	)
 
 	for _, v := range sites.Sites {
@@ -4842,4 +4843,244 @@ func isUserInfoEqual(u1, u2 madmin.UserInfo) bool {
 
 func isPolicyMappingEqual(p1, p2 srPolicyMapping) bool {
 	return p1.Policy == p2.Policy && p1.IsGroup == p2.IsGroup && p1.UserOrGroup == p2.UserOrGroup
+}
+
+// proxyUploadPart routes the part upload request to the site that initiated the multipart upload.
+func (c *SiteReplicationSys) proxyUploadPart(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket, object, uploadID string, partID int, sz int64, md5hex, sha256hex string, pi madmin.PeerInfo, opts ObjectOptions) {
+	tgt := c.getValidTargetforUpload(ctx, bucket, pi.DeploymentID, opts)
+	if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, c.annotatePeerErr(pi.Name, "Bucket target not found", fmt.Errorf("No remote target for peer %s", pi.Name)))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("remote site %s is offline ", pi.Name)), r.URL)
+		return
+	}
+	if tgt.disableProxy {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("replication proxy setting is disabled for remote site %s", pi.Name)), r.URL)
+		return
+	}
+	coreClnt := &miniogo.Core{Client: tgt.Client}
+	var md5sum string
+	if hdrs, ok := r.Header["Content-Md5"]; ok {
+		md5sum = hdrs[0]
+	}
+	_, hdrs, err := coreClnt.PutObjectPart(ctx, bucket, object, uploadID, partID, r.Body, sz, md5sum, sha256hex, opts.ServerSideEncryption)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	hdrSlice := []string{
+		xhttp.AmzServerSideEncryption,
+		xhttp.AmzServerSideEncryptionKmsID,
+		xhttp.AmzServerSideEncryptionKmsContext,
+		xhttp.AmzServerSideEncryption,
+		xhttp.ETag,
+		xhttp.AmzChecksumAlgo,
+		xhttp.AmzChecksumCRC32,
+		xhttp.AmzChecksumCRC32C,
+		xhttp.AmzChecksumSHA1,
+		xhttp.AmzChecksumSHA256,
+		xhttp.AmzChecksumMode,
+	}
+	for _, hdrName := range hdrSlice {
+		hdrVal := hdrs.Get(hdrName)
+		if hdrVal != "" {
+			w.Header().Set(hdrName, hdrVal)
+		}
+	}
+	writeSuccessResponseHeadersOnly(w)
+}
+
+func (c *SiteReplicationSys) proxyCopyObjectPart(ctx context.Context, w http.ResponseWriter, r *http.Request, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset, length int64, pi madmin.PeerInfo, srcOpts, dstOpts ObjectOptions) {
+	tgt := c.getValidTargetforUpload(ctx, srcBucket, pi.DeploymentID, dstOpts)
+	if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, c.annotatePeerErr(pi.Name, "Bucket target not found", fmt.Errorf("No remote target for peer %s", pi.Name)))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("remote site %s is offline ", pi.Name)), r.URL)
+		return
+	}
+	if tgt.disableProxy {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("replication proxy setting is disabled for remote site %s", pi.Name)), r.URL)
+		return
+	}
+	metadata := map[string]string{}
+	header := make(http.Header)
+	if srcOpts.ServerSideEncryption != nil {
+		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
+	}
+
+	if dstOpts.ServerSideEncryption != nil {
+		dstOpts.ServerSideEncryption.Marshal(header)
+	}
+	for k, v := range header {
+		metadata[k] = v[0]
+	}
+	if rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange); rangeHeader != "" {
+		metadata[xhttp.AmzCopySourceRange] = rangeHeader
+	}
+	coreClnt := &miniogo.Core{Client: tgt.Client}
+	partInfo, err := coreClnt.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID,
+		partID, startOffset, length, metadata)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	response := generateCopyObjectPartResponse(strings.Trim(partInfo.ETag, "\""), partInfo.LastModified)
+	encodedSuccessResponse := encodeResponse(response)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
+// proxyListObjectParts proxies ListObjectParts request to the peer site that has the upload in progress.
+func (c *SiteReplicationSys) proxyListObjectParts(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket, object, uploadID string, partNumberMarker, maxParts int, encodingType string, pi madmin.PeerInfo) {
+	opts, err := getDefaultOpts(r.Header, false, nil)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	tgt := c.getValidTargetforUpload(ctx, bucket, pi.DeploymentID, opts)
+	if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, c.annotatePeerErr(pi.Name, "Bucket target not found", fmt.Errorf("No remote target for peer %s", pi.Name)))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("remote site %s is offline ", pi.Name)), r.URL)
+		return
+	}
+	if tgt.disableProxy {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("replication proxy setting is disabled for remote site %s", pi.Name)), r.URL)
+		return
+	}
+	coreClnt := &miniogo.Core{Client: tgt.Client}
+	lpInfo, err := coreClnt.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errUploadIDNotFound), r.URL)
+		return
+	}
+	listPartsInfo := FromMinioClientListPartsInfo(lpInfo)
+	response := generateListPartsResponse(listPartsInfo, encodingType)
+	encodedSuccessResponse := encodeResponse(response)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
+// proxyAbortMultipart proxies the AbortMultipart request to peer site handling the upload
+func (c *SiteReplicationSys) proxyAbortMultipart(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket, object, uploadID string, pi madmin.PeerInfo) {
+	opts := ObjectOptions{}
+	tgt := c.getValidTargetforUpload(ctx, bucket, pi.DeploymentID, opts)
+	if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, c.annotatePeerErr(pi.Name, "Bucket target not found", fmt.Errorf("No remote target for peer %s", pi.Name)))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("remote site %s is offline ", pi.Name)), r.URL)
+		return
+	}
+	if tgt.disableProxy {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("replication proxy setting is disabled for remote site %s", pi.Name)), r.URL)
+		return
+	}
+	coreClnt := &miniogo.Core{Client: tgt.Client}
+	err := coreClnt.AbortMultipartUpload(ctx, bucket, object, uploadID)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	writeSuccessNoContent(w)
+}
+
+// proxyCompleteMultipart proxies CompleteMultipart request to the peer that initiated the upload
+func (c *SiteReplicationSys) proxyCompleteMultipart(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket, object, uploadID string, completedParts []CompletePart, pi madmin.PeerInfo, opts ObjectOptions, writeErrorResponseWithoutXMLHeader func(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL)) {
+	tgt := c.getValidTargetforUpload(ctx, bucket, pi.DeploymentID, opts)
+	if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		logger.LogIf(ctx, c.annotatePeerErr(pi.Name, "Bucket target not found", fmt.Errorf("No remote target for peer %s", pi.Name)))
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("remote site %s is offline ", pi.Name)), r.URL)
+		return
+	}
+	if tgt.disableProxy {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrNoSuchUpload, fmt.Errorf("replication proxy setting is disabled for remote site %s", pi.Name)), r.URL)
+		return
+	}
+	coreClnt := &miniogo.Core{Client: tgt.Client}
+	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
+	completeDoneCh := sendWhiteSpace(ctx, w)
+
+	mopts := miniogo.PutObjectOptions{}
+	if r.Header.Get(xMinIOExtract) == "true" && strings.HasSuffix(object, archiveExt) {
+		mopts.IsExtract = true
+	}
+	uploadInfo, err := coreClnt.CompleteMultipartUpload(ctx, bucket, object, uploadID, ToMinioClientCompleteParts(completedParts), mopts)
+
+	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
+	// can cause white space to be written after we send XML response in a race condition.
+	headerWritten := <-completeDoneCh
+	if err != nil {
+		if headerWritten {
+			writeErrorResponseWithoutXMLHeader(ctx, w, toAPIError(ctx, err), r.URL)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		}
+		return
+	}
+	// Generate complete multipart response.
+	response := CompleteMultipartUploadResponse{
+		Location: uploadInfo.Location,
+		Bucket:   uploadInfo.Bucket,
+		Key:      uploadInfo.Key,
+		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
+		ETag:           "\"" + uploadInfo.ETag + "\"",
+		ChecksumSHA1:   uploadInfo.ChecksumSHA1,
+		ChecksumSHA256: uploadInfo.ChecksumSHA256,
+		ChecksumCRC32:  uploadInfo.ChecksumCRC32,
+		ChecksumCRC32C: uploadInfo.ChecksumCRC32C,
+	}
+	var encodedSuccessResponse []byte
+	if !headerWritten {
+		encodedSuccessResponse = encodeResponse(response)
+	} else {
+		encodedSuccessResponse, err = xml.Marshal(response)
+		if err != nil {
+			writeErrorResponseWithoutXMLHeader(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
+// getPeerForUpload returns the site replication peer handling this upload. Defaults to local cluster otherwise
+func (c *SiteReplicationSys) getPeerForUpload(ctx context.Context, uploadID string) (pi madmin.PeerInfo, local bool) {
+	ci := c.GetClusterInfo(ctx)
+	if !ci.Enabled {
+		return pi, true
+	}
+	slc := strings.SplitN(uploadID, ".", 2)
+	for _, site := range ci.Sites {
+		if slc[0] == site.DeploymentID {
+			return site, site.DeploymentID == globalDeploymentID
+		}
+	}
+	return pi, true
+}
+
+// getValidTargetforUpload returns the remote target client for the deployment ID and bucket specified as args
+func (c *SiteReplicationSys) getValidTargetforUpload(ctx context.Context, bucket, deplID string, opts ObjectOptions) (tgt *TargetClient) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and site B does not have the object yet.
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+		return nil
+	}
+	ci := c.GetClusterInfo(ctx)
+	if !ci.Enabled {
+		return nil
+	}
+	var pi madmin.PeerInfo
+	for _, site := range ci.Sites {
+		if site.DeploymentID == deplID {
+			pi = site
+		}
+	}
+	if pi.DeploymentID == "" || pi.DeploymentID == globalDeploymentID {
+		return nil
+	}
+
+	peerARN := globalBucketTargetSys.getRemoteARNForPeer(bucket, pi)
+	return globalBucketTargetSys.GetRemoteTargetClient(ctx, peerARN)
 }

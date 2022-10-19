@@ -288,13 +288,9 @@ func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	info, err := globalSiteReplicationSys.GetClusterInfo(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	info := globalSiteReplicationSys.GetClusterInfo(ctx)
 
-	if err = json.NewEncoder(w).Encode(info); err != nil {
+	if err := json.NewEncoder(w).Encode(info); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

@@ -437,9 +437,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].Metadata = userDefined
 	}
 
-	uploadID := mustGetUUID()
+	uploadID := fmt.Sprintf("%s.%s", globalDeploymentID, mustGetUUID())
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
-
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
 		return nil, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
