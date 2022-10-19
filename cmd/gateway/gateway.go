@@ -22,6 +22,9 @@ import (
 	// NAS
 	_ "github.com/minio/minio/cmd/gateway/nas"
 
+	// PANFS
+	_ "github.com/minio/minio/cmd/gateway/panfs"
+
 	// S3
 	_ "github.com/minio/minio/cmd/gateway/s3"
 	// gateway functionality is frozen, no new gateways are being implemented
