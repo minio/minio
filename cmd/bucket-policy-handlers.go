@@ -149,7 +149,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil)
+	updatedAt, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketPolicyConfig)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
