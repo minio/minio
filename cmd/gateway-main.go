@@ -249,16 +249,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	listeners := ctx.Int("listeners")
-	if listeners == 0 {
-		listeners = 1
-	}
-	addrs := make([]string, 0, listeners)
-	for i := 0; i < listeners; i++ {
-		addrs = append(addrs, globalMinioAddr)
-	}
-
-	httpServer := xhttp.NewServer(addrs).
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}).
 		UseHandler(setCriticalErrorHandler(corsHandler(router))).
 		UseTLSConfig(newTLSConfig(getCert)).
 		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).

@@ -57,10 +57,11 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_ADDRESS",
 	},
 	cli.IntFlag{
-		Name:   "listeners",
+		Name:   "listeners", // Deprecated Oct 2022
 		Value:  1,
 		Usage:  "bind N number of listeners per ADDRESS:PORT",
 		EnvVar: "MINIO_LISTENERS",
+		Hidden: true,
 	},
 	cli.StringFlag{
 		Name:   "console-address",
@@ -499,16 +500,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	listeners := ctx.Int("listeners")
-	if listeners == 0 {
-		listeners = 1
-	}
-	addrs := make([]string, 0, listeners)
-	for i := 0; i < listeners; i++ {
-		addrs = append(addrs, globalMinioAddr)
-	}
-
-	httpServer := xhttp.NewServer(addrs).
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}).
 		UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 		UseTLSConfig(newTLSConfig(getCert)).
 		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
