@@ -33,7 +33,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -169,7 +168,7 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 
 	if etcdClient == nil {
 		if globalIsGateway {
-			if globalGatewayName == NASBackendGateway {
+			if globalGatewayName == NASBackendGateway || globalGatewayName == PANFSBackendGateway {
 				sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
 			} else {
 				sys.store = &IAMStoreSys{newIAMDummyStore(sys.usersSysType)}

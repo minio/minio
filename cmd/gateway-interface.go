@@ -17,12 +17,11 @@
 
 package cmd
 
-import "github.com/minio/madmin-go"
-
 // Gateway name backends
 const (
-	NASBackendGateway = "nas"
-	S3BackendGateway  = "s3"
+	NASBackendGateway   = "nas"
+	PANFSBackendGateway = "panfs"
+	S3BackendGateway    = "s3"
 )
 
 // Gateway represents a gateway backend.
