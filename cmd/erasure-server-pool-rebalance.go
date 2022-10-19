@@ -558,7 +558,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			for _, version := range fivs.Versions {
 				// Skip transitioned objects for now. TBD
 				if version.IsRemote() {
-					logger.LogIf(ctx, fmt.Errorf("skipping %s/%s transitioned object", bucket, version.Name))
 					continue
 				}
 
@@ -589,7 +588,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 							SkipRebalancing:   true, // make sure we skip the decommissioned pool
 						})
 					var failure bool
-					if err != nil {
+					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						logger.LogIf(ctx, err)
 						failure = true
 					}
@@ -615,7 +614,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 							VersionID:    version.VersionID,
 							NoDecryption: true,
 						})
-					if isErrObjectNotFound(err) {
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
 						return
 					}
@@ -661,7 +660,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				if err != nil {
 					logger.LogIf(ctx, err)
 				}
-
 			}
 		}
 

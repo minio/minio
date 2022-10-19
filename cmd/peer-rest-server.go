@@ -1090,6 +1090,7 @@ func (s *peerRESTServer) LoadRebalanceMetaHandler(w http.ResponseWriter, r *http
 	startRebalance, err := strconv.ParseBool(startRebalanceStr)
 	if err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 
 	if err := pools.loadRebalanceMeta(r.Context()); err != nil {
