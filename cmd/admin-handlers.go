@@ -1988,12 +1988,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
 	defer healthCancel()
 
-	// Freeze all incoming S3 API calls before running speedtest.
-	globalNotificationSys.ServiceFreeze(ctx, true)
-
-	// unfreeze all incoming S3 API calls after speedtest.
-	defer globalNotificationSys.ServiceFreeze(ctx, false)
-
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
 	anonAddr := func(addr string) string {
@@ -2139,7 +2133,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
 			anonCmdLine := strings.ReplaceAll(cmdLine, globalLocalNodeName, "server1")
-			return strings.ReplaceAll(anonCmdLine, globalMinioConsoleHost, "server1")
+			if len(globalMinioConsoleHost) > 0 {
+				anonCmdLine = strings.ReplaceAll(anonCmdLine, globalMinioConsoleHost, "server1")
+			}
+			return anonCmdLine
 		}
 
 		// Server start command regex groups:
