@@ -63,7 +63,7 @@ createSvcacct () {
   # Create the svcacct if it does not exist
   if ! checkSvcacctExists ; then
     echo "Creating svcacct '$SVCACCT'"
-    cat $MINIO_ACCESSKEY_SECRETKEY_TMP | ${MC} admin user svcacct add --access-key $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --secret-key $(head -2 $MINIO_ACCESSKEY_SECRETKEY_TMP) myminio $USER
+    ${MC} admin user svcacct add --access-key $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --secret-key $(tail -n1 $MINIO_ACCESSKEY_SECRETKEY_TMP) myminio $USER
   else
     echo "Svcacct '$SVCACCT' already exists."
   fi
