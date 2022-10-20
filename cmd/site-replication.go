@@ -1361,7 +1361,7 @@ func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket
 	}
 
 	// Delete the bucket policy
-	_, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, nil)
+	_, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketPolicyConfig)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1391,7 +1391,7 @@ func (c *SiteReplicationSys) PeerBucketTaggingHandler(ctx context.Context, bucke
 	}
 
 	// Delete the tags
-	_, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil)
+	_, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketTaggingConfig)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1445,7 +1445,7 @@ func (c *SiteReplicationSys) PeerBucketSSEConfigHandler(ctx context.Context, buc
 	}
 
 	// Delete sse config
-	_, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil)
+	_, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketSSEConfig)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1475,7 +1475,7 @@ func (c *SiteReplicationSys) PeerBucketQuotaConfigHandler(ctx context.Context, b
 	}
 
 	// Delete the bucket policy
-	_, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, nil)
+	_, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketQuotaConfigFile)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -2234,7 +2234,7 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 				return err
 			}
 		} else {
-			if _, err := globalBucketMetadataSys.Update(ctx, b.Name, bucketReplicationConfig, nil); err != nil {
+			if _, err := globalBucketMetadataSys.Delete(ctx, b.Name, bucketReplicationConfig); err != nil {
 				return err
 			}
 		}

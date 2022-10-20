@@ -81,9 +81,7 @@ func (sys *BucketMetadataSys) Set(bucket string, meta BucketMetadata) {
 	}
 }
 
-// Update update bucket metadata for the specified config file.
-// The configData data should not be modified after being sent here.
-func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configFile string, configData []byte) (updatedAt time.Time, err error) {
+func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string, configFile string, configData []byte, parse bool) (updatedAt time.Time, err error) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return updatedAt, errServerNotInitialized
@@ -107,7 +105,7 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 		return updatedAt, errInvalidArgument
 	}
 
-	meta, err := loadBucketMetadata(ctx, objAPI, bucket)
+	meta, err := loadBucketMetadataParse(ctx, objAPI, bucket, parse)
 	if err != nil {
 		if !globalIsErasure && !globalIsDistErasure && errors.Is(err, errVolumeNotFound) {
 			// Only single drive mode needs this fallback.
@@ -163,6 +161,18 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 	globalNotificationSys.LoadBucketMetadata(bgContext(ctx), bucket) // Do not use caller context here
 
 	return updatedAt, nil
+}
+
+// Delete delete the bucket metadata for the specified bucket.
+// must be used by all callers instead of using Update() with nil configData.
+func (sys *BucketMetadataSys) Delete(ctx context.Context, bucket string, configFile string) (updatedAt time.Time, err error) {
+	return sys.updateAndParse(ctx, bucket, configFile, nil, false)
+}
+
+// Update update bucket metadata for the specified bucket.
+// The configData data should not be modified after being sent here.
+func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configFile string, configData []byte) (updatedAt time.Time, err error) {
+	return sys.updateAndParse(ctx, bucket, configFile, configData, true)
 }
 
 // Get metadata for a bucket.
