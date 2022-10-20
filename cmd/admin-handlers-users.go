@@ -1189,31 +1189,42 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		accountName = cred.ParentUser
 	}
 
+	roleArn := iampolicy.Args{Claims: claims}.GetRoleArn()
+	var effectivePolicy iampolicy.Policy
+
 	var buf []byte
-	if accountName == globalActiveCred.AccessKey {
+	switch {
+	case accountName == globalActiveCred.AccessKey:
 		for _, policy := range iampolicy.DefaultPolicies {
 			if policy.Name == "consoleAdmin" {
-				buf, err = json.MarshalIndent(policy.Definition, "", " ")
-				if err != nil {
-					writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-					return
-				}
+				effectivePolicy = policy.Definition
 				break
 			}
 		}
-	} else {
+	case roleArn != "":
+		_, policy, err := globalIAMSys.GetRolePolicy(roleArn)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		policySlice := newMappedPolicy(policy).toSlice()
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySlice...)
+
+	default:
 		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policies...)
 
-		buf, err = json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+	}
+	buf, err = json.MarshalIndent(effectivePolicy, "", " ")
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 
 	acctInfo := madmin.AccountInfo{
