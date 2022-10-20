@@ -353,6 +353,26 @@ users:
   #  existingSecretKey: password
   #  policy: readonly
 
+## Additional Annotations for the Kubernetes Job makeUserJob
+makeUserJob:
+  podAnnotations: {}
+  annotations: {}
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraVolumes: []
+  extraVolumeMounts: []
+  # Command to run after the main command on exit
+  exitCommand: ""
+
 ## List of service accounts to be created after minio install
 ##
 # svcaccts:
@@ -367,10 +387,7 @@ users:
   #   existingSecretKey: password
   #   user: console
 
-
-
-## Additional Annotations for the Kubernetes Job makeUserJob
-makeUserJob:
+makeServiceAccountJob:
   podAnnotations: {}
   annotations: {}
   securityContext:
