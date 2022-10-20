@@ -68,37 +68,7 @@ func (rs *rebalanceStats) update(bucket string, oi ObjectInfo) {
 	rs.Object = oi.Name
 }
 
-func (rs *rebalanceStats) clone() *rebalanceStats {
-	ss := &rebalanceStats{
-		InitFreeSpace: rs.InitFreeSpace,
-		InitCapacity:  rs.InitCapacity,
-
-		Bucket:        rs.Bucket,
-		Object:        rs.Object,
-		NumObjects:    rs.NumObjects,
-		NumVersions:   rs.NumVersions,
-		Bytes:         rs.Bytes,
-		Participating: rs.Participating,
-		Info:          rs.Info,
-	}
-	ss.Buckets = make([]string, len(rs.Buckets))
-	copy(ss.Buckets, rs.Buckets)
-
-	ss.RebalancedBuckets = make([]string, len(rs.RebalancedBuckets))
-	copy(ss.RebalancedBuckets, rs.RebalancedBuckets)
-
-	return ss
-}
-
 type rstats []*rebalanceStats
-
-func (rs rstats) clone() []*rebalanceStats {
-	ss := make([]*rebalanceStats, len(rs))
-	for i, r := range rs {
-		ss[i] = r.clone()
-	}
-	return ss
-}
 
 //go:generate stringer -type=rebalStatus -trimprefix=rebal $GOFILE
 type rebalStatus uint8
@@ -127,23 +97,7 @@ type rebalanceMeta struct {
 	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
 }
 
-var (
-	errRebalanceNotStarted     = errors.New("rebalance not started")
-	errRebalanceAlreadyRunning = errors.New("rebalance already running")
-)
-
-func (z *erasureServerPools) loadRebalanceMetaWithTTL(ctx context.Context, ttl time.Duration) error {
-	var reload bool
-	z.rebalMu.RLock()
-	reload = z.rebalMeta == nil || time.Since(z.rebalMeta.lastRefreshedAt) > ttl
-	z.rebalMu.RUnlock()
-
-	if !reload {
-		return nil
-	}
-
-	return z.loadRebalanceMeta(ctx)
-}
+var errRebalanceNotStarted = errors.New("rebalance not started")
 
 func (z *erasureServerPools) loadRebalanceMeta(ctx context.Context) error {
 	r := &rebalanceMeta{}
@@ -232,20 +186,6 @@ const (
 	rebalMetaVer  = 1
 )
 
-func (r *rebalanceMeta) clone() *rebalanceMeta {
-	if r == nil {
-		return nil
-	}
-	s := rebalanceMeta{
-		lastRefreshedAt: r.lastRefreshedAt,
-		ID:              r.ID,
-		PercentFreeGoal: r.PercentFreeGoal,
-		PoolStats:       rstats(r.PoolStats).clone(),
-		StoppedAt:       r.StoppedAt,
-	}
-	return &s
-}
-
 func (z *erasureServerPools) nextRebalBucket(poolIdx int) (string, bool) {
 	z.rebalMu.RLock()
 	defer z.rebalMu.RUnlock()
@@ -288,6 +228,7 @@ func (z *erasureServerPools) bucketRebalanceDone(bucket string, poolIdx int) {
 		}
 	}
 }
+
 func (r *rebalanceMeta) load(ctx context.Context, store objectIO) error {
 	return r.loadWithOpts(ctx, store, ObjectOptions{})
 }
@@ -319,7 +260,6 @@ func (r *rebalanceMeta) loadWithOpts(ctx context.Context, store objectIO, opts O
 
 	// OK, parse data.
 	if _, err = r.UnmarshalMsg(data[4:]); err != nil {
-
 		return err
 	}
 
@@ -833,12 +773,12 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 }
 
 func (z *erasureServerPools) StartRebalance() {
-	ctx, cancel := context.WithCancel(GlobalContext)
 	z.rebalMu.Lock()
 	if z.rebalMeta == nil || !z.rebalMeta.StoppedAt.IsZero() { // rebalance not running, nothing to do
 		z.rebalMu.Unlock()
 		return
 	}
+	ctx, cancel := context.WithCancel(GlobalContext)
 	z.rebalMeta.cancel = cancel // to be used when rebalance-stop is called
 	z.rebalMu.Unlock()
 
@@ -872,6 +812,8 @@ func (z *erasureServerPools) StartRebalance() {
 	return
 }
 
+// StopRebalance signals the rebalance goroutine running on this node (if any)
+// to stop, using the context.CancelFunc(s) saved at the time ofStartRebalance.
 func (z *erasureServerPools) StopRebalance() error {
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
@@ -890,8 +832,7 @@ func (z *erasureServerPools) StopRebalance() error {
 }
 
 // for rebalance trace support
-type rebalanceMetrics struct {
-}
+type rebalanceMetrics struct{}
 
 var globalRebalanceMetrics rebalanceMetrics
 

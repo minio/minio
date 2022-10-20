@@ -630,6 +630,8 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	}
 }
 
+// StopRebalance notifies all MinIO nodes to signal any ongoing rebalance
+// goroutine to stop.
 func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
