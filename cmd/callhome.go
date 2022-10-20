@@ -18,28 +18,18 @@
 package cmd
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 )
-
-const (
-	// callhomeSchemaVersion1 is callhome schema version 1
-	callhomeSchemaVersion1 = "1"
-
-	// callhomeSchemaVersion is current callhome schema version.
-	callhomeSchemaVersion = callhomeSchemaVersion1
-)
-
-// CallhomeInfo - Contains callhome information
-type CallhomeInfo struct {
-	SchemaVersion string             `json:"schema_version"`
-	AdminInfo     madmin.InfoMessage `json:"admin_info"`
-}
 
 var callhomeLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 
@@ -118,26 +108,85 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) bool {
 }
 
 func performCallhome(ctx context.Context) {
-	err := sendCallhomeInfo(
-		CallhomeInfo{
-			SchemaVersion: callhomeSchemaVersion,
-			AdminInfo:     getServerInfo(ctx, nil),
-		})
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
+	deadline := 10 * time.Second // Default deadline is 10secs for callhome
+	objectAPI := newObjectLayerFn()
+
+	healthCtx, healthCancel := context.WithTimeout(ctx, deadline)
+	defer healthCancel()
+
+	healthInfoCh := make(chan madmin.HealthInfo)
+
+	query := url.Values{}
+	for _, k := range madmin.HealthDataTypesList {
+		query[string(k)] = []string{"true"}
+	}
+
+	healthInfo := madmin.HealthInfo{
+		Version: madmin.HealthInfoVersion,
+		Minio: madmin.MinioHealthInfo{
+			Info: madmin.MinioInfo{
+				DeploymentID: globalDeploymentID,
+			},
+		},
+	}
+
+	go fetchHealthInfo(healthCtx, objectAPI, &query, healthInfoCh, healthInfo)
+
+	for {
+		select {
+		case hi, ok := <-healthInfoCh:
+			if ok {
+				healthInfo = hi
+			}
+		case <-healthCtx.Done():
+			err := sendHealthInfo(ctx, healthInfo)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
+			}
+			return
+		}
 	}
 }
 
 const (
-	callhomeURL    = "https://subnet.min.io/api/callhome"
-	callhomeURLDev = "http://localhost:9000/api/callhome"
+	healthURL    = "https://subnet.min.io/api/health/upload"
+	healthURLDev = "http://localhost:9000/api/health/upload"
 )
 
-func sendCallhomeInfo(ch CallhomeInfo) error {
-	url := callhomeURL
+func sendHealthInfo(ctx context.Context, healthInfo madmin.HealthInfo) error {
+	url := healthURL
 	if globalIsCICD {
-		url = callhomeURLDev
+		url = healthURLDev
 	}
-	_, err := globalSubnetConfig.Post(url, ch)
+
+	filename := fmt.Sprintf("health_%s.json.gz", UTCNow().Format("20060102150405"))
+	url += "?filename=" + filename
+
+	_, err := globalSubnetConfig.Upload(url, filename, createHealthJSONGzip(ctx, healthInfo))
 	return err
+}
+
+func createHealthJSONGzip(ctx context.Context, healthInfo madmin.HealthInfo) []byte {
+	var b bytes.Buffer
+	gzWriter := gzip.NewWriter(&b)
+
+	header := struct {
+		Version string `json:"version"`
+	}{Version: healthInfo.Version}
+
+	enc := json.NewEncoder(gzWriter)
+	if e := enc.Encode(header); e != nil {
+		logger.LogIf(ctx, fmt.Errorf("Could not encode health info header: %w", e))
+		return nil
+	}
+
+	if e := enc.Encode(healthInfo); e != nil {
+		logger.LogIf(ctx, fmt.Errorf("Could not encode health info: %w", e))
+		return nil
+	}
+
+	gzWriter.Flush()
+	gzWriter.Close()
+
+	return b.Bytes()
 }
