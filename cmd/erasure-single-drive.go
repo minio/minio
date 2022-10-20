@@ -1477,7 +1477,7 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	if opts.Expiration.Expire {
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
+		action, _ := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 		var isErr bool
 		switch action {
 		case lifecycle.NoneAction:
@@ -2962,7 +2962,7 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 		objInfo, err := es.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				action, _ := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
 				switch action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough

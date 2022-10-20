@@ -701,7 +701,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			action := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			action, _ := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			switch action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
