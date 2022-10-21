@@ -51,7 +51,9 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker      bool                // Is only set in DELETE operations for delete marker replication
+	DeleteMarker            bool // Is only set in DELETE operations for delete marker replication
+	CheckDMReplicationReady bool // Is delete marker ready to be replicated - set only during HEAD
+
 	UserDefined       map[string]string   // only set in case of POST/PUT operations
 	PartNumber        int                 // only useful in case of GetObject/HeadObject
 	CheckPrecondFn    CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation

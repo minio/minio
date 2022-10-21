@@ -580,8 +580,8 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
-				ReplicationProxyRequest: "false",
-				ReplicationDeleteMarker: true,
+				ReplicationProxyRequest:           "false",
+				IsReplicationReadyForDeleteMarker: true,
 			},
 		})
 		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {

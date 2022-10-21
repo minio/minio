@@ -159,6 +159,23 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 			}
 		}
 	}
+	replReadyCheck := strings.TrimSpace(r.Header.Get(xhttp.MinIOCheckDMReplicationReady))
+	if replReadyCheck != "" {
+		switch replReadyCheck {
+		case "true":
+			opts.CheckDMReplicationReady = true
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOCheckDMReplicationReady, fmt.Errorf("should be true or false"))
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    err,
+			}
+		}
+	}
+
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
 	return opts, nil
