@@ -75,7 +75,8 @@ func handleSignals() {
 
 	for {
 		select {
-		case <-globalHTTPServerErrorCh:
+		case err := <-globalHTTPServerErrorCh:
+			logger.LogIf(context.Background(), err)
 			exit(stopProcess())
 		case osSignal := <-globalOSSignalCh:
 			if !globalIsGateway {
