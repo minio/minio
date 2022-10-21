@@ -26,13 +26,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
+
+const siteReplAPIVersion = "1"
+
+func siteReplAPIVersionMismatch(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
+	if v := r.Form.Get("api-version"); v != siteReplAPIVersion {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSiteReplicationAPIVersionMismatch), r.URL)
+		return true
+	}
+	return false
+}
 
 // SiteReplicationAdd - PUT /minio/admin/v3/site-replication/add
 func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +51,10 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
+		return
+	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
 		return
 	}
 
@@ -81,6 +94,10 @@ func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	var joinArg madmin.SRPeerJoinReq
 	if err := parseJSONBody(ctx, r.Body, &joinArg, cred.SecretKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -105,9 +122,16 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	operation := madmin.BktOp(vars["operation"])
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
+	bucket := r.Form.Get("bucket")
+	operation := madmin.BktOp(r.Form.Get("operation"))
+	if bucket == "" || operation == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+		return
+	}
 
 	var err error
 	switch operation {
@@ -168,6 +192,10 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	var item madmin.SRIAMItem
 	if err := parseJSONBody(ctx, r.Body, &item, ""); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -219,6 +247,10 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
 	if objectAPI == nil {
+		return
+	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
 		return
 	}
 
@@ -288,6 +320,10 @@ func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	info, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -307,6 +343,10 @@ func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Re
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
+		return
+	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
 		return
 	}
 
@@ -348,6 +388,11 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 	if objectAPI == nil {
 		return
 	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	opts := getSRStatusOptions(r)
 	// default options to all if status options are unset for backward compatibility
 	var dfltOpts madmin.SRStatusOptions
@@ -380,6 +425,10 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 		return
 	}
 
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	opts := getSRStatusOptions(r)
 	info, err := globalSiteReplicationSys.SiteReplicationMetaInfo(ctx, objectAPI, opts)
 	if err != nil {
@@ -402,6 +451,11 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 	if objectAPI == nil {
 		return
 	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	var site madmin.PeerInfo
 	err := parseJSONBody(ctx, r.Body, &site, cred.SecretKey)
 	if err != nil {
@@ -432,6 +486,10 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
+		return
+	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
 		return
 	}
 
@@ -470,6 +528,11 @@ func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.R
 	if objectAPI == nil {
 		return
 	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
+		return
+	}
+
 	var rreq madmin.SRRemoveReq
 	err := parseJSONBody(ctx, r.Body, &rreq, "")
 	if err != nil {
@@ -500,6 +563,10 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
 	if objectAPI == nil {
+		return
+	}
+
+	if siteReplAPIVersionMismatch(ctx, w, r) {
 		return
 	}
 

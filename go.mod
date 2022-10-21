@@ -35,7 +35,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.1
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.15.11
-	github.com/klauspost/cpuid/v2 v2.1.1
+	github.com/klauspost/cpuid/v2 v2.1.2
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.11.0
@@ -49,7 +49,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.0
 	github.com/minio/madmin-go v1.6.5
-	github.com/minio/minio-go/v7 v7.0.41-0.20221013203648-8257e7003b5e
+	github.com/minio/minio-go/v7 v7.0.41
 	github.com/minio/pkg v1.5.2
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
@@ -73,7 +73,7 @@ require (
 	github.com/rs/cors v1.8.2
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil/v3 v3.22.8
+	github.com/shirou/gopsutil/v3 v3.22.9
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.7-0.20220719154719-f3635b96e483
 	github.com/valyala/bytebufferpool v1.0.0
@@ -84,9 +84,9 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.5
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
-	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b
+	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
-	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41
+	golang.org/x/sys v0.1.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	google.golang.org/api v0.96.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -211,8 +211,8 @@ require (
 	go.uber.org/goleak v1.1.12 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/net v0.0.0-20220909164309-bea034e7d591 // indirect
-	golang.org/x/sync v0.0.0-20220907140024-f12130a52804 // indirect
+	golang.org/x/net v0.0.0-20221017152216-f25eb7ecb193 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035 // indirect
 	golang.org/x/text v0.3.8 // indirect
 	golang.org/x/tools v0.1.12 // indirect
@@ -226,3 +226,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/madmin-go => ../madmin-go
