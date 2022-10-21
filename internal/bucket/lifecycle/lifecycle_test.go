@@ -725,18 +725,120 @@ func TestTransitionTier(t *testing.T) {
 		},
 	}
 
+	now := time.Now().UTC()
+
 	obj1 := ObjectOpts{
 		Name:     "obj1",
 		IsLatest: true,
+		ModTime:  now,
 	}
+
 	obj2 := ObjectOpts{
-		Name: "obj2",
+		Name:    "obj2",
+		ModTime: now,
 	}
-	if got := lc.TransitionTier(obj1); got != "TIER-1" {
-		t.Fatalf("Expected TIER-1 but got %s", got)
+
+	// Go back seven days in the past
+	now = now.Add(7 * 24 * time.Hour)
+
+	evt := lc.Eval(obj1, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
-	if got := lc.TransitionTier(obj2); got != "TIER-2" {
-		t.Fatalf("Expected TIER-2 but got %s", got)
+	if evt.StorageClass != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
+	}
+
+	evt = lc.Eval(obj2, now)
+	if evt.Action != TransitionVersionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)
+	}
+}
+
+func TestTransitionTierWithPrefixAndTags(t *testing.T) {
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Filter: Filter{
+					Prefix: Prefix{
+						set:    true,
+						string: "abcd/",
+					},
+				},
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-1",
+				},
+			},
+			{
+				ID:     "rule-2",
+				Status: "Enabled",
+				Filter: Filter{
+					tagSet: true,
+					Tag: Tag{
+						Key:   "priority",
+						Value: "low",
+					},
+				},
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-2",
+				},
+			},
+		},
+	}
+
+	now := time.Now().UTC()
+
+	obj1 := ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
+		ModTime:  now,
+	}
+
+	obj2 := ObjectOpts{
+		Name:     "abcd/obj2",
+		IsLatest: true,
+		ModTime:  now,
+	}
+
+	obj3 := ObjectOpts{
+		Name:     "obj3",
+		IsLatest: true,
+		ModTime:  now,
+		UserTags: "priority=low",
+	}
+
+	// Go back seven days in the past
+	now = now.Add(7 * 24 * time.Hour)
+
+	// Eval object 1
+	evt := lc.Eval(obj1, now)
+	if evt.Action != NoneAction {
+		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.Action)
+	}
+
+	// Eval object 2
+	evt = lc.Eval(obj2, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
+	}
+
+	// Eval object 3
+	evt = lc.Eval(obj3, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)
 	}
 }
 

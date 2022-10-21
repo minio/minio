@@ -495,15 +495,15 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Automatically remove the object/version is an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			var success bool
-			switch action {
+			switch evt.Action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
+				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
 			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 				// Restored object delete would be still allowed to proceed as success
 				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
 			}
 			if success {
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -757,15 +757,15 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// Automatically remove the object/version is an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			var success bool
-			switch action {
+			switch evt.Action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
+				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
 			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 				// Restored object delete would be still allowed to proceed as success
 				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
 			}
 			if success {
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))

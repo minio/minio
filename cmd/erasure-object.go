@@ -1530,9 +1530,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.Expiration.Expire {
 		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 		if err == nil {
-			action := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 			var isErr bool
-			switch action {
+			switch evt.Action {
 			case lifecycle.NoneAction:
 				isErr = true
 			case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
