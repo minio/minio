@@ -208,15 +208,11 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 
 // Returns all the expanded endpoints, each argument is expanded separately.
 func (s endpointSet) getEndpoints() (endpoints []string) {
-	if len(s.endpoints) != 0 {
-		return s.endpoints
-	}
 	for _, argPattern := range s.argPatterns {
 		for _, lbls := range argPattern.Expand() {
 			endpoints = append(endpoints, strings.Join(lbls, ""))
 		}
 	}
-	s.endpoints = endpoints
 	return endpoints
 }
 
