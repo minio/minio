@@ -281,7 +281,7 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 
 // Event contains a lifecycle action with associated info
 type Event struct {
-	EventAction  Action
+	Action       Action
 	RuleID       string
 	Due          time.Time
 	StorageClass string
@@ -301,11 +301,11 @@ func (es lifecycleEvents) Less(i, j int) bool {
 	if es[i].Due.Equal(es[j].Due) {
 		// Prefer Expiration over Transition for both current and noncurrent
 		// versions
-		switch es[i].EventAction {
+		switch es[i].Action {
 		case DeleteAction, DeleteVersionAction:
 			return true
 		}
-		switch es[j].EventAction {
+		switch es[j].Action {
 		case DeleteAction, DeleteVersionAction:
 			return false
 		}
@@ -333,8 +333,8 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		}
 
 		events = append(events, Event{
-			EventAction: action,
-			Due:         now,
+			Action: action,
+			Due:    now,
 		})
 	}
 
@@ -346,9 +346,9 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 				// if set to false the policy takes no action. This cannot be specified with Days or
 				// Date in a Lifecycle Expiration Policy.
 				events = append(events, Event{
-					EventAction: DeleteVersionAction,
-					RuleID:      rule.ID,
-					Due:         now,
+					Action: DeleteVersionAction,
+					RuleID: rule.ID,
+					Due:    now,
 				})
 				// No other conflicting actions apply to an expired object delete marker
 				break
@@ -360,9 +360,9 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
 				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
 					events = append(events, Event{
-						EventAction: DeleteVersionAction,
-						RuleID:      rule.ID,
-						Due:         expectedExpiry,
+						Action: DeleteVersionAction,
+						RuleID: rule.ID,
+						Due:    expectedExpiry,
 					})
 					// No other conflicting actions apply to an expired object delete marker
 					break
@@ -382,9 +382,9 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.After(expectedExpiry) {
 				events = append(events, Event{
-					EventAction: DeleteVersionAction,
-					RuleID:      rule.ID,
-					Due:         expectedExpiry,
+					Action: DeleteVersionAction,
+					RuleID: rule.ID,
+					Due:    expectedExpiry,
 				})
 			}
 		}
@@ -395,7 +395,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && now.After(due) {
 					events = append(events, Event{
-						EventAction:  TransitionVersionAction,
+						Action:       TransitionVersionAction,
 						RuleID:       rule.ID,
 						Due:          due,
 						StorageClass: rule.NoncurrentVersionTransition.StorageClass,
@@ -410,17 +410,17 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
 					events = append(events, Event{
-						EventAction: DeleteAction,
-						RuleID:      rule.ID,
-						Due:         rule.Expiration.Date.Time,
+						Action: DeleteAction,
+						RuleID: rule.ID,
+						Due:    rule.Expiration.Date.Time,
 					})
 				}
 			case !rule.Expiration.IsDaysNull():
 				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
 					events = append(events, Event{
-						EventAction: DeleteAction,
-						RuleID:      rule.ID,
-						Due:         expectedExpiry,
+						Action: DeleteAction,
+						RuleID: rule.ID,
+						Due:    expectedExpiry,
 					})
 				}
 			}
@@ -428,7 +428,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			if obj.TransitionStatus != TransitionComplete {
 				if due, ok := rule.Transition.NextDue(obj); ok && now.After(due) {
 					events = append(events, Event{
-						EventAction:  TransitionAction,
+						Action:       TransitionAction,
 						RuleID:       rule.ID,
 						Due:          due,
 						StorageClass: rule.Transition.StorageClass,
@@ -444,14 +444,14 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	return Event{
-		EventAction: NoneAction,
+		Action: NoneAction,
 	}
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
-	return lc.Eval(obj, time.Now().UTC()).EventAction
+	return lc.Eval(obj, time.Now().UTC()).Action
 }
 
 // ExpectedExpiryTime calculates the expiry, transition or restore date/time based on a object modtime.
@@ -472,7 +472,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 // given obj.
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
 	event := lc.Eval(obj, time.Time{})
-	switch event.EventAction {
+	switch event.Action {
 	case DeleteAction, DeleteVersionAction:
 		w.Header()[xhttp.AmzExpiration] = []string{
 			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, event.Due.Format(http.TimeFormat), event.RuleID),

@@ -742,16 +742,16 @@ func TestTransitionTier(t *testing.T) {
 	now = now.Add(7 * 24 * time.Hour)
 
 	evt := lc.Eval(obj1, now)
-	if evt.EventAction != TransitionAction {
-		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.EventAction)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
 	if evt.StorageClass != "TIER-1" {
 		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
 	}
 
 	evt = lc.Eval(obj2, now)
-	if evt.EventAction != TransitionVersionAction {
-		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.EventAction)
+	if evt.Action != TransitionVersionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.Action)
 	}
 	if evt.StorageClass != "TIER-2" {
 		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)
@@ -819,14 +819,14 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 
 	// Eval object 1
 	evt := lc.Eval(obj1, now)
-	if evt.EventAction != NoneAction {
-		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.EventAction)
+	if evt.Action != NoneAction {
+		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.Action)
 	}
 
 	// Eval object 2
 	evt = lc.Eval(obj2, now)
-	if evt.EventAction != TransitionAction {
-		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.EventAction)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
 	if evt.StorageClass != "TIER-1" {
 		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
@@ -834,8 +834,8 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 
 	// Eval object 3
 	evt = lc.Eval(obj3, now)
-	if evt.EventAction != TransitionAction {
-		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.EventAction)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
 	if evt.StorageClass != "TIER-2" {
 		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)

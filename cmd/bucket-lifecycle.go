@@ -308,7 +308,7 @@ func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 func enqueueTransitionImmediate(obj ObjectInfo) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
 		event := lc.Eval(obj.ToLifecycleOpts(), time.Now())
-		switch event.EventAction {
+		switch event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 			globalTransitionState.queueTransitionTask(obj, event.StorageClass)
 		}

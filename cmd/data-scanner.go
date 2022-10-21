@@ -963,21 +963,21 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	versionID := oi.VersionID
 	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
-	action, tier := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi)
+	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi)
 	if i.debug {
 		if versionID != "" {
-			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, action)
+			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, lcEvt.Action)
 		} else {
-			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), action)
+			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), lcEvt.Action)
 		}
 	}
-	defer globalScannerMetrics.timeILM(action)
+	defer globalScannerMetrics.timeILM(lcEvt.Action)
 
-	switch action {
+	switch lcEvt.Action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		return applyLifecycleAction(action, oi, ""), 0
+		return applyLifecycleAction(lcEvt.Action, oi, ""), 0
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		return applyLifecycleAction(action, oi, tier), size
+		return applyLifecycleAction(lcEvt.Action, oi, lcEvt.StorageClass), size
 	default:
 		// No action.
 		return false, size
@@ -1109,21 +1109,21 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 	return size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) (action lifecycle.Action, sc string) {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) lifecycle.Event {
 	event := lc.Eval(obj.ToLifecycleOpts(), time.Now().UTC())
 	if serverDebugLog {
-		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.EventAction)
+		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
 	}
 
-	if event.EventAction == lifecycle.NoneAction {
-		return action, ""
+	if event.Action == lifecycle.NoneAction {
+		return event
 	}
 
-	switch event.EventAction {
+	switch event.Action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
 		if obj.VersionID == "" {
-			return lifecycle.NoneAction, ""
+			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
 		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 			if serverDebugLog {
@@ -1133,11 +1133,11 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 					console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 				}
 			}
-			return lifecycle.NoneAction, ""
+			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
 	}
 
-	return event.EventAction, event.StorageClass
+	return event
 }
 
 func applyTransitionRule(obj ObjectInfo, storageClass string) bool {
