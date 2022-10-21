@@ -131,6 +131,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	if r.Header.Get(xhttp.Range) != "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
 	}
 
 	// Validate pre-conditions if any.
@@ -436,6 +437,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 
 	if r.Header.Get(xhttp.Range) != "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
 	}
 
 	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, opts)
