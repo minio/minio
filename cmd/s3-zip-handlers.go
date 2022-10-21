@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -122,6 +123,17 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
+	// We do not allow offsetting into extracted files.
+	if opts.PartNumber != 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
+		return
+	}
+
+	if r.Header.Get(xhttp.Range) != "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
+	}
+
 	// Validate pre-conditions if any.
 	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		if objectAPI.IsEncryptionSupported() {
@@ -192,6 +204,8 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	// s3zip does not allow ranges
+	w.Header().Del(xhttp.AcceptRanges)
 
 	setHeadGetRespHeaders(w, r.Form)
 
@@ -410,11 +424,20 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
-	var rs *HTTPRangeSpec
-
 	// Validate pre-conditions if any.
 	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		return checkPreconditions(ctx, w, r, oi, opts)
+	}
+
+	// We do not allow offsetting into extracted files.
+	if opts.PartNumber != 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
+		return
+	}
+
+	if r.Header.Get(xhttp.Range) != "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
 	}
 
 	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, opts)
@@ -455,15 +478,14 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
+	// s3zip does not allow ranges.
+	w.Header().Del(xhttp.AcceptRanges)
+
 	// Set any additional requested response headers.
 	setHeadGetRespHeaders(w, r.Form)
 
 	// Successful response.
-	if rs != nil {
-		w.WriteHeader(http.StatusPartialContent)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc..
