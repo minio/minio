@@ -136,7 +136,7 @@ func randString(n int, src rand.Source, prefix string) string {
 		cache >>= letterIdxBits
 		remain--
 	}
-	return prefix + string(b[0:30-len(prefix)])
+	return prefix + string(b[0:30-len(prefix)]) + env.Get("MINIO_GATEWAY_S3_RAND_STRING_SUFFIX", "")
 }
 
 // Chains all credential types, in the following order:
