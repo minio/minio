@@ -49,7 +49,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.0
 	github.com/minio/madmin-go v1.6.5
-	github.com/minio/minio-go/v7 v7.0.41-0.20221013203648-8257e7003b5e
+	github.com/minio/minio-go/v7 v7.0.43-0.20221021202758-c6319beb6b27
 	github.com/minio/pkg v1.5.2
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0

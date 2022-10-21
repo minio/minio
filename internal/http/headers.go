@@ -197,6 +197,8 @@ const (
 	MinIOReplicationResetStatus = "X-Minio-Replication-Reset-Status"
 	// Header indicating target cluster can receive delete marker replication requests because object has been replicated
 	MinIOTargetReplicationReady = "X-Minio-Replication-Ready"
+	// Header asking if cluster can receive delete marker replication request now.
+	MinIOCheckDMReplicationReady = "X-Minio-Check-Replication-Ready"
 	// Header indiicates last tag update time on source
 	MinIOSourceTaggingTimestamp = "X-Minio-Source-Replication-Tagging-Timestamp"
 	// Header indiicates last rtention update time on source
