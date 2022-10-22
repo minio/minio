@@ -19,12 +19,6 @@ package config
 
 // UI errors
 var (
-	ErrInvalidFSValue = newErrFn(
-		"Invalid drive path",
-		"Please provide an existing deployment with MinIO",
-		"MinIO does not support newer NAS gateway deployments anymore refer https://github.com/minio/minio/issues/14331",
-	)
-
 	ErrInvalidXLValue = newErrFn(
 		"Invalid drive path",
 		"Please provide a fresh drive for single drive MinIO setup",
@@ -107,12 +101,6 @@ var (
 		"Invalid cache high watermark value",
 		"Please check the passed value",
 		"MINIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
-	)
-
-	ErrInvalidCacheEncryptionKey = newErrFn(
-		"Invalid cache encryption master key value",
-		"Please check the passed value",
-		"MINIO_CACHE_ENCRYPTION_SECRET_KEY: For more information, please refer to https://blog.min.io/deprecation-of-the-minio-gateway/",
 	)
 
 	ErrInvalidCacheRange = newErrFn(
@@ -282,18 +270,6 @@ Example 1:
 		"Invalid compression include value",
 		"Please check the passed value",
 		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_MIME_TYPES=\"A,B,C\"",
-	)
-
-	ErrInvalidGWSSEValue = newErrFn(
-		"Invalid gateway SSE value",
-		"Please check the passed value",
-		"MINIO_GATEWAY_SSE: Gateway SSE accepts only C and S3 as valid values. Delimit by `;` to set more than one value",
-	)
-
-	ErrInvalidGWSSEEnvValue = newErrFn(
-		"Invalid gateway SSE configuration",
-		"",
-		"Refer to https://min.io/docs/minio/linux/administration/server-side-encryption/server-side-encryption-sse-kms.html#quickstart for setting up SSE",
 	)
 
 	ErrInvalidReplicationWorkersValue = newErrFn(

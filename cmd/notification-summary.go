@@ -31,9 +31,6 @@ func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
 func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
-	if globalIsGateway {
-		return 0
-	}
 	for _, disk := range diskInfo {
 		// Ignore parity disks
 		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {
@@ -53,10 +50,6 @@ func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
 func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
-	if globalIsGateway {
-		return 0
-	}
-
 	for _, disk := range diskInfo {
 		// Ignore parity disks
 		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {

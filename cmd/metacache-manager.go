@@ -56,10 +56,6 @@ func (m *metacacheManager) initManager() {
 			objAPI = newObjectLayerFn()
 		}
 
-		if globalIsGateway {
-			return
-		}
-
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
 

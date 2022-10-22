@@ -636,7 +636,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			case crypto.SSEC:
 				content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
 			}
-			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
+			for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
 				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 					// Do not need to send any internal metadata
 					// values to client.

@@ -100,11 +100,6 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, notifications are not supported - except NAS gateway.
-	if globalIsGateway && !objAPI.IsNotificationSupported() {
-		return nil
-	}
-
 	if err := evnot.targetList.Add(globalConfigTargetList.Targets()...); err != nil {
 		return err
 	}
@@ -326,10 +321,6 @@ func sendEvent(args eventArgs) {
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 
-	// globalNotificationSys is not initialized in gateway mode.
-	if globalNotificationSys == nil {
-		return
-	}
 	if globalHTTPListen.NumSubscribers(args.EventName) > 0 {
 		globalHTTPListen.Publish(args.ToEvent(false))
 	}
