@@ -440,6 +440,9 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 }
 
 func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, pool, set, objectParity int) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
 	tags := make(map[string]interface{})
 	tags["pool"] = pool
 	tags["set"] = set

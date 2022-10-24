@@ -1035,6 +1035,9 @@ type AuditLogOptions struct {
 
 // sends audit logs for internal subsystem activity
 func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
 	entry := audit.NewEntry(globalDeploymentID)
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
@@ -1047,11 +1050,13 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	// Merge tag information if found - this is currently needed for tags
 	// set during decommissioning.
 	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
-		if entry.Tags == nil {
-			entry.Tags = make(map[string]interface{})
-		}
-		for k, v := range reqInfo.GetTagsMap() {
-			entry.Tags[k] = v
+		if tags := reqInfo.GetTagsMap(); len(tags) > 0 {
+			if entry.Tags == nil {
+				entry.Tags = make(map[string]interface{}, len(tags))
+			}
+			for k, v := range tags {
+				entry.Tags[k] = v
+			}
 		}
 	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
