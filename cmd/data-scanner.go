@@ -1441,9 +1441,11 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string) {
 	case ILMTransition:
 		apiName = "ILMTransition"
 	}
-	auditLogInternal(ctx, oi.Bucket, oi.Name, AuditLogOptions{
+	auditLogInternal(ctx, AuditLogOptions{
 		Event:     event,
 		APIName:   apiName,
+		Bucket:    oi.Bucket,
+		Object:    oi.Name,
 		VersionID: oi.VersionID,
 	})
 }

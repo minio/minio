@@ -372,9 +372,11 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 
 	defer func() {
 		replStatus := string(replicationStatus)
-		auditLogInternal(context.Background(), bucket, dobj.ObjectName, AuditLogOptions{
+		auditLogInternal(context.Background(), AuditLogOptions{
 			Event:     dobj.EventType,
 			APIName:   ReplicateDeleteAPI,
+			Bucket:    bucket,
+			Object:    dobj.ObjectName,
 			VersionID: versionID,
 			Status:    replStatus,
 		})
@@ -903,9 +905,11 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			// on disk.
 			replicationStatus = ri.ReplicationStatus
 		}
-		auditLogInternal(ctx, ri.Bucket, ri.Name, AuditLogOptions{
+		auditLogInternal(ctx, AuditLogOptions{
 			Event:     ri.EventType,
 			APIName:   ReplicateObjectAPI,
+			Bucket:    ri.Bucket,
+			Object:    ri.Name,
 			VersionID: ri.VersionID,
 			Status:    replicationStatus.String(),
 		})

@@ -1026,28 +1026,38 @@ type AuditLogOptions struct {
 	Event     string
 	APIName   string
 	Status    string
+	Bucket    string
+	Object    string
 	VersionID string
 	Error     string
+	Tags      map[string]interface{}
 }
 
 // sends audit logs for internal subsystem activity
-func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
+func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
 	entry := audit.NewEntry(globalDeploymentID)
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
-	entry.API.Bucket = bucket
-	entry.API.Object = object
-	if opts.VersionID != "" {
-		entry.ReqQuery = make(map[string]string)
-		entry.ReqQuery[xhttp.VersionID] = opts.VersionID
-	}
+	entry.API.Bucket = opts.Bucket
+	entry.API.Objects = []audit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
+	entry.Tags = opts.Tags
 	// Merge tag information if found - this is currently needed for tags
 	// set during decommissioning.
 	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
-		entry.Tags = reqInfo.GetTagsMap()
+		if tags := reqInfo.GetTagsMap(); len(tags) > 0 {
+			if entry.Tags == nil {
+				entry.Tags = make(map[string]interface{}, len(tags))
+			}
+			for k, v := range tags {
+				entry.Tags[k] = v
+			}
+		}
 	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
 	logger.AuditLog(ctx, nil, nil, nil)

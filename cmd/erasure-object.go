@@ -439,10 +439,32 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
+func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, pool, set, objectParity int) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
+	tags := make(map[string]interface{})
+	tags["pool"] = pool
+	tags["set"] = set
+	tags["objectParity"] = objectParity
+
+	opts := AuditLogOptions{
+		Event:     "DeleteDanglingObject",
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+		Tags:      tags,
+	}
+
+	auditLogInternal(ctx, opts)
+}
+
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
 	var err error
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
+		defer auditDanglingObjectDeletion(ctx, bucket, object, m.VersionID, er.poolIndex, er.setIndex, m.Erasure.ParityBlocks)
+
 		err = errFileNotFound
 		if opts.VersionID != "" {
 			err = errFileVersionNotFound
