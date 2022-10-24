@@ -1274,9 +1274,11 @@ func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID strin
 	if err != nil {
 		errStr = err.Error()
 	}
-	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+	auditLogInternal(ctx, AuditLogOptions{
 		Event:     "decommission",
 		APIName:   apiName,
+		Bucket:    bucket,
+		Object:    object,
 		VersionID: versionID,
 		Error:     errStr,
 	})
