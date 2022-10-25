@@ -20,9 +20,12 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/internal/logger"
 )
@@ -97,6 +100,23 @@ func handleSignals() {
 			case serviceStop:
 				logger.Info("Stopping on service signal")
 				exit(stopProcess())
+			}
+		case confReloadSignal := <-globalConfReloadSignalCh:
+			logger.Info("%s signal received. Start reloading MinIO IAM sub-system", strings.ToUpper(confReloadSignal.String()))
+			// Reload IAM data from storage.
+			retryCtx, _ := context.WithCancel(GlobalContext)
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for {
+				if err := globalIAMSys.Load(retryCtx); err != nil {
+					if configRetriableErrors(err) {
+						logger.Info("Waiting for all MinIO IAM sub-system to be reload.. possible cause (%v)", err)
+						time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+						continue
+					}
+					logger.Info("Unable to reload IAM sub-system, some users may not be available %w", err)
+					logger.LogIf(GlobalContext, fmt.Errorf("Unable to reload IAM sub-system, some users may not be available %w", err))
+				}
+				break
 			}
 		}
 	}
