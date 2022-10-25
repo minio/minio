@@ -291,6 +291,10 @@ const (
 	ErrSiteReplicationIAMError
 	ErrSiteReplicationConfigMissing
 
+	// Pool rebalance errors
+	ErrAdminRebalanceAlreadyStarted
+	ErrAdminRebalanceNotStarted
+
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
@@ -1396,6 +1400,16 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioSiteReplicationConfigMissingError",
 		Description:    "Site not found in site replication configuration",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminRebalanceAlreadyStarted: {
+		Code:           "XMinioAdminRebalanceAlreadyStarted",
+		Description:    "Pool rebalance is already started",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAdminRebalanceNotStarted: {
+		Code:           "XMinioAdminRebalanceNotStarted",
+		Description:    "Pool rebalance is not started",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",

@@ -85,6 +85,9 @@ type ObjectOptions struct {
 	// SkipDecommissioned set to 'true' if the call requires skipping the pool being decommissioned.
 	// mainly set for certain WRITE operations.
 	SkipDecommissioned bool
+	// SkipRebalancing should be set to 'true' if the call should skip pools
+	// participating in a rebalance operation. Typically set for 'write' operations.
+	SkipRebalancing bool
 
 	WalkFilter      func(info FileInfo) bool // return WalkFilter returns 'true/false'
 	WalkMarker      string                   // set to skip until this object
