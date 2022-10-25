@@ -25,6 +25,7 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -36,6 +37,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
@@ -418,6 +420,24 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 	return nil
 }
 
+// Return the list of address that MinIO server needs to listen on:
+//   - Returning 127.0.0.1 is necessary so Console will be able to send
+//     requests to the local S3 API.
+//   - The returned List needs to be deduplicated as well.
+func getServerListenAddrs() []string {
+	// Use a string set to avoid duplication
+	addrs := set.NewStringSet()
+	// Listen on local interface to receive requests from Console
+	for _, ip := range mustGetLocalIPs() {
+		if ip != nil && ip.IsLoopback() {
+			addrs.Add(net.JoinHostPort(ip.String(), globalMinioPort))
+		}
+	}
+	// Add the interface specified by the user
+	addrs.Add(globalMinioAddr)
+	return addrs.ToSlice()
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
@@ -500,7 +520,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr}).
+	httpServer := xhttp.NewServer(getServerListenAddrs()).
 		UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 		UseTLSConfig(newTLSConfig(getCert)).
 		UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
@@ -637,7 +657,7 @@ func serverMain(ctx *cli.Context) {
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {
-			logger.Info(color.Yellow("WARNING: Drive caching is deprecated for single/multi drive MinIO setups. Please migrate to using MinIO S3 gateway instead of drive caching"))
+			logger.Info(color.Yellow("WARNING: Drive caching is deprecated for single/multi drive MinIO setups."))
 			var cacheAPI CacheObjectLayer
 			cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
 			logger.FatalIf(err, "Unable to initialize drive caching")
@@ -685,17 +705,5 @@ func serverMain(ctx *cli.Context) {
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (newObject ObjectLayer, err error) {
-	// For FS only, directly use the disk.
-	if endpointServerPools.NEndpoints() == 1 {
-		// Initialize new FS object layer.
-		newObject, err = NewFSObjectLayer(ctx, endpointServerPools[0].Endpoints[0].Path)
-		if err == nil {
-			return newObject, nil
-		}
-		if err != nil && err != errFreshDisk {
-			return newObject, err
-		}
-	}
-
 	return newErasureServerPools(ctx, endpointServerPools)
 }

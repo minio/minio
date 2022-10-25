@@ -1404,9 +1404,6 @@ func getMinioVersionMetrics() *MetricsGroup {
 func getNodeHealthMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
-		if globalIsGateway {
-			return
-		}
 		metrics = make([]Metric, 0, 16)
 		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
 		metrics = append(metrics, Metric{
@@ -1426,9 +1423,6 @@ func getMinioHealingMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 5)
-		if globalIsGateway {
-			return
-		}
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if !exists {
 			return
@@ -1672,7 +1666,7 @@ func getBucketUsageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1817,7 +1811,7 @@ func getClusterTierMetrics() *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 		if globalTierConfigMgr.Empty() {
@@ -1845,7 +1839,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1889,7 +1883,7 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1922,7 +1916,7 @@ func getClusterStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1979,7 +1973,7 @@ func getKMSNodeMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+		if objLayer == nil || GlobalKMS == nil {
 			return
 		}
 
@@ -2017,7 +2011,7 @@ func getKMSMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+		if objLayer == nil || GlobalKMS == nil {
 			return []Metric{}
 		}
 

@@ -415,10 +415,5 @@ func (config *TierConfigMgr) Reset() {
 
 // Init initializes tier configuration reading from objAPI
 func (config *TierConfigMgr) Init(ctx context.Context, objAPI ObjectLayer) error {
-	// In gateway mode, we don't support ILM tier configuration.
-	if globalIsGateway {
-		return nil
-	}
-
 	return config.Reload(ctx, objAPI)
 }

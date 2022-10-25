@@ -44,9 +44,8 @@ func mustSplitHostPort(hostPort string) (host, port string) {
 	return xh.Name, xh.Port.String()
 }
 
-// mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
-func mustGetLocalIP4() (ipList set.StringSet) {
-	ipList = set.NewStringSet()
+// mustGetLocalIPs returns IPs of local interface
+func mustGetLocalIPs() (ipList []net.IP) {
 	ifs, err := net.Interfaces()
 	logger.FatalIf(err, "Unable to get IP addresses of this host")
 
@@ -68,36 +67,33 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 				ip = v.IP
 			}
 
-			if ip.To4() != nil {
-				ipList.Add(ip.String())
-			}
+			ipList = append(ipList, ip)
 		}
 	}
 
 	return ipList
 }
 
+// mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
+func mustGetLocalIP4() (ipList set.StringSet) {
+	ipList = set.NewStringSet()
+	for _, ip := range mustGetLocalIPs() {
+		if ip.To4() != nil {
+			ipList.Add(ip.String())
+		}
+	}
+	return
+}
+
 // mustGetLocalIP6 returns IPv6 addresses of localhost.  It panics on error.
 func mustGetLocalIP6() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
-	addrs, err := net.InterfaceAddrs()
-	logger.FatalIf(err, "Unable to get IP addresses of this host")
-
-	for _, addr := range addrs {
-		var ip net.IP
-		switch v := addr.(type) {
-		case *net.IPNet:
-			ip = v.IP
-		case *net.IPAddr:
-			ip = v.IP
-		}
-
+	for _, ip := range mustGetLocalIPs() {
 		if ip.To4() == nil {
 			ipList.Add(ip.String())
 		}
 	}
-
-	return ipList
+	return
 }
 
 // getHostIP returns IP address of given host.

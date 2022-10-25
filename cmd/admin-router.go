@@ -274,16 +274,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/kms/key/create").HandlerFunc(gz(httpTraceAll(adminAPI.KMSCreateKeyHandler))).Queries("key-id", "{key-id:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(gz(httpTraceAll(adminAPI.KMSKeyStatusHandler)))
 
-		if !globalIsGateway {
-			// Keep obdinfo for backward compatibility with mc
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-			// -- Health API --
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
-		}
+		// Keep obdinfo for backward compatibility with mc
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
+		// -- Health API --
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 	}
 
 	// If none of the routes match add default error handler routes

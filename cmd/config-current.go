@@ -331,7 +331,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	case config.IdentityOpenIDSubSys:
 		if _, err := openid.LookupConfig(s,
-			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 			return err
 		}
 	case config.IdentityLDAPSubSys:
@@ -352,7 +352,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	case config.IdentityPluginSubSys:
 		if _, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
 			return err
 		}
 	case config.SubnetSubSys:
@@ -370,12 +370,12 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		fallthrough
 	case config.PolicyPluginSubSys:
 		if ppargs, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-			NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody); err != nil {
 			return err
 		} else if ppargs.URL == nil {
 			// Check if legacy opa is configured.
 			if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-				NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
+				NewHTTPTransport(), xhttp.DrainBody); err != nil {
 				return err
 			}
 		}
@@ -388,7 +388,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 	}
 
 	if config.NotifySubSystems.Contains(subSys) {
-		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, subSys, NewGatewayHTTPTransport()); err != nil {
+		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, subSys, NewHTTPTransport()); err != nil {
 			return err
 		}
 	}
@@ -434,42 +434,26 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
-		if globalIsGateway {
-			logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
-		} else {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
-		}
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
 	if err == nil && dnsURL != "" {
 		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
 		if err != nil {
-			if globalIsGateway {
-				logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
-			} else {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
-			}
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 		}
 	}
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		if globalIsGateway {
-			logger.FatalIf(err, "Unable to initialize etcd config")
-		} else {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
-		}
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 	}
 
 	if etcdCfg.Enabled {
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
-			if globalIsGateway {
-				logger.FatalIf(err, "Unable to initialize etcd config")
-			} else {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
-			}
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 		}
 
 		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
@@ -485,12 +469,8 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
 				)
 				if err != nil {
-					if globalIsGateway {
-						logger.FatalIf(err, "Unable to initialize DNS config")
-					} else {
-						logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-							globalDomainNames, err))
-					}
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+						globalDomainNames, err))
 				}
 			}
 		}
@@ -510,11 +490,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
-		if globalIsGateway {
-			logger.FatalIf(err, "Unable to setup cache")
-		} else {
-			logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
-		}
+		logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
 	}
 
 	if globalCacheConfig.Enabled {
@@ -545,7 +521,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
 
-	transport := NewGatewayHTTPTransport()
+	transport := NewHTTPTransport()
 
 	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
@@ -554,11 +530,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
-		if globalIsGateway {
-			logger.FatalIf(err, "Unable to initialize dynamic configuration")
-		} else {
-			logger.LogIf(ctx, err)
-		}
+		logger.LogIf(ctx, err)
 	}
 }
 
@@ -579,7 +551,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 
 		// Initialize remote instance transport once.
 		getRemoteInstanceTransportOnce.Do(func() {
-			getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
+			getRemoteInstanceTransport = newHTTPTransport(apiConfig.RemoteTransportDeadline)
 		})
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
@@ -617,7 +589,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			if l.Enabled {
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
-				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 				loggerCfg.HTTP[n] = l
 			}
 		}
@@ -634,7 +606,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			if l.Enabled {
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
-				l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
+				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 				loggerCfg.AuditWebhook[n] = l
 			}
 		}

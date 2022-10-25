@@ -24,9 +24,6 @@ import (
 	_ "github.com/minio/minio/internal/init"
 
 	minio "github.com/minio/minio/cmd"
-
-	// Import gateway
-	_ "github.com/minio/minio/cmd/gateway"
 )
 
 func main() {

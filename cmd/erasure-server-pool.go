@@ -42,8 +42,6 @@ import (
 )
 
 type erasureServerPools struct {
-	GatewayUnsupported
-
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
 	serverPools   []*erasureSets
@@ -1302,8 +1300,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
-				switch action {
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				switch evt.Action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
 				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
@@ -2130,12 +2128,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		Bucket: bucket,
 		Object: object,
 	}
-}
-
-// GetMetrics - returns metrics of local disks
-func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return &BackendMetrics{}, NotImplemented{}
 }
 
 func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx int, err error) {

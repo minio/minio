@@ -2,8 +2,6 @@
 
 Events occurring on objects in a bucket can be monitored using bucket event notifications.
 
-> NOTE: Gateway mode does not support bucket notifications (except NAS gateway).
-
 Various event types supported by MinIO server are
 
 | Supported Object Event Types     |                                            |                                        |

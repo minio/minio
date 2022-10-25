@@ -74,15 +74,6 @@ const (
 
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
-	if globalIsGateway {
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return rc, errServerNotInitialized
-		}
-
-		return rc, BucketReplicationConfigNotFound{Bucket: bucketName}
-	}
-
 	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
 	if err != nil {
 		if errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) || errors.Is(err, errInvalidArgument) {
@@ -201,10 +192,6 @@ func getMustReplicateOptions(o ObjectInfo, op replication.Type, opts ObjectOptio
 // mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
 // a synchronous manner.
 func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplicateOptions) (dsc ReplicateDecision) {
-	if globalIsGateway {
-		return
-	}
-
 	// object layer not initialized we return with no decision.
 	if newObjectLayerFn() == nil {
 		return
@@ -372,9 +359,11 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 
 	defer func() {
 		replStatus := string(replicationStatus)
-		auditLogInternal(context.Background(), bucket, dobj.ObjectName, AuditLogOptions{
+		auditLogInternal(context.Background(), AuditLogOptions{
 			Event:     dobj.EventType,
 			APIName:   ReplicateDeleteAPI,
+			Bucket:    bucket,
+			Object:    dobj.ObjectName,
 			VersionID: versionID,
 			Status:    replStatus,
 		})
@@ -580,8 +569,8 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
 			VersionID: versionID,
 			Internal: miniogo.AdvancedGetOptions{
-				ReplicationProxyRequest: "false",
-				ReplicationDeleteMarker: true,
+				ReplicationProxyRequest:           "false",
+				IsReplicationReadyForDeleteMarker: true,
 			},
 		})
 		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
@@ -903,9 +892,11 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			// on disk.
 			replicationStatus = ri.ReplicationStatus
 		}
-		auditLogInternal(ctx, ri.Bucket, ri.Name, AuditLogOptions{
+		auditLogInternal(ctx, AuditLogOptions{
 			Event:     ri.EventType,
 			APIName:   ReplicateObjectAPI,
+			Bucket:    ri.Bucket,
+			Object:    ri.Name,
 			VersionID: ri.VersionID,
 			Status:    replicationStatus.String(),
 		})
