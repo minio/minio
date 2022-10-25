@@ -456,8 +456,8 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			action := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
-			switch action {
+			event := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			switch action := event.Action; action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
 				// Skip this entry.
@@ -685,9 +685,11 @@ func auditLogRebalance(ctx context.Context, apiName, bucket, object, versionID s
 	if err != nil {
 		errStr = err.Error()
 	}
-	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+	auditLogInternal(ctx, AuditLogOptions{
 		Event:     "rebalance",
 		APIName:   apiName,
+		Bucket:    bucket,
+		Object:    object,
 		VersionID: versionID,
 		Error:     errStr,
 	})
