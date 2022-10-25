@@ -195,6 +195,8 @@ const (
 	ErrBucketTaggingNotFound
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -396,8 +398,6 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
-	ErrPolicyAlreadyAttached
-	ErrPolicyNotAttached
 )
 
 type errorCodeMap map[APIErrorCode]APIError
