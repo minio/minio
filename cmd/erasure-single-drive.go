@@ -55,8 +55,6 @@ import (
 
 // erasureSingle - Implements single drive XL layer
 type erasureSingle struct {
-	GatewayUnsupported
-
 	disk StorageAPI
 
 	endpoint Endpoint
@@ -2482,6 +2480,22 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 		Size:         n,
 		ActualSize:   data.ActualSize(),
 	}, nil
+}
+
+func (es *erasureSingle) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error {
+	return NotImplemented{}
+}
+
+func (es *erasureSingle) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // GetMultipartInfo returns multipart metadata uploaded during newMultipartUpload, used

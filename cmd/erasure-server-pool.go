@@ -42,8 +42,6 @@ import (
 )
 
 type erasureServerPools struct {
-	GatewayUnsupported
-
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
 	serverPools   []*erasureSets
@@ -2130,12 +2128,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		Bucket: bucket,
 		Object: object,
 	}
-}
-
-// GetMetrics - returns metrics of local disks
-func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return &BackendMetrics{}, NotImplemented{}
 }
 
 func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx int, err error) {

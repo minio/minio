@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -78,7 +77,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, zipPath)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -501,34 +499,20 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	}
 
 	srcInfo.UserDefined[archiveTypeMetadataKey] = archiveType
-	var zipInfoStr string
-	if globalIsGateway {
-		zipInfoStr = base64.StdEncoding.EncodeToString(zipInfo)
-	} else {
-		zipInfoStr = string(zipInfo)
+	zipInfoStr := string(zipInfo)
+	popts := ObjectOptions{
+		MTime:     srcInfo.ModTime,
+		VersionID: srcInfo.VersionID,
+		EvalMetadataFn: func(oi ObjectInfo) error {
+			oi.UserDefined[archiveTypeMetadataKey] = archiveType
+			oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
+			return nil
+		},
 	}
 
-	if globalIsGateway {
-		srcInfo.UserDefined[archiveInfoMetadataKey] = zipInfoStr
-
-		// Use CopyObject API only for Gateway mode.
-		if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, opts, opts); err != nil {
-			return nil, err
-		}
-	} else {
-		popts := ObjectOptions{
-			MTime:     srcInfo.ModTime,
-			VersionID: srcInfo.VersionID,
-			EvalMetadataFn: func(oi ObjectInfo) error {
-				oi.UserDefined[archiveTypeMetadataKey] = archiveType
-				oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
-				return nil
-			},
-		}
-		// For all other modes use in-place update to update metadata on a specific version.
-		if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
-			return nil, err
-		}
+	// For all other modes use in-place update to update metadata on a specific version.
+	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
+		return nil, err
 	}
 
 	return zipInfo, nil

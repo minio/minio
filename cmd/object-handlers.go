@@ -130,7 +130,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -335,7 +334,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1020,16 +1018,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -1102,7 +1093,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	sseConfig, _ := globalBucketSSEConfigSys.Get(dstBucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	var srcOpts, dstOpts ObjectOptions
@@ -1405,9 +1395,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if globalIsGateway {
-			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
-		}
 	}
 
 	if objTags != "" {
@@ -1645,16 +1632,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -1790,7 +1770,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	actualSize := size
@@ -1805,7 +1784,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if err = actualReader.AddChecksum(r, globalIsGateway); err != nil {
+		if err = actualReader.AddChecksum(r, false); err != nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
@@ -1826,7 +1805,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if err := hashReader.AddChecksum(r, size < 0 || globalIsGateway); err != nil {
+	if err := hashReader.AddChecksum(r, size < 0); err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 		return
 	}
@@ -1834,7 +1813,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
 
-	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -2025,16 +2003,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -2139,7 +2110,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if err = hreader.AddChecksum(r, globalIsGateway); err != nil {
+	if err = hreader.AddChecksum(r, false); err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 		return
 	}
@@ -2153,7 +2124,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)

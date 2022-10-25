@@ -1317,6 +1317,7 @@ func TestXLStorageReadFileWithVerify(t *testing.T) {
 
 // TestXLStorageFormatFileChange - to test if changing the diskID makes the calls fail.
 func TestXLStorageFormatFileChange(t *testing.T) {
+	volume := "fail-vol"
 	xlStorage, _, err := newXLStorageTestSetup(t)
 	if err != nil {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)

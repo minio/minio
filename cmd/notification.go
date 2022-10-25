@@ -491,10 +491,6 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 
 // LoadBucketMetadata - calls LoadBucketMetadata call on all peers
 func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName string) {
-	if globalIsGateway {
-		return
-	}
-
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {

@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/internal/bucket/replication"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -183,13 +182,6 @@ const (
 	writeLock
 )
 
-// BackendMetrics - represents bytes served from backend
-type BackendMetrics struct {
-	bytesReceived uint64
-	bytesSent     uint64
-	requestStats  RequestStats
-}
-
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Locking operations on object.
@@ -241,11 +233,6 @@ type ObjectLayer interface {
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
-	// Policy operations
-	SetBucketPolicy(context.Context, string, *policy.Policy) error
-	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
-	DeleteBucketPolicy(context.Context, string) error
-
 	// Supported operations check
 	IsNotificationSupported() bool
 	IsListenSupported() bool
@@ -259,9 +246,6 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
-
-	// Backend related metrics
-	GetMetrics(ctx context.Context) (*BackendMetrics, error)
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult

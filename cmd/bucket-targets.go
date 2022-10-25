@@ -208,9 +208,6 @@ func (sys *BucketTargetSys) Delete(bucket string) {
 
 // SetTarget - sets a new minio-go client target for this bucket.
 func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget, update bool) error {
-	if globalIsGateway {
-		return nil
-	}
 	if !tgt.Type.IsValid() && !update {
 		return BucketRemoteArnTypeInvalid{Bucket: bucket}
 	}
@@ -271,9 +268,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 }
 
 func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
-	if globalIsGateway {
-		return
-	}
 	if limit == 0 {
 		globalBucketMonitor.DeleteBucket(bucket)
 		return
@@ -285,10 +279,6 @@ func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
 
 // RemoveTarget - removes a remote bucket target for this source bucket.
 func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr string) error {
-	if globalIsGateway {
-		return nil
-	}
-
 	if arnStr == "" {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}

@@ -41,8 +41,6 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
-	GatewayUnsupported
-
 	setDriveCount      int
 	defaultParityCount int
 

@@ -642,6 +642,15 @@ func (e InvalidETag) Error() string {
 	return "etag of the object has changed"
 }
 
+// BackendDown is returned for network errors
+type BackendDown struct {
+	Err string
+}
+
+func (e BackendDown) Error() string {
+	return e.Err
+}
+
 // NotImplemented If a feature is not implemented
 type NotImplemented struct {
 	Message string
@@ -656,15 +665,6 @@ type UnsupportedMetadata struct{}
 
 func (e UnsupportedMetadata) Error() string {
 	return "Unsupported headers in Metadata"
-}
-
-// BackendDown is returned for network errors or if the gateway's backend is down.
-type BackendDown struct {
-	Err string
-}
-
-func (e BackendDown) Error() string {
-	return e.Err
 }
 
 // isErrBucketNotFound - Check if error type is BucketNotFound.

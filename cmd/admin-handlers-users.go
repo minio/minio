@@ -1149,15 +1149,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	var dataUsageInfo DataUsageInfo
-	var err error
-	if !globalIsGateway {
-		// Load the latest calculated data usage
-		dataUsageInfo, _ = loadDataUsageFromBackend(ctx, objectAPI)
-	}
+	// Load the latest calculated data usage
+	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var buckets []BucketInfo
+	var err error
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,

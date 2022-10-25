@@ -2238,8 +2238,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if apiErr.Code == "InternalError" {
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
-		// their internal error types. This code is only
-		// useful with gateway implementations.
+		// their internal error types.
 		switch e := err.(type) {
 		case batchReplicationJobError:
 			apiErr = APIError{
@@ -2309,7 +2308,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
 			}
-			if globalIsGateway && strings.Contains(e.Message, "KMS is not configured") {
+			if strings.Contains(e.Message, "KMS is not configured") {
 				apiErr = APIError{
 					Code:           "NotImplemented",
 					Description:    e.Message,
@@ -2333,7 +2332,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Error(),
 				HTTPStatusCode: e.Response().StatusCode,
 			}
-			// Add more Gateway SDKs here if any in future.
+			// Add more other SDK related errors here if any in future.
 		default:
 			//nolint:gocritic
 			if errors.Is(err, errMalformedEncoding) {
