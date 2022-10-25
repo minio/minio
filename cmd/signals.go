@@ -113,10 +113,8 @@ func handleSignals() {
 						time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 						continue
 					}
-					if err != nil {
-						logger.Info("Unable to reload IAM sub-system, some users may not be available %w", err)
-						logger.LogIf(GlobalContext, fmt.Errorf("Unable to reload IAM sub-system, some users may not be available %w", err))
-					}
+					logger.Info("Unable to reload IAM sub-system, some users may not be available %w", err)
+					logger.LogIf(GlobalContext, fmt.Errorf("Unable to reload IAM sub-system, some users may not be available %w", err))
 				}
 				break
 			}
