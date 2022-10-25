@@ -31,7 +31,7 @@ connectToMinio() {
     if [ $ATTEMPTS -gt $LIMIT ]; then
       exit 1 ;
     fi ;
-    sleep 2 ; # 1 second intervals between attempts
+    sleep 2 ; # 2 second intervals between attempts
     $MC_COMMAND ;
     STATUS=$? ;
   done ;
