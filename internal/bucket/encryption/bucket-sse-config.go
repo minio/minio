@@ -124,7 +124,6 @@ func ParseBucketSSEConfig(r io.Reader) (*BucketSSEConfig, error) {
 // when bucketSSEConfig is empty.
 type ApplyOptions struct {
 	AutoEncrypt bool
-	Passthrough bool // Set to 'true' for S3 gateway mode.
 }
 
 // Apply applies the SSE bucket configuration on the given HTTP headers and
@@ -139,11 +138,7 @@ func (b *BucketSSEConfig) Apply(headers http.Header, opts ApplyOptions) {
 	}
 	if b == nil {
 		if opts.AutoEncrypt {
-			if !opts.Passthrough {
-				headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			} else {
-				headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			}
+			headers.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
 		}
 		return
 	}

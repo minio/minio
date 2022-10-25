@@ -162,8 +162,7 @@ func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string)
 	return err
 }
 
-// loadBucketMetadata loads and migrates to bucket metadata.
-func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket string) (BucketMetadata, error) {
+func loadBucketMetadataParse(ctx context.Context, objectAPI ObjectLayer, bucket string, parse bool) (BucketMetadata, error) {
 	b := newBucketMetadata(bucket)
 	err := b.Load(ctx, objectAPI, b.Name)
 	if err != nil && !errors.Is(err, errConfigNotFound) {
@@ -172,8 +171,22 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	if err == nil {
 		b.defaultTimestamps()
 	}
-	// Old bucket without bucket metadata. Hence we migrate existing settings.
-	if err := b.convertLegacyConfigs(ctx, objectAPI); err != nil {
+
+	configs, err := b.getAllLegacyConfigs(ctx, objectAPI)
+	if err != nil {
+		return b, err
+	}
+
+	if len(configs) == 0 {
+		if parse {
+			// nothing to update, parse and proceed.
+			err = b.parseAllConfigs(ctx, objectAPI)
+		}
+	} else {
+		// Old bucket without bucket metadata. Hence we migrate existing settings.
+		err = b.convertLegacyConfigs(ctx, objectAPI, configs)
+	}
+	if err != nil {
 		return b, err
 	}
 
@@ -183,6 +196,11 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	}
 
 	return b, nil
+}
+
+// loadBucketMetadata loads and migrates to bucket metadata.
+func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket string) (BucketMetadata, error) {
+	return loadBucketMetadataParse(ctx, objectAPI, bucket, true)
 }
 
 // parseAllConfigs will parse all configs and populate the private fields.
@@ -277,7 +295,7 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 	return nil
 }
 
-func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI ObjectLayer) error {
+func (b *BucketMetadata) getAllLegacyConfigs(ctx context.Context, objectAPI ObjectLayer) (map[string][]byte, error) {
 	legacyConfigs := []string{
 		legacyBucketObjectLockEnabledConfigFile,
 		bucketPolicyConfig,
@@ -291,7 +309,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		objectLockConfig,
 	}
 
-	configs := make(map[string][]byte)
+	configs := make(map[string][]byte, len(legacyConfigs))
 
 	// Handle migration from lockEnabled to newer format.
 	if b.LockEnabled {
@@ -316,16 +334,15 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 				continue
 			}
 
-			return err
+			return nil, err
 		}
 		configs[legacyFile] = configData
 	}
 
-	if len(configs) == 0 {
-		// nothing to update, return right away.
-		return b.parseAllConfigs(ctx, objectAPI)
-	}
+	return configs, nil
+}
 
+func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI ObjectLayer, configs map[string][]byte) error {
 	for legacyFile, configData := range configs {
 		switch legacyFile {
 		case legacyBucketObjectLockEnabledConfigFile:

@@ -55,8 +55,6 @@ import (
 
 // erasureSingle - Implements single drive XL layer
 type erasureSingle struct {
-	GatewayUnsupported
-
 	disk StorageAPI
 
 	endpoint Endpoint
@@ -1477,9 +1475,9 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	if opts.Expiration.Expire {
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
+		evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 		var isErr bool
-		switch action {
+		switch evt.Action {
 		case lifecycle.NoneAction:
 			isErr = true
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
@@ -2484,6 +2482,22 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}, nil
 }
 
+func (es *erasureSingle) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error {
+	return NotImplemented{}
+}
+
+func (es *erasureSingle) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
 // GetMultipartInfo returns multipart metadata uploaded during newMultipartUpload, used
 // by callers to verify object states
 // - encrypted
@@ -2962,8 +2976,8 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 		objInfo, err := es.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
-				switch action {
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				switch evt.Action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
 				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:

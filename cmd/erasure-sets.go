@@ -51,8 +51,6 @@ type setsDsyncLockers [][]dsync.NetLocker
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type erasureSets struct {
-	GatewayUnsupported
-
 	sets []*erasureObjects
 
 	// Reference format.

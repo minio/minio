@@ -89,38 +89,6 @@ MINIO_STORAGE_CLASS_RRS       (string)    set the parity count for reduced redun
 MINIO_STORAGE_CLASS_COMMENT   (sentence)  optionally add a comment to this setting
 ```
 
-### Cache
-
-MinIO provides caching storage tier for primarily gateway deployments, allowing you to cache content for faster reads, cost savings on repeated downloads from the cloud.
-
-```
-KEY:
-cache  add caching storage tier
-
-ARGS:
-drives*  (csv)       comma separated mountpoints e.g. "/optane1,/optane2"
-expiry   (number)    cache expiry duration in days e.g. "90"
-quota    (number)    limit cache drive usage in percentage e.g. "90"
-exclude  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
-after    (number)    minimum number of access before caching an object
-comment  (sentence)  optionally add a comment to this setting
-```
-
-or environment variables
-
-```
-KEY:
-cache  add caching storage tier
-
-ARGS:
-MINIO_CACHE_DRIVES*  (csv)       comma separated mountpoints e.g. "/optane1,/optane2"
-MINIO_CACHE_EXPIRY   (number)    cache expiry duration in days e.g. "90"
-MINIO_CACHE_QUOTA    (number)    limit cache drive usage in percentage e.g. "90"
-MINIO_CACHE_EXCLUDE  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
-MINIO_CACHE_AFTER    (number)    minimum number of access before caching an object
-MINIO_CACHE_COMMENT  (sentence)  optionally add a comment to this setting
-```
-
 #### Etcd
 
 MinIO supports storing encrypted IAM assets in etcd, if KMS is configured. Please refer to how to encrypt your config and IAM credentials [here](https://github.com/minio/minio/blob/master/docs/kms/IAM.md).
@@ -283,8 +251,6 @@ Example: the following setting will decrease the scanner speed by a factor of 3,
 
 Once set the scanner settings are automatically applied without the need for server restarts.
 
-> NOTE: Data usage scanner is not supported under Gateway deployments.
-
 ### Healing
 
 Healing is enabled by default. The following configuration settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses up to '1sec' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_sleep` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ heal max_sleep=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ heal max_io=30` . By default the wait delay is `1sec` beyond 10 concurrent operations. This means the healer will sleep *1 second* at max for each heal operation if there are more than *10* concurrent client requests.
@@ -309,8 +275,6 @@ Example: The following settings will increase the heal operation speed by allowi
 ```
 
 Once set the healer settings are automatically applied without the need for server restarts.
-
-> NOTE: Healing is not supported for Gateway deployments.
 
 ## Environment only settings (not in config)
 

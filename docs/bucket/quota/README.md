@@ -4,8 +4,6 @@
 
 Buckets can be configured to have `Hard` quota - it disallows writes to the bucket after configured quota limit is reached.
 
-> NOTE: Bucket quotas are not supported under gateway or standalone single disk deployments.
-
 ## Prerequisites
 
 - Install MinIO - [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#procedure).

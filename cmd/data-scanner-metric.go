@@ -119,13 +119,6 @@ func (p *scannerMetrics) incTime(s scannerMetric, d time.Duration) {
 	}
 }
 
-func (p *scannerMetrics) incNoTime(s scannerMetric) {
-	atomic.AddUint64(&p.operations[s], 1)
-	if s < scannerMetricLastRealtime {
-		p.latency[s].add(0)
-	}
-}
-
 // timeILM times an ILM action.
 // lifecycle.NoneAction is ignored.
 // Use for s < scannerMetricLastRealtime

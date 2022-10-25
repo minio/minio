@@ -91,6 +91,14 @@ const (
 	AmzBucketReplicationStatus    = "X-Amz-Replication-Status"
 	AmzSnowballExtract            = "X-Amz-Meta-Snowball-Auto-Extract"
 
+	// MinIOSnowballIgnoreDirs will skip creating empty directory objects.
+	MinIOSnowballIgnoreDirs = "X-Amz-Meta-Minio-Snowball-Ignore-Dirs"
+	// MinIOSnowballIgnoreErrors will ignore recoverable errors, typically single files failing to upload.
+	// An error will be printed to console instead.
+	MinIOSnowballIgnoreErrors = "X-Amz-Meta-Minio-Snowball-Ignore-Errors"
+	// MinIOSnowballPrefix will apply this prefix (plus / at end) to all extracted objects
+	MinIOSnowballPrefix = "X-Amz-Meta-Minio-Snowball-Prefix"
+
 	// Object lock enabled
 	AmzObjectLockEnabled = "x-amz-bucket-object-lock-enabled"
 
@@ -189,6 +197,8 @@ const (
 	MinIOReplicationResetStatus = "X-Minio-Replication-Reset-Status"
 	// Header indicating target cluster can receive delete marker replication requests because object has been replicated
 	MinIOTargetReplicationReady = "X-Minio-Replication-Ready"
+	// Header asking if cluster can receive delete marker replication request now.
+	MinIOCheckDMReplicationReady = "X-Minio-Check-Replication-Ready"
 	// Header indiicates last tag update time on source
 	MinIOSourceTaggingTimestamp = "X-Minio-Source-Replication-Tagging-Timestamp"
 	// Header indiicates last rtention update time on source

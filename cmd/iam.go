@@ -168,17 +168,7 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		if globalIsGateway {
-			if globalGatewayName == NASBackendGateway {
-				sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
-			} else {
-				sys.store = &IAMStoreSys{newIAMDummyStore(sys.usersSysType)}
-				logger.Info("WARNING: %s gateway is running in-memory IAM store, for persistence please configure etcd",
-					globalGatewayName)
-			}
-		} else {
-			sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
-		}
+		sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
 	} else {
 		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
@@ -224,7 +214,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	var err error
 	globalOpenIDConfig, err = openid.LookupConfig(s,
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
@@ -236,7 +226,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
 	}
@@ -244,14 +234,14 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
 
 	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody)
+		NewHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err))
 	}
 
 	if authZPluginCfg.URL == nil {
 		opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-			NewGatewayHTTPTransport(), xhttp.DrainBody)
+			NewHTTPTransport(), xhttp.DrainBody)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
 		} else {

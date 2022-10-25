@@ -1065,10 +1065,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
-	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -1398,10 +1396,6 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketObjectLockConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -1618,7 +1612,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil)
+	updatedAt, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketTaggingConfig)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

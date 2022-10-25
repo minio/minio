@@ -35,13 +35,6 @@ type BucketQuotaSys struct {
 
 // Get - Get quota configuration.
 func (sys *BucketQuotaSys) Get(ctx context.Context, bucketName string) (*madmin.BucketQuota, error) {
-	if globalIsGateway {
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return nil, errServerNotInitialized
-		}
-		return &madmin.BucketQuota{}, nil
-	}
 	qCfg, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
 	return qCfg, err
 }

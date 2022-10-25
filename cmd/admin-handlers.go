@@ -944,11 +944,6 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
-		return
-	}
-
 	hip, errCode := extractHealInitParams(mux.Vars(r), r.Form, r.Body)
 	if errCode != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
@@ -1135,12 +1130,6 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	// Check if this setup has an erasure coded backend.
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
-		return
-	}
-
 	aggregateHealStateResult, err := getAggregatedBackgroundHealState(r.Context(), objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1213,11 +1202,6 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
 	if objectAPI == nil {
-		return
-	}
-
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -1386,11 +1370,6 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
 	if objectAPI == nil {
-		return
-	}
-
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -1910,7 +1889,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 	}
 
 	client := &http.Client{
-		Transport: NewGatewayHTTPTransport(),
+		Transport: NewHTTPTransport(),
 		Timeout:   10 * time.Second,
 	}
 
@@ -1987,12 +1966,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
 	defer healthCancel()
-
-	// Freeze all incoming S3 API calls before running speedtest.
-	globalNotificationSys.ServiceFreeze(ctx, true)
-
-	// unfreeze all incoming S3 API calls after speedtest.
-	defer globalNotificationSys.ServiceFreeze(ctx, false)
 
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
@@ -2139,7 +2112,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
 			anonCmdLine := strings.ReplaceAll(cmdLine, globalLocalNodeName, "server1")
-			return strings.ReplaceAll(anonCmdLine, globalMinioConsoleHost, "server1")
+			if len(globalMinioConsoleHost) > 0 {
+				anonCmdLine = strings.ReplaceAll(anonCmdLine, globalMinioConsoleHost, "server1")
+			}
+			return anonCmdLine
 		}
 
 		// Server start command regex groups:

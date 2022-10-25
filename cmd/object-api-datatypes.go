@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"io"
 	"math"
 	"time"
@@ -39,8 +38,6 @@ const (
 	BackendFS = BackendType(madmin.FS)
 	// Multi disk BackendErasure (single, distributed) backend.
 	BackendErasure = BackendType(madmin.Erasure)
-	// Gateway backend.
-	BackendGateway = BackendType(madmin.Gateway)
 	// Add your own backend.
 )
 
@@ -103,9 +100,6 @@ type ObjectInfo struct {
 
 	// Hex encoded unique entity tag of the object.
 	ETag string
-
-	// The ETag stored in the gateway backend
-	InnerETag string
 
 	// Version ID of this object.
 	VersionID string
@@ -196,14 +190,6 @@ func (o ObjectInfo) ArchiveInfo() []byte {
 	if !ok {
 		return nil
 	}
-	if len(z) > 0 && z[0] >= 32 {
-		// FS/gateway mode does base64 encoding on roundtrip.
-		// zipindex has version as first byte, which is below any base64 value.
-		zipInfo, _ := base64.StdEncoding.DecodeString(z)
-		if len(zipInfo) != 0 {
-			return zipInfo
-		}
-	}
 	return []byte(z)
 }
 
@@ -216,7 +202,6 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		Size:                       o.Size,
 		IsDir:                      o.IsDir,
 		ETag:                       o.ETag,
-		InnerETag:                  o.InnerETag,
 		VersionID:                  o.VersionID,
 		IsLatest:                   o.IsLatest,
 		DeleteMarker:               o.DeleteMarker,

@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-09-17T00-09-45Z
+  tag: RELEASE.2022-10-24T18-35-07Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,11 +25,11 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-09-16T09-16-47Z
+  tag: RELEASE.2022-10-20T23-26-33Z
   pullPolicy: IfNotPresent
 
-## minio mode, i.e. standalone or distributed or gateway.
-mode: distributed ## other supported values are "standalone", "gateway"
+## minio mode, i.e. standalone or distributed
+mode: distributed ## other supported values are "standalone"
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: {}
@@ -117,11 +117,6 @@ drivesPerNode: 1
 replicas: 16
 # Number of expanded MinIO clusters
 pools: 1
-
-# Deploy if 'mode == gateway' - 4 replicas.
-gateway:
-  type: "nas" # currently only "nas" are supported.
-  replicas: 4
 
 ## TLS Settings for MinIO
 tls:

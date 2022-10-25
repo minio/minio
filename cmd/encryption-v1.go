@@ -1043,18 +1043,6 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 	return encrypted, nil
 }
 
-// The customer key in the header is used by the gateway for encryption in the case of
-// s3 gateway double encryption. A new client key is derived from the customer provided
-// key to be sent to the s3 backend for encryption at the backend.
-func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
-	var key [32]byte
-	mac := hmac.New(sha256.New, clientKey[:])
-	mac.Write([]byte(crypto.SSEC.String()))
-	mac.Write([]byte(path.Join(bucket, object)))
-	mac.Sum(key[:0])
-	return key
-}
-
 type (
 	objectMetaEncryptFn func(baseKey string, data []byte) []byte
 	objectMetaDecryptFn func(baseKey string, data []byte) ([]byte, error)

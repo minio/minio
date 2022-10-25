@@ -456,9 +456,9 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	fi.ReplicationState = GetInternalReplicationState(j.MetaSys)
 	if j.FreeVersion() {
 		fi.SetTierFreeVersion()
-		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
-		fi.TransitionedObjName = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName])
-		fi.TransitionVersionID = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID])
+		fi.TransitionTier = string(j.MetaSys[metaTierName])
+		fi.TransitionedObjName = string(j.MetaSys[metaTierObjName])
+		fi.TransitionVersionID = string(j.MetaSys[metaTierVersionID])
 	}
 
 	return fi, nil
@@ -487,7 +487,7 @@ func (j *xlMetaV2DeleteMarker) Signature() [4]byte {
 // its contents and false otherwise.
 func (j xlMetaV2Object) UsesDataDir() bool {
 	// Skip if this version is not transitioned, i.e it uses its data directory.
-	if !bytes.Equal(j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus], []byte(lifecycle.TransitionComplete)) {
+	if !bytes.Equal(j.MetaSys[metaTierStatus], []byte(lifecycle.TransitionComplete)) {
 		return true
 	}
 
@@ -503,11 +503,18 @@ func (j xlMetaV2Object) InlineData() bool {
 	return ok
 }
 
+const (
+	metaTierStatus    = ReservedMetadataPrefixLower + TransitionStatus
+	metaTierObjName   = ReservedMetadataPrefixLower + TransitionedObjectName
+	metaTierVersionID = ReservedMetadataPrefixLower + TransitionedVersionID
+	metaTierName      = ReservedMetadataPrefixLower + TransitionTier
+)
+
 func (j *xlMetaV2Object) SetTransition(fi FileInfo) {
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+	j.MetaSys[metaTierStatus] = []byte(fi.TransitionStatus)
+	j.MetaSys[metaTierObjName] = []byte(fi.TransitionedObjName)
+	j.MetaSys[metaTierVersionID] = []byte(fi.TransitionVersionID)
+	j.MetaSys[metaTierName] = []byte(fi.TransitionTier)
 }
 
 func (j *xlMetaV2Object) RemoveRestoreHdrs() {
@@ -626,16 +633,16 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
 
-	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus]; ok {
+	if st, ok := j.MetaSys[metaTierStatus]; ok {
 		fi.TransitionStatus = string(st)
 	}
-	if o, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
+	if o, ok := j.MetaSys[metaTierObjName]; ok {
 		fi.TransitionedObjName = string(o)
 	}
-	if rv, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID]; ok {
+	if rv, ok := j.MetaSys[metaTierVersionID]; ok {
 		fi.TransitionVersionID = string(rv)
 	}
-	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
+	if sc, ok := j.MetaSys[metaTierName]; ok {
 		fi.TransitionTier = string(sc)
 	}
 	if crcs := j.MetaSys[ReservedMetadataPrefixLower+"crc"]; len(crcs) > 0 {
@@ -1528,16 +1535,16 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 
 		if fi.TransitionStatus != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+			ventry.ObjectV2.MetaSys[metaTierStatus] = []byte(fi.TransitionStatus)
 		}
 		if fi.TransitionedObjName != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+			ventry.ObjectV2.MetaSys[metaTierObjName] = []byte(fi.TransitionedObjName)
 		}
 		if fi.TransitionVersionID != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
+			ventry.ObjectV2.MetaSys[metaTierVersionID] = []byte(fi.TransitionVersionID)
 		}
 		if fi.TransitionTier != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+			ventry.ObjectV2.MetaSys[metaTierName] = []byte(fi.TransitionTier)
 		}
 		if len(fi.Checksum) > 0 {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+"crc"] = fi.Checksum

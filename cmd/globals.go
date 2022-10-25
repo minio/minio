@@ -79,7 +79,6 @@ const (
 	globalMinioModeErasureSD       = "mode-server-xl-single"
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
-	globalMinioModeGatewayPrefix   = "mode-gateway-"
 	globalDirSuffix                = "__XLDIR__"
 	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
 
@@ -147,14 +146,8 @@ var (
 	// Indicates if the running minio server is in single drive XL mode.
 	globalIsErasureSD = false
 
-	// Indicates if the running minio is in gateway mode.
-	globalIsGateway = false
-
 	// Indicates if server code should go through testing path.
 	globalIsTesting = false
-
-	// Name of gateway server, e.g S3, NAS etc
-	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
@@ -318,9 +311,6 @@ var (
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
-
-	// GlobalGatewaySSE sse options
-	GlobalGatewaySSE gatewaySSE
 
 	globalAllHealState *allHealState
 

@@ -116,10 +116,6 @@ Below is a list of common files and content-types which are typically not suitab
 All files with these extensions and mime types are excluded from compression,
 even if compression is enabled for all types.
 
-### 5. Notes
-
-- MinIO does not support compression for Gateway implementations.
-
 ## To test the setup
 
 To test this setup, practice put calls to the server using `mc` and use `mc ls` on

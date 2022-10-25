@@ -118,7 +118,7 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
 	}
 	getRemoteTierTargetInstanceTransportOnce.Do(func() {
-		getRemoteTierTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
+		getRemoteTierTargetInstanceTransport = newHTTPTransport(10 * time.Minute)
 	})
 	opts := &minio.Options{
 		Creds:     creds,

@@ -41,8 +41,6 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
-	GatewayUnsupported
-
 	setDriveCount      int
 	defaultParityCount int
 
@@ -108,7 +106,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 
 func diskErrToDriveState(err error) (state string) {
 	switch {
-	case errors.Is(err, errDiskNotFound):
+	case errors.Is(err, errDiskNotFound) || errors.Is(err, context.DeadlineExceeded):
 		state = madmin.DriveStateOffline
 	case errors.Is(err, errCorruptedFormat):
 		state = madmin.DriveStateCorrupt
