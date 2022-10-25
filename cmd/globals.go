@@ -221,9 +221,10 @@ var (
 
 	globalTLSCerts *certs.Manager
 
-	globalHTTPServer        *xhttp.Server
-	globalHTTPServerErrorCh = make(chan error)
-	globalOSSignalCh        = make(chan os.Signal, 1)
+	globalHTTPServer         *xhttp.Server
+	globalHTTPServerErrorCh  = make(chan error)
+	globalOSSignalCh         = make(chan os.Signal, 1)
+	globalConfReloadSignalCh = make(chan os.Signal, 1)
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.

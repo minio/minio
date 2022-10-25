@@ -155,11 +155,19 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
+	gatewayName := gw.Name()
+
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	if gatewayName == PANFSBackendGateway {
+		signal.Notify(globalConfReloadSignalCh, syscall.SIGUSR1)
+	}
 
 	go handleSignals()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	if gatewayName == PANFSBackendGateway {
+		signal.Notify(globalConfReloadSignalCh, syscall.SIGUSR1)
+	}
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	xhttp.SetDeploymentID(globalDeploymentID)
@@ -170,7 +178,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	globalGatewayName = gw.Name()
-	gatewayName := gw.Name()
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
@@ -304,7 +311,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	go globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
-	if gatewayName == NASBackendGateway {
+	if gatewayName == NASBackendGateway || gatewayName == PANFSBackendGateway {
 		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
