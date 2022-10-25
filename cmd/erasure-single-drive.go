@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -1943,7 +1944,15 @@ func (es *erasureSingle) restoreTransitionedObject(ctx context.Context, bucket s
 }
 
 func (es *erasureSingle) getUploadIDDir(bucket, object, uploadID string) string {
-	return pathJoin(es.getMultipartSHADir(bucket, object), uploadID)
+	uploadUUID := uploadID
+	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	if err == nil {
+		slc := strings.SplitN(string(uploadBytes), ".", 2)
+		if len(slc) == 2 {
+			uploadUUID = slc[1]
+		}
+	}
+	return pathJoin(es.getMultipartSHADir(bucket, object), uploadUUID)
 }
 
 func (es *erasureSingle) getMultipartSHADir(bucket, object string) string {
@@ -2190,9 +2199,9 @@ func (es *erasureSingle) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].ModTime = modTime
 		partsMetadata[index].Metadata = opts.UserDefined
 	}
-
-	uploadID := mustGetUUID()
-	uploadIDPath := es.getUploadIDDir(bucket, object, uploadID)
+	uploadUUID := mustGetUUID()
+	uploadID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
+	uploadIDPath := es.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {

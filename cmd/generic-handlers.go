@@ -576,3 +576,47 @@ func setCriticalErrorHandler(h http.Handler) http.Handler {
 		h.ServeHTTP(w, r)
 	})
 }
+
+// setUploadForwardingHandler middleware forwards multiparts requests
+// in a site replication setup to peer that initiated the upload
+func setUploadForwardingHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !globalSiteReplicationSys.isEnabled() ||
+			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
+			h.ServeHTTP(w, r)
+			return
+		}
+		bucket, object := request2BucketObjectName(r)
+		uploadID := r.Form.Get(xhttp.UploadID)
+
+		if bucket != "" && object != "" && uploadID != "" {
+			deplID, err := getDeplIDFromUpload(uploadID)
+			if err != nil {
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchUpload), r.URL)
+				return
+			}
+			remote, self := globalSiteReplicationSys.getPeerForUpload(deplID)
+			if self {
+				h.ServeHTTP(w, r)
+				return
+			}
+			// forward request to peer handling this upload
+			if globalBucketTargetSys.isOffline(remote.EndpointURL) {
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrReplicationRemoteConnectionError), r.URL)
+				return
+			}
+
+			r.URL.Scheme = remote.EndpointURL.Scheme
+			r.URL.Host = remote.EndpointURL.Host
+			// Make sure we remove any existing headers before
+			// proxying the request to another node.
+			for k := range w.Header() {
+				w.Header().Del(k)
+			}
+			globalForwarder.ServeHTTP(w, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}

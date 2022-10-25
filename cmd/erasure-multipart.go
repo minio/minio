@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +42,15 @@ import (
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
-	return pathJoin(er.getMultipartSHADir(bucket, object), uploadID)
+	uploadUUID := uploadID
+	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	if err == nil {
+		slc := strings.SplitN(string(uploadBytes), ".", 2)
+		if len(slc) == 2 {
+			uploadUUID = slc[1]
+		}
+	}
+	return pathJoin(er.getMultipartSHADir(bucket, object), uploadUUID)
 }
 
 func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
@@ -436,9 +445,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].ModTime = modTime
 		partsMetadata[index].Metadata = userDefined
 	}
-
-	uploadID := mustGetUUID()
-	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
+	uploadUUID := mustGetUUID()
+	uploadID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
+	uploadIDPath := er.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
