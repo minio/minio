@@ -706,7 +706,7 @@ func (c *diskCache) updateMetadata(ctx context.Context, bucket, object, etag str
 
 	if globalCacheKMS != nil {
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, m.Meta)
+		key, err = decryptObjectMeta(key, bucket, object, m.Meta)
 		if err != nil {
 			return err
 		}
@@ -953,7 +953,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 		objSize, _ = sio.EncryptedSize(uint64(size))
 
 	}
-	cacheFile := MustGetUUID()
+	cacheFile := mustGetUUID()
 	n, _, err := c.bitrotWriteToCache(cachePath, cacheFile, reader, actualSize)
 	if IsErr(err, baseErrs...) {
 		// take the cache drive offline
@@ -1397,7 +1397,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	var objectEncryptionKey crypto.ObjectKey
 	if globalCacheKMS != nil {
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, m.Meta)
+		key, err = decryptObjectMeta(key, bucket, object, m.Meta)
 		if err != nil {
 			return err
 		}
@@ -1427,7 +1427,7 @@ func newCachePartEncryptReader(ctx context.Context, bucket, object string, partI
 	var objectEncryptionKey, partEncryptionKey crypto.ObjectKey
 
 	// Calculating object encryption key
-	key, err = decryptObjectInfo(key, bucket, object, metadata)
+	key, err = decryptObjectMeta(key, bucket, object, metadata)
 	if err != nil {
 		return nil, err
 	}

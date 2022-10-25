@@ -99,5 +99,5 @@ and add relevant policies on MinIO using `mc admin policy add myminio/ <group_na
 
 ## Explore Further
 
-- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

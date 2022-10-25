@@ -18,9 +18,11 @@
 package hash
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"hash"
 	"hash/crc32"
 	"net/http"
@@ -61,6 +63,7 @@ const (
 type Checksum struct {
 	Type    ChecksumType
 	Encoded string
+	Raw     []byte
 }
 
 // Is returns if c is all of t.
@@ -169,7 +172,8 @@ func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
 	}
 	h := t.Hasher()
 	h.Write(data)
-	c := Checksum{Type: t, Encoded: base64.StdEncoding.EncodeToString(h.Sum(nil))}
+	raw := h.Sum(nil)
+	c := Checksum{Type: t, Encoded: base64.StdEncoding.EncodeToString(raw), Raw: raw}
 	if !c.Valid() {
 		return nil
 	}
@@ -200,17 +204,25 @@ func ReadCheckSums(b []byte) map[string]string {
 	return res
 }
 
-// NewChecksumString returns a new checksum from specified algorithm and base64 encoded value.
-func NewChecksumString(alg, value string) *Checksum {
-	t := NewChecksumType(alg)
-	if !t.IsSet() {
+// NewChecksumWithType is similar to NewChecksumString but expects input algo of ChecksumType.
+func NewChecksumWithType(alg ChecksumType, value string) *Checksum {
+	if !alg.IsSet() {
 		return nil
 	}
-	c := Checksum{Type: t, Encoded: value}
+	bvalue, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return nil
+	}
+	c := Checksum{Type: alg, Encoded: value, Raw: bvalue}
 	if !c.Valid() {
 		return nil
 	}
 	return &c
+}
+
+// NewChecksumString returns a new checksum from specified algorithm and base64 encoded value.
+func NewChecksumString(alg, value string) *Checksum {
+	return NewChecksumWithType(NewChecksumType(alg), value)
 }
 
 // AppendTo will append the checksum to b.
@@ -221,7 +233,7 @@ func (c *Checksum) AppendTo(b []byte) []byte {
 	}
 	var tmp [binary.MaxVarintLen32]byte
 	n := binary.PutUvarint(tmp[:], uint64(c.Type))
-	crc := c.Raw()
+	crc := c.Raw
 	if len(crc) != c.Type.RawByteLen() {
 		return b
 	}
@@ -238,17 +250,8 @@ func (c Checksum) Valid() bool {
 	if len(c.Encoded) == 0 || c.Type.Is(ChecksumTrailing) {
 		return c.Type.Is(ChecksumNone) || c.Type.Is(ChecksumTrailing)
 	}
-	raw := c.Raw()
+	raw := c.Raw
 	return c.Type.RawByteLen() == len(raw)
-}
-
-// Raw returns the Raw checksum.
-func (c Checksum) Raw() []byte {
-	if len(c.Encoded) == 0 {
-		return nil
-	}
-	v, _ := base64.StdEncoding.DecodeString(c.Encoded)
-	return v
 }
 
 // Matches returns whether given content matches c.
@@ -261,11 +264,11 @@ func (c Checksum) Matches(content []byte) error {
 	if err != nil {
 		return err
 	}
-	got := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-	if got != c.Encoded {
+	sum := hasher.Sum(nil)
+	if !bytes.Equal(sum, c.Raw) {
 		return ChecksumMismatch{
 			Want: c.Encoded,
-			Got:  got,
+			Got:  base64.StdEncoding.EncodeToString(sum),
 		}
 	}
 	return nil
@@ -292,13 +295,13 @@ func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
 // AddChecksumHeader will transfer any checksum value that has been checked.
 func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
 	for k, v := range c {
-		typ := NewChecksumType(k)
-		if !typ.IsSet() {
+		fmt.Println(c, v)
+		cksum := NewChecksumString(k, v)
+		if cksum == nil {
 			continue
 		}
-		crc := Checksum{Type: typ, Encoded: v}
-		if crc.Valid() {
-			w.Header().Set(typ.Key(), v)
+		if cksum.Valid() {
+			w.Header().Set(cksum.Type.Key(), v)
 		}
 	}
 }
@@ -314,12 +317,11 @@ func GetContentChecksum(r *http.Request) (*Checksum, error) {
 		}
 		return nil, ErrInvalidChecksum
 	}
-	c := Checksum{Type: t, Encoded: s}
-	if !c.Valid() {
+	cksum := NewChecksumWithType(t, s)
+	if cksum == nil {
 		return nil, ErrInvalidChecksum
 	}
-
-	return &c, nil
+	return cksum, nil
 }
 
 // getContentChecksum returns content checksum type and value.

@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -54,8 +55,6 @@ import (
 
 // erasureSingle - Implements single drive XL layer
 type erasureSingle struct {
-	GatewayUnsupported
-
 	disk StorageAPI
 
 	endpoint Endpoint
@@ -343,7 +342,14 @@ func (es *erasureSingle) GetBucketInfo(ctx context.Context, bucket string, opts 
 		}
 		return bi, toObjectErr(err, bucket)
 	}
-	return BucketInfo{Name: volInfo.Name, Created: volInfo.Created}, nil
+	bi = BucketInfo{Name: volInfo.Name, Created: volInfo.Created}
+	meta, err := globalBucketMetadataSys.Get(bucket)
+	if err == nil {
+		bi.Created = meta.Created
+		bi.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+		bi.ObjectLocking = meta.LockEnabled
+	}
+	return bi, nil
 }
 
 // DeleteBucket - deletes a bucket.
@@ -1009,6 +1015,11 @@ func (es *erasureSingle) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
+	fi.Checksum = opts.WantChecksum.AppendTo(nil)
+	if opts.EncryptFn != nil {
+		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+	}
+
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1464,9 +1475,9 @@ func (es *erasureSingle) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	if opts.Expiration.Expire {
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
+		evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 		var isErr bool
-		switch action {
+		switch evt.Action {
 		case lifecycle.NoneAction:
 			isErr = true
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
@@ -2471,6 +2482,22 @@ func (es *erasureSingle) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}, nil
 }
 
+func (es *erasureSingle) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+func (es *erasureSingle) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error {
+	return NotImplemented{}
+}
+
+func (es *erasureSingle) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
+}
+
 // GetMultipartInfo returns multipart metadata uploaded during newMultipartUpload, used
 // by callers to verify object states
 // - encrypted
@@ -2585,6 +2612,7 @@ func (es *erasureSingle) ListObjectParts(ctx context.Context, bucket, object, up
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
 	result.UserDefined = cloneMSS(fi.Metadata)
+	result.ChecksumAlgorithm = fi.Metadata[hash.MinIOMultipartChecksum]
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(fi.Parts) == 0 || maxParts == 0 {
@@ -2605,10 +2633,15 @@ func (es *erasureSingle) ListObjectParts(ctx context.Context, bucket, object, up
 	count := maxParts
 	for _, part := range parts {
 		result.Parts = append(result.Parts, PartInfo{
-			PartNumber:   part.Number,
-			ETag:         part.ETag,
-			LastModified: fi.ModTime,
-			Size:         part.Size,
+			PartNumber:     part.Number,
+			ETag:           part.ETag,
+			LastModified:   fi.ModTime,
+			ActualSize:     part.ActualSize,
+			Size:           part.Size,
+			ChecksumCRC32:  part.Checksums["CRC32"],
+			ChecksumCRC32C: part.Checksums["CRC32C"],
+			ChecksumSHA1:   part.Checksums["SHA1"],
+			ChecksumSHA256: part.Checksums["SHA256"],
 		})
 		count--
 		if count == 0 {
@@ -2677,6 +2710,40 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, err
 	}
 
+	// Checksum type set when upload started.
+	var checksumType hash.ChecksumType
+	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
+		checksumType = hash.NewChecksumType(cs)
+		if opts.WantChecksum != nil && !opts.WantChecksum.Type.Is(checksumType) {
+			return oi, InvalidArgument{
+				Bucket: bucket,
+				Object: fi.Name,
+				Err:    fmt.Errorf("checksum type mismatch"),
+			}
+		}
+	}
+
+	var checksumCombined []byte
+
+	// However, in case of encryption, the persisted part ETags don't match
+	// what we have sent to the client during PutObjectPart. The reason is
+	// that ETags are encrypted. Hence, the client will send a list of complete
+	// part ETags of which non can match the ETag of any part. For example
+	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
+	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
+	//
+	// Therefore, we adjust all ETags sent by the client to match what is stored
+	// on the backend.
+	kind, isEncrypted := crypto.IsEncrypted(fi.Metadata)
+
+	var objectEncryptionKey []byte
+	if isEncrypted && kind == crypto.S3 {
+		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
+		if err != nil {
+			return oi, err
+		}
+	}
+
 	// Calculate full object size.
 	var objectSize int64
 
@@ -2704,39 +2771,72 @@ func (es *erasureSingle) CompleteMultipartUpload(ctx context.Context, bucket str
 			}
 			return oi, invp
 		}
+		expPart := currentFI.Parts[partIdx]
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		if currentFI.Parts[partIdx].ETag != part.ETag {
+		expETag := tryDecryptETag(objectEncryptionKey, currentFI.Parts[partIdx].ETag, kind != crypto.S3)
+		if expETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
-				ExpETag:    currentFI.Parts[partIdx].ETag,
+				ExpETag:    expETag,
 				GotETag:    part.ETag,
 			}
 			return oi, invp
+		}
+
+		if checksumType.IsSet() {
+			crc := expPart.Checksums[checksumType.String()]
+			if crc == "" {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			wantCS := map[string]string{
+				hash.ChecksumCRC32.String():  part.ChecksumCRC32,
+				hash.ChecksumCRC32C.String(): part.ChecksumCRC32C,
+				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
+				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
+			}
+			if wantCS[checksumType.String()] != crc {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+					ExpETag:    wantCS[checksumType.String()],
+					GotETag:    crc,
+				}
+			}
+			cs := hash.NewChecksumString(checksumType.String(), crc)
+			if !cs.Valid() {
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+				}
+			}
+			checksumCombined = append(checksumCombined, cs.Raw...)
 		}
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentFI.Parts[partIdx].ActualSize) {
 			return oi, PartTooSmall{
 				PartNumber: part.PartNumber,
-				PartSize:   currentFI.Parts[partIdx].ActualSize,
+				PartSize:   expPart.ActualSize,
 				PartETag:   part.ETag,
 			}
 		}
 
 		// Save for total object size.
-		objectSize += currentFI.Parts[partIdx].Size
+		objectSize += expPart.Size
 
 		// Save the consolidated actual size.
-		objectActualSize += currentFI.Parts[partIdx].ActualSize
+		objectActualSize += expPart.ActualSize
 
 		// Add incoming parts.
 		fi.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			Size:       currentFI.Parts[partIdx].Size,
-			ActualSize: currentFI.Parts[partIdx].ActualSize,
-			Index:      currentFI.Parts[partIdx].Index,
+			Size:       expPart.Size,
+			ActualSize: expPart.ActualSize,
+			ModTime:    expPart.ModTime,
+			Index:      expPart.Index,
+			Checksums:  nil, // Not transferred since we do not need it.
 		}
 	}
 
@@ -2876,8 +2976,8 @@ func (es *erasureSingle) ListObjects(ctx context.Context, bucket, prefix, marker
 		objInfo, err := es.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
-				switch action {
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				switch evt.Action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
 				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
@@ -3029,12 +3129,22 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 				versionsSorter(fivs.Versions).reverse()
 
 				for _, version := range fivs.Versions {
+					send := true
+					if opts.WalkFilter != nil && !opts.WalkFilter(version) {
+						send = false
+					}
+
+					if !send {
+						continue
+					}
+
 					versioned := vcfg != nil && vcfg.Versioned(version.Name)
+					objInfo := version.ToObjectInfo(bucket, version.Name, versioned)
 
 					select {
 					case <-ctx.Done():
 						return
-					case results <- version.ToObjectInfo(bucket, version.Name, versioned):
+					case results <- objInfo:
 					}
 				}
 			}
@@ -3058,7 +3168,7 @@ func (es *erasureSingle) Walk(ctx context.Context, bucket, prefix string, result
 				path:           path,
 				filterPrefix:   filterPrefix,
 				recursive:      true,
-				forwardTo:      "",
+				forwardTo:      opts.WalkMarker,
 				minDisks:       1,
 				reportNotFound: false,
 				agreed:         loadEntry,

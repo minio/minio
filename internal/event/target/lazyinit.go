@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,21 +15,36 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package target
 
-import "github.com/minio/madmin-go"
-
-// Gateway name backends
-const (
-	NASBackendGateway = "nas"
-	S3BackendGateway  = "s3"
+import (
+	"sync"
+	"sync/atomic"
 )
 
-// Gateway represents a gateway backend.
-type Gateway interface {
-	// Name returns the unique name of the gateway.
-	Name() string
+// Inspired from Golang sync.Once but it is only marked
+// initialized when the provided function returns nil.
 
-	// NewGatewayLayer returns a new  ObjectLayer.
-	NewGatewayLayer(creds madmin.Credentials) (ObjectLayer, error)
+type lazyInit struct {
+	done uint32
+	m    sync.Mutex
+}
+
+func (l *lazyInit) Do(f func() error) error {
+	if atomic.LoadUint32(&l.done) == 0 {
+		return l.doSlow(f)
+	}
+	return nil
+}
+
+func (l *lazyInit) doSlow(f func() error) error {
+	l.m.Lock()
+	defer l.m.Unlock()
+	if atomic.LoadUint32(&l.done) == 0 {
+		if f() == nil {
+			// Mark as done only when f() is successful
+			atomic.StoreUint32(&l.done, 1)
+		}
+	}
+	return nil
 }

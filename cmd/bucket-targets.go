@@ -30,7 +30,6 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -108,7 +107,6 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
 				m := map[string]epHealth{}
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
 					var online bool
@@ -121,6 +119,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 						Online:   online,
 					}
 				}
+				cancel()
 				sys.hMutex.Lock()
 				sys.hc = m
 				sys.hMutex.Unlock()
@@ -209,9 +208,6 @@ func (sys *BucketTargetSys) Delete(bucket string) {
 
 // SetTarget - sets a new minio-go client target for this bucket.
 func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget, update bool) error {
-	if globalIsGateway {
-		return nil
-	}
 	if !tgt.Type.IsValid() && !update {
 		return BucketRemoteArnTypeInvalid{Bucket: bucket}
 	}
@@ -220,11 +216,15 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 	}
 	// validate if target credentials are ok
-	if _, err = clnt.BucketExists(ctx, tgt.TargetBucket); err != nil {
+	exists, err := clnt.BucketExists(ctx, tgt.TargetBucket)
+	if err != nil {
 		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 		}
 		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: err}
+	}
+	if !exists {
+		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalBucketVersioningSys.Enabled(bucket) {
@@ -234,7 +234,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if err != nil {
 			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: err}
 		}
-		if vcfg.Status != string(versioning.Enabled) {
+		if !vcfg.Enabled() {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
@@ -268,9 +268,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 }
 
 func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
-	if globalIsGateway {
-		return
-	}
 	if limit == 0 {
 		globalBucketMonitor.DeleteBucket(bucket)
 		return
@@ -282,10 +279,6 @@ func (sys *BucketTargetSys) updateBandwidthLimit(bucket string, limit int64) {
 
 // RemoveTarget - removes a remote bucket target for this source bucket.
 func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr string) error {
-	if globalIsGateway {
-		return nil
-	}
-
 	if arnStr == "" {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}

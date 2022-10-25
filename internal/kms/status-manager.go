@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,35 +15,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package kms
 
-type gatewaySSE []string
+import (
+	"context"
 
-const (
-	// GatewaySSES3 is set when SSE-S3 encryption needed on both gateway and backend
-	gatewaySSES3 = "S3"
-	// GatewaySSEC is set when SSE-C encryption needed on both gateway and backend
-	gatewaySSEC = "C"
+	"github.com/minio/kes"
 )
 
-func (sse gatewaySSE) SSES3() bool {
-	for _, v := range sse {
-		if v == gatewaySSES3 {
-			return true
-		}
-	}
-	return false
-}
-
-func (sse gatewaySSE) SSEC() bool {
-	for _, v := range sse {
-		if v == gatewaySSEC {
-			return true
-		}
-	}
-	return false
-}
-
-func (sse gatewaySSE) IsSet() bool {
-	return sse.SSES3() || sse.SSEC()
+// StatusManager is the generic interface that handles KMS status operations
+type StatusManager interface {
+	// Version retrieves version information
+	Version(ctx context.Context) (string, error)
+	// APIs retrieves a list of supported API endpoints
+	APIs(ctx context.Context) ([]kes.API, error)
 }

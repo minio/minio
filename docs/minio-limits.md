@@ -39,15 +39,15 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 ### List of Amazon S3 Bucket API's not supported on MinIO
 
-- BucketACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
+- BucketACL (Use [bucket policies](https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
 - BucketWebsite (Use [`caddy`](https://github.com/caddyserver/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.min.io/docs/minio-client-complete-guide#events) APIs)
+- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://min.io/docs/minio/linux/administration/monitoring/bucket-notifications.html) APIs)
 - BucketRequestPayment
 
 ### List of Amazon S3 Object API's not supported on MinIO
 
-- ObjectACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
+- ObjectACL (Use [bucket policies](https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html) instead)
 
 ## Object name restrictions on MinIO
 

@@ -31,10 +31,11 @@ All properties except the file size are tied to the zip file. This means that mo
 
 - ListObjectsV2 can only list the most recent ZIP archive version of your object, applicable only for versioned buckets.
 - ListObjectsV2 API calls must be used to list zip file content.
+- Range requests for GetObject/HeadObject for individual files from zip is not supported.
 - Names inside ZIP files are kept unmodified, but some may lead to invalid paths. See [Object key naming guidelines](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html) on safe names.
 - This API behavior is limited for following **read** operations on files inside a zip archive:
   - `HeadObject`
   - `GetObject`
   - `ListObjectsV2`
-- A maximum of 100,000 files inside a single ZIP archive is recommended for best performance and memory usage trade-off.
 - If the ZIP file directory isn't located within the last 100MB the file will not be parsed.
+- A maximum of 100M inside a single zip is allowed. However, a reasonable limit of 100,000 files inside a single ZIP archive is recommended for best performance and memory usage trade-off.

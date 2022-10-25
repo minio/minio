@@ -42,8 +42,6 @@ import (
 )
 
 type erasureServerPools struct {
-	GatewayUnsupported
-
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
 	serverPools   []*erasureSets
@@ -1302,8 +1300,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				action := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo, false)
-				switch action {
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				switch evt.Action {
 				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
 					fallthrough
 				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
@@ -1588,6 +1586,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		meta, err := globalBucketMetadataSys.Get(bucket)
 		if err == nil {
 			bucketInfo.Created = meta.Created
+			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+			bucketInfo.ObjectLocking = meta.LockEnabled
 		}
 		return bucketInfo, nil
 	}
@@ -1602,6 +1602,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		meta, err := globalBucketMetadataSys.Get(bucket)
 		if err == nil {
 			bucketInfo.Created = meta.Created
+			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+			bucketInfo.ObjectLocking = meta.LockEnabled
 		}
 		return bucketInfo, nil
 	}
@@ -1875,12 +1877,22 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						versionsSorter(fivs.Versions).reverse()
 
 						for _, version := range fivs.Versions {
+							send := true
+							if opts.WalkFilter != nil && !opts.WalkFilter(version) {
+								send = false
+							}
+
+							if !send {
+								continue
+							}
+
 							versioned := vcfg != nil && vcfg.Versioned(version.Name)
+							objInfo := version.ToObjectInfo(bucket, version.Name, versioned)
 
 							select {
 							case <-ctx.Done():
 								return
-							case results <- version.ToObjectInfo(bucket, version.Name, versioned):
+							case results <- objInfo:
 							}
 						}
 					}
@@ -1904,7 +1916,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						path:           path,
 						filterPrefix:   filterPrefix,
 						recursive:      true,
-						forwardTo:      "",
+						forwardTo:      opts.WalkMarker,
 						minDisks:       1,
 						reportNotFound: false,
 						agreed:         loadEntry,
@@ -2116,12 +2128,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		Bucket: bucket,
 		Object: object,
 	}
-}
-
-// GetMetrics - returns metrics of local disks
-func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return &BackendMetrics{}, NotImplemented{}
 }
 
 func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx int, err error) {

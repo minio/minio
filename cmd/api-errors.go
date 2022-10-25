@@ -30,6 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -265,6 +266,7 @@ const (
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
+	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
@@ -275,6 +277,8 @@ const (
 	ErrAdminNoSuchConfigTarget
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
+	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPValidation
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -1228,6 +1232,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified group does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminNoSuchJob: {
+		Code:           "XMinioAdminNoSuchJob",
+		Description:    "The specified job does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrAdminGroupNotEmpty: {
 		Code:           "XMinioAdminGroupNotEmpty",
 		Description:    "The specified group is not empty - cannot remove it.",
@@ -1282,6 +1291,16 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigDuplicateKeys: {
 		Code:           "XMinioAdminConfigDuplicateKeys",
 		Description:    "JSON configuration provided has objects with duplicate keys",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigInvalidIDPType: {
+		Code:           "XMinioAdminConfigInvalidIDPType",
+		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigLDAPValidation: {
+		Code:           "XMinioAdminConfigLDAPValidation",
+		Description:    "LDAP Configuration validation failed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigNotificationTargetsFailed: {
@@ -1935,6 +1954,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty
+	case errNoSuchJob:
+		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
@@ -2229,9 +2250,14 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if apiErr.Code == "InternalError" {
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
-		// their internal error types. This code is only
-		// useful with gateway implementations.
+		// their internal error types.
 		switch e := err.(type) {
+		case batchReplicationJobError:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Description,
+				HTTPStatusCode: e.HTTPStatusCode,
+			}
 		case InvalidArgument:
 			apiErr = APIError{
 				Code:           "InvalidArgument",
@@ -2294,7 +2320,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
 			}
-			if globalIsGateway && strings.Contains(e.Message, "KMS is not configured") {
+			if strings.Contains(e.Message, "KMS is not configured") {
 				apiErr = APIError{
 					Code:           "NotImplemented",
 					Description:    e.Message,
@@ -2318,7 +2344,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Error(),
 				HTTPStatusCode: e.Response().StatusCode,
 			}
-			// Add more Gateway SDKs here if any in future.
+			// Add more other SDK related errors here if any in future.
 		default:
 			//nolint:gocritic
 			if errors.Is(err, errMalformedEncoding) {

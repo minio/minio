@@ -19,6 +19,8 @@ package replication
 
 import (
 	"encoding/xml"
+
+	"github.com/minio/minio-go/v7/pkg/tags"
 )
 
 var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
@@ -29,8 +31,9 @@ type Filter struct {
 	Prefix  string
 	And     And
 	Tag     Tag
+
 	// Caching tags, only once
-	cachedTags map[string]struct{}
+	cachedTags map[string]string
 }
 
 // IsEmpty returns true if filter is not set
@@ -93,27 +96,43 @@ func (f Filter) Validate() error {
 
 // TestTags tests if the object tags satisfy the Filter tags requirement,
 // it returns true if there is no tags in the underlying Filter.
-func (f *Filter) TestTags(ttags []string) bool {
+func (f *Filter) TestTags(userTags string) bool {
 	if f.cachedTags == nil {
-		tags := make(map[string]struct{})
+		cached := make(map[string]string)
 		for _, t := range append(f.And.Tags, f.Tag) {
 			if !t.IsEmpty() {
-				tags[t.String()] = struct{}{}
+				cached[t.Key] = t.Value
 			}
 		}
-		f.cachedTags = tags
+		f.cachedTags = cached
 	}
-	for ct := range f.cachedTags {
-		foundTag := false
-		for _, t := range ttags {
-			if ct == t {
-				foundTag = true
-				break
-			}
-		}
-		if !foundTag {
-			return false
+
+	// This filter does not have any tags, always return true
+	if len(f.cachedTags) == 0 {
+		return true
+	}
+
+	parsedTags, err := tags.ParseObjectTags(userTags)
+	if err != nil {
+		return false
+	}
+
+	tagsMap := parsedTags.ToMap()
+
+	// This filter has tags configured but this object
+	// does not have any tag, skip this object
+	if len(tagsMap) == 0 {
+		return false
+	}
+
+	// Both filter and object have tags, find a match,
+	// skip this object otherwise
+	for k, cv := range f.cachedTags {
+		v, ok := tagsMap[k]
+		if ok && v == cv {
+			return true
 		}
 	}
-	return true
+
+	return false
 }

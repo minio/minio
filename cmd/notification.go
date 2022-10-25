@@ -491,10 +491,6 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 
 // LoadBucketMetadata - calls LoadBucketMetadata call on all peers
 func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName string) {
-	if globalIsGateway {
-		return
-	}
-
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -731,7 +727,7 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 }
 
 // GetMetrics - Get metrics from all peers.
-func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) []madmin.RealtimeMetrics {
+func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, opts collectMetricsOpts) []madmin.RealtimeMetrics {
 	reply := make([]madmin.RealtimeMetrics, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
@@ -740,8 +736,8 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 			continue
 		}
 		host := client.host.String()
-		if len(hosts) > 0 {
-			if _, ok := hosts[host]; !ok {
+		if len(opts.hosts) > 0 {
+			if _, ok := opts.hosts[host]; !ok {
 				continue
 			}
 		}
@@ -749,7 +745,7 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, disks)
+			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, opts)
 			return err
 		}, index)
 	}

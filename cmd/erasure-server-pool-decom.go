@@ -701,14 +701,14 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			action := evalActionFromLifecycle(ctx, *lc, lr, objInfo, false)
-			switch action {
+			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			switch evt.Action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
+				globalExpiryState.enqueueByDays(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
 				// Skip this entry.
 				return true
 			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+				globalExpiryState.enqueueByDays(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
 				// Skip this entry.
 				return true
 			}
@@ -768,6 +768,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							DeleteMarker:       true, // make sure we create a delete marker
 							SkipDecommissioned: true, // make sure we skip the decommissioned pool
 						})
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+						// object/version already deleted by the application, nothing to do here we move on.
+						continue
+					}
 					var failure bool
 					if err != nil {
 						logger.LogIf(ctx, err)
@@ -783,7 +787,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					continue
 				}
 
-				var failure bool
+				var failure, ignore bool
 				// gr.Close() is ensured by decommissionObject().
 				for try := 0; try < 3; try++ {
 					gr, err := set.GetObjectNInfo(ctx,
@@ -796,9 +800,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							VersionID:    version.VersionID,
 							NoDecryption: true,
 						})
-					if isErrObjectNotFound(err) {
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
-						return
+						ignore = true
+						break
 					}
 					if err != nil {
 						failure = true
@@ -815,6 +820,9 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					stopFn(nil)
 					failure = false
 					break
+				}
+				if ignore {
+					continue
 				}
 				z.poolMetaMutex.Lock()
 				z.poolMeta.CountItem(idx, version.Size, failure)
@@ -1266,9 +1274,11 @@ func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID strin
 	if err != nil {
 		errStr = err.Error()
 	}
-	auditLogInternal(ctx, bucket, object, AuditLogOptions{
+	auditLogInternal(ctx, AuditLogOptions{
 		Event:     "decommission",
 		APIName:   apiName,
+		Bucket:    bucket,
+		Object:    object,
 		VersionID: versionID,
 		Error:     errStr,
 	})

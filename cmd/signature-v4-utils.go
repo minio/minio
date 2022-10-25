@@ -141,7 +141,7 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 // check if the access key is valid and recognized, additionally
 // also returns if the access key is owner/admin.
 func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, APIErrorCode) {
-	if !globalIAMSys.Initialized() && !globalIsGateway {
+	if !globalIAMSys.Initialized() {
 		// Check if server has initialized, then only proceed
 		// to check for IAM users otherwise its okay for clients
 		// to retry with 503 errors when server is coming up.

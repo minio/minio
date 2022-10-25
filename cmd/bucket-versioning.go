@@ -69,11 +69,6 @@ func (sys *BucketVersioningSys) PrefixSuspended(bucket, prefix string) bool {
 
 // Get returns stored bucket policy
 func (sys *BucketVersioningSys) Get(bucket string) (*versioning.Versioning, error) {
-	if globalIsGateway {
-		// Gateway does not implement versioning.
-		return &versioning.Versioning{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/"}, nil
-	}
-
 	if bucket == minioMetaBucket || strings.HasPrefix(bucket, minioMetaBucket) {
 		return &versioning.Versioning{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/"}, nil
 	}

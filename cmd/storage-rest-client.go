@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"path"
 	"strconv"
@@ -48,7 +49,10 @@ func isNetworkError(err error) bool {
 	if nerr, ok := err.(*rest.NetworkError); ok {
 		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
-	return false
+
+	// A peer node can be in shut down phase and proactively
+	// return 503 server closed error,consider it as an offline node
+	return err.Error() == http.ErrServerClosed.Error()
 }
 
 // Converts network error to storageErr. This function is

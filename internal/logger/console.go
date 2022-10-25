@@ -32,6 +32,9 @@ import (
 // ConsoleLoggerTgt is a stringified value to represent console logging
 const ConsoleLoggerTgt = "console+http"
 
+// ExitFunc is called by Fatal() class functions, by default it calls os.Exit()
+var ExitFunc = os.Exit
+
 // Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
 type Logger interface {
 	json(msg string, args ...interface{})
@@ -90,7 +93,7 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	}
 	fmt.Println(string(logJSON))
 
-	os.Exit(1)
+	ExitFunc(1)
 }
 
 func (f fatalMsg) quiet(msg string, args ...interface{}) {
@@ -143,7 +146,7 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 	}
 
 	// Exit because this is a fatal error message
-	os.Exit(1)
+	ExitFunc(1)
 }
 
 type infoMsg struct{}

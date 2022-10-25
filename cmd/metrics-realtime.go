@@ -25,23 +25,29 @@ import (
 	"github.com/minio/minio/internal/disk"
 )
 
-func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
+type collectMetricsOpts struct {
+	hosts map[string]struct{}
+	disks map[string]struct{}
+	jobID string
+}
+
+func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if types == madmin.MetricsNone {
 		return
 	}
 
-	if len(hosts) > 0 {
-		if _, ok := hosts[globalMinioAddr]; !ok {
+	if len(opts.hosts) > 0 {
+		if _, ok := opts.hosts[globalMinioAddr]; !ok {
 			return
 		}
 	}
 
-	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
+	if types.Contains(madmin.MetricsDisk) {
 		m.ByDisk = make(map[string]madmin.DiskMetric)
 		aggr := madmin.DiskMetric{
 			CollectedAt: time.Now(),
 		}
-		for name, disk := range collectLocalDisksMetrics(disks) {
+		for name, disk := range collectLocalDisksMetrics(opts.disks) {
 			m.ByDisk[name] = disk
 			aggr.Merge(&disk)
 		}
@@ -56,6 +62,10 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}, dis
 		metrics := globalOSMetrics.report()
 		m.Aggregated.OS = &metrics
 	}
+	if types.Contains(madmin.MetricsBatchJobs) {
+		m.Aggregated.BatchJobs = globalBatchJobsMetrics.report(opts.jobID)
+	}
+
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
@@ -143,11 +153,11 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 	return metrics
 }
 
-func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
+func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if !globalIsDistErasure {
 		return
 	}
-	all := globalNotificationSys.GetMetrics(ctx, types, hosts, disks)
+	all := globalNotificationSys.GetMetrics(ctx, types, opts)
 	for _, remote := range all {
 		m.Merge(&remote)
 	}

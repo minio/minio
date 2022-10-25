@@ -46,19 +46,21 @@ import (
 	"github.com/felixge/fgprof"
 	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	ioutilx "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	xnet "github.com/minio/pkg/net"
 	"golang.org/x/oauth2"
 )
 
@@ -86,6 +88,79 @@ func IsErr(err error, errs ...error) bool {
 		}
 	}
 	return false
+}
+
+// ErrorRespToObjectError converts MinIO errors to minio object layer errors.
+func ErrorRespToObjectError(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
+
+	bucket := ""
+	object := ""
+	if len(params) >= 1 {
+		bucket = params[0]
+	}
+	if len(params) == 2 {
+		object = params[1]
+	}
+
+	if xnet.IsNetworkOrHostDown(err, false) {
+		return BackendDown{Err: err.Error()}
+	}
+
+	minioErr, ok := err.(minio.ErrorResponse)
+	if !ok {
+		// We don't interpret non MinIO errors. As minio errors will
+		// have StatusCode to help to convert to object errors.
+		return err
+	}
+
+	switch minioErr.Code {
+	case "PreconditionFailed":
+		err = PreConditionFailed{}
+	case "InvalidRange":
+		err = InvalidRange{}
+	case "BucketAlreadyOwnedByYou":
+		err = BucketAlreadyOwnedByYou{}
+	case "BucketNotEmpty":
+		err = BucketNotEmpty{}
+	case "NoSuchBucketPolicy":
+		err = BucketPolicyNotFound{}
+	case "NoSuchLifecycleConfiguration":
+		err = BucketLifecycleNotFound{}
+	case "InvalidBucketName":
+		err = BucketNameInvalid{Bucket: bucket}
+	case "InvalidPart":
+		err = InvalidPart{}
+	case "NoSuchBucket":
+		err = BucketNotFound{Bucket: bucket}
+	case "NoSuchKey":
+		if object != "" {
+			err = ObjectNotFound{Bucket: bucket, Object: object}
+		} else {
+			err = BucketNotFound{Bucket: bucket}
+		}
+	case "XMinioInvalidObjectName":
+		err = ObjectNameInvalid{}
+	case "AccessDenied":
+		err = PrefixAccessDenied{
+			Bucket: bucket,
+			Object: object,
+		}
+	case "XAmzContentSHA256Mismatch":
+		err = hash.SHA256Mismatch{}
+	case "NoSuchUpload":
+		err = InvalidUploadID{}
+	case "EntityTooSmall":
+		err = PartTooSmall{}
+	}
+
+	switch minioErr.StatusCode {
+	case http.StatusMethodNotAllowed:
+		err = toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+	return err
 }
 
 // returns 'true' if either string has space in the
@@ -120,9 +195,6 @@ func path2BucketObjectWithBasePath(basePath, path string) (bucket, prefix string
 func path2BucketObject(s string) (bucket, prefix string) {
 	return path2BucketObjectWithBasePath("", s)
 }
-
-// CloneMSS is an exposed function of cloneMSS for gateway usage.
-var CloneMSS = cloneMSS
 
 // cloneMSS will clone a map[string]string.
 // If input is nil an empty map is returned, not nil.
@@ -183,9 +255,6 @@ const (
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
-
-	// Default values used while communicating for gateway communication
-	defaultDialTimeout = 5 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -616,10 +685,10 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	}
 }
 
-// NewGatewayHTTPTransportWithClientCerts returns a new http configuration
+// NewHTTPTransportWithClientCerts returns a new http configuration
 // used while communicating with the cloud backends.
-func NewGatewayHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
-	transport := newGatewayHTTPTransport(1 * time.Minute)
+func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
+	transport := newHTTPTransport(1 * time.Minute)
 	if clientCert != "" && clientKey != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -637,19 +706,22 @@ func NewGatewayHTTPTransportWithClientCerts(clientCert, clientKey string) *http.
 	return transport
 }
 
-// NewGatewayHTTPTransport returns a new http configuration
+// NewHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
-func NewGatewayHTTPTransport() *http.Transport {
-	return newGatewayHTTPTransport(1 * time.Minute)
+func NewHTTPTransport() *http.Transport {
+	return newHTTPTransport(1 * time.Minute)
 }
 
-func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
+// Default values for dial timeout
+const defaultDialTimeout = 5 * time.Second
+
+func newHTTPTransport(timeout time.Duration) *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs:            globalRootCAs,
 		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
 	}, defaultDialTimeout)()
 
-	// Customize response header timeout for gateway transport.
+	// Customize response header timeout
 	tr.ResponseHeaderTimeout = timeout
 	return tr
 }
@@ -736,6 +808,20 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	return
 }
 
+// cleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
+// encryption metadata.
+func cleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
+	newMeta := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
+			newMeta[strings.TrimPrefix(k, "X-Amz-Meta-")] = v
+		} else {
+			newMeta[k] = v
+		}
+	}
+	return newMeta
+}
+
 // pathClean is like path.Clean but does not return "." for
 // empty inputs, instead returns "empty" as is.
 func pathClean(p string) string {
@@ -811,10 +897,6 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
-	prefix := likelyUnescapeGeneric(vars["prefix"], url.QueryUnescape)
-	if prefix != "" {
-		object = prefix
-	}
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(xhttp.AmzRequestID),
@@ -898,8 +980,6 @@ func getMinioMode() string {
 		mode = globalMinioModeDistErasure
 	} else if globalIsErasure {
 		mode = globalMinioModeErasure
-	} else if globalIsGateway {
-		mode = globalMinioModeGatewayPrefix + globalGatewayName
 	} else if globalIsErasureSD {
 		mode = globalMinioModeErasureSD
 	}
@@ -1016,13 +1096,6 @@ func decodeDirObject(object string) string {
 	return object
 }
 
-// This is used by metrics to show the number of failed RPC calls
-// between internodes
-func loadAndResetRPCNetworkErrsCounter() uint64 {
-	defer rest.ResetNetworkErrsCounter()
-	return rest.GetNetworkErrsCounter()
-}
-
 // Helper method to return total number of nodes in cluster
 func totalNodeCount() uint64 {
 	peers, _ := globalEndpoints.peers()
@@ -1038,28 +1111,38 @@ type AuditLogOptions struct {
 	Event     string
 	APIName   string
 	Status    string
+	Bucket    string
+	Object    string
 	VersionID string
 	Error     string
+	Tags      map[string]interface{}
 }
 
 // sends audit logs for internal subsystem activity
-func auditLogInternal(ctx context.Context, bucket, object string, opts AuditLogOptions) {
+func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
 	entry := audit.NewEntry(globalDeploymentID)
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
-	entry.API.Bucket = bucket
-	entry.API.Object = object
-	if opts.VersionID != "" {
-		entry.ReqQuery = make(map[string]string)
-		entry.ReqQuery[xhttp.VersionID] = opts.VersionID
-	}
+	entry.API.Bucket = opts.Bucket
+	entry.API.Objects = []audit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
+	entry.Tags = opts.Tags
 	// Merge tag information if found - this is currently needed for tags
 	// set during decommissioning.
 	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
-		entry.Tags = reqInfo.GetTagsMap()
+		if tags := reqInfo.GetTagsMap(); len(tags) > 0 {
+			if entry.Tags == nil {
+				entry.Tags = make(map[string]interface{}, len(tags))
+			}
+			for k, v := range tags {
+				entry.Tags[k] = v
+			}
+		}
 	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
 	logger.AuditLog(ctx, nil, nil, nil)

@@ -91,8 +91,9 @@ const (
 	peerRESTConcurrent   = "concurrent"
 	peerRESTDuration     = "duration"
 	peerRESTStorageClass = "storage-class"
-	peerRESTTypes        = "types"
+	peerRESTMetricsTypes = "types"
 	peerRESTDisk         = "disk"
+	peerRESTJobID        = "job-id"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

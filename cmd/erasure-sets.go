@@ -51,8 +51,6 @@ type setsDsyncLockers [][]dsync.NetLocker
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type erasureSets struct {
-	GatewayUnsupported
-
 	sets []*erasureObjects
 
 	// Reference format.
@@ -355,6 +353,10 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 	endpointStrings := make([]string, len(endpoints.Endpoints))
 	for i, endpoint := range endpoints.Endpoints {
 		endpointStrings[i] = endpoint.String()
+	}
+
+	if defaultParityCount == 0 {
+		logger.Error("Warning: Default parity set to 0. This can lead to data loss.")
 	}
 
 	// Initialize the erasure sets instance.

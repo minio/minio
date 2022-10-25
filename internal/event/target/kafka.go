@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -122,12 +123,15 @@ func (k KafkaArgs) Validate() error {
 
 // KafkaTarget - Kafka target.
 type KafkaTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       KafkaArgs
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      Store
 	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
@@ -135,13 +139,15 @@ func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
 }
 
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *KafkaTarget) HasQueueStore() bool {
-	return target.store != nil
-}
-
 // IsActive - Return true if target is up and active
 func (target *KafkaTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+	return target.isActive()
+}
+
+func (target *KafkaTarget) isActive() (bool, error) {
 	if !target.args.pingBrokers() {
 		return false, errNotConnected
 	}
@@ -150,10 +156,14 @@ func (target *KafkaTarget) IsActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
+	_, err := target.isActive()
 	if err != nil {
 		return err
 	}
@@ -189,8 +199,12 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to Kafka.
 func (target *KafkaTarget) Send(eventKey string) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	var err error
-	_, err = target.IsActive()
+	_, err = target.isActive()
 	if err != nil {
 		return err
 	}
@@ -234,6 +248,7 @@ func (target *KafkaTarget) Send(eventKey string) error {
 
 // Close - closes underneath kafka connection.
 func (target *KafkaTarget) Close() error {
+	close(target.quitCh)
 	if target.producer != nil {
 		return target.producer.Close()
 	}
@@ -251,21 +266,19 @@ func (k KafkaArgs) pingBrokers() bool {
 	return false
 }
 
-// NewKafkaTarget - creates new Kafka target with auth credentials.
-func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*KafkaTarget, error) {
+func (target *KafkaTarget) init() error {
+	return target.lazyInit.Do(target.initKafka)
+}
+
+func (target *KafkaTarget) initKafka() error {
+	args := target.args
+
 	config := sarama.NewConfig()
-
-	target := &KafkaTarget{
-		id:         event.TargetID{ID: id, Name: "kafka"},
-		args:       args,
-		loggerOnce: loggerOnce,
-	}
-
 	if args.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
 		if err != nil {
 			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
+			return err
 		}
 		config.Version = kafkaVersion
 	}
@@ -278,7 +291,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
 	if err != nil {
 		target.loggerOnce(context.Background(), err, target.ID().String())
-		return target, err
+		return err
 	}
 
 	config.Net.TLS.Enable = args.TLS.Enable
@@ -298,33 +311,46 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 		brokers = append(brokers, broker.String())
 	}
 
-	var store Store
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID().String())
-			return target, oErr
-		}
-		target.store = store
-	}
-
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
-		if store == nil || err != sarama.ErrOutOfBrokers {
+		if err != sarama.ErrOutOfBrokers {
 			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
 		}
+		target.producer.Close()
+		return err
 	}
 	target.producer = producer
 
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
+	yes, err := target.isActive()
+	if err != nil {
+		return err
+	}
+	if !yes {
+		return errNotConnected
 	}
 
-	return target, nil
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
+
+// NewKafkaTarget - creates new Kafka target with auth credentials.
+func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*KafkaTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of Kafka `%s`: %w", id, err)
+		}
+	}
+
+	return &KafkaTarget{
+		id:         event.TargetID{ID: id, Name: "kafka"},
+		args:       args,
+		store:      store,
+		loggerOnce: loggerOnce,
+		quitCh:     make(chan struct{}),
+	}, nil
 }

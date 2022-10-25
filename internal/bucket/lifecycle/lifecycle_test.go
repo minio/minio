@@ -439,6 +439,96 @@ func TestComputeActions(t *testing.T) {
 			isNoncurrent:           true,
 			expectedAction:         DeleteVersionAction,
 		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                             <Rule>
+                               <ID>Rule 1</ID>
+                               <Filter>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Expiration>
+                                 <Days>365</Days>
+                               </Expiration>
+                             </Rule>
+                             <Rule>
+                               <ID>Rule 2</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Transition>
+                                 <StorageClass>STANDARD_IA</StorageClass>
+                                 <Days>30</Days>
+                               </Transition>
+                              </Rule>
+                          </LifecycleConfiguration>`,
+			objectName:     "logs/obj-1",
+			objectModTime:  time.Now().UTC().Add(-31 * 24 * time.Hour),
+			expectedAction: TransitionAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                             <Rule>
+                               <ID>Rule 1</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Expiration>
+                                 <Days>365</Days>
+                               </Expiration>
+                             </Rule>
+                             <Rule>
+                               <ID>Rule 2</ID>
+                               <Filter>
+                                 <Prefix>logs/</Prefix>
+                               </Filter>
+                               <Status>Enabled</Status>
+                               <Transition>
+                                 <StorageClass>STANDARD_IA</StorageClass>
+                                 <Days>365</Days>
+                               </Transition>
+                             </Rule>
+                          </LifecycleConfiguration>`,
+			objectName:     "logs/obj-1",
+			objectModTime:  time.Now().UTC().Add(-366 * 24 * time.Hour),
+			expectedAction: DeleteAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>Rule 1</ID>
+                              <Filter>
+                                <Tag>
+                                   <Key>tag1</Key>
+                                   <Value>value1</Value>
+                                </Tag>
+                              </Filter>
+                              <Status>Enabled</Status>
+                              <Transition>
+                                <StorageClass>GLACIER</StorageClass>
+                                <Days>365</Days>
+                              </Transition>
+                            </Rule>
+                            <Rule>
+                              <ID>Rule 2</ID>
+                              <Filter>
+                                <Tag>
+                                   <Key>tag2</Key>
+                                   <Value>value2</Value>
+                                </Tag>
+                              </Filter>
+                              <Status>Enabled</Status>
+                              <Expiration>
+                                <Days>14</Days>
+                              </Expiration>
+                             </Rule>
+                         </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectTags:     "tag1=value1&tag2=value2",
+			objectModTime:  time.Now().UTC().Add(-15 * 24 * time.Hour),
+			expectedAction: DeleteAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -461,7 +551,6 @@ func TestComputeActions(t *testing.T) {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
 		})
-
 	}
 }
 
@@ -636,18 +725,120 @@ func TestTransitionTier(t *testing.T) {
 		},
 	}
 
+	now := time.Now().UTC()
+
 	obj1 := ObjectOpts{
 		Name:     "obj1",
 		IsLatest: true,
+		ModTime:  now,
 	}
+
 	obj2 := ObjectOpts{
-		Name: "obj2",
+		Name:    "obj2",
+		ModTime: now,
 	}
-	if got := lc.TransitionTier(obj1); got != "TIER-1" {
-		t.Fatalf("Expected TIER-1 but got %s", got)
+
+	// Go back seven days in the past
+	now = now.Add(7 * 24 * time.Hour)
+
+	evt := lc.Eval(obj1, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
-	if got := lc.TransitionTier(obj2); got != "TIER-2" {
-		t.Fatalf("Expected TIER-2 but got %s", got)
+	if evt.StorageClass != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
+	}
+
+	evt = lc.Eval(obj2, now)
+	if evt.Action != TransitionVersionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)
+	}
+}
+
+func TestTransitionTierWithPrefixAndTags(t *testing.T) {
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Filter: Filter{
+					Prefix: Prefix{
+						set:    true,
+						string: "abcd/",
+					},
+				},
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-1",
+				},
+			},
+			{
+				ID:     "rule-2",
+				Status: "Enabled",
+				Filter: Filter{
+					tagSet: true,
+					Tag: Tag{
+						Key:   "priority",
+						Value: "low",
+					},
+				},
+				Transition: Transition{
+					Days:         TransitionDays(3),
+					StorageClass: "TIER-2",
+				},
+			},
+		},
+	}
+
+	now := time.Now().UTC()
+
+	obj1 := ObjectOpts{
+		Name:     "obj1",
+		IsLatest: true,
+		ModTime:  now,
+	}
+
+	obj2 := ObjectOpts{
+		Name:     "abcd/obj2",
+		IsLatest: true,
+		ModTime:  now,
+	}
+
+	obj3 := ObjectOpts{
+		Name:     "obj3",
+		IsLatest: true,
+		ModTime:  now,
+		UserTags: "priority=low",
+	}
+
+	// Go back seven days in the past
+	now = now.Add(7 * 24 * time.Hour)
+
+	// Eval object 1
+	evt := lc.Eval(obj1, now)
+	if evt.Action != NoneAction {
+		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.Action)
+	}
+
+	// Eval object 2
+	evt = lc.Eval(obj2, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-1" {
+		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
+	}
+
+	// Eval object 3
+	evt = lc.Eval(obj3, now)
+	if evt.Action != TransitionAction {
+		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
+	}
+	if evt.StorageClass != "TIER-2" {
+		t.Fatalf("Expected TIER-2 but got %s", evt.StorageClass)
 	}
 }
 
@@ -668,8 +859,8 @@ func TestNoncurrentVersionsLimit(t *testing.T) {
 	lc := Lifecycle{
 		Rules: rules,
 	}
-	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 10 {
-		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 10) but got (%s, %d, %d)", ruleID, days, lim)
+	if ruleID, days, lim := lc.NoncurrentVersionsExpirationLimit(ObjectOpts{Name: "obj"}); ruleID != "1" || days != 1 || lim != 1 {
+		t.Fatalf("Expected (ruleID, days, lim) to be (\"1\", 1, 1) but got (%s, %d, %d)", ruleID, days, lim)
 	}
 }
 
@@ -709,6 +900,35 @@ func TestMaxNoncurrentBackwardCompat(t *testing.T) {
 				t.Fatalf("%d: Failed to unmarshal xml %v", i+1, err)
 			}
 			t.Fatalf("%d: Expected %v but got %v", i+1, tc.expected, got)
+		}
+	}
+}
+
+func TestParseLifecycleConfigWithID(t *testing.T) {
+	r := bytes.NewReader([]byte(`<LifecycleConfiguration>
+								  <Rule>
+	                              <ID>rule-1</ID>
+		                          <Filter>
+		                             <Prefix>prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          <Rule>
+		                          <Filter>
+		                             <Prefix>another-prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          </LifecycleConfiguration>`))
+	lc, err := ParseLifecycleConfigWithID(r)
+	if err != nil {
+		t.Fatalf("Expected parsing to succeed but failed with %v", err)
+	}
+	for _, rule := range lc.Rules {
+		if rule.ID == "" {
+			t.Fatalf("Expected all rules to have a unique id assigned %#v", rule)
 		}
 	}
 }

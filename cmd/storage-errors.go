@@ -103,9 +103,6 @@ var errBitrotHashAlgoInvalid = StorageErr("bit-rot hash algorithm is invalid")
 // errCrossDeviceLink - rename across devices not allowed.
 var errCrossDeviceLink = StorageErr("Rename across devices not allowed, please fix your backend configuration")
 
-// errMinDiskSize - cannot create volume or files when disk size is less than threshold.
-var errMinDiskSize = StorageErr("The drive size is less than 900MiB threshold")
-
 // errLessData - returned when less data available than what was requested.
 var errLessData = StorageErr("less data available than what was requested")
 
@@ -118,9 +115,6 @@ var errDoneForNow = errors.New("done for now")
 // errSkipFile returned by the fn() for readDirFn() when it needs
 // to proceed to next entry.
 var errSkipFile = errors.New("skip this file")
-
-// Returned by FS drive mode when a fresh disk is specified.
-var errFreshDisk = errors.New("FS backend requires existing drive")
 
 // errXLBackend XL drive mode requires fresh deployment.
 var errXLBackend = errors.New("XL backend requires fresh drive")

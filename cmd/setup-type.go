@@ -35,9 +35,6 @@ const (
 
 	// DistErasureSetupType - Distributed Erasure setup type enum.
 	DistErasureSetupType
-
-	// GatewaySetupType - gateway setup type enum.
-	GatewaySetupType
 )
 
 func (setupType SetupType) String() string {
@@ -50,8 +47,6 @@ func (setupType SetupType) String() string {
 		return globalMinioModeErasure
 	case DistErasureSetupType:
 		return globalMinioModeDistErasure
-	case GatewaySetupType:
-		return globalMinioModeGatewayPrefix
 	}
 
 	return "unknown"

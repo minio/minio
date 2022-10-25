@@ -375,7 +375,9 @@ func (es *erasureSingle) listPath(ctx context.Context, o *listPathOptions) (entr
 		entries.truncate(0)
 		o.ID = ""
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
+			if !(isErrObjectNotFound(err) || errors.Is(err, IncompleteBody{}) || isErrVersionNotFound(err)) {
+				logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
+			}
 		}
 	}
 
@@ -625,14 +627,14 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 
 		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
 		if o.Lifecycle != nil {
-			action := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo, false)
-			switch action {
+			evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
+			switch evt.Action {
 			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
+				globalExpiryState.enqueueByDays(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
 				// Skip this entry.
 				continue
 			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+				globalExpiryState.enqueueByDays(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
 				// Skip this entry.
 				continue
 			}

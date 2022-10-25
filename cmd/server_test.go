@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -102,6 +103,7 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.TestContentTypePersists(c)
 	suite.TestPartialContent(c)
 	suite.TestListObjectsHandler(c)
+	suite.TestListObjectVersionsOutputOrderHandler(c)
 	suite.TestListObjectsHandlerErrors(c)
 	suite.TestPutBucketErrors(c)
 	suite.TestGetObjectLarge10MiB(c)
@@ -1634,6 +1636,70 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 			c.Assert(strings.Contains(string(getContent), expectedStr), true)
 		}
 	}
+}
+
+// TestListObjectVersionsHandler - checks the order of <Version>
+// and <DeleteMarker> XML tags in a version listing
+func (s *TestSuiteCommon) TestListObjectVersionsOutputOrderHandler(c *check) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	makeBucketRequest, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request to create bucket.
+	response, err := s.client.Do(makeBucketRequest)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	// HTTP request to create the bucket.
+	enableVersioningBody := []byte("<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
+	enableVersioningBucketRequest, err := newTestSignedRequest(http.MethodPut, getBucketVersioningConfigURL(s.endPoint, bucketName),
+		int64(len(enableVersioningBody)), bytes.NewReader(enableVersioningBody), s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request to create bucket.
+	response, err = s.client.Do(enableVersioningBucketRequest)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	for _, objectName := range []string{"file.1", "file.2"} {
+		buffer := bytes.NewReader([]byte("testcontent"))
+		putRequest, err := newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
+			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		response, err = s.client.Do(putRequest)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+
+		delRequest, err := newTestSignedRequest(http.MethodDelete, getDeleteObjectURL(s.endPoint, bucketName, objectName),
+			0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		response, err = s.client.Do(delRequest)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusNoContent)
+	}
+
+	// create listObjectsV1 request with valid parameters
+	request, err := newTestSignedRequest(http.MethodGet, getListObjectVersionsURL(s.endPoint, bucketName, "", "1000", ""),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request.
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	getContent, err := io.ReadAll(response.Body)
+	c.Assert(err, nil)
+
+	r := regexp.MustCompile(
+		`<ListVersionsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">.*` +
+			`<DeleteMarker><Key>file.1</Key>.*<IsLatest>true</IsLatest>.*</DeleteMarker>` +
+			`<Version><Key>file.1</Key>.*<IsLatest>false</IsLatest>.*</Version>` +
+			`<DeleteMarker><Key>file.2</Key>.*<IsLatest>true</IsLatest>.*</DeleteMarker>` +
+			`<Version><Key>file.2</Key>.*<IsLatest>false</IsLatest>.*</Version>` +
+			`</ListVersionsResult>`)
+
+	c.Assert(r.MatchString(string(getContent)), true)
 }
 
 // TestListObjectsSpecialCharactersHandler - Setting valid parameters to List Objects
