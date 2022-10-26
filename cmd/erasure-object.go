@@ -1549,6 +1549,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	storageDisks := er.getDisks()
 
+	//  Determine whether to mark object deleted for replication
+	var markDelete bool
+
 	if opts.Expiration.Expire {
 		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 		if err == nil {
@@ -1573,20 +1576,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					Object: object,
 				}
 			}
+			markDelete = goi.VersionID != ""
 		}
 	}
 
 	versionFound := !(opts.DeleteMarker && opts.VersionID != "")
 
-	// Determine whether to mark object deleted for replication
-	markDelete := !opts.DeleteMarker && opts.VersionID != ""
-
+	if !markDelete {
+		markDelete = !opts.DeleteMarker && opts.VersionID != ""
+	}
 	// Default deleteMarker to true if object is under versioning
 	// versioning suspended means we add `null` version as
 	// delete marker, if its not decided already.
 	deleteMarker := (opts.Versioned || opts.VersionSuspended) && opts.VersionID == "" || (opts.DeleteMarker && opts.VersionID != "")
 
-	if markDelete {
+	if markDelete && opts.VersionID != "" {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus() == replication.Replica {
 			markDelete = false
