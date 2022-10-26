@@ -43,7 +43,17 @@ type lockRESTServer struct {
 }
 
 func (l *lockRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusForbidden)
+	statusCode := http.StatusForbidden
+	switch err {
+	case errLockNotInitialized:
+		// Return 425 instead of 5xx, otherwise this node will be marked offline
+		statusCode = http.StatusTooEarly
+	case errLockConflict:
+		statusCode = http.StatusConflict
+	case errLockNotFound:
+		statusCode = http.StatusNotFound
+	}
+	w.WriteHeader(statusCode)
 	w.Write([]byte(err.Error()))
 }
 
