@@ -1180,6 +1180,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			partsMetadata[index].ModTime = fi.ModTime
 			partsMetadata[index].Metadata = fi.Metadata
 			partsMetadata[index].Parts = fi.Parts
+			partsMetadata[index].Checksum = fi.Checksum
 		}
 	}
 
