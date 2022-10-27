@@ -339,7 +339,24 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
-		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, nil, opts)
+		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, nil, ObjectOptions{
+			VersionID: versionID,
+		})
+		errs = make([]error, len(errs))
+		for i := range errs {
+			errs[i] = err
+		}
+		if err == nil {
+			// Dangling object successfully purged, size is '0'
+			m.Size = 0
+		}
+		// Generate file/version not found with default heal result
+		err = errFileNotFound
+		if versionID != "" {
+			err = errFileVersionNotFound
+		}
+		return er.defaultHealResult(m, storageDisks, storageEndpoints,
+			errs, bucket, object, versionID), err
 	}
 
 	result.ParityBlocks = result.DiskCount - readQuorum
@@ -392,14 +409,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	// data state and a list of outdated disks on which data needs
 	// to be healed.
 	outDatedDisks := make([]StorageAPI, len(storageDisks))
-	numAvailableDisks := 0
 	disksToHealCount := 0
 	for i, v := range availableDisks {
 		driveState := ""
 		switch {
 		case v != nil:
 			driveState = madmin.DriveStateOk
-			numAvailableDisks++
 			// If data is sane on any one disk, we can
 			// extract the correct object size.
 			result.ObjectSize = partsMetadata[i].Size
@@ -449,12 +464,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
-	}
-
-	// If less than read quorum number of disks have all the parts
-	// of the data, we can't reconstruct the erasure-coded data.
-	if numAvailableDisks < readQuorum {
-		return er.purgeObjectDangling(ctx, bucket, object, versionID, partsMetadata, errs, dataErrs, opts)
 	}
 
 	if disksToHealCount == 0 {
@@ -877,32 +886,6 @@ func isObjectDirDangling(errs []error) (ok bool) {
 	}
 	found = found + foundNotEmpty + otherFound
 	return found < notFound && found > 0
-}
-
-func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object, versionID string,
-	metaArr []FileInfo, errs []error, dataErrs []error, opts madmin.HealOpts) (madmin.HealResultItem, error,
-) {
-	storageDisks := er.getDisks()
-	storageEndpoints := er.getEndpoints()
-
-	m, err := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, dataErrs, ObjectOptions{
-		VersionID: versionID,
-	})
-	errs = make([]error, len(errs))
-	for i := range errs {
-		errs[i] = err
-	}
-	if err == nil {
-		// Dangling object successfully purged, size is '0'
-		m.Size = 0
-	}
-	// Generate file/version not found with default heal result
-	err = errFileNotFound
-	if versionID != "" {
-		err = errFileVersionNotFound
-	}
-	return er.defaultHealResult(m, storageDisks, storageEndpoints,
-		errs, bucket, object, versionID), err
 }
 
 // Object is considered dangling/corrupted if any only
