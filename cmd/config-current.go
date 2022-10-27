@@ -360,8 +360,13 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.CallhomeSubSys:
-		if _, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default]); err != nil {
+		cfg, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default])
+		if err != nil {
 			return err
+		}
+		// callhome cannot be enabled if license is not registered yet, throw an error.
+		if cfg.Enabled() && !globalSubnetConfig.Registered() {
+			return errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
 		}
 	case config.PolicyOPASubSys:
 		// In case legacy OPA config is being set, we treat it as if the
@@ -516,11 +521,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
-	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
-	}
-
 	transport := NewHTTPTransport()
 
 	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
@@ -641,13 +641,24 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				globalStorageClass.Update(sc)
 			}
 		}
+	case config.SubnetSubSys:
+		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
+		} else {
+			globalSubnetConfig.Update(subnetConfig)
+			globalSubnetConfig.ApplyEnv() // update environment settings for Console UI
+		}
 	case config.CallhomeSubSys:
 		callhomeCfg, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default])
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
 		} else {
-			globalCallhomeConfig = callhomeCfg
-			updateCallhomeParams(ctx, objAPI)
+			enable := callhomeCfg.Enable && !globalCallhomeConfig.Enabled()
+			globalCallhomeConfig.Update(callhomeCfg)
+			if enable {
+				initCallhome(ctx, objAPI)
+			}
 		}
 	}
 	globalServerConfigMu.Lock()
