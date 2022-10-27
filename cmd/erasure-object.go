@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -439,14 +440,10 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
-func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, pool, set, objectParity int) {
+func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, tags map[string]interface{}) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
-	tags := make(map[string]interface{})
-	tags["pool"] = pool
-	tags["set"] = set
-	tags["objectParity"] = objectParity
 
 	opts := AuditLogOptions{
 		Event:     "DeleteDanglingObject",
@@ -460,10 +457,19 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 }
 
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
+	_, file, line, cok := runtime.Caller(1)
 	var err error
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
-		defer auditDanglingObjectDeletion(ctx, bucket, object, m.VersionID, er.poolIndex, er.setIndex, m.Erasure.ParityBlocks)
+		tags := make(map[string]interface{}, 4)
+		tags["set"] = er.setIndex
+		tags["pool"] = er.poolIndex
+		tags["parity"] = m.Erasure.ParityBlocks
+		if cok {
+			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
+		}
+
+		defer auditDanglingObjectDeletion(ctx, bucket, object, m.VersionID, tags)
 
 		err = errFileNotFound
 		if opts.VersionID != "" {
