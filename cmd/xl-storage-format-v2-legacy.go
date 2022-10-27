@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/tinylib/msgp/msgp"
 )
@@ -80,29 +81,45 @@ func (x *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 
 // unmarshalV unmarshals with a specific metadata version.
 func (j *xlMetaV2Version) unmarshalV(v uint8, bts []byte) (o []byte, err error) {
-	switch v {
-	// We accept un-set as latest version.
-	case 0, xlMetaVersion:
-		// Clear omitempty fields:
-		if j.ObjectV2 != nil && len(j.ObjectV2.PartIndices) > 0 {
-			j.ObjectV2.PartIndices = j.ObjectV2.PartIndices[:0]
-		}
-		o, err = j.UnmarshalMsg(bts)
-
-		// Clean up PartEtags on v1
-		if j.ObjectV2 != nil {
-			allEmpty := true
-			for _, tag := range j.ObjectV2.PartETags {
-				if len(tag) != 0 {
-					allEmpty = false
-					break
-				}
-			}
-			if allEmpty {
-				j.ObjectV2.PartETags = nil
-			}
-		}
-		return o, err
+	if v > xlMetaVersion {
+		return bts, fmt.Errorf("unknown xlMetaVersion: %d", v)
 	}
-	return bts, fmt.Errorf("unknown xlMetaVersion: %d", v)
+
+	// Clear omitempty fields:
+	if j.ObjectV2 != nil && len(j.ObjectV2.PartIndices) > 0 {
+		j.ObjectV2.PartIndices = j.ObjectV2.PartIndices[:0]
+	}
+	o, err = j.UnmarshalMsg(bts)
+
+	// Fix inconsistent x-minio-internal-replication-timestamp by converting to UTC.
+	// Fixed in version 2 or later
+	if err == nil && j.Type == DeleteType && v < 2 {
+		if val, ok := j.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp]; ok {
+			tm, err := time.Parse(time.RFC3339Nano, string(val))
+			if err == nil {
+				j.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(tm.UTC().Format(time.RFC3339Nano))
+			}
+		}
+		if val, ok := j.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp]; ok {
+			tm, err := time.Parse(time.RFC3339Nano, string(val))
+			if err == nil {
+				j.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(tm.UTC().Format(time.RFC3339Nano))
+			}
+		}
+	}
+
+	// Clean up PartEtags on v1
+	if j.ObjectV2 != nil {
+		allEmpty := true
+		for _, tag := range j.ObjectV2.PartETags {
+			if len(tag) != 0 {
+				allEmpty = false
+				break
+			}
+		}
+		if allEmpty {
+			j.ObjectV2.PartETags = nil
+		}
+	}
+	return o, err
 }

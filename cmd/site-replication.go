@@ -676,7 +676,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 		optsMap["forceCreate"] = "true"
 	}
 	createdAt, _ := globalBucketMetadataSys.CreatedAt(bucket)
-	optsMap["createdAt"] = createdAt.Format(time.RFC3339Nano)
+	optsMap["createdAt"] = createdAt.UTC().Format(time.RFC3339Nano)
 	opts.CreatedAt = createdAt
 
 	// Create bucket and enable versioning on all peers.
@@ -4253,7 +4253,7 @@ func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer,
 		optsMap["versioningEnabled"] = "true"
 		opts.VersioningEnabled = true
 		opts.CreatedAt = bStatus.CreatedAt
-		optsMap["createdAt"] = bStatus.CreatedAt.Format(time.RFC3339Nano)
+		optsMap["createdAt"] = bStatus.CreatedAt.UTC().Format(time.RFC3339Nano)
 
 		if bStatus.ObjectLockConfig != nil {
 			config, err := base64.StdEncoding.DecodeString(*bStatus.ObjectLockConfig)
