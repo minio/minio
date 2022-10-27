@@ -603,6 +603,9 @@ func Test_xlMetaV2Shallow_LoadTimeStamp(t *testing.T) {
 		t.Errorf("Wrong signature, want %#v, got %#v", wantSig, v0.header.Signature)
 	}
 	v, err := xl.getIdx(0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	wantTimeStamp := "2022-10-27T07:40:53.195813291Z"
 	got := string(v.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp])
 	if wantTimeStamp != got {
