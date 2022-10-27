@@ -653,7 +653,7 @@ func getCopyObjMetadata(oi ObjectInfo, sc string) map[string]string {
 	}
 
 	meta[xhttp.MinIOSourceETag] = oi.ETag
-	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
+	meta[xhttp.MinIOSourceMTime] = oi.ModTime.UTC().Format(time.RFC3339Nano)
 	meta[xhttp.AmzBucketReplicationStatus] = replication.Replica.String()
 	return meta
 }
