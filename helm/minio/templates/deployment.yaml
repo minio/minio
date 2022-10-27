@@ -161,6 +161,14 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end}}
+            {{- range $secEnv := .Values.secretEnvironment }}
+            - name: {{ $secEnv.name }}
+              valuesFrom:
+                secretKeyRef:
+                  name: {{ $secEnv.secretName }}
+                  key: {{ $secEnv.secretKey }}
+                  optional: false
+            {{- end}}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
 {{- with .Values.nodeSelector }}

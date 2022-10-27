@@ -443,6 +443,14 @@ environment:
   ## MINIO_SUBNET_LICENSE: "License key obtained from https://subnet.min.io"
   ## MINIO_BROWSER: "off"
 
+## Use this field to supply your own environment variable - from secret keys.
+secretEnvironment:
+  ## Example:
+  #   - name: MINIO_NOTIFY_AMQP_URL_PRIMARY
+  #     secretName: amqpSecret  # The name of the secret
+  #     secretKey: amqpUrlwithPassword # The key within the secret
+
+
 ## The name of a secret in the same kubernetes namespace which contain secret values
 ## This can be useful for LDAP password, etc
 ## The key in the secret must be 'config.env'
