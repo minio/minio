@@ -465,7 +465,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 
 const (
 	xlHeaderVersion = 2
-	xlMetaVersion   = 1
+	xlMetaVersion   = 2
 )
 
 func decodeXLHeaders(buf []byte) (versions int, b []byte, err error) {
