@@ -67,6 +67,7 @@ const (
 	ObjectReplicationAll
 	ObjectRestorePostAll
 	ObjectTransitionAll
+	Everything
 )
 
 // The number of single names should not exceed 64.
@@ -112,6 +113,12 @@ func (name Name) Expand() []Name {
 			ObjectTransitionFailed,
 			ObjectTransitionComplete,
 		}
+	case Everything:
+		res := make([]Name, objectSingleTypesEnd-1)
+		for i := range res {
+			res[i] = Name(i + 1)
+		}
+		return res
 	default:
 		return []Name{name}
 	}

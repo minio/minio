@@ -35,6 +35,7 @@ import (
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -919,13 +920,9 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan pubsub.Maskable, 2000)
+	ch := make(chan event.Event, 2000)
 
-	err := globalHTTPListen.Subscribe(mask, ch, doneCh, func(evI pubsub.Maskable) bool {
-		ev, ok := evI.(event.Event)
-		if !ok {
-			return false
-		}
+	err := globalHTTPListen.Subscribe(mask, ch, doneCh, func(ev event.Event) bool {
 		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
 			if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
 				return false
@@ -978,13 +975,9 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan pubsub.Maskable, 2000)
-	mask := pubsub.MaskFromMaskable(traceOpts.TraceTypes())
-	err = globalTrace.Subscribe(mask, ch, r.Context().Done(), func(entry pubsub.Maskable) bool {
-		if e, ok := entry.(madmin.TraceInfo); ok {
-			return shouldTrace(e, traceOpts)
-		}
-		return false
+	ch := make(chan madmin.TraceInfo, 2000)
+	err = globalTrace.Subscribe(traceOpts.TraceTypes(), ch, r.Context().Done(), func(entry madmin.TraceInfo) bool {
+		return shouldTrace(entry, traceOpts)
 	})
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -1125,7 +1118,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	ch := make(chan pubsub.Maskable, 2000)
+	ch := make(chan log.Info, 2000)
 	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -1141,12 +1134,16 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 			if err := enc.Encode(entry); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
-		case <-keepAliveTicker.C:
-			if err := enc.Encode(&madmin.LogInfo{}); err != nil {
-				return
+			if len(ch) == 0 {
+				w.(http.Flusher).Flush()
 			}
-			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if len(ch) == 0 {
+				if err := enc.Encode(&madmin.LogInfo{}); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
 		case <-r.Context().Done():
 			return
 		}
