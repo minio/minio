@@ -157,9 +157,17 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 	for i, err := range errs {
 		if err != nil && !errors.Is(err, errXLBackend) {
 			if errors.Is(err, errDiskNotFound) && verboseLogging {
-				logger.Error("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+				if globalEndpoints.NEndpoints() > 1 {
+					logger.Error("Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+				} else {
+					logger.Fatal(err, "Unable to connect to %s: %v", endpoints[i], isServerResolvable(endpoints[i], time.Second))
+				}
 			} else {
-				logger.Error("Unable to use the drive %s: %v", endpoints[i], err)
+				if globalEndpoints.NEndpoints() > 1 {
+					logger.Error("Unable to use the drive %s: %v", endpoints[i], err)
+				} else {
+					logger.Fatal(errInvalidArgument, "Unable to use the drive %s: %v", endpoints[i], err)
+				}
 			}
 		}
 	}
