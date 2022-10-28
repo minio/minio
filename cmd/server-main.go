@@ -93,6 +93,20 @@ var ServerFlags = []cli.Flag{
 	},
 }
 
+var gatewayCmd = cli.Command{
+	Name:            "gateway",
+	Usage:           "start object storage gateway",
+	Hidden:          true,
+	Flags:           append(ServerFlags, GlobalFlags...),
+	HideHelpCommand: true,
+	Action:          gatewayMain,
+}
+
+func gatewayMain(ctx *cli.Context) error {
+	logger.Fatal(errInvalidArgument, "Gateway is deprecated, To continue to use Gateway please use releases no later than 'RELEASE.2022-10-24T18-35-07Z'. We recommend all our users to migrate from gateway mode to server mode. Please read https://blog.min.io/deprecation-of-the-minio-gateway/")
+	return nil
+}
+
 var serverCmd = cli.Command{
 	Name:   "server",
 	Usage:  "start object storage server",
