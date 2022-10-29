@@ -43,12 +43,12 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.24.0
-	github.com/minio/console v0.21.1
+	github.com/minio/console v0.21.2-0.20221102173545-2ff44df63675
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.1
-	github.com/minio/madmin-go v1.7.1
+	github.com/minio/madmin-go v1.7.2
 	github.com/minio/minio-go/v7 v7.0.43-0.20221021202758-c6319beb6b27
 	github.com/minio/pkg v1.5.4
 	github.com/minio/selfupdate v0.5.0
@@ -161,14 +161,14 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-ieproxy v0.0.9 // indirect
+	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20221019004256-8493f97e042f // indirect
+	github.com/minio/mc v0.0.0-20221101010057-15e52fd862f5 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
