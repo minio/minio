@@ -162,15 +162,18 @@ type ObjectOpts struct {
 }
 
 // HasExistingObjectReplication returns true if any of the rule returns 'ExistingObjects' replication.
-func (c Config) HasExistingObjectReplication(arn string) bool {
+func (c Config) HasExistingObjectReplication(arn string) (hasARN, isEnabled bool) {
 	for _, rule := range c.Rules {
 		if rule.Destination.ARN == arn || c.RoleArn == arn {
+			if !hasARN {
+				hasARN = true
+			}
 			if rule.ExistingObjectReplication.Status == Enabled {
-				return true
+				return true, true
 			}
 		}
 	}
-	return false
+	return hasARN, false
 }
 
 // FilterActionableRules returns the rules actions that need to be executed

@@ -276,7 +276,13 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if !config.HasExistingObjectReplication(arn) {
+	hasARN, hasExistingObjEnabled := config.HasExistingObjectReplication(arn)
+	if !hasARN {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrRemoteTargetNotFoundError), r.URL)
+		return
+	}
+
+	if !hasExistingObjEnabled {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNoExistingObjects), r.URL)
 		return
 	}
