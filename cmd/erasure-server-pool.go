@@ -1699,7 +1699,7 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 func (z *erasureServerPools) renameAll(ctx context.Context, bucket, prefix string) {
 	for _, servers := range z.serverPools {
 		for _, set := range servers.sets {
-			set.renameAll(ctx, bucket, prefix)
+			set.deleteAll(ctx, bucket, prefix)
 		}
 	}
 }
