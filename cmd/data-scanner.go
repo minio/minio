@@ -118,6 +118,10 @@ type backgroundHealInfo struct {
 }
 
 func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundHealInfo {
+	if globalIsErasureSD {
+		return backgroundHealInfo{}
+	}
+
 	// Get last healing information
 	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
 	if err != nil {
@@ -127,15 +131,17 @@ func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundH
 		return backgroundHealInfo{}
 	}
 	var info backgroundHealInfo
-	err = json.Unmarshal(buf, &info)
-	if err != nil {
+	if err = json.Unmarshal(buf, &info); err != nil {
 		logger.LogIf(ctx, err)
-		return backgroundHealInfo{}
 	}
 	return info
 }
 
 func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgroundHealInfo) {
+	if globalIsErasureSD {
+		return
+	}
+
 	b, err := json.Marshal(info)
 	if err != nil {
 		logger.LogIf(ctx, err)
