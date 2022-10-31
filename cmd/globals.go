@@ -291,6 +291,9 @@ var (
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS kms.KMS
 
+	// Common lock for various subsystems performing the leader tasks
+	globalLeaderLock *sharedLock
+
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
 	// configuration must be present.
