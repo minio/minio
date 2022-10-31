@@ -124,6 +124,18 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
+		case errors.Is(err, errDecommissionRebalanceAlreadyRunning):
+			apiErr = APIError{
+				Code:           "XMinioDecommissionNotAllowed",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errRebalanceDecommissionAlreadyRunning):
+			apiErr = APIError{
+				Code:           "XMinioRebalanceNotAllowed",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case errors.Is(err, errConfigNotFound):
 			apiErr = APIError{
 				Code:           "XMinioConfigError",

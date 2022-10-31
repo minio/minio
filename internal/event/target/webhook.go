@@ -98,7 +98,8 @@ type WebhookTarget struct {
 	httpClient *http.Client
 	store      Store
 	loggerOnce logger.LogOnce
-	quitCh     chan struct{}
+	cancel     context.CancelFunc
+	cancelCh   <-chan struct{}
 }
 
 // ID - returns target ID.
@@ -199,14 +200,12 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 	resp, err := target.httpClient.Do(req)
 	if err != nil {
-		target.Close()
 		return err
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		target.Close()
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
 
@@ -242,7 +241,7 @@ func (target *WebhookTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *WebhookTarget) Close() error {
-	close(target.quitCh)
+	target.cancel()
 	return nil
 }
 
@@ -274,18 +273,21 @@ func (target *WebhookTarget) initWebhook() error {
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		streamEventsFromStore(target.store, target, target.cancelCh, target.loggerOnce)
 	}
 	return nil
 }
 
 // NewWebhookTarget - creates new Webhook target.
 func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce logger.LogOnce, transport *http.Transport) (*WebhookTarget, error) {
+	ctx, cancel := context.WithCancel(ctx)
+
 	var store Store
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := store.Open(); err != nil {
+			cancel()
 			return nil, fmt.Errorf("unable to initialize the queue store of Webhook `%s`: %w", id, err)
 		}
 	}
@@ -296,6 +298,7 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 		loggerOnce: loggerOnce,
 		transport:  transport,
 		store:      store,
-		quitCh:     make(chan struct{}),
+		cancel:     cancel,
+		cancelCh:   ctx.Done(),
 	}, nil
 }

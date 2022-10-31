@@ -630,6 +630,49 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	}
 }
 
+// StopRebalance notifies all MinIO nodes to signal any ongoing rebalance
+// goroutine to stop.
+func (sys *NotificationSys) StopRebalance(ctx context.Context) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.StopRebalance(ctx)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
+// LoadRebalanceMeta notifies all peers to load rebalance.bin from object layer.
+// Note: Only peers participating in rebalance operation, namely the first node
+// in each pool will load rebalance.bin.
+func (sys *NotificationSys) LoadRebalanceMeta(ctx context.Context, startRebalance bool) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.LoadRebalanceMeta(ctx, startRebalance)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
 // LoadTransitionTierConfig notifies remote peers to load their remote tier
 // configs from config store.
 func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {

@@ -51,7 +51,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 		}
 	}
 
-	if len(globalSubnetConfig.APIKey) == 0 && err == nil {
+	if !globalSubnetConfig.Registered() {
 		var builder strings.Builder
 		startupBanner(&builder)
 		logger.Info(builder.String())

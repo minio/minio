@@ -29,6 +29,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -321,7 +322,7 @@ func sendEvent(args eventArgs) {
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 
-	if globalHTTPListen.NumSubscribers(args.EventName) > 0 {
+	if globalHTTPListen.NumSubscribers(pubsub.MaskFromMaskable(args.EventName)) > 0 {
 		globalHTTPListen.Publish(args.ToEvent(false))
 	}
 

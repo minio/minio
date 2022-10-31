@@ -125,15 +125,11 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 
 	// Listen Publisher and peer-listen-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	listenCh := make(chan pubsub.Maskable, 4000)
+	listenCh := make(chan event.Event, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
-	err := globalHTTPListen.Subscribe(mask, listenCh, ctx.Done(), func(evI pubsub.Maskable) bool {
-		ev, ok := evI.(event.Event)
-		if !ok {
-			return false
-		}
+	err := globalHTTPListen.Subscribe(mask, listenCh, ctx.Done(), func(ev event.Event) bool {
 		if ev.S3.Bucket.Name != "" && bucketName != "" {
 			if ev.S3.Bucket.Name != bucketName {
 				return false
@@ -161,16 +157,9 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	enc := json.NewEncoder(w)
 	for {
 		select {
-		case evI := <-listenCh:
-			ev, ok := evI.(event.Event)
-			if ok {
-				if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
-					return
-				}
-			} else {
-				if _, err := w.Write([]byte(" ")); err != nil {
-					return
-				}
+		case ev := <-listenCh:
+			if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
+				return
 			}
 			if len(listenCh) == 0 {
 				// Flush if nothing is queued

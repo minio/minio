@@ -44,7 +44,11 @@ import (
 type erasureServerPools struct {
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
-	serverPools   []*erasureSets
+
+	rebalMu   sync.RWMutex
+	rebalMeta *rebalanceMeta
+
+	serverPools []*erasureSets
 
 	// Shut down async operations
 	shutdown context.CancelFunc
@@ -327,8 +331,9 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
-		// skip suspended pools for any new I/O.
-		if z.IsSuspended(index) {
+		// Skip suspended pools or pools participating in rebalance for any new
+		// I/O.
+		if z.IsSuspended(index) || z.IsPoolRebalancing(index) {
 			continue
 		}
 		pool := z.serverPools[index]
@@ -426,6 +431,10 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 		if z.IsSuspended(pinfo.Index) && opts.SkipDecommissioned {
 			continue
 		}
+		// Skip object if it's from pools participating in a rebalance operation.
+		if opts.SkipRebalancing && z.IsPoolRebalancing(pinfo.Index) {
+			continue
+		}
 
 		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
 			return pinfo, pinfo.Err
@@ -466,6 +475,7 @@ func (z *erasureServerPools) getPoolIdxExistingNoLock(ctx context.Context, bucke
 	return z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
 		NoLock:             true,
 		SkipDecommissioned: true,
+		SkipRebalancing:    true,
 	})
 }
 
@@ -489,7 +499,10 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 // if none are found falls back to most available space pool, this function is
 // designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{SkipDecommissioned: true})
+	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
+		SkipDecommissioned: true,
+		SkipRebalancing:    true,
+	})
 	if err != nil && !isErrObjectNotFound(err) {
 		return idx, err
 	}
@@ -1387,9 +1400,10 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	for idx, pool := range z.serverPools {
-		if z.IsSuspended(idx) {
+		if z.IsSuspended(idx) || z.IsPoolRebalancing(idx) {
 			continue
 		}
+
 		result, err := pool.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return nil, err

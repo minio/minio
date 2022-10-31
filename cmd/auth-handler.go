@@ -626,7 +626,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 
 	conditions := getConditionValues(r, "", cred.AccessKey, cred.Claims)
 	conditions["object-lock-mode"] = []string{string(retMode)}
-	conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+	conditions["object-lock-retain-until-date"] = []string{retDate.UTC().Format(time.RFC3339)}
 	if retDays > 0 {
 		conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
 	}
