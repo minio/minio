@@ -265,6 +265,7 @@ const (
 	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
+	ErrAdminPolicyChangeAlreadyApplied
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
@@ -1245,6 +1246,12 @@ var errorCodes = errorCodeMap{
 		Description:    "The canned policy does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminPolicyChangeAlreadyApplied: {
+		Code:           "XMinioAdminPolicyChangeAlreadyApplied",
+		Description:    "The specified policy change is already in effect.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	ErrAdminInvalidArgument: {
 		Code:           "XMinioAdminInvalidArgument",
 		Description:    "Invalid arguments specified.",
@@ -1966,6 +1973,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
+	case errNoPolicyToAttachOrDetach:
+		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:

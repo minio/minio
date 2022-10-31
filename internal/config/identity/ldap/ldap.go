@@ -18,6 +18,7 @@
 package ldap
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -54,6 +55,126 @@ func (l *Config) LookupUserDN(username string) (string, []string, error) {
 	}
 
 	return bindDN, groups, nil
+}
+
+// DoesUsernameExist checks if the given username exists in the LDAP directory.
+// The given username could be just the short "login" username or the full DN.
+// When the username is found, the full DN is returned, otherwise the returned
+// string is empty. If the user is not found, err = nil, otherwise, err != nil.
+func (l *Config) DoesUsernameExist(username string) (string, error) {
+	conn, err := l.LDAP.Connect()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.LDAP.LookupBind(conn); err != nil {
+		return "", err
+	}
+
+	// Check if the passed in username is a valid DN.
+	parsedUsernameDN, err := ldap.ParseDN(username)
+	if err != nil {
+		// Since the passed in username was not a DN, we consider it as a login
+		// username and attempt to check it exists in the directory.
+		bindDN, err := l.LDAP.LookupUserDN(conn, username)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return "", nil
+			}
+			return "", fmt.Errorf("Unable to find user DN: %w", err)
+		}
+		return bindDN, nil
+	}
+
+	// Since the username is a valid DN, check that it is under a configured
+	// base DN in the LDAP directory.
+	var foundDistName []string
+	for _, baseDN := range l.LDAP.UserDNSearchBaseDistNames {
+		// BaseDN should not fail to parse.
+		baseDNParsed, _ := ldap.ParseDN(baseDN)
+		if baseDNParsed.AncestorOf(parsedUsernameDN) {
+			searchRequest := ldap.NewSearchRequest(username, ldap.ScopeBaseObject, ldap.NeverDerefAliases,
+				0, 0, false, "(objectClass=*)", nil, nil)
+			searchResult, err := conn.Search(searchRequest)
+			if err != nil {
+				// Check if there is no matching result.
+				// Ref: https://ldap.com/ldap-result-code-reference/
+				if ldap.IsErrorWithCode(err, 32) {
+					continue
+				}
+				return "", err
+			}
+			for _, entry := range searchResult.Entries {
+				foundDistName = append(foundDistName, entry.DN)
+			}
+		}
+	}
+
+	if len(foundDistName) == 1 {
+		return foundDistName[0], nil
+	} else if len(foundDistName) > 1 {
+		// FIXME: This error would happen if the multiple base DNs are given and
+		// some base DNs are subtrees of other base DNs - we should validate
+		// and error out in such cases.
+		return "", fmt.Errorf("found multiple DNs for the given username")
+	}
+	return "", nil
+}
+
+// DoesGroupDNExist checks if the given group DN exists in the LDAP directory.
+func (l *Config) DoesGroupDNExist(groupDN string) (bool, error) {
+	if len(l.LDAP.GroupSearchBaseDistNames) == 0 {
+		return false, errors.New("no group search Base DNs given")
+	}
+
+	gdn, err := ldap.ParseDN(groupDN)
+	if err != nil {
+		return false, fmt.Errorf("Given group DN could not be parsed: %s", err)
+	}
+
+	conn, err := l.LDAP.Connect()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.LDAP.LookupBind(conn); err != nil {
+		return false, err
+	}
+
+	var foundDistName []string
+	for _, baseDN := range l.LDAP.GroupSearchBaseDistNames {
+		// BaseDN should not fail to parse.
+		baseDNParsed, _ := ldap.ParseDN(baseDN)
+		if baseDNParsed.AncestorOf(gdn) {
+			searchRequest := ldap.NewSearchRequest(groupDN, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false, "(objectClass=*)", nil, nil)
+			searchResult, err := conn.Search(searchRequest)
+			if err != nil {
+				// Check if there is no matching result.
+				// Ref: https://ldap.com/ldap-result-code-reference/
+				if ldap.IsErrorWithCode(err, 32) {
+					continue
+				}
+				return false, err
+			}
+			for _, entry := range searchResult.Entries {
+				foundDistName = append(foundDistName, entry.DN)
+			}
+		}
+	}
+	if len(foundDistName) == 1 {
+		return true, nil
+	} else if len(foundDistName) > 1 {
+		// FIXME: This error would happen if the multiple base DNs are given and
+		// some base DNs are subtrees of other base DNs - we should validate
+		// and error out in such cases.
+		return false, fmt.Errorf("found multiple DNs for the given group DN")
+	} else {
+		return false, nil
+	}
 }
 
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
