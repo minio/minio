@@ -806,9 +806,9 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrExpiredPresignRequest: {
-		Code:           "AccessDenied",
+		Code:           "Gone",
 		Description:    "Request has expired",
-		HTTPStatusCode: http.StatusForbidden,
+		HTTPStatusCode: http.StatusGone,
 	},
 	ErrRequestNotReadyYet: {
 		Code:           "AccessDenied",
