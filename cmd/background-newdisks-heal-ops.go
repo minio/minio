@@ -310,7 +310,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	// Prevent parallel erasure set healing
-	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-drive-healing/%s/%d/%d", endpoint, poolIdx, setIdx))
+	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-drive-healing/%d/%d", poolIdx, setIdx))
 	lkctx, err := locker.GetLock(ctx, newDiskHealingTimeout)
 	if err != nil {
 		return err

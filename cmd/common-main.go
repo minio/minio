@@ -209,15 +209,8 @@ func minioConfigToConsoleFeatures() {
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
-	if globalSubnetConfig.License != "" {
-		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetConfig.License)
-	}
-	if globalSubnetConfig.APIKey != "" {
-		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
-	}
-	if globalSubnetConfig.ProxyURL != nil {
-		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
-	}
+
+	globalSubnetConfig.ApplyEnv()
 }
 
 func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {

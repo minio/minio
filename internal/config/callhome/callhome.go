@@ -18,6 +18,7 @@
 package callhome
 
 import (
+	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/config"
@@ -42,6 +43,9 @@ var DefaultKVS = config.KVS{
 	},
 }
 
+// callhomeCycleDefault is the default interval between two callhome cycles (24hrs)
+const callhomeCycleDefault = 24 * time.Hour
+
 // Config represents the subnet related configuration
 type Config struct {
 	// Flag indicating whether callhome is enabled.
@@ -49,6 +53,37 @@ type Config struct {
 
 	// The interval between callhome cycles
 	Frequency time.Duration `json:"frequency"`
+}
+
+var configLock sync.RWMutex
+
+// Enabled - indicates if callhome is enabled or not
+func (c *Config) Enabled() bool {
+	configLock.RLock()
+	defer configLock.RUnlock()
+
+	return c.Enable
+}
+
+// FrequencyDur - returns the currently configured callhome frequency
+func (c *Config) FrequencyDur() time.Duration {
+	configLock.RLock()
+	defer configLock.RUnlock()
+
+	if c.Frequency == 0 {
+		return callhomeCycleDefault
+	}
+
+	return c.Frequency
+}
+
+// Update updates new callhome frequency
+func (c *Config) Update(ncfg Config) {
+	configLock.Lock()
+	defer configLock.Unlock()
+
+	c.Enable = ncfg.Enable
+	c.Frequency = ncfg.Frequency
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.

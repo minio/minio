@@ -29,10 +29,14 @@ import (
 
 var errConfigNotFound = errors.New("config file not found")
 
-func readConfigWithMetadata(ctx context.Context, store objectIO, configFile string) ([]byte, ObjectInfo, error) {
-	r, err := store.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
+func readConfigWithMetadata(ctx context.Context, store objectIO, configFile string, opts ObjectOptions) ([]byte, ObjectInfo, error) {
+	lockType := readLock
+	if opts.NoLock {
+		lockType = noLock // erasureObjects.GetObjectNInfo honors lockType argument but not opts.NoLock.
+	}
+
+	r, err := store.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, lockType, opts)
 	if err != nil {
-		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
 			return nil, ObjectInfo{}, errConfigNotFound
 		}
@@ -52,7 +56,7 @@ func readConfigWithMetadata(ctx context.Context, store objectIO, configFile stri
 }
 
 func readConfig(ctx context.Context, store objectIO, configFile string) ([]byte, error) {
-	buf, _, err := readConfigWithMetadata(ctx, store, configFile)
+	buf, _, err := readConfigWithMetadata(ctx, store, configFile, ObjectOptions{})
 	return buf, err
 }
 
@@ -70,14 +74,18 @@ func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) 
 	return err
 }
 
-func saveConfig(ctx context.Context, store objectIO, configFile string, data []byte) error {
+func saveConfigWithOpts(ctx context.Context, store objectIO, configFile string, data []byte, opts ObjectOptions) error {
 	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
 	if err != nil {
 		return err
 	}
 
-	_, err = store.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader), ObjectOptions{MaxParity: true})
+	_, err = store.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader), opts)
 	return err
+}
+
+func saveConfig(ctx context.Context, store objectIO, configFile string, data []byte) error {
+	return saveConfigWithOpts(ctx, store, configFile, data, ObjectOptions{MaxParity: true})
 }
 
 func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {

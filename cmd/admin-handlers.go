@@ -50,7 +50,6 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
-	"github.com/minio/minio/internal/pubsub"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
@@ -1504,16 +1503,12 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan pubsub.Maskable, 4000)
+	traceCh := make(chan madmin.TraceInfo, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
-	mask := pubsub.MaskFromMaskable(traceOpts.TraceTypes())
 
-	err = globalTrace.Subscribe(mask, traceCh, ctx.Done(), func(entry pubsub.Maskable) bool {
-		if e, ok := entry.(madmin.TraceInfo); ok {
-			return shouldTrace(e, traceOpts)
-		}
-		return false
+	err = globalTrace.Subscribe(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry madmin.TraceInfo) bool {
+		return shouldTrace(entry, traceOpts)
 	})
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
@@ -1585,7 +1580,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	setEventStreamHeaders(w)
 
-	logCh := make(chan pubsub.Maskable, 4000)
+	logCh := make(chan log.Info, 4000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
@@ -1611,9 +1606,8 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	for {
 		select {
-		case entry := <-logCh:
-			log, ok := entry.(log.Info)
-			if ok && log.SendLog(node, logKind) {
+		case log := <-logCh:
+			if log.SendLog(node, logKind) {
 				if err := enc.Encode(log); err != nil {
 					return
 				}

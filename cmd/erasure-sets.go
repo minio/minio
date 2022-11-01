@@ -117,7 +117,7 @@ func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
 func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
-	disk, err := newStorageAPIWithoutHealthCheck(endpoint)
+	disk, err := newStorageAPI(endpoint, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,7 +251,7 @@ func (s *erasureSets) connectDisks() {
 				s.erasureDisks[setIndex][diskIndex] = disk
 			} else {
 				// Enable healthcheck disk for remote endpoint.
-				disk, err = newStorageAPI(endpoint)
+				disk, err = newStorageAPI(endpoint, true)
 				if err != nil {
 					printEndpointError(endpoint, err, false)
 					s.erasureDisksMu.Unlock()
@@ -1250,7 +1250,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	storageDisks, _ := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints.Endpoints)
+	storageDisks, _ := initStorageDisksWithErrors(s.endpoints.Endpoints, false)
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {

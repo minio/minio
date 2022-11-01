@@ -84,6 +84,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/pools/decommission").HandlerFunc(gz(httpTraceAll(adminAPI.StartDecommission))).Queries("pool", "{pool:.*}")
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/pools/cancel").HandlerFunc(gz(httpTraceAll(adminAPI.CancelDecommission))).Queries("pool", "{pool:.*}")
+
+			// Rebalance operations
+			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/rebalance/start").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStart)))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/rebalance/status").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStatus)))
+			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/rebalance/stop").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStop)))
 		}
 
 		// Profiling operations - deprecated API
@@ -179,9 +184,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(httpTraceHdrs(adminAPI.ImportIAM))
 
 		// IDentity Provider configuration APIs
-		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg))).Queries("type", "{type:.*}")
-		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AddIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.UpdateIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg)))
 
 		// -- END IAM APIs --
 
