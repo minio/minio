@@ -277,6 +277,8 @@ const (
 	ErrAdminConfigDuplicateKeys
 	ErrAdminConfigInvalidIDPType
 	ErrAdminConfigLDAPValidation
+	ErrAdminConfigIDPCfgNameAlreadyExists
+	ErrAdminConfigIDPCfgNameDoesNotExist
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -1303,6 +1305,16 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigLDAPValidation: {
 		Code:           "XMinioAdminConfigLDAPValidation",
 		Description:    "LDAP Configuration validation failed",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigIDPCfgNameAlreadyExists: {
+		Code:           "XMinioAdminConfigIDPCfgNameAlreadyExists",
+		Description:    "An IDP configuration with the given name aleady exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigIDPCfgNameDoesNotExist: {
+		Code:           "XMinioAdminConfigIDPCfgNameDoesNotExist",
+		Description:    "No such IDP configuration exists",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigNotificationTargetsFailed: {
