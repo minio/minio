@@ -622,7 +622,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	}
 
-	defer er.renameAll(context.Background(), minioMetaTmpBucket, tmpID)
+	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tmpID)
 
 	// Rename from tmp location to the actual location.
 	for i, disk := range outDatedDisks {

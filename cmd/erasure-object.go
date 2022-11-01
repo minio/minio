@@ -1072,7 +1072,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.renameAll(context.Background(), minioMetaTmpBucket, tempObj)
+			er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 		}
 	}()
 
