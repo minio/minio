@@ -1,9 +1,11 @@
-# Pool rebalance
+# Pool Rebalance
 
 ## Introduction
 A MinIO distributed setup consists of one or more server pools. MinIO distributes objects uploaded among these pools proportional to their available drive space. A good proportion of objects uploaded will land on the recently added pools. Over time, objects would be uniformly distributed across all the pools.
 
-Certain workloads may require that objects are distributed uniformly across all pools as much as possible, at all times. To support this, MinIO needs to redistribute objects from existing pools to the newly added pools. This is now possible with the Pool rebalance feature.
+Certain workloads may require that objects are distributed uniformly across all pools as much as possible, at all times. To support this, MinIO allows to redistribute objects from existing pools to the newly added pools. This is now possible with the Pool Rebalance feature.
+
+This is generally a time and IO consuming operation, so it can potentially be disruptive for your cluster. We recommend [consulting with a MinIO engineer](https://min.io/pricing) before deciding on starting this operation.
 
 ## Mechanism
 Pool rebalance operates with the goal of converging percentage used space across all server pools. This is done by moving objects from pools that have more objects to those which have lesser, usually because they were recently added.
@@ -19,7 +21,7 @@ Let's take an example of a MinIO setup with a single server pool with 300TiB cap
                          |  600 TiB |
 ```
 
-After rebalance, assuming no new objects are uploaded meanwhile, we will have,
+After rebalance, assuming no new objects were uploaded, we will have.
 
 ```
    | Pool ID| Used space | Capacity |
@@ -29,7 +31,7 @@ After rebalance, assuming no new objects are uploaded meanwhile, we will have,
 ```
 
 ## Usage
-Pool rebalance can be managed using `mc`. There are 3 subcommands, namely `rebalance-start`, `rebalance-status` and `rebalance-stop`.
+Pool rebalance can be managed using `mc`. There are 3 subcommands, namely `start`, `status` and `stop`.
 
 ### To start a rebalance operation
 ```
@@ -59,7 +61,7 @@ Rebalance stopped for myminio
 Note: Rebalance operation stops running once it reaches its original goal of converging used space across all pools.
 
 ## Monitoring
-An ongoing rebalance operation can be monitored using `mc admin trace` like so,
+An ongoing rebalance operation can be monitored using `mc admin trace` 
 
 ```
 $ mc admin trace --call rebalance ALIAS/
