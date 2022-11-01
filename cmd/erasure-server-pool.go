@@ -63,22 +63,6 @@ func (z *erasureServerPools) SinglePool() bool {
 
 // Initialize new pool of erasure sets.
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
-	if endpointServerPools.NEndpoints() == 1 {
-		ep := endpointServerPools[0]
-		storageDisks, format, err := waitForFormatErasure(true, ep.Endpoints, 1, ep.SetCount, ep.DrivesPerSet, "", "")
-		if err != nil {
-			return nil, err
-		}
-
-		objLayer, err := newErasureSingle(ctx, storageDisks[0], format)
-		if err != nil {
-			return nil, err
-		}
-
-		globalLocalDrives = storageDisks
-		return objLayer, nil
-	}
-
 	var (
 		deploymentID       string
 		distributionAlgo   string
@@ -1681,7 +1665,7 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	}
 
 	// Purge the entire bucket metadata entirely.
-	z.renameAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
+	z.deleteAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
 	// If site replication is configured, hold on to deleted bucket state until sites sync
 	switch opts.SRDeleteOp {
 	case MarkDelete:
@@ -1691,12 +1675,12 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	return nil
 }
 
-// renameAll will rename bucket+prefix unconditionally across all disks to
+// deleteAll will rename bucket+prefix unconditionally across all disks to
 // minioMetaTmpDeletedBucket + unique uuid,
 // Note that set distribution is ignored so it should only be used in cases where
 // data is not distributed across sets. Errors are logged but individual
 // disk failures are not returned.
-func (z *erasureServerPools) renameAll(ctx context.Context, bucket, prefix string) {
+func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix string) {
 	for _, servers := range z.serverPools {
 		for _, set := range servers.sets {
 			set.deleteAll(ctx, bucket, prefix)

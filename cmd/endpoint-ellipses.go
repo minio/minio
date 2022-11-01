@@ -343,7 +343,13 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		return nil, -1, errInvalidArgument
 	}
 
-	if !ellipses.HasEllipses(args...) {
+	ok := true
+	for _, arg := range args {
+		ok = ok && !ellipses.HasEllipses(arg)
+	}
+
+	// None of the args have ellipses use the old style.
+	if ok {
 		setArgs, err := GetAllSets(args...)
 		if err != nil {
 			return nil, -1, err
@@ -365,6 +371,10 @@ func createServerEndpoints(serverAddr string, args ...string) (
 
 	var foundPrevLocal bool
 	for _, arg := range args {
+		if !ellipses.HasEllipses(arg) && len(args) > 1 {
+			// TODO: support SNSD deployments to be decommissioned in future
+			return nil, -1, fmt.Errorf("all args must have ellipses for pool expansion (%w) args: %s", errInvalidArgument, args)
+		}
 		setArgs, err := GetAllSets(arg)
 		if err != nil {
 			return nil, -1, err
