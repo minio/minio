@@ -155,10 +155,10 @@ func (m *metacache) delete(ctx context.Context) {
 		logger.LogIf(ctx, errors.New("metacache.delete: no object layer"))
 		return
 	}
-	ez, ok := objAPI.(renameAllStorager)
+	ez, ok := objAPI.(deleteAllStorager)
 	if !ok {
-		logger.LogIf(ctx, errors.New("metacache.delete: expected objAPI to be 'renameAllStorager'"))
+		logger.LogIf(ctx, errors.New("metacache.delete: expected objAPI to be 'deleteAllStorager'"))
 		return
 	}
-	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(m.bucket, m.id))
+	ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(m.bucket, m.id))
 }
