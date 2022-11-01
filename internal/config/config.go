@@ -232,6 +232,23 @@ func RegisterHelpDeprecatedSubSys(helpDeprecatedKVMap map[string]HelpKV) {
 type KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+
+	Deprecated bool `json:"-"`
+}
+
+func (kv KV) String() string {
+	var s strings.Builder
+	s.WriteString(kv.Key)
+	s.WriteString(KvSeparator)
+	spc := madmin.HasSpace(kv.Value)
+	if spc {
+		s.WriteString(KvDoubleQuote)
+	}
+	s.WriteString(kv.Value)
+	if spc {
+		s.WriteString(KvDoubleQuote)
+	}
+	return s.String()
 }
 
 // KVS - is a shorthand for some wrapper functions
@@ -277,20 +294,7 @@ func (kvs KVS) Keys() []string {
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for _, kv := range kvs {
-		// Do not need to print if state is on
-		if kv.Key == Enable && kv.Value == EnableOn {
-			continue
-		}
-		s.WriteString(kv.Key)
-		s.WriteString(KvSeparator)
-		spc := madmin.HasSpace(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
-		s.WriteString(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
+		s.WriteString(kv.String())
 		s.WriteString(KvSpaceSeparator)
 	}
 	return s.String()
@@ -347,6 +351,16 @@ func (kvs *KVS) Delete(key string) {
 			return
 		}
 	}
+}
+
+// LookupKV returns the KV by its key
+func (kvs KVS) LookupKV(key string) (KV, bool) {
+	for _, kv := range kvs {
+		if kv.Key == key {
+			return kv, true
+		}
+	}
+	return KV{}, false
 }
 
 // Lookup - lookup a key in a list of KVS
@@ -427,39 +441,6 @@ func (c Config) RedactSensitiveInfo() Config {
 	nc.DelKVS(CredentialsSubSys)
 
 	return nc
-}
-
-type configWriteTo struct {
-	Config
-	filterByKey string
-}
-
-// NewConfigWriteTo - returns a struct which
-// allows for serializing the config/kv struct
-// to a io.WriterTo
-func NewConfigWriteTo(cfg Config, key string) io.WriterTo {
-	return &configWriteTo{Config: cfg, filterByKey: key}
-}
-
-// WriteTo - implements io.WriterTo interface implementation for config.
-func (c *configWriteTo) WriteTo(w io.Writer) (int64, error) {
-	kvsTargets, err := c.GetKVS(c.filterByKey, DefaultKVS)
-	if err != nil {
-		return 0, err
-	}
-	var n int
-	for _, target := range kvsTargets {
-		m1, _ := w.Write([]byte(target.SubSystem))
-		m2, _ := w.Write([]byte(KvSpaceSeparator))
-		m3, _ := w.Write([]byte(target.KVS.String()))
-		if len(kvsTargets) > 1 {
-			m4, _ := w.Write([]byte(KvNewline))
-			n += m1 + m2 + m3 + m4
-		} else {
-			n += m1 + m2 + m3
-		}
-	}
-	return int64(n), nil
 }
 
 // Default KV configs for worm and region
@@ -1301,10 +1282,10 @@ func (cs *SubsysInfo) AddEnvString(b *strings.Builder) {
 	}
 }
 
-// AddString adds the string representation of the configuration to the given
+// WriteTo writes the string representation of the configuration to the given
 // builder. When off is true, adds a comment character before the config system
-// output.
-func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
+// output. It also ignores values when empty and deprecated.
+func (cs *SubsysInfo) WriteTo(b *strings.Builder, off bool) {
 	cs.AddEnvString(b)
 	if off {
 		b.WriteString(KvComment)
@@ -1316,6 +1297,22 @@ func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
 		b.WriteString(cs.Target)
 	}
 	b.WriteString(KvSpaceSeparator)
-	b.WriteString(cs.Config.String())
+	for _, kv := range cs.Config {
+		dkv, ok := cs.Defaults.LookupKV(kv.Key)
+		if !ok {
+			continue
+		}
+		// Ignore empty and deprecated values
+		if dkv.Deprecated && kv.Value == "" {
+			continue
+		}
+		// Do not need to print if state is on
+		if kv.Key == Enable && kv.Value == EnableOn {
+			continue
+		}
+		b.WriteString(kv.String())
+		b.WriteString(KvSpaceSeparator)
+	}
+
 	b.WriteString(KvNewline)
 }
