@@ -61,6 +61,8 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setRequestValidityHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
+	// Add upload forwarding handler for site replication
+	setUploadForwardingHandler,
 	// Add bucket forwarding handler
 	setBucketForwardingHandler,
 	// Add new handlers here.

@@ -225,7 +225,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	var s strings.Builder
 	for _, subSysConfig := range subSysConfigs {
-		subSysConfig.AddString(&s, false)
+		subSysConfig.WriteTo(&s, false)
 	}
 
 	password := cred.SecretKey
@@ -454,10 +454,6 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	var s strings.Builder
 	hkvs := config.HelpSubSysMap[""]
-	var count int
-	for _, hkv := range hkvs {
-		count += len(cfg[hkv.Key])
-	}
 	for _, hkv := range hkvs {
 		// We ignore the error below, as we cannot get one.
 		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key, "")
@@ -482,7 +478,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			case config.IdentityPluginSubSys:
 				off = !idplugin.Enabled(item.Config)
 			}
-			item.AddString(&s, off)
+			item.WriteTo(&s, off)
 		}
 	}
 

@@ -279,6 +279,8 @@ const (
 	ErrAdminConfigDuplicateKeys
 	ErrAdminConfigInvalidIDPType
 	ErrAdminConfigLDAPValidation
+	ErrAdminConfigIDPCfgNameAlreadyExists
+	ErrAdminConfigIDPCfgNameDoesNotExist
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -292,6 +294,10 @@ const (
 	ErrSiteReplicationBucketMetaError
 	ErrSiteReplicationIAMError
 	ErrSiteReplicationConfigMissing
+
+	// Pool rebalance errors
+	ErrAdminRebalanceAlreadyStarted
+	ErrAdminRebalanceNotStarted
 
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
@@ -1303,6 +1309,16 @@ var errorCodes = errorCodeMap{
 		Description:    "LDAP Configuration validation failed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminConfigIDPCfgNameAlreadyExists: {
+		Code:           "XMinioAdminConfigIDPCfgNameAlreadyExists",
+		Description:    "An IDP configuration with the given name aleady exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigIDPCfgNameDoesNotExist: {
+		Code:           "XMinioAdminConfigIDPCfgNameDoesNotExist",
+		Description:    "No such IDP configuration exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminConfigNotificationTargetsFailed: {
 		Code:           "XMinioAdminNotificationTargetsTestFailed",
 		Description:    "Configuration update failed due an unsuccessful attempt to connect to one or more notification servers",
@@ -1398,6 +1414,16 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioSiteReplicationConfigMissingError",
 		Description:    "Site not found in site replication configuration",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminRebalanceAlreadyStarted: {
+		Code:           "XMinioAdminRebalanceAlreadyStarted",
+		Description:    "Pool rebalance is already started",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAdminRebalanceNotStarted: {
+		Code:           "XMinioAdminRebalanceNotStarted",
+		Description:    "Pool rebalance is not started",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",

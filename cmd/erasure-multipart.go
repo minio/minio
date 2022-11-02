@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +42,15 @@ import (
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
-	return pathJoin(er.getMultipartSHADir(bucket, object), uploadID)
+	uploadUUID := uploadID
+	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	if err == nil {
+		slc := strings.SplitN(string(uploadBytes), ".", 2)
+		if len(slc) == 2 {
+			uploadUUID = slc[1]
+		}
+	}
+	return pathJoin(er.getMultipartSHADir(bucket, object), uploadUUID)
 }
 
 func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
@@ -166,21 +175,6 @@ func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Du
 	wg.Wait()
 }
 
-func (er erasureObjects) renameAll(ctx context.Context, bucket, prefix string) {
-	var wg sync.WaitGroup
-	for _, disk := range er.getDisks() {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(disk StorageAPI) {
-			defer wg.Done()
-			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpDeletedBucket, mustGetUUID())
-		}(disk)
-	}
-	wg.Wait()
-}
-
 func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 	var wg sync.WaitGroup
 	for _, disk := range er.getDisks() {
@@ -209,11 +203,12 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
+				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 				return nil
 			}
 			wait := er.deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(fi.ModTime) > expiry {
-				er.renameAll(ctx, minioMetaMultipartBucket, uploadIDPath)
+				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 			}
 			wait()
 			return nil
@@ -436,9 +431,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].ModTime = modTime
 		partsMetadata[index].Metadata = userDefined
 	}
-
-	uploadID := mustGetUUID()
-	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
+	uploadUUID := mustGetUUID()
+	uploadID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
+	uploadIDPath := er.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
 	if _, err := writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum); err != nil {
@@ -632,7 +627,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.renameAll(context.Background(), minioMetaTmpBucket, tmpPart)
+			er.deleteAll(context.Background(), minioMetaTmpBucket, tmpPart)
 		}
 	}()
 
@@ -1171,6 +1166,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			partsMetadata[index].ModTime = fi.ModTime
 			partsMetadata[index].Metadata = fi.Metadata
 			partsMetadata[index].Parts = fi.Parts
+			partsMetadata[index].Checksum = fi.Checksum
 		}
 	}
 
@@ -1264,7 +1260,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	// Cleanup all uploaded parts.
-	er.renameAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
+	er.deleteAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
 
 	// Successfully purged.
 	return nil

@@ -442,23 +442,6 @@ func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
 	return saveConfig(ctx, api, configFile, data)
 }
 
-// deleteBucketMetadata deletes bucket metadata
-// If config does not exist no error is returned.
-func deleteBucketMetadata(ctx context.Context, obj objectDeleter, bucket string) error {
-	metadataFiles := []string{
-		dataUsageCacheName,
-		bucketMetadataFile,
-		path.Join(replicationDir, resyncFileName),
-	}
-	for _, metaFile := range metadataFiles {
-		configFile := path.Join(bucketMetaPrefix, bucket, metaFile)
-		if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
-			return err
-		}
-	}
-	return nil
-}
-
 // migrate config for remote targets by encrypting data if currently unencrypted and kms is configured.
 func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI ObjectLayer) error {
 	var err error

@@ -676,7 +676,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 		optsMap["forceCreate"] = "true"
 	}
 	createdAt, _ := globalBucketMetadataSys.CreatedAt(bucket)
-	optsMap["createdAt"] = createdAt.Format(time.RFC3339Nano)
+	optsMap["createdAt"] = createdAt.UTC().Format(time.RFC3339Nano)
 	opts.CreatedAt = createdAt
 
 	// Create bucket and enable versioning on all peers.
@@ -4167,9 +4167,6 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 func (c *SiteReplicationSys) purgeDeletedBucket(ctx context.Context, objAPI ObjectLayer, bucket string) {
 	z, ok := objAPI.(*erasureServerPools)
 	if !ok {
-		if z, ok := objAPI.(*erasureSingle); ok {
-			z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
-		}
 		return
 	}
 	z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
@@ -4253,7 +4250,7 @@ func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer,
 		optsMap["versioningEnabled"] = "true"
 		opts.VersioningEnabled = true
 		opts.CreatedAt = bStatus.CreatedAt
-		optsMap["createdAt"] = bStatus.CreatedAt.Format(time.RFC3339Nano)
+		optsMap["createdAt"] = bStatus.CreatedAt.UTC().Format(time.RFC3339Nano)
 
 		if bStatus.ObjectLockConfig != nil {
 			config, err := base64.StdEncoding.DecodeString(*bStatus.ObjectLockConfig)
@@ -4842,4 +4839,28 @@ func isUserInfoEqual(u1, u2 madmin.UserInfo) bool {
 
 func isPolicyMappingEqual(p1, p2 srPolicyMapping) bool {
 	return p1.Policy == p2.Policy && p1.IsGroup == p2.IsGroup && p1.UserOrGroup == p2.UserOrGroup
+}
+
+type srPeerInfo struct {
+	madmin.PeerInfo
+	EndpointURL *url.URL
+}
+
+// getPeerForUpload returns the site replication peer handling this upload. Defaults to local cluster otherwise
+func (c *SiteReplicationSys) getPeerForUpload(deplID string) (pi srPeerInfo, local bool) {
+	ci, _ := c.GetClusterInfo(GlobalContext)
+	if !ci.Enabled {
+		return pi, true
+	}
+	for _, site := range ci.Sites {
+		if deplID == site.DeploymentID {
+			ep, _ := url.Parse(site.Endpoint)
+			pi = srPeerInfo{
+				PeerInfo:    site,
+				EndpointURL: ep,
+			}
+			return pi, site.DeploymentID == globalDeploymentID
+		}
+	}
+	return pi, true
 }

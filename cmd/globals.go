@@ -27,7 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/console/restapi"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/madmin-go"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
@@ -220,11 +221,10 @@ var (
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.
-	globalTrace = pubsub.New(8)
+	globalTrace = pubsub.New[madmin.TraceInfo, madmin.TraceType](8)
 
 	// global Listen system to send S3 API events to registered listeners
-	// Objects are expected to be event.Event
-	globalHTTPListen = pubsub.New(0)
+	globalHTTPListen = pubsub.New[event.Event, pubsub.Mask](0)
 
 	// global console system to send console logs to
 	// registered listeners

@@ -431,7 +431,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string) (fi FileInfo, err erro
 
 const (
 	xlHeaderVersion = 2
-	xlMetaVersion   = 1
+	xlMetaVersion   = 2
 )
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
@@ -912,7 +912,6 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 		x.data.repair()
 		logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 	}
-
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
 		ver := &x.versions[i]
 		_, err = ver.header.unmarshalV(headerV, hdr)
@@ -920,6 +919,25 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 			return err
 		}
 		ver.meta = meta
+
+		// Fix inconsistent x-minio-internal-replication-timestamp by loading and reindexing.
+		if metaV < 2 && ver.header.Type == DeleteType {
+			// load (and convert) version.
+			version, err := x.getIdx(i)
+			if err == nil {
+				// Only reindex if set.
+				_, ok1 := version.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp]
+				_, ok2 := version.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp]
+				if ok1 || ok2 {
+					meta, err := version.MarshalMsg(make([]byte, 0, len(ver.meta)+10))
+					if err == nil {
+						// Override both if fine.
+						ver.header = version.header()
+						ver.meta = meta
+					}
+				}
+			}
+		}
 		return nil
 	})
 }
@@ -1233,11 +1251,11 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 		if !fi.DeleteMarkerReplicationStatus().Empty() {
 			switch fi.DeleteMarkerReplicationStatus() {
 			case replication.Replica:
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(time.RFC3339Nano))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(fi.ReplicationState.ReplicaStatus)
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.UTC().Format(time.RFC3339Nano))
 			default:
 				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(time.RFC3339Nano))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.UTC().Format(time.RFC3339Nano))
 			}
 		}
 		if !fi.VersionPurgeStatus().Empty() {
@@ -1275,11 +1293,11 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				if !fi.DeleteMarkerReplicationStatus().Empty() {
 					switch fi.DeleteMarkerReplicationStatus() {
 					case replication.Replica:
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat))
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(fi.ReplicationState.ReplicaStatus)
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.UTC().Format(http.TimeFormat))
 					default:
 						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat))
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.UTC().Format(http.TimeFormat))
 					}
 				}
 				if !fi.VersionPurgeStatus().Empty() {

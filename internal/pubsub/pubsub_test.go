@@ -24,7 +24,7 @@ import (
 )
 
 func TestSubscribe(t *testing.T) {
-	ps := New(2)
+	ps := New[Maskable, Mask](2)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	doneCh := make(chan struct{})
@@ -38,21 +38,21 @@ func TestSubscribe(t *testing.T) {
 	ps.Lock()
 	defer ps.Unlock()
 
-	if len(ps.subs) != 2 || ps.NumSubscribers(nil) != 2 {
+	if len(ps.subs) != 2 || ps.NumSubscribers(MaskAll) != 2 || ps.Subscribers() != 2 {
 		t.Fatalf("expected 2 subscribers")
 	}
 }
 
 func TestNumSubscribersMask(t *testing.T) {
-	ps := New(2)
+	ps := New[Maskable, Mask](2)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	if err := ps.Subscribe(1, ch1, doneCh, nil); err != nil {
+	if err := ps.Subscribe(Mask(1), ch1, doneCh, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := ps.Subscribe(2, ch2, doneCh, nil); err != nil {
+	if err := ps.Subscribe(Mask(2), ch2, doneCh, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	ps.Lock()
@@ -70,7 +70,7 @@ func TestNumSubscribersMask(t *testing.T) {
 	if want, got := int32(2), ps.NumSubscribers(Mask(1|2)); got != want {
 		t.Fatalf("want %d subscribers, got %d", want, got)
 	}
-	if want, got := int32(2), ps.NumSubscribers(nil); got != want {
+	if want, got := int32(2), ps.NumSubscribers(MaskAll); got != want {
 		t.Fatalf("want %d subscribers, got %d", want, got)
 	}
 	if want, got := int32(0), ps.NumSubscribers(Mask(4)); got != want {
@@ -79,7 +79,7 @@ func TestNumSubscribersMask(t *testing.T) {
 }
 
 func TestSubscribeExceedingLimit(t *testing.T) {
-	ps := New(2)
+	ps := New[Maskable, Maskable](2)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	ch3 := make(chan Maskable, 1)
@@ -97,7 +97,7 @@ func TestSubscribeExceedingLimit(t *testing.T) {
 }
 
 func TestUnsubscribe(t *testing.T) {
-	ps := New(2)
+	ps := New[Maskable, Maskable](2)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	doneCh1 := make(chan struct{})
@@ -127,7 +127,7 @@ func (m maskString) Mask() uint64 {
 }
 
 func TestPubSub(t *testing.T) {
-	ps := New(1)
+	ps := New[Maskable, Maskable](1)
 	ch1 := make(chan Maskable, 1)
 	doneCh1 := make(chan struct{})
 	defer close(doneCh1)
@@ -143,7 +143,7 @@ func TestPubSub(t *testing.T) {
 }
 
 func TestMultiPubSub(t *testing.T) {
-	ps := New(2)
+	ps := New[Maskable, Maskable](2)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	doneCh := make(chan struct{})
@@ -165,7 +165,7 @@ func TestMultiPubSub(t *testing.T) {
 }
 
 func TestMultiPubSubMask(t *testing.T) {
-	ps := New(3)
+	ps := New[Maskable, Maskable](3)
 	ch1 := make(chan Maskable, 1)
 	ch2 := make(chan Maskable, 1)
 	ch3 := make(chan Maskable, 1)

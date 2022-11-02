@@ -858,10 +858,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	if err := globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
 
 	// Make sure to add Location information here only for bucket
 	if cp := pathClean(r.URL.Path); cp != "" {

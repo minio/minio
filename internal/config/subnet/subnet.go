@@ -35,8 +35,8 @@ const (
 
 // Post submit 'payload' to specified URL
 func (c Config) Post(reqURL string, payload interface{}) (string, error) {
-	if len(c.APIKey) == 0 {
-		return "", errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc support register ALIAS'")
+	if !c.Registered() {
+		return "", errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -47,7 +47,10 @@ func (c Config) Post(reqURL string, payload interface{}) (string, error) {
 		return "", err
 	}
 
+	configLock.RLock()
 	r.Header.Set("Authorization", c.APIKey)
+	configLock.RUnlock()
+
 	r.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{

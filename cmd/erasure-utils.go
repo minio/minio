@@ -20,8 +20,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/klauspost/reedsolomon"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -116,4 +118,17 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 
 	// Success.
 	return totalWritten, nil
+}
+
+// returns deploymentID from uploadID
+func getDeplIDFromUpload(uploadID string) (string, error) {
+	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	if err != nil {
+		return "", fmt.Errorf("error parsing uploadID %s (%w)", uploadID, err)
+	}
+	slc := strings.SplitN(string(uploadBytes), ".", 2)
+	if len(slc) != 2 {
+		return "", fmt.Errorf("uploadID %s has incorrect format", uploadID)
+	}
+	return slc[0], nil
 }
