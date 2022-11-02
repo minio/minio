@@ -206,11 +206,11 @@ func newLocalXLStorage(path string) (*xlStorage, error) {
 	return newXLStorage(Endpoint{
 		URL:     &u,
 		IsLocal: true,
-	})
+	}, true)
 }
 
 // Initialize a new storage disk.
-func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
+func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	path := ep.Path
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
@@ -247,7 +247,9 @@ func newXLStorage(ep Endpoint) (s *xlStorage, err error) {
 		diskIndex:  -1,
 	}
 
-	bgFormatErasureCleanupTmp(s.diskPath) // cleanup any old data.
+	if cleanUp {
+		bgFormatErasureCleanupTmp(s.diskPath) // cleanup any old data.
+	}
 
 	formatData, formatFi, err := formatErasureMigrate(s.diskPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

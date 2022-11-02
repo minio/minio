@@ -175,21 +175,6 @@ func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Du
 	wg.Wait()
 }
 
-func (er erasureObjects) renameAll(ctx context.Context, bucket, prefix string) {
-	var wg sync.WaitGroup
-	for _, disk := range er.getDisks() {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(disk StorageAPI) {
-			defer wg.Done()
-			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpDeletedBucket, mustGetUUID())
-		}(disk)
-	}
-	wg.Wait()
-}
-
 func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 	var wg sync.WaitGroup
 	for _, disk := range er.getDisks() {
@@ -218,11 +203,12 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
+				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 				return nil
 			}
 			wait := er.deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(fi.ModTime) > expiry {
-				er.renameAll(ctx, minioMetaMultipartBucket, uploadIDPath)
+				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 			}
 			wait()
 			return nil
@@ -641,7 +627,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.renameAll(context.Background(), minioMetaTmpBucket, tmpPart)
+			er.deleteAll(context.Background(), minioMetaTmpBucket, tmpPart)
 		}
 	}()
 
@@ -1274,7 +1260,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	// Cleanup all uploaded parts.
-	er.renameAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
+	er.deleteAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
 
 	// Successfully purged.
 	return nil
