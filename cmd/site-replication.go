@@ -3477,6 +3477,9 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	)
 
 	for _, v := range sites.Sites {
+		if peer.Endpoint == v.Endpoint {
+			return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("Endpoint %s entered for deployment id %s already configured in site replication", v.Endpoint, v.DeploymentID))
+		}
 		if peer.DeploymentID == v.DeploymentID {
 			found = true
 			if peer.Endpoint == v.Endpoint {
@@ -3487,8 +3490,12 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 				return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
 			}
 			// check if endpoint is reachable
-			if _, err = admClient.ServerInfo(ctx); err != nil {
-				return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("Endpoint %s not reachable: %w", peer.Endpoint, err))
+			info, err := admClient.ServerInfo(ctx)
+			if err != nil {
+				return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("Endpoint %s not reachable: %w", peer.Endpoint, err))
+			}
+			if info.DeploymentID != v.DeploymentID {
+				return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("Endpoint %s does not belong to deployment expected: %s (found %s) ", v.Endpoint, v.DeploymentID, info.DeploymentID))
 			}
 		}
 	}
