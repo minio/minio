@@ -2740,7 +2740,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if b := getClusterMetaInfo(ctx); len(b) > 0 {
-			w, err := stream.AddEncryptedStream("cluster.info", nil)
+			w, err := stream.AddUnencryptedStream("cluster.info", nil)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				return
