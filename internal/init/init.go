@@ -16,3 +16,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package init
+
+import "os"
+
+func init() {
+	// All MinIO operations must be under UTC.
+	os.Setenv("TZ", "UTC")
+}
