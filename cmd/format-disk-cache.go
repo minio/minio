@@ -397,7 +397,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 		bucket = strings.TrimSuffix(bucket, SlashSeparator)
 		var objMetaPaths []string
 		root := path.Join(oldCacheBucketsPath, bucket)
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 			if strings.HasSuffix(path, cacheMetaJSONFile) {
 				objMetaPaths = append(objMetaPaths, path)
 			}
