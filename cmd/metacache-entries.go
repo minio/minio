@@ -743,7 +743,7 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 			if xl != nil && len(versions) > 0 {
 				// Merge all versions. 'strict' doesn't matter since we only need one.
 				xl.versions = mergeXLV2Versions(readQuorum, true, 0, versions)
-				if meta, err := xl.AppendTo(metaDataPoolGet()); err != nil {
+				if meta, err := xl.AppendTo(metaDataPoolGet()); err == nil {
 					if best.reusable {
 						metaDataPoolPut(best.metadata)
 					}
