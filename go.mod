@@ -43,12 +43,12 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.24.0
-	github.com/minio/console v0.21.1
+	github.com/minio/console v0.21.2-0.20221102173545-2ff44df63675
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.1
-	github.com/minio/madmin-go v1.6.6
+	github.com/minio/madmin-go v1.7.2
 	github.com/minio/minio-go/v7 v7.0.43-0.20221021202758-c6319beb6b27
 	github.com/minio/pkg v1.5.4
 	github.com/minio/selfupdate v0.5.0
@@ -168,7 +168,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20221019004256-8493f97e042f // indirect
+	github.com/minio/mc v0.0.0-20221101010057-15e52fd862f5 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -207,7 +207,7 @@ require (
 	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.5 // indirect
-	go.mongodb.org/mongo-driver v1.10.2 // indirect
+	go.mongodb.org/mongo-driver v1.10.3 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
