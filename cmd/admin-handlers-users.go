@@ -135,7 +135,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Add ldap users which have mapped policies if in LDAP mode
 	// FIXME(vadmeste): move this to policy info in the future
-	ldapUsers, err := globalIAMSys.ListLDAPUsers()
+	ldapUsers, err := globalIAMSys.ListLDAPUsers(ctx)
 	if err != nil && err != errIAMActionNotAllowed {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -657,7 +657,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
-		if globalLDAPConfig.Enabled {
+		if globalLDAPConfig.Enabled() {
 			opts.claims[ldapUserN] = targetUser // simple username
 			targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
 			if err != nil {
@@ -1149,15 +1149,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	var dataUsageInfo DataUsageInfo
-	var err error
-	if !globalIsGateway {
-		// Load the latest calculated data usage
-		dataUsageInfo, _ = loadDataUsageFromBackend(ctx, objectAPI)
-	}
+	// Load the latest calculated data usage
+	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var buckets []BucketInfo
+	var err error
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
@@ -1189,31 +1186,42 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		accountName = cred.ParentUser
 	}
 
+	roleArn := iampolicy.Args{Claims: claims}.GetRoleArn()
+	var effectivePolicy iampolicy.Policy
+
 	var buf []byte
-	if accountName == globalActiveCred.AccessKey {
+	switch {
+	case accountName == globalActiveCred.AccessKey:
 		for _, policy := range iampolicy.DefaultPolicies {
 			if policy.Name == "consoleAdmin" {
-				buf, err = json.MarshalIndent(policy.Definition, "", " ")
-				if err != nil {
-					writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-					return
-				}
+				effectivePolicy = policy.Definition
 				break
 			}
 		}
-	} else {
+	case roleArn != "":
+		_, policy, err := globalIAMSys.GetRolePolicy(roleArn)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		policySlice := newMappedPolicy(policy).toSlice()
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySlice...)
+
+	default:
 		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policies...)
 
-		buf, err = json.MarshalIndent(globalIAMSys.GetCombinedPolicy(policies...), "", " ")
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+	}
+	buf, err = json.MarshalIndent(effectivePolicy, "", " ")
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 
 	acctInfo := madmin.AccountInfo{
@@ -2086,7 +2094,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 				// In case of LDAP we need to resolve the targetUser to a DN and
 				// query their groups:
-				if globalLDAPConfig.Enabled {
+				if globalLDAPConfig.Enabled() {
 					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
 					targetUser, _, err := globalLDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
 					if err != nil {

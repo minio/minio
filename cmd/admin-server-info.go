@@ -20,10 +20,14 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"os"
 	"runtime"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/minio/madmin-go"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -67,6 +71,22 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	var memstats runtime.MemStats
 	runtime.ReadMemStats(&memstats)
 
+	gcStats := debug.GCStats{
+		// If stats.PauseQuantiles is non-empty, ReadGCStats fills
+		// it with quantiles summarizing the distribution of pause time.
+		// For example, if len(stats.PauseQuantiles) is 5, it will be
+		// filled with the minimum, 25%, 50%, 75%, and maximum pause times.
+		PauseQuantiles: make([]time.Duration, 5),
+	}
+	debug.ReadGCStats(&gcStats)
+	// Truncate GC stats to max 5 entries.
+	if len(gcStats.PauseEnd) > 5 {
+		gcStats.PauseEnd = gcStats.PauseEnd[len(gcStats.PauseEnd)-5:]
+	}
+	if len(gcStats.Pause) > 5 {
+		gcStats.Pause = gcStats.Pause[len(gcStats.Pause)-5:]
+	}
+
 	props := madmin.ServerProperties{
 		State:    string(madmin.ItemInitializing),
 		Endpoint: addr,
@@ -81,10 +101,48 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			Frees:      memstats.Frees,
 			HeapAlloc:  memstats.HeapAlloc,
 		},
+		GoMaxProcs:     runtime.GOMAXPROCS(0),
+		NumCPU:         runtime.NumCPU(),
+		RuntimeVersion: runtime.Version(),
+		GCStats: &madmin.GCStats{
+			LastGC:     gcStats.LastGC,
+			NumGC:      gcStats.NumGC,
+			PauseTotal: gcStats.PauseTotal,
+			Pause:      gcStats.Pause,
+			PauseEnd:   gcStats.PauseEnd,
+		},
+		MinioEnvVars: make(map[string]string, 10),
+	}
+
+	sensitive := map[string]struct{}{
+		config.EnvAccessKey:         {},
+		config.EnvSecretKey:         {},
+		config.EnvRootUser:          {},
+		config.EnvRootPassword:      {},
+		config.EnvMinIOSubnetAPIKey: {},
+		config.EnvKMSSecretKey:      {},
+	}
+	for _, v := range os.Environ() {
+		if !strings.HasPrefix(v, "MINIO") && !strings.HasPrefix(v, "_MINIO") {
+			continue
+		}
+		split := strings.SplitN(v, "=", 2)
+		key := split[0]
+		value := ""
+		if len(split) > 1 {
+			value = split[1]
+		}
+
+		// Do not send sensitive creds.
+		if _, ok := sensitive[key]; ok || strings.Contains(strings.ToLower(key), "password") || strings.HasSuffix(strings.ToLower(key), "key") {
+			props.MinioEnvVars[key] = "*** EXISTS, REDACTED ***"
+			continue
+		}
+		props.MinioEnvVars[key] = value
 	}
 
 	objLayer := newObjectLayerFn()
-	if objLayer != nil && !globalIsGateway {
+	if objLayer != nil {
 		// only need Disks information in server mode.
 		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
 		props.State = string(madmin.ItemOnline)

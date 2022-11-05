@@ -67,7 +67,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	bucketLifecycle, err := lifecycle.ParseLifecycleConfig(io.LimitReader(r.Body, r.ContentLength))
+	bucketLifecycle, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -168,7 +168,7 @@ func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter,
 		return
 	}
 
-	if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, nil); err != nil {
+	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketLifecycleConfig); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

@@ -359,7 +359,10 @@ func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int6
 
 // Tests is requested authenticated function, tests replies for s3 errors.
 func TestIsReqAuthenticated(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(GlobalContext)
+	defer cancel()
+
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,10 +371,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	initAllSubsystems()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	initAllSubsystems(ctx)
 
 	initConfigSubsystem(ctx, objLayer)
 
@@ -413,7 +413,10 @@ func TestIsReqAuthenticated(t *testing.T) {
 }
 
 func TestCheckAdminRequestAuthType(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +442,6 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 		{Request: mustNewPresignedV2Request(http.MethodGet, "http://127.0.0.1:9000", 0, nil, t), ErrCode: ErrAccessDenied},
 		{Request: mustNewPresignedRequest(http.MethodGet, "http://127.0.0.1:9000", 0, nil, t), ErrCode: ErrAccessDenied},
 	}
-	ctx := context.Background()
 	for i, testCase := range testCases {
 		if _, s3Error := checkAdminRequestAuth(ctx, testCase.Request, iampolicy.AllAdminActions, globalSite.Region); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
@@ -451,7 +453,7 @@ func TestValidateAdminSignature(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	objLayer, fsDir, err := prepareFS()
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,8 +463,7 @@ func TestValidateAdminSignature(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	initAllSubsystems()
-
+	initAllSubsystems(ctx)
 	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)

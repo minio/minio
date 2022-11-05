@@ -431,7 +431,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string) (fi FileInfo, err erro
 
 const (
 	xlHeaderVersion = 2
-	xlMetaVersion   = 1
+	xlMetaVersion   = 2
 )
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
@@ -456,9 +456,9 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	fi.ReplicationState = GetInternalReplicationState(j.MetaSys)
 	if j.FreeVersion() {
 		fi.SetTierFreeVersion()
-		fi.TransitionTier = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionTier])
-		fi.TransitionedObjName = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName])
-		fi.TransitionVersionID = string(j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID])
+		fi.TransitionTier = string(j.MetaSys[metaTierName])
+		fi.TransitionedObjName = string(j.MetaSys[metaTierObjName])
+		fi.TransitionVersionID = string(j.MetaSys[metaTierVersionID])
 	}
 
 	return fi, nil
@@ -487,7 +487,7 @@ func (j *xlMetaV2DeleteMarker) Signature() [4]byte {
 // its contents and false otherwise.
 func (j xlMetaV2Object) UsesDataDir() bool {
 	// Skip if this version is not transitioned, i.e it uses its data directory.
-	if !bytes.Equal(j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus], []byte(lifecycle.TransitionComplete)) {
+	if !bytes.Equal(j.MetaSys[metaTierStatus], []byte(lifecycle.TransitionComplete)) {
 		return true
 	}
 
@@ -503,11 +503,18 @@ func (j xlMetaV2Object) InlineData() bool {
 	return ok
 }
 
+const (
+	metaTierStatus    = ReservedMetadataPrefixLower + TransitionStatus
+	metaTierObjName   = ReservedMetadataPrefixLower + TransitionedObjectName
+	metaTierVersionID = ReservedMetadataPrefixLower + TransitionedVersionID
+	metaTierName      = ReservedMetadataPrefixLower + TransitionTier
+)
+
 func (j *xlMetaV2Object) SetTransition(fi FileInfo) {
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
-	j.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+	j.MetaSys[metaTierStatus] = []byte(fi.TransitionStatus)
+	j.MetaSys[metaTierObjName] = []byte(fi.TransitionedObjName)
+	j.MetaSys[metaTierVersionID] = []byte(fi.TransitionVersionID)
+	j.MetaSys[metaTierName] = []byte(fi.TransitionTier)
 }
 
 func (j *xlMetaV2Object) RemoveRestoreHdrs() {
@@ -626,16 +633,16 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
 
-	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus]; ok {
+	if st, ok := j.MetaSys[metaTierStatus]; ok {
 		fi.TransitionStatus = string(st)
 	}
-	if o, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName]; ok {
+	if o, ok := j.MetaSys[metaTierObjName]; ok {
 		fi.TransitionedObjName = string(o)
 	}
-	if rv, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID]; ok {
+	if rv, ok := j.MetaSys[metaTierVersionID]; ok {
 		fi.TransitionVersionID = string(rv)
 	}
-	if sc, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionTier]; ok {
+	if sc, ok := j.MetaSys[metaTierName]; ok {
 		fi.TransitionTier = string(sc)
 	}
 	if crcs := j.MetaSys[ReservedMetadataPrefixLower+"crc"]; len(crcs) > 0 {
@@ -905,7 +912,6 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 		x.data.repair()
 		logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 	}
-
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
 		ver := &x.versions[i]
 		_, err = ver.header.unmarshalV(headerV, hdr)
@@ -913,6 +919,25 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 			return err
 		}
 		ver.meta = meta
+
+		// Fix inconsistent x-minio-internal-replication-timestamp by loading and reindexing.
+		if metaV < 2 && ver.header.Type == DeleteType {
+			// load (and convert) version.
+			version, err := x.getIdx(i)
+			if err == nil {
+				// Only reindex if set.
+				_, ok1 := version.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp]
+				_, ok2 := version.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp]
+				if ok1 || ok2 {
+					meta, err := version.MarshalMsg(make([]byte, 0, len(ver.meta)+10))
+					if err == nil {
+						// Override both if fine.
+						ver.header = version.header()
+						ver.meta = meta
+					}
+				}
+			}
+		}
 		return nil
 	})
 }
@@ -1226,11 +1251,11 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 		if !fi.DeleteMarkerReplicationStatus().Empty() {
 			switch fi.DeleteMarkerReplicationStatus() {
 			case replication.Replica:
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(time.RFC3339Nano))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(fi.ReplicationState.ReplicaStatus)
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.UTC().Format(time.RFC3339Nano))
 			default:
 				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
-				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(time.RFC3339Nano))
+				ventry.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.UTC().Format(time.RFC3339Nano))
 			}
 		}
 		if !fi.VersionPurgeStatus().Empty() {
@@ -1268,11 +1293,11 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				if !fi.DeleteMarkerReplicationStatus().Empty() {
 					switch fi.DeleteMarkerReplicationStatus() {
 					case replication.Replica:
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(string(fi.ReplicationState.ReplicaStatus))
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat))
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaStatus] = []byte(fi.ReplicationState.ReplicaStatus)
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicaTimestamp] = []byte(fi.ReplicationState.ReplicaTimeStamp.UTC().Format(http.TimeFormat))
 					default:
 						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationStatus] = []byte(fi.ReplicationState.ReplicationStatusInternal)
-						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat))
+						ver.DeleteMarker.MetaSys[ReservedMetadataPrefixLower+ReplicationTimestamp] = []byte(fi.ReplicationState.ReplicationTimeStamp.UTC().Format(http.TimeFormat))
 					}
 				}
 				if !fi.VersionPurgeStatus().Empty() {
@@ -1528,16 +1553,16 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 
 		if fi.TransitionStatus != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+			ventry.ObjectV2.MetaSys[metaTierStatus] = []byte(fi.TransitionStatus)
 		}
 		if fi.TransitionedObjName != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+			ventry.ObjectV2.MetaSys[metaTierObjName] = []byte(fi.TransitionedObjName)
 		}
 		if fi.TransitionVersionID != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedVersionID] = []byte(fi.TransitionVersionID)
+			ventry.ObjectV2.MetaSys[metaTierVersionID] = []byte(fi.TransitionVersionID)
 		}
 		if fi.TransitionTier != "" {
-			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+			ventry.ObjectV2.MetaSys[metaTierName] = []byte(fi.TransitionTier)
 		}
 		if len(fi.Checksum) > 0 {
 			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+"crc"] = fi.Checksum

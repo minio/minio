@@ -134,7 +134,7 @@ func init() {
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
-		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
+		RoundTripper: newHTTPTransport(1 * time.Hour),
 		Logger: func(err error) {
 			if err != nil && !errors.Is(err, context.Canceled) {
 				logger.LogIf(GlobalContext, err)
@@ -151,7 +151,7 @@ func init() {
 	defaultAWSCredProvider = []credentials.Provider{
 		&credentials.IAM{
 			Client: &http.Client{
-				Transport: NewGatewayHTTPTransport(),
+				Transport: NewHTTPTransport(),
 			},
 		},
 	}
@@ -175,7 +175,9 @@ func minioConfigToConsoleFeatures() {
 	if globalMinioEndpoint != "" {
 		os.Setenv("CONSOLE_MINIO_SERVER", globalMinioEndpoint)
 	} else {
-		os.Setenv("CONSOLE_MINIO_SERVER", getAPIEndpoints()[0])
+		// Explicitly set 127.0.0.1 so Console will automatically bypass TLS verification to the local S3 API.
+		// This will save users from providing a certificate with IP or FQDN SAN that points to the local host.
+		os.Setenv("CONSOLE_MINIO_SERVER", fmt.Sprintf("%s://127.0.0.1:%s", getURLScheme(globalIsTLS), globalMinioPort))
 	}
 	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
@@ -202,20 +204,13 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// Enable if LDAP is enabled.
-	if globalLDAPConfig.Enabled {
+	if globalLDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
-	if globalSubnetConfig.License != "" {
-		os.Setenv("CONSOLE_SUBNET_LICENSE", globalSubnetConfig.License)
-	}
-	if globalSubnetConfig.APIKey != "" {
-		os.Setenv("CONSOLE_SUBNET_API_KEY", globalSubnetConfig.APIKey)
-	}
-	if globalSubnetConfig.ProxyURL != nil {
-		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
-	}
+
+	globalSubnetConfig.ApplyEnv()
 }
 
 func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
@@ -236,6 +231,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 			Userinfo:                cfg.ClaimUserinfo,
 			RedirectCallbackDynamic: cfg.RedirectURIDynamic,
 			RedirectCallback:        callback,
+			RoleArn:                 cfg.GetRoleArn(),
 		}
 	}
 	return m
@@ -303,22 +299,6 @@ func initConsoleServer() (*restapi.Server, error) {
 	}
 
 	return server, nil
-}
-
-func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if strings.HasPrefix(name, "gateway") {
-		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
-			uiErr := config.ErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured")
-			logger.Fatal(uiErr, "Unable to start gateway with SSE")
-		}
-	}
-
-	globalCompressConfigMu.Lock()
-	if globalCompressConfig.Enabled && !objAPI.IsCompressionSupported() {
-		logger.Fatal(errInvalidArgument,
-			"Compression support is requested but '%s' does not support compression", name)
-	}
-	globalCompressConfigMu.Unlock()
 }
 
 // Check for updates and print a notification message

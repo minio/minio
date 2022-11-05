@@ -111,12 +111,16 @@ func (a *AMQPArgs) Validate() error {
 
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
+	lazyInit lazyInit
+
 	id         event.TargetID
 	args       AMQPArgs
 	conn       *amqp.Connection
 	connMutex  sync.Mutex
 	store      Store
 	loggerOnce logger.LogOnce
+
+	quitCh chan struct{}
 }
 
 // ID - returns TargetID.
@@ -126,6 +130,14 @@ func (target *AMQPTarget) ID() event.TargetID {
 
 // IsActive - Return true if target is up and active
 func (target *AMQPTarget) IsActive() (bool, error) {
+	if err := target.init(); err != nil {
+		return false, err
+	}
+
+	return target.isActive()
+}
+
+func (target *AMQPTarget) isActive() (bool, error) {
 	ch, _, err := target.channel()
 	if err != nil {
 		return false, err
@@ -134,11 +146,6 @@ func (target *AMQPTarget) IsActive() (bool, error) {
 		ch.Close()
 	}()
 	return true, nil
-}
-
-// HasQueueStore - Checks if the queueStore has been configured for the target
-func (target *AMQPTarget) HasQueueStore() bool {
-	return target.store != nil
 }
 
 func (target *AMQPTarget) channel() (*amqp.Channel, chan amqp.Confirmation, error) {
@@ -256,6 +263,10 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp.Channel, confirms
 
 // Save - saves the events to the store which will be replayed when the amqp connection is active.
 func (target *AMQPTarget) Save(eventData event.Event) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
@@ -270,6 +281,10 @@ func (target *AMQPTarget) Save(eventData event.Event) error {
 
 // Send - sends event to AMQP.
 func (target *AMQPTarget) Send(eventKey string) error {
+	if err := target.init(); err != nil {
+		return err
+	}
+
 	ch, confirms, err := target.channel()
 	if err != nil {
 		return err
@@ -296,51 +311,49 @@ func (target *AMQPTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *AMQPTarget) Close() error {
+	close(target.quitCh)
 	if target.conn != nil {
 		return target.conn.Close()
 	}
 	return nil
 }
 
-// NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce logger.LogOnce, test bool) (*AMQPTarget, error) {
-	var conn *amqp.Connection
-	var err error
+func (target *AMQPTarget) init() error {
+	return target.lazyInit.Do(target.initAMQP)
+}
 
-	var store Store
-
-	target := &AMQPTarget{
-		id:         event.TargetID{ID: id, Name: "amqp"},
-		args:       args,
-		loggerOnce: loggerOnce,
-	}
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID().String())
-			return target, oErr
-		}
-		target.store = store
-	}
-
-	conn, err = amqp.Dial(args.URL.String())
+func (target *AMQPTarget) initAMQP() error {
+	conn, err := amqp.Dial(target.args.URL.String())
 	if err != nil {
-		if store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+		if IsConnRefusedErr(err) || IsConnResetErr(err) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
-			return target, err
 		}
+		return err
 	}
 	target.conn = conn
 
-	if target.store != nil && !test {
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+	return nil
+}
 
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
+// NewAMQPTarget - creates new AMQP target.
+func NewAMQPTarget(id string, args AMQPArgs, loggerOnce logger.LogOnce) (*AMQPTarget, error) {
+	var store Store
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of AMQP `%s`: %w", id, err)
+		}
 	}
 
-	return target, nil
+	return &AMQPTarget{
+		id:         event.TargetID{ID: id, Name: "amqp"},
+		args:       args,
+		loggerOnce: loggerOnce,
+		store:      store,
+		quitCh:     make(chan struct{}),
+	}, nil
 }

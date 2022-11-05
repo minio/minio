@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -439,10 +440,37 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
+func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, tags map[string]interface{}) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
+
+	opts := AuditLogOptions{
+		Event:     "DeleteDanglingObject",
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+		Tags:      tags,
+	}
+
+	auditLogInternal(ctx, opts)
+}
+
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
+	_, file, line, cok := runtime.Caller(1)
 	var err error
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
+		tags := make(map[string]interface{}, 4)
+		tags["set"] = er.setIndex
+		tags["pool"] = er.poolIndex
+		tags["parity"] = m.Erasure.ParityBlocks
+		if cok {
+			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
+		}
+
+		defer auditDanglingObjectDeletion(ctx, bucket, object, m.VersionID, tags)
+
 		err = errFileNotFound
 		if opts.VersionID != "" {
 			err = errFileVersionNotFound
@@ -1044,7 +1072,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	var online int
 	defer func() {
 		if online != len(onlineDisks) {
-			er.renameAll(context.Background(), minioMetaTmpBucket, tempObj)
+			er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 		}
 	}()
 
@@ -1527,12 +1555,15 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	storageDisks := er.getDisks()
 
+	//  Determine whether to mark object deleted for replication
+	var markDelete bool
+
 	if opts.Expiration.Expire {
 		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 		if err == nil {
-			action := evalActionFromLifecycle(ctx, *lc, rcfg, goi, false)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 			var isErr bool
-			switch action {
+			switch evt.Action {
 			case lifecycle.NoneAction:
 				isErr = true
 			case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
@@ -1551,20 +1582,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					Object: object,
 				}
 			}
+			markDelete = goi.VersionID != ""
 		}
 	}
 
 	versionFound := !(opts.DeleteMarker && opts.VersionID != "")
 
-	// Determine whether to mark object deleted for replication
-	markDelete := !opts.DeleteMarker && opts.VersionID != ""
-
+	if !markDelete {
+		markDelete = !opts.DeleteMarker && opts.VersionID != ""
+	}
 	// Default deleteMarker to true if object is under versioning
 	// versioning suspended means we add `null` version as
 	// delete marker, if its not decided already.
 	deleteMarker := (opts.Versioned || opts.VersionSuspended) && opts.VersionID == "" || (opts.DeleteMarker && opts.VersionID != "")
 
-	if markDelete {
+	if markDelete && opts.VersionID != "" {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus() == replication.Replica {
 			markDelete = false

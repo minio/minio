@@ -179,53 +179,6 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 	return onlineDisks, modTime
 }
 
-// Returns the latest updated FileInfo files and error in case of failure.
-func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultParityCount int, errs []error) (FileInfo, error) {
-	// There should be atleast half correct entries, if not return failure
-	expectedRQuorum := len(partsMetadata) / 2
-	if defaultParityCount == 0 {
-		// if parity count is '0', we expected all entries to be present.
-		expectedRQuorum = len(partsMetadata)
-	}
-
-	reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, expectedRQuorum)
-	if reducedErr != nil {
-		return FileInfo{}, reducedErr
-	}
-
-	// List all the file commit ids from parts metadata.
-	modTimes := listObjectModtimes(partsMetadata, errs)
-
-	// Count all latest updated FileInfo values
-	var count int
-	var latestFileInfo FileInfo
-
-	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
-	modTime := commonTime(modTimes)
-
-	if modTime.IsZero() || modTime.Equal(timeSentinel) {
-		return FileInfo{}, errErasureReadQuorum
-	}
-
-	// Interate through all the modTimes and count the FileInfo(s) with latest time.
-	for index, t := range modTimes {
-		if partsMetadata[index].IsValid() && t.Equal(modTime) {
-			latestFileInfo = partsMetadata[index]
-			count++
-		}
-	}
-
-	if !latestFileInfo.IsValid() {
-		return FileInfo{}, errErasureReadQuorum
-	}
-
-	if count < latestFileInfo.Erasure.DataBlocks {
-		return FileInfo{}, errErasureReadQuorum
-	}
-
-	return latestFileInfo, nil
-}
-
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //

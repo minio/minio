@@ -50,7 +50,7 @@ NOTE: If `etcd` is configured with `Client-to-server authentication with HTTPS c
 
 Once etcd is configured, **any STS configuration** will work including Client Grants, Web Identity or AD/LDAP.
 
-For example, you can configure STS with Client Grants (KeyCloak) using the guides at [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide) and [KeyCloak Configuration Guide](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md). Once this is done, STS credentials can be generated:
+For example, you can configure STS with Client Grants (KeyCloak) using the guides at [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html) and [KeyCloak Configuration Guide](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md). Once this is done, STS credentials can be generated:
 
 ```
 go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
@@ -68,5 +68,5 @@ These credentials can now be used to perform MinIO API operations, these credent
 
 ## Explore Further
 
-- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

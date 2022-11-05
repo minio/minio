@@ -2,8 +2,6 @@
 
 Events occurring on objects in a bucket can be monitored using bucket event notifications.
 
-> NOTE: Gateway mode does not support bucket notifications (except NAS gateway).
-
 Various event types supported by MinIO server are
 
 | Supported Object Event Types     |                                            |                                        |
@@ -32,7 +30,7 @@ Various event types supported by MinIO server are
 | `s3:BucketCreated`                                                           |
 | `s3:BucketRemoved`                                                           |
 
-Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.min.io/docs/minio-client-complete-guide#events). MinIO SDK's [`BucketNotification` APIs](https://docs.min.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message MinIO sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
+Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://min.io/docs/minio/linux/reference/minio-mc/mc-event-add.html). MinIO SDK's [`BucketNotification` APIs](https://min.io/docs/minio/linux/developers/go/API.html#setbucketnotification-ctx-context-context-bucketname-string-config-notification-configuration-error) can also be used. The notification message MinIO sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
 Bucket events can be published to the following targets:
 
@@ -45,8 +43,8 @@ Bucket events can be published to the following targets:
 
 ## Prerequisites
 
-- Install and configure MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
-- Install and configure MinIO Client from [here](https://docs.min.io/docs/minio-client-quickstart-guide).
+- Install and configure MinIO Server from [here](https://min.io/docs/minio/linux/index.html#procedure).
+- Install and configure MinIO Client from [here](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart).
 
 ```
 $ mc admin config get myminio | grep notify

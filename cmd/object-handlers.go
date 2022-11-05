@@ -130,7 +130,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -187,23 +186,25 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
+	// Take read lock on object, here so subsequent lower-level
+	// calls do not need to.
+	lock := objectAPI.NewNSLock(bucket, object)
+	lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	ctx = lkctx.Context()
+	defer lock.RUnlock(lkctx.Cancel)
+
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
-	} else {
-		// Take read lock on object, here so subsequent lower-level
-		// calls do not need to.
-		lock := objectAPI.NewNSLock(bucket, object)
-		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		ctx = lkctx.Context()
-		defer lock.RUnlock(lkctx.Cancel)
 	}
 
-	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	gopts := opts
+	gopts.NoLock = true // We already have a lock, we can live with it.
+	objInfo, err := getObjectInfo(ctx, bucket, object, gopts)
 	if err != nil {
 		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
 			// Versioning enabled quite possibly object is deleted might be delete-marker
@@ -333,7 +334,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -342,7 +342,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
@@ -418,6 +418,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
+
 	var proxy proxyResult
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
@@ -441,6 +442,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			}
 		}
 		if reader == nil || !proxy.Proxy {
+			// validate if the request indeed was authorized, if it wasn't we need to return "ErrAccessDenied"
+			// instead of any namespace related error.
+			if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+				return
+			}
 			if isErrPreconditionFailed(err) {
 				return
 			}
@@ -463,6 +470,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 					w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
 					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 				}
+				QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -472,29 +480,38 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	objInfo := gr.ObjInfo
 
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
-		var success bool
-		switch action {
-		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-			success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
-		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-			// Restored object delete would be still allowed to proceed as success
-			// since transition behavior is slightly different.
-			applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
-		}
-		if success {
-			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-			return
-		}
+	if objInfo.UserTags != "" {
+		r.Header.Set(xhttp.AmzObjectTagging, objInfo.UserTags)
 	}
 
-	// Queue failed/pending replication automatically
-	if !proxy.Proxy {
-		QueueReplicationHeal(ctx, bucket, objInfo)
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
 	}
+
+	if !proxy.Proxy { // apply lifecycle rules only for local requests
+		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
+			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			var success bool
+			switch evt.Action {
+			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
+			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+				// Restored object delete would be still allowed to proceed as success
+				// since transition behavior is slightly different.
+				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
+			}
+			if success {
+				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+				return
+			}
+		}
+
+		QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+	}
+
 	// filter object lock metadata if permission does not permit
 	getRetPerms := checkRequestAuthType(ctx, r, policy.GetObjectRetentionAction, bucket, object)
 	legalHoldPerms := checkRequestAuthType(ctx, r, policy.GetObjectLegalHoldAction, bucket, object)
@@ -632,7 +649,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		return
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+	// Check for auth type to return S3 compatible error.
+	// type to return the correct error (NoSuchKey vs AccessDenied)
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
 		if getRequestAuthType(r) == authTypeAnonymous {
 			// As per "Permission" section in
 			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
@@ -653,6 +672,11 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				ConditionValues: getConditionValues(r, "", "", nil),
 				IsOwner:         false,
 			}) {
+				getObjectInfo := objectAPI.GetObjectInfo
+				if api.CacheAPI() != nil {
+					getObjectInfo = api.CacheAPI().GetObjectInfo
+				}
+
 				_, err = getObjectInfo(ctx, bucket, object, opts)
 				if toAPIError(ctx, err).Code == "NoSuchKey" {
 					s3Error = ErrNoSuchKey
@@ -662,6 +686,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
+
 	// Get request range.
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get(xhttp.Range)
@@ -669,60 +694,83 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	var proxy proxyResult
 	if err != nil {
-		var oi ObjectInfo
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
 			if rangeHeader != "" {
 				rs, _ = parseRequestRangeSpec(rangeHeader)
 			}
+			var oi ObjectInfo
 			oi, proxy = proxyHeadToReplicationTarget(ctx, bucket, object, rs, opts, proxytgts)
 			if proxy.Proxy {
 				objInfo = oi
 			}
+			if proxy.Err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
+				return
+			}
 		}
-		if !proxy.Proxy {
-			if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-				switch {
-				case !objInfo.VersionPurgeStatus.Empty():
-					w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
-				case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
-					w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
-				}
-				// Versioning enabled quite possibly object is deleted might be delete-marker
-				// if present set the headers, no idea why AWS S3 sets these headers.
-				if objInfo.VersionID != "" && objInfo.DeleteMarker {
-					w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
-				}
+	}
+
+	if objInfo.UserTags != "" {
+		// Set this such that authorization policies can be applied on the object tags.
+		r.Header.Set(xhttp.AmzObjectTagging, objInfo.UserTags)
+	}
+
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	if err != nil && !proxy.Proxy {
+		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
+			switch {
+			case !objInfo.VersionPurgeStatus.Empty():
+				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
+			case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
+				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
+			}
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if objInfo.VersionID != "" && objInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 			}
 			QueueReplicationHeal(ctx, bucket, objInfo)
-			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-			return
+			// do an additional verification whether object exists when object is deletemarker and request
+			// is from replication
+			if opts.CheckDMReplicationReady {
+				topts := opts
+				topts.VersionID = ""
+				goi, gerr := getObjectInfo(ctx, bucket, object, topts)
+				if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
+					w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
+				}
+			}
 		}
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
 	}
 
-	// Automatically remove the object/version is an expiry lifecycle rule can be applied
-	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-		action := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo, false)
-		var success bool
-		switch action {
-		case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-			success = applyExpiryRule(objInfo, false, action == lifecycle.DeleteVersionAction)
-		case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-			// Restored object delete would be still allowed to proceed as success
-			// since transition behavior is slightly different.
-			applyExpiryRule(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
+	if !proxy.Proxy { // apply lifecycle rules only locally not for proxied requests
+		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
+			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			var success bool
+			switch evt.Action {
+			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
+			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+				// Restored object delete would be still allowed to proceed as success
+				// since transition behavior is slightly different.
+				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
+			}
+			if success {
+				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+				return
+			}
 		}
-		if success {
-			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-			return
-		}
-	}
-
-	// Queue failed/pending replication automatically
-	if !proxy.Proxy {
 		QueueReplicationHeal(ctx, bucket, objInfo)
 	}
 
@@ -859,6 +907,11 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	// to change the original one.
 	defaultMeta := make(map[string]string, len(userMeta))
 	for k, v := range userMeta {
+		// skip tier metadata when copying metadata from source object
+		switch k {
+		case metaTierName, metaTierStatus, metaTierObjName, metaTierVersionID:
+			continue
+		}
 		defaultMeta[k] = v
 	}
 
@@ -965,16 +1018,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -1047,7 +1093,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	sseConfig, _ := globalBucketSSEConfigSys.Get(dstBucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	var srcOpts, dstOpts ObjectOptions
@@ -1350,9 +1395,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if globalIsGateway {
-			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
-		}
 	}
 
 	if objTags != "" {
@@ -1363,7 +1405,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				ondiskTimestamp, err := time.Parse(lastTaggingTimestamp, time.RFC3339Nano)
 				// update tagging metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
-					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.Format(time.RFC3339Nano)
+					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
 					srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
 				}
 			}
@@ -1395,7 +1437,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
-					srcInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = srcTimestamp.Format(time.RFC3339Nano)
+					srcInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
 				}
 			}
 		} else {
@@ -1531,6 +1573,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	origETag := objInfo.ETag
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
@@ -1563,6 +1606,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
+		objInfo.ETag = origETag
 		enqueueTransitionImmediate(objInfo)
 		// Remove the transitioned object whose object version is being overwritten.
 		logger.LogIf(ctx, os.Sweep())
@@ -1588,16 +1632,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -1733,7 +1770,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	actualSize := size
@@ -1777,7 +1813,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
 
-	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -1893,6 +1928,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	origETag := objInfo.ETag
 	if kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); encrypted {
 		switch kind {
 		case crypto.S3:
@@ -1939,6 +1975,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
+		objInfo.ETag = origETag
 		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
@@ -1966,16 +2003,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -2094,7 +2124,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)
@@ -2233,8 +2262,15 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 		return nil
 	}
+	var opts untarOptions
+	opts.ignoreDirs = strings.EqualFold(r.Header.Get(xhttp.MinIOSnowballIgnoreDirs), "true")
+	opts.ignoreErrs = strings.EqualFold(r.Header.Get(xhttp.MinIOSnowballIgnoreErrors), "true")
+	opts.prefixAll = r.Header.Get(xhttp.MinIOSnowballPrefix)
+	if opts.prefixAll != "" {
+		opts.prefixAll = trimLeadingSlash(pathJoin(opts.prefixAll, slashSeparator))
+	}
 
-	if err = untar(hreader, putObjectTar); err != nil {
+	if err = untar(ctx, hreader, putObjectTar, opts); err != nil {
 		apiErr := errorCodes.ToAPIErr(s3Err)
 		// If not set, convert or use BadRequest
 		if s3Err == ErrNone {
@@ -2534,7 +2570,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		key, err = decryptObjectInfo(key, dstBucket, dstObject, mi.UserDefined)
+		key, err = decryptObjectMeta(key, dstBucket, dstObject, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -2998,7 +3034,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 			}
 			if objRetention.Mode.Valid() {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
-				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
+				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(iso8601TimeFormat)
 			} else {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = ""
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
@@ -3197,15 +3233,19 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Allow putObjectTagging if policy action is set
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectTaggingAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+	// Tags XML will not be bigger than 1MiB in size, fail if its bigger.
+	tags, err := tags.ParseObjectXML(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	tags, err := tags.ParseObjectXML(io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+	// Set this such that authorization policies can be applied on the object tags.
+	r.Header.Set(xhttp.AmzObjectTagging, tags.String())
+
+	// Allow putObjectTagging if policy action is set
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectTaggingAction, bucket, object); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
@@ -3283,12 +3323,6 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Allow deleteObjectTagging if policy action is set
-	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectTaggingAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -3300,6 +3334,18 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
+	if userTags := oi.UserTags; userTags != "" {
+		// Set this such that authorization policies can be applied on the object tags.
+		r.Header.Set(xhttp.AmzObjectTagging, oi.UserTags)
+	}
+
+	// Allow deleteObjectTagging if policy action is set
+	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectTaggingAction, bucket, object); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
 	dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(oi, replication.MetadataReplicationType, opts))
 	if dsc.ReplicateAny() {
 		opts.UserDefined = make(map[string]string)

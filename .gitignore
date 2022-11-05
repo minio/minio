@@ -25,7 +25,7 @@ mc.*
 s3-check-md5*
 xl-meta*
 healing-*
-inspect*
+inspect*.zip
 200M*
 hash-set
 minio.RELEASE*

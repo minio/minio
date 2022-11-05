@@ -5,10 +5,10 @@ When using Veeam Backup and Replication, you can use S3 compatible object storag
 ## Prerequisites
 
 - One or both of Veeam Backup and Replication with support for S3 compatible object store (e.g. 9.5.4) and Veeam Backup for Office365 (VBO)
-- MinIO object storage set up per <https://docs.min.io/docs/minio-quickstart-guide.html>
-- Veeam requires TLS connections to the object storage.  This can be configured per <https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls.html>
+- MinIO object storage set up per <https://min.io/docs/minio/linux/index.html>
+- Veeam requires TLS connections to the object storage.  This can be configured per <https://min.io/docs/minio/linux/operations/network-encryption.html>
 - The S3 bucket, Access Key and Secret Key have to be created before and outside of Veeam.
-- Configure the minio client for the Veeam MinIO endpoint - <https://docs.min.io/docs/minio-client-quickstart-guide.html>
+- Configure the minio client for the Veeam MinIO endpoint - <https://min.io/docs/minio/linux/index.html#quickstart-for-linux>
 
 ## Setting up an S3 compatible object store for Veeam Backup and Replication
 
@@ -26,7 +26,7 @@ mc mb myminio/veeambackup
 mc mb -l myminio/veeambackup
 ```
 
-> Object locking requires erasure coding enabled on the minio server. For more information see <https://docs.minio.io/docs/minio-erasure-code-quickstart-guide.html>.
+> Object locking requires erasure coding enabled on the minio server. For more information see <https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html>.
 
 ### Add MinIO as an object store for Veeam
 

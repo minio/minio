@@ -392,13 +392,6 @@ func (e *dataUsageEntry) addChild(hash dataUsageHash) {
 	e.Children[hash.Key()] = struct{}{}
 }
 
-// removeChild will remove a child based on its hash.
-func (e *dataUsageEntry) removeChild(hash dataUsageHash) {
-	if len(e.Children) > 0 {
-		delete(e.Children, hash.Key())
-	}
-}
-
 // Create a clone of the entry.
 func (e dataUsageEntry) clone() dataUsageEntry {
 	// We operate on a copy from the receiver.
@@ -486,43 +479,6 @@ func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 			d.deleteRecursive(dataUsageHash(child))
 		}
 	}
-}
-
-// keepBuckets will keep only the buckets specified specified by delete all others.
-func (d *dataUsageCache) keepBuckets(b []BucketInfo) {
-	lu := make(map[dataUsageHash]struct{})
-	for _, v := range b {
-		lu[hashPath(v.Name)] = struct{}{}
-	}
-	d.keepRootChildren(lu)
-}
-
-// keepRootChildren will keep the root children specified by delete all others.
-func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
-	root := d.root()
-	if root == nil {
-		return
-	}
-	rh := d.rootHash()
-	for k := range d.Cache {
-		h := dataUsageHash(k)
-		if h == rh {
-			continue
-		}
-		if _, ok := list[h]; !ok {
-			delete(d.Cache, k)
-			d.deleteRecursive(h)
-			root.removeChild(h)
-		}
-	}
-	// Clean up abandoned children.
-	for k := range root.Children {
-		h := dataUsageHash(k)
-		if _, ok := list[h]; !ok {
-			delete(root.Children, k)
-		}
-	}
-	d.Cache[rh.Key()] = *root
 }
 
 // dui converts the flattened version of the path to madmin.DataUsageInfo.

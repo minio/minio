@@ -37,8 +37,7 @@ const (
 	apiCorsAllowOrigin             = "cors_allow_origin"
 	apiRemoteTransportDeadline     = "remote_transport_deadline"
 	apiListQuorum                  = "list_quorum"
-	apiReplicationWorkers          = "replication_workers"
-	apiReplicationFailedWorkers    = "replication_failed_workers"
+	apiReplicationPriority         = "replication_priority"
 	apiTransitionWorkers           = "transition_workers"
 	apiStaleUploadsCleanupInterval = "stale_uploads_cleanup_interval"
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
@@ -46,16 +45,14 @@ const (
 	apiDisableODirect              = "disable_odirect"
 	apiGzipObjects                 = "gzip_objects"
 
-	EnvAPIRequestsMax              = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline         = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIClusterDeadline          = "MINIO_API_CLUSTER_DEADLINE"
-	EnvAPICorsAllowOrigin          = "MINIO_API_CORS_ALLOW_ORIGIN"
-	EnvAPIRemoteTransportDeadline  = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
-	EnvAPIListQuorum               = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers            = "MINIO_API_SECURE_CIPHERS" // default "on"
-	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
-	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
-	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
+	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
+	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
+	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
+	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default "on"
+	EnvAPIReplicationPriority     = "MINIO_API_REPLICATION_PRIORITY"
 
 	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
 	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
@@ -67,8 +64,14 @@ const (
 
 // Deprecated key and ENVs
 const (
-	apiReadyDeadline    = "ready_deadline"
-	EnvAPIReadyDeadline = "MINIO_API_READY_DEADLINE"
+	apiReadyDeadline            = "ready_deadline"
+	apiReplicationWorkers       = "replication_workers"
+	apiReplicationFailedWorkers = "replication_failed_workers"
+
+	EnvAPIReadyDeadline            = "MINIO_API_READY_DEADLINE"
+	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
+	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
+	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
 )
 
 // DefaultKVS - default storage class config
@@ -99,12 +102,8 @@ var (
 			Value: "strict",
 		},
 		config.KV{
-			Key:   apiReplicationWorkers,
-			Value: "250",
-		},
-		config.KV{
-			Key:   apiReplicationFailedWorkers,
-			Value: "8",
+			Key:   apiReplicationPriority,
+			Value: "auto",
 		},
 		config.KV{
 			Key:   apiTransitionWorkers,
@@ -141,8 +140,7 @@ type Config struct {
 	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
 	ListQuorum                  string        `json:"list_quorum"`
-	ReplicationWorkers          int           `json:"replication_workers"`
-	ReplicationFailedWorkers    int           `json:"replication_failed_workers"`
+	ReplicationPriority         string        `json:"replication_priority"`
 	TransitionWorkers           int           `json:"transition_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
@@ -167,6 +165,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	// remove this since we have removed this already.
 	kvs.Delete(apiReadyDeadline)
 	kvs.Delete("extend_list_cache_life")
+	kvs.Delete(apiReplicationWorkers)
+	kvs.Delete(apiReplicationFailedWorkers)
 
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
@@ -206,22 +206,11 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, errors.New("invalid value for list strict quorum")
 	}
 
-	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.GetWithDefault(apiReplicationWorkers, DefaultKVS)))
-	if err != nil {
-		return cfg, err
-	}
-
-	if replicationWorkers <= 0 {
-		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication workers should be 1")
-	}
-
-	replicationFailedWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationFailedWorkers, kvs.GetWithDefault(apiReplicationFailedWorkers, DefaultKVS)))
-	if err != nil {
-		return cfg, err
-	}
-
-	if replicationFailedWorkers <= 0 {
-		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication failed workers should be 1")
+	replicationPriority := env.Get(EnvAPIReplicationPriority, kvs.GetWithDefault(apiReplicationPriority, DefaultKVS))
+	switch replicationPriority {
+	case "slow", "fast", "auto":
+	default:
+		return cfg, errors.New("invalid value for replication priority")
 	}
 
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
@@ -263,8 +252,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		CorsAllowOrigin:             corsAllowOrigin,
 		RemoteTransportDeadline:     remoteTransportDeadline,
 		ListQuorum:                  listQuorum,
-		ReplicationWorkers:          replicationWorkers,
-		ReplicationFailedWorkers:    replicationFailedWorkers,
+		ReplicationPriority:         replicationPriority,
 		TransitionWorkers:           transitionWorkers,
 		StaleUploadsCleanupInterval: staleUploadsCleanupInterval,
 		StaleUploadsExpiry:          staleUploadsExpiry,

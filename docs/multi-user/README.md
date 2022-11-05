@@ -8,13 +8,13 @@ In this document we will explain in detail on how to configure multiple users.
 
 ### 1. Prerequisites
 
-- Install mc - [MinIO Client Quickstart Guide](https://docs.min.io/docs/minio-client-quickstart-guide.html)
-- Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
-- Configure etcd (optional needed only in gateway or federation mode) - [Etcd V3 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
+- Install mc - [MinIO Client Quickstart Guide](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+- Install MinIO - [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linux)
+- Configure etcd - [Etcd V3 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
 
 ### 2. Create a new user with canned policy
 
-Use [`mc admin policy`](https://docs.min.io/docs/minio-admin-complete-guide.html#policies) to create canned policies. Server provides a default set of canned policies namely `writeonly`, `readonly` and `readwrite` *(these policies apply to all resources on the server)*. These can be overridden by custom policies using `mc admin policy` command.
+Use [`mc admin policy`](https://min.io/docs/minio/linux/reference/minio-mc-admin/mc-admin-policy.html) to create canned policies. Server provides a default set of canned policies namely `writeonly`, `readonly` and `readwrite` *(these policies apply to all resources on the server)*. These can be overridden by custom policies using `mc admin policy` command.
 
 Create new canned policy file `getonly.json`. This policy enables users to download all objects under `my-bucketname`.
 
@@ -267,7 +267,7 @@ If the user is authenticating using an STS credential which was authorized from 
 
 ## Explore Further
 
-- [MinIO Client Complete Guide](https://docs.min.io/docs/minio-client-complete-guide)
-- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
-- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO Client Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc.html)
+- [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html)
+- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

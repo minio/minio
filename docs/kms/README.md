@@ -4,7 +4,7 @@ MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests
 
 ## Quick Start
 
-MinIO supports multiple KMS implementations via our [KES](https://github.com/minio/kes#kes) project. We run a KES instance at `https://play.min.io:7373` for you to experiment and quickly get started. To run MinIO with a KMS just fetch the root identity, set the following environment variables and then start your MinIO server. If you havn't installed MinIO, yet, then follow the MinIO [install instructions](https://docs.min.io/docs/minio-quickstart-guide) first.
+MinIO supports multiple KMS implementations via our [KES](https://github.com/minio/kes#kes) project. We run a KES instance at `https://play.min.io:7373` for you to experiment and quickly get started. To run MinIO with a KMS just fetch the root identity, set the following environment variables and then start your MinIO server. If you havn't installed MinIO, yet, then follow the MinIO [install instructions](https://min.io/docs/minio/linux/index.html#quickstart-for-linux) first.
 
 ### 1. Fetch the root identity
 
@@ -67,7 +67,7 @@ The MinIO-KES configuration is always the same - regardless of the underlying KM
 
 ### Further references
 
-- [Run MinIO with TLS / HTTPS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls.html)
+- [Run MinIO with TLS / HTTPS](https://min.io/docs/minio/linux/operations/network-encryption.html)
 - [Tweak the KES server configuration](https://github.com/minio/kes/wiki/Configuration)
 - [Run a load balancer infront of KES](https://github.com/minio/kes/wiki/TLS-Proxy)
 - [Understand the KES server concepts](https://github.com/minio/kes/wiki/Concepts)
@@ -137,8 +137,7 @@ Certificates are no secrets and sent in plaintext as part of the TLS handshake.
 
 ## Explore Further
 
-- [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with MinIO Server](https://docs.min.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
-- [The MinIO documentation website](https://docs.min.io)
+- [Use `mc` with MinIO Server](https://min.io/docs/minio/linux/reference/minio-mc.html)
+- [Use `aws-cli` with MinIO Server](https://min.io/docs/minio/linux/integrations/aws-cli-with-minio.html)
+- [Use `minio-go` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/go/minio-go.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

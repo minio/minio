@@ -17,10 +17,35 @@
 
 package ldap
 
-import "github.com/minio/minio/internal/config"
+import (
+	"github.com/minio/minio/internal/config"
+)
+
+// LegacyConfig contains AD/LDAP server connectivity information from old config
+// V33.
+type LegacyConfig struct {
+	Enabled bool `json:"enabled"`
+
+	// E.g. "ldap.minio.io:636"
+	ServerAddr string `json:"serverAddr"`
+
+	// User DN search parameters
+	UserDNSearchBaseDistName  string   `json:"userDNSearchBaseDN"`
+	UserDNSearchBaseDistNames []string `json:"-"` // Generated field
+	UserDNSearchFilter        string   `json:"userDNSearchFilter"`
+
+	// Group search parameters
+	GroupSearchBaseDistName  string   `json:"groupSearchBaseDN"`
+	GroupSearchBaseDistNames []string `json:"-"` // Generated field
+	GroupSearchFilter        string   `json:"groupSearchFilter"`
+
+	// Lookup bind LDAP service account
+	LookupBindDN       string `json:"lookupBindDN"`
+	LookupBindPassword string `json:"lookupBindPassword"`
+}
 
 // SetIdentityLDAP - One time migration code needed, for migrating from older config to new for LDAPConfig.
-func SetIdentityLDAP(s config.Config, ldapArgs Config) {
+func SetIdentityLDAP(s config.Config, ldapArgs LegacyConfig) {
 	if !ldapArgs.Enabled {
 		// ldap not enabled no need to preserve it in new settings.
 		return

@@ -124,40 +124,31 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 //
 //	"/.dockerenv":      "file",
 func IsDocker() bool {
-	if !globalIsCICD {
-		_, err := os.Stat("/.dockerenv")
-		if osIsNotExist(err) {
-			return false
-		}
-
-		// Log error, as we will not propagate it to caller
-		logger.LogIf(GlobalContext, err)
-
-		return err == nil
+	_, err := os.Stat("/.dockerenv")
+	if osIsNotExist(err) {
+		return false
 	}
-	return false
+
+	// Log error, as we will not propagate it to caller
+	logger.LogIf(GlobalContext, err)
+
+	return err == nil
 }
 
 // IsDCOS returns true if minio is running in DCOS.
 func IsDCOS() bool {
-	if !globalIsCICD {
-		// http://mesos.apache.org/documentation/latest/docker-containerizer/
-		// Mesos docker containerizer sets this value
-		return env.Get("MESOS_CONTAINER_NAME", "") != ""
-	}
-	return false
+	// http://mesos.apache.org/documentation/latest/docker-containerizer/
+	// Mesos docker containerizer sets this value
+	return env.Get("MESOS_CONTAINER_NAME", "") != ""
 }
 
 // IsKubernetes returns true if minio is running in kubernetes.
 func IsKubernetes() bool {
-	if !globalIsCICD {
-		// Kubernetes env used to validate if we are
-		// indeed running inside a kubernetes pod
-		// is KUBERNETES_SERVICE_HOST
-		// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_pods.go#L541
-		return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
-	}
-	return false
+	// Kubernetes env used to validate if we are
+	// indeed running inside a kubernetes pod
+	// is KUBERNETES_SERVICE_HOST
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_pods.go#L541
+	return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
 }
 
 // IsBOSH returns true if minio is deployed from a bosh package
@@ -424,10 +415,10 @@ func getLatestReleaseTime(u *url.URL, timeout time.Duration, mode string) (sha25
 
 const (
 	// Kubernetes deployment doc link.
-	kubernetesDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-kubernetes"
+	kubernetesDeploymentDoc = "https://min.io/docs/minio/kubernetes/upstream/index.html#quickstart-for-kubernetes"
 
 	// Mesos deployment doc link.
-	mesosDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-dc-os"
+	mesosDeploymentDoc = "https://min.io/docs/minio/kubernetes/upstream/index.html#quickstart-for-kubernetes"
 )
 
 func getDownloadURL(releaseTag string) (downloadURL string) {
@@ -455,18 +446,6 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 	}
 
 	return minioReleaseURL + "minio"
-}
-
-func getUpdateReaderFromFile(u *url.URL) (io.ReadCloser, error) {
-	r, err := os.Open(u.Path)
-	if err != nil {
-		return nil, AdminError{
-			Code:       AdminUpdateUnexpectedFailure,
-			Message:    err.Error(),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	return r, nil
 }
 
 func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string) (io.ReadCloser, error) {
@@ -514,12 +493,9 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 			return nil, err
 		}
 	} else {
-		reader, err = getUpdateReaderFromFile(u)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
-
+	defer xhttp.DrainBody(reader)
 	// convert a Reader to bytes
 	binaryFile, err := io.ReadAll(reader)
 	if err != nil {

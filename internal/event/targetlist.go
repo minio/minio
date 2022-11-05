@@ -35,7 +35,6 @@ type Target interface {
 	Save(Event) error
 	Send(string) error
 	Close() error
-	HasQueueStore() bool
 }
 
 // TargetList - holds list of targets indexed by target ID.

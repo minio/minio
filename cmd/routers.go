@@ -61,6 +61,8 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setRequestValidityHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
+	// Add upload forwarding handler for site replication
+	setUploadForwardingHandler,
 	// Add bucket forwarding handler
 	setBucketForwardingHandler,
 	// Add new handlers here.
@@ -88,6 +90,9 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 
 	// Add STS router always.
 	registerSTSRouter(router)
+
+	// Add KMS router
+	registerKMSRouter(router)
 
 	// Add API router
 	registerAPIRouter(router)

@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,22 +30,14 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
+	cfgldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/ldap"
 )
 
-// List of implemented ID config types.
-var idCfgTypes = set.CreateStringSet("openid")
-
-// SetIdentityProviderCfg:
-//
-// PUT <admin-prefix>/id-cfg?type=openid&name=dex1
-func (a adminAPIHandlers) SetIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetIdentityCfg")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
+func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
@@ -56,6 +49,14 @@ func (a adminAPIHandlers) SetIdentityProviderCfg(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Ensure body content type is opaque to ensure that request body has not
+	// been interpreted as form data.
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/octet-stream" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+		return
+	}
+
 	password := cred.SecretKey
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
@@ -64,40 +65,46 @@ func (a adminAPIHandlers) SetIdentityProviderCfg(w http.ResponseWriter, r *http.
 		return
 	}
 
-	cfgType := mux.Vars(r)["type"]
-	if !idCfgTypes.Contains(cfgType) {
-		// TODO: change this to invalid type error when implementation
-		// is complete.
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	idpCfgType := mux.Vars(r)["type"]
+	if !madmin.ValidIDPConfigTypes.Contains(idpCfgType) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigInvalidIDPType), r.URL)
 		return
 	}
 
-	var cfgDataBuilder strings.Builder
-	switch cfgType {
-	case "openid":
-		fmt.Fprintf(&cfgDataBuilder, "identity_openid")
+	var subSys string
+	switch idpCfgType {
+	case madmin.OpenidIDPCfg:
+		subSys = madmin.IdentityOpenIDSubSys
+	case madmin.LDAPIDPCfg:
+		subSys = madmin.IdentityLDAPSubSys
 	}
 
-	// Ensure body content type is opaque.
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/octet-stream" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
-		return
-	}
-
-	// Subsystem configuration name could be empty.
 	cfgName := mux.Vars(r)["name"]
+	cfgTarget := madmin.Default
 	if cfgName != "" {
-		fmt.Fprintf(&cfgDataBuilder, "%s%s", config.SubSystemSeparator, cfgName)
+		cfgTarget = cfgName
+		if idpCfgType == madmin.LDAPIDPCfg && cfgName != madmin.Default {
+			// LDAP does not support multiple configurations. So cfgName must be
+			// empty or `madmin.Default`.
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			return
+		}
 	}
 
-	fmt.Fprintf(&cfgDataBuilder, "%s%s", config.KvSpaceSeparator, string(reqBytes))
-
-	cfgData := cfgDataBuilder.String()
-	subSys, _, _, err := config.GetSubSys(cfgData)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	// Check that this is a valid Create vs Update API call.
+	s := globalServerConfig.Clone()
+	if apiErrCode := handleCreateUpdateValidation(s, subSys, cfgTarget, isUpdate); apiErrCode != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
 		return
+	}
+
+	cfgData := ""
+	{
+		tgtSuffix := ""
+		if cfgTarget != madmin.Default {
+			tgtSuffix = config.SubSystemSeparator + cfgTarget
+		}
+		cfgData = subSys + tgtSuffix + config.KvSpaceSeparator + string(reqBytes)
 	}
 
 	cfg, err := readServerConfig(ctx, objectAPI)
@@ -119,6 +126,16 @@ func (a adminAPIHandlers) SetIdentityProviderCfg(w http.ResponseWriter, r *http.
 	}
 
 	if err = validateConfig(cfg, subSys); err != nil {
+
+		var validationErr ldap.Validation
+		if errors.As(err, &validationErr) {
+			// If we got an LDAP validation error, we need to send appropriate
+			// error message back to client (likely mc).
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigLDAPValidation),
+				validationErr.FormatError(), r.URL)
+			return
+		}
+
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -138,86 +155,101 @@ func (a adminAPIHandlers) SetIdentityProviderCfg(w http.ResponseWriter, r *http.
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// GetIdentityProviderCfg:
-//
-// GET <admin-prefix>/id-cfg?type=openid&name=dex_test
-//
-// GetIdentityProviderCfg returns a list of configured IDPs on the server if
-// name is empty. If name is non-empty, returns the configuration details for
-// the IDP of the given type and configuration name. The configuration name for
-// the default ("un-named") configuration target is `_`.
-func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetIdentityProviderCfg")
+func handleCreateUpdateValidation(s config.Config, subSys, cfgTarget string, isUpdate bool) APIErrorCode {
+	if cfgTarget != madmin.Default {
+		// This cannot give an error at this point.
+		subSysTargets, _ := s.GetAvailableTargets(subSys)
+		subSysTargetsSet := set.CreateStringSet(subSysTargets...)
+		if isUpdate && !subSysTargetsSet.Contains(cfgTarget) {
+			return ErrAdminConfigIDPCfgNameDoesNotExist
+		}
+		if !isUpdate && subSysTargetsSet.Contains(cfgTarget) {
+			return ErrAdminConfigIDPCfgNameAlreadyExists
+		}
 
+		return ErrNone
+	}
+
+	// For the default configuration name, since it will always be an available
+	// target, we need to check if a configuration value has been set previously
+	// to figure out if this is a valid create or update API call.
+
+	// This cannot really error (FIXME: improve the type for GetConfigInfo)
+	var cfgInfos []madmin.IDPCfgInfo
+	switch subSys {
+	case madmin.IdentityOpenIDSubSys:
+		cfgInfos, _ = globalOpenIDConfig.GetConfigInfo(s, cfgTarget)
+	case madmin.IdentityLDAPSubSys:
+		cfgInfos, _ = globalLDAPConfig.GetConfigInfo(s, cfgTarget)
+	}
+
+	if len(cfgInfos) > 0 && !isUpdate {
+		return ErrAdminConfigIDPCfgNameAlreadyExists
+	}
+	if len(cfgInfos) == 0 && isUpdate {
+		return ErrAdminConfigIDPCfgNameDoesNotExist
+	}
+	return ErrNone
+}
+
+// AddIdentityProviderCfg: adds a new IDP config for openid/ldap.
+//
+// PUT <admin-prefix>/idp-cfg/openid/dex1 -> create named config `dex1`
+//
+// PUT <admin-prefix>/idp-cfg/openid/_ -> create (default) named config `_`
+func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AddIdentityProviderCfg")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	a.addOrUpdateIDPHandler(ctx, w, r, false)
+}
+
+// UpdateIdentityProviderCfg: updates an existing IDP config for openid/ldap.
+//
+// PATCH <admin-prefix>/idp-cfg/openid/dex1 -> update named config `dex1`
+//
+// PATCH <admin-prefix>/idp-cfg/openid/_ -> update (default) named config `_`
+func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "UpdateIdentityProviderCfg")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	a.addOrUpdateIDPHandler(ctx, w, r, true)
+}
+
+// ListIdentityProviderCfg:
+//
+// GET <admin-prefix>/idp-cfg/openid -> lists openid provider configs.
+func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
-
-	cfgType := mux.Vars(r)["type"]
-	cfgName := r.Form.Get("name")
 	password := cred.SecretKey
 
-	if !idCfgTypes.Contains(cfgType) {
-		// TODO: change this to invalid type error when implementation
-		// is complete.
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	idpCfgType := mux.Vars(r)["type"]
+	if !madmin.ValidIDPConfigTypes.Contains(idpCfgType) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigInvalidIDPType), r.URL)
 		return
 	}
 
-	// If no cfgName is provided, we list.
-	if cfgName == "" {
-		a.listIdentityProviders(ctx, w, r, cfgType, password)
-		return
-	}
+	var cfgList []madmin.IDPListItem
+	var err error
+	switch idpCfgType {
+	case madmin.OpenidIDPCfg:
+		cfg := globalServerConfig.Clone()
+		cfgList, err = globalOpenIDConfig.GetConfigList(cfg)
+	case madmin.LDAPIDPCfg:
+		cfg := globalServerConfig.Clone()
+		cfgList, err = globalLDAPConfig.GetConfigList(cfg)
 
-	cfg := globalServerConfig.Clone()
-
-	cfgInfos, err := globalOpenIDConfig.GetConfigInfo(cfg, cfgName)
-	if err != nil {
-		if err == openid.ErrProviderConfigNotFound {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
-			return
-		}
-
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	res := madmin.IDPConfig{
-		Type: cfgType,
-		Name: cfgName,
-		Info: cfgInfos,
-	}
-	data, err := json.Marshal(res)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	econfigData, err := madmin.EncryptData(password, data)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, econfigData)
-}
-
-func (a adminAPIHandlers) listIdentityProviders(ctx context.Context, w http.ResponseWriter, r *http.Request, cfgType, password string) {
-	// var subSys string
-	switch cfgType {
-	case "openid":
-		// subSys = config.IdentityOpenIDSubSys
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
-	cfg := globalServerConfig.Clone()
-	cfgList, err := globalOpenIDConfig.GetConfigList(cfg)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -238,9 +270,69 @@ func (a adminAPIHandlers) listIdentityProviders(ctx context.Context, w http.Resp
 	writeSuccessResponseJSON(w, econfigData)
 }
 
+// GetIdentityProviderCfg:
+//
+// GET <admin-prefix>/idp-cfg/openid/dex_test
+func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetIdentityProviderCfg")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	idpCfgType := mux.Vars(r)["type"]
+	cfgName := mux.Vars(r)["name"]
+	password := cred.SecretKey
+
+	if !madmin.ValidIDPConfigTypes.Contains(idpCfgType) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigInvalidIDPType), r.URL)
+		return
+	}
+
+	cfg := globalServerConfig.Clone()
+	var cfgInfos []madmin.IDPCfgInfo
+	var err error
+	switch idpCfgType {
+	case madmin.OpenidIDPCfg:
+		cfgInfos, err = globalOpenIDConfig.GetConfigInfo(cfg, cfgName)
+	case madmin.LDAPIDPCfg:
+		cfgInfos, err = globalLDAPConfig.GetConfigInfo(cfg, cfgName)
+	}
+	if err != nil {
+		if errors.Is(err, openid.ErrProviderConfigNotFound) || errors.Is(err, cfgldap.ErrProviderConfigNotFound) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
+			return
+		}
+
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	res := madmin.IDPConfig{
+		Type: idpCfgType,
+		Name: cfgName,
+		Info: cfgInfos,
+	}
+	data, err := json.Marshal(res)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
+}
+
 // DeleteIdentityProviderCfg:
 //
-// DELETE <admin-prefix>/id-cfg?type=openid&name=dex_test
+// DELETE <admin-prefix>/idp-cfg/openid/dex_test
 func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteIdentityProviderCfg")
 
@@ -251,57 +343,82 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		return
 	}
 
-	cfgType := mux.Vars(r)["type"]
+	idpCfgType := mux.Vars(r)["type"]
 	cfgName := mux.Vars(r)["name"]
-	if !idCfgTypes.Contains(cfgType) {
-		// TODO: change this to invalid type error when implementation
-		// is complete.
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	if !madmin.ValidIDPConfigTypes.Contains(idpCfgType) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigInvalidIDPType), r.URL)
 		return
 	}
 
-	cfg := globalServerConfig.Clone()
+	cfgCopy := globalServerConfig.Clone()
+	var subSys string
+	switch idpCfgType {
+	case madmin.OpenidIDPCfg:
+		subSys = config.IdentityOpenIDSubSys
+		cfgInfos, err := globalOpenIDConfig.GetConfigInfo(cfgCopy, cfgName)
+		if err != nil {
+			if errors.Is(err, openid.ErrProviderConfigNotFound) {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
+				return
+			}
 
-	cfgInfos, err := globalOpenIDConfig.GetConfigInfo(cfg, cfgName)
-	if err != nil {
-		if err == openid.ErrProviderConfigNotFound {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	hasEnv := false
-	for _, ci := range cfgInfos {
-		if ci.IsCfg && ci.IsEnv {
-			hasEnv = true
-			break
+		hasEnv := false
+		for _, ci := range cfgInfos {
+			if ci.IsCfg && ci.IsEnv {
+				hasEnv = true
+				break
+			}
 		}
-	}
 
-	if hasEnv {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigEnvOverridden), r.URL)
-		return
-	}
+		if hasEnv {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigEnvOverridden), r.URL)
+			return
+		}
+	case madmin.LDAPIDPCfg:
+		subSys = config.IdentityLDAPSubSys
+		cfgInfos, err := globalLDAPConfig.GetConfigInfo(cfgCopy, cfgName)
+		if err != nil {
+			if errors.Is(err, openid.ErrProviderConfigNotFound) {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
+				return
+			}
 
-	var subSys string
-	switch cfgType {
-	case "openid":
-		subSys = config.IdentityOpenIDSubSys
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		hasEnv := false
+		for _, ci := range cfgInfos {
+			if ci.IsCfg && ci.IsEnv {
+				hasEnv = true
+				break
+			}
+		}
+
+		if hasEnv {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigEnvOverridden), r.URL)
+			return
+		}
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
-	cfg, err = readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if err = cfg.DelKVS(fmt.Sprintf("%s:%s", subSys, cfgName)); err != nil {
+	cfgKey := fmt.Sprintf("%s:%s", subSys, cfgName)
+	if cfgName == madmin.Default {
+		cfgKey = subSys
+	}
+	if err = cfg.DelKVS(cfgKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

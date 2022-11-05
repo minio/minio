@@ -19,16 +19,17 @@ package ldap
 
 import (
 	"crypto/x509"
+	"errors"
+	"sort"
 	"time"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/ldap"
 )
 
 const (
 	defaultLDAPExpiry = time.Hour * 1
-
-	dnDelimiter = ";"
 
 	minLDAPExpiry time.Duration = 15 * time.Minute
 	maxLDAPExpiry time.Duration = 365 * 24 * time.Hour
@@ -36,30 +37,14 @@ const (
 
 // Config contains AD/LDAP server connectivity information.
 type Config struct {
-	Enabled bool `json:"enabled"`
-
-	// E.g. "ldap.minio.io:636"
-	ServerAddr string `json:"serverAddr"`
-
-	// User DN search parameters
-	UserDNSearchBaseDistName  string   `json:"userDNSearchBaseDN"`
-	UserDNSearchBaseDistNames []string `json:"-"` // Generated field
-	UserDNSearchFilter        string   `json:"userDNSearchFilter"`
-
-	// Group search parameters
-	GroupSearchBaseDistName  string   `json:"groupSearchBaseDN"`
-	GroupSearchBaseDistNames []string `json:"-"` // Generated field
-	GroupSearchFilter        string   `json:"groupSearchFilter"`
-
-	// Lookup bind LDAP service account
-	LookupBindDN       string `json:"lookupBindDN"`
-	LookupBindPassword string `json:"lookupBindPassword"`
+	LDAP ldap.Config
 
 	stsExpiryDuration time.Duration // contains converted value
-	tlsSkipVerify     bool          // allows skipping TLS verification
-	serverInsecure    bool          // allows plain text connection to LDAP server
-	serverStartTLS    bool          // allows using StartTLS connection to LDAP server
-	rootCAs           *x509.CertPool
+}
+
+// Enabled returns if LDAP is enabled.
+func (l *Config) Enabled() bool {
+	return l.LDAP.Enabled
 }
 
 // Clone returns a cloned copy of LDAP config.
@@ -68,21 +53,8 @@ func (l *Config) Clone() Config {
 		return Config{}
 	}
 	cfg := Config{
-		Enabled:                   l.Enabled,
-		ServerAddr:                l.ServerAddr,
-		UserDNSearchBaseDistName:  l.UserDNSearchBaseDistName,
-		UserDNSearchBaseDistNames: l.UserDNSearchBaseDistNames,
-		UserDNSearchFilter:        l.UserDNSearchFilter,
-		GroupSearchBaseDistName:   l.GroupSearchBaseDistName,
-		GroupSearchBaseDistNames:  l.GroupSearchBaseDistNames,
-		GroupSearchFilter:         l.GroupSearchFilter,
-		LookupBindDN:              l.LookupBindDN,
-		LookupBindPassword:        l.LookupBindPassword,
-		stsExpiryDuration:         l.stsExpiryDuration,
-		tlsSkipVerify:             l.tlsSkipVerify,
-		serverInsecure:            l.serverInsecure,
-		serverStartTLS:            l.serverStartTLS,
-		rootCAs:                   l.rootCAs,
+		LDAP:              l.LDAP.Clone(),
+		stsExpiryDuration: l.stsExpiryDuration,
 	}
 	return cfg
 }
@@ -173,64 +145,135 @@ func Enabled(kvs config.KVS) bool {
 }
 
 // Lookup - initializes LDAP config, overrides config, if any ENV values are set.
-func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
+func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	l = Config{}
 
 	// Purge all removed keys first
-	for _, k := range removedKeys {
-		kvs.Delete(k)
+	kvs := s[config.IdentityLDAPSubSys][config.Default]
+	if len(kvs) > 0 {
+		for _, k := range removedKeys {
+			kvs.Delete(k)
+		}
+		s[config.IdentityLDAPSubSys][config.Default] = kvs
 	}
 
-	if err = config.CheckValidKeys(config.IdentityLDAPSubSys, kvs, DefaultKVS); err != nil {
+	if err := s.CheckValidKeys(config.IdentityLDAPSubSys, removedKeys); err != nil {
 		return l, err
 	}
 
-	ldapServer := env.Get(EnvServerAddr, kvs.Get(ServerAddr))
+	getCfgVal := func(cfgParam string) string {
+		// As parameters are already validated, we skip checking
+		// if the config param was found.
+		val, _ := s.ResolveConfigParam(config.IdentityLDAPSubSys, config.Default, cfgParam)
+		return val
+	}
+
+	ldapServer := getCfgVal(ServerAddr)
 	if ldapServer == "" {
 		return l, nil
 	}
-	l.Enabled = true
-	l.rootCAs = rootCAs
-	l.ServerAddr = ldapServer
+	l.LDAP = ldap.Config{
+		Enabled:    true,
+		RootCAs:    rootCAs,
+		ServerAddr: ldapServer,
+	}
 	l.stsExpiryDuration = defaultLDAPExpiry
 
 	// LDAP connection configuration
-	if v := env.Get(EnvServerInsecure, kvs.Get(ServerInsecure)); v != "" {
-		l.serverInsecure, err = config.ParseBool(v)
+	if v := getCfgVal(ServerInsecure); v != "" {
+		l.LDAP.ServerInsecure, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}
 	}
-	if v := env.Get(EnvServerStartTLS, kvs.Get(ServerStartTLS)); v != "" {
-		l.serverStartTLS, err = config.ParseBool(v)
+	if v := getCfgVal(ServerStartTLS); v != "" {
+		l.LDAP.ServerStartTLS, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}
 	}
-	if v := env.Get(EnvTLSSkipVerify, kvs.Get(TLSSkipVerify)); v != "" {
-		l.tlsSkipVerify, err = config.ParseBool(v)
+	if v := getCfgVal(TLSSkipVerify); v != "" {
+		l.LDAP.TLSSkipVerify, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}
 	}
 
 	// Lookup bind user configuration
-	l.LookupBindDN = env.Get(EnvLookupBindDN, kvs.Get(LookupBindDN))
-	l.LookupBindPassword = env.Get(EnvLookupBindPassword, kvs.Get(LookupBindPassword))
+	l.LDAP.LookupBindDN = getCfgVal(LookupBindDN)
+	l.LDAP.LookupBindPassword = getCfgVal(LookupBindPassword)
 
 	// User DN search configuration
-	l.UserDNSearchFilter = env.Get(EnvUserDNSearchFilter, kvs.Get(UserDNSearchFilter))
-	l.UserDNSearchBaseDistName = env.Get(EnvUserDNSearchBaseDN, kvs.Get(UserDNSearchBaseDN))
+	l.LDAP.UserDNSearchFilter = getCfgVal(UserDNSearchFilter)
+	l.LDAP.UserDNSearchBaseDistName = getCfgVal(UserDNSearchBaseDN)
 
 	// Group search params configuration
-	l.GroupSearchFilter = env.Get(EnvGroupSearchFilter, kvs.Get(GroupSearchFilter))
-	l.GroupSearchBaseDistName = env.Get(EnvGroupSearchBaseDN, kvs.Get(GroupSearchBaseDN))
+	l.LDAP.GroupSearchFilter = getCfgVal(GroupSearchFilter)
+	l.LDAP.GroupSearchBaseDistName = getCfgVal(GroupSearchBaseDN)
 
 	// Validate and test configuration.
-	valResult := l.Validate()
+	valResult := l.LDAP.Validate()
 	if !valResult.IsOk() {
 		return l, valResult
 	}
 
 	return l, nil
+}
+
+// GetConfigList - returns a list of LDAP configurations.
+func (l *Config) GetConfigList(s config.Config) ([]madmin.IDPListItem, error) {
+	ldapConfigs, err := s.GetAvailableTargets(config.IdentityLDAPSubSys)
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, ldapConfigs will only have a single entry for the default
+	// configuration.
+
+	var res []madmin.IDPListItem
+	for _, cfg := range ldapConfigs {
+		res = append(res, madmin.IDPListItem{
+			Type:    "ldap",
+			Name:    cfg,
+			Enabled: l.Enabled(),
+		})
+	}
+
+	return res, nil
+}
+
+// ErrProviderConfigNotFound - represents a non-existing provider error.
+var ErrProviderConfigNotFound = errors.New("provider configuration not found")
+
+// GetConfigInfo - returns config details for an LDAP configuration.
+func (l *Config) GetConfigInfo(s config.Config, cfgName string) ([]madmin.IDPCfgInfo, error) {
+	// For now only a single LDAP config is supported.
+	if cfgName != madmin.Default {
+		return nil, ErrProviderConfigNotFound
+	}
+	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityLDAPSubSys, cfgName)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]madmin.IDPCfgInfo, 0, len(kvsrcs))
+	for _, kvsrc := range kvsrcs {
+		// skip default values.
+		if kvsrc.Src == config.ValueSourceDef {
+			continue
+		}
+		res = append(res, madmin.IDPCfgInfo{
+			Key:   kvsrc.Key,
+			Value: kvsrc.Value,
+			IsCfg: true,
+			IsEnv: kvsrc.Src == config.ValueSourceEnv,
+		})
+	}
+
+	// sort the structs by the key
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Key < res[j].Key
+	})
+
+	return res, nil
 }

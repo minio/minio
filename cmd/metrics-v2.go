@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/rest"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -167,7 +168,8 @@ const (
 	writeBytes      MetricName = "write_bytes"
 	wcharBytes      MetricName = "wchar_bytes"
 
-	apiLatencyMicroSec MetricName = "latency_us"
+	latencyMicroSec MetricName = "latency_us"
+	latencyNanoSec  MetricName = "latency_ns"
 
 	usagePercent MetricName = "update_percent"
 
@@ -331,7 +333,7 @@ func getNodeDiskAPILatencyMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
-		Name:      apiLatencyMicroSec,
+		Name:      latencyMicroSec,
 		Help:      "Average last minute latency in µs for drive API storage operations",
 		Type:      gaugeMetric,
 	}
@@ -534,6 +536,26 @@ func getInternodeFailedRequests() MetricDescription {
 		Name:      errorsTotal,
 		Help:      "Total number of failed internode calls",
 		Type:      counterMetric,
+	}
+}
+
+func getInternodeTCPDialTimeout() MetricDescription {
+	return MetricDescription{
+		Namespace: interNodeMetricNamespace,
+		Subsystem: trafficSubsystem,
+		Name:      "dial_errors",
+		Help:      "Total number of internode TCP dial timeouts and errors",
+		Type:      counterMetric,
+	}
+}
+
+func getInternodeTCPAvgDuration() MetricDescription {
+	return MetricDescription{
+		Namespace: interNodeMetricNamespace,
+		Subsystem: trafficSubsystem,
+		Name:      "dial_avg_time",
+		Help:      "Average time of internodes TCP dial calls",
+		Type:      gaugeMetric,
 	}
 }
 
@@ -1382,9 +1404,6 @@ func getMinioVersionMetrics() *MetricsGroup {
 func getNodeHealthMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
-		if globalIsGateway {
-			return
-		}
 		metrics = make([]Metric, 0, 16)
 		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
 		metrics = append(metrics, Metric{
@@ -1404,9 +1423,6 @@ func getMinioHealingMetrics() *MetricsGroup {
 	mg := &MetricsGroup{}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 5)
-		if globalIsGateway {
-			return
-		}
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if !exists {
 			return
@@ -1607,10 +1623,19 @@ func getNetworkMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 10)
 		connStats := globalConnStats.toServerConnStats()
+		rpcStats := rest.GetRPCStats()
 		if globalIsDistErasure {
 			metrics = append(metrics, Metric{
 				Description: getInternodeFailedRequests(),
-				Value:       float64(loadAndResetRPCNetworkErrsCounter()),
+				Value:       float64(rpcStats.Errs),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInternodeTCPDialTimeout(),
+				Value:       float64(rpcStats.DialErrs),
+			})
+			metrics = append(metrics, Metric{
+				Description: getInternodeTCPAvgDuration(),
+				Value:       float64(rpcStats.DialAvgDuration),
 			})
 			metrics = append(metrics, Metric{
 				Description: getInterNodeSentBytesMD(),
@@ -1641,7 +1666,7 @@ func getBucketUsageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1786,7 +1811,7 @@ func getClusterTierMetrics() *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 		if globalTierConfigMgr.Empty() {
@@ -1814,7 +1839,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1858,7 +1883,7 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1891,7 +1916,7 @@ func getClusterStorageMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway {
+		if objLayer == nil {
 			return
 		}
 
@@ -1948,7 +1973,7 @@ func getKMSNodeMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+		if objLayer == nil || GlobalKMS == nil {
 			return
 		}
 
@@ -1986,7 +2011,7 @@ func getKMSMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		objLayer := newObjectLayerFn()
 		// Service not initialized yet
-		if objLayer == nil || globalIsGateway || GlobalKMS == nil {
+		if objLayer == nil || GlobalKMS == nil {
 			return []Metric{}
 		}
 

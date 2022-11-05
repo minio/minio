@@ -19,10 +19,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"runtime"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/internal/logger"
 )
@@ -112,7 +112,8 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 				KeyMarker:      keyMarker,
 			}
 		}
-		if _, err := uuid.Parse(uploadIDMarker); err != nil {
+		_, err := base64.StdEncoding.DecodeString(uploadIDMarker)
+		if err != nil {
 			logger.LogIf(ctx, err)
 			return MalformedUploadID{
 				UploadID: uploadIDMarker,

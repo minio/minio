@@ -18,7 +18,6 @@
 package openid
 
 import (
-	"crypto"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -116,6 +115,18 @@ var (
 			Key:   Scopes,
 			Value: "",
 		},
+		config.KV{
+			Key:   Vendor,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakRealm,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
 	}
 )
 
@@ -186,7 +197,7 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		ProviderCfgs:       map[string]*providerCfg{},
 		pubKeys: publicKeys{
 			RWMutex: &sync.RWMutex{},
-			pkMap:   map[string]crypto.PublicKey{},
+			pkMap:   map[string]interface{}{},
 		},
 		roleArnPolicyMap: map[arn.ARN]string{},
 		transport:        openIDClientTransport,

@@ -91,7 +91,7 @@ func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}
 }
 
 func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context, objPath string) ([]byte, ObjectInfo, error) {
-	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath)
+	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath, ObjectOptions{})
 	if err != nil {
 		return nil, meta, err
 	}

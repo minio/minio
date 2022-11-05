@@ -73,7 +73,7 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 
 	globalEndpoints = mustGetPoolEndpoints(erasureDirs...)
 
-	initAllSubsystems()
+	initAllSubsystems(ctx)
 
 	initConfigSubsystem(ctx, objLayer)
 

@@ -18,7 +18,6 @@
 package openid
 
 import (
-	"crypto"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,7 +37,7 @@ type publicKeys struct {
 	*sync.RWMutex
 
 	// map of kid to public key
-	pkMap map[string]crypto.PublicKey
+	pkMap map[string]interface{}
 }
 
 func (pk *publicKeys) parseAndAdd(b io.Reader) error {
@@ -48,19 +47,25 @@ func (pk *publicKeys) parseAndAdd(b io.Reader) error {
 		return err
 	}
 
-	pk.Lock()
-	defer pk.Unlock()
-
 	for _, key := range jwk.Keys {
-		pk.pkMap[key.Kid], err = key.DecodePublicKey()
+		pkey, err := key.DecodePublicKey()
 		if err != nil {
 			return err
 		}
+		pk.add(key.Kid, pkey)
 	}
+
 	return nil
 }
 
-func (pk *publicKeys) get(kid string) crypto.PublicKey {
+func (pk *publicKeys) add(keyID string, key interface{}) {
+	pk.Lock()
+	defer pk.Unlock()
+
+	pk.pkMap[keyID] = key
+}
+
+func (pk *publicKeys) get(kid string) interface{} {
 	pk.RLock()
 	defer pk.RUnlock()
 	return pk.pkMap[kid]
@@ -72,6 +77,10 @@ func (r *Config) PopulatePublicKey(arn arn.ARN) error {
 	if pCfg.JWKS.URL == nil || pCfg.JWKS.URL.String() == "" {
 		return nil
 	}
+
+	// Add client secret for the client ID for HMAC based signature.
+	r.pubKeys.add(pCfg.ClientID, []byte(pCfg.ClientSecret))
+
 	client := &http.Client{
 		Transport: r.transport,
 	}
@@ -134,8 +143,11 @@ const (
 func (r *Config) Validate(arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
-		"RS256", "RS384", "RS512", "ES256", "ES384", "ES512",
-		"RS3256", "RS3384", "RS3512", "ES3256", "ES3384", "ES3512",
+		"RS256", "RS384", "RS512",
+		"ES256", "ES384", "ES512",
+		"HS256", "HS384", "HS512",
+		"RS3256", "RS3384", "RS3512",
+		"ES3256", "ES3384", "ES3512",
 	}
 
 	keyFuncCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
