@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -37,7 +36,7 @@ import (
 
 func inspectToExportType(downloadPath string, datajson bool) error {
 	decode := func(r io.Reader, file string) ([]byte, error) {
-		b, e := ioutil.ReadAll(r)
+		b, e := io.ReadAll(r)
 		if e != nil {
 			return nil, e
 		}
