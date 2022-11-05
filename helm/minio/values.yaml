@@ -396,7 +396,7 @@ customCommandJob:
   exitCommand: ""
 
 ## Merge jobs
-postInstallJob:
+postJob:
   podAnnotations: {}
   annotations: {}
   securityContext:

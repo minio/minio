@@ -1,17 +1,17 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: { { template "minio.fullname" . } }-post-install-job
+  name: { { template "minio.fullname" . } }-post-job
   namespace: { { .Release.Namespace | quote } }
   labels:
-    app: { { template "minio.name" . } }-post-install-job
+    app: { { template "minio.name" . } }-post-job
     chart: { { template "minio.chart" . } }
     release: { { .Release.Name } }
     heritage: { { .Release.Service } }
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
-  { { - with .Values.postInstallJob.annotations } }
+  { { - with .Values.postJob.annotations } }
   { { toYaml . | indent 4 } }
   { { - end } }
 spec:
@@ -23,30 +23,30 @@ spec:
   { { - if .Values.podLabels } }
   { { toYaml .Values.podLabels | indent 8 } }
   { { - end } }
-  { { - if .Values.postInstallJob.podAnnotations } }
+  { { - if .Values.postJob.podAnnotations } }
 annotations:
-  { { toYaml .Values.postInstallJob.podAnnotations | indent 8 } }
+  { { toYaml .Values.postJob.podAnnotations | indent 8 } }
   { { - end } }
 spec:
   restartPolicy: OnFailure
   { { - include "minio.imagePullSecrets" . | indent 6 } }
   { { - if .Values.nodeSelector } }
 nodeSelector:
-  { { toYaml .Values.postInstallJob.nodeSelector | indent 8 } }
+  { { toYaml .Values.postJob.nodeSelector | indent 8 } }
   { { - end } }
-  { { - with .Values.postInstallJob.affinity } }
+  { { - with .Values.postJob.affinity } }
 affinity:
   { { toYaml . | indent 8 } }
   { { - end } }
-  { { - with .Values.postInstallJob.tolerations } }
+  { { - with .Values.postJob.tolerations } }
 tolerations:
   { { toYaml . | indent 8 } }
   { { - end } }
-  { { - if .Values.postInstallJob.securityContext.enabled } }
+  { { - if .Values.postJob.securityContext.enabled } }
 securityContext:
-  runAsUser: { { .Values.postInstallJob.securityContext.runAsUser } }
-  runAsGroup: { { .Values.postInstallJob.securityContext.runAsGroup } }
-  fsGroup: { { .Values.postInstallJob.securityContext.fsGroup } }
+  runAsUser: { { .Values.postJob.securityContext.runAsUser } }
+  runAsGroup: { { .Values.postJob.securityContext.runAsGroup } }
+  fsGroup: { { .Values.postJob.securityContext.fsGroup } }
   { { - end } }
 volumes:
   - name: minio-configuration
