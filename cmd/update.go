@@ -495,7 +495,7 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 	} else {
 		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
-
+	defer xhttp.DrainBody(reader)
 	// convert a Reader to bytes
 	binaryFile, err := io.ReadAll(reader)
 	if err != nil {
