@@ -382,9 +382,6 @@ func (target *MySQLTarget) initMySQL() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -413,12 +410,18 @@ func NewMySQLTarget(id string, args MySQLArgs, loggerOnce logger.LogOnce) (*MySQ
 		args.DSN = config.FormatDSN()
 	}
 
-	return &MySQLTarget{
+	target := &MySQLTarget{
 		id:         event.TargetID{ID: id, Name: "mysql"},
 		args:       args,
 		firstPing:  false,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
