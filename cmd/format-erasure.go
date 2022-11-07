@@ -177,7 +177,7 @@ func formatGetBackendErasureVersion(b []byte) (string, error) {
 		return "", fmt.Errorf(`format.Version expected: %s, got: %s`, formatMetaVersionV1, meta.Version)
 	}
 	if meta.Format != formatBackendErasure && meta.Format != formatBackendErasureSingle {
-		return "", fmt.Errorf(`found backend type %s, expected %s or %s`, meta.Format, formatBackendErasure, formatBackendErasureSingle)
+		return "", fmt.Errorf(`found backend type %s, expected %s or %s - to migrate to a supported backend visit https://min.io/docs/minio/linux/operations/install-deploy-manage/migrate-fs-gateway.html`, meta.Format, formatBackendErasure, formatBackendErasureSingle)
 	}
 	// Erasure backend found, proceed to detect version.
 	format := &formatErasureVersionDetect{}

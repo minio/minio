@@ -376,9 +376,6 @@ func (target *PostgreSQLTarget) initPostgreSQL() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -414,7 +411,7 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, loggerOnce logger.LogOn
 		}
 	}
 
-	return &PostgreSQLTarget{
+	target := &PostgreSQLTarget{
 		id:         event.TargetID{ID: id, Name: "postgresql"},
 		args:       args,
 		firstPing:  false,
@@ -422,5 +419,11 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, loggerOnce logger.LogOn
 		connString: connStr,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

@@ -296,9 +296,6 @@ func (target *RedisTarget) initRedis() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -343,12 +340,18 @@ func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*Redi
 		},
 	}
 
-	return &RedisTarget{
+	target := &RedisTarget{
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

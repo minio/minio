@@ -2934,17 +2934,9 @@ func (p *ReplicationPool) saveStats(ctx context.Context) error {
 	if !p.initialized() {
 		return nil
 	}
-	bsm := globalReplicationStats.getAllCachedLatest()
-	if len(bsm.Stats) == 0 {
-		return nil
-	}
-	data := make([]byte, 4, 4+bsm.Msgsize())
-	// Add the replication stats meta header.
-	binary.LittleEndian.PutUint16(data[0:2], replStatsMetaFormat)
-	binary.LittleEndian.PutUint16(data[2:4], replStatsVersion)
-	// Add data
-	data, err := bsm.MarshalMsg(data)
-	if err != nil {
+
+	data, err := globalReplicationStats.serializeStats()
+	if data == nil {
 		return err
 	}
 	return saveConfig(ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName), data)

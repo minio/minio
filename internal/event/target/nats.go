@@ -410,9 +410,6 @@ func (target *NATSTarget) initNATS() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -427,11 +424,17 @@ func NewNATSTarget(id string, args NATSArgs, loggerOnce logger.LogOnce) (*NATSTa
 		}
 	}
 
-	return &NATSTarget{
+	target := &NATSTarget{
 		id:         event.TargetID{ID: id, Name: "nats"},
 		args:       args,
 		loggerOnce: loggerOnce,
 		store:      store,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
