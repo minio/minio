@@ -48,7 +48,7 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.21.1
-	github.com/minio/madmin-go v1.7.3
+	github.com/minio/madmin-go v1.7.4
 	github.com/minio/minio-go/v7 v7.0.43-0.20221021202758-c6319beb6b27
 	github.com/minio/pkg v1.5.4
 	github.com/minio/selfupdate v0.5.0
@@ -73,7 +73,6 @@ require (
 	github.com/rs/cors v1.8.2
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.22.9
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.7-0.20220719154719-f3635b96e483
