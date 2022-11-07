@@ -254,9 +254,6 @@ func (target *MQTTTarget) initMQTT() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -281,11 +278,17 @@ func NewMQTTTarget(id string, args MQTTArgs, loggerOnce logger.LogOnce) (*MQTTTa
 		}
 	}
 
-	return &MQTTTarget{
+	target := &MQTTTarget{
 		id:         event.TargetID{ID: id, Name: "mqtt"},
 		args:       args,
 		store:      store,
 		quitCh:     make(chan struct{}),
 		loggerOnce: loggerOnce,
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
