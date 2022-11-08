@@ -228,7 +228,7 @@ func TestQueueStoreListN(t *testing.T) {
 	}
 	// Re-list
 	lst, err := store.List()
-	if len(lst) > 0 {
-		t.Fatalf("Expected List() to return empty list, got %v", lst)
+	if len(lst) > 0 || err != nil {
+		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", lst, err)
 	}
 }
