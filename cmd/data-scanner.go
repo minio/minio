@@ -64,11 +64,6 @@ const (
 var (
 	globalHealConfig heal.Config
 
-	dataScannerLeaderLockTimeout = newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
-		timeout:       30 * time.Second,
-		minimum:       10 * time.Second,
-		retryInterval: time.Second,
-	})
 	// Sleeper values are updated when config is loaded.
 	scannerSleeper = newDynamicSleeper(10, 10*time.Second, true)
 	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
@@ -157,19 +152,9 @@ func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgr
 // runDataScanner will start a data scanner.
 // The function will block until the context is canceled.
 // There should only ever be one scanner running per cluster.
-func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
-	// Make sure only 1 scanner is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "scanner/runDataScanner.lock")
-	lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
-	if err != nil {
-		if intDataUpdateTracker.debug {
-			logger.LogIf(pctx, err)
-		}
-		return
-	}
-	ctx := lkctx.Context()
-	defer lkctx.Cancel()
-	// No unlock for "leader" lock.
+func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
+	ctx, cancel := globalLeaderLock.GetLock(ctx)
+	defer cancel()
 
 	// Load current bloom cycle
 	var cycleInfo currentScannerCycle
@@ -181,7 +166,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 	} else if len(buf) > 8 {
 		cycleInfo.next = binary.LittleEndian.Uint64(buf[:8])
 		buf = buf[8:]
-		_, err = cycleInfo.UnmarshalMsg(buf)
+		_, err := cycleInfo.UnmarshalMsg(buf)
 		logger.LogIf(ctx, err)
 	}
 

@@ -314,7 +314,7 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 
 	rs, err := rebalanceStatus(ctx, pools)
 	if err != nil {
-		if errors.Is(err, errRebalanceNotStarted) {
+		if errors.Is(err, errRebalanceNotStarted) || errors.Is(err, errConfigNotFound) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceNotStarted), r.URL)
 			return
 		}
