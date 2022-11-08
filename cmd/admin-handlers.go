@@ -1611,7 +1611,10 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	for {
 		select {
-		case log := <-logCh:
+		case log, ok := <-logCh:
+			if !ok {
+				return
+			}
 			if log.SendLog(node, logKind) {
 				if err := enc.Encode(log); err != nil {
 					return
