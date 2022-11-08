@@ -332,9 +332,6 @@ func (target *AMQPTarget) initAMQP() error {
 	}
 	target.conn = conn
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -349,11 +346,17 @@ func NewAMQPTarget(id string, args AMQPArgs, loggerOnce logger.LogOnce) (*AMQPTa
 		}
 	}
 
-	return &AMQPTarget{
+	target := &AMQPTarget{
 		id:         event.TargetID{ID: id, Name: "amqp"},
 		args:       args,
 		loggerOnce: loggerOnce,
 		store:      store,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

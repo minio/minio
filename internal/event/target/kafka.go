@@ -329,9 +329,6 @@ func (target *KafkaTarget) initKafka() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -346,11 +343,17 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 		}
 	}
 
-	return &KafkaTarget{
+	target := &KafkaTarget{
 		id:         event.TargetID{ID: id, Name: "kafka"},
 		args:       args,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

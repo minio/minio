@@ -27,6 +27,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -1123,6 +1124,10 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 
 // Test reading an object with some outdated data in some disks
 func TestGetObjectWithOutdatedDisks(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
