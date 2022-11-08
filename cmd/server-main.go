@@ -581,6 +581,8 @@ func serverMain(ctx *cli.Context) {
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
 
+	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
+
 	// Enable background operations for erasure coding
 	initAutoHeal(GlobalContext, newObject)
 	initHealMRF(GlobalContext, newObject)
