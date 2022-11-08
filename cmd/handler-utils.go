@@ -367,10 +367,6 @@ func getResource(path string, host string, domains []string) (string, error) {
 	// If virtual-host-style is enabled construct the "resource" properly.
 	xhost, err := xnet.ParseHost(host)
 	if err != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
-		reqInfo.AppendTags("path", path)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
 		return "", err
 	}
 
