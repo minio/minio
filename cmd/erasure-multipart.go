@@ -43,7 +43,7 @@ import (
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
 	uploadUUID := uploadID
-	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	uploadBytes, err := base64.RawURLEncoding.DecodeString(uploadID)
 	if err == nil {
 		slc := strings.SplitN(string(uploadBytes), ".", 2)
 		if len(slc) == 2 {
@@ -432,7 +432,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].Metadata = userDefined
 	}
 	uploadUUID := mustGetUUID()
-	uploadID := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
+	uploadID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
