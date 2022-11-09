@@ -3,9 +3,9 @@ set -e ; # Have script exit in the event of a failed command.
 
 {{- if .Values.configPathmc }}
 MC_CONFIG_DIR="{{ .Values.configPathmc }}"
-MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
+MC="mc --insecure --config-dir ${MC_CONFIG_DIR}"
 {{- else }}
-MC="/usr/bin/mc --insecure"
+MC="mc --insecure"
 {{- end }}
 
 # connectToMinio
@@ -79,7 +79,7 @@ if ! checkBucketExists $BUCKET ; then
         echo "Creating bucket '$BUCKET'"
         ${MC} mb myminio/$BUCKET
   else
-    echo "Bucket '$BUCKET' already exists."  
+    echo "Bucket '$BUCKET' already exists."
   fi
   fi
 

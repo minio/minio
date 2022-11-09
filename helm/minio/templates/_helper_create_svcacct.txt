@@ -3,9 +3,9 @@ set -e ; # Have script exit in the event of a failed command.
 
 {{- if .Values.configPathmc }}
 MC_CONFIG_DIR="{{ .Values.configPathmc }}"
-MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
+MC="mc --insecure --config-dir ${MC_CONFIG_DIR}"
 {{- else }}
-MC="/usr/bin/mc --insecure"
+MC="mc --insecure"
 {{- end }}
 
 # AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.

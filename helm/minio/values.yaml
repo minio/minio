@@ -104,7 +104,7 @@ existingSecret: ""
 
 ## Directory on the MinIO pof
 certsPath: "/etc/minio/certs/"
-configPathmc: "/etc/minio/mc/"
+configPathmc: "./minio/mc/"
 
 ## Path where PV would be mounted on the MinIO Pod
 mountPath: "/export"
