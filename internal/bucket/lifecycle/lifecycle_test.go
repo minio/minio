@@ -932,3 +932,69 @@ func TestParseLifecycleConfigWithID(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterAndSetPredictionHeaders(t *testing.T) {
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Filter: Filter{
+					set: true,
+					Prefix: Prefix{
+						string: "folder1/folder1/exp_dt=2022-",
+						set:    true,
+					},
+				},
+				Expiration: Expiration{
+					Days: 1,
+					set:  true,
+				},
+			},
+		},
+	}
+	tests := []struct {
+		opts ObjectOpts
+		lc   Lifecycle
+		want int
+	}{
+		{
+			opts: ObjectOpts{
+				Name:        "folder1/folder1/exp_dt=2022-08-01/obj-1",
+				ModTime:     time.Now().UTC().Add(-10 * 24 * time.Hour),
+				VersionID:   "",
+				IsLatest:    true,
+				NumVersions: 1,
+			},
+			want: 1,
+			lc:   lc,
+		},
+		{
+			opts: ObjectOpts{
+				Name:        "folder1/folder1/exp_dt=9999-01-01/obj-1",
+				ModTime:     time.Now().UTC().Add(-10 * 24 * time.Hour),
+				VersionID:   "",
+				IsLatest:    true,
+				NumVersions: 1,
+			},
+			want: 0,
+			lc:   lc,
+		},
+	}
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
+			if got := tc.lc.FilterRules(tc.opts); len(got) != tc.want {
+				t.Fatalf("Expected %d rules to match but got %d", tc.want, len(got))
+			}
+			w := httptest.NewRecorder()
+			tc.lc.SetPredictionHeaders(w, tc.opts)
+			expHdr, ok := w.Header()[xhttp.AmzExpiration]
+			switch {
+			case ok && tc.want == 0:
+				t.Fatalf("Expected no rule to match but found x-amz-expiration header set: %v", expHdr)
+			case !ok && tc.want > 0:
+				t.Fatal("Expected x-amz-expiration header to be set but not found")
+			}
+		})
+	}
+}
