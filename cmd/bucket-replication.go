@@ -2210,7 +2210,11 @@ func newresyncer() *replicationResyncer {
 // resyncBucket resyncs all qualifying objects as per replication rules for the target
 // ARN
 func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI ObjectLayer, heal bool, opts resyncOpts) {
-	<-s.workerCh // block till a worker is available
+	select {
+	case <-s.workerCh: // block till a worker is available
+	case <-ctx.Done():
+		return
+	}
 
 	resyncStatus := ResyncFailed
 	defer func() {
