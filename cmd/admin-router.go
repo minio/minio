@@ -190,6 +190,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg)))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg)))
 
+		// LDAP IAM operations
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListLDAPPolicyMappingEntities)))
+
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig

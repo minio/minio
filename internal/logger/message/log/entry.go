@@ -83,7 +83,7 @@ func (l Info) Mask() uint64 {
 // SendLog returns true if log pertains to node specified in args.
 func (l Info) SendLog(node string, logKind madmin.LogMask) bool {
 	if logKind.Contains(l.LogKind.LogMask()) {
-		return node == "" || strings.EqualFold(node, l.NodeName)
+		return node == "" || strings.EqualFold(node, l.NodeName) && !l.Time.IsZero()
 	}
 	return false
 }

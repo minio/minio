@@ -359,7 +359,11 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			}
 		}
 		if !ok {
-			return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
+			if globalIsErasureSD {
+				update = true
+			} else {
+				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
+			}
 		}
 	}
 
@@ -374,9 +378,13 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 				}
 			}
 			if !ok {
-				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
+				if globalIsErasureSD {
+					update = true
+				} else {
+					return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
+				}
 			}
-			if pos != pi.position {
+			if ok && pos != pi.position {
 				return false, fmt.Errorf("pool order change detected for %s, expected position is (%s) but found (%s)", k, humanize.Ordinal(pi.position+1), humanize.Ordinal(pos+1))
 			}
 		}

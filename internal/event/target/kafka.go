@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 
-	sarama "github.com/Shopify/sarama"
+	"github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
 )
 
@@ -137,6 +137,11 @@ type KafkaTarget struct {
 // ID - returns target ID.
 func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Store returns any underlying store if set.
+func (target *KafkaTarget) Store() event.TargetStore {
+	return target.store
 }
 
 // IsActive - Return true if target is up and active
@@ -329,9 +334,6 @@ func (target *KafkaTarget) initKafka() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -346,11 +348,17 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 		}
 	}
 
-	return &KafkaTarget{
+	target := &KafkaTarget{
 		id:         event.TargetID{ID: id, Name: "kafka"},
 		args:       args,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

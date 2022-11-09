@@ -230,6 +230,11 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *NATSTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *NATSTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -410,9 +415,6 @@ func (target *NATSTarget) initNATS() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -427,11 +429,17 @@ func NewNATSTarget(id string, args NATSArgs, loggerOnce logger.LogOnce) (*NATSTa
 		}
 	}
 
-	return &NATSTarget{
+	target := &NATSTarget{
 		id:         event.TargetID{ID: id, Name: "nats"},
 		args:       args,
 		loggerOnce: loggerOnce,
 		store:      store,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

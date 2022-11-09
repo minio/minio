@@ -167,6 +167,11 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *ElasticsearchTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *ElasticsearchTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -349,9 +354,6 @@ func (target *ElasticsearchTarget) initElasticsearch() error {
 		return err
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -366,13 +368,19 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, loggerOnce logger
 		}
 	}
 
-	return &ElasticsearchTarget{
+	target := &ElasticsearchTarget{
 		id:         event.TargetID{ID: id, Name: "elasticsearch"},
 		args:       args,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
 
 // ES Client definitions and methods

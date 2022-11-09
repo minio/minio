@@ -115,6 +115,11 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 	return target.isActive()
 }
 
+// Store returns any underlying store if set.
+func (target *WebhookTarget) Store() event.TargetStore {
+	return target.store
+}
+
 func (target *WebhookTarget) isActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -179,7 +184,7 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", target.args.Endpoint.String(), bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, target.args.Endpoint.String(), bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -272,9 +277,6 @@ func (target *WebhookTarget) initWebhook() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.cancelCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -292,7 +294,7 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 		}
 	}
 
-	return &WebhookTarget{
+	target := &WebhookTarget{
 		id:         event.TargetID{ID: id, Name: "webhook"},
 		args:       args,
 		loggerOnce: loggerOnce,
@@ -300,5 +302,11 @@ func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOn
 		store:      store,
 		cancel:     cancel,
 		cancelCh:   ctx.Done(),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.cancelCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
