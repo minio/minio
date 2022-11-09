@@ -128,6 +128,11 @@ func (target *AMQPTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *AMQPTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *AMQPTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {

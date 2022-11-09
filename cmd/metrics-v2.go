@@ -58,6 +58,7 @@ func init() {
 		getCacheMetrics(),
 		getGoMetrics(),
 		getHTTPMetrics(),
+		getNotificationMetrics(),
 		getLocalStorageMetrics(),
 		getMinioProcMetrics(),
 		getMinioVersionMetrics(),
@@ -83,6 +84,7 @@ func init() {
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
+		getNotificationMetrics(),
 	})
 	clusterCollector = newMinioClusterCollector(allMetricsGroups)
 }
@@ -127,6 +129,7 @@ const (
 	scannerSubsystem          MetricSubsystem = "scanner"
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
+	notifySubsystem           MetricSubsystem = "notify"
 )
 
 // MetricName are the individual names for the metric.
@@ -1532,6 +1535,39 @@ func getCacheMetrics() *MetricsGroup {
 			})
 		}
 		return
+	})
+	return mg
+}
+
+func getNotificationMetrics() *MetricsGroup {
+	mg := &MetricsGroup{}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		stats := globalConfigTargetList.Stats()
+		metrics := make([]Metric, 0, 1+len(stats.TargetStats))
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: notifySubsystem,
+				Name:      "current_send_in_progress",
+				Help:      "Number of concurrent async Send calls active to all targets",
+				Type:      gaugeMetric,
+			},
+			Value: float64(stats.CurrentSendCalls),
+		})
+		for _, st := range stats.TargetStats {
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "target_queue_length",
+					Help:      "Number of unsent notifications in queue for target",
+					Type:      gaugeMetric,
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.CurrentQueue),
+			})
+		}
+		return metrics
 	})
 	return mg
 }

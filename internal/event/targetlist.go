@@ -19,6 +19,7 @@ package event
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -35,6 +36,26 @@ type Target interface {
 	Save(Event) error
 	Send(string) error
 	Close() error
+	Store() TargetStore
+}
+
+// TargetStore is a shallow version of a target.Store
+type TargetStore interface {
+	Len() int
+}
+
+// TargetStats is a collection of stats for multiple targets.
+type TargetStats struct {
+	// CurrentSendCalls is the number of concurrent async Send calls to all targets
+	CurrentSendCalls int64
+
+	TargetStats map[string]TargetStat
+}
+
+// TargetStat is the stats of a single target.
+type TargetStat struct {
+	ID           TargetID
+	CurrentQueue int // Populated if target has a store.
 }
 
 // TargetList - holds list of targets indexed by target ID.
@@ -164,6 +185,26 @@ func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- 
 		}
 		wg.Wait()
 	}()
+}
+
+// Stats returns stats for targets.
+func (list *TargetList) Stats() TargetStats {
+	t := TargetStats{}
+	if list == nil {
+		return t
+	}
+	t.CurrentSendCalls = atomic.LoadInt64(&list.currentSendCalls)
+	list.RLock()
+	defer list.RUnlock()
+	t.TargetStats = make(map[string]TargetStat, len(list.targets))
+	for id, target := range list.targets {
+		ts := TargetStat{ID: id}
+		if st := target.Store(); st != nil {
+			ts.CurrentQueue = st.Len()
+		}
+		t.TargetStats[strings.ReplaceAll(id.String(), ":", "_")] = ts
+	}
+	return t
 }
 
 // NewTargetList - creates TargetList.

@@ -19,11 +19,12 @@ package target
 
 import (
 	"encoding/json"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/internal/event"
 )
@@ -36,9 +37,10 @@ const (
 // QueueStore - Filestore for persisting events.
 type QueueStore struct {
 	sync.RWMutex
-	currentEntries uint64
-	entryLimit     uint64
-	directory      string
+	entryLimit uint64
+	directory  string
+
+	entries map[string]int64 // key -> modtime as unix nano
 }
 
 // NewQueueStore - Creates an instance for QueueStore.
@@ -50,6 +52,7 @@ func NewQueueStore(directory string, limit uint64) Store {
 	return &QueueStore{
 		directory:  directory,
 		entryLimit: limit,
+		entries:    make(map[string]int64, limit),
 	}
 }
 
@@ -62,17 +65,24 @@ func (store *QueueStore) Open() error {
 		return err
 	}
 
-	names, err := store.list()
+	files, err := store.list()
 	if err != nil {
 		return err
 	}
 
-	currentEntries := uint64(len(names))
-	if currentEntries >= store.entryLimit {
-		return errLimitExceeded
+	// Truncate entries.
+	if uint64(len(files)) > store.entryLimit {
+		files = files[:store.entryLimit]
 	}
-
-	store.currentEntries = currentEntries
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		key := strings.TrimSuffix(file.Name(), eventExt)
+		if fi, err := file.Info(); err == nil {
+			store.entries[key] = fi.ModTime().UnixNano()
+		}
+	}
 
 	return nil
 }
@@ -91,7 +101,7 @@ func (store *QueueStore) write(key string, e event.Event) error {
 	}
 
 	// Increment the event count.
-	store.currentEntries++
+	store.entries[key] = time.Now().UnixNano()
 
 	return nil
 }
@@ -100,7 +110,7 @@ func (store *QueueStore) write(key string, e event.Event) error {
 func (store *QueueStore) Put(e event.Event) error {
 	store.Lock()
 	defer store.Unlock()
-	if store.currentEntries >= store.entryLimit {
+	if uint64(len(store.entries)) >= store.entryLimit {
 		return errLimitExceeded
 	}
 	key, err := getNewUUID()
@@ -146,44 +156,51 @@ func (store *QueueStore) Del(key string) error {
 	return store.del(key)
 }
 
+// Len returns the entry count.
+func (store *QueueStore) Len() int {
+	store.RLock()
+	l := len(store.entries)
+	defer store.RUnlock()
+	return l
+}
+
 // lockless call
 func (store *QueueStore) del(key string) error {
-	if err := os.Remove(filepath.Join(store.directory, key+eventExt)); err != nil {
-		return err
-	}
+	err := os.Remove(filepath.Join(store.directory, key+eventExt))
 
-	// Decrement the current entries count.
-	store.currentEntries--
+	// Delete as entry no matter the result
+	delete(store.entries, key)
 
-	// Current entries can underflow, when multiple
-	// events are being pushed in parallel, this code
-	// is needed to ensure that we don't underflow.
-	//
-	// queueStore replayEvents is not serialized,
-	// this code is needed to protect us under
-	// such situations.
-	if store.currentEntries == math.MaxUint64 {
-		store.currentEntries = 0
-	}
-	return nil
+	return err
 }
 
-// List - lists all files from the directory.
+// List - lists all files registered in the store.
 func (store *QueueStore) List() ([]string, error) {
 	store.RLock()
-	defer store.RUnlock()
-	return store.list()
-}
-
-// list lock less.
-func (store *QueueStore) list() ([]string, error) {
-	var names []string
-	files, err := os.ReadDir(store.directory)
-	if err != nil {
-		return names, err
+	l := make([]string, 0, len(store.entries))
+	for k := range store.entries {
+		l = append(l, k)
 	}
 
-	// Sort the dentries.
+	// Sort entries...
+	sort.Slice(l, func(i, j int) bool {
+		return store.entries[l[i]] < store.entries[l[j]]
+	})
+	store.RUnlock()
+
+	return l, nil
+}
+
+// list will read all entries from disk.
+// Entries are returned sorted by modtime, oldest first.
+// Underlying entry list in store is *not* updated.
+func (store *QueueStore) list() ([]os.DirEntry, error) {
+	files, err := os.ReadDir(store.directory)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort the entries.
 	sort.Slice(files, func(i, j int) bool {
 		ii, err := files[i].Info()
 		if err != nil {
@@ -196,9 +213,5 @@ func (store *QueueStore) list() ([]string, error) {
 		return ii.ModTime().Before(ji.ModTime())
 	})
 
-	for _, file := range files {
-		names = append(names, file.Name())
-	}
-
-	return names, nil
+	return files, nil
 }

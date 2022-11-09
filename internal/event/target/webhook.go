@@ -115,6 +115,11 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 	return target.isActive()
 }
 
+// Store returns any underlying store if set.
+func (target *WebhookTarget) Store() event.TargetStore {
+	return target.store
+}
+
 func (target *WebhookTarget) isActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
