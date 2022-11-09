@@ -202,12 +202,33 @@ func TestQueueStoreListN(t *testing.T) {
 		t.Fatalf("List() Expected: 10, got %d", len(names))
 	}
 
-	if err = os.RemoveAll(queueDir); err != nil {
+	// re-open
+	store, err = setUpStore(queueDir, 10)
+	if err != nil {
+		t.Fatal("Failed to create a queue store ", err)
+	}
+	names, err = store.List()
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = store.List()
-	if !os.IsNotExist(err) {
-		t.Fatalf("Expected List() to fail with os.ErrNotExist, %s", err)
+	if len(names) != 10 {
+		t.Fatalf("List() Expected: 10, got %d", len(names))
+	}
+	if len(names) != store.Len() {
+		t.Fatalf("List() Expected: 10, got %d", len(names))
+	}
+
+	// Delete all
+	for _, key := range names {
+		err := store.Del(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Re-list
+	lst, err := store.List()
+	if len(lst) > 0 || err != nil {
+		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", lst, err)
 	}
 }

@@ -41,16 +41,13 @@ func checkDelObjArgs(ctx context.Context, bucket, object string) error {
 func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
 	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketName(bucket) != nil {
-		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
 		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if len(object) == 0 {
-		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if !IsValidObjectPrefix(object) {
-		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if runtime.GOOS == globalWindowsOSName && strings.Contains(object, "\\") {

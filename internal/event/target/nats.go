@@ -230,6 +230,11 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *NATSTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *NATSTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
