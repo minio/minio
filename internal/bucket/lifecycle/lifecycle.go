@@ -358,7 +358,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 				// Specifying the Days tag will automatically perform ExpiredObjectDeleteMarker cleanup
 				// once delete markers are old enough to satisfy the age criteria.
 				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
-				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
+				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
 					events = append(events, Event{
 						Action: DeleteVersionAction,
 						RuleID: rule.ID,
@@ -380,7 +380,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		if !obj.IsLatest && !rule.NoncurrentVersionExpiration.IsDaysNull() {
 			// Non current versions should be deleted if their age exceeds non current days configuration
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.After(expectedExpiry) {
+			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.IsZero() || now.After(expectedExpiry) {
 				events = append(events, Event{
 					Action: DeleteVersionAction,
 					RuleID: rule.ID,
@@ -393,7 +393,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			if !obj.DeleteMarker && obj.TransitionStatus != TransitionComplete {
 				// Non current versions should be transitioned if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && now.After(due) {
+				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
 					events = append(events, Event{
 						Action:       TransitionVersionAction,
 						RuleID:       rule.ID,
@@ -408,7 +408,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		if obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
-				if time.Now().UTC().After(rule.Expiration.Date.Time) {
+				if now.IsZero() || now.After(rule.Expiration.Date.Time) {
 					events = append(events, Event{
 						Action: DeleteAction,
 						RuleID: rule.ID,
@@ -416,7 +416,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 					})
 				}
 			case !rule.Expiration.IsDaysNull():
-				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
+				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
 					events = append(events, Event{
 						Action: DeleteAction,
 						RuleID: rule.ID,
@@ -426,7 +426,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			}
 
 			if obj.TransitionStatus != TransitionComplete {
-				if due, ok := rule.Transition.NextDue(obj); ok && now.After(due) {
+				if due, ok := rule.Transition.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
 					events = append(events, Event{
 						Action:       TransitionAction,
 						RuleID:       rule.ID,
