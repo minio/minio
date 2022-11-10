@@ -21,6 +21,7 @@ import (
 	"container/ring"
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
@@ -36,6 +37,9 @@ const defaultLogBufferCount = 10000
 
 // HTTPConsoleLoggerSys holds global console logger state
 type HTTPConsoleLoggerSys struct {
+	totalMessages  int64
+	failedMessages int64
+
 	sync.RWMutex
 	pubsub   *pubsub.PubSub[log.Info, madmin.LogMask]
 	console  *console.Target
@@ -133,6 +137,15 @@ func (sys *HTTPConsoleLoggerSys) String() string {
 	return logger.ConsoleLoggerTgt
 }
 
+// Stats returns the target statistics.
+func (sys *HTTPConsoleLoggerSys) Stats() types.TargetStats {
+	return types.TargetStats{
+		TotalMessages:  atomic.LoadInt64(&sys.totalMessages),
+		FailedMessages: atomic.LoadInt64(&sys.failedMessages),
+		QueueLength:    0,
+	}
+}
+
 // Content returns the console stdout log
 func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	sys.RLock()
@@ -170,6 +183,7 @@ func (sys *HTTPConsoleLoggerSys) Send(entry interface{}) error {
 	case string:
 		lg = log.Info{ConsoleMsg: e, NodeName: sys.nodeName}
 	}
+	atomic.AddInt64(&sys.totalMessages, 1)
 
 	sys.pubsub.Publish(lg)
 	sys.Lock()
@@ -177,6 +191,9 @@ func (sys *HTTPConsoleLoggerSys) Send(entry interface{}) error {
 	sys.logBuf.Value = lg
 	sys.logBuf = sys.logBuf.Next()
 	sys.Unlock()
-
-	return sys.console.Send(entry, string(logger.All))
+	err := sys.console.Send(entry, string(logger.All))
+	if err != nil {
+		atomic.AddInt64(&sys.failedMessages, 1)
+	}
+	return err
 }
