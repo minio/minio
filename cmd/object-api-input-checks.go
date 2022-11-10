@@ -109,7 +109,7 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 				KeyMarker:      keyMarker,
 			}
 		}
-		_, err := base64.StdEncoding.DecodeString(uploadIDMarker)
+		_, err := base64.RawURLEncoding.DecodeString(uploadIDMarker)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return MalformedUploadID{
