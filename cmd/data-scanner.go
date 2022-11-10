@@ -420,7 +420,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		filter := f.withFilter
 		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix) {
 			if f.dataUsageScannerDebug {
 				console.Debugf(scannerLogPrefix+" Prefix %q has active rules\n", prefix)
 			}
@@ -1101,7 +1101,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 }
 
 func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) lifecycle.Event {
-	event := lc.Eval(obj.ToLifecycleOpts(), time.Now().UTC())
+	event := lc.Eval(obj.ToLifecycleOpts())
 	if serverDebugLog {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
 	}

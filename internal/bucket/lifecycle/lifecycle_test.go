@@ -221,7 +221,7 @@ func TestExpectedExpiryTime(t *testing.T) {
 	}
 }
 
-func TestComputeActions(t *testing.T) {
+func TestEval(t *testing.T) {
 	testCases := []struct {
 		inputConfig            string
 		objectName             string
@@ -538,7 +538,7 @@ func TestComputeActions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
-			if resultAction := lc.ComputeAction(ObjectOpts{
+			if res := lc.Eval(ObjectOpts{
 				Name:             tc.objectName,
 				UserTags:         tc.objectTags,
 				ModTime:          tc.objectModTime,
@@ -547,8 +547,8 @@ func TestComputeActions(t *testing.T) {
 				IsLatest:         !tc.isNoncurrent,
 				SuccessorModTime: tc.objectSuccessorModTime,
 				VersionID:        tc.versionID,
-			}); resultAction != tc.expectedAction {
-				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
+			}); res.Action != tc.expectedAction {
+				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, res.Action)
 			}
 		})
 	}
@@ -556,50 +556,49 @@ func TestComputeActions(t *testing.T) {
 
 func TestHasActiveRules(t *testing.T) {
 	testCases := []struct {
-		inputConfig    string
-		prefix         string
-		expectedNonRec bool
-		expectedRec    bool
+		inputConfig string
+		prefix      string
+		want        bool
 	}{
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/foobject",
-			expectedNonRec: true, expectedRec: true,
+			inputConfig: `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/foobject",
+			want:        true,
 		},
 		{ // empty prefix
-			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/foobject/foo.txt",
-			expectedNonRec: true, expectedRec: true,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/foobject/foo.txt",
+			want:        true,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "zdir/foobject",
-			expectedNonRec: false, expectedRec: false,
+			inputConfig: `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "zdir/foobject",
+			want:        false,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/zdir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/",
-			expectedNonRec: false, expectedRec: true,
+			inputConfig: `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/zdir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/",
+			want:        true,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix></Prefix></Filter><Status>Disabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/",
-			expectedNonRec: false, expectedRec: false,
+			inputConfig: `<LifecycleConfiguration><Rule><Filter><Prefix></Prefix></Filter><Status>Disabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/",
+			want:        false,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>2999-01-01T00:00:00.000Z</Date></Expiration></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/foobject",
-			expectedNonRec: false, expectedRec: false,
+			inputConfig: `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>2999-01-01T00:00:00.000Z</Date></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/foobject",
+			want:        false,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/foobject/foo.txt",
-			expectedNonRec: true, expectedRec: true,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/foobject/foo.txt",
+			want:        true,
 		},
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
-			prefix:         "foodir/foobject/foo.txt",
-			expectedNonRec: true, expectedRec: true,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
+			prefix:      "foodir/foobject/foo.txt",
+			want:        true,
 		},
 	}
 
@@ -610,14 +609,10 @@ func TestHasActiveRules(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
-			if got := lc.HasActiveRules(tc.prefix, false); got != tc.expectedNonRec {
-				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.expectedNonRec, got)
-			}
-			if got := lc.HasActiveRules(tc.prefix, true); got != tc.expectedRec {
-				t.Fatalf("Expected result with recursive set to true: `%v`, got: `%v`", tc.expectedRec, got)
+			if got := lc.HasActiveRules(tc.prefix); got != tc.want {
+				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.want, got)
 			}
 		})
-
 	}
 }
 
@@ -741,7 +736,7 @@ func TestTransitionTier(t *testing.T) {
 	// Go back seven days in the past
 	now = now.Add(7 * 24 * time.Hour)
 
-	evt := lc.Eval(obj1, now)
+	evt := lc.eval(obj1, now)
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
@@ -749,7 +744,7 @@ func TestTransitionTier(t *testing.T) {
 		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
 	}
 
-	evt = lc.Eval(obj2, now)
+	evt = lc.eval(obj2, now)
 	if evt.Action != TransitionVersionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.Action)
 	}
@@ -818,13 +813,13 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 	now = now.Add(7 * 24 * time.Hour)
 
 	// Eval object 1
-	evt := lc.Eval(obj1, now)
+	evt := lc.eval(obj1, now)
 	if evt.Action != NoneAction {
 		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.Action)
 	}
 
 	// Eval object 2
-	evt = lc.Eval(obj2, now)
+	evt = lc.eval(obj2, now)
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
@@ -833,7 +828,7 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 	}
 
 	// Eval object 3
-	evt = lc.Eval(obj3, now)
+	evt = lc.eval(obj3, now)
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
