@@ -62,6 +62,11 @@ func (t *testingLogger) Type() types.TargetType {
 	return types.TargetHTTP
 }
 
+// Stats returns the target statistics.
+func (t *testingLogger) Stats() types.TargetStats {
+	return types.TargetStats{}
+}
+
 func (t *testingLogger) Send(entry interface{}) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
