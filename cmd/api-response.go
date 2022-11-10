@@ -267,8 +267,7 @@ func (o ObjectVersion) MarshalXML(e *xxml.Encoder, start xxml.StartElement) erro
 	} else {
 		start.Name.Local = "Version"
 	}
-	type objectVersionWrapper ObjectVersion
-	return e.EncodeElement(objectVersionWrapper(o), start)
+	return e.EncodeElement(o, start)
 }
 
 // DeleteMarkerVersion container for delete marker metadata
