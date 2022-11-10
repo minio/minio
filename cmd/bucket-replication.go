@@ -2726,6 +2726,7 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 	case <-GlobalContext.Done():
 		return
 	case p.mrfSaveCh <- entry:
+	default:
 	}
 }
 
