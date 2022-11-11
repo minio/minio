@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -89,7 +90,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 
 		if err = storageclass.ValidateParity(commonParityDrives, ep.DrivesPerSet); err != nil {
-			return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, ecDrivesNoConfig(ep.DrivesPerSet))
+			return nil, fmt.Errorf("parity validation returned an error %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
 		}
 
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
@@ -115,7 +116,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		// Validate if users brought different DeploymentID pools.
 		if deploymentID != formats[i].ID {
-			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
+			return nil, fmt.Errorf("all pools must have same deployment ID - expected %s, got %s for pool(%s)", deploymentID, formats[i].ID, humanize.Ordinal(i+1))
 		}
 
 		z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
