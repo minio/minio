@@ -168,7 +168,9 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 	objInfo.Parts = fi.Parts
 
 	// Update storage class
-	if sc, ok := fi.Metadata[xhttp.AmzStorageClass]; ok {
+	if fi.TransitionTier != "" {
+		objInfo.StorageClass = fi.TransitionTier
+	} else if sc, ok := fi.Metadata[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass

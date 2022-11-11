@@ -533,6 +533,7 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 
 	ignoredErrs := []error{
 		errFileNotFound,
+		errFileNameTooLong,
 		errVolumeNotFound,
 		errFileVersionNotFound,
 		errDiskNotFound,

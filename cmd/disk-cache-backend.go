@@ -1003,6 +1003,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 	if err != nil {
 		return err
 	}
+	defer rc.Close()
 	bufp := c.pool.Get().(*[]byte)
 	defer c.pool.Put(bufp)
 

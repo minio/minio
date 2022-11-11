@@ -40,6 +40,11 @@ func (target ExampleTarget) Save(eventData Event) error {
 	return target.send(eventData)
 }
 
+// Store - Returns a nil store.
+func (target ExampleTarget) Store() TargetStore {
+	return nil
+}
+
 func (target ExampleTarget) send(eventData Event) error {
 	b := make([]byte, 1)
 	if _, err := rand.Read(b); err != nil {

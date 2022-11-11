@@ -121,11 +121,8 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 	return nil
 }
 
-// HasActiveRules - returns whether policy has active rules for.
-// Optionally a prefix can be supplied.
-// If recursive is specified the function will also return true if any level below the
-// prefix has active rules. If no prefix is specified recursive is effectively true.
-func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
+// HasActiveRules - returns whether lc has active rules at any level below or at prefix.
+func (lc Lifecycle) HasActiveRules(prefix string) bool {
 	if len(lc.Rules) == 0 {
 		return false
 	}
@@ -135,17 +132,9 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		}
 
 		if len(prefix) > 0 && len(rule.GetPrefix()) > 0 {
-			if !recursive {
-				// If not recursive, incoming prefix must be in rule prefix
-				if !strings.HasPrefix(prefix, rule.GetPrefix()) {
-					continue
-				}
-			}
-			if recursive {
-				// If recursive, we can skip this rule if it doesn't match the tested prefix.
-				if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
-					continue
-				}
+			// If recursive, we can skip this rule if it doesn't match the tested prefix.
+			if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
+				continue
 			}
 		}
 
@@ -316,8 +305,14 @@ func (es lifecycleEvents) Less(i, j int) bool {
 	return es[i].Due.Before(es[j].Due)
 }
 
-// Eval returns the lifecycle event applicable at now. If now is the zero value of time.Time, it returns the upcoming lifecycle event.
-func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
+// Eval returns the lifecycle event applicable now.
+func (lc Lifecycle) Eval(obj ObjectOpts) Event {
+	return lc.eval(obj, time.Now().UTC())
+}
+
+// eval returns the lifecycle event applicable at the given now. If now is the
+// zero value of time.Time, it returns the upcoming lifecycle event.
+func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	var events []Event
 	if obj.ModTime.IsZero() {
 		return Event{}
@@ -358,7 +353,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 				// Specifying the Days tag will automatically perform ExpiredObjectDeleteMarker cleanup
 				// once delete markers are old enough to satisfy the age criteria.
 				// https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html
-				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
+				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
 					events = append(events, Event{
 						Action: DeleteVersionAction,
 						RuleID: rule.ID,
@@ -371,8 +366,8 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		}
 
 		// Skip rules with newer noncurrent versions specified. These rules are
-		// not handled at an individual version level. ComputeAction applies
-		// only to a specific version.
+		// not handled at an individual version level. eval applies only to a
+		// specific version.
 		if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
 			continue
 		}
@@ -380,7 +375,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		if !obj.IsLatest && !rule.NoncurrentVersionExpiration.IsDaysNull() {
 			// Non current versions should be deleted if their age exceeds non current days configuration
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.After(expectedExpiry) {
+			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.IsZero() || now.After(expectedExpiry) {
 				events = append(events, Event{
 					Action: DeleteVersionAction,
 					RuleID: rule.ID,
@@ -393,7 +388,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			if !obj.DeleteMarker && obj.TransitionStatus != TransitionComplete {
 				// Non current versions should be transitioned if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && now.After(due) {
+				if due, ok := rule.NoncurrentVersionTransition.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
 					events = append(events, Event{
 						Action:       TransitionVersionAction,
 						RuleID:       rule.ID,
@@ -408,7 +403,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 		if obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
-				if time.Now().UTC().After(rule.Expiration.Date.Time) {
+				if now.IsZero() || now.After(rule.Expiration.Date.Time) {
 					events = append(events, Event{
 						Action: DeleteAction,
 						RuleID: rule.ID,
@@ -416,7 +411,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 					})
 				}
 			case !rule.Expiration.IsDaysNull():
-				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.After(expectedExpiry) {
+				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
 					events = append(events, Event{
 						Action: DeleteAction,
 						RuleID: rule.ID,
@@ -426,7 +421,7 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 			}
 
 			if obj.TransitionStatus != TransitionComplete {
-				if due, ok := rule.Transition.NextDue(obj); ok && now.After(due) {
+				if due, ok := rule.Transition.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
 					events = append(events, Event{
 						Action:       TransitionAction,
 						RuleID:       rule.ID,
@@ -448,12 +443,6 @@ func (lc Lifecycle) Eval(obj ObjectOpts, now time.Time) Event {
 	}
 }
 
-// ComputeAction returns the action to perform by evaluating all lifecycle rules
-// against the object name and its modification time.
-func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
-	return lc.Eval(obj, time.Now().UTC()).Action
-}
-
 // ExpectedExpiryTime calculates the expiry, transition or restore date/time based on a object modtime.
 // The expected transition or restore time is always a midnight time following the object
 // modification time plus the number of transition/restore days.
@@ -471,7 +460,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 // SetPredictionHeaders sets time to expiry and transition headers on w for a
 // given obj.
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
-	event := lc.Eval(obj, time.Time{})
+	event := lc.eval(obj, time.Time{})
 	switch event.Action {
 	case DeleteAction, DeleteVersionAction:
 		w.Header()[xhttp.AmzExpiration] = []string{

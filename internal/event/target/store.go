@@ -41,6 +41,7 @@ var errLimitExceeded = errors.New("the maximum store limit reached")
 type Store interface {
 	Put(event event.Event) error
 	Get(key string) (event.Event, error)
+	Len() int
 	List() ([]string, error)
 	Del(key string) error
 	Open() error

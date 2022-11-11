@@ -22,7 +22,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 	"hash"
 	"hash/crc32"
 	"net/http"
@@ -295,7 +294,6 @@ func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
 // AddChecksumHeader will transfer any checksum value that has been checked.
 func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
 	for k, v := range c {
-		fmt.Println(c, v)
 		cksum := NewChecksumString(k, v)
 		if cksum == nil {
 			continue

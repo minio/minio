@@ -1051,9 +1051,10 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			fmt.Errorf("Invalid combination of uploadID marker '%s' and marker '%s'", "abc", "asia/europe/"), false,
 		},
 		{
-			bucketNames[0], "asia", "asia/europe", "abc", "", 0,
+			// Contains a base64 padding character
+			bucketNames[0], "asia", "asia/europe", "abc=", "", 0,
 			ListMultipartsInfo{},
-			fmt.Errorf("Malformed upload id %s", "abc"), false,
+			fmt.Errorf("Malformed upload id %s", "abc="), false,
 		},
 
 		// Setting up valid case of ListMultiPartUploads.
