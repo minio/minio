@@ -445,7 +445,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	// Check if the current bucket has a configured lifecycle policy
 	if globalLifecycleSys != nil {
 		lc, err = globalLifecycleSys.Get(cache.Info.Name)
-		if err == nil && lc.HasActiveRules("", true) {
+		if err == nil && lc.HasActiveRules("") {
 			cache.Info.lifeCycle = lc
 			if intDataUpdateTracker.debug {
 				console.Debugln(color.Green("scannerDisk:") + " lifecycle: Active rules found")

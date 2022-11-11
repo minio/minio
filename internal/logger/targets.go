@@ -18,6 +18,8 @@
 package logger
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/internal/logger/target/http"
@@ -32,6 +34,7 @@ import (
 type Target interface {
 	String() string
 	Endpoint() string
+	Stats() types.TargetStats
 	Init() error
 	Cancel()
 	Send(entry interface{}) error
@@ -68,6 +71,33 @@ func AuditTargets() []Target {
 	defer swapAuditMuRW.RUnlock()
 
 	res := auditTargets
+	return res
+}
+
+// CurrentStats returns the current statistics.
+func CurrentStats() map[string]types.TargetStats {
+	sys := SystemTargets()
+	audit := AuditTargets()
+	res := make(map[string]types.TargetStats, len(sys)+len(audit))
+	cnt := make(map[string]int, len(sys)+len(audit))
+
+	// Add system and audit.
+	for _, t := range sys {
+		key := strings.ToLower(t.Type().String())
+		n := cnt[key]
+		cnt[key]++
+		key = fmt.Sprintf("sys_%s_%d", key, n)
+		res[key] = t.Stats()
+	}
+
+	for _, t := range audit {
+		key := strings.ToLower(t.Type().String())
+		n := cnt[key]
+		cnt[key]++
+		key = fmt.Sprintf("audit_%s_%d", key, n)
+		res[key] = t.Stats()
+	}
+
 	return res
 }
 

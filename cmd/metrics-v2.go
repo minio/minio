@@ -130,6 +130,7 @@ const (
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
 	notifySubsystem           MetricSubsystem = "notify"
+	auditSubsystem            MetricSubsystem = "audit"
 )
 
 // MetricName are the individual names for the metric.
@@ -1565,6 +1566,43 @@ func getNotificationMetrics() *MetricsGroup {
 				},
 				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
 				Value:          float64(st.CurrentQueue),
+			})
+		}
+		// Audit and system:
+		audit := logger.CurrentStats()
+		for id, st := range audit {
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: auditSubsystem,
+					Name:      "target_queue_length",
+					Help:      "Number of unsent messages in queue for target",
+					Type:      gaugeMetric,
+				},
+				VariableLabels: map[string]string{"target_id": id},
+				Value:          float64(st.QueueLength),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: auditSubsystem,
+					Name:      "total_messages",
+					Help:      "Total number of messages sent since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": id},
+				Value:          float64(st.TotalMessages),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: auditSubsystem,
+					Name:      "failed_messages",
+					Help:      "Total number of messages that failed to send since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": id},
+				Value:          float64(st.FailedMessages),
 			})
 		}
 		return metrics
