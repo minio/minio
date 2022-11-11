@@ -270,8 +270,8 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	if req == nil {
 		req = &ReqInfo{API: "SYSTEM"}
 	}
-	req.RLock()
-	defer req.RUnlock()
+	req.Lock()
+	defer req.Unlock()
 
 	API := "SYSTEM"
 	if req.API != "" {
