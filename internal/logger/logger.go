@@ -289,8 +289,9 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 
 	// Get the cause for the Error
 	message := fmt.Sprintf("%v (%T)", err, err)
+	deploymentID := req.DeploymentID
 	if req.DeploymentID == "" {
-		req.DeploymentID = xhttp.GlobalDeploymentID
+		deploymentID = xhttp.GlobalDeploymentID
 	}
 
 	objects := make([]log.ObjectVersion, 0, len(req.Objects))
@@ -302,7 +303,7 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	}
 
 	entry := log.Entry{
-		DeploymentID: req.DeploymentID,
+		DeploymentID: deploymentID,
 		Level:        ErrorLvl.String(),
 		LogKind:      logKind,
 		RemoteHost:   req.RemoteHost,
