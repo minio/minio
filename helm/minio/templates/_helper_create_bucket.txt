@@ -103,7 +103,7 @@ if ! checkBucketExists $BUCKET ; then
   # At this point, the bucket should exist, skip checking for existence
   # Set policy on the bucket
   echo "Setting policy of bucket '$BUCKET' to '$POLICY'."
-  ${MC} policy set $POLICY myminio/$BUCKET
+  ${MC} anonymous set $POLICY myminio/$BUCKET
 }
 
 # Try connecting to MinIO instance
