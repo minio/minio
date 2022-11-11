@@ -261,8 +261,8 @@ func (n *netPerfRX) ActiveConnections() uint64 {
 }
 
 func (n *netPerfRX) Reset() {
-	n.RLock()
-	defer n.RUnlock()
+	n.Lock()
+	defer n.Unlock()
 	n.RX = 0
 	n.RXSample = 0
 	n.lastToConnect = time.Time{}
