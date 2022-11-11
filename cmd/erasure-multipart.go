@@ -567,16 +567,6 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
-	// Write lock for this part ID.
-	// Held throughout the operation.
-	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
-	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	pctx := plkctx.Context()
-	defer partIDLock.Unlock(plkctx.Cancel)
-
 	// Read lock for upload id.
 	// Only held while reading the upload metadata.
 	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
@@ -587,19 +577,29 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	rctx := rlkctx.Context()
 	defer uploadIDRLock.RUnlock(rlkctx.Cancel)
 
-	data := r.Reader
-	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
-		logger.LogIf(rctx, errInvalidArgument, logger.Application)
-		return pi, toObjectErr(errInvalidArgument)
-	}
-
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 
 	// Validates if upload ID exists.
 	fi, _, err := er.checkUploadIDExists(rctx, bucket, object, uploadID, true)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object, uploadID)
+	}
+
+	// Write lock for this part ID, only after valid uploadID.
+	// Held throughout the operation.
+	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
+	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+	pctx := plkctx.Context()
+	defer partIDLock.Unlock(plkctx.Cancel)
+
+	data := r.Reader
+	// Validate input data size and it can never be less than zero.
+	if data.Size() < -1 {
+		logger.LogIf(rctx, errInvalidArgument, logger.Application)
+		return pi, toObjectErr(errInvalidArgument)
 	}
 
 	onlineDisks := er.getDisks()
