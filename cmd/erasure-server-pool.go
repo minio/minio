@@ -391,9 +391,6 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			pinfo := PoolObjInfo{
 				Index: i,
 			}
-			// do not remove this check as it can lead to inconsistencies
-			// for all callers of bucket replication.
-			opts.VersionID = ""
 			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool, poolOpts[i])
@@ -421,11 +418,11 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			continue
 		}
 
-		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
+		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) && !isErrMethodNotAllowed(pinfo.Err) {
 			return pinfo, pinfo.Err
 		}
 
-		if isErrObjectNotFound(pinfo.Err) {
+		if isErrObjectNotFound(pinfo.Err) || isErrMethodNotAllowed(pinfo.Err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
 			if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
@@ -940,9 +937,21 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		opts.NoLock = true
 	}
 
-	idx, err := z.getPoolIdxNoLock(ctx, bucket, object, data.Size())
-	if err != nil {
-		return ObjectInfo{}, err
+	var idx int
+	if opts.Versioned || opts.VersionSuspended {
+		// Versioned bucket we can spread the versions to all pools
+		// this is an optimization.
+		idx = z.getAvailablePoolIdx(ctx, bucket, object, data.Size())
+		if idx < 0 {
+			return ObjectInfo{}, toObjectErr(errDiskFull)
+		}
+	} else {
+		// Un-versioned bucket must write object to "a" pool.
+		var err error
+		idx, err = z.getPoolIdxNoLock(ctx, bucket, object, data.Size())
+		if err != nil {
+			return ObjectInfo{}, err
+		}
 	}
 
 	// Overwrite the object at the right pool
@@ -1043,7 +1052,8 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		obj := obj
 		eg.Go(func() error {
 			pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
-				NoLock: true,
+				NoLock:    true,
+				VersionID: obj.VersionID,
 			})
 			if err != nil {
 				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -1400,13 +1410,23 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		}
 	}
 
-	// any parallel writes on the object will block for this poolIdx
-	// to return since this holds a read lock on the namespace.
-	idx, err := z.getPoolIdx(ctx, bucket, object, -1)
-	if err != nil {
-		return nil, err
+	var idx int
+	if opts.Versioned || opts.VersionSuspended {
+		// Versioned bucket we can spread the versions to all pools
+		// this is an optimization.
+		idx = z.getAvailablePoolIdx(ctx, bucket, object, -1)
+		if idx < 0 {
+			return nil, toObjectErr(errDiskFull)
+		}
+	} else {
+		var err error
+		// any parallel writes on the object will block for this poolIdx
+		// to return since this holds a read lock on the namespace.
+		idx, err = z.getPoolIdx(ctx, bucket, object, -1)
+		if err != nil {
+			return nil, err
+		}
 	}
-
 	return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
 }
 
