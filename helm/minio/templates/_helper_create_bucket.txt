@@ -118,6 +118,6 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }} {{ .objectlocking }}
+createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default false }} {{ .objectlocking  | default false }}
 {{- end }}
 {{- end }}
