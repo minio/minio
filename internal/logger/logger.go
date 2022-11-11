@@ -271,7 +271,6 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 		req = &ReqInfo{API: "SYSTEM"}
 	}
 	req.RLock()
-	defer req.RUnlock()
 
 	API := "SYSTEM"
 	if req.API != "" {
@@ -289,10 +288,14 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 
 	// Get the cause for the Error
 	message := fmt.Sprintf("%v (%T)", err, err)
+	req.RUnlock()
 	if req.DeploymentID == "" {
+		req.Lock()
 		req.DeploymentID = xhttp.GlobalDeploymentID
+		req.Unlock()
 	}
-
+	req.RLock()
+	defer req.RUnlock()
 	objects := make([]log.ObjectVersion, 0, len(req.Objects))
 	for _, ov := range req.Objects {
 		objects = append(objects, log.ObjectVersion{
