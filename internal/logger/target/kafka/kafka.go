@@ -25,6 +25,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
@@ -36,11 +37,14 @@ import (
 
 // Target - Kafka target.
 type Target struct {
+	totalMessages  int64
+	failedMessages int64
+
 	wg     sync.WaitGroup
 	doneCh chan struct{}
 
 	// Channel of log entries
-	logCh chan interface{}
+	logCh chan audit.Entry
 
 	producer sarama.SyncProducer
 	kconfig  Config
@@ -55,37 +59,40 @@ func (h *Target) Send(entry interface{}) error {
 	default:
 	}
 
-	select {
-	case <-h.doneCh:
-	case h.logCh <- entry:
-	default:
-		// log channel is full, do not wait and return
-		// an error immediately to the caller
-		return errors.New("log buffer full")
+	if e, ok := entry.(audit.Entry); ok {
+		select {
+		case <-h.doneCh:
+		case h.logCh <- e:
+		default:
+			// log channel is full, do not wait and return
+			// an error immediately to the caller
+			atomic.AddInt64(&h.totalMessages, 1)
+			atomic.AddInt64(&h.failedMessages, 1)
+			return errors.New("log buffer full")
+		}
 	}
 
 	return nil
 }
 
-func (h *Target) logEntry(entry interface{}) {
+func (h *Target) logEntry(entry audit.Entry) {
+	atomic.AddInt64(&h.totalMessages, 1)
 	logJSON, err := json.Marshal(&entry)
 	if err != nil {
+		atomic.AddInt64(&h.failedMessages, 1)
 		return
 	}
+	msg := sarama.ProducerMessage{
+		Topic: h.kconfig.Topic,
+		Key:   sarama.StringEncoder(entry.RequestID),
+		Value: sarama.ByteEncoder(logJSON),
+	}
 
-	ae, ok := entry.(audit.Entry)
-	if ok {
-		msg := sarama.ProducerMessage{
-			Topic: h.kconfig.Topic,
-			Key:   sarama.StringEncoder(ae.RequestID),
-			Value: sarama.ByteEncoder(logJSON),
-		}
-
-		_, _, err = h.producer.SendMessage(&msg)
-		if err != nil {
-			h.kconfig.LogOnce(context.Background(), err, h.kconfig.Topic)
-			return
-		}
+	_, _, err = h.producer.SendMessage(&msg)
+	if err != nil {
+		atomic.AddInt64(&h.failedMessages, 1)
+		h.kconfig.LogOnce(context.Background(), err, h.kconfig.Topic)
+		return
 	}
 }
 
@@ -145,6 +152,15 @@ func (k Config) pingBrokers() error {
 		}
 	}
 	return err
+}
+
+// Stats returns the target statistics.
+func (h *Target) Stats() types.TargetStats {
+	return types.TargetStats{
+		TotalMessages:  atomic.LoadInt64(&h.totalMessages),
+		FailedMessages: atomic.LoadInt64(&h.failedMessages),
+		QueueLength:    len(h.logCh),
+	}
 }
 
 // Endpoint - return kafka target
@@ -231,7 +247,7 @@ func (h *Target) Cancel() {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	target := &Target{
-		logCh:   make(chan interface{}, 10000),
+		logCh:   make(chan audit.Entry, 10000),
 		doneCh:  make(chan struct{}),
 		kconfig: config,
 	}

@@ -1130,7 +1130,10 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	enc := gob.NewEncoder(w)
 	for {
 		select {
-		case entry := <-ch:
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
 			if err := enc.Encode(entry); err != nil {
 				return
 			}

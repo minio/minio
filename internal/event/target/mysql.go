@@ -165,6 +165,11 @@ func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *MySQLTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *MySQLTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -382,9 +387,6 @@ func (target *MySQLTarget) initMySQL() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -413,12 +415,18 @@ func NewMySQLTarget(id string, args MySQLArgs, loggerOnce logger.LogOnce) (*MySQ
 		args.DSN = config.FormatDSN()
 	}
 
-	return &MySQLTarget{
+	target := &MySQLTarget{
 		id:         event.TargetID{ID: id, Name: "mysql"},
 		args:       args,
 		firstPing:  false,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

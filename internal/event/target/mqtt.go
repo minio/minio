@@ -121,6 +121,11 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *MQTTTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *MQTTTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -254,9 +259,6 @@ func (target *MQTTTarget) initMQTT() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -281,11 +283,17 @@ func NewMQTTTarget(id string, args MQTTArgs, loggerOnce logger.LogOnce) (*MQTTTa
 		}
 	}
 
-	return &MQTTTarget{
+	target := &MQTTTarget{
 		id:         event.TargetID{ID: id, Name: "mqtt"},
 		args:       args,
 		store:      store,
 		quitCh:     make(chan struct{}),
 		loggerOnce: loggerOnce,
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

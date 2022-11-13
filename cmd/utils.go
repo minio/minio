@@ -51,6 +51,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/deadlineconn"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -726,17 +727,37 @@ func newHTTPTransport(timeout time.Duration) *http.Transport {
 	return tr
 }
 
+type dialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
+// newCustomDialContext setups a custom dialer for any external communication and proxies.
+func newCustomDialContext() dialContext {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			Timeout:   15 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+
+		conn, err := dialer.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+
+		dconn := deadlineconn.New(conn).
+			WithReadDeadline(globalConnReadDeadline).
+			WithWriteDeadline(globalConnWriteDeadline)
+
+		return dconn, nil
+	}
+}
+
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport() func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   15 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           newCustomDialContext(),
 		MaxIdleConnsPerHost:   1024,
 		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
 		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default

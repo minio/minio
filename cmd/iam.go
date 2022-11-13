@@ -786,6 +786,26 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	}
 }
 
+// QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
+func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
+	select {
+	case <-sys.configLoaded:
+		pe := sys.store.ListLDAPPolicyMappings(q, sys.ldapConfig.IsLDAPUserDN, sys.ldapConfig.IsLDAPGroupDN)
+		pe.Timestamp = UTCNow()
+		return &pe, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // IsTempUser - returns if given key is a temporary user.
 func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {

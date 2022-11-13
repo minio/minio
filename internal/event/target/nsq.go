@@ -105,6 +105,11 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *NSQTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *NSQTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -244,9 +249,6 @@ func (target *NSQTarget) initNSQ() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -261,11 +263,17 @@ func NewNSQTarget(id string, args NSQArgs, loggerOnce logger.LogOnce) (*NSQTarge
 		}
 	}
 
-	return &NSQTarget{
+	target := &NSQTarget{
 		id:         event.TargetID{ID: id, Name: "nsq"},
 		args:       args,
 		loggerOnce: loggerOnce,
 		store:      store,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

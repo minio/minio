@@ -298,7 +298,7 @@ func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 // This is to be called after a successful upload of an object (version).
 func enqueueTransitionImmediate(obj ObjectInfo) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
-		event := lc.Eval(obj.ToLifecycleOpts(), time.Now())
+		event := lc.Eval(obj.ToLifecycleOpts())
 		switch event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 			globalTransitionState.queueTransitionTask(obj, event.StorageClass)

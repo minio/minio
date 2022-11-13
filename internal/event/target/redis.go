@@ -133,6 +133,11 @@ func (target *RedisTarget) ID() event.TargetID {
 	return target.id
 }
 
+// Store returns any underlying store if set.
+func (target *RedisTarget) Store() event.TargetStore {
+	return target.store
+}
+
 // IsActive - Return true if target is up and active
 func (target *RedisTarget) IsActive() (bool, error) {
 	if err := target.init(); err != nil {
@@ -296,9 +301,6 @@ func (target *RedisTarget) initRedis() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -343,12 +345,18 @@ func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*Redi
 		},
 	}
 
-	return &RedisTarget{
+	target := &RedisTarget{
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
 		store:      store,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

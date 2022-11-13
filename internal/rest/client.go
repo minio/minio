@@ -199,11 +199,12 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 
 type respBodyMonitor struct {
 	io.ReadCloser
+	expectTimeouts bool
 }
 
 func (r respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	if err != nil && err != io.EOF {
+	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
 		atomic.AddUint64(&globalStats.errs, 1)
 	}
 	return
@@ -211,7 +212,7 @@ func (r respBodyMonitor) Read(p []byte) (n int, err error) {
 
 func (r respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
-	if err != nil {
+	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
 		atomic.AddUint64(&globalStats.errs, 1)
 	}
 	return
@@ -297,7 +298,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		return nil, errors.New(resp.Status)
 	}
 	if !c.NoMetrics && !c.ExpectTimeouts {
-		resp.Body = &respBodyMonitor{resp.Body}
+		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: c.ExpectTimeouts}
 	}
 	return resp.Body, nil
 }

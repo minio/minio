@@ -167,12 +167,12 @@ func ValidateParity(ssParity, setDriveCount int) error {
 	// SS parity disks should be greater than or equal to minParityDisks.
 	// Parity below minParityDisks is not supported.
 	if ssParity > 0 && ssParity < minParityDisks {
-		return fmt.Errorf("Standard storage class parity %d should be greater than or equal to %d",
+		return fmt.Errorf("parity %d should be greater than or equal to %d",
 			ssParity, minParityDisks)
 	}
 
 	if ssParity > setDriveCount/2 {
-		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, setDriveCount/2)
+		return fmt.Errorf("parity %d should be less than or equal to %d", ssParity, setDriveCount/2)
 	}
 
 	return nil
@@ -304,7 +304,12 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.
 	if err = validateParity(cfg.Standard.Parity, cfg.RRS.Parity, setDriveCount); err != nil {
-		return Config{}, err
+		cfg.RRS.Parity = defaultRRSParity
+		if setDriveCount == 1 {
+			cfg.RRS.Parity = 0
+		}
+		cfg.Standard.Parity = DefaultParityBlocks(setDriveCount)
+		return cfg, err
 	}
 
 	return cfg, nil
