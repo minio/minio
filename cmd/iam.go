@@ -1666,10 +1666,10 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	if !isOwnerDerived {
 		var err error
 		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
-		if err == errNoSuchPolicy {
+		if errors.Is(err, errNoSuchPolicy) {
 			for _, pname := range policies {
 				_, err := sys.store.GetPolicy(pname)
-				if err == errNoSuchPolicy {
+				if errors.Is(err, errNoSuchPolicy) {
 					// all policies presented in the claim should exist
 					logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
 					return false
