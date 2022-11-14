@@ -210,9 +210,8 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 
-		// All other expiration only applies to latest versions
-		// (except if this is a delete marker)
-		if obj.IsLatest && !obj.DeleteMarker {
+		// Remove the object or simply add a delete marker (once) in a versioned bucket
+		if obj.VersionID == "" || obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
@@ -225,6 +224,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 	}
+
 	return action
 }
 
