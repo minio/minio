@@ -1661,7 +1661,8 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 		_, combinedPolicyStmt := filterPolicies(cache, mp.Policies, "")
 
 		if combinedPolicyStmt.IsEmpty() {
-			return time.Time{}, fmt.Errorf("specified policy %s, not found %w", policyName, errNoSuchPolicy)
+			logger.LogIf(ctx, fmt.Errorf("specified policy %s, not found %w", policyName, errNoSuchPolicy))
+			return time.Time{}, errNoSuchPolicy
 		}
 
 		err := store.saveMappedPolicy(ctx, cred.ParentUser, stsUser, false, mp, options{ttl: ttl})
