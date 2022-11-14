@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -110,6 +111,10 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) bool {
 func performCallhome(ctx context.Context) {
 	deadline := 10 * time.Second // Default deadline is 10secs for callhome
 	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		logger.LogIf(ctx, errors.New("Callhome: object layer not ready"))
+		return
+	}
 
 	healthCtx, healthCancel := context.WithTimeout(ctx, deadline)
 	defer healthCancel()
@@ -118,7 +123,7 @@ func performCallhome(ctx context.Context) {
 
 	query := url.Values{}
 	for _, k := range madmin.HealthDataTypesList {
-		query[string(k)] = []string{"true"}
+		query.Set(string(k), "true")
 	}
 
 	healthInfo := madmin.HealthInfo{
@@ -134,15 +139,17 @@ func performCallhome(ctx context.Context) {
 
 	for {
 		select {
-		case hi, ok := <-healthInfoCh:
-			if ok {
-				healthInfo = hi
+		case hi, hasMore := <-healthInfoCh:
+			if !hasMore {
+				// Received all data. Send to SUBNET and return
+				err := sendHealthInfo(ctx, healthInfo)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
+				}
+				return
 			}
+			healthInfo = hi
 		case <-healthCtx.Done():
-			err := sendHealthInfo(ctx, healthInfo)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
-			}
 			return
 		}
 	}
