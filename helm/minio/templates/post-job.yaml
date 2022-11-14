@@ -174,3 +174,28 @@ containers:
   resources:
   { { toYaml .Values.customCommandJob.resources | indent 10 } }
   { { - end } }
+  { { - if .Values.svcaccts } }
+- name: minio-make-svcacct
+  image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  imagePullPolicy: { { .Values.mcImage.pullPolicy } }
+  { { - if .Values.makeServiceAccountJob.exitCommand } }
+  command: [ "/bin/sh", "-c" ]
+  args: ["/bin/sh /config/add-svcacct; x=$(echo $?); {{ .Values.makeServiceAccountJob.exitCommand }} && exit $x" ]
+  { { - else } }
+  command: ["/bin/sh", "/config/add-svcacct"]
+  { { - end } }
+  env:
+    - name: MINIO_ENDPOINT
+      value: { { template "minio.fullname" . } }
+    - name: MINIO_PORT
+      value: { { .Values.service.port | quote } }
+  volumeMounts:
+    - name: minio-configuration
+      mountPath: /config
+    { { - if .Values.tls.enabled } }
+    - name: cert-secret-volume-mc
+      mountPath: { { .Values.configPathmc } }certs
+    {{ end }}
+  resources:
+  {{ toYaml .Values.makeServiceAccountJob.resources | indent 10 }}
+  { { - end } }

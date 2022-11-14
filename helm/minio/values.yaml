@@ -362,21 +362,9 @@ makeUserJob:
   #   user: console
 
 makeServiceAccountJob:
-  podAnnotations: {}
-  annotations: {}
-  securityContext:
-    enabled: false
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
