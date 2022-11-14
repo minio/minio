@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path"
 	"strings"
 	"sync"
@@ -214,7 +215,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]Policy
 
 	// Parse all values to construct the policies data model.
 	for _, kvs := range r.Kvs {
-		if err = ies.getPolicyDocKV(ctx, kvs, m); err != nil && err != errNoSuchPolicy {
+		if err = ies.getPolicyDocKV(ctx, kvs, m); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
@@ -375,7 +376,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 
 	// Parse all policies mapping to create the proper data model
 	for _, kv := range r.Kvs {
-		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, basePrefix); err != nil && err != errNoSuchPolicy {
+		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, basePrefix); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
