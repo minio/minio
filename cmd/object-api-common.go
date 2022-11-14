@@ -396,7 +396,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	result := ListObjectsInfo{}
 	for _, objInfo := range objInfos {
-		if objInfo.IsDir && delimiter == SlashSeparator {
+		if objInfo.IsDir && delimiter == SlashSeparator && objInfo.Name != prefix {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}

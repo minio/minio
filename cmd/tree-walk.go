@@ -194,7 +194,14 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 
 	for i, entry := range entries {
 		var leaf, leafDir bool
-
+		if i == 0 && entry == "" {
+			select {
+			case <-endWalkCh:
+				return false, errWalkAbort
+			case resultCh <- TreeWalkResult{entry: prefixDir, isEmptyDir: leafDir, end: (i == len(entries)-1) && isEnd}:
+			}
+			continue
+		}
 		// Decision to do isLeaf check was pushed from listDir() to here.
 		if delayIsLeaf {
 			leaf = isLeaf(bucket, pathJoin(prefixDir, entry))
@@ -252,7 +259,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		}
 
 		// EOF is set if we are at last entry and the caller indicated we at the end.
-		isEOF := ((i == len(entries)-1) && isEnd)
+		isEOF := (i == len(entries)-1) && isEnd
 		select {
 		case <-endWalkCh:
 			return false, errWalkAbort

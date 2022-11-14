@@ -11,14 +11,6 @@ fi
 echo "os=$os"
 
 set -x
-os="linux"
-errno=$errno
-if [[ `uname  -a` =~ "Darwin" ]];then
-    os="mac"
-    errno=254
-fi
-echo "os=$os"
-
 
 MINT_DATA_DIR=testdata
 MINT_MODE=core
@@ -29,9 +21,7 @@ ENABLE_HTTPS=0
 SERVER_REGION=us-east-1
 ENABLE_VIRTUAL_STYLE=0
 
-
-
-
+# macos need bash 4.0+
 # create testdata
 declare -A data_file_map
 data_file_map["datafile-0-b"]="0"
@@ -387,7 +377,7 @@ function test_list_objects() {
         fi
     fi
 
-    # if upload objects succeeds, list objects without existing prefix
+    # if upload objects succeeds, list objects with not exist prefix
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix linux"
         out=$($function)
@@ -398,6 +388,112 @@ function test_list_objects() {
             out="list-objects without existing prefix failed"
         fi
     fi
+
+    # put dir1/dir2/dir3/dir4/  listobject(prefix=dir1/) should return "dir1/dir2/dir3/dir4/" ...
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key dir1/dir2/dir3/dir4/"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/dir3/dir4/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+      fi
+
+    # put dir1/dir2/  listobject(prefix=dir2/) should return "dir1/dir2/"
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --bucket ${bucket_name} --key dir1/dir2/"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if upload objects succeeds, list objects with existing prefix
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
+    # delete dir1/dir2/  listobject(prefix=dir1/) should return "dir2/"
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-object --bucket ${bucket_name} --key dir1/dir2/"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .Contents[0].Key)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/dir3/dir4/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/ --delimiter /"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        key_name=$(echo "$out" | jq -r .CommonPrefixes[0].Prefix)
+        if [ $rv -eq 0 ] && [ "$key_name" != "dir1/dir2/" ]; then
+            rv=1
+            # since rv is 0, command passed, but didn't return expected value. In this case set the output
+            out="list-objects with prefix is dir failed"
+        fi
+    fi
+
+    # delete dir1/dir2/dir3/dir4/  listobject(prefix=dir1/) should return nothing
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-object --bucket ${bucket_name} --key dir1/dir2/dir3/dir4/"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+    if [ $rv -eq 0 ]; then
+          function="${AWS} s3api list-objects --bucket ${bucket_name} --prefix dir1/"
+          test_function=${function}
+          out=$($function)
+          rv=$?
+          output=$(echo "$out")
+          if [ $rv -eq 0 ] && [ "$output" != "" ]; then
+              rv=1
+              # since rv is 0, command passed, but didn't return expected value. In this case set the output
+              out="list-objects with prefix is dir failed"
+          fi
+    fi
+
+
 
     # if upload objects succeeds, list objectsv2 with existing prefix
     if [ $rv -eq 0 ]; then
@@ -1654,7 +1750,7 @@ function test_get_object_error(){
 
     # if make bucket succeeds upload a file
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /dir1/datafile-1-kB"
         out=$($function 2>&1)
         rv=$?
     else
@@ -1663,19 +1759,40 @@ function test_get_object_error(){
     fi
 
     # if upload succeeds download the file
-        if [ $rv -eq 0 ]; then
-            function="${AWS} s3api get-object --bucket ${bucket_name} --key datafile-1-kB/ /tmp/datafile-1-kB"
-            # save the ref to function being tested, so it can be logged
-            test_function=${function}
-            out=$($function 2>&1)
-            if [ $? -eq $errno ];then
-                rv=0
-            fi
-            if ! [[ "$out" =~ "The specified key does not exist" ]];then
-                log_failure "$(get_duration "$start_time")" "${function}" "${out}"
-                rv=1
-            fi
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1 /tmp/datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        if [ $? -eq $errno ];then
+            rv=0
         fi
+        if ! [[ "$out" =~ "The specified key does not exist" ]];then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1/ /tmp/datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        if [ $? -eq $errno ];then
+            rv=0
+        fi
+        if [[ "$out" =~ "The specified key does not exist" ]];then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+        fi
+    fi
+
+    # delete bucket
+    if [ $rv -eq 0 ]; then
+        function="delete_bucket"
+        out=$(delete_bucket "$bucket_name")
+        rv=$?
+    fi
     return $rv
 }
 
