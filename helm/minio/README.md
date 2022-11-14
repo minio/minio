@@ -219,6 +219,22 @@ Description of the configuration parameters used above -
 - `users[].existingSecretKey` - data key in existingSecret secret containing the secretKey
 - `users[].policy` - name of the policy to assign to user
 
+### Create service account after install
+
+Install the chart, specifying the service accounts you want to create after install:
+
+```bash
+helm install --set svcaccts[0].accessKey=accessKey,svcaccts[0].secretKey=secretKey,svcaccts[0].user=parentUser,svcaccts[1].accessKey=accessKey2,svcaccts[1].secretRef=existingSecret,svcaccts[1].secretKey=password,svcaccts[1].user=parentUser2 minio/minio
+```
+
+Description of the configuration parameters used above -
+
+- `svcaccts[].accessKey` - accessKey of service account
+- `svcaccts[].secretKey` - secretKey of svcacctsecretRef
+- `svcaccts[].existingSecret` - secret name that contains the secretKey of service account
+- `svcaccts[].existingSecretKey` - data key in existingSecret secret containing the secretKey
+- `svcaccts[].user` - name of the parent user to assign to service account
+
 ## Uninstalling the Chart
 
 Assuming your release is named as `my-release`, delete it using the command:

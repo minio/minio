@@ -10,7 +10,7 @@ MC="/usr/bin/mc --insecure"
 
 # AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
 # Special characters for example : ',",<,>,{,}
-MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_tmp"
+MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_svcacct_tmp"
 
 # connectToMinio
 # Use a check-sleep-check loop to wait for MinIO service to be available
@@ -31,7 +31,7 @@ connectToMinio() {
     if [ $ATTEMPTS -gt $LIMIT ]; then
       exit 1 ;
     fi ;
-    sleep 2 ; # 1 second intervals between attempts
+    sleep 2 ; # 2 second intervals between attempts
     $MC_COMMAND ;
     STATUS=$? ;
   done ;
@@ -39,16 +39,16 @@ connectToMinio() {
   return 0
 }
 
-# checkUserExists ()
-# Check if the user exists, by using the exit code of `mc admin user info`
-checkUserExists() {
-  CMD=$(${MC} admin user info myminio $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) > /dev/null 2>&1)
+# checkSvcacctExists ()
+# Check if the svcacct exists, by using the exit code of `mc admin user svcacct info`
+checkSvcacctExists() {
+  CMD=$(${MC} admin user svcacct info myminio $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) > /dev/null 2>&1)
   return $?
 }
 
-# createUser ($policy)
-createUser() {
-  POLICY=$1
+# createSvcacct ($user)
+createSvcacct () {
+  USER=$1
   #check accessKey_and_secretKey_tmp file
   if [[ ! -f $MINIO_ACCESSKEY_SECRETKEY_TMP ]];then
     echo "credentials file does not exist"
@@ -59,24 +59,16 @@ createUser() {
     rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
     return 1
   fi
-  USER=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
-  # Create the user if it does not exist
-  if ! checkUserExists ; then
-    echo "Creating user '$USER'"
-    cat $MINIO_ACCESSKEY_SECRETKEY_TMP | ${MC} admin user add myminio
+  SVCACCT=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
+  # Create the svcacct if it does not exist
+  if ! checkSvcacctExists ; then
+    echo "Creating svcacct '$SVCACCT'"
+    ${MC} admin user svcacct add --access-key $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --secret-key $(tail -n1 $MINIO_ACCESSKEY_SECRETKEY_TMP) myminio $USER
   else
-    echo "User '$USER' already exists."
+    echo "Svcacct '$SVCACCT' already exists."
   fi
   #clean up credentials files.
   rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
-
-  # set policy for user
-  if [ ! -z $POLICY -a $POLICY != " " ] ; then
-      echo "Adding policy '$POLICY' for '$USER'"
-      ${MC} admin policy set myminio $POLICY user=$USER
-  else
-      echo "User '$USER' has no policy attached."
-  fi
 }
 
 # Try connecting to MinIO instance
@@ -87,19 +79,19 @@ scheme=http
 {{- end }}
 connectToMinio $scheme
 
-{{ if .Values.users }}
+{{ if .Values.svcaccts }}
 {{ $global := . }}
-# Create the users
-{{- range .Values.users }}
+# Create the svcaccts
+{{- range .Values.svcaccts }}
 echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
 cat /config/secrets/{{ tpl .existingSecret $global }}/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 # Add a new line if it doesn't exist
 sed -i '$a\' $MINIO_ACCESSKEY_SECRETKEY_TMP
-createUser {{ .policy }}
+createSvcacct {{ .user }}
 {{ else }}
 echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
-createUser {{ .policy }}
+createSvcacct {{ .user }}
 {{- end }}
 {{- end }}
 {{- end }}

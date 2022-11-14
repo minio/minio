@@ -1,19 +1,19 @@
 {{- $global := . -}}
-{{- if .Values.users }}
+{{- if .Values.svcaccts }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ template "minio.fullname" . }}-make-user-job
+  name: {{ template "minio.fullname" . }}-make-svcacct-job
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ template "minio.name" . }}-make-user-job
+    app: {{ template "minio.name" . }}-make-svcacct-job
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
-{{- with .Values.makeUserJob.annotations }}
+{{- with .Values.makeServiceAccountJob.annotations }}
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:
@@ -25,30 +25,30 @@ spec:
 {{- if .Values.podLabels }}
 {{ toYaml .Values.podLabels | indent 8 }}
 {{- end }}
-{{- if .Values.makeUserJob.podAnnotations }}
+{{- if .Values.makeServiceAccountJob.podAnnotations }}
       annotations:
-{{ toYaml .Values.makeUserJob.podAnnotations | indent 8 }}
+{{ toYaml .Values.makeServiceAccountJob.podAnnotations | indent 8 }}
 {{- end }}
     spec:
       restartPolicy: OnFailure
 {{- include "minio.imagePullSecrets" . | indent 6 }}
 {{- if .Values.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.makeUserJob.nodeSelector | indent 8 }}
+{{ toYaml .Values.makeServiceAccountJob.nodeSelector | indent 8 }}
 {{- end }}
-{{- with .Values.makeUserJob.affinity }}
+{{- with .Values.makeServiceAccountJob.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- with .Values.makeUserJob.tolerations }}
+{{- with .Values.makeServiceAccountJob.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- if .Values.makeUserJob.securityContext.enabled }}
+{{- if .Values.makeServiceAccountJob.securityContext.enabled }}
       securityContext:
-        runAsUser: {{ .Values.makeUserJob.securityContext.runAsUser }}
-        runAsGroup: {{ .Values.makeUserJob.securityContext.runAsGroup }}
-        fsGroup: {{ .Values.makeUserJob.securityContext.fsGroup }}
+        runAsUser: {{ .Values.makeServiceAccountJob.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.makeServiceAccountJob.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.makeServiceAccountJob.securityContext.fsGroup }}
 {{- end }}
       volumes:
         - name: minio-configuration
@@ -58,7 +58,7 @@ spec:
                 name: {{ template "minio.fullname" . }}
             - secret:
                 name: {{ template "minio.secretName" . }}
-            {{- range .Values.users }}
+            {{- range .Values.svcaccts }}
             {{- if .existingSecret }}
             - secret:
                 name: {{ tpl .existingSecret $global }}
@@ -75,8 +75,8 @@ spec:
             - key: {{ .Values.tls.publicCrt }}
               path: CAs/public.crt
         {{ end }}
-        {{- if .Values.makeUserJob.extraVolumes }}
-          {{- toYaml .Values.makeUserJob.extraVolumes | nindent 8 }}
+        {{- if .Values.makeServiceAccountJob.extraVolumes }}
+          {{- toYaml .Values.makeServiceAccountJob.extraVolumes | nindent 8 }}
         {{- end }}
 {{ if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
@@ -85,11 +85,11 @@ spec:
       - name: minio-mc
         image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
         imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
-        {{- if .Values.makeUserJob.exitCommand }}
+        {{- if .Values.makeServiceAccountJob.exitCommand }}
         command: ["/bin/sh", "-c"]
-        args: ["/bin/sh /config/add-user; x=$(echo $?); {{ .Values.makeUserJob.exitCommand }} && exit $x" ]
+        args: ["/bin/sh /config/add-svcacct; x=$(echo $?); {{ .Values.makeServiceAccountJob.exitCommand }} && exit $x" ]
         {{- else }}
-        command: ["/bin/sh", "/config/add-user"]
+        command: ["/bin/sh", "/config/add-svcacct"]
         {{- end }}
         env:
           - name: MINIO_ENDPOINT
@@ -103,9 +103,9 @@ spec:
           - name: cert-secret-volume-mc
             mountPath: {{ .Values.configPathmc }}certs
           {{ end }}
-          {{- if .Values.makeUserJob.extraVolumeMounts }}
-            {{- toYaml .Values.makeUserJob.extraVolumeMounts | nindent 10 }}
+          {{- if .Values.makeServiceAccountJob.extraVolumeMounts }}
+            {{- toYaml .Values.makeServiceAccountJob.extraVolumeMounts | nindent 10 }}
           {{- end }}
         resources:
-{{ toYaml .Values.makeUserJob.resources | indent 10 }}
+{{ toYaml .Values.makeServiceAccountJob.resources | indent 10 }}
 {{- end }}
