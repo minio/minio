@@ -1261,7 +1261,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if len(fivs.Versions) > 2 {
-			return fmt.Errorf("bucket(%s)/object(%s) object needs healing, allowing lazy healing via scanner instead here for versions greater than %d > 2",
+			return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
 				bucket, entry.name,
 				len(fivs.Versions))
 		}
