@@ -339,12 +339,44 @@ users:
   #  existingSecretKey: password
   #  policy: readonly
 
-
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
   resources:
     requests:
       memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
+
+## List of service accounts to be created after minio install
+##
+# svcaccts:
+  ## accessKey, secretKey and parent user to be assigned to the service accounts
+  ## Add new service accounts as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management/minio-user-management.html#service-accounts
+  # - accessKey: console-svcacct
+  #   secretKey: console123
+  #   user: console
+  ## Or you can refer to specific secret
+  # - accessKey: externalSecret
+  #   existingSecret: my-secret
+  #   existingSecretKey: password
+  #   user: console
+
+makeServiceAccountJob:
+  podAnnotations: {}
+  annotations: {}
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraVolumes: []
+  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -362,14 +394,14 @@ buckets:
   #   # bucket [true|false]
   #   versioning: false
   #   # set objectlocking for
-  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking 
+  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
   #   objectlocking: false
   # - name: bucket2
   #   policy: none
   #   purge: false
   #   versioning: true
   #   # set objectlocking for
-  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking 
+  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
   #   objectlocking: false
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
@@ -379,7 +411,7 @@ makeBucketJob:
       memory: 128Mi
   # Command to run after the main command on exit
   exitCommand: ""
-  
+
 ## List of command to run after minio install
 ## NOTE: the mc command TARGET is always "myminio"
 customCommands:
@@ -405,7 +437,7 @@ postJob:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  
+
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed
 environment:
@@ -457,7 +489,7 @@ metrics:
   serviceMonitor:
     enabled: false
     # scrape each node/pod individually for additional metrics
-    includeNode: false 
+    includeNode: false
     public: true
     additionalLabels: {}
     # for node metrics
