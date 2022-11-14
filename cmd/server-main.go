@@ -330,6 +330,8 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+
+	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
 }
 
 func configRetriableErrors(err error) bool {

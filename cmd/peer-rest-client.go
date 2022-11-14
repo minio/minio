@@ -202,6 +202,8 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 		values.Set(peerRESTDisk, disk)
 	}
 	values.Set(peerRESTJobID, opts.jobID)
+	values.Set(peerRESTDepID, opts.depID)
+
 	respBody, err := client.callWithContext(ctx, peerRESTMethodMetrics, values, nil, -1)
 	if err != nil {
 		return

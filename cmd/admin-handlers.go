@@ -428,7 +428,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-
+	dID := r.Form.Get("by-depID")
 	done := ctx.Done()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -441,15 +441,16 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			hosts: hostMap,
 			disks: diskMap,
 			jobID: jobID,
+			depID: dID,
 		})
 		m.Merge(&mLocal)
-
 		// Allow half the interval for collecting remote...
 		cctx, cancel := context.WithTimeout(ctx, interval/2)
 		mRemote := collectRemoteMetrics(cctx, types, collectMetricsOpts{
 			hosts: hostMap,
 			disks: diskMap,
 			jobID: jobID,
+			depID: dID,
 		})
 		cancel()
 		m.Merge(&mRemote)
