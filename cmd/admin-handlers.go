@@ -512,9 +512,10 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, now time.Time, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
+		Elapsed:    now.Sub(l.Timestamp),
 		Resource:   resource,
 		ServerList: []string{server},
 		Source:     l.Source,
@@ -531,6 +532,7 @@ func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEn
 }
 
 func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
+	now := time.Now().UTC()
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -541,7 +543,7 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 				if val, ok := entryMap[lockReqInfo.Name]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
+					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
 				}
 			}
 		}
