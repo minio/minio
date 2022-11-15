@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -64,6 +64,7 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 		return fmt.Errorf("Expected platform '%s', found to be running '%s'",
 			s1.MinioPlatform, s2.MinioPlatform)
 	}
+
 	if s1.MinioEndpoints.NEndpoints() != s2.MinioEndpoints.NEndpoints() {
 		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.NEndpoints(),
 			s2.MinioEndpoints.NEndpoints())
@@ -200,15 +201,18 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 	srcCfg := getServerSystemCfg()
 	clnts := newBootstrapRESTClients(endpointServerPools)
 	var onlineServers int
-	var offlineEndpoints []string
+	var offlineEndpoints []error
+	var incorrectConfigs []error
 	var retries int
 	for onlineServers < len(clnts)/2 {
 		for _, clnt := range clnts {
 			if err := clnt.Verify(ctx, srcCfg); err != nil {
 				if !isNetworkError(err) {
-					logger.LogIf(ctx, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err))
+					logger.LogOnceIf(ctx, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err), clnt.String())
+					incorrectConfigs = append(incorrectConfigs, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err))
+				} else {
+					offlineEndpoints = append(offlineEndpoints, fmt.Errorf("%s is unreachable: %w", clnt.String(), err))
 				}
-				offlineEndpoints = append(offlineEndpoints, clnt.String())
 				continue
 			}
 			onlineServers++
@@ -221,15 +225,19 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 			// 100% CPU when half the endpoints are offline.
 			time.Sleep(100 * time.Millisecond)
 			retries++
-			// after 5 retries start logging that servers are not reachable yet
-			if retries >= 5 {
-				logger.Info(fmt.Sprintf("Waiting for atleast %d remote servers to be online for bootstrap check", len(clnts)/2))
+			// after 20 retries start logging that servers are not reachable yet
+			if retries >= 20 {
+				logger.Info(fmt.Sprintf("Waiting for atleast %d remote servers with valid configuration to be online", len(clnts)/2))
 				if len(offlineEndpoints) > 0 {
 					logger.Info(fmt.Sprintf("Following servers are currently offline or unreachable %s", offlineEndpoints))
+				}
+				if len(incorrectConfigs) > 0 {
+					logger.Info(fmt.Sprintf("Following servers mismatch in their configuration %s", incorrectConfigs))
 				}
 				retries = 0 // reset to log again after 5 retries.
 			}
 			offlineEndpoints = nil
+			incorrectConfigs = nil
 		}
 	}
 	return nil

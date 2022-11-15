@@ -317,7 +317,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 	}
 
 	replaceScheme := func(k string) string {
-		// This is needed as fallback when users are changeing
+		// This is needed as fallback when users are updating
 		// from http->https or https->http, we need to verify
 		// both because MinIO remembers the command-line in
 		// "exact" order - as long as this order is not disturbed
@@ -359,11 +359,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			}
 		}
 		if !ok {
-			if globalIsErasureSD {
-				update = true
-			} else {
-				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
-			}
+			update = true
 		}
 	}
 
@@ -378,11 +374,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 				}
 			}
 			if !ok {
-				if globalIsErasureSD {
-					update = true
-				} else {
-					return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
-				}
+				update = true
 			}
 			if ok && pos != pi.position {
 				return false, fmt.Errorf("pool order change detected for %s, expected position is (%s) but found (%s)", k, humanize.Ordinal(pi.position+1), humanize.Ordinal(pos+1))
@@ -400,6 +392,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			}
 		}
 	}
+
 	return update, nil
 }
 
