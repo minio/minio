@@ -2249,9 +2249,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	query := r.Form
 	healthInfoCh := make(chan madmin.HealthInfo)
 	enc := json.NewEncoder(w)
-	setCommonHeaders(w)
-	setEventStreamHeaders(w)
-	w.WriteHeader(http.StatusOK)
 
 	healthInfo := madmin.HealthInfo{
 		Version: madmin.HealthInfoVersion,
@@ -2292,6 +2289,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	defer healthCancel()
 
 	go fetchHealthInfo(healthCtx, objectAPI, &query, healthInfoCh, healthInfo)
+
+	setCommonHeaders(w)
+	setEventStreamHeaders(w)
+	w.WriteHeader(http.StatusOK)
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
