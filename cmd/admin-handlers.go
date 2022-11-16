@@ -2612,7 +2612,8 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	resultCh := make(chan madmin.ClusterRegistrationInfo)
+	resultCh := make(chan madmin.ClusterRegistrationInfo,1)
+	
 	go func() {
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)
