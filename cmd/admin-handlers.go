@@ -2613,7 +2613,10 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 	defer cancel()
 
 	resultCh := make(chan madmin.ClusterRegistrationInfo)
+
 	go func() {
+		defer close(resultCh)
+
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)
 		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
@@ -2635,7 +2638,12 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 
 		ci.DeploymentID = globalDeploymentID
 		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.NoOfServers, ci.Info.NoOfDrives, ci.Info.MinioVersion)
-		resultCh <- ci
+
+		select {
+		case resultCh <- ci:
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	select {
