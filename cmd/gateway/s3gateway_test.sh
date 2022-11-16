@@ -1668,7 +1668,7 @@ function test_get_object_error(){
 
     # if make bucket succeeds upload a file
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /dir1/datafile-1-kB"
         out=$($function 2>&1)
         rv=$?
     else
@@ -1677,19 +1677,40 @@ function test_get_object_error(){
     fi
 
     # if upload succeeds download the file
-        if [ $rv -eq 0 ]; then
-            function="${AWS} s3api get-object --bucket ${bucket_name} --key datafile-1-kB/ /tmp/datafile-1-kB"
-            # save the ref to function being tested, so it can be logged
-            test_function=${function}
-            out=$($function 2>&1)
-            if [ $? -eq $errno ];then
-                rv=0
-            fi
-            if ! [[ "$out" =~ "The specified key does not exist" ]];then
-                log_failure "$(get_duration "$start_time")" "${function}" "${out}"
-                rv=1
-            fi
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1 /tmp/datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        if [ $? -eq $errno ];then
+            rv=0
         fi
+        if ! [[ "$out" =~ "The specified key does not exist" ]];then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+        fi
+    fi
+
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1/ /tmp/datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        if [ $? -eq $errno ];then
+            rv=0
+        fi
+        if [[ "$out" =~ "The specified key does not exist" ]];then
+            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+            rv=1
+        fi
+    fi
+
+    # delete bucket
+    if [ $rv -eq 0 ]; then
+        function="delete_bucket"
+        out=$(delete_bucket "$bucket_name")
+        rv=$?
+    fi
     return $rv
 }
 
