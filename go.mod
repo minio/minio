@@ -47,7 +47,7 @@ require (
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
-	github.com/minio/kes v0.21.1
+	github.com/minio/kes v0.22.0
 	github.com/minio/madmin-go v1.7.5
 	github.com/minio/minio-go/v7 v7.0.43
 	github.com/minio/pkg v1.5.4
@@ -93,6 +93,7 @@ require (
 )
 
 require (
+	aead.dev/mem v0.2.0 // indirect
 	cloud.google.com/go v0.104.0 // indirect
 	cloud.google.com/go/compute v1.10.0 // indirect
 	cloud.google.com/go/iam v0.4.0 // indirect
