@@ -1593,6 +1593,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 
 	pool.ResizeWorkers(workers, 0)
 	pool.ResizeFailedWorkers(failedWorkers)
+	pool.workerWg.Add(1)
 	go pool.AddWorker(pool.existingWorkers, nil)
 	go pool.resyncer.PersistToDisk(ctx, o)
 	go pool.processMRF()
