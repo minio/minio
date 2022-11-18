@@ -321,6 +321,21 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		}
 	}
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	tgtBytes, err := json.Marshal(&targets)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+	if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
 	if err := globalReplicationPool.resyncer.start(ctx, objectAPI, resyncOpts{
 		bucket:       bucket,
 		arn:          arn,
