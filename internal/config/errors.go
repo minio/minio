@@ -195,9 +195,10 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 	ErrInvalidEndpoint = newErrFn(
 		"Invalid endpoint for single drive mode",
 		"Please check the endpoint",
-		`Single drive mode requires absolute path without hostnames
+		`Single-Node modes requires absolute path without hostnames:
 Examples:
-   $ minio server /data/minio/`,
+   $ minio server /data/minio/ #Single Node Single Drive
+   $ minio server /data-{1...4}/minio # Single Node Multi Drive`,
 	)
 
 	ErrUnsupportedBackend = newErrFn(

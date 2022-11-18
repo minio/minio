@@ -592,7 +592,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 			return endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
-			return endpoints, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single drive setup")
+			return endpoints, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single node setup")
 		}
 		endpoints = append(endpoints, endpoint)
 		setupType = ErasureSDSetupType
