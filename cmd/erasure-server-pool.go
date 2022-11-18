@@ -1076,9 +1076,12 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 				NoLock: true,
 			})
 			if err != nil {
-				derrs[j] = err
+				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+					derrs[j] = err
+				}
 				dobjects[j] = DeletedObject{
 					ObjectName: obj.ObjectName,
+					VersionID:  obj.VersionID,
 				}
 				return nil
 			}
@@ -1435,9 +1438,9 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		pi, err := pool.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 		if err == nil {
-			return pool.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+			return pi, nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1499,9 +1502,9 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		result, err := pool.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 		if err == nil {
-			return pool.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
+			return result, nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1530,9 +1533,9 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		err := pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		if err == nil {
-			return pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
+			return nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1562,10 +1565,16 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		objInfo, err = pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		if err == nil {
-			return pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+			return objInfo, nil
 		}
+		switch err.(type) {
+		case InvalidUploadID:
+			// upload id not found move to next pool
+			continue
+		}
+		return objInfo, err
 	}
 
 	return objInfo, InvalidUploadID{
