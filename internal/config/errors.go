@@ -192,12 +192,13 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 		  --address '[fe80::da00:a6c8:e3ae:ddd7]:9000'`,
 	)
 
-	ErrInvalidFSEndpoint = newErrFn(
-		"Invalid endpoint for standalone FS mode",
-		"Please check the FS endpoint",
-		`FS mode requires only one writable disk path
-Example 1:
-   $ minio server /data/minio/`,
+	ErrInvalidEndpoint = newErrFn(
+		"Invalid endpoint for single drive mode",
+		"Please check the endpoint",
+		`Single-Node modes requires absolute path without hostnames:
+Examples:
+   $ minio server /data/minio/ #Single Node Single Drive
+   $ minio server /data-{1...4}/minio # Single Node Multi Drive`,
 	)
 
 	ErrUnsupportedBackend = newErrFn(
