@@ -221,6 +221,9 @@ func (sm *siteResyncMetrics) incBucket(o resyncOpts, bktStatus ResyncStatusType)
 	defer sm.Unlock()
 	st, ok := sm.resyncStatus[o.resyncID]
 	if ok {
+		if st.BucketStatuses == nil {
+			st.BucketStatuses = map[string]ResyncStatusType{}
+		}
 		switch bktStatus {
 		case ResyncCompleted:
 			st.BucketStatuses[o.bucket] = ResyncCompleted
