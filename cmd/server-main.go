@@ -91,6 +91,20 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_READ_HEADER_TIMEOUT",
 		Hidden: true,
 	},
+	cli.DurationFlag{
+		Name:   "conn-read-deadline",
+		Usage:  "custom connection READ deadline",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_CONN_READ_DEADLINE",
+	},
+	cli.DurationFlag{
+		Name:   "conn-write-deadline",
+		Usage:  "custom connection WRITE deadline",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -249,6 +263,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 		globalIsErasure = true
 	}
 	globalIsErasureSD = (setupType == ErasureSDSetupType)
+
+	globalConnReadDeadline = ctx.Duration("conn-read-deadline")
+	globalConnWriteDeadline = ctx.Duration("conn-write-deadline")
 }
 
 func serverHandleEnvVars() {
@@ -313,6 +330,8 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+
+	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
 }
 
 func configRetriableErrors(err error) bool {
@@ -549,7 +568,7 @@ func serverMain(ctx *cli.Context) {
 
 	setHTTPServer(httpServer)
 
-	if globalIsDistErasure && globalEndpoints.FirstLocal() {
+	if globalIsDistErasure {
 		// Additionally in distributed setup, validate the setup and configuration.
 		if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
 			logger.Fatal(err, "Unable to start the server")
@@ -563,6 +582,8 @@ func serverMain(ctx *cli.Context) {
 
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
+
+	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
 
 	// Enable background operations for erasure coding
 	initAutoHeal(GlobalContext, newObject)

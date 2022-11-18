@@ -112,16 +112,16 @@ func TestPoolMetaValidate(t *testing.T) {
 		{
 			meta:           meta,
 			pools:          newPools,
-			name:           "Invalid-Commandline",
-			expectedErr:    true,
-			expectedUpdate: false,
+			name:           "Correct-Update",
+			expectedErr:    false,
+			expectedUpdate: true,
 		},
 		{
 			meta:           meta,
 			pools:          reducedPools,
-			name:           "Invalid-Reduced",
-			expectedErr:    true,
-			expectedUpdate: false,
+			name:           "Correct-Update",
+			expectedErr:    false,
+			expectedUpdate: true,
 		},
 		{
 			meta:           meta,

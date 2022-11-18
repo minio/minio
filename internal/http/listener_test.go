@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -167,6 +168,10 @@ func TestNewHTTPListener(t *testing.T) {
 }
 
 func TestHTTPListenerStartClose(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	nonLoopBackIP := getNonLoopBackIP(t)
 
 	testCases := []struct {
@@ -208,6 +213,10 @@ func TestHTTPListenerStartClose(t *testing.T) {
 }
 
 func TestHTTPListenerAddr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	nonLoopBackIP := getNonLoopBackIP(t)
 	var casePorts []string
 	for i := 0; i < 6; i++ {
@@ -251,6 +260,10 @@ func TestHTTPListenerAddr(t *testing.T) {
 }
 
 func TestHTTPListenerAddrs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	nonLoopBackIP := getNonLoopBackIP(t)
 	var casePorts []string
 	for i := 0; i < 6; i++ {

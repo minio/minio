@@ -18,7 +18,6 @@
 package openid
 
 import (
-	"crypto"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -198,7 +197,7 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		ProviderCfgs:       map[string]*providerCfg{},
 		pubKeys: publicKeys{
 			RWMutex: &sync.RWMutex{},
-			pkMap:   map[string]crypto.PublicKey{},
+			pkMap:   map[string]interface{}{},
 		},
 		roleArnPolicyMap: map[arn.ARN]string{},
 		transport:        openIDClientTransport,

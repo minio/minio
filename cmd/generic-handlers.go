@@ -593,7 +593,7 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 		if bucket != "" && object != "" && uploadID != "" {
 			deplID, err := getDeplIDFromUpload(uploadID)
 			if err != nil {
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchUpload), r.URL)
+				h.ServeHTTP(w, r)
 				return
 			}
 			remote, self := globalSiteReplicationSys.getPeerForUpload(deplID)

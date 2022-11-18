@@ -786,6 +786,26 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	}
 }
 
+// QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
+func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
+	select {
+	case <-sys.configLoaded:
+		pe := sys.store.ListLDAPPolicyMappings(q, sys.ldapConfig.IsLDAPUserDN, sys.ldapConfig.IsLDAPGroupDN)
+		pe.Timestamp = UTCNow()
+		return &pe, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // IsTempUser - returns if given key is a temporary user.
 func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {
@@ -1661,10 +1681,10 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	if !isOwnerDerived {
 		var err error
 		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
-		if err == errNoSuchPolicy {
+		if errors.Is(err, errNoSuchPolicy) {
 			for _, pname := range policies {
 				_, err := sys.store.GetPolicy(pname)
-				if err == errNoSuchPolicy {
+				if errors.Is(err, errNoSuchPolicy) {
 					// all policies presented in the claim should exist
 					logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
 					return false

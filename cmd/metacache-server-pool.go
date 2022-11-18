@@ -155,9 +155,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 						return
 					case <-t.C:
 						meta.lastHandout = time.Now()
-						if rpc == nil {
-							meta, _ = localMetacacheMgr.updateCacheEntry(meta)
-						}
 						meta, _ = rpc.UpdateMetacacheListing(ctx, meta)
 					}
 				}(*c)
@@ -299,29 +296,8 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 
 	// Gather results to a single channel.
-	err := mergeEntryChannels(ctx, inputs, results, func(existing, other *metaCacheEntry) (replace bool) {
-		// Pick object over directory
-		if existing.isDir() && !other.isDir() {
-			return true
-		}
-		if !existing.isDir() && other.isDir() {
-			return false
-		}
-		eMeta, err := existing.xlmeta()
-		if err != nil {
-			return true
-		}
-		oMeta, err := other.xlmeta()
-		if err != nil {
-			return false
-		}
-		// Replace if modtime is newer
-		if !oMeta.latestModtime().Equal(oMeta.latestModtime()) {
-			return oMeta.latestModtime().After(eMeta.latestModtime())
-		}
-		// Use NumVersions as a final tiebreaker.
-		return len(oMeta.versions) > len(eMeta.versions)
-	})
+	// Quorum is one since we are merging across sets.
+	err := mergeEntryChannels(ctx, inputs, results, 1)
 
 	cancelList()
 	wg.Wait()

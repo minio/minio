@@ -281,6 +281,9 @@ var (
 	// Cluster replication manager.
 	globalSiteReplicationSys SiteReplicationSys
 
+	// Cluster replication resync metrics
+	globalSiteResyncMetrics *siteResyncMetrics
+
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
 	globalBucketFederation bool
@@ -290,6 +293,9 @@ var (
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS kms.KMS
+
+	// Common lock for various subsystems performing the leader tasks
+	globalLeaderLock *sharedLock
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
@@ -370,6 +376,11 @@ var (
 	// MinIO client
 	globalMinioClient *minio.Client
 
+	// Public key for subnet confidential information
+	subnetAdminPublicKey = []byte("-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEAyC+ol5v0FP+QcsR6d1KypR/063FInmNEFsFzbEwlHQyEQN3O7kNI\nwVDN1vqp1wDmJYmv4VZGRGzfFw1q+QV7K1TnysrEjrqpVxfxzDQCoUadAp8IxLLc\ns2fjyDNxnZjoC6fTID9C0khKnEa5fPZZc3Ihci9SiCGkPmyUyCGVSxWXIKqL2Lrj\nyDc0pGeEhWeEPqw6q8X2jvTC246tlzqpDeNsPbcv2KblXRcKniQNbBrizT37CKHQ\nM6hc9kugrZbFuo8U5/4RQvZPJnx/DVjLDyoKo2uzuVQs4s+iBrA5sSSLp8rPED/3\n6DgWw3e244Dxtrg972dIT1IOqgn7KUJzVQIDAQAB\n-----END PUBLIC KEY-----")
+
+	globalConnReadDeadline  time.Duration
+	globalConnWriteDeadline time.Duration
 	// Add new variable global values here.
 )
 

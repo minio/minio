@@ -31,19 +31,45 @@ import (
 	"github.com/minio/pkg/env"
 )
 
-// Error config error type
-type Error struct {
-	Err string
+// ErrorConfig holds the config error types
+type ErrorConfig interface {
+	ErrConfigGeneric | ErrConfigNotFound
 }
 
-// Errorf - formats according to a format specifier and returns
-// the string as a value that satisfies error of type config.Error
-func Errorf(format string, a ...interface{}) error {
-	return Error{Err: fmt.Sprintf(format, a...)}
+// ErrConfigGeneric is a generic config type
+type ErrConfigGeneric struct {
+	msg string
 }
 
-func (e Error) Error() string {
-	return e.Err
+func (ge *ErrConfigGeneric) setMsg(msg string) {
+	ge.msg = msg
+}
+
+func (ge ErrConfigGeneric) Error() string {
+	return ge.msg
+}
+
+// ErrConfigNotFound is an error to indicate
+// that a config parameter is not found
+type ErrConfigNotFound struct {
+	ErrConfigGeneric
+}
+
+// Error creates an error message and wraps
+// it with the error type specified in the type parameter
+func Error[T ErrorConfig, PT interface {
+	*T
+	setMsg(string)
+}](format string, vals ...interface{},
+) T {
+	pt := PT(new(T))
+	pt.setMsg(fmt.Sprintf(format, vals...))
+	return *pt
+}
+
+// Errorf formats an error and returns it as a generic config error
+func Errorf(format string, vals ...interface{}) ErrConfigGeneric {
+	return Error[ErrConfigGeneric](format, vals...)
 }
 
 // Default keys
@@ -739,7 +765,7 @@ func (c Config) DelKVS(s string) error {
 
 	ck, ok := c[subSys][tgt]
 	if !ok {
-		return Errorf("sub-system %s:%s already deleted or does not exist", subSys, tgt)
+		return Error[ErrConfigNotFound]("sub-system %s:%s already deleted or does not exist", subSys, tgt)
 	}
 
 	if len(inputs) == 2 {
@@ -748,7 +774,7 @@ func (c Config) DelKVS(s string) error {
 		for _, delKey := range strings.Fields(inputs[1]) {
 			_, ok := currKVS.Lookup(delKey)
 			if !ok {
-				return Errorf("key %s doesn't exist", delKey)
+				return Error[ErrConfigNotFound]("key %s doesn't exist", delKey)
 			}
 			defVal, isDef := defKVS.Lookup(delKey)
 			if isDef {

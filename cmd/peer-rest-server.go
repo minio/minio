@@ -437,6 +437,7 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 		diskMap[disk] = struct{}{}
 	}
 	jobID := r.Form.Get(peerRESTJobID)
+	depID := r.Form.Get(peerRESTDepID)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -444,8 +445,8 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 	info := collectLocalMetrics(types, collectMetricsOpts{
 		disks: diskMap,
 		jobID: jobID,
+		depID: depID,
 	})
-
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
@@ -1130,7 +1131,10 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	enc := gob.NewEncoder(w)
 	for {
 		select {
-		case entry := <-ch:
+		case entry, ok := <-ch:
+			if !ok {
+				return
+			}
 			if err := enc.Encode(entry); err != nil {
 				return
 			}

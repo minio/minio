@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -745,7 +746,7 @@ func (store *IAMStoreSys) RemoveUsersFromGroup(ctx context.Context, group string
 
 		// Remove the group from storage. First delete the
 		// mapped policy. No-mapped-policy case is ignored.
-		if err := store.deleteMappedPolicy(ctx, group, regUser, true); err != nil && err != errNoSuchPolicy {
+		if err := store.deleteMappedPolicy(ctx, group, regUser, true); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return updatedAt, err
 		}
 		if err := store.deleteGroupInfo(ctx, group); err != nil && err != errNoSuchGroup {
@@ -883,7 +884,7 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 			store.deleteMappedPolicy(ctx, name, regUser, false)
 		}
 		err := store.deleteMappedPolicy(ctx, name, userType, isGroup)
-		if err != nil && err != errNoSuchPolicy {
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return updatedAt, err
 		}
 		if !isGroup {
@@ -928,7 +929,7 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 	defer store.unlock()
 
 	err := store.loadPolicyDoc(ctx, policy, cache.iamPolicyDocsMap)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// policy was deleted, update cache.
 		delete(cache.iamPolicyDocsMap, policy)
 
@@ -1004,7 +1005,7 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 	}
 
 	err := store.deletePolicyDoc(ctx, policy)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// Ignore error if policy is already deleted.
 		err = nil
 	}
@@ -1252,6 +1253,169 @@ func (store *IAMStoreSys) GetUsers() map[string]madmin.UserInfo {
 	return result
 }
 
+// Assumes store is locked by caller. If users is empty, returns all user mappings.
+func (store *IAMStoreSys) listLDAPUserPolicyMappings(cache *iamCache, users []string,
+	isLDAPUserDN func(string) bool,
+) []madmin.UserPolicyEntities {
+	var r []madmin.UserPolicyEntities
+	usersSet := set.CreateStringSet(users...)
+	for user, mappedPolicy := range cache.iamUserPolicyMap {
+		if !isLDAPUserDN(user) {
+			continue
+		}
+
+		if !usersSet.IsEmpty() && !usersSet.Contains(user) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.UserPolicyEntities{
+			User:     user,
+			Policies: ps,
+		})
+	}
+
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].User < r[j].User
+	})
+
+	return r
+}
+
+// Assumes store is locked by caller. If groups is empty, returns all group mappings.
+func (store *IAMStoreSys) listLDAPGroupPolicyMappings(cache *iamCache, groups []string,
+	isLDAPGroupDN func(string) bool,
+) []madmin.GroupPolicyEntities {
+	var r []madmin.GroupPolicyEntities
+	groupsSet := set.CreateStringSet(groups...)
+	for group, mappedPolicy := range cache.iamGroupPolicyMap {
+		if !isLDAPGroupDN(group) {
+			continue
+		}
+
+		if !groupsSet.IsEmpty() && !groupsSet.Contains(group) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.GroupPolicyEntities{
+			Group:    group,
+			Policies: ps,
+		})
+	}
+
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].Group < r[j].Group
+	})
+
+	return r
+}
+
+// Assumes store is locked by caller. If policies is empty, returns all policy mappings.
+func (store *IAMStoreSys) listLDAPPolicyMappings(cache *iamCache, policy []string,
+	isLDAPUserDN, isLDAPGroupDN func(string) bool,
+) []madmin.PolicyEntities {
+	queryPolSet := set.CreateStringSet(policy...)
+
+	policyToUsersMap := make(map[string]set.StringSet)
+	for user, mappedPolicy := range cache.iamUserPolicyMap {
+		if !isLDAPUserDN(user) {
+			continue
+		}
+
+		commonPolicySet := mappedPolicy.policySet()
+		if !queryPolSet.IsEmpty() {
+			commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+		}
+		for _, policy := range commonPolicySet.ToSlice() {
+			s, ok := policyToUsersMap[policy]
+			if !ok {
+				policyToUsersMap[policy] = set.CreateStringSet(user)
+			} else {
+				s.Add(user)
+				policyToUsersMap[policy] = s
+			}
+		}
+	}
+
+	policyToGroupsMap := make(map[string]set.StringSet)
+	for group, mappedPolicy := range cache.iamGroupPolicyMap {
+		if !isLDAPGroupDN(group) {
+			continue
+		}
+
+		commonPolicySet := mappedPolicy.policySet()
+		if !queryPolSet.IsEmpty() {
+			commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+		}
+		for _, policy := range commonPolicySet.ToSlice() {
+			s, ok := policyToUsersMap[policy]
+			if !ok {
+				policyToGroupsMap[policy] = set.CreateStringSet(group)
+			} else {
+				s.Add(group)
+				policyToGroupsMap[policy] = s
+			}
+		}
+	}
+
+	m := make(map[string]madmin.PolicyEntities, len(policyToGroupsMap))
+	for policy, groups := range policyToGroupsMap {
+		s := groups.ToSlice()
+		sort.Strings(s)
+		m[policy] = madmin.PolicyEntities{
+			Policy: policy,
+			Groups: s,
+		}
+	}
+	for policy, users := range policyToUsersMap {
+		s := users.ToSlice()
+		sort.Strings(s)
+
+		// Update existing value in map
+		pe := m[policy]
+		pe.Policy = policy
+		pe.Users = s
+		m[policy] = pe
+	}
+
+	policyEntities := make([]madmin.PolicyEntities, 0, len(m))
+	for _, v := range m {
+		policyEntities = append(policyEntities, v)
+	}
+
+	sort.Slice(policyEntities, func(i, j int) bool {
+		return policyEntities[i].Policy < policyEntities[j].Policy
+	})
+
+	return policyEntities
+}
+
+// ListLDAPPolicyMappings - return LDAP users/groups mapped to policies.
+func (store *IAMStoreSys) ListLDAPPolicyMappings(q madmin.PolicyEntitiesQuery,
+	isLDAPUserDN, isLDAPGroupDN func(string) bool,
+) madmin.PolicyEntitiesResult {
+	cache := store.rlock()
+	defer store.runlock()
+
+	var result madmin.PolicyEntitiesResult
+
+	isAllPoliciesQuery := len(q.Users) == 0 && len(q.Groups) == 0 && len(q.Policy) == 0
+
+	if len(q.Users) > 0 {
+		result.UserMappings = store.listLDAPUserPolicyMappings(cache, q.Users, isLDAPUserDN)
+	}
+	if len(q.Groups) > 0 {
+		result.GroupMappings = store.listLDAPGroupPolicyMappings(cache, q.Groups, isLDAPGroupDN)
+	}
+	if len(q.Policy) > 0 || isAllPoliciesQuery {
+		result.PolicyMappings = store.listLDAPPolicyMappings(cache, q.Policy, isLDAPUserDN, isLDAPGroupDN)
+	}
+	return result
+}
+
 // GetUsersWithMappedPolicies - safely returns the name of access keys with associated policies
 func (store *IAMStoreSys) GetUsersWithMappedPolicies() map[string]string {
 	cache := store.rlock()
@@ -1344,7 +1508,7 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 		m = cache.iamUserPolicyMap
 	}
 	err := store.loadMappedPolicy(ctx, userOrGroup, userType, isGroup, m)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// This means that the policy mapping was deleted, so we update
 		// the cache.
 		delete(m, userOrGroup)
@@ -1410,7 +1574,7 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 	if userType != svcUser {
 		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
 		// Ignore policy not mapped error
-		if err != nil && err != errNoSuchPolicy {
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}

@@ -18,10 +18,15 @@
 package init
 
 import (
+	"os"
+
 	"github.com/klauspost/cpuid/v2"
 )
 
 func init() {
+	// All MinIO operations must be under UTC.
+	os.Setenv("TZ", "UTC")
+
 	// Temporary workaround for
 	// https://github.com/golang/go/issues/49233
 	// Keep until upstream has been fixed.

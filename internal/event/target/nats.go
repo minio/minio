@@ -160,7 +160,7 @@ func (n NATSArgs) Validate() error {
 
 // To obtain a nats connection from args.
 func (n NATSArgs) connectNats() (*nats.Conn, error) {
-	connOpts := []nats.Option{nats.Name("Minio Notification")}
+	connOpts := []nats.Option{nats.Name("Minio Notification"), nats.MaxReconnects(-1)}
 	if n.Username != "" && n.Password != "" {
 		connOpts = append(connOpts, nats.UserInfo(n.Username, n.Password))
 	}
@@ -228,6 +228,11 @@ type NATSTarget struct {
 // ID - returns target ID.
 func (target *NATSTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Store returns any underlying store if set.
+func (target *NATSTarget) Store() event.TargetStore {
+	return target.store
 }
 
 // IsActive - Return true if target is up and active
@@ -410,9 +415,6 @@ func (target *NATSTarget) initNATS() error {
 		return errNotConnected
 	}
 
-	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
-	}
 	return nil
 }
 
@@ -427,11 +429,17 @@ func NewNATSTarget(id string, args NATSArgs, loggerOnce logger.LogOnce) (*NATSTa
 		}
 	}
 
-	return &NATSTarget{
+	target := &NATSTarget{
 		id:         event.TargetID{ID: id, Name: "nats"},
 		args:       args,
 		loggerOnce: loggerOnce,
 		store:      store,
 		quitCh:     make(chan struct{}),
-	}, nil
+	}
+
+	if target.store != nil {
+		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+	}
+
+	return target, nil
 }
