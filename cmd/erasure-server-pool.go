@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -89,7 +90,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 
 		if err = storageclass.ValidateParity(commonParityDrives, ep.DrivesPerSet); err != nil {
-			return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, ecDrivesNoConfig(ep.DrivesPerSet))
+			return nil, fmt.Errorf("parity validation returned an error %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
 		}
 
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
@@ -115,7 +116,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		// Validate if users brought different DeploymentID pools.
 		if deploymentID != formats[i].ID {
-			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
+			return nil, fmt.Errorf("all pools must have same deployment ID - expected %s, got %s for pool(%s)", deploymentID, formats[i].ID, humanize.Ordinal(i+1))
 		}
 
 		z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
@@ -1075,9 +1076,12 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 				NoLock: true,
 			})
 			if err != nil {
-				derrs[j] = err
+				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+					derrs[j] = err
+				}
 				dobjects[j] = DeletedObject{
 					ObjectName: obj.ObjectName,
+					VersionID:  obj.VersionID,
 				}
 				return nil
 			}
@@ -1434,9 +1438,9 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		pi, err := pool.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 		if err == nil {
-			return pool.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+			return pi, nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1498,9 +1502,9 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		result, err := pool.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 		if err == nil {
-			return pool.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
+			return result, nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1529,9 +1533,9 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		err := pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		if err == nil {
-			return pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
+			return nil
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1561,10 +1565,16 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		if z.IsSuspended(idx) {
 			continue
 		}
-		_, err := pool.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		objInfo, err = pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		if err == nil {
-			return pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+			return objInfo, nil
 		}
+		switch err.(type) {
+		case InvalidUploadID:
+			// upload id not found move to next pool
+			continue
+		}
+		return objInfo, err
 	}
 
 	return objInfo, InvalidUploadID{

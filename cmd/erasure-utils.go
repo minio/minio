@@ -122,7 +122,7 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 
 // returns deploymentID from uploadID
 func getDeplIDFromUpload(uploadID string) (string, error) {
-	uploadBytes, err := base64.StdEncoding.DecodeString(uploadID)
+	uploadBytes, err := base64.RawURLEncoding.DecodeString(uploadID)
 	if err != nil {
 		return "", fmt.Errorf("error parsing uploadID %s (%w)", uploadID, err)
 	}

@@ -20,5 +20,7 @@ data:
   policy_{{ $idx }}.json: |-
 {{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
 {{ end }}
+  add-svcacct: |-
+{{ include (print $.Template.BasePath "/_helper_create_svcacct.txt") . | indent 4 }}
   custom-command: |-
 {{ include (print $.Template.BasePath "/_helper_custom_command.txt") . | indent 4 }}

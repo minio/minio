@@ -487,6 +487,22 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	return generateARN(target)
 }
 
+// getRemoteARNForPeer returns the remote target for a peer site in site replication
+func (sys *BucketTargetSys) getRemoteARNForPeer(bucket string, peer madmin.PeerInfo) string {
+	tgts := sys.targetsMap[bucket]
+	for _, target := range tgts {
+		ep, _ := url.Parse(peer.Endpoint)
+		if target.SourceBucket == bucket &&
+			target.TargetBucket == bucket &&
+			target.Endpoint == ep.Host &&
+			target.Secure == (ep.Scheme == "https") &&
+			target.Type == madmin.ReplicationService {
+			return target.Arn
+		}
+	}
+	return ""
+}
+
 // generate ARN that is unique to this target type
 func generateARN(t *madmin.BucketTarget) string {
 	arn := madmin.ARN{

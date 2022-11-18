@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -74,6 +75,22 @@ var (
 	}
 	errSRNotEnabled = SRError{
 		Cause: errors.New("site replication is not enabled"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRResyncStarted = SRError{
+		Cause: errors.New("site replication resync is already in progress"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRResyncCanceled = SRError{
+		Cause: errors.New("site replication resync is already canceled"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRNoResync = SRError{
+		Cause: errors.New("no resync in progress"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
+	errSRResyncToSelf = SRError{
+		Cause: errors.New("invalid peer specified - cannot resync to self"),
 		Code:  ErrSiteReplicationInvalidRequest,
 	}
 )
@@ -4857,4 +4874,306 @@ func (c *SiteReplicationSys) getPeerForUpload(deplID string) (pi srPeerInfo, loc
 		}
 	}
 	return pi, true
+}
+
+// startResync initiates resync of data to peerSite specified. The overall site resync status
+// is maintained in .minio.sys/buckets/site-replication/resync/<deployment-id.meta>, while collecting
+// individual bucket resync status in .minio.sys/buckets/<bucket-name>/replication/resync.bin
+func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer, peer madmin.PeerInfo) (res madmin.SRResyncOpStatus, err error) {
+	if !c.isEnabled() {
+		return res, errSRNotEnabled
+	}
+	if objAPI == nil {
+		return res, errSRObjectLayerNotReady
+	}
+
+	if peer.DeploymentID == globalDeploymentID {
+		return res, errSRResyncToSelf
+	}
+	if _, ok := c.state.Peers[peer.DeploymentID]; !ok {
+		return res, errSRPeerNotFound
+	}
+	rs, err := globalSiteResyncMetrics.siteStatus(ctx, objAPI, peer.DeploymentID)
+	if err != nil {
+		return res, err
+	}
+	if rs.Status == ResyncStarted {
+		return res, errSRResyncStarted
+	}
+	var buckets []BucketInfo
+	buckets, err = objAPI.ListBuckets(ctx, BucketOptions{})
+	if err != nil {
+		return res, err
+	}
+	rs = newSiteResyncStatus(peer.DeploymentID, buckets)
+	defer func() {
+		if err != nil {
+			rs.Status = ResyncFailed
+			saveSiteResyncMetadata(ctx, rs, objAPI)
+			globalSiteResyncMetrics.updateState(rs)
+		}
+	}()
+
+	globalSiteResyncMetrics.updateState(rs)
+	if err := saveSiteResyncMetadata(ctx, rs, objAPI); err != nil {
+		return res, err
+	}
+
+	for _, bi := range buckets {
+		bucket := bi.Name
+		if _, err := getReplicationConfig(ctx, bucket); err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+				Status:    ResyncFailed.String(),
+			})
+			continue
+		}
+		// mark remote target for this deployment with the new reset id
+		tgtArn := globalBucketTargetSys.getRemoteARNForPeer(bucket, peer)
+		if tgtArn == "" {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: fmt.Sprintf("no valid remote target found for this peer %s (%s)", peer.Name, peer.DeploymentID),
+				Bucket:    bucket,
+			})
+			continue
+		}
+		target := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, bucket, tgtArn)
+		target.ResetBeforeDate = UTCNow()
+		target.ResetID = rs.ResyncID
+		if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, true); err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+			})
+			continue
+		}
+		targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+		if err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+			})
+			continue
+		}
+		tgtBytes, err := json.Marshal(&targets)
+		if err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+			})
+			continue
+		}
+		if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+			})
+			continue
+		}
+		if err := globalReplicationPool.resyncer.start(ctx, objAPI, resyncOpts{
+			bucket:   bucket,
+			arn:      tgtArn,
+			resyncID: rs.ResyncID,
+		}); err != nil {
+			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+				ErrDetail: err.Error(),
+				Bucket:    bucket,
+			})
+			continue
+		}
+	}
+	res = madmin.SRResyncOpStatus{
+		Status:   ResyncStarted.String(),
+		OpType:   "start",
+		ResyncID: rs.ResyncID,
+	}
+	if len(res.Buckets) > 0 {
+		res.ErrDetail = "partial failure in starting site resync"
+	}
+	return res, nil
+}
+
+// cancelResync stops an ongoing site level resync for the peer specified.
+func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLayer, peer madmin.PeerInfo) (res madmin.SRResyncOpStatus, err error) {
+	if !c.isEnabled() {
+		return res, errSRNotEnabled
+	}
+	if objAPI == nil {
+		return res, errSRObjectLayerNotReady
+	}
+	if peer.DeploymentID == globalDeploymentID {
+		return res, errSRResyncToSelf
+	}
+	if _, ok := c.state.Peers[peer.DeploymentID]; !ok {
+		return res, errSRPeerNotFound
+	}
+	rs, err := globalSiteResyncMetrics.siteStatus(ctx, objAPI, peer.DeploymentID)
+	if err != nil {
+		return res, err
+	}
+	switch rs.Status {
+	case ResyncCanceled:
+		return res, errSRResyncCanceled
+	case ResyncCompleted, NoResync:
+		return res, errSRNoResync
+	}
+
+	res = madmin.SRResyncOpStatus{
+		Status:   rs.Status.String(),
+		OpType:   "cancel",
+		ResyncID: rs.ResyncID,
+	}
+	switch rs.Status {
+	case ResyncCanceled:
+		return res, errSRResyncCanceled
+	case ResyncCompleted, NoResync:
+		return res, errSRNoResync
+	}
+	targets := globalBucketTargetSys.ListTargets(ctx, "", string(madmin.ReplicationService))
+	// clear the remote target resetID set while initiating resync to stop replication
+	for _, t := range targets {
+		if t.ResetID == rs.ResyncID {
+			// get tgt with credentials
+			tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, t.SourceBucket, t.Arn)
+			tgt.ResetID = ""
+			bucket := t.SourceBucket
+			if err = globalBucketTargetSys.SetTarget(ctx, bucket, &tgt, true); err != nil {
+				res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+					ErrDetail: err.Error(),
+					Bucket:    bucket,
+				})
+				continue
+			}
+			targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+			if err != nil {
+				res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+					ErrDetail: err.Error(),
+					Bucket:    bucket,
+				})
+				continue
+			}
+			tgtBytes, err := json.Marshal(&targets)
+			if err != nil {
+				res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+					ErrDetail: err.Error(),
+					Bucket:    bucket,
+				})
+				continue
+			}
+			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+				res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
+					ErrDetail: err.Error(),
+					Bucket:    bucket,
+				})
+				continue
+			}
+			// update resync state for the bucket
+			globalReplicationPool.resyncer.Lock()
+			m, ok := globalReplicationPool.resyncer.statusMap[bucket]
+			if !ok {
+				m = newBucketResyncStatus(bucket)
+			}
+			if st, ok := m.TargetsMap[t.Arn]; ok {
+				st.LastUpdate = UTCNow()
+				st.ResyncStatus = ResyncCanceled
+				m.TargetsMap[t.Arn] = st
+				m.LastUpdate = UTCNow()
+			}
+			globalReplicationPool.resyncer.statusMap[bucket] = m
+			globalReplicationPool.resyncer.Unlock()
+		}
+	}
+
+	rs.Status = ResyncCanceled
+	rs.LastUpdate = UTCNow()
+	if err := saveSiteResyncMetadata(ctx, rs, objAPI); err != nil {
+		return res, err
+	}
+
+	globalSiteResyncMetrics.updateState(rs)
+
+	res.Status = rs.Status.String()
+	return res, nil
+}
+
+const (
+	siteResyncMetaFormat    = 1
+	siteResyncMetaVersionV1 = 1
+	siteResyncMetaVersion   = siteResyncMetaVersionV1
+	siteResyncSaveInterval  = 10 * time.Second
+)
+
+func newSiteResyncStatus(dID string, buckets []BucketInfo) SiteResyncStatus {
+	now := UTCNow()
+	s := SiteResyncStatus{
+		Version:        siteResyncMetaVersion,
+		Status:         ResyncStarted,
+		DeplID:         dID,
+		TotBuckets:     len(buckets),
+		BucketStatuses: make(map[string]ResyncStatusType),
+	}
+	for _, bi := range buckets {
+		s.BucketStatuses[bi.Name] = ResyncPending
+	}
+	s.ResyncID = mustGetUUID()
+	s.StartTime = now
+	s.LastUpdate = now
+	return s
+}
+
+// load site resync metadata from disk
+func loadSiteResyncMetadata(ctx context.Context, objAPI ObjectLayer, dID string) (rs SiteResyncStatus, e error) {
+	data, err := readConfig(GlobalContext, objAPI, getSRResyncFilePath(dID))
+	if err != nil {
+		return rs, err
+	}
+	if len(data) == 0 {
+		// Seems to be empty.
+		return rs, nil
+	}
+	if len(data) <= 4 {
+		return rs, fmt.Errorf("site resync: no data")
+	}
+	// Read resync meta header
+	switch binary.LittleEndian.Uint16(data[0:2]) {
+	case siteResyncMetaFormat:
+	default:
+		return rs, fmt.Errorf("resyncMeta: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
+	}
+	switch binary.LittleEndian.Uint16(data[2:4]) {
+	case siteResyncMetaVersion:
+	default:
+		return rs, fmt.Errorf("resyncMeta: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
+	}
+	// OK, parse data.
+	if _, err = rs.UnmarshalMsg(data[4:]); err != nil {
+		return rs, err
+	}
+
+	switch rs.Version {
+	case siteResyncMetaVersionV1:
+	default:
+		return rs, fmt.Errorf("unexpected resync meta version: %d", rs.Version)
+	}
+	return rs, nil
+}
+
+// save resync status of peer to resync/depl-id.meta
+func saveSiteResyncMetadata(ctx context.Context, ss SiteResyncStatus, objectAPI ObjectLayer) error {
+	data := make([]byte, 4, ss.Msgsize()+4)
+
+	// Initialize the resync meta header.
+	binary.LittleEndian.PutUint16(data[0:2], siteResyncMetaFormat)
+	binary.LittleEndian.PutUint16(data[2:4], siteResyncMetaVersion)
+
+	buf, err := ss.MarshalMsg(data)
+	if err != nil {
+		return err
+	}
+	return saveConfig(ctx, objectAPI, getSRResyncFilePath(ss.DeplID), buf)
+}
+
+func getSRResyncFilePath(dID string) string {
+	return pathJoin(siteResyncPrefix, dID+".meta")
 }

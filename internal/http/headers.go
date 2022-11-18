@@ -210,6 +210,9 @@ const (
 
 	// MinIOCompressed is returned when object is compressed
 	MinIOCompressed = "X-Minio-Compressed"
+
+	// SUBNET related
+	SubnetAPIKey = "x-subnet-api-key"
 )
 
 // Common http query params S3 API

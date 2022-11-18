@@ -746,7 +746,7 @@ func (store *IAMStoreSys) RemoveUsersFromGroup(ctx context.Context, group string
 
 		// Remove the group from storage. First delete the
 		// mapped policy. No-mapped-policy case is ignored.
-		if err := store.deleteMappedPolicy(ctx, group, regUser, true); err != nil && err != errNoSuchPolicy {
+		if err := store.deleteMappedPolicy(ctx, group, regUser, true); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return updatedAt, err
 		}
 		if err := store.deleteGroupInfo(ctx, group); err != nil && err != errNoSuchGroup {
@@ -884,7 +884,7 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 			store.deleteMappedPolicy(ctx, name, regUser, false)
 		}
 		err := store.deleteMappedPolicy(ctx, name, userType, isGroup)
-		if err != nil && err != errNoSuchPolicy {
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return updatedAt, err
 		}
 		if !isGroup {
@@ -929,7 +929,7 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 	defer store.unlock()
 
 	err := store.loadPolicyDoc(ctx, policy, cache.iamPolicyDocsMap)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// policy was deleted, update cache.
 		delete(cache.iamPolicyDocsMap, policy)
 
@@ -1005,7 +1005,7 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 	}
 
 	err := store.deletePolicyDoc(ctx, policy)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// Ignore error if policy is already deleted.
 		err = nil
 	}
@@ -1494,7 +1494,7 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 		m = cache.iamUserPolicyMap
 	}
 	err := store.loadMappedPolicy(ctx, userOrGroup, userType, isGroup, m)
-	if err == errNoSuchPolicy {
+	if errors.Is(err, errNoSuchPolicy) {
 		// This means that the policy mapping was deleted, so we update
 		// the cache.
 		delete(m, userOrGroup)
@@ -1560,7 +1560,7 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 	if userType != svcUser {
 		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
 		// Ignore policy not mapped error
-		if err != nil && err != errNoSuchPolicy {
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
