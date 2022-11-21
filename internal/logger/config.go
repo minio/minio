@@ -459,6 +459,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
 			QueueSize:  queueSize,
+			Name:       target,
 		}
 	}
 
@@ -501,6 +502,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
 			QueueSize:  queueSize,
+			Name:       starget,
 		}
 	}
 
@@ -570,6 +572,7 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
 			QueueSize:  queueSize,
+			Name:       target,
 		}
 	}
 
@@ -613,6 +616,7 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
 			QueueSize:  queueSize,
+			Name:       starget,
 		}
 	}
 

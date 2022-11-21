@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger/target/http"
 	"github.com/minio/minio/internal/logger/target/kafka"
 	"github.com/minio/minio/internal/logger/target/types"
@@ -36,6 +37,7 @@ type Target interface {
 	Endpoint() string
 	Stats() types.TargetStats
 	Init() error
+	IsOnline() bool
 	Cancel()
 	Send(entry interface{}) error
 	Type() types.TargetType
@@ -53,6 +55,18 @@ var (
 	// This is always set represent /dev/console target
 	consoleTgt Target
 )
+
+// TargetStatus returns status of the target (online|offline)
+func TargetStatus(h Target) madmin.Status {
+	if h.IsOnline() {
+		return madmin.Status{Status: string(madmin.ItemOnline)}
+	}
+	// Previous initialization had failed. Try again.
+	if e := h.Init(); e == nil {
+		return madmin.Status{Status: string(madmin.ItemOnline)}
+	}
+	return madmin.Status{Status: string(madmin.ItemOffline)}
+}
 
 // SystemTargets returns active targets.
 // Returned slice may not be modified in any way.
@@ -130,30 +144,38 @@ func AddSystemTarget(t Target) error {
 	return nil
 }
 
-func initSystemTargets(cfgMap map[string]http.Config) (tgts []Target, err error) {
+func initSystemTargets(cfgMap map[string]http.Config) ([]Target, []error) {
+	tgts := []Target{}
+	errs := []error{}
 	for _, l := range cfgMap {
 		if l.Enabled {
 			t := http.New(l)
-			if err = t.Init(); err != nil {
-				return tgts, err
-			}
 			tgts = append(tgts, t)
+
+			e := t.Init()
+			if e != nil {
+				errs = append(errs, e)
+			}
 		}
 	}
-	return tgts, err
+	return tgts, errs
 }
 
-func initKafkaTargets(cfgMap map[string]kafka.Config) (tgts []Target, err error) {
+func initKafkaTargets(cfgMap map[string]kafka.Config) ([]Target, []error) {
+	tgts := []Target{}
+	errs := []error{}
 	for _, l := range cfgMap {
 		if l.Enabled {
 			t := kafka.New(l)
-			if err = t.Init(); err != nil {
-				return tgts, err
-			}
 			tgts = append(tgts, t)
+
+			e := t.Init()
+			if e != nil {
+				errs = append(errs, e)
+			}
 		}
 	}
-	return tgts, err
+	return tgts, errs
 }
 
 // Split targets into two groups:
@@ -178,11 +200,8 @@ func cancelTargets(targets []Target) {
 }
 
 // UpdateSystemTargets swaps targets with newly loaded ones from the cfg
-func UpdateSystemTargets(cfg Config) error {
-	newTgts, err := initSystemTargets(cfg.HTTP)
-	if err != nil {
-		return err
-	}
+func UpdateSystemTargets(cfg Config) []error {
+	newTgts, errs := initSystemTargets(cfg.HTTP)
 
 	swapSystemMuRW.Lock()
 	consoleTargets, otherTargets := splitTargets(systemTargets, types.TargetConsole)
@@ -191,15 +210,12 @@ func UpdateSystemTargets(cfg Config) error {
 	swapSystemMuRW.Unlock()
 
 	cancelTargets(otherTargets) // cancel running targets
-	return nil
+	return errs
 }
 
 // UpdateAuditWebhookTargets swaps audit webhook targets with newly loaded ones from the cfg
-func UpdateAuditWebhookTargets(cfg Config) error {
-	newWebhookTgts, err := initSystemTargets(cfg.AuditWebhook)
-	if err != nil {
-		return err
-	}
+func UpdateAuditWebhookTargets(cfg Config) []error {
+	newWebhookTgts, errs := initSystemTargets(cfg.AuditWebhook)
 
 	swapAuditMuRW.Lock()
 	// Retain kafka targets
@@ -209,15 +225,12 @@ func UpdateAuditWebhookTargets(cfg Config) error {
 	swapAuditMuRW.Unlock()
 
 	cancelTargets(oldWebhookTgts) // cancel running targets
-	return nil
+	return errs
 }
 
 // UpdateAuditKafkaTargets swaps audit kafka targets with newly loaded ones from the cfg
-func UpdateAuditKafkaTargets(cfg Config) error {
-	newKafkaTgts, err := initKafkaTargets(cfg.AuditKafka)
-	if err != nil {
-		return err
-	}
+func UpdateAuditKafkaTargets(cfg Config) []error {
+	newKafkaTgts, errs := initKafkaTargets(cfg.AuditKafka)
 
 	swapAuditMuRW.Lock()
 	// Retain webhook targets
@@ -227,5 +240,5 @@ func UpdateAuditKafkaTargets(cfg Config) error {
 	swapAuditMuRW.Unlock()
 
 	cancelTargets(oldKafkaTgts) // cancel running targets
-	return nil
+	return errs
 }

@@ -77,6 +77,9 @@ type Target struct {
 	// Channel of log entries
 	logCh chan interface{}
 
+	// is the target online?
+	online bool
+
 	config Config
 	client *http.Client
 }
@@ -88,6 +91,11 @@ func (h *Target) Endpoint() string {
 
 func (h *Target) String() string {
 	return h.config.Name
+}
+
+// IsOnline returns true if the initialization was successful
+func (h *Target) IsOnline() bool {
+	return h.online
 }
 
 // Stats returns the target statistics.
@@ -140,6 +148,7 @@ func (h *Target) Init() error {
 	}
 
 	h.lastStarted = time.Now()
+	h.online = true
 	atomic.AddInt64(&h.workers, 1)
 	go h.startHTTPLogger()
 	return nil
@@ -230,6 +239,7 @@ func New(config Config) *Target {
 		logCh:  make(chan interface{}, config.QueueSize),
 		doneCh: make(chan struct{}),
 		config: config,
+		online: false,
 	}
 
 	return h
@@ -237,6 +247,10 @@ func New(config Config) *Target {
 
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}) error {
+	if !h.online {
+		return nil
+	}
+
 	select {
 	case <-h.doneCh:
 		return nil
