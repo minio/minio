@@ -27,6 +27,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -43,24 +44,43 @@ const (
 	signV4ChunkedAlgorithm        = "AWS4-HMAC-SHA256-PAYLOAD"
 	signV4ChunkedAlgorithmTrailer = "AWS4-HMAC-SHA256-TRAILER"
 	streamingContentEncoding      = "aws-chunked"
+	awsTrailerHeader              = "X-Amz-Trailer"
+	trailerKVSeparator            = ":"
 )
 
 // getChunkSignature - get chunk signature.
 // Does not update anything in cr.
 func (cr *s3ChunkedReader) getChunkSignature() string {
 	hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
-	trailer := cr.trailers != nil
 
 	// Calculate string to sign.
 	alg := signV4ChunkedAlgorithm + "\n"
-	if trailer {
-		alg = signV4ChunkedAlgorithmTrailer + "\n"
-	}
 	stringToSign := alg +
 		cr.seedDate.Format(iso8601Format) + "\n" +
 		getScope(cr.seedDate, cr.region) + "\n" +
 		cr.seedSignature + "\n" +
 		emptySHA256 + "\n" +
+		hashedChunk
+
+	// Get hmac signing key.
+	signingKey := getSigningKey(cr.cred.SecretKey, cr.seedDate, cr.region, serviceS3)
+
+	// Calculate signature.
+	newSignature := getSignature(signingKey, stringToSign)
+
+	return newSignature
+}
+
+// getTrailerChunkSignature - get trailer chunk signature.
+func (cr *s3ChunkedReader) getTrailerChunkSignature() string {
+	hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
+
+	// Calculate string to sign.
+	alg := signV4ChunkedAlgorithmTrailer + "\n"
+	stringToSign := alg +
+		cr.seedDate.Format(iso8601Format) + "\n" +
+		getScope(cr.seedDate, cr.region) + "\n" +
+		cr.seedSignature + "\n" +
 		hashedChunk
 
 	// Get hmac signing key.
@@ -180,7 +200,10 @@ func newSignV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser, API
 	if trailer {
 		// Discard anything unsigned.
 		req.Trailer = make(http.Header)
-		// TODO: Populate...
+		trailers := req.Header.Values(awsTrailerHeader)
+		for _, key := range trailers {
+			req.Trailer.Add(key, "")
+		}
 	} else {
 		req.Trailer = nil
 	}
@@ -372,9 +395,13 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 
 	// If the chunk size is zero we return io.EOF. As specified by AWS,
 	// only the last chunk is zero-sized.
-	if size == 0 {
+	if len(cr.buffer) == 0 {
 		if cr.trailers != nil {
-			// TODO:
+			err = cr.readTrailers()
+			if err != nil {
+				cr.err = err
+				return 0, err
+			}
 		}
 		cr.err = io.EOF
 		return n, cr.err
@@ -383,6 +410,107 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 	cr.offset = copy(buf, cr.buffer)
 	n += cr.offset
 	return n, err
+}
+
+// readTrailers will read all trailers and populate cr.trailers with actual values.
+func (cr *s3ChunkedReader) readTrailers() error {
+	var valueBuffer bytes.Buffer
+	// Read value
+	for {
+		v, err := cr.reader.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return io.ErrUnexpectedEOF
+			}
+		}
+		if v != '\r' {
+			valueBuffer.WriteByte(v)
+			continue
+		}
+		valueBuffer.WriteByte(v)
+		v, err = cr.reader.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return io.ErrUnexpectedEOF
+			}
+		}
+		if v != '\n' {
+			return errMalformedEncoding
+		}
+		valueBuffer.WriteByte(v)
+		break
+	}
+
+	// Read signature
+	var signatureBuffer bytes.Buffer
+	for {
+		v, err := cr.reader.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return io.ErrUnexpectedEOF
+			}
+		}
+		if v != '\r' {
+			signatureBuffer.WriteByte(v)
+			continue
+		}
+		var tmp [3]byte
+		_, err = io.ReadFull(cr.reader, tmp[:])
+		if err != nil {
+			if err == io.EOF {
+				return io.ErrUnexpectedEOF
+			}
+		}
+		if string(tmp[:]) != "\n\r\n" {
+			return errMalformedEncoding
+		}
+		// No need to write final newlines to buffer.
+		break
+	}
+
+	// Verify signature.
+	sig := signatureBuffer.Bytes()
+	if !bytes.HasPrefix(sig, []byte("x-amz-trailer-signature:")) {
+		return errMalformedEncoding
+	}
+	sig = sig[len("x-amz-trailer-signature:"):]
+	sig = bytes.TrimSpace(sig)
+	cr.chunkSHA256Writer.Write(valueBuffer.Bytes())
+	wantSig := cr.getTrailerChunkSignature()
+	if !compareSignatureV4(string(sig), wantSig) {
+		return errSignatureMismatch
+	}
+
+	// Parse trailers.
+	wantTrailers := make(map[string]struct{}, len(cr.trailers))
+	for k := range cr.trailers {
+		wantTrailers[k] = struct{}{}
+	}
+	input := bufio.NewScanner(bytes.NewReader(valueBuffer.Bytes()))
+	for input.Scan() {
+		line := strings.TrimSpace(input.Text())
+		if line == "" {
+			continue
+		}
+		// Find first separator.
+		idx := strings.IndexByte(line, trailerKVSeparator[0])
+		if idx <= 0 || idx >= len(line) {
+			return errMalformedEncoding
+		}
+		key := line[:idx]
+		value := line[idx+1:]
+		if _, ok := wantTrailers[key]; !ok {
+			return errMalformedEncoding
+		}
+		cr.trailers.Set(key, value)
+		delete(wantTrailers, key)
+	}
+
+	// Check if we got all we want.
+	if len(wantTrailers) > 0 {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 
 // readCRLF - check if reader only has '\r\n' CRLF character.
