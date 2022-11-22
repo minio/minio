@@ -66,8 +66,6 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers,
 	// legacy objects.
 	bpOld *bpool.BytePoolCap
-
-	deletedCleanupSleeper *dynamicSleeper
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -338,7 +336,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					wait := er.deletedCleanupSleeper.Timer(ctx)
+					wait := deletedCleanupSleeper.Timer(ctx)
 					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
 					wait()
 					return nil
