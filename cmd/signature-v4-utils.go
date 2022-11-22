@@ -36,6 +36,10 @@ import (
 // client did not calculate sha256 of the payload.
 const unsignedPayload = "UNSIGNED-PAYLOAD"
 
+// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// client did not calculate sha256 of the payload and there is a trailer.
+const unsignedPayloadTrailer = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+
 // skipContentSha256Cksum returns true if caller needs to skip
 // payload checksum, false if not.
 func skipContentSha256Cksum(r *http.Request) bool {
@@ -61,7 +65,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 	// If x-amz-content-sha256 is set and the value is not
 	// 'UNSIGNED-PAYLOAD' we should validate the content sha256.
 	switch v[0] {
-	case unsignedPayload:
+	case unsignedPayload, unsignedPayloadTrailer:
 		return true
 	case emptySHA256:
 		// some broken clients set empty-sha256
