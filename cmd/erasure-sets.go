@@ -461,17 +461,16 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 			// Initialize erasure objects for a given set.
 			s.sets[i] = &erasureObjects{
-				setIndex:              i,
-				poolIndex:             poolIdx,
-				setDriveCount:         setDriveCount,
-				defaultParityCount:    defaultParityCount,
-				getDisks:              s.GetDisks(i),
-				getLockers:            s.GetLockers(i),
-				getEndpoints:          s.GetEndpoints(i),
-				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
-				nsMutex:               mutex,
-				bp:                    bp,
-				bpOld:                 bpOld,
+				setIndex:           i,
+				poolIndex:          poolIdx,
+				setDriveCount:      setDriveCount,
+				defaultParityCount: defaultParityCount,
+				getDisks:           s.GetDisks(i),
+				getLockers:         s.GetLockers(i),
+				getEndpoints:       s.GetEndpoints(i),
+				nsMutex:            mutex,
+				bp:                 bp,
+				bpOld:              bpOld,
 			}
 		}(i)
 	}
