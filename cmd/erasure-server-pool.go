@@ -1254,7 +1254,20 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	}
 	for _, obj := range objects {
 		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
-			loi.Prefixes = append(loi.Prefixes, obj.Name)
+			// Only add each once.
+			// With slash delimiter we only get the directory once.
+			found := false
+			if delimiter != slashSeparator {
+				for _, p := range loi.Prefixes {
+					if found {
+						break
+					}
+					found = p == obj.Name
+				}
+			}
+			if !found {
+				loi.Prefixes = append(loi.Prefixes, obj.Name)
+			}
 		} else {
 			loi.Objects = append(loi.Objects, obj)
 		}
@@ -1334,7 +1347,20 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	for _, obj := range objects {
 		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
-			loi.Prefixes = append(loi.Prefixes, obj.Name)
+			// Only add each once.
+			// With slash delimiter we only get the directory once.
+			found := false
+			if delimiter != slashSeparator {
+				for _, p := range loi.Prefixes {
+					if found {
+						break
+					}
+					found = p == obj.Name
+				}
+			}
+			if !found {
+				loi.Prefixes = append(loi.Prefixes, obj.Name)
+			}
 		} else {
 			loi.Objects = append(loi.Objects, obj)
 		}
