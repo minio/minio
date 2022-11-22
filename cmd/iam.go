@@ -1025,7 +1025,7 @@ func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]Us
 func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
 	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
 	if err != nil {
-		return auth.Credentials{}, embeddedPolicy, err
+		return auth.Credentials{}, nil, err
 	}
 	// Hide secret & session keys
 	sa.Credentials.SecretKey = ""
@@ -1033,15 +1033,45 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 	return sa.Credentials, embeddedPolicy, nil
 }
 
-// getServiceAccount - gets information about a service account
-func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (u UserIdentity, p *iampolicy.Policy, err error) {
+func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+	sa, embeddedPolicy, err := sys.getAccountWithEmbeddedPolicy(ctx, accessKey)
+	if err != nil {
+		if err == errNoSuchAccount {
+			return UserIdentity{}, nil, errNoSuchServiceAccount
+		}
+		return UserIdentity{}, nil, err
+	}
+	if !sa.Credentials.IsServiceAccount() {
+		return UserIdentity{}, nil, errNoSuchServiceAccount
+	}
+
+	return sa, embeddedPolicy, nil
+}
+
+func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+	tmpAcc, embeddedPolicy, err := sys.getAccountWithEmbeddedPolicy(ctx, accessKey)
+	if err != nil {
+		if err == errNoSuchAccount {
+			return UserIdentity{}, nil, errNoSuchTempAccount
+		}
+		return UserIdentity{}, nil, err
+	}
+	if !tmpAcc.Credentials.IsTemp() {
+		return UserIdentity{}, nil, errNoSuchTempAccount
+	}
+
+	return tmpAcc, embeddedPolicy, nil
+}
+
+// getAccountWithEmbeddedPolicy - gets information about an account with its embedded policy if found
+func (sys *IAMSys) getAccountWithEmbeddedPolicy(ctx context.Context, accessKey string) (u UserIdentity, p *iampolicy.Policy, err error) {
 	if !sys.Initialized() {
 		return u, nil, errServerNotInitialized
 	}
 
 	sa, ok := sys.store.GetUser(accessKey)
-	if !ok || !sa.Credentials.IsServiceAccount() {
-		return u, nil, errNoSuchServiceAccount
+	if !ok {
+		return u, nil, errNoSuchAccount
 	}
 
 	var embeddedPolicy *iampolicy.Policy
