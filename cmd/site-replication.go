@@ -1257,9 +1257,8 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 	}
 	// skip overwrite of local update if peer sent stale info
 	if !updatedAt.IsZero() {
-		if u, err := globalIAMSys.GetUserInfo(ctx, stsCred.AccessKey); err == nil {
-			ok, _, _ := globalIAMSys.IsTempUser(stsCred.AccessKey)
-			if ok && u.UpdatedAt.After(updatedAt) {
+		if u, _, err := globalIAMSys.getTempAccount(ctx, stsCred.AccessKey); err == nil {
+			if u.UpdatedAt.After(updatedAt) {
 				return nil
 			}
 		}
