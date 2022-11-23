@@ -539,9 +539,9 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					for {
 						if err := z.Decommission(ctx, pool.ID); err != nil {
-							switch err {
+							switch {
 							// we already started decommission
-							case errDecommissionAlreadyRunning:
+							case errors.Is(err, errDecommissionAlreadyRunning):
 								// A previous decommission running found restart it.
 								z.doDecommissionInRoutine(ctx, idx)
 								return
