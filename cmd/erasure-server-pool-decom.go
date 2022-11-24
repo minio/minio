@@ -539,21 +539,18 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					for {
 						if err := z.Decommission(ctx, pool.ID); err != nil {
-							switch err {
-							// we already started decommission
-							case errDecommissionAlreadyRunning:
+							if errors.Is(err, errDecommissionAlreadyRunning) {
 								// A previous decommission running found restart it.
 								z.doDecommissionInRoutine(ctx, idx)
 								return
-							default:
-								if configRetriableErrors(err) {
-									logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
-									time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
-									continue
-								}
-								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
-								return
 							}
+							if configRetriableErrors(err) {
+								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
+								time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
+								continue
+							}
+							logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+							return
 						}
 						break
 					}
