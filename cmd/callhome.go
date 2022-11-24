@@ -127,7 +127,8 @@ func performCallhome(ctx context.Context) {
 	}
 
 	healthInfo := madmin.HealthInfo{
-		Version: madmin.HealthInfoVersion,
+		TimeStamp: time.Now().UTC(),
+		Version:   madmin.HealthInfoVersion,
 		Minio: madmin.MinioHealthInfo{
 			Info: madmin.MinioInfo{
 				DeploymentID: globalDeploymentID,
