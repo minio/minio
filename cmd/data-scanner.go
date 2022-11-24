@@ -1015,6 +1015,8 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	if i.lifeCycle == nil {
 		return fivs, nil
 	}
+	done := globalScannerMetrics.time(scannerMetricApplyNonCurrent)
+	defer done()
 
 	_, days, lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
 	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
@@ -1071,6 +1073,17 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+	if i.heal.enabled {
+		if healDeleteDangling {
+			done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+			err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+			done()
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
+			}
+		}
+	}
+
 	return i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 }
 

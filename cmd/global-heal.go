@@ -342,7 +342,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 			// erasureObjects layer needs object names to be encoded
 			encodedEntryName := encodeDirObject(entry.name)
-
+			if healDeleteDangling {
+				err := er.checkAbandonedParts(ctx, bucket, encodedEntryName, madmin.HealOpts{Remove: healDeleteDangling})
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", bucket, entry.name, err))
+				}
+			}
 			for _, version := range fivs.Versions {
 				if _, err := er.HealObject(ctx, bucket, encodedEntryName,
 					version.VersionID, madmin.HealOpts{

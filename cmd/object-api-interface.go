@@ -249,6 +249,7 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
+	CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
