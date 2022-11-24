@@ -225,7 +225,7 @@ func (a adminAPIHandlers) GetUserPolicies(w http.ResponseWriter, r *http.Request
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
-	name := vars["accessKey"]
+	name := vars["user"]
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -1678,10 +1678,12 @@ func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Requ
 	}
 
 	vars := mux.Vars(r)
-	policiesToAdd := vars["policiesToAdd"]
-	accessKey := vars["accessKey"]
+	user := vars["user"]
 
-	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	r.ParseForm()
+	policiesToAttach := r.Form["policy"]
+
+	ok, _, err := globalIAMSys.IsTempUser(user)
 	if err != nil && err != errNoSuchUser {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1693,7 +1695,7 @@ func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Requ
 
 	// Validate that user exists.
 	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-		_, ok := globalIAMSys.GetUser(ctx, accessKey)
+		_, ok := globalIAMSys.GetUser(ctx, user)
 		if !ok {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
 			return
@@ -1705,7 +1707,7 @@ func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Requ
 		userType = stsUser
 	}
 
-	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, accessKey)
+	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, user)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1717,18 +1719,17 @@ func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if policy is already attached to user.
-	policiesSlice := strings.Split(policiesToAdd, ",")
-	for _, p := range policiesSlice {
+	for _, p := range policiesToAttach {
 		if _, ok := policyMap[p]; ok {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
 			return
 		}
 	}
 
-	existingPolicies = append(existingPolicies, policiesSlice...)
+	existingPolicies = append(existingPolicies, policiesToAttach...)
 	newPolicies := strings.Join(existingPolicies, ",")
 
-	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, accessKey, newPolicies, userType, false)
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, user, newPolicies, userType, false)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1737,10 +1738,10 @@ func (a adminAPIHandlers) AttachPolicyToUser(w http.ResponseWriter, r *http.Requ
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
-			UserOrGroup: accessKey,
+			UserOrGroup: user,
 			UserType:    int(userType),
 			IsGroup:     false,
-			Policy:      policiesToAdd,
+			Policy:      strings.Join(policiesToAttach, ","),
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {
@@ -1761,10 +1762,12 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 	}
 
 	vars := mux.Vars(r)
-	policiesToDetach := vars["policiesToDetach"]
-	accessKey := vars["accessKey"]
+	user := vars["user"]
 
-	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	r.ParseForm()
+	policiesToDetach := r.Form["policy"]
+
+	ok, _, err := globalIAMSys.IsTempUser(user)
 	if err != nil && err != errNoSuchUser {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1776,7 +1779,7 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 
 	// Validate that user exists.
 	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-		_, ok := globalIAMSys.GetUser(ctx, accessKey)
+		_, ok := globalIAMSys.GetUser(ctx, user)
 		if !ok {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
 			return
@@ -1788,7 +1791,7 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 		userType = stsUser
 	}
 
-	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, accessKey)
+	existingPolicies, err := globalIAMSys.GetUserPolicies(ctx, user)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1800,8 +1803,7 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 	}
 
 	// Check if policy is already attached to user.
-	policiesSlice := strings.Split(policiesToDetach, ",")
-	for _, p := range policiesSlice {
+	for _, p := range policiesToDetach {
 		if _, ok := policyMap[p]; ok {
 			delete(policyMap, p)
 		} else {
@@ -1817,7 +1819,7 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 
 	newPolicies := strings.Join(newPoliciesSl, ",")
 
-	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, accessKey, newPolicies, userType, false)
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, user, newPolicies, userType, false)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1826,10 +1828,10 @@ func (a adminAPIHandlers) DetachPolicyFromUser(w http.ResponseWriter, r *http.Re
 	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
-			UserOrGroup: accessKey,
+			UserOrGroup: user,
 			UserType:    int(userType),
 			IsGroup:     false,
-			Policy:      policiesToDetach,
+			Policy:      strings.Join(policiesToDetach, ","),
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {
@@ -1850,8 +1852,10 @@ func (a adminAPIHandlers) AttachPolicyToGroup(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
-	policiesToAdd := vars["policiesToAdd"]
 	group := vars["group"]
+
+	r.ParseForm()
+	policiesToAttach := r.Form["policy"]
 
 	// Validate that group exists.
 	_, err := globalIAMSys.GetGroupDescription(group)
@@ -1871,22 +1875,20 @@ func (a adminAPIHandlers) AttachPolicyToGroup(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	policiesSlice := strings.Split(policiesToAdd, ",")
-
 	policyMap := make(map[string]bool)
 	for _, p := range existingPolicies {
 		policyMap[p] = true
 	}
 
-	// Check if policy is already attached to user.
-	for _, p := range policiesSlice {
+	// Check if policy is already attached to group.
+	for _, p := range policiesToAttach {
 		if _, ok := policyMap[p]; ok {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
 			return
 		}
 	}
 
-	existingPolicies = append(existingPolicies, policiesSlice...)
+	existingPolicies = append(existingPolicies, policiesToAttach...)
 	newPolicies := strings.Join(existingPolicies, ",")
 
 	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, group, newPolicies, userType, true)
@@ -1901,7 +1903,7 @@ func (a adminAPIHandlers) AttachPolicyToGroup(w http.ResponseWriter, r *http.Req
 			UserOrGroup: group,
 			UserType:    int(userType),
 			IsGroup:     true,
-			Policy:      policiesToAdd,
+			Policy:      strings.Join(policiesToAttach, ","),
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {
@@ -1922,8 +1924,10 @@ func (a adminAPIHandlers) DetachPolicyFromGroup(w http.ResponseWriter, r *http.R
 	}
 
 	vars := mux.Vars(r)
-	policiesToDetach := vars["policiesToDetach"]
 	group := vars["group"]
+
+	r.ParseForm()
+	policiesToDetach := r.Form["policy"]
 
 	// Validate that group exists.
 	_, err := globalIAMSys.GetGroupDescription(group)
@@ -1949,8 +1953,7 @@ func (a adminAPIHandlers) DetachPolicyFromGroup(w http.ResponseWriter, r *http.R
 	}
 
 	// Check if policy is already attached to user.
-	policiesSlice := strings.Split(policiesToDetach, ",")
-	for _, p := range policiesSlice {
+	for _, p := range policiesToDetach {
 		if _, ok := policyMap[p]; ok {
 			delete(policyMap, p)
 		} else {
@@ -1978,7 +1981,7 @@ func (a adminAPIHandlers) DetachPolicyFromGroup(w http.ResponseWriter, r *http.R
 			UserOrGroup: group,
 			UserType:    int(userType),
 			IsGroup:     true,
-			Policy:      policiesToDetach,
+			Policy:      strings.Join(policiesToDetach, ","),
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {
