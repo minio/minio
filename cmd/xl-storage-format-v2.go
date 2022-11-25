@@ -1191,9 +1191,10 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 	return nil
 }
 
-// getDataDirs will return all data directories in the metadata.
+// getDataDirs will return all data directories in the metadata
+// as well as all version ids used for inline data.
 func (x *xlMetaV2) getDataDirs() ([]string, error) {
-	dds := make([]string, len(x.versions))
+	dds := make([]string, len(x.versions)*2)
 	for i, ver := range x.versions {
 		if ver.header.Type == DeleteType {
 			continue
@@ -1209,6 +1210,11 @@ func (x *xlMetaV2) getDataDirs() ([]string, error) {
 				return nil, errors.New("obj.ObjectV2 unexpectedly nil")
 			}
 			dds = append(dds, uuid.UUID(obj.ObjectV2.DataDir).String())
+			if obj.ObjectV2.VersionID == [16]byte{} {
+				dds = append(dds, nullVersionID)
+			} else {
+				dds = append(dds, uuid.UUID(obj.ObjectV2.VersionID).String())
+			}
 		case LegacyType:
 			if obj.ObjectV1 == nil {
 				return nil, errors.New("obj.ObjectV1 unexpectedly nil")

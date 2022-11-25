@@ -2722,8 +2722,8 @@ func (s *xlStorage) CleanAbandonedParts(ctx context.Context, volume string, path
 	if err != nil {
 		return err
 	}
-
-	metaPath := pathutil.Join(volumeDir, pathJoin(path, xlStorageFormatFile))
+	baseDir := pathJoin(volumeDir, path+slashSeparator)
+	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
 	buf, _, err := s.readAllData(ctx, volumeDir, metaPath)
 	if err != nil {
 		return err
@@ -2739,7 +2739,7 @@ func (s *xlStorage) CleanAbandonedParts(ctx context.Context, volume string, path
 		return err
 	}
 	foundDirs := make(map[string]struct{}, len(xl.versions))
-	err = readDirFn(metaPath, func(name string, typ os.FileMode) error {
+	err = readDirFn(baseDir, func(name string, typ os.FileMode) error {
 		if !typ.IsDir() {
 			return nil
 		}
@@ -2767,7 +2767,8 @@ func (s *xlStorage) CleanAbandonedParts(ctx context.Context, volume string, path
 	// Delete excessive directories.
 	// Do not abort on context errors.
 	for dir := range foundDirs {
-		err := s.deleteFile(volumeDir, pathJoin(path, dir+SlashSeparator), true, true)
+		toRemove := pathJoin(volumeDir, path, dir+SlashSeparator)
+		err := s.deleteFile(volumeDir, toRemove, true, true)
 		diskHealthCheckOK(ctx, err)
 	}
 
