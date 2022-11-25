@@ -206,7 +206,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 				return nil
 			}
-			wait := er.deletedCleanupSleeper.Timer(ctx)
+			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(fi.ModTime) > expiry {
 				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 			}
@@ -223,7 +223,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		wait := er.deletedCleanupSleeper.Timer(ctx)
+		wait := deletedCleanupSleeper.Timer(ctx)
 		if now.Sub(vi.Created) > expiry {
 			er.deleteAll(ctx, minioMetaTmpBucket, tmpDir)
 		}
