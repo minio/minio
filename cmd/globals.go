@@ -281,6 +281,9 @@ var (
 	// Cluster replication manager.
 	globalSiteReplicationSys SiteReplicationSys
 
+	// Cluster replication resync metrics
+	globalSiteResyncMetrics *siteResyncMetrics
+
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
 	globalBucketFederation bool
@@ -378,6 +381,10 @@ var (
 
 	globalConnReadDeadline  time.Duration
 	globalConnWriteDeadline time.Duration
+
+	// Controller for deleted file sweeper.
+	deletedCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
+
 	// Add new variable global values here.
 )
 

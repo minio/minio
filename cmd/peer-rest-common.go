@@ -97,6 +97,7 @@ const (
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
 	peerRESTJobID          = "job-id"
+	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"
 
 	peerRESTListenBucket = "bucket"

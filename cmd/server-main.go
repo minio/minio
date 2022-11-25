@@ -330,6 +330,8 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+
+	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
 }
 
 func configRetriableErrors(err error) bool {
@@ -566,7 +568,7 @@ func serverMain(ctx *cli.Context) {
 
 	setHTTPServer(httpServer)
 
-	if globalIsDistErasure && globalEndpoints.FirstLocal() {
+	if globalIsDistErasure {
 		// Additionally in distributed setup, validate the setup and configuration.
 		if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
 			logger.Fatal(err, "Unable to start the server")

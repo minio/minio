@@ -515,3 +515,45 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// SiteReplicationResyncOp - PUT /minio/admin/v3/site-replication/resync/op
+func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationResyncOp")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationResyncAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var peerSite madmin.PeerInfo
+	if err := parseJSONBody(ctx, r.Body, &peerSite, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	vars := mux.Vars(r)
+	op := madmin.SiteResyncOp(vars["operation"])
+	var (
+		status madmin.SRResyncOpStatus
+		err    error
+	)
+	switch op {
+	case madmin.SiteResyncStart:
+		status, err = globalSiteReplicationSys.startResync(ctx, objectAPI, peerSite)
+	case madmin.SiteResyncCancel:
+		status, err = globalSiteReplicationSys.cancelResync(ctx, objectAPI, peerSite)
+	default:
+		err = errSRInvalidRequest(errInvalidArgument)
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	body, err := json.Marshal(status)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, body)
+}

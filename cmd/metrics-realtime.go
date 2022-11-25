@@ -29,6 +29,7 @@ type collectMetricsOpts struct {
 	hosts map[string]struct{}
 	disks map[string]struct{}
 	jobID string
+	depID string
 }
 
 func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
@@ -65,7 +66,9 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	if types.Contains(madmin.MetricsBatchJobs) {
 		m.Aggregated.BatchJobs = globalBatchJobsMetrics.report(opts.jobID)
 	}
-
+	if types.Contains(madmin.MetricsSiteResync) {
+		m.Aggregated.SiteResync = globalSiteResyncMetrics.report(opts.depID)
+	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.

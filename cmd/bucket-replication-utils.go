@@ -628,9 +628,12 @@ func (v VersionPurgeStatusType) Pending() bool {
 	return v == Pending || v == Failed
 }
 
-type replicationResyncState struct {
+type replicationResyncer struct {
 	// map of bucket to their resync status
-	statusMap map[string]BucketReplicationResyncStatus
+	statusMap      map[string]BucketReplicationResyncStatus
+	workerSize     int
+	resyncCancelCh chan struct{}
+	workerCh       chan struct{}
 	sync.RWMutex
 }
 
@@ -642,12 +645,23 @@ const (
 	resyncMetaVersion   = resyncMetaVersionV1
 )
 
+type resyncOpts struct {
+	bucket       string
+	arn          string
+	resyncID     string
+	resyncBefore time.Time
+}
+
 // ResyncStatusType status of resync operation
 type ResyncStatusType int
 
 const (
 	// NoResync - no resync in progress
 	NoResync ResyncStatusType = iota
+	// ResyncPending - resync pending
+	ResyncPending
+	// ResyncCanceled - resync canceled
+	ResyncCanceled
 	// ResyncStarted -  resync in progress
 	ResyncStarted
 	// ResyncCompleted -  resync finished
@@ -655,6 +669,10 @@ const (
 	// ResyncFailed -  resync failed
 	ResyncFailed
 )
+
+func (rt ResyncStatusType) isValid() bool {
+	return rt != NoResync
+}
 
 func (rt ResyncStatusType) String() string {
 	switch rt {
@@ -664,6 +682,10 @@ func (rt ResyncStatusType) String() string {
 		return "Completed"
 	case ResyncFailed:
 		return "Failed"
+	case ResyncPending:
+		return "Pending"
+	case ResyncCanceled:
+		return "Canceled"
 	default:
 		return ""
 	}
@@ -671,8 +693,8 @@ func (rt ResyncStatusType) String() string {
 
 // TargetReplicationResyncStatus status of resync of bucket for a specific target
 type TargetReplicationResyncStatus struct {
-	StartTime time.Time `json:"startTime" msg:"st"`
-	EndTime   time.Time `json:"endTime" msg:"et"`
+	StartTime  time.Time `json:"startTime" msg:"st"`
+	LastUpdate time.Time `json:"lastUpdated" msg:"lst"`
 	// Resync ID assigned to this reset
 	ResyncID string `json:"resyncID" msg:"id"`
 	// ResyncBeforeDate - resync all objects created prior to this date
@@ -699,6 +721,14 @@ type BucketReplicationResyncStatus struct {
 	TargetsMap map[string]TargetReplicationResyncStatus `json:"resyncMap,omitempty" msg:"brs"`
 	ID         int                                      `json:"id" msg:"id"`
 	LastUpdate time.Time                                `json:"lastUpdate" msg:"lu"`
+}
+
+func (rs *BucketReplicationResyncStatus) cloneTgtStats() (m map[string]TargetReplicationResyncStatus) {
+	m = make(map[string]TargetReplicationResyncStatus)
+	for arn, st := range rs.TargetsMap {
+		m[arn] = st
+	}
+	return
 }
 
 func newBucketResyncStatus(bucket string) BucketReplicationResyncStatus {
