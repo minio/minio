@@ -292,7 +292,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	if err != nil {
 		return fmt.Errorf("Error: %w, %s", err, endpoint)
 	}
-
+	defer disk.Close()
 	poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
 	if poolIdx < 0 {
 		return fmt.Errorf("unexpected pool index (%d) found in %s", poolIdx, disk.Endpoint())
