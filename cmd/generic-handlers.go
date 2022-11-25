@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
+	httplogger "github.com/minio/minio/internal/http/logger"
 	"github.com/minio/minio/internal/http/stats"
 	"github.com/minio/minio/internal/logger"
 )
@@ -549,7 +550,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		// part of the log entry, Error response XML and auditing.
 		// Set custom headers such as x-amz-request-id for each request.
 		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
-		h.ServeHTTP(logger.NewResponseWriter(w), r)
+		h.ServeHTTP(httplogger.NewResponseRecorder(w), r)
 	})
 }
 

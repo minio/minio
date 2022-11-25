@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	httplogger "github.com/minio/minio/internal/http/logger"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 )
@@ -350,7 +351,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := logger.NewResponseWriter(w)
+		statsWriter := httplogger.NewResponseRecorder(w)
 
 		f.ServeHTTP(statsWriter, r)
 

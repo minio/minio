@@ -53,6 +53,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	httplogger "github.com/minio/minio/internal/http/logger"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -3542,7 +3543,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 				return
 			}
 			nr := httptest.NewRecorder()
-			rw := logger.NewResponseWriter(nr)
+			rw := httplogger.NewResponseRecorder(nr)
 			rw.LogErrBody = true
 			rw.LogAllBody = true
 			rreq.SelectParameters.Evaluate(rw)
