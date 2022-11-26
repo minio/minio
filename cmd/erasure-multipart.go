@@ -350,7 +350,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		rctx := lkctx.Context()
 		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
 		lk.RUnlock(lkctx.Cancel)
-		if err != nil {
+		if err != nil && !isErrVersionNotFound(err) {
 			return nil, err
 		}
 		if opts.CheckPrecondFn(obj) {
@@ -359,7 +359,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	userDefined := cloneMSS(opts.UserDefined)
-
+	if opts.PreserveETag != "" {
+		userDefined["etag"] = opts.PreserveETag
+	}
 	onlineDisks := er.getDisks()
 	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
 	if parityDrives < 0 {
@@ -1151,9 +1153,13 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Save successfully calculated md5sum.
-	fi.Metadata["etag"] = opts.UserDefined["etag"]
+	// for replica, newMultipartUpload would have already sent the replication ETag
 	if fi.Metadata["etag"] == "" {
-		fi.Metadata["etag"] = getCompleteMultipartMD5(parts)
+		if opts.UserDefined["etag"] != "" {
+			fi.Metadata["etag"] = opts.UserDefined["etag"]
+		} else { // fallback if not already calculated in handler.
+			fi.Metadata["etag"] = getCompleteMultipartMD5(parts)
+		}
 	}
 
 	// Save the consolidated actual size.
