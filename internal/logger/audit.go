@@ -27,7 +27,6 @@ import (
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/minio/madmin-go"
 	xhttp "github.com/minio/minio/internal/http"
-	httplogger "github.com/minio/minio/internal/http/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
 )
 
@@ -94,13 +93,13 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			headerBytes     int64
 		)
 
-		var st *httplogger.ResponseRecorder
+		var st *xhttp.ResponseRecorder
 		switch v := w.(type) {
-		case *httplogger.ResponseRecorder:
+		case *xhttp.ResponseRecorder:
 			st = v
 		case *gzhttp.GzipResponseWriter:
 			// the writer may be obscured by gzip response writer
-			if rw, ok := v.ResponseWriter.(*httplogger.ResponseRecorder); ok {
+			if rw, ok := v.ResponseWriter.(*xhttp.ResponseRecorder); ok {
 				st = rw
 			}
 		}

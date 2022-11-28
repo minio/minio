@@ -30,7 +30,7 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/handlers"
-	httplogger "github.com/minio/minio/internal/http/logger"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
@@ -69,8 +69,8 @@ const contextTraceReqKey = contextTraceReqType("request-trace-info")
 // Hold related tracing data of a http request, any handler
 // can modify this struct to modify the trace information .
 type traceCtxt struct {
-	requestRecorder  *httplogger.RequestRecorder
-	responseRecorder *httplogger.ResponseRecorder
+	requestRecorder  *xhttp.RequestRecorder
+	responseRecorder *xhttp.ResponseRecorder
 	funcName         string
 }
 
@@ -89,8 +89,8 @@ func httpTracer(h http.Handler) http.Handler {
 		r = r.WithContext(ctx)
 
 		// Setup a http request and response body recorder
-		reqRecorder := &httplogger.RequestRecorder{Reader: r.Body}
-		respRecorder := httplogger.NewResponseRecorder(w)
+		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
+		respRecorder := xhttp.NewResponseRecorder(w)
 
 		tc.requestRecorder = reqRecorder
 		tc.responseRecorder = respRecorder
