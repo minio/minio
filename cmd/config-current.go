@@ -590,11 +590,11 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-				loggerCfg.HTTP[n] = l
 			}
+			loggerCfg.HTTP[n] = l
 		}
-		if err = logger.UpdateSystemTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
+		if errs := logger.UpdateSystemTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
@@ -607,12 +607,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-				loggerCfg.AuditWebhook[n] = l
 			}
+			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if err = logger.UpdateAuditWebhookTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %w", err))
+		if errs := logger.UpdateAuditWebhookTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
@@ -625,8 +625,8 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-		if err = logger.UpdateAuditKafkaTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
+		if errs := logger.UpdateAuditKafkaTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:
 		for i, setDriveCount := range setDriveCounts {
