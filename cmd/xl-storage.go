@@ -2713,7 +2713,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 // CleanAbandonedParts will read metadata of the object on disk
 // and delete any data directories and inline data that isn't referenced in metadata.
 // Metadata itself is not modified, only inline data.
-func (s *xlStorage) CleanAbandonedParts(ctx context.Context, volume string, path string) error {
+func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path string) error {
 	if volume == "" || path == "" {
 		return nil // Ignore
 	}

@@ -702,7 +702,7 @@ func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string
 			wg.Add(1)
 			go func(disk StorageAPI) {
 				defer wg.Done()
-				_ = disk.CleanAbandonedParts(ctx, bucket, object)
+				_ = disk.CleanAbandonedData(ctx, bucket, object)
 			}(disk)
 		}
 	}

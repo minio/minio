@@ -779,7 +779,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 
 // CleanAbandonedParts will read metadata of the object on disk
 // and delete any data directories and inline data that isn't referenced in metadata.
-func (client *storageRESTClient) CleanAbandonedParts(ctx context.Context, volume string, path string) error {
+func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume string, path string) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)

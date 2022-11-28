@@ -768,8 +768,8 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// CleanAbandonedPartsHandler - Clean unused data directories.
-func (s *storageRESTServer) CleanAbandonedPartsHandler(w http.ResponseWriter, r *http.Request) {
+// CleanAbandonedDataHandler - Clean unused data directories.
+func (s *storageRESTServer) CleanAbandonedDataHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
 	}
@@ -778,7 +778,7 @@ func (s *storageRESTServer) CleanAbandonedPartsHandler(w http.ResponseWriter, r 
 	if volume == "" || filePath == "" {
 		return // Ignore
 	}
-	keepHTTPResponseAlive(w)(s.storage.CleanAbandonedParts(r.Context(), volume, filePath))
+	keepHTTPResponseAlive(w)(s.storage.CleanAbandonedData(r.Context(), volume, filePath))
 }
 
 // closeNotifier is itself a ReadCloser that will notify when either an error occurs or
@@ -1392,7 +1392,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(httpTraceHdrs(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(httpTraceHdrs(server.ReadMultiple))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(httpTraceHdrs(server.CleanAbandonedPartsHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(httpTraceHdrs(server.CleanAbandonedDataHandler))
 		}
 	}
 }

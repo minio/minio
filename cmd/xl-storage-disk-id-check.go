@@ -529,14 +529,14 @@ func (p *xlStorageDiskIDCheck) ReadMultiple(ctx context.Context, req ReadMultipl
 
 // CleanAbandonedParts will read metadata of the object on disk
 // and delete any data directories and inline data that isn't referenced in metadata.
-func (p *xlStorageDiskIDCheck) CleanAbandonedParts(ctx context.Context, volume string, path string) error {
+func (p *xlStorageDiskIDCheck) CleanAbandonedData(ctx context.Context, volume string, path string) error {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricDeleteAbandonedParts, volume, path)
 	if err != nil {
 		return err
 	}
 	defer done(&err)
 
-	return p.storage.CleanAbandonedParts(ctx, volume, path)
+	return p.storage.CleanAbandonedData(ctx, volume, path)
 }
 
 func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {

@@ -310,9 +310,9 @@ func (d *naughtyDisk) ReadMultiple(ctx context.Context, req ReadMultipleReq, res
 	return d.disk.ReadMultiple(ctx, req, resp)
 }
 
-func (d *naughtyDisk) CleanAbandonedParts(ctx context.Context, volume string, path string) error {
+func (d *naughtyDisk) CleanAbandonedData(ctx context.Context, volume string, path string) error {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.CleanAbandonedParts(ctx, volume, path)
+	return d.disk.CleanAbandonedData(ctx, volume, path)
 }
