@@ -18,6 +18,7 @@
 package kms
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -95,19 +96,35 @@ func NewWithConfig(config Config) (KMS, error) {
 	}
 	go func() {
 		for {
+			var prevCertificate tls.Certificate
 			select {
-			case certificate := <-config.ReloadCertEvents:
-				client := kes.NewClientWithConfig("", &tls.Config{
-					MinVersion:         tls.VersionTLS12,
-					Certificates:       []tls.Certificate{certificate},
-					RootCAs:            config.RootCAs,
-					ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-				})
-				client.Endpoints = endpoints
+			case certificate, ok := <-config.ReloadCertEvents:
+				if !ok {
+					return
+				}
+				sameCert := true
+				for i, b := range certificate.Certificate {
+					if !bytes.Equal(b, prevCertificate.Certificate[i]) {
+						sameCert = false
+						break
+					}
+				}
+				// Do not reload if its the same cert as before.
+				if !sameCert {
+					client := kes.NewClientWithConfig("", &tls.Config{
+						MinVersion:         tls.VersionTLS12,
+						Certificates:       []tls.Certificate{certificate},
+						RootCAs:            config.RootCAs,
+						ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+					})
+					client.Endpoints = endpoints
 
-				c.lock.Lock()
-				c.client = client
-				c.lock.Unlock()
+					c.lock.Lock()
+					c.client = client
+					c.lock.Unlock()
+
+					prevCertificate = certificate
+				}
 			}
 		}
 	}()
