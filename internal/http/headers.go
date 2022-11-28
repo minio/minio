@@ -216,3 +216,8 @@ const (
 	// Reports the version of MinIO server
 	MinIOVersion = "x-minio-version"
 )
+
+// PanFS specific headers
+const (
+	PanFSBucketPath = "x-panfs-bucket-path"
+)

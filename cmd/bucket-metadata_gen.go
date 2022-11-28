@@ -30,6 +30,12 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
+		case "PanfsPath":
+			z.PanfsPath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "PanfsPath")
+				return
+			}
 		case "Created":
 			z.Created, err = dc.ReadTime()
 			if err != nil {
@@ -163,15 +169,25 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 21
+	// map header, size 22
 	// write "Name"
-	err = en.Append(0xde, 0x0, 0x15, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0xde, 0x0, 0x16, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
 	err = en.WriteString(z.Name)
 	if err != nil {
 		err = msgp.WrapError(err, "Name")
+		return
+	}
+	// write "PanfsPath"
+	err = en.Append(0xa9, 0x50, 0x61, 0x6e, 0x66, 0x73, 0x50, 0x61, 0x74, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.PanfsPath)
+	if err != nil {
+		err = msgp.WrapError(err, "PanfsPath")
 		return
 	}
 	// write "Created"
@@ -380,10 +396,13 @@ func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 21
+	// map header, size 22
 	// string "Name"
-	o = append(o, 0xde, 0x0, 0x15, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0xde, 0x0, 0x16, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
+	// string "PanfsPath"
+	o = append(o, 0xa9, 0x50, 0x61, 0x6e, 0x66, 0x73, 0x50, 0x61, 0x74, 0x68)
+	o = msgp.AppendString(o, z.PanfsPath)
 	// string "Created"
 	o = append(o, 0xa7, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64)
 	o = msgp.AppendTime(o, z.Created)
@@ -469,6 +488,12 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.Name, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Name")
+				return
+			}
+		case "PanfsPath":
+			z.PanfsPath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PanfsPath")
 				return
 			}
 		case "Created":
@@ -605,6 +630,6 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketMetadata) Msgsize() (s int) {
-	s = 3 + 5 + msgp.StringPrefixSize + len(z.Name) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON) + 21 + msgp.BytesPrefixSize + len(z.ReplicationConfigXML) + 24 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigJSON) + 28 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigMetaJSON) + 22 + msgp.TimeSize + 26 + msgp.TimeSize + 26 + msgp.TimeSize + 23 + msgp.TimeSize + 21 + msgp.TimeSize + 27 + msgp.TimeSize + 26 + msgp.TimeSize
+	s = 3 + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.StringPrefixSize + len(z.PanfsPath) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON) + 21 + msgp.BytesPrefixSize + len(z.ReplicationConfigXML) + 24 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigJSON) + 28 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigMetaJSON) + 22 + msgp.TimeSize + 26 + msgp.TimeSize + 26 + msgp.TimeSize + 23 + msgp.TimeSize + 21 + msgp.TimeSize + 27 + msgp.TimeSize + 26 + msgp.TimeSize
 	return
 }

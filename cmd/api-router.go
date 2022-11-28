@@ -316,6 +316,9 @@ func registerAPIRouter(router *mux.Router) {
 
 		// Bucket operations
 
+		// GetBucketPanFSPath
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("getbucketpanfspath", maxClients(gz(httpTraceAll(api.GetBucketPanFSPathHandler))))).Queries("panfs-path", "")
 		// GetBucketLocation
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketlocation", maxClients(gz(httpTraceAll(api.GetBucketLocationHandler))))).Queries("location", "")

@@ -51,6 +51,8 @@ import (
 // Default etag is used for pre-existing objects.
 var PANdefaultEtag = "00000000000000000000000000000000-2"
 
+const PANFS_BUCKET_DEFAULT_VOLUME = "default/path/on/realm"
+
 // PANFSObjects - Implements panfs object layer.
 type PANFSObjects struct {
 	GatewayUnsupported
@@ -463,6 +465,10 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 	}
 
 	meta := newBucketMetadata(bucket)
+	if opts.PanfsBucketPath != "" {
+		meta.PanfsPath = opts.PanfsBucketPath
+	}
+
 	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -519,15 +525,19 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	}
 
 	createdTime := st.ModTime()
-	meta, err := globalBucketMetadataSys.Get(bucket)
+	meta, err := loadBucketMetadata(ctx, fs, bucket)
+	// meta, err := globalBucketMetadataSys.Get(bucket)
 	if err == nil {
 		createdTime = meta.Created
 	}
 
-	return BucketInfo{
-		Name:    bucket,
-		Created: createdTime,
-	}, nil
+	bi.Name = bucket
+	bi.Created = createdTime
+
+	if globalGatewayName == PANFSBackendGateway {
+		bi.PanfsPath = meta.PanfsPath
+	}
+	return
 }
 
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.
