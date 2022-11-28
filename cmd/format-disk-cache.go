@@ -354,6 +354,7 @@ func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile
 	if err != nil {
 		return err
 	}
+	defer readCloser.Close()
 	var reader io.Reader = readCloser
 
 	actualSize := uint64(st.Size())
