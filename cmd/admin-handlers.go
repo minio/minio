@@ -2253,7 +2253,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	enc := json.NewEncoder(w)
 
 	healthInfo := madmin.HealthInfo{
-		Version: madmin.HealthInfoVersion,
+		TimeStamp: time.Now().UTC(),
+		Version:   madmin.HealthInfoVersion,
 		Minio: madmin.MinioHealthInfo{
 			Info: madmin.MinioInfo{
 				DeploymentID: globalDeploymentID,

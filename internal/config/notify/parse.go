@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,8 +60,11 @@ func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, subSy
 
 	for _, target := range targetList {
 		yes, err := target.IsActive()
-		if err != nil || !yes {
-			return ErrTargetsOffline
+		if err == nil && !yes {
+			err = ErrTargetsOffline
+		}
+		if err != nil {
+			return fmt.Errorf("error (%s): %w", target.ID(), err)
 		}
 	}
 
