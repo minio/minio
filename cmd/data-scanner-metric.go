@@ -47,6 +47,8 @@ const (
 	scannerMetricILM
 	scannerMetricCheckReplication
 	scannerMetricYield
+	scannerMetricCleanAbandoned
+	scannerMetricApplyNonCurrent
 
 	// START Trace metrics:
 	scannerMetricStartTrace

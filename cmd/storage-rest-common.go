@@ -54,6 +54,7 @@ const (
 	storageRESTMethodWalkDir        = "/walkdir"
 	storageRESTMethodStatInfoFile   = "/statfile"
 	storageRESTMethodReadMultiple   = "/readmultiple"
+	storageRESTMethodCleanAbandoned = "/cleanabandoned"
 )
 
 const (

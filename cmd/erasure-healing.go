@@ -40,6 +40,7 @@ type healingMetric uint8
 const (
 	healingMetricBucket healingMetric = iota
 	healingMetricObject
+	healingMetricCheckAbandonedParts
 )
 
 // AcceptableDelta returns 'true' if the fi.DiskMTime is under
@@ -93,7 +94,7 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricBucket, startTime, bucket, "", "", opts, err, &res)
+			healTrace(healingMetricBucket, startTime, bucket, "", "", &opts, err, &res)
 		}()
 	}
 
@@ -294,7 +295,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
-func (er erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
+func (er *erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
 
@@ -304,7 +305,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricObject, startTime, bucket, object, versionID, opts, err, &result)
+			healTrace(healingMetricObject, startTime, bucket, object, versionID, &opts, err, &result)
 		}()
 	}
 	// Initialize heal result object
@@ -673,9 +674,45 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	return result, nil
 }
 
+// checkAbandonedParts will check if an object has abandoned parts,
+// meaning data-dirs or inlined data that are no longer referenced by the xl.meta
+// Errors are generally ignored by this function.
+func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string, object string, opts madmin.HealOpts) (err error) {
+	if !opts.Remove || opts.DryRun {
+		return nil
+	}
+	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
+		startTime := time.Now()
+		defer func() {
+			healTrace(healingMetricCheckAbandonedParts, startTime, bucket, object, "", nil, err, nil)
+		}()
+	}
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx.Cancel)
+	}
+	var wg sync.WaitGroup
+	for _, disk := range er.getDisks() {
+		if disk != nil {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				_ = disk.CleanAbandonedData(ctx, bucket, object)
+			}(disk)
+		}
+	}
+	wg.Wait()
+	return nil
+}
+
 // healObjectDir - heals object directory specifically, this special call
 // is needed since we do not have a special backend format for directories.
-func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool, remove bool) (hr madmin.HealResultItem, err error) {
+func (er *erasureObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool, remove bool) (hr madmin.HealResultItem, err error) {
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
@@ -766,7 +803,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 
 // Populates default heal result item entries with possible values when we are returning prematurely.
 // This is to ensure that in any circumstance we are not returning empty arrays with wrong values.
-func (er erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []Endpoint, errs []error, bucket, object, versionID string) madmin.HealResultItem {
+func (er *erasureObjects) defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []Endpoint, errs []error, bucket, object, versionID string) madmin.HealResultItem {
 	// Initialize heal result object
 	result := madmin.HealResultItem{
 		Type:       madmin.HealItemObject,
@@ -1005,15 +1042,17 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 }
 
 // healTrace sends healing results to trace output.
-func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts madmin.HealOpts, err error, result *madmin.HealResultItem) {
+func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts *madmin.HealOpts, err error, result *madmin.HealResultItem) {
 	tr := madmin.TraceInfo{
 		TraceType: madmin.TraceHealing,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
 		FuncName:  "heal." + funcName.String(),
 		Duration:  time.Since(startTime),
-		Message:   fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode),
 		Path:      pathJoin(bucket, decodeDirObject(object)),
+	}
+	if opts != nil {
+		tr.Message = fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode)
 	}
 	if versionID != "" && versionID != "null" {
 		tr.Path += " v=" + versionID

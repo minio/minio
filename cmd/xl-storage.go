@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -2707,4 +2708,102 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		})
 	}
 	return stat, nil
+}
+
+// CleanAbandonedData will read metadata of the object on disk
+// and delete any data directories and inline data that isn't referenced in metadata.
+// Metadata itself is not modified, only inline data.
+func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path string) error {
+	if volume == "" || path == "" {
+		return nil // Ignore
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	baseDir := pathJoin(volumeDir, path+slashSeparator)
+	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
+	buf, _, err := s.readAllData(ctx, volumeDir, metaPath)
+	if err != nil {
+		return err
+	}
+	defer metaDataPoolPut(buf)
+
+	if !isXL2V1Format(buf) {
+		return nil
+	}
+	var xl xlMetaV2
+	err = xl.LoadOrConvert(buf)
+	if err != nil {
+		return err
+	}
+	foundDirs := make(map[string]struct{}, len(xl.versions))
+	err = readDirFn(baseDir, func(name string, typ os.FileMode) error {
+		if !typ.IsDir() {
+			return nil
+		}
+		// See if directory has a UUID name.
+		base := filepath.Base(name)
+		_, err := uuid.Parse(base)
+		if err == nil {
+			foundDirs[base] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	wantDirs, err := xl.getDataDirs()
+	if err != nil {
+		return err
+	}
+
+	// Delete all directories we expect to be there.
+	for _, dir := range wantDirs {
+		delete(foundDirs, dir)
+	}
+
+	// Delete excessive directories.
+	// Do not abort on context errors.
+	for dir := range foundDirs {
+		toRemove := pathJoin(volumeDir, path, dir+SlashSeparator)
+		err := s.deleteFile(volumeDir, toRemove, true, true)
+		diskHealthCheckOK(ctx, err)
+	}
+
+	// Do the same for inline data
+	dirs, err := xl.data.list()
+	if err != nil {
+		return err
+	}
+	// Clear and repopulate
+	for k := range foundDirs {
+		delete(foundDirs, k)
+	}
+	// Populate into map
+	for _, k := range dirs {
+		foundDirs[k] = struct{}{}
+	}
+	// Delete all directories we expect to be there.
+	for _, dir := range wantDirs {
+		delete(foundDirs, dir)
+	}
+
+	// Delete excessive inline entries.
+	if len(foundDirs) > 0 {
+		// Convert to slice.
+		dirs = dirs[:0]
+		for dir := range foundDirs {
+			dirs = append(dirs, dir)
+		}
+		if xl.data.remove(dirs...) {
+			newBuf, err := xl.AppendTo(metaDataPoolGet())
+			if err == nil {
+				defer metaDataPoolPut(newBuf)
+				return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, false)
+			}
+		}
+	}
+	return nil
 }
