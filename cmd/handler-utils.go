@@ -350,7 +350,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := logger.NewResponseWriter(w)
+		statsWriter := xhttp.NewResponseRecorder(w)
 
 		f.ServeHTTP(statsWriter, r)
 
