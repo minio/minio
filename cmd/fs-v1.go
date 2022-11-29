@@ -911,9 +911,6 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 		}
 
 		id = gateway.GetId(readCloser)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil

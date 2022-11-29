@@ -44,11 +44,11 @@ func GetId(r io.Reader) string {
 	buf := make([]byte, GATEWAY_ID_LEN)
 	c, err := r.Read(buf)
 	if c != GATEWAY_ID_LEN {
-		return ""
+		return "wrongid"
 	}
 
 	if err != nil {
-
+		return "wrongid"
 	}
 
 	return string(buf[:c])
