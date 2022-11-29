@@ -910,7 +910,7 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		id, err = gateway.GetId(readCloser)
+		id = gateway.GetId(readCloser)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -976,7 +976,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		id, err = gateway.GetId(readCloser)
+		id = gateway.GetId(readCloser)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
