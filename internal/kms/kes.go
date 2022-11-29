@@ -303,7 +303,11 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 
 	plaintexts := make([][]byte, 0, len(ciphertexts))
 	for i := range ciphertexts {
-		plaintext, err := c.DecryptKey(keyID, ciphertexts[i], contexts[i])
+		ctxBytes, err := contexts[i].MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		plaintext, err := c.client.Decrypt(ctx, keyID, ciphertexts[i], ctxBytes)
 		if err != nil {
 			return nil, err
 		}

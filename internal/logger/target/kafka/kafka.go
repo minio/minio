@@ -46,6 +46,9 @@ type Target struct {
 	// Channel of log entries
 	logCh chan audit.Entry
 
+	// is the target online?
+	online bool
+
 	producer sarama.SyncProducer
 	kconfig  Config
 	config   *sarama.Config
@@ -53,6 +56,10 @@ type Target struct {
 
 // Send log message 'e' to kafka target.
 func (h *Target) Send(entry interface{}) error {
+	if !h.online {
+		return nil
+	}
+
 	select {
 	case <-h.doneCh:
 		return nil
@@ -173,6 +180,11 @@ func (h *Target) String() string {
 	return "kafka"
 }
 
+// IsOnline returns true if the initialization was successful
+func (h *Target) IsOnline() bool {
+	return h.online
+}
+
 // Init initialize kafka target
 func (h *Target) Init() error {
 	if !h.kconfig.Enabled {
@@ -232,6 +244,7 @@ func (h *Target) Init() error {
 	}
 
 	h.producer = producer
+	h.online = true
 	go h.startKakfaLogger()
 	return nil
 }
@@ -250,6 +263,7 @@ func New(config Config) *Target {
 		logCh:   make(chan audit.Entry, 10000),
 		doneCh:  make(chan struct{}),
 		kconfig: config,
+		online:  false,
 	}
 	return target
 }

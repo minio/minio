@@ -18,9 +18,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -32,53 +30,8 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/handlers"
-	"github.com/minio/minio/internal/logger"
+	xhttp "github.com/minio/minio/internal/http"
 )
-
-// recordRequest - records the first recLen bytes
-// of a given io.Reader
-type recordRequest struct {
-	// Data source to record
-	io.Reader
-	// Response body should be logged
-	logBody bool
-	// Internal recording buffer
-	buf bytes.Buffer
-	// total bytes read including header size
-	bytesRead int
-}
-
-func (r *recordRequest) Close() error {
-	// no-op
-	return nil
-}
-
-func (r *recordRequest) Read(p []byte) (n int, err error) {
-	n, err = r.Reader.Read(p)
-	r.bytesRead += n
-
-	if r.logBody {
-		r.buf.Write(p[:n])
-	}
-	if err != nil {
-		return n, err
-	}
-	return n, err
-}
-
-func (r *recordRequest) BodySize() int {
-	return r.bytesRead
-}
-
-// Return the bytes that were recorded.
-func (r *recordRequest) Data() []byte {
-	// If body logging is enabled then we return the actual body
-	if r.logBody {
-		return r.buf.Bytes()
-	}
-	// ... otherwise we return <BODY> placeholder
-	return logger.BodyPlaceHolder
-}
 
 var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
 
@@ -116,8 +69,8 @@ const contextTraceReqKey = contextTraceReqType("request-trace-info")
 // Hold related tracing data of a http request, any handler
 // can modify this struct to modify the trace information .
 type traceCtxt struct {
-	requestRecorder  *recordRequest
-	responseRecorder *logger.ResponseWriter
+	requestRecorder  *xhttp.RequestRecorder
+	responseRecorder *xhttp.ResponseRecorder
 	funcName         string
 }
 
@@ -136,8 +89,8 @@ func httpTracer(h http.Handler) http.Handler {
 		r = r.WithContext(ctx)
 
 		// Setup a http request and response body recorder
-		reqRecorder := &recordRequest{Reader: r.Body}
-		respRecorder := logger.NewResponseWriter(w)
+		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
+		respRecorder := xhttp.NewResponseRecorder(w)
 
 		tc.requestRecorder = reqRecorder
 		tc.responseRecorder = respRecorder
@@ -240,7 +193,7 @@ func httpTrace(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 		}
 
 		tc.funcName = getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
-		tc.requestRecorder.logBody = logBody
+		tc.requestRecorder.LogBody = logBody
 		tc.responseRecorder.LogAllBody = logBody
 		tc.responseRecorder.LogErrBody = true
 

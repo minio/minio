@@ -1412,3 +1412,8 @@ func (s *erasureSets) TransitionObject(ctx context.Context, bucket, object strin
 func (s *erasureSets) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return s.getHashedSet(object).RestoreTransitionedObject(ctx, bucket, object, opts)
 }
+
+// CheckAbandonedParts - check object for abandoned parts.
+func (s *erasureSets) CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error {
+	return s.getHashedSet(object).checkAbandonedParts(ctx, bucket, object, opts)
+}

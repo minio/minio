@@ -62,6 +62,10 @@ func (t *testingLogger) Type() types.TargetType {
 	return types.TargetHTTP
 }
 
+func (t *testingLogger) IsOnline() bool {
+	return true
+}
+
 // Stats returns the target statistics.
 func (t *testingLogger) Stats() types.TargetStats {
 	return types.TargetStats{}
