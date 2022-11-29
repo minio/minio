@@ -343,17 +343,23 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 
 	accessToken := r.Form.Get(stsWebIdentityAccessToken)
 
+	// RoleARN parameter processing: If a role ARN is given in the request, we
+	// use that and validate the authentication request. If not, we assume this
+	// is an STS request for a claim based IDP (if one is present) and set
+	// roleArn = openid.DummyRoleARN.
+	//
+	// Currently, we do not support multiple claim based IDPs, as there is no
+	// defined parameter to disambiguate the intended IDP in this STS request.
 	roleArn := openid.DummyRoleARN
-	if globalIAMSys.HasRolePolicy() {
+	roleArnStr := r.Form.Get(stsRoleArn)
+	if roleArnStr != "" {
 		var err error
-		roleArnStr := r.Form.Get(stsRoleArn)
 		roleArn, _, err = globalIAMSys.GetRolePolicy(roleArnStr)
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
 			return
 		}
-
 	}
 
 	// Validate JWT; check clientID in claims matches the one associated with the roleArn
@@ -376,7 +382,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	if globalIAMSys.HasRolePolicy() {
+	if roleArnStr != "" && globalIAMSys.HasRolePolicy() {
 		// If roleArn is used, we set it as a claim, and use the
 		// associated policy when credentials are used.
 		claims[roleArnClaim] = roleArn.String()
