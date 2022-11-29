@@ -1563,7 +1563,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicyWithPolVar(c *check, roleARN s
 	c.mustNotListObjects(ctx, lisaClient, "other")
 }
 
-func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
+func TestIAMWithOpenIDMultipleConfigsValidation1(t *testing.T) {
 	openIDServer := os.Getenv(EnvTestOpenIDServer)
 	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
 	if openIDServer == "" || openIDServer2 == "" {
@@ -1587,8 +1587,40 @@ func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
 				defer suite.TearDownSuite(c)
 
 				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
+				if err != nil {
+					c.Fatalf("config with 1 claim based and 1 role based provider should pass but got: %v", err)
+				}
+			},
+		)
+	}
+}
+
+func TestIAMWithOpenIDMultipleConfigsValidation2(t *testing.T) {
+	openIDServer := os.Getenv(EnvTestOpenIDServer)
+	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+	if openIDServer == "" || openIDServer2 == "" {
+		t.Skip("Skipping OpenID test as enough OpenID servers are not provided.")
+	}
+	testApps := testClientApps
+
+	rolePolicies := []string{
+		"", // Treated as claim-based provider as no role policy is given.
+		"", // Treated as claim-based provider as no role policy is given.
+	}
+
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				suite.SetUpSuite(c)
+				defer suite.TearDownSuite(c)
+
+				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
 				if err == nil {
-					c.Fatal("config with both claim based and role policy based providers should fail")
+					c.Fatalf("config with 2 claim based provider should fail")
 				}
 			},
 		)
