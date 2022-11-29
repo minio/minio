@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/mcontext"
 )
 
 var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
@@ -62,18 +63,6 @@ func getOpName(name string) (op string) {
 	return op
 }
 
-type contextTraceReqType string
-
-const contextTraceReqKey = contextTraceReqType("request-trace-info")
-
-// Hold related tracing data of a http request, any handler
-// can modify this struct to modify the trace information .
-type traceCtxt struct {
-	requestRecorder  *xhttp.RequestRecorder
-	responseRecorder *xhttp.ResponseRecorder
-	funcName         string
-}
-
 // If trace is enabled, execute the request if it is traced by other handlers
 // otherwise, generate a trace event with request information but no response.
 func httpTracer(h http.Handler) http.Handler {
@@ -84,16 +73,19 @@ func httpTracer(h http.Handler) http.Handler {
 		}
 
 		// Create tracing data structure and associate it to the request context
-		tc := traceCtxt{}
-		ctx := context.WithValue(r.Context(), contextTraceReqKey, &tc)
+		tc := mcontext.TraceCtxt{
+			AmzReqID: r.Header.Get(xhttp.AmzRequestID),
+		}
+
+		ctx := context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc)
 		r = r.WithContext(ctx)
 
 		// Setup a http request and response body recorder
 		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
 		respRecorder := xhttp.NewResponseRecorder(w)
 
-		tc.requestRecorder = reqRecorder
-		tc.responseRecorder = respRecorder
+		tc.RequestRecorder = reqRecorder
+		tc.ResponseRecorder = respRecorder
 
 		// Execute call.
 		r.Body = reqRecorder
@@ -103,7 +95,7 @@ func httpTracer(h http.Handler) http.Handler {
 		reqEndTime := time.Now().UTC()
 
 		tt := madmin.TraceInternal
-		if strings.HasPrefix(tc.funcName, "s3.") {
+		if strings.HasPrefix(tc.FuncName, "s3.") {
 			tt = madmin.TraceS3
 		}
 		// No need to continue if no subscribers for actual type...
@@ -141,7 +133,7 @@ func httpTracer(h http.Handler) http.Handler {
 		}
 
 		// Calculate function name
-		funcName := tc.funcName
+		funcName := tc.FuncName
 		if funcName == "" {
 			funcName = "<unknown>"
 		}
@@ -185,17 +177,17 @@ func httpTracer(h http.Handler) http.Handler {
 
 func httpTrace(f http.HandlerFunc, logBody bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if !ok {
 			// Tracing is not enabled for this request
 			f.ServeHTTP(w, r)
 			return
 		}
 
-		tc.funcName = getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
-		tc.requestRecorder.LogBody = logBody
-		tc.responseRecorder.LogAllBody = logBody
-		tc.responseRecorder.LogErrBody = true
+		tc.FuncName = getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
+		tc.RequestRecorder.LogBody = logBody
+		tc.ResponseRecorder.LogAllBody = logBody
+		tc.ResponseRecorder.LogErrBody = true
 
 		f.ServeHTTP(w, r)
 	}
