@@ -549,7 +549,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		// part of the log entry, Error response XML and auditing.
 		// Set custom headers such as x-amz-request-id for each request.
 		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
-		h.ServeHTTP(logger.NewResponseWriter(w), r)
+		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
 	})
 }
 

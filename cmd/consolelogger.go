@@ -57,6 +57,11 @@ func NewConsoleLogger(ctx context.Context) *HTTPConsoleLoggerSys {
 	}
 }
 
+// IsOnline always true in case of console logger
+func (sys *HTTPConsoleLoggerSys) IsOnline() bool {
+	return true
+}
+
 // SetNodeName - sets the node name if any after distributed setup has initialized
 func (sys *HTTPConsoleLoggerSys) SetNodeName(nodeName string) {
 	if !globalIsDistErasure {

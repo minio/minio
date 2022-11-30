@@ -1254,7 +1254,20 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	}
 	for _, obj := range objects {
 		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
-			loi.Prefixes = append(loi.Prefixes, obj.Name)
+			// Only add each once.
+			// With slash delimiter we only get the directory once.
+			found := false
+			if delimiter != slashSeparator {
+				for _, p := range loi.Prefixes {
+					if found {
+						break
+					}
+					found = p == obj.Name
+				}
+			}
+			if !found {
+				loi.Prefixes = append(loi.Prefixes, obj.Name)
+			}
 		} else {
 			loi.Objects = append(loi.Objects, obj)
 		}
@@ -1334,7 +1347,20 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	for _, obj := range objects {
 		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
-			loi.Prefixes = append(loi.Prefixes, obj.Name)
+			// Only add each once.
+			// With slash delimiter we only get the directory once.
+			found := false
+			if delimiter != slashSeparator {
+				for _, p := range loi.Prefixes {
+					if found {
+						break
+					}
+					found = p == obj.Name
+				}
+			}
+			if !found {
+				loi.Prefixes = append(loi.Prefixes, obj.Name)
+			}
 		} else {
 			loi.Objects = append(loi.Objects, obj)
 		}
@@ -2046,7 +2072,12 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		if err != nil {
 			return healObjectFn(bucket, entry.name, "")
 		}
-
+		if opts.Remove && !opts.DryRun {
+			err := z.CheckAbandonedParts(ctx, bucket, entry.name, opts)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", bucket, entry.name, err))
+			}
+		}
 		for _, version := range fivs.Versions {
 			err := healObjectFn(bucket, version.Name, version.VersionID)
 			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -2397,4 +2428,31 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 	}
 
 	return z.serverPools[idx].RestoreTransitionedObject(ctx, bucket, object, opts)
+}
+
+func (z *erasureServerPools) CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].CheckAbandonedParts(ctx, bucket, object, opts)
+	}
+	errs := make([]error, len(z.serverPools))
+	var wg sync.WaitGroup
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, pool *erasureSets) {
+			defer wg.Done()
+			err := pool.CheckAbandonedParts(ctx, bucket, object, opts)
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+				errs[idx] = err
+			}
+		}(idx, pool)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		return err
+	}
+	return nil
 }

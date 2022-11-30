@@ -3542,7 +3542,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 				return
 			}
 			nr := httptest.NewRecorder()
-			rw := logger.NewResponseWriter(nr)
+			rw := xhttp.NewResponseRecorder(nr)
 			rw.LogErrBody = true
 			rw.LogAllBody = true
 			rreq.SelectParameters.Evaluate(rw)

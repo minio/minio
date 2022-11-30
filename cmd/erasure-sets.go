@@ -461,17 +461,16 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 			// Initialize erasure objects for a given set.
 			s.sets[i] = &erasureObjects{
-				setIndex:              i,
-				poolIndex:             poolIdx,
-				setDriveCount:         setDriveCount,
-				defaultParityCount:    defaultParityCount,
-				getDisks:              s.GetDisks(i),
-				getLockers:            s.GetLockers(i),
-				getEndpoints:          s.GetEndpoints(i),
-				deletedCleanupSleeper: newDynamicSleeper(10, 2*time.Second, false),
-				nsMutex:               mutex,
-				bp:                    bp,
-				bpOld:                 bpOld,
+				setIndex:           i,
+				poolIndex:          poolIdx,
+				setDriveCount:      setDriveCount,
+				defaultParityCount: defaultParityCount,
+				getDisks:           s.GetDisks(i),
+				getLockers:         s.GetLockers(i),
+				getEndpoints:       s.GetEndpoints(i),
+				nsMutex:            mutex,
+				bp:                 bp,
+				bpOld:              bpOld,
 			}
 		}(i)
 	}
@@ -1412,4 +1411,9 @@ func (s *erasureSets) TransitionObject(ctx context.Context, bucket, object strin
 // RestoreTransitionedObject - restore transitioned object content locally on this cluster.
 func (s *erasureSets) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return s.getHashedSet(object).RestoreTransitionedObject(ctx, bucket, object, opts)
+}
+
+// CheckAbandonedParts - check object for abandoned parts.
+func (s *erasureSets) CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error {
+	return s.getHashedSet(object).checkAbandonedParts(ctx, bucket, object, opts)
 }

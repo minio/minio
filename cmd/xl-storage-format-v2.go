@@ -610,7 +610,19 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 
 		fi.Metadata[k] = v
 	}
+
+	tierFVIDKey := ReservedMetadataPrefixLower + tierFVID
+	tierFVMarkerKey := ReservedMetadataPrefixLower + tierFVMarker
 	for k, v := range j.MetaSys {
+		// Make sure we skip free-version-id, similar to AddVersion()
+		if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
+			// Skip tierFVID, tierFVMarker keys; it's used
+			// only for creating free-version.
+			switch k {
+			case tierFVIDKey, tierFVMarkerKey:
+				continue
+			}
+		}
 		switch {
 		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower), equals(k, VersionPurgeStatusKey):
 			fi.Metadata[k] = string(v)
@@ -1177,6 +1189,40 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 		x.sortByModTime()
 	}
 	return nil
+}
+
+// getDataDirs will return all data directories in the metadata
+// as well as all version ids used for inline data.
+func (x *xlMetaV2) getDataDirs() ([]string, error) {
+	dds := make([]string, len(x.versions)*2)
+	for i, ver := range x.versions {
+		if ver.header.Type == DeleteType {
+			continue
+		}
+
+		obj, err := x.getIdx(i)
+		if err != nil {
+			return nil, err
+		}
+		switch ver.header.Type {
+		case ObjectType:
+			if obj.ObjectV2 == nil {
+				return nil, errors.New("obj.ObjectV2 unexpectedly nil")
+			}
+			dds = append(dds, uuid.UUID(obj.ObjectV2.DataDir).String())
+			if obj.ObjectV2.VersionID == [16]byte{} {
+				dds = append(dds, nullVersionID)
+			} else {
+				dds = append(dds, uuid.UUID(obj.ObjectV2.VersionID).String())
+			}
+		case LegacyType:
+			if obj.ObjectV1 == nil {
+				return nil, errors.New("obj.ObjectV1 unexpectedly nil")
+			}
+			dds = append(dds, obj.ObjectV1.DataDir)
+		}
+	}
+	return dds, nil
 }
 
 // sortByModTime will sort versions by modtime in descending order,

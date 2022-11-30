@@ -204,10 +204,7 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		closeRespFn:      closeRespFn,
 	}
 
-	var (
-		hasLegacyPolicyMapping = false
-		seenClientIDs          = set.NewStringSet()
-	)
+	seenClientIDs := set.NewStringSet()
 
 	deprecatedKeys := []string{JwksURL}
 
@@ -376,9 +373,8 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		arnKey := p.roleArn
 		if p.RolePolicy == "" {
 			arnKey = DummyRoleARN
-			hasLegacyPolicyMapping = true
-			// Ensure that when a JWT policy claim based provider
-			// exists, it is the only one.
+			// Ensure that at most one JWT policy claim based provider may be
+			// defined.
 			if _, ok := c.arnProviderCfgsMap[DummyRoleARN]; ok {
 				return c, errSingleProvider
 			}
@@ -390,12 +386,6 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		if err = c.PopulatePublicKey(arnKey); err != nil {
 			return c, err
 		}
-	}
-
-	// Ensure that when a JWT policy claim based provider
-	// exists, it is the only one.
-	if hasLegacyPolicyMapping && len(c.ProviderCfgs) > 1 {
-		return c, errSingleProvider
 	}
 
 	c.Enabled = true
