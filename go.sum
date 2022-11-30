@@ -662,8 +662,8 @@ github.com/klauspost/pgzip v1.2.5 h1:qnWYvvKqedOF2ulHpMG72XQol4ILEJ8k2wwRl/Km8oE
 github.com/klauspost/pgzip v1.2.5/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/klauspost/readahead v1.4.0 h1:w4hQ3BpdLjBnRQkZyNi+nwdHU7eGP9buTexWK9lU7gY=
 github.com/klauspost/readahead v1.4.0/go.mod h1:7bolpMKhT5LKskLwYXGSDOyA2TYtMFgdgV0Y8gy7QhA=
-github.com/klauspost/reedsolomon v1.11.0 h1:fc24kMFf4I6dXJwSkVAsw8Za/dMcJrV5ImeDjG3ss1M=
-github.com/klauspost/reedsolomon v1.11.0/go.mod h1:FXLZzlJIdfqEnQLdUKWNRuMZg747hZ4oYp2Ml60Lb/k=
+github.com/klauspost/reedsolomon v1.11.3 h1:rX9UNNvDhJ0Bq45y6uBy/eYehcjyz5faokTuZmu1Q9U=
+github.com/klauspost/reedsolomon v1.11.3/go.mod h1:FXLZzlJIdfqEnQLdUKWNRuMZg747hZ4oYp2Ml60Lb/k=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.2/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.3/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
