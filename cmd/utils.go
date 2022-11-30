@@ -45,7 +45,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/felixge/fgprof"
 	"github.com/gorilla/mux"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/internal/config"

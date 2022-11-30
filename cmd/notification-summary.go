@@ -18,7 +18,7 @@
 package cmd
 
 import (
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 // GetTotalCapacity gets the total capacity in the cluster.

@@ -34,8 +34,8 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.0.1
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.11
-	github.com/klauspost/cpuid/v2 v2.1.2
+	github.com/klauspost/compress v1.15.12
+	github.com/klauspost/cpuid/v2 v2.2.1
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.11.3
@@ -43,14 +43,14 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.24.0
-	github.com/minio/console v0.21.3
+	github.com/minio/console v0.22.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.22.0
-	github.com/minio/madmin-go v1.7.5
-	github.com/minio/minio-go/v7 v7.0.43
-	github.com/minio/pkg v1.5.4
+	github.com/minio/madmin-go/v2 v2.0.0
+	github.com/minio/minio-go/v7 v7.0.44
+	github.com/minio/pkg v1.5.5
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
@@ -84,8 +84,8 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.5
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
-	golang.org/x/crypto v0.2.0
-	golang.org/x/oauth2 v0.1.0
+	golang.org/x/crypto v0.3.0
+	golang.org/x/oauth2 v0.2.0
 	golang.org/x/sys v0.2.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	google.golang.org/api v0.98.0
@@ -150,6 +150,7 @@ require (
 	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.3 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+	github.com/jedib0t/go-pretty/v6 v6.3.8 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
@@ -169,7 +170,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20221103000258-583d449e38cd // indirect
+	github.com/minio/mc v0.0.0-20221201184114-854b4f123f03 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
