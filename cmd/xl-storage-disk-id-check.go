@@ -66,6 +66,7 @@ const (
 	storageMetricStatInfoFile
 	storageMetricReadMultiple
 	storageMetricDeleteAbandonedParts
+	storageMetricDiskInfo
 
 	// .... add more
 
@@ -225,6 +226,9 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	if contextCanceled(ctx) {
 		return DiskInfo{}, ctx.Err()
 	}
+
+	si := p.updateStorageMetrics(storageMetricDiskInfo)
+	defer si(&err)
 
 	info, err = p.storage.DiskInfo(ctx)
 	if err != nil {
@@ -539,7 +543,7 @@ func (p *xlStorageDiskIDCheck) CleanAbandonedData(ctx context.Context, volume st
 	return p.storage.CleanAbandonedData(ctx, volume, path)
 }
 
-func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, path string, err string) madmin.TraceInfo {
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceStorage,
 		Time:      startTime,
@@ -547,6 +551,7 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 		FuncName:  "storage." + s.String(),
 		Duration:  duration,
 		Path:      path,
+		Error:     err,
 	}
 }
 
@@ -565,15 +570,19 @@ func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, 
 func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...string) func(err *error) {
 	startTime := time.Now()
 	trace := globalTrace.NumSubscribers(madmin.TraceStorage) > 0
-	return func(err *error) {
+	return func(errp *error) {
 		duration := time.Since(startTime)
 
 		atomic.AddUint64(&p.apiCalls[s], 1)
 		p.apiLatencies[s].add(duration)
 
-		paths = append([]string{p.String()}, paths...)
 		if trace {
-			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " ")))
+			var errStr string
+			if errp != nil && *errp != nil {
+				errStr = (*errp).Error()
+			}
+			paths = append([]string{p.String()}, paths...)
+			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " "), errStr))
 		}
 	}
 }
