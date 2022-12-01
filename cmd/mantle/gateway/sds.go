@@ -28,13 +28,10 @@ func Put(f *os.File, fn string) (string, error) {
 }
 
 func Get(r io.Reader) (bb []byte, err error) {
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return
-	}
+	id := GetId(r)
 
 	client := &http.Client{}
-	resp, err := network.Get(client, urlJoin("files", string(b)), setMantleHeaders())
+	resp, err := network.Get(client, urlJoin("files", id), setMantleHeaders())
 	if err != nil {
 		return nil, err
 	}
