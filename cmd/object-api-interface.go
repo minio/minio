@@ -194,8 +194,8 @@ type ObjectLayer interface {
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, scanMode madmin.HealScanMode) error
 	BackendInfo() madmin.BackendInfo
-	StorageInfo(ctx context.Context) (StorageInfo, []error)
-	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
+	StorageInfo(ctx context.Context) StorageInfo
+	LocalStorageInfo(ctx context.Context) StorageInfo
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error

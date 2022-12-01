@@ -1069,7 +1069,7 @@ func (z *erasureServerPools) getDecommissionPoolSpaceInfo(idx int) (pi poolSpace
 		return pi, errInvalidArgument
 	}
 
-	info, _ := z.serverPools[idx].StorageInfo(context.Background())
+	info := z.serverPools[idx].StorageInfo(context.Background())
 	info.Backend = z.BackendInfo()
 
 	usableTotal := int64(GetTotalUsableCapacity(info.Disks, info))

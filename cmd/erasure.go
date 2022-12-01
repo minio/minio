@@ -175,7 +175,7 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk, errs []error) {
+func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -189,8 +189,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 					State:    diskErrToDriveState(errDiskNotFound),
 					Endpoint: diskEndpoint,
 				}
-				// Storage disk is empty, perhaps ignored disk or not available.
-				return errDiskNotFound
+				return nil
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
 			di := madmin.Disk{
@@ -231,16 +230,17 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				di.Utilization = float64(info.Used / info.Total * 100)
 			}
 			disksInfo[index] = di
-			return err
+			return nil
 		}, index)
 	}
 
-	return disksInfo, g.Wait()
+	g.Wait()
+	return disksInfo
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) (StorageInfo, []error) {
-	disksInfo, errs := getDisksInfo(disks, endpoints)
+func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
+	disksInfo := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -250,18 +250,18 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) (StorageInfo, []er
 	}
 
 	storageInfo.Backend.Type = madmin.Erasure
-	return storageInfo, errs
+	return storageInfo
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (er erasureObjects) StorageInfo(ctx context.Context) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
 	return getStorageInfo(disks, endpoints)
 }
 
 // LocalStorageInfo - returns underlying local storage statistics.
-func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (er erasureObjects) LocalStorageInfo(ctx context.Context) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
 
