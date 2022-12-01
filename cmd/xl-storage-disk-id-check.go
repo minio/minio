@@ -577,12 +577,12 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 		p.apiLatencies[s].add(duration)
 
 		if trace {
-			var err string
+			var errStr string
 			if errp != nil && *errp != nil {
-				err = (*errp).Error()
+				errStr = (*errp).Error()
 			}
 			paths = append([]string{p.String()}, paths...)
-			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " "), err))
+			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " "), errStr))
 		}
 	}
 }
