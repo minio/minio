@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -73,12 +73,11 @@ func skipContentSha256Cksum(r *http.Request) bool {
 		// we should skip such clients and allow
 		// blindly such insecure clients only if
 		// S3 strict compatibility is disabled.
-		if r.ContentLength > 0 && !globalCLIContext.StrictS3Compat {
-			// We return true only in situations when
-			// deployment has asked MinIO to allow for
-			// such broken clients and content-length > 0.
-			return true
-		}
+
+		// We return true only in situations when
+		// deployment has asked MinIO to allow for
+		// such broken clients and content-length > 0.
+		return r.ContentLength > 0 && !globalCLIContext.StrictS3Compat
 	}
 	return false
 }

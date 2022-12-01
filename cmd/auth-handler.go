@@ -89,6 +89,12 @@ func isRequestSignStreamingTrailerV4(r *http.Request) bool {
 		r.Method == http.MethodPut
 }
 
+// Verify if the request has AWS Streaming Signature Version '4', with unsigned content and trailer.
+func isRequestUnsignedTrailerV4(r *http.Request) bool {
+	return r.Header.Get(xhttp.AmzContentSha256) == unsignedPayloadTrailer &&
+		r.Method == http.MethodPut && strings.Contains(r.Header.Get(xhttp.ContentEncoding), streamingContentEncoding)
+}
+
 // Authorization type.
 //
 //go:generate stringer -type=authType -trimprefix=authType $GOFILE
@@ -107,10 +113,11 @@ const (
 	authTypeJWT
 	authTypeSTS
 	authTypeStreamingSignedTrailer
+	authTypeStreamingUnsignedTrailer
 )
 
 // Get request authentication type.
-func getRequestAuthType(r *http.Request) authType {
+func getRequestAuthType(r *http.Request) (at authType) {
 	if r.URL != nil {
 		var err error
 		r.Form, err = url.ParseQuery(r.URL.RawQuery)
@@ -127,6 +134,8 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeStreamingSigned
 	} else if isRequestSignStreamingTrailerV4(r) {
 		return authTypeStreamingSignedTrailer
+	} else if isRequestUnsignedTrailerV4(r) {
+		return authTypeStreamingUnsignedTrailer
 	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
 	} else if isRequestPresignedSignatureV4(r) {
@@ -534,14 +543,15 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 
 // List of all support S3 auth types.
 var supportedS3AuthTypes = map[authType]struct{}{
-	authTypeAnonymous:              {},
-	authTypePresigned:              {},
-	authTypePresignedV2:            {},
-	authTypeSigned:                 {},
-	authTypeSignedV2:               {},
-	authTypePostPolicy:             {},
-	authTypeStreamingSigned:        {},
-	authTypeStreamingSignedTrailer: {},
+	authTypeAnonymous:                {},
+	authTypePresigned:                {},
+	authTypePresignedV2:              {},
+	authTypeSigned:                   {},
+	authTypeSignedV2:                 {},
+	authTypePostPolicy:               {},
+	authTypeStreamingSigned:          {},
+	authTypeStreamingSignedTrailer:   {},
+	authTypeStreamingUnsignedTrailer: {},
 }
 
 // Validate if the authType is valid and supported.
@@ -587,6 +597,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 				atomic.AddUint64(&globalHTTPStats.rejectedRequestsTime, 1)
 				return
 			}
+			h.ServeHTTP(w, r)
+			return
 		case authTypeJWT, authTypeSTS:
 			h.ServeHTTP(w, r)
 			return
@@ -687,7 +699,7 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
-	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer:
+	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
