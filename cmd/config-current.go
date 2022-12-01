@@ -85,20 +85,32 @@ func initHelp() {
 	// Captures help for each sub-system
 	helpSubSys := config.HelpKVS{
 		config.HelpKV{
+			Key:         config.SubnetSubSys,
+			Type:        "string",
+			Description: "register the cluster to MinIO SUBNET",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         config.CallhomeSubSys,
+			Type:        "string",
+			Description: "enable callhome to MinIO SUBNET",
+			Optional:    true,
+		},
+		config.HelpKV{
 			Key:         config.SiteSubSys,
 			Description: "label the server and its location",
 		},
 		config.HelpKV{
-			Key:         config.CacheSubSys,
-			Description: "add caching storage tier",
+			Key:         config.APISubSys,
+			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
+		},
+		config.HelpKV{
+			Key:         config.ScannerSubSys,
+			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:         config.CompressionSubSys,
 			Description: "enable server side compression of objects",
-		},
-		config.HelpKV{
-			Key:         config.EtcdSubSys,
-			Description: "federate multiple clusters for IAM and Bucket DNS",
 		},
 		config.HelpKV{
 			Key:             config.IdentityOpenIDSubSys,
@@ -120,14 +132,6 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.PolicyPluginSubSys,
 			Description: "enable Access Management Plugin for policy enforcement",
-		},
-		config.HelpKV{
-			Key:         config.APISubSys,
-			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
-		},
-		config.HelpKV{
-			Key:         config.ScannerSubSys,
-			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -195,16 +199,12 @@ func initHelp() {
 			MultipleTargets: true,
 		},
 		config.HelpKV{
-			Key:         config.SubnetSubSys,
-			Type:        "string",
-			Description: "set subnet config for the cluster e.g. api key",
-			Optional:    true,
+			Key:         config.EtcdSubSys,
+			Description: "persist IAM assets externally to etcd",
 		},
 		config.HelpKV{
-			Key:         config.CallhomeSubSys,
-			Type:        "string",
-			Description: "enable callhome for the cluster",
-			Optional:    true,
+			Key:         config.CacheSubSys,
+			Description: "[DEPRECATED] add caching storage tier",
 		},
 	}
 
