@@ -51,8 +51,6 @@ import (
 // Default etag is used for pre-existing objects.
 var PANdefaultEtag = "00000000000000000000000000000000-2"
 
-const PANFS_BUCKET_DEFAULT_VOLUME = "default/path/on/realm"
-
 // PANFSObjects - Implements panfs object layer.
 type PANFSObjects struct {
 	GatewayUnsupported
@@ -533,7 +531,7 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	bi.Name = bucket
 	bi.Created = createdTime
 
-if globalGatewayName == PANFSBackendGateway {
+	if globalGatewayName == PANFSBackendGateway {
 		bi.PanFSPath = meta.PanFSPath
 	}
 	return

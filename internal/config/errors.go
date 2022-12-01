@@ -145,6 +145,18 @@ var (
 		`Access key length should be at least 3, and secret key length at least 8 characters`,
 	)
 
+	ErrInvalidDefaultPanFSBucketPath = newErrFn(
+		"Invalid path",
+		"Please provide path to the existing directory in PanFS",
+		`Default bucket path should be a valid path in the PanFS`,
+	)
+
+	ErrMissingEnvPanFSBucketPath = newErrFn(
+		"Missing credential environment variable, \""+EnvPanFSBucketPath+"\"",
+		"Environment variable \""+EnvPanFSBucketPath+"\" is missing",
+		`Default PanFS bucket path is expected to be specified via environment variable MINIO_PANFS_BUCKET_PATH`,
+	)
+
 	ErrMissingEnvCredentialRootUser = newErrFn(
 		"Missing credential environment variable, \""+EnvRootUser+"\"",
 		"Environment variable \""+EnvRootUser+"\" is missing",

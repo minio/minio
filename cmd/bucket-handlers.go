@@ -755,7 +755,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		if panfsPath := r.Header.Get(xhttp.PanFSBucketPath); len(panfsPath) > 0 {
 			panfsBucketPath = panfsPath
 		} else {
-			panfsBucketPath = PANFS_BUCKET_DEFAULT_VOLUME
+			panfsBucketPath = globalPanFSDefaultBucketPath
 		}
 	}
 
