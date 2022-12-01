@@ -974,9 +974,6 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		id = gateway.GetId(readCloser)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil
