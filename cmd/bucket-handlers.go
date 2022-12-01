@@ -216,7 +216,7 @@ func (api objectAPIHandlers) GetBucketPanFSPathHandler(w http.ResponseWriter, r 
 		return
 	}
 	encodedSuccessResponse := encodeResponse(PanFSPathResponse{
-		PanFSPath: bi.PanfsPath,
+		PanFSPath: bi.PanFSPath,
 	})
 
 	// Write success response.
@@ -226,7 +226,7 @@ func (api objectAPIHandlers) GetBucketPanFSPathHandler(w http.ResponseWriter, r 
 // GetBucketLocationHandler - GET Bucket location.
 // -------------------------
 // This operation returns bucket location.
-func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) { // add new get panfs location header + mc shuold be available to use it
+func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketLocation")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
@@ -748,7 +748,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Get PanFS path for bucket only in Minio is running in PanFS Gateway mode
+	// Get PanFS path for bucket only if Minio is running in PanFS Gateway mode
 	// If PanFS path provided in any other mode - just ignore it
 	panfsBucketPath := ""
 	if globalIsGateway && globalGatewayName == PANFSBackendGateway {
@@ -833,7 +833,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		Location:        location,
 		LockEnabled:     objectLockEnabled,
 		ForceCreate:     forceCreate,
-		PanfsBucketPath: panfsBucketPath,
+		PanFSBucketPath: panfsBucketPath,
 	}
 
 	if globalDNSConfig != nil {

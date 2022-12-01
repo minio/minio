@@ -116,7 +116,7 @@ type MakeBucketOptions struct {
 	VersioningEnabled bool
 	ForceCreate       bool      // Create buckets even if they are already created.
 	CreatedAt         time.Time // only for site replication
-	PanfsBucketPath   string    // only for PanFS gateway mode
+	PanFSBucketPath   string    // only for PanFS gateway mode
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.

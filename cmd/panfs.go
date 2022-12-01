@@ -465,8 +465,8 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 	}
 
 	meta := newBucketMetadata(bucket)
-	if opts.PanfsBucketPath != "" {
-		meta.PanfsPath = opts.PanfsBucketPath
+	if opts.PanFSBucketPath != "" {
+		meta.PanFSPath = opts.PanFSBucketPath
 	}
 
 	if err := meta.Save(ctx, fs); err != nil {
@@ -526,7 +526,6 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 
 	createdTime := st.ModTime()
 	meta, err := loadBucketMetadata(ctx, fs, bucket)
-	// meta, err := globalBucketMetadataSys.Get(bucket)
 	if err == nil {
 		createdTime = meta.Created
 	}
@@ -534,8 +533,8 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	bi.Name = bucket
 	bi.Created = createdTime
 
-	if globalGatewayName == PANFSBackendGateway {
-		bi.PanfsPath = meta.PanfsPath
+if globalGatewayName == PANFSBackendGateway {
+		bi.PanFSPath = meta.PanFSPath
 	}
 	return
 }

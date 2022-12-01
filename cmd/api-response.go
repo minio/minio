@@ -54,7 +54,7 @@ type LocationResponse struct {
 
 // PanFSPathResponse - format for panfs path response
 type PanFSPathResponse struct {
-	XMLName   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ PanFSPath" json:"-"`
+	XMLName   xml.Name `xml:"PanFSPath" json:"-"`
 	PanFSPath string   `xml:",chardata"`
 }
 
