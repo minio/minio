@@ -58,9 +58,9 @@ const (
 	scannerMetricLastRealtime
 
 	// Trace only metrics:
-	scannerMetricScanFolder     // Scan a folder on disk, recursively.
-	scannerMetricScanCycle      // Full cycle, cluster global
-	scannerMetricScanBucketDisk // Single bucket on one disk
+	scannerMetricScanFolder      // Scan a folder on disk, recursively.
+	scannerMetricScanCycle       // Full cycle, cluster global
+	scannerMetricScanBucketDrive // Single bucket on one drive
 
 	// Must be last:
 	scannerMetricLast
@@ -181,9 +181,9 @@ func (p *scannerMetrics) getCurrentPaths() []string {
 	return res
 }
 
-// activeDisks returns the number of currently active disks.
+// activeDrives returns the number of currently active disks.
 // (since this is concurrent it may not be 100% reliable)
-func (p *scannerMetrics) activeDisks() int {
+func (p *scannerMetrics) activeDrives() int {
 	var i int
 	p.currentPaths.Range(func(k, v interface{}) bool {
 		i++

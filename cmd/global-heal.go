@@ -105,8 +105,7 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		return status, true
 	}
 
-	// ignores any errors here.
-	si, _ := o.StorageInfo(ctx)
+	si := o.StorageInfo(ctx)
 
 	indexed := make(map[string][]madmin.Disk)
 	for _, disk := range si.Disks {

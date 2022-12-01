@@ -478,7 +478,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(GetTotalCapacityFree(server.Disks)),
 	)
 
-	s, _ := objLayer.StorageInfo(GlobalContext)
+	sinfo := objLayer.StorageInfo(GlobalContext)
+
 	// Report total usable capacity
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -486,8 +487,9 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(GetTotalUsableCapacity(server.Disks, s)),
+		float64(GetTotalUsableCapacity(server.Disks, sinfo)),
 	)
+
 	// Report total usable capacity free
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -495,7 +497,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total free usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(GetTotalUsableCapacityFree(server.Disks, s)),
+		float64(GetTotalUsableCapacityFree(server.Disks, sinfo)),
 	)
 
 	// MinIO Offline Disks per node

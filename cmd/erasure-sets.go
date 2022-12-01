@@ -600,17 +600,16 @@ func (s *erasureSets) ParityCount() int {
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (s *erasureSets) StorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo madmin.StorageInfo
 
 	storageInfos := make([]madmin.StorageInfo, len(s.sets))
-	storageInfoErrs := make([][]error, len(s.sets))
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx)
+			storageInfos[index] = s.sets[index].StorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -622,26 +621,20 @@ func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	errs := make([]error, 0, len(s.sets)*s.setDriveCount)
-	for i := range s.sets {
-		errs = append(errs, storageInfoErrs[i]...)
-	}
-
-	return storageInfo, errs
+	return storageInfo
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (s *erasureSets) LocalStorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
-	storageInfoErrs := make([][]error, len(s.sets))
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfoErrs[index] = s.sets[index].LocalStorageInfo(ctx)
+			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -653,12 +646,7 @@ func (s *erasureSets) LocalStorageInfo(ctx context.Context) (StorageInfo, []erro
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	var errs []error
-	for i := range s.sets {
-		errs = append(errs, storageInfoErrs[i]...)
-	}
-
-	return storageInfo, errs
+	return storageInfo
 }
 
 // Shutdown shutsdown all erasure coded sets in parallel

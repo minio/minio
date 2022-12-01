@@ -78,7 +78,7 @@ func init() {
 
 	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
 		getNodeHealthMetrics(),
-		getLocalDiskStorageMetrics(),
+		getLocalDriveStorageMetrics(),
 		getCacheMetrics(),
 		getHTTPMetrics(),
 		getNetworkMetrics(),
@@ -333,7 +333,7 @@ func getClusterCapacityUsageFreeBytesMD() MetricDescription {
 	}
 }
 
-func getNodeDiskAPILatencyMD() MetricDescription {
+func getNodeDriveAPILatencyMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -343,7 +343,7 @@ func getNodeDiskAPILatencyMD() MetricDescription {
 	}
 }
 
-func getNodeDiskUsedBytesMD() MetricDescription {
+func getNodeDriveUsedBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -353,7 +353,7 @@ func getNodeDiskUsedBytesMD() MetricDescription {
 	}
 }
 
-func getNodeDiskFreeBytesMD() MetricDescription {
+func getNodeDriveFreeBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -363,7 +363,7 @@ func getNodeDiskFreeBytesMD() MetricDescription {
 	}
 }
 
-func getClusterDisksOfflineTotalMD() MetricDescription {
+func getClusterDrivesOfflineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -373,7 +373,7 @@ func getClusterDisksOfflineTotalMD() MetricDescription {
 	}
 }
 
-func getClusterDisksOnlineTotalMD() MetricDescription {
+func getClusterDrivesOnlineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -383,7 +383,7 @@ func getClusterDisksOnlineTotalMD() MetricDescription {
 	}
 }
 
-func getClusterDisksTotalMD() MetricDescription {
+func getClusterDrivesTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -393,9 +393,39 @@ func getClusterDisksTotalMD() MetricDescription {
 	}
 }
 
-func getClusterDisksFreeInodes() MetricDescription {
+func getNodeDrivesOfflineTotalMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      offlineTotal,
+		Help:      "Total drives offline",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeDrivesOnlineTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      onlineTotal,
+		Help:      "Total drives online",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeDrivesTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      total,
+		Help:      "Total drives",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeDrivesFreeInodes() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      freeInodes,
 		Help:      "Total free inodes",
@@ -403,7 +433,7 @@ func getClusterDisksFreeInodes() MetricDescription {
 	}
 }
 
-func getNodeDiskTotalBytesMD() MetricDescription {
+func getNodeDriveTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -1288,7 +1318,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of bucket scans started since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDisk) + uint64(globalScannerMetrics.activeDisks())),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDrive) + uint64(globalScannerMetrics.activeDrives())),
 			},
 			{
 				Description: MetricDescription{
@@ -1298,7 +1328,7 @@ func getScannerNodeMetrics() *MetricsGroup {
 					Help:      "Total number of bucket scans finished since server start",
 					Type:      counterMetric,
 				},
-				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDisk)),
+				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDrive)),
 			},
 			{
 				Description: MetricDescription{
@@ -1918,30 +1948,48 @@ func getLocalStorageMetrics() *MetricsGroup {
 		}
 
 		metrics = make([]Metric, 0, 50)
-		storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+		storageInfo := objLayer.LocalStorageInfo(ctx)
+		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
+		totalDrives := onlineDrives.Merge(offlineDrives)
+
 		for _, disk := range storageInfo.Disks {
 			metrics = append(metrics, Metric{
-				Description:    getNodeDiskUsedBytesMD(),
+				Description:    getNodeDriveUsedBytesMD(),
 				Value:          float64(disk.UsedSpace),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getNodeDiskFreeBytesMD(),
+				Description:    getNodeDriveFreeBytesMD(),
 				Value:          float64(disk.AvailableSpace),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getNodeDiskTotalBytesMD(),
+				Description:    getNodeDriveTotalBytesMD(),
 				Value:          float64(disk.TotalSpace),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getClusterDisksFreeInodes(),
+				Description:    getNodeDrivesFreeInodes(),
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
+			})
+
+			metrics = append(metrics, Metric{
+				Description: getNodeDrivesOfflineTotalMD(),
+				Value:       float64(offlineDrives.Sum()),
+			})
+
+			metrics = append(metrics, Metric{
+				Description: getNodeDrivesOnlineTotalMD(),
+				Value:       float64(onlineDrives.Sum()),
+			})
+
+			metrics = append(metrics, Metric{
+				Description: getNodeDrivesTotalMD(),
+				Value:       float64(totalDrives.Sum()),
 			})
 
 		}
@@ -1950,7 +1998,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getLocalDiskStorageMetrics() *MetricsGroup {
+func getLocalDriveStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 3 * time.Second,
 	}
@@ -1961,7 +2009,7 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 			return
 		}
 
-		storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+		storageInfo := objLayer.LocalStorageInfo(ctx)
 		if storageInfo.Backend.Type == madmin.FS {
 			return
 		}
@@ -1972,7 +2020,7 @@ func getLocalDiskStorageMetrics() *MetricsGroup {
 			}
 			for apiName, latency := range disk.Metrics.LastMinute {
 				metrics = append(metrics, Metric{
-					Description:    getNodeDiskAPILatencyMD(),
+					Description:    getNodeDriveAPILatencyMD(),
 					Value:          float64(latency.Avg().Microseconds()),
 					VariableLabels: map[string]string{"disk": disk.DrivePath, "api": "storage." + apiName},
 				})
@@ -1996,9 +2044,9 @@ func getClusterStorageMetrics() *MetricsGroup {
 
 		// Fetch disk space info, ignore errors
 		metrics = make([]Metric, 0, 10)
-		storageInfo, _ := objLayer.StorageInfo(ctx)
-		onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
-		totalDisks := onlineDisks.Merge(offlineDisks)
+		storageInfo := objLayer.StorageInfo(ctx)
+		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
+		totalDrives := onlineDrives.Merge(offlineDrives)
 
 		metrics = append(metrics, Metric{
 			Description: getClusterCapacityTotalBytesMD(),
@@ -2021,18 +2069,18 @@ func getClusterStorageMetrics() *MetricsGroup {
 		})
 
 		metrics = append(metrics, Metric{
-			Description: getClusterDisksOfflineTotalMD(),
-			Value:       float64(offlineDisks.Sum()),
+			Description: getClusterDrivesOfflineTotalMD(),
+			Value:       float64(offlineDrives.Sum()),
 		})
 
 		metrics = append(metrics, Metric{
-			Description: getClusterDisksOnlineTotalMD(),
-			Value:       float64(onlineDisks.Sum()),
+			Description: getClusterDrivesOnlineTotalMD(),
+			Value:       float64(onlineDrives.Sum()),
 		})
 
 		metrics = append(metrics, Metric{
-			Description: getClusterDisksTotalMD(),
-			Value:       float64(totalDisks.Sum()),
+			Description: getClusterDrivesTotalMD(),
+			Value:       float64(totalDrives.Sum()),
 		})
 		return
 	})

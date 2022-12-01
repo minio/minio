@@ -952,6 +952,39 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 	return offlineDisks
 }
 
+// StorageInfo returns disk information across all peers
+func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
+	var storageInfo StorageInfo
+	replies := make([]StorageInfo, len(sys.peerClients))
+
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			info, err := client.LocalStorageInfo()
+			if err != nil {
+				info.Disks = getOfflineDisks(client.host.String(), globalEndpoints)
+			}
+			replies[idx] = info
+		}(client, i)
+	}
+	wg.Wait()
+
+	// Add local to this server.
+	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext))
+
+	storageInfo.Backend = objLayer.BackendInfo()
+	for _, sinfo := range replies {
+		storageInfo.Disks = append(storageInfo.Disks, sinfo.Disks...)
+	}
+
+	return storageInfo
+}
+
 // ServerInfo - calls ServerInfo RPC call on all peers.
 func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	reply := make([]madmin.ServerProperties, len(sys.peerClients))
