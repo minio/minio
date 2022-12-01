@@ -1187,6 +1187,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	roleArn := iampolicy.Args{Claims: claims}.GetRoleArn()
+	policySetFromClaims, hasPolicyClaim := iampolicy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
 	var effectivePolicy iampolicy.Policy
 
 	var buf []byte
@@ -1198,15 +1199,18 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 				break
 			}
 		}
+
 	case roleArn != "":
 		_, policy, err := globalIAMSys.GetRolePolicy(roleArn)
 		if err != nil {
-			logger.LogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 		policySlice := newMappedPolicy(policy).toSlice()
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySlice...)
+
+	case hasPolicyClaim:
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySetFromClaims.ToSlice()...)
 
 	default:
 		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
