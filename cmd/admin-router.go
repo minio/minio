@@ -156,11 +156,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup))).
 			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
 
-		// Attach policies to user
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/attach-user-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyToUser))).Queries("user", "{user:.*}")
+		// Attach policies to user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/attach").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyBuiltin)))
 
-		// Detach policies from user
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/detach-user-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyFromUser))).Queries("user", "{user:.*}")
+		// Detach policies from user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/detach").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyBuiltin)))
 
 		// Remove user IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveUser))).Queries("accessKey", "{accessKey:.*}")
@@ -174,9 +174,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// Add/Remove members from group
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/update-group-members").HandlerFunc(gz(httpTraceHdrs(adminAPI.UpdateGroupMembers)))
 
-		// List user policies
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-user-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetUserPolicies))).Queries("user", "{user:.*}")
-
 		// Get Group
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/group").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetGroup))).Queries("group", "{group:.*}")
 
@@ -185,15 +182,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// Set Group Status
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetGroupStatus))).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
-
-		// Attach policies to group
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/attach-group-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyToGroup))).Queries("group", "{group:.*}")
-
-		// Detach policies from group
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/detach-group-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyFromGroup))).Queries("group", "{group:.*}")
-
-		// List group policies
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-group-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetGroupPolicies))).Queries("group", "{group:.*}")
 
 		// Export IAM info to zipped file
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/export-iam").HandlerFunc(httpTraceHdrs(adminAPI.ExportIAM))
