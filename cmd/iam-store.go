@@ -1489,6 +1489,10 @@ func (store *IAMStoreSys) GetUserPolicies(name string) ([]string, error) {
 	cache := store.rlock()
 	defer store.runlock()
 
+	if cache.iamUserPolicyMap[name].Policies == "" {
+		return []string{}, nil
+	}
+
 	policies := strings.Split(cache.iamUserPolicyMap[name].Policies, ",")
 
 	return policies, nil
