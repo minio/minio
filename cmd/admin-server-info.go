@@ -143,10 +143,11 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil {
-		// only need Disks information in server mode.
-		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
+		storageInfo := objLayer.LocalStorageInfo(GlobalContext)
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks
+	} else {
+		props.State = string(madmin.ItemOffline)
 	}
 
 	return props

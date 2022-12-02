@@ -545,16 +545,15 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	return
 }
 
-func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(z.serverPools))
-	storageInfosErrs := make([][]error, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].LocalStorageInfo(ctx)
+			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -567,40 +566,11 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) (StorageInfo,
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	var errs []error
-	for i := range z.serverPools {
-		errs = append(errs, storageInfosErrs[i]...)
-	}
-	return storageInfo, errs
+	return storageInfo
 }
 
-func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []error) {
-	var storageInfo StorageInfo
-
-	storageInfos := make([]StorageInfo, len(z.serverPools))
-	storageInfosErrs := make([][]error, len(z.serverPools))
-	g := errgroup.WithNErrs(len(z.serverPools))
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].StorageInfo(ctx)
-			return nil
-		}, index)
-	}
-
-	// Wait for the go routines.
-	g.Wait()
-
-	storageInfo.Backend = z.BackendInfo()
-	for _, lstorageInfo := range storageInfos {
-		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-	}
-
-	var errs []error
-	for i := range z.serverPools {
-		errs = append(errs, storageInfosErrs[i]...)
-	}
-	return storageInfo, errs
+func (z *erasureServerPools) StorageInfo(ctx context.Context) StorageInfo {
+	return globalNotificationSys.StorageInfo(z)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {

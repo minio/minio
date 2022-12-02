@@ -25,13 +25,13 @@ func _() {
 	_ = x[scannerMetricLastRealtime-14]
 	_ = x[scannerMetricScanFolder-15]
 	_ = x[scannerMetricScanCycle-16]
-	_ = x[scannerMetricScanBucketDisk-17]
+	_ = x[scannerMetricScanBucketDrive-17]
 	_ = x[scannerMetricLast-18]
 }
 
-const _scannerMetric_name = "ReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldCleanAbandonedApplyNonCurrentStartTraceScanObjectLastRealtimeScanFolderScanCycleScanBucketDiskLast"
+const _scannerMetric_name = "ReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldCleanAbandonedApplyNonCurrentStartTraceScanObjectLastRealtimeScanFolderScanCycleScanBucketDriveLast"
 
-var _scannerMetric_index = [...]uint8{0, 12, 24, 33, 41, 53, 65, 74, 77, 93, 98, 112, 127, 137, 147, 159, 169, 178, 192, 196}
+var _scannerMetric_index = [...]uint8{0, 12, 24, 33, 41, 53, 65, 74, 77, 93, 98, 112, 127, 137, 147, 159, 169, 178, 193, 197}
 
 func (i scannerMetric) String() string {
 	if i >= scannerMetric(len(_scannerMetric_index)-1) {

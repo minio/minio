@@ -125,7 +125,7 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	}
 
 	// Fetch disk capacity and available space.
-	si, _ := z.StorageInfo(ctx)
+	si := z.StorageInfo(ctx)
 	diskStats := make([]struct {
 		AvailableSpace uint64
 		TotalSpace     uint64

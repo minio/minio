@@ -37,11 +37,6 @@ func getFormatStr(strLen int, padding int) string {
 	return "%" + formatStr
 }
 
-func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
-	storageInfo, _ := objAPI.StorageInfo(GlobalContext)
-	return storageInfo
-}
-
 // Prints the formatted startup message.
 func printStartupMessage(apiEndpoints []string, err error) {
 	logger.Info(color.Bold("MinIO Object Storage Server"))
@@ -67,7 +62,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(mustGetStorageInfo(objAPI))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext))
 	}
 
 	// Prints credential, region and browser access.
