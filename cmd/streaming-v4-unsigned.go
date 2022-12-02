@@ -20,6 +20,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -99,6 +100,7 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 				return io.ErrUnexpectedEOF
 			}
 			if got != want {
+				fmt.Printf("mustread: want: %v got: %v\n", want, got)
 				return errMalformedEncoding
 			}
 			if err != nil {
@@ -138,6 +140,7 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 		case b >= 'A' && b <= 'F':
 			size = size<<4 | int(b-('A'-10))
 		default:
+			fmt.Printf("err size: %v\n", string(b))
 			cr.err = errMalformedEncoding
 			return n, cr.err
 		}
@@ -173,6 +176,7 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 	if len(cr.buffer) == 0 {
 		if cr.trailers != nil {
 			err = cr.readTrailers()
+			fmt.Println("trailer returned:", err)
 			if err != nil {
 				cr.err = err
 				return 0, err

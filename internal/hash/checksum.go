@@ -246,8 +246,8 @@ func (c Checksum) Valid() bool {
 	if c.Type == ChecksumInvalid {
 		return false
 	}
-	if len(c.Encoded) == 0 || c.Type.Is(ChecksumTrailing) {
-		return c.Type.Is(ChecksumNone) || c.Type.Is(ChecksumTrailing)
+	if len(c.Encoded) == 0 || c.Type.Trailing() {
+		return c.Type.Is(ChecksumNone) || c.Type.Trailing()
 	}
 	raw := c.Raw
 	return c.Type.RawByteLen() == len(raw)
@@ -331,8 +331,9 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 		t |= NewChecksumType(alg)
 		if t.IsSet() {
 			hdr := t.Key()
+			// Not sure if this a valid method.
 			if s = r.Header.Get(hdr); s == "" {
-				if strings.EqualFold(r.Header.Get(xhttp.AmzTrailer), hdr) {
+				if _, ok := r.Trailer[http.CanonicalHeaderKey(hdr)]; ok {
 					t |= ChecksumTrailing
 				} else {
 					t = ChecksumInvalid
@@ -351,6 +352,19 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 			} else {
 				t = c
 				s = got
+			}
+			return
+		}
+
+		if len(r.Trailer) > 0 {
+			if _, ok := r.Trailer[http.CanonicalHeaderKey(c.Key())]; ok {
+				if t != ChecksumNone {
+					t = ChecksumInvalid
+					s = ""
+				} else {
+					t = c | ChecksumTrailing
+					s = ""
+				}
 			}
 		}
 	}

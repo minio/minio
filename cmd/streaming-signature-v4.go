@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"net/http"
@@ -259,6 +260,11 @@ const maxChunkSize = 16 << 20 // 16 MiB
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
+	defer func() {
+		if err != nil {
+			fmt.Println("Read err:", err)
+		}
+	}()
 	// First, if there is any unread data, copy it to the client
 	// provided buffer.
 	if cr.offset > 0 {
@@ -396,8 +402,10 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 	// If the chunk size is zero we return io.EOF. As specified by AWS,
 	// only the last chunk is zero-sized.
 	if len(cr.buffer) == 0 {
+		fmt.Println("EOF. Trailers:", cr.trailers)
 		if cr.trailers != nil {
 			err = cr.readTrailers()
+			fmt.Println("trailers returned:", err, "now:", cr.trailers)
 			if err != nil {
 				cr.err = err
 				return 0, err

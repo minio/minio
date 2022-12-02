@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"net/http"
@@ -50,6 +51,8 @@ type Reader struct {
 	// Content checksum
 	contentHash   Checksum
 	contentHasher hash.Hash
+
+	trailer http.Header
 
 	sha256 hash.Hash
 }
@@ -155,10 +158,17 @@ func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
 		return nil
 	}
 	r.contentHash = *cs
-	if cs.Type.Trailing() || ignoreValue {
+	if ignoreValue {
 		// Ignore until we have trailing headers.
 		return nil
 	}
+	if cs.Type.Trailing() {
+		r.trailer = req.Trailer
+		if _, ok := r.trailer[http.CanonicalHeaderKey(cs.Type.Key())]; !ok {
+			return ErrInvalidChecksum
+		}
+	}
+
 	r.contentHasher = cs.Type.Hasher()
 	if r.contentHasher == nil {
 		return ErrInvalidChecksum
@@ -186,6 +196,14 @@ func (r *Reader) Read(p []byte) (int, error) {
 			}
 		}
 		if r.contentHasher != nil {
+			if r.contentHash.Type.Trailing() {
+				fmt.Println("trailers now:", r.trailer)
+				r.contentHash.Encoded = r.trailer.Get(r.contentHash.Type.Key())
+				r.contentHash.Raw, err = base64.StdEncoding.DecodeString(r.contentHash.Encoded)
+				if err != nil || len(r.contentHash.Raw) == 0 {
+					return 0, ChecksumMismatch{Got: r.contentHash.Encoded}
+				}
+			}
 			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw, sum) {
 				err := ChecksumMismatch{
 					Want: r.contentHash.Encoded,
