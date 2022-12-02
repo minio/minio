@@ -179,8 +179,13 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	var rc io.ReadCloser
 
 	if file.UncompressedSize64 > 0 {
-		// We do not know where the file ends, but the returned reader only returns UncompressedSize.
-		rs := &HTTPRangeSpec{Start: file.Offset, End: -1}
+		// There may be number of header bytes before the content.
+		// Reading 64K extra. This should more than cover name and any "extra" details.
+		end := file.Offset + int64(file.CompressedSize64) + 64<<10
+		if end > zipObjInfo.Size {
+			end = zipObjInfo.Size
+		}
+		rs := &HTTPRangeSpec{Start: file.Offset, End: end}
 		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, readLock, opts)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
