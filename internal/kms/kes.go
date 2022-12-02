@@ -102,12 +102,12 @@ func NewWithConfig(config Config) (KMS, error) {
 				if !ok {
 					return
 				}
-				sameCert := true
+				sameCert := len(certificate.Certificate) == len(prevCertificate.Certificate)
 				for i, b := range certificate.Certificate {
-					if !bytes.Equal(b, prevCertificate.Certificate[i]) {
-						sameCert = false
+					if !sameCert {
 						break
 					}
+					sameCert = sameCert && bytes.Equal(b, prevCertificate.Certificate[i])
 				}
 				// Do not reload if its the same cert as before.
 				if !sameCert {
