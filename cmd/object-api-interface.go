@@ -36,7 +36,7 @@ import (
 type CheckPreconditionFn func(o ObjectInfo) bool
 
 // EvalMetadataFn validates input objInfo and returns an updated metadata
-type EvalMetadataFn func(o ObjectInfo) error
+type EvalMetadataFn func(o *ObjectInfo) error
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
