@@ -503,7 +503,7 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	popts := ObjectOptions{
 		MTime:     srcInfo.ModTime,
 		VersionID: srcInfo.VersionID,
-		EvalMetadataFn: func(oi ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo) error {
 			oi.UserDefined[archiveTypeMetadataKey] = archiveType
 			oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
 			return nil
