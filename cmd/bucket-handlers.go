@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -753,6 +754,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	panfsBucketPath := ""
 	if globalIsGateway && globalGatewayName == PANFSBackendGateway {
 		if panfsPath := r.Header.Get(xhttp.PanFSBucketPath); len(panfsPath) > 0 {
+			if _, err := os.Stat(panfsPath); os.IsNotExist(err) {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPanFSBucketPahtNotFound), r.URL)
+				return
+			}
 			panfsBucketPath = panfsPath
 		} else {
 			panfsBucketPath = globalPanFSDefaultBucketPath
