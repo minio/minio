@@ -983,7 +983,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		popts := ObjectOptions{
 			MTime:     objInfo.ModTime,
 			VersionID: objInfo.VersionID,
-			EvalMetadataFn: func(oi ObjectInfo) error {
+			EvalMetadataFn: func(oi *ObjectInfo) error {
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = newReplStatusInternal
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[xhttp.AmzBucketReplicationStatus] = string(rinfos.ReplicationStatus())

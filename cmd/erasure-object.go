@@ -1744,7 +1744,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	objInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if opts.EvalMetadataFn != nil {
-		if err := opts.EvalMetadataFn(objInfo); err != nil {
+		if err := opts.EvalMetadataFn(&objInfo); err != nil {
 			return ObjectInfo{}, err
 		}
 	}
