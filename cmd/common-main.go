@@ -854,6 +854,7 @@ func handleKMSConfig() {
 		defaultKeyID := env.Get(config.EnvKESKeyName, "")
 		KMS, err := kms.NewWithConfig(kms.Config{
 			Endpoints:        endpoints,
+			Enclave:          env.Get(config.EnvKESEnclave, ""),
 			DefaultKeyID:     defaultKeyID,
 			Certificate:      certificate,
 			ReloadCertEvents: reloadCertEvents,
