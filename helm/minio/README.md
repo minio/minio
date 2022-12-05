@@ -32,7 +32,8 @@ helm install --namespace minio --set rootUser=rootuser,rootPassword=rootpass123 
 
 The command deploys MinIO on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
 
-The default number of replicas is 16 and default setup requests 16Gb of RAM.
+### Installing the Chart (toy-setup)
+
 Minimal toy setup for testing purposes can be deployed using:
 
 ```bash
