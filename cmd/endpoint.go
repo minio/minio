@@ -592,14 +592,14 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 			return endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
-			return endpoints, setupType, config.ErrInvalidFSEndpoint(nil).Msg("use path style endpoint for FS setup")
+			return endpoints, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single node setup")
 		}
 		endpoints = append(endpoints, endpoint)
 		setupType = ErasureSDSetupType
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(endpoints); err != nil {
-			return endpoints, setupType, config.ErrInvalidFSEndpoint(nil).Msg(err.Error())
+			return endpoints, setupType, config.ErrInvalidEndpoint(nil).Msg(err.Error())
 		}
 
 		return endpoints, setupType, nil

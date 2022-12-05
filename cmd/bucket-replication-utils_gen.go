@@ -2117,10 +2117,10 @@ func (z *TargetReplicationResyncStatus) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
-		case "et":
-			z.EndTime, err = dc.ReadTime()
+		case "lst":
+			z.LastUpdate, err = dc.ReadTime()
 			if err != nil {
-				err = msgp.WrapError(err, "EndTime")
+				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
 		case "id":
@@ -2205,14 +2205,14 @@ func (z *TargetReplicationResyncStatus) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "StartTime")
 		return
 	}
-	// write "et"
-	err = en.Append(0xa2, 0x65, 0x74)
+	// write "lst"
+	err = en.Append(0xa3, 0x6c, 0x73, 0x74)
 	if err != nil {
 		return
 	}
-	err = en.WriteTime(z.EndTime)
+	err = en.WriteTime(z.LastUpdate)
 	if err != nil {
-		err = msgp.WrapError(err, "EndTime")
+		err = msgp.WrapError(err, "LastUpdate")
 		return
 	}
 	// write "id"
@@ -2315,9 +2315,9 @@ func (z *TargetReplicationResyncStatus) MarshalMsg(b []byte) (o []byte, err erro
 	// string "st"
 	o = append(o, 0x8b, 0xa2, 0x73, 0x74)
 	o = msgp.AppendTime(o, z.StartTime)
-	// string "et"
-	o = append(o, 0xa2, 0x65, 0x74)
-	o = msgp.AppendTime(o, z.EndTime)
+	// string "lst"
+	o = append(o, 0xa3, 0x6c, 0x73, 0x74)
+	o = msgp.AppendTime(o, z.LastUpdate)
 	// string "id"
 	o = append(o, 0xa2, 0x69, 0x64)
 	o = msgp.AppendString(o, z.ResyncID)
@@ -2372,10 +2372,10 @@ func (z *TargetReplicationResyncStatus) UnmarshalMsg(bts []byte) (o []byte, err 
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
-		case "et":
-			z.EndTime, bts, err = msgp.ReadTimeBytes(bts)
+		case "lst":
+			z.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EndTime")
+				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
 		case "id":
@@ -2450,7 +2450,7 @@ func (z *TargetReplicationResyncStatus) UnmarshalMsg(bts []byte) (o []byte, err 
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *TargetReplicationResyncStatus) Msgsize() (s int) {
-	s = 1 + 3 + msgp.TimeSize + 3 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ResyncID) + 4 + msgp.TimeSize + 4 + msgp.IntSize + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object)
+	s = 1 + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ResyncID) + 4 + msgp.TimeSize + 4 + msgp.IntSize + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object)
 	return
 }
 

@@ -155,9 +155,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 						return
 					case <-t.C:
 						meta.lastHandout = time.Now()
-						if rpc == nil {
-							meta, _ = localMetacacheMgr.updateCacheEntry(meta)
-						}
 						meta, _ = rpc.UpdateMetacacheListing(ctx, meta)
 					}
 				}(*c)

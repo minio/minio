@@ -315,18 +315,20 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
-		"test-bucket-list-object",
+		0: "test-bucket-list-object",
 		// This bucket will be tested with empty directories
-		"test-bucket-empty-dir",
+		1: "test-bucket-empty-dir",
 		// Will not store any objects in this bucket,
 		// Its to test ListObjects on an empty bucket.
-		"empty-bucket",
+		2: "empty-bucket",
 		// Listing the case where the marker > last object.
-		"test-bucket-single-object",
+		3: "test-bucket-single-object",
 		// Listing uncommon delimiter.
-		"test-bucket-delimiter",
+		4: "test-bucket-delimiter",
 		// Listing prefixes > maxKeys
-		"test-bucket-max-keys-prefixes",
+		5: "test-bucket-max-keys-prefixes",
+		// Listing custom delimiters
+		6: "test-bucket-custom-delimiter",
 	}
 	for _, bucket := range testBuckets {
 		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
@@ -366,6 +368,10 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		{testBuckets[5], "foo/201910/2112", "content", nil},
 		{testBuckets[5], "foo/201910_txt", "content", nil},
 		{testBuckets[5], "201910/foo/bar/xl.meta/1.txt", "content", nil},
+		{testBuckets[6], "aaa", "content", nil},
+		{testBuckets[6], "bbb_aaa", "content", nil},
+		{testBuckets[6], "bbb_aaa", "content", nil},
+		{testBuckets[6], "ccc", "content", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -788,6 +794,15 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 				{Name: "201910/foo/bar/xl.meta/1.txt"},
 			},
 		},
+		// ListObjectsResult-40
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "aaa"},
+				{Name: "ccc"},
+			},
+			Prefixes: []string{"bbb_"},
+		},
 	}
 
 	testCases := []struct {
@@ -918,6 +933,8 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		{testBuckets[5], "foo/201910", "", "", 1000, resultCases[38], nil, true},
 		// Test listing with prefix match with 'xl.meta'
 		{testBuckets[5], "201910/foo/bar", "", "", 1000, resultCases[39], nil, true},
+		// Test listing with custom prefix
+		{testBuckets[6], "", "", "_", 1000, resultCases[40], nil, true},
 	}
 
 	for i, testCase := range testCases {

@@ -317,7 +317,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 	}
 
 	replaceScheme := func(k string) string {
-		// This is needed as fallback when users are changeing
+		// This is needed as fallback when users are updating
 		// from http->https or https->http, we need to verify
 		// both because MinIO remembers the command-line in
 		// "exact" order - as long as this order is not disturbed
@@ -359,11 +359,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			}
 		}
 		if !ok {
-			if globalIsErasureSD {
-				update = true
-			} else {
-				return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
-			}
+			update = true
 		}
 	}
 
@@ -378,11 +374,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 				}
 			}
 			if !ok {
-				if globalIsErasureSD {
-					update = true
-				} else {
-					return false, fmt.Errorf("pool(%s) = %s is not specified, please specify on server command line", humanize.Ordinal(pi.position+1), k)
-				}
+				update = true
 			}
 			if ok && pos != pi.position {
 				return false, fmt.Errorf("pool order change detected for %s, expected position is (%s) but found (%s)", k, humanize.Ordinal(pi.position+1), humanize.Ordinal(pos+1))
@@ -400,6 +392,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			}
 		}
 	}
+
 	return update, nil
 }
 
@@ -546,21 +539,18 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 					r := rand.New(rand.NewSource(time.Now().UnixNano()))
 					for {
 						if err := z.Decommission(ctx, pool.ID); err != nil {
-							switch err {
-							// we already started decommission
-							case errDecommissionAlreadyRunning:
+							if errors.Is(err, errDecommissionAlreadyRunning) {
 								// A previous decommission running found restart it.
 								z.doDecommissionInRoutine(ctx, idx)
 								return
-							default:
-								if configRetriableErrors(err) {
-									logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
-									time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
-									continue
-								}
-								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
-								return
 							}
+							if configRetriableErrors(err) {
+								logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w: retrying..", pool, err))
+								time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
+								continue
+							}
+							logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pool, err))
+							return
 						}
 						break
 					}

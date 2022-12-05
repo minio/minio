@@ -428,7 +428,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-
+	dID := r.Form.Get("by-depID")
 	done := ctx.Done()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -441,15 +441,16 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 			hosts: hostMap,
 			disks: diskMap,
 			jobID: jobID,
+			depID: dID,
 		})
 		m.Merge(&mLocal)
-
 		// Allow half the interval for collecting remote...
 		cctx, cancel := context.WithTimeout(ctx, interval/2)
 		mRemote := collectRemoteMetrics(cctx, types, collectMetricsOpts{
 			hosts: hostMap,
 			disks: diskMap,
 			jobID: jobID,
+			depID: dID,
 		})
 		cancel()
 		m.Merge(&mRemote)
@@ -511,9 +512,10 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, now time.Time, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
+		Elapsed:    now.Sub(l.Timestamp),
 		Resource:   resource,
 		ServerList: []string{server},
 		Source:     l.Source,
@@ -530,6 +532,7 @@ func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEn
 }
 
 func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
+	now := time.Now().UTC()
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -540,7 +543,7 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 				if val, ok := entryMap[lockReqInfo.Name]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
+					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
 				}
 			}
 		}
@@ -1908,67 +1911,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 	return ki
 }
 
-// HealthInfoHandler - GET /minio/admin/v3/healthinfo
-// ----------
-// Get server health info
-func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "HealthInfo")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	query := r.Form
-	healthInfo := madmin.HealthInfo{
-		Version: madmin.HealthInfoVersion,
-		Minio: madmin.MinioHealthInfo{
-			Info: madmin.MinioInfo{
-				DeploymentID: globalDeploymentID,
-			},
-		},
-	}
-	healthInfoCh := make(chan madmin.HealthInfo)
-
-	enc := json.NewEncoder(w)
-
-	setCommonHeaders(w)
-
-	setEventStreamHeaders(w)
-
-	w.WriteHeader(http.StatusOK)
-
-	errResp := func(err error) {
-		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
-			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
-		encodedErrorResponse := encodeResponse(errorResponse)
-		healthInfo.Error = string(encodedErrorResponse)
-		logger.LogIf(ctx, enc.Encode(healthInfo))
-	}
-
-	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
-	if dstr := r.Form.Get("deadline"); dstr != "" {
-		var err error
-		deadline, err = time.ParseDuration(dstr)
-		if err != nil {
-			errResp(err)
-			return
-		}
-	}
-
-	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
-	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
-	if err != nil { // returns a locked lock
-		errResp(err)
-		return
-	}
-	defer nsLock.Unlock(lkctx.Cancel)
-
-	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
-	defer healthCancel()
-
+func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *url.Values, healthInfoCh chan madmin.HealthInfo, healthInfo madmin.HealthInfo) {
 	hostAnonymizer := createHostAnonymizer()
 	// anonAddr - Anonymizes hosts in given input string.
 	anonAddr := func(addr string) string {
@@ -2193,7 +2136,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	getAndWriteMinioConfig := func() {
 		if query.Get("minioconfig") == "true" {
-			config, err := readServerConfig(ctx, objectAPI)
+			config, err := readServerConfig(healthCtx, objectAPI)
 			if err != nil {
 				healthInfo.Minio.Config = madmin.MinioConfig{
 					Error: err.Error(),
@@ -2241,7 +2184,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		getAndWriteSysConfig()
 
 		if query.Get("minioinfo") == "true" {
-			infoMessage := getServerInfo(ctx, r)
+			infoMessage := getServerInfo(healthCtx, nil)
 			servers := make([]madmin.ServerInfo, 0, len(infoMessage.Servers))
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
@@ -2291,6 +2234,68 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			partialWrite(healthInfo)
 		}
 	}()
+}
+
+// HealthInfoHandler - GET /minio/admin/v3/healthinfo
+// ----------
+// Get server health info
+func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HealthInfo")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	query := r.Form
+	healthInfoCh := make(chan madmin.HealthInfo)
+	enc := json.NewEncoder(w)
+
+	healthInfo := madmin.HealthInfo{
+		TimeStamp: time.Now().UTC(),
+		Version:   madmin.HealthInfoVersion,
+		Minio: madmin.MinioHealthInfo{
+			Info: madmin.MinioInfo{
+				DeploymentID: globalDeploymentID,
+			},
+		},
+	}
+
+	errResp := func(err error) {
+		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
+			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		encodedErrorResponse := encodeResponse(errorResponse)
+		healthInfo.Error = string(encodedErrorResponse)
+		logger.LogIf(ctx, enc.Encode(healthInfo))
+	}
+
+	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
+	if dstr := query.Get("deadline"); dstr != "" {
+		var err error
+		deadline, err = time.ParseDuration(dstr)
+		if err != nil {
+			errResp(err)
+			return
+		}
+	}
+
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
+	lkctx, err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
+	if err != nil { // returns a locked lock
+		errResp(err)
+		return
+	}
+
+	defer nsLock.Unlock(lkctx.Cancel)
+	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
+	defer healthCancel()
+
+	go fetchHealthInfo(healthCtx, objectAPI, &query, healthInfoCh, healthInfo)
+
+	setCommonHeaders(w)
+	setEventStreamHeaders(w)
+	w.WriteHeader(http.StatusOK)
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -2609,7 +2614,10 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 	defer cancel()
 
 	resultCh := make(chan madmin.ClusterRegistrationInfo)
+
 	go func() {
+		defer close(resultCh)
+
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)
 		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
@@ -2631,7 +2639,12 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 
 		ci.DeploymentID = globalDeploymentID
 		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.NoOfServers, ci.Info.NoOfDrives, ci.Info.MinioVersion)
-		resultCh <- ci
+
+		select {
+		case resultCh <- ci:
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	select {

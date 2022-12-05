@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -33,25 +34,38 @@ const (
 	respBodyLimit = 1 << 20 // 1 MiB
 )
 
-// Post submit 'payload' to specified URL
-func (c Config) Post(reqURL string, payload interface{}) (string, error) {
+// Upload given file content (payload) to specified URL
+func (c Config) Upload(reqURL string, filename string, payload []byte) (string, error) {
 	if !c.Registered() {
 		return "", errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	r, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(body))
-	if err != nil {
-		return "", err
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, e := writer.CreateFormFile("file", filename)
+	if e != nil {
+		return "", e
 	}
 
+	if _, e = part.Write(payload); e != nil {
+		return "", e
+	}
+	writer.Close()
+
+	r, e := http.NewRequest(http.MethodPost, reqURL, &body)
+	if e != nil {
+		return "", e
+	}
+	r.Header.Add("Content-Type", writer.FormDataContentType())
+
+	return c.submitPost(r)
+}
+
+func (c Config) submitPost(r *http.Request) (string, error) {
 	configLock.RLock()
-	r.Header.Set("Authorization", c.APIKey)
+	r.Header.Set(xhttp.SubnetAPIKey, c.APIKey)
 	configLock.RUnlock()
-
-	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
 
 	client := &http.Client{
 		Timeout:   10 * time.Second,
@@ -75,4 +89,23 @@ func (c Config) Post(reqURL string, payload interface{}) (string, error) {
 	}
 
 	return respStr, fmt.Errorf("SUBNET request failed with code %d and error: %s", resp.StatusCode, respStr)
+}
+
+// Post submit 'payload' to specified URL
+func (c Config) Post(reqURL string, payload interface{}) (string, error) {
+	if !c.Registered() {
+		return "", errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	r, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	return c.submitPost(r)
 }

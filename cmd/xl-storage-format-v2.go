@@ -610,7 +610,19 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 
 		fi.Metadata[k] = v
 	}
+
+	tierFVIDKey := ReservedMetadataPrefixLower + tierFVID
+	tierFVMarkerKey := ReservedMetadataPrefixLower + tierFVMarker
 	for k, v := range j.MetaSys {
+		// Make sure we skip free-version-id, similar to AddVersion()
+		if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
+			// Skip tierFVID, tierFVMarker keys; it's used
+			// only for creating free-version.
+			switch k {
+			case tierFVIDKey, tierFVMarkerKey:
+				continue
+			}
+		}
 		switch {
 		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower), equals(k, VersionPurgeStatusKey):
 			fi.Metadata[k] = string(v)

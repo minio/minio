@@ -1253,17 +1253,21 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				return nil
 			}
 		}
+
 		fivs, err := entry.fileInfoVersions(bucket)
 		if err != nil {
-			_, err = er.HealObject(ctx, bucket, entry.name, "", madmin.HealOpts{NoLock: true})
+			healObject(bucket, entry.name, "", madmin.HealNormalScan)
 			return err
 		}
 
+		if len(fivs.Versions) > 2 {
+			return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
+				bucket, entry.name,
+				len(fivs.Versions))
+		}
+
 		for _, version := range fivs.Versions {
-			_, err = er.HealObject(ctx, bucket, version.Name, version.VersionID, madmin.HealOpts{NoLock: true})
-			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-				return err
-			}
+			healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
 		}
 
 		return nil

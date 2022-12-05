@@ -84,7 +84,13 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			Description:    e.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}
-	case config.Error:
+	case config.ErrConfigNotFound:
+		apiErr = APIError{
+			Code:           "XMinioConfigNotFoundError",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusNotFound,
+		}
+	case config.ErrConfigGeneric:
 		apiErr = APIError{
 			Code:           "XMinioConfigError",
 			Description:    e.Error(),
