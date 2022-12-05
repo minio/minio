@@ -103,35 +103,33 @@ func NewWithConfig(config Config) (KMS, error) {
 	go func() {
 		for {
 			var prevCertificate tls.Certificate
-			select {
-			case certificate, ok := <-config.ReloadCertEvents:
-				if !ok {
-					return
-				}
-				sameCert := len(certificate.Certificate) == len(prevCertificate.Certificate)
-				for i, b := range certificate.Certificate {
-					if !sameCert {
-						break
-					}
-					sameCert = sameCert && bytes.Equal(b, prevCertificate.Certificate[i])
-				}
-				// Do not reload if its the same cert as before.
+			certificate, ok := <-config.ReloadCertEvents
+			if !ok {
+				return
+			}
+			sameCert := len(certificate.Certificate) == len(prevCertificate.Certificate)
+			for i, b := range certificate.Certificate {
 				if !sameCert {
-					client := kes.NewClientWithConfig("", &tls.Config{
-						MinVersion:         tls.VersionTLS12,
-						Certificates:       []tls.Certificate{certificate},
-						RootCAs:            config.RootCAs,
-						ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-					})
-					client.Endpoints = endpoints
-
-					c.lock.Lock()
-					c.client = client
-					c.enclave = c.client.Enclave(config.Enclave)
-					c.lock.Unlock()
-
-					prevCertificate = certificate
+					break
 				}
+				sameCert = sameCert && bytes.Equal(b, prevCertificate.Certificate[i])
+			}
+			// Do not reload if its the same cert as before.
+			if !sameCert {
+				client := kes.NewClientWithConfig("", &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					Certificates:       []tls.Certificate{certificate},
+					RootCAs:            config.RootCAs,
+					ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+				})
+				client.Endpoints = endpoints
+
+				c.lock.Lock()
+				c.client = client
+				c.enclave = c.client.Enclave(config.Enclave)
+				c.lock.Unlock()
+
+				prevCertificate = certificate
 			}
 		}
 	}()

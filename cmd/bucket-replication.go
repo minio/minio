@@ -36,7 +36,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
-	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/bandwidth"
@@ -568,9 +567,9 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 	}
 	// early return if already replicated delete marker for existing object replication/ healing delete markers
 	if dobj.DeleteMarkerVersionID != "" {
-		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.StatObjectOptions{
+		toi, err := tgt.StatObject(ctx, tgt.Bucket, dobj.ObjectName, minio.StatObjectOptions{
 			VersionID: versionID,
-			Internal: miniogo.AdvancedGetOptions{
+			Internal: minio.AdvancedGetOptions{
 				ReplicationProxyRequest:           "false",
 				IsReplicationReadyForDeleteMarker: true,
 			},
@@ -589,12 +588,12 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		}
 	}
 
-	rmErr := tgt.RemoveObject(ctx, tgt.Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
+	rmErr := tgt.RemoveObject(ctx, tgt.Bucket, dobj.ObjectName, minio.RemoveObjectOptions{
 		VersionID: versionID,
-		Internal: miniogo.AdvancedRemoveOptions{
+		Internal: minio.AdvancedRemoveOptions{
 			ReplicationDeleteMarker: dobj.DeleteMarkerVersionID != "",
 			ReplicationMTime:        dobj.DeleteMarkerMTime.Time,
-			ReplicationStatus:       miniogo.ReplicationStatusReplica,
+			ReplicationStatus:       minio.ReplicationStatusReplica,
 			ReplicationRequest:      true, // always set this to distinguish between `mc mirror` replication and serverside
 		},
 	})
@@ -680,7 +679,7 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
+func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
@@ -695,14 +694,14 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
 		sc = objInfo.StorageClass
 	}
-	putOpts = miniogo.PutObjectOptions{
+	putOpts = minio.PutObjectOptions{
 		UserMetadata:    meta,
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    sc,
-		Internal: miniogo.AdvancedPutOptions{
+		Internal: minio.AdvancedPutOptions{
 			SourceVersionID:    objInfo.VersionID,
-			ReplicationStatus:  miniogo.ReplicationStatusReplica,
+			ReplicationStatus:  minio.ReplicationStatusReplica,
 			SourceMTime:        objInfo.ModTime,
 			SourceETag:         objInfo.ETag,
 			ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
@@ -735,7 +734,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		putOpts.CacheControl = cc
 	}
 	if mode, ok := lkMap.Lookup(xhttp.AmzObjectLockMode); ok {
-		rmode := miniogo.RetentionMode(mode)
+		rmode := minio.RetentionMode(mode)
 		putOpts.Mode = rmode
 	}
 	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
@@ -758,7 +757,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		putOpts.Internal.RetentionTimestamp = retTimestamp
 	}
 	if lhold, ok := lkMap.Lookup(xhttp.AmzObjectLockLegalHold); ok {
-		putOpts.LegalHold = miniogo.LegalHoldStatus(lhold)
+		putOpts.LegalHold = minio.LegalHoldStatus(lhold)
 		// set legalhold timestamp in opts
 		lholdTimestamp := objInfo.ModTime
 		if lholdTmstampStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
@@ -1126,7 +1125,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	rinfo.Size = size
 	rinfo.ReplicationAction = rAction
 	// use core client to avoid doing multipart on PUT
-	c := &miniogo.Core{Client: tgt.Client}
+	c := &minio.Core{Client: tgt.Client}
 
 	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
 	if err != nil {
@@ -1271,9 +1270,9 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}()
 
 	rAction = replicateAll
-	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, miniogo.StatObjectOptions{
+	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, minio.StatObjectOptions{
 		VersionID: objInfo.VersionID,
-		Internal: miniogo.AdvancedGetOptions{
+		Internal: minio.AdvancedGetOptions{
 			ReplicationProxyRequest: "false",
 		},
 	})
@@ -1309,16 +1308,16 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	rinfo.Size = size
 	rinfo.ReplicationAction = rAction
 	// use core client to avoid doing multipart on PUT
-	c := &miniogo.Core{Client: tgt.Client}
+	c := &minio.Core{Client: tgt.Client}
 	if rAction != replicateAll {
 		// replicate metadata for object tagging/copy with metadata replacement
-		srcOpts := miniogo.CopySrcOptions{
+		srcOpts := minio.CopySrcOptions{
 			Bucket:    tgt.Bucket,
 			Object:    object,
 			VersionID: objInfo.VersionID,
 		}
-		dstOpts := miniogo.PutObjectOptions{
-			Internal: miniogo.AdvancedPutOptions{
+		dstOpts := minio.PutObjectOptions{
+			Internal: minio.AdvancedPutOptions{
 				SourceVersionID:    objInfo.VersionID,
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
@@ -1372,8 +1371,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	return
 }
 
-func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts miniogo.PutObjectOptions) (err error) {
-	var uploadedParts []miniogo.CompletePart
+func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts minio.PutObjectOptions) (err error) {
+	var uploadedParts []minio.CompletePart
 	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		return err
@@ -1399,7 +1398,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 
 	var (
 		hr    *hash.Reader
-		pInfo miniogo.ObjectPart
+		pInfo minio.ObjectPart
 	)
 
 	for _, partInfo := range objInfo.Parts {
@@ -1414,13 +1413,13 @@ func replicateObjectWithMultipart(ctx context.Context, c *miniogo.Core, bucket, 
 		if pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
-		uploadedParts = append(uploadedParts, miniogo.CompletePart{
+		uploadedParts = append(uploadedParts, minio.CompletePart{
 			PartNumber: pInfo.PartNumber,
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, miniogo.PutObjectOptions{
-		Internal: miniogo.AdvancedPutOptions{
+	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
@@ -1874,7 +1873,7 @@ type proxyResult struct {
 
 // get Reader from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, _ http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
 	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
 	if !proxy.Proxy {
 		return nil, proxy, nil
@@ -1883,10 +1882,10 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	if err != nil {
 		return nil, proxy, err
 	}
-	gopts := miniogo.GetObjectOptions{
+	gopts := minio.GetObjectOptions{
 		VersionID:            opts.VersionID,
 		ServerSideEncryption: opts.ServerSideEncryption,
-		Internal: miniogo.AdvancedGetOptions{
+		Internal: minio.AdvancedGetOptions{
 			ReplicationProxyRequest: "true",
 		},
 		PartNumber: opts.PartNumber,
@@ -1903,7 +1902,7 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	if err = gopts.SetMatchETag(oi.ETag); err != nil {
 		return nil, proxy, err
 	}
-	c := miniogo.Core{Client: tgt.Client}
+	c := minio.Core{Client: tgt.Client}
 	obj, _, h, err := c.GetObject(ctx, bucket, object, gopts)
 	if err != nil {
 		return nil, proxy, err
@@ -1963,10 +1962,10 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 			continue
 		}
 
-		gopts := miniogo.GetObjectOptions{
+		gopts := minio.GetObjectOptions{
 			VersionID:            opts.VersionID,
 			ServerSideEncryption: opts.ServerSideEncryption,
-			Internal: miniogo.AdvancedGetOptions{
+			Internal: minio.AdvancedGetOptions{
 				ReplicationProxyRequest: "true",
 			},
 			PartNumber: opts.PartNumber,
@@ -2356,9 +2355,9 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			roi.EventType = ReplicateExisting
 			replicateObject(ctx, roi, objectAPI)
 		}
-		_, err = tgt.StatObject(ctx, tgt.Bucket, roi.Name, miniogo.StatObjectOptions{
+		_, err = tgt.StatObject(ctx, tgt.Bucket, roi.Name, minio.StatObjectOptions{
 			VersionID: roi.VersionID,
-			Internal: miniogo.AdvancedGetOptions{
+			Internal: minio.AdvancedGetOptions{
 				ReplicationProxyRequest: "false",
 			},
 		})

@@ -28,8 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go"
-	minio "github.com/minio/minio-go/v7"
-	miniogo "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
@@ -80,7 +79,7 @@ func (s3 *warmBackendS3) Get(ctx context.Context, object string, rv remoteVersio
 			return nil, s3.ToObjectError(err, object)
 		}
 	}
-	c := &miniogo.Core{Client: s3.client}
+	c := &minio.Core{Client: s3.client}
 	// Important to use core primitives here to pass range get options as is.
 	r, _, _, err := c.GetObject(ctx, s3.Bucket, s3.getDest(object), gopts)
 	if err != nil {

@@ -24,7 +24,6 @@ import (
 	"net/url"
 
 	"github.com/minio/minio/internal/dsync"
-	"github.com/minio/minio/internal/http"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/rest"
 )
@@ -95,7 +94,7 @@ func (client *lockRESTClient) restCall(ctx context.Context, call string, args ds
 	defer metaDataPoolPut(argsBytes)
 	body := bytes.NewReader(argsBytes)
 	respBody, err := client.callWithContext(ctx, call, nil, body, body.Size())
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	switch err {
 	case nil:
 		return true, nil
