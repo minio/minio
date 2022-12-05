@@ -67,6 +67,6 @@ func (r *RequestRecorder) Data() []byte {
 	if r.LogBody {
 		return r.buf.Bytes()
 	}
-	// ... otherwise we return <BODY> placeholder
-	return BodyPlaceHolder
+	// ... otherwise we return <BLOB> placeholder
+	return blobBody
 }
