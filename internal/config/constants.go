@@ -70,6 +70,7 @@ const (
 	EnvKMSSecretKey      = "MINIO_KMS_SECRET_KEY"
 	EnvKMSSecretKeyFile  = "MINIO_KMS_SECRET_KEY_FILE"
 	EnvKESEndpoint       = "MINIO_KMS_KES_ENDPOINT"
+	EnvKESEnclave        = "MINIO_KMS_KES_ENCLAVE"
 	EnvKESKeyName        = "MINIO_KMS_KES_KEY_NAME"
 	EnvKESClientKey      = "MINIO_KMS_KES_KEY_FILE"
 	EnvKESClientPassword = "MINIO_KMS_KES_KEY_PASSWORD"

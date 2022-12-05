@@ -777,6 +777,24 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 	}
 }
 
+// CleanAbandonedData will read metadata of the object on disk
+// and delete any data directories and inline data that isn't referenced in metadata.
+func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume string, path string) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	respBody, err := client.call(ctx, storageRESTMethodCleanAbandoned, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+	respReader, err := waitForHTTPResponse(respBody)
+	if err == nil {
+		io.Copy(io.Discard, respReader)
+	}
+	return err
+}
+
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.restClient.Close()

@@ -97,6 +97,17 @@ func (client *peerRESTClient) GetLocks() (lockMap map[string][]lockRequesterInfo
 	return lockMap, err
 }
 
+// LocalStorageInfo - fetch server information for a remote node.
+func (client *peerRESTClient) LocalStorageInfo() (info StorageInfo, err error) {
+	respBody, err := client.call(peerRESTMethodLocalStorageInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // ServerInfo - fetch server information for a remote node.
 func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
 	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)

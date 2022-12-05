@@ -983,7 +983,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		popts := ObjectOptions{
 			MTime:     objInfo.ModTime,
 			VersionID: objInfo.VersionID,
-			EvalMetadataFn: func(oi ObjectInfo) error {
+			EvalMetadataFn: func(oi *ObjectInfo) error {
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = newReplStatusInternal
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[xhttp.AmzBucketReplicationStatus] = string(rinfos.ReplicationStatus())
@@ -2519,23 +2519,12 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []Buck
 	}
 }
 
-var replicationResyncLockTimeout = newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
-	timeout:       30 * time.Second,
-	minimum:       10 * time.Second,
-	retryInterval: time.Second,
-})
-
 // Loads bucket replication resync statuses into memory.
 func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
 	// Make sure only one node running resync on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "replication/resync.lock")
-	lkctx, err := locker.GetLock(ctx, replicationResyncLockTimeout)
-	if err != nil {
-		return err
-	}
-	ctx = lkctx.Context()
-	defer lkctx.Cancel()
-	// No unlock for "leader" lock.
+	ctx, cancel := globalLeaderLock.GetLock(ctx)
+	defer cancel()
+
 	for index := range buckets {
 		meta, err := loadBucketResyncMetadata(ctx, buckets[index].Name, objAPI)
 		if err != nil {

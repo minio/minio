@@ -344,8 +344,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ignores any errors here.
-	storageInfo, _ := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx)
 
 	// Collect any disk healing.
 	healing, _ := getAggregatedBackgroundHealState(ctx, nil)
@@ -1234,7 +1233,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		duration = time.Second * 10
 	}
 
-	storageInfo, _ := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx)
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 	if !sufficientCapacity {
@@ -2519,61 +2518,19 @@ func fetchKMSStatus() madmin.KMS {
 func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 	var loggerInfo []madmin.Logger
 	var auditloggerInfo []madmin.Audit
-	for _, target := range logger.SystemTargets() {
-		if target.Endpoint() != "" {
-			tgt := target.String()
-			err := checkConnection(target.Endpoint(), 15*time.Second)
-			if err == nil {
-				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: string(madmin.ItemOnline)}
-				loggerInfo = append(loggerInfo, mapLog)
-			} else {
-				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: string(madmin.ItemOffline)}
-				loggerInfo = append(loggerInfo, mapLog)
-			}
+	for _, tgt := range logger.SystemTargets() {
+		if tgt.Endpoint() != "" {
+			loggerInfo = append(loggerInfo, madmin.Logger{tgt.String(): logger.TargetStatus(tgt)})
 		}
 	}
 
-	for _, target := range logger.AuditTargets() {
-		if target.Endpoint() != "" {
-			tgt := target.String()
-			err := checkConnection(target.Endpoint(), 15*time.Second)
-			if err == nil {
-				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: string(madmin.ItemOnline)}
-				auditloggerInfo = append(auditloggerInfo, mapAudit)
-			} else {
-				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: string(madmin.ItemOffline)}
-				auditloggerInfo = append(auditloggerInfo, mapAudit)
-			}
+	for _, tgt := range logger.AuditTargets() {
+		if tgt.Endpoint() != "" {
+			auditloggerInfo = append(auditloggerInfo, madmin.Audit{tgt.String(): logger.TargetStatus(tgt)})
 		}
 	}
 
 	return loggerInfo, auditloggerInfo
-}
-
-// checkConnection - ping an endpoint , return err in case of no connection
-func checkConnection(endpointStr string, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
-	defer cancel()
-
-	client := &http.Client{
-		Transport: globalProxyTransport,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, endpointStr, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer xhttp.DrainBody(resp.Body)
-	return nil
 }
 
 func embedFileInZip(zipWriter *zip.Writer, name string, data []byte) error {
@@ -2623,7 +2580,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
 		ci.Info.MinioVersion = Version
 
-		si, _ := objectAPI.StorageInfo(ctx)
+		si := objectAPI.StorageInfo(ctx)
 
 		ci.Info.NoOfDrives = len(si.Disks)
 		for _, disk := range si.Disks {
