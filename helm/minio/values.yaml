@@ -316,6 +316,11 @@ policies: []
 #
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -341,6 +346,11 @@ users:
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -362,6 +372,11 @@ makeUserJob:
   #   user: console
 
 makeServiceAccountJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -394,6 +409,11 @@ buckets:
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
 makeBucketJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -407,6 +427,11 @@ customCommands:
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi

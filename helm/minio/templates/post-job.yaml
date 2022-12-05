@@ -77,6 +77,12 @@ containers:
   { { - if .Values.buckets } }
 - name: minio-makeBucket
   image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  { { - if .Values.makeBucketJob.securityContext.enabled } }
+  securityContext:
+    runAsUser: { { .Values.makeBucketJob.securityContext.runAsUser } }
+    runAsGroup: { { .Values.makeBucketJob.securityContext.runAsGroup } }
+    fsGroup: { { .Values.makeBucketJob.securityContext.fsGroup } }
+  { { - end } }
   imagePullPolicy: { { .Values.mcImage.pullPolicy } }
   { { - if .Values.makeBucketJob.exitCommand } }
   command: [ "/bin/sh", "-c" ]
@@ -102,6 +108,12 @@ containers:
   { { - if .Values.users } }
 - name: minio-makeUser
   image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  { { - if .Values.makeUserJob.securityContext.enabled } }
+  securityContext:
+    runAsUser: { { .Values.makeUserJob.securityContext.runAsUser } }
+    runAsGroup: { { .Values.makeUserJob.securityContext.runAsGroup } }
+    fsGroup: { { .Values.makeUserJob.securityContext.fsGroup } }
+  { { - end } }
   imagePullPolicy: { { .Values.mcImage.pullPolicy } }
   { { - if .Values.makeUserJob.exitCommand } }
   command: [ "/bin/sh", "-c" ]
@@ -127,6 +139,12 @@ containers:
   { { - if .Values.policies } }
 - name: minio-makePolicy
   image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  { { - if .Values.makePolicyJob.securityContext.enabled } }
+  securityContext:
+    runAsUser: { { .Values.makePolicyJob.securityContext.runAsUser } }
+    runAsGroup: { { .Values.makePolicyJob.securityContext.runAsGroup } }
+    fsGroup: { { .Values.makePolicyJob.securityContext.fsGroup } }
+  { { - end } }
   imagePullPolicy: { { .Values.mcImage.pullPolicy } }
   { { - if .Values.makePolicyJob.exitCommand } }
   command: [ "/bin/sh", "-c" ]
@@ -152,6 +170,12 @@ containers:
   { { - if .Values.customCommands } }
 - name: minio-customCommand
   image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  { { - if .Values.customCommandJob.securityContext.enabled } }
+  securityContext:
+    runAsUser: { { .Values.customCommandJob.securityContext.runAsUser } }
+    runAsGroup: { { .Values.customCommandJob.securityContext.runAsGroup } }
+    fsGroup: { { .Values.customCommandJob.securityContext.fsGroup } }
+  { { - end } }
   imagePullPolicy: { { .Values.mcImage.pullPolicy } }
   { { - if .Values.customCommandJob.exitCommand } }
   command: [ "/bin/sh", "-c" ]
@@ -177,6 +201,12 @@ containers:
   { { - if .Values.svcaccts } }
 - name: minio-make-svcacct
   image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+  { { - if .Values.makeServiceAccountJob.securityContext.enabled } }
+  securityContext:
+    runAsUser: { { .Values.makeServiceAccountJob.securityContext.runAsUser } }
+    runAsGroup: { { .Values.makeServiceAccountJob.securityContext.runAsGroup } }
+    fsGroup: { { .Values.makeServiceAccountJob.securityContext.fsGroup } }
+  { { - end } }
   imagePullPolicy: { { .Values.mcImage.pullPolicy } }
   { { - if .Values.makeServiceAccountJob.exitCommand } }
   command: [ "/bin/sh", "-c" ]
