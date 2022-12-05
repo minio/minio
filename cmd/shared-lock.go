@@ -40,6 +40,7 @@ func (ld sharedLock) backgroundRoutine(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 
+	keepLock:
 		for {
 			select {
 			case <-ctx.Done():
@@ -48,7 +49,7 @@ func (ld sharedLock) backgroundRoutine(ctx context.Context, objAPI ObjectLayer, 
 				// The context of the lock is canceled, this can happen
 				// if one lock lost quorum due to cluster instability
 				// in that case, try to lock again.
-				break
+				break keepLock
 			case ld.lockContext <- lkctx:
 				// Send the lock context to anyone asking for it
 			}
