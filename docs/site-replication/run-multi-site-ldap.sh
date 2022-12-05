@@ -229,7 +229,7 @@ fi
 ./mc mb --with-lock minio3/newbucket-olock
 sleep 5
 
-enabled_minio2=$(./mc stat --json minio2/newbucket-olock| jq -r .metadata.ObjectLock.enabled)
+enabled_minio2=$(./mc stat --json minio2/newbucket-olock| jq -r .ObjectLock.enabled)
 if [ $? -ne 0 ]; then
     echo "expected bucket to be mirrored with object-lock but not present, exiting..."
     exit_1;
@@ -240,7 +240,7 @@ if [ "${enabled_minio2}" != "Enabled" ]; then
     exit_1;
 fi
 
-enabled_minio1=$(./mc stat --json minio1/newbucket-olock| jq -r .metadata.ObjectLock.enabled)
+enabled_minio1=$(./mc stat --json minio1/newbucket-olock| jq -r .ObjectLock.enabled)
 if [ $? -ne 0 ]; then
     echo "expected bucket to be mirrored with object-lock but not present, exiting..."
     exit_1;

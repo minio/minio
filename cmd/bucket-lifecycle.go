@@ -540,7 +540,7 @@ type RestoreObjectRequest struct {
 	XMLName          xml.Name           `xml:"http://s3.amazonaws.com/doc/2006-03-01/ RestoreRequest" json:"-"`
 	Days             int                `xml:"Days,omitempty"`
 	Type             RestoreRequestType `xml:"Type,omitempty"`
-	Tier             string             `xml:"Tier,-"`
+	Tier             string             `xml:"Tier"`
 	Description      string             `xml:"Description,omitempty"`
 	SelectParameters *SelectParameters  `xml:"SelectParameters,omitempty"`
 	OutputLocation   OutputLocation     `xml:"OutputLocation,omitempty"`

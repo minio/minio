@@ -2267,11 +2267,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types.
 		switch e := err.(type) {
 		case batchReplicationJobError:
-			apiErr = APIError{
-				Code:           e.Code,
-				Description:    e.Description,
-				HTTPStatusCode: e.HTTPStatusCode,
-			}
+			apiErr = APIError(e)
 		case InvalidArgument:
 			apiErr = APIError{
 				Code:           "InvalidArgument",

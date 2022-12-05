@@ -811,7 +811,6 @@ func (z *erasureServerPools) StartRebalance() {
 			stopfn(err)
 		}(poolIdx)
 	}
-	return
 }
 
 // StopRebalance signals the rebalance goroutine running on this node (if any)

@@ -31,7 +31,6 @@ import (
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/event"
-	"github.com/minio/minio/internal/http"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
@@ -92,7 +91,7 @@ func (client *peerRESTClient) GetLocks() (lockMap map[string][]lockRequesterInfo
 		return
 	}
 	lockMap = map[string][]lockRequesterInfo{}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&lockMap)
 	return lockMap, err
 }
@@ -103,7 +102,7 @@ func (client *peerRESTClient) LocalStorageInfo() (info StorageInfo, err error) {
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -114,7 +113,7 @@ func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err er
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -125,7 +124,7 @@ func (client *peerRESTClient) GetCPUs(ctx context.Context) (info madmin.CPUs, er
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -136,7 +135,7 @@ func (client *peerRESTClient) GetPartitions(ctx context.Context) (info madmin.Pa
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -147,7 +146,7 @@ func (client *peerRESTClient) GetOSInfo(ctx context.Context) (info madmin.OSInfo
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -158,7 +157,7 @@ func (client *peerRESTClient) GetSELinuxInfo(ctx context.Context) (info madmin.S
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -171,7 +170,7 @@ func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.Sys
 		return
 	}
 	roundtrip := int32(time.Since(sent).Milliseconds())
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	err = gob.NewDecoder(respBody).Decode(&info)
 	cfg := info.Config["time-info"]
@@ -189,7 +188,7 @@ func (client *peerRESTClient) GetSysErrors(ctx context.Context) (info madmin.Sys
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -200,7 +199,7 @@ func (client *peerRESTClient) GetMemInfo(ctx context.Context) (info madmin.MemIn
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -219,7 +218,7 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -230,7 +229,7 @@ func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.Proc
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -243,7 +242,7 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -253,7 +252,7 @@ func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&data)
 	return data, err
 }
@@ -268,7 +267,7 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	}
 
 	var bs BucketStats
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return bs, msgp.Decode(respBody, &bs)
 }
 
@@ -281,7 +280,7 @@ func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
 	}
 
 	bsMap := BucketStatsMap{}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return bsMap, msgp.Decode(respBody, &bsMap)
 }
 
@@ -293,7 +292,7 @@ func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -305,7 +304,7 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -324,7 +323,7 @@ func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bl
 		return nil, err
 	}
 	var resp bloomFilterResponse
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return &resp, gob.NewDecoder(respBody).Decode(&resp)
 }
 
@@ -337,7 +336,7 @@ func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -350,7 +349,7 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -367,7 +366,7 @@ func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, userType IAM
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -380,7 +379,7 @@ func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -393,7 +392,7 @@ func (client *peerRESTClient) DeleteServiceAccount(accessKey string) (err error)
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -407,7 +406,7 @@ func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) 
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -420,7 +419,7 @@ func (client *peerRESTClient) LoadServiceAccount(accessKey string) (err error) {
 	if err != nil {
 		return
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -432,7 +431,7 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -459,7 +458,7 @@ func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha2
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -469,7 +468,7 @@ func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -482,7 +481,7 @@ func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string) er
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -491,7 +490,7 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	if err != nil {
 		return madmin.BgHealState{}, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	state := madmin.BgHealState{}
 	err = gob.NewDecoder(respBody).Decode(&state)
@@ -505,7 +504,7 @@ func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []st
 		logger.LogIf(ctx, err)
 		return nil
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	if err = gob.NewDecoder(respBody).Decode(&diskIDs); err != nil {
 		logger.LogIf(ctx, err)
 		return nil
@@ -531,7 +530,7 @@ func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPat
 		return nil, err
 	}
 	var resp metacache
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return &resp, msgp.Decode(respBody, &resp)
 }
 
@@ -549,7 +548,7 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 		logger.LogIf(ctx, err)
 		return m, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	var resp metacache
 	return resp, msgp.Decode(respBody, &resp)
 }
@@ -560,7 +559,7 @@ func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 		logger.LogIf(ctx, err)
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -570,7 +569,7 @@ func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
 		logger.LogIf(ctx, err)
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -582,7 +581,7 @@ func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebala
 		logger.LogIf(ctx, err)
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -592,7 +591,7 @@ func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) erro
 		logger.LogIf(ctx, err)
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -615,7 +614,7 @@ func (client *peerRESTClient) doTrace(traceCh chan<- madmin.TraceInfo, doneCh <-
 	}()
 
 	respBody, err := client.callWithContext(ctx, peerRESTMethodTrace, values, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	if err != nil {
 		return
@@ -653,7 +652,7 @@ func (client *peerRESTClient) doListen(listenCh chan<- event.Event, doneCh <-cha
 	}()
 
 	respBody, err := client.callWithContext(ctx, peerRESTMethodListen, v, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	if err != nil {
 		return
@@ -723,7 +722,7 @@ func (client *peerRESTClient) doConsoleLog(logCh chan log.Info, doneCh <-chan st
 	}()
 
 	respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	if err != nil {
 		return
 	}
@@ -822,7 +821,7 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 	if err != nil {
 		return nil, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	dec := gob.NewDecoder(respBody)
 	var bandwidthReport madmin.BucketBandwidthReport
@@ -841,7 +840,7 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 		for {
 			var metric Metric
 			if err := dec.Decode(&metric); err != nil {
-				http.DrainBody(respBody)
+				xhttp.DrainBody(respBody)
 				close(ch)
 				return
 			}
@@ -863,7 +862,7 @@ func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts)
 	if err != nil {
 		return SpeedTestResult{}, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	waitReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return SpeedTestResult{}, err
@@ -892,7 +891,7 @@ func (client *peerRESTClient) DriveSpeedTest(ctx context.Context, opts madmin.Dr
 	if err != nil {
 		return madmin.DriveSpeedTestResult{}, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	waitReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return madmin.DriveSpeedTestResult{}, err
@@ -914,7 +913,7 @@ func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) e
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return nil
 }
 
@@ -924,7 +923,7 @@ func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (DailyAll
 	if err != nil {
 		return result, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 
 	err = gob.NewDecoder(respBody).Decode(&result)
 	if err != nil {
@@ -939,7 +938,7 @@ func (client *peerRESTClient) DevNull(ctx context.Context, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	return err
 }
 
@@ -952,7 +951,7 @@ func (client *peerRESTClient) Netperf(ctx context.Context, duration time.Duratio
 	if err != nil {
 		return result, err
 	}
-	defer http.DrainBody(respBody)
+	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&result)
 	return result, err
 }

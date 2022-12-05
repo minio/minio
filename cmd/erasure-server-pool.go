@@ -2191,9 +2191,7 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 
 	b := z.BackendInfo()
 	poolReadQuorums := make([]int, len(b.StandardSCData))
-	for i, data := range b.StandardSCData {
-		poolReadQuorums[i] = data
-	}
+	copy(poolReadQuorums, b.StandardSCData)
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
