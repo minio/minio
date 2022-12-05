@@ -69,7 +69,8 @@ func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
 	if lrw.TimeToFirstByte == 0 {
 		lrw.TimeToFirstByte = time.Now().UTC().Sub(lrw.StartTime)
 	}
-	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
+	gzipped := lrw.Header().Get("Content-Encoding") == "gzip"
+	if !gzipped && ((lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody) {
 		// Always logging error responses.
 		lrw.body.Write(p)
 	}
@@ -89,18 +90,25 @@ func (lrw *ResponseRecorder) writeHeaders(w io.Writer, statusCode int, headers h
 	}
 }
 
-// BodyPlaceHolder returns a dummy body placeholder
-var BodyPlaceHolder = []byte("<BODY>")
+// blobBody returns a dummy body placeholder for blob (binary stream)
+var blobBody = []byte("<BLOB>")
+
+// gzippedBody returns a dummy body placeholder for gzipped content
+var gzippedBody = []byte("<GZIP>")
 
 // Body - Return response body.
 func (lrw *ResponseRecorder) Body() []byte {
+	if lrw.Header().Get("Content-Encoding") == "gzip" {
+		// ... otherwise we return the <GZIP> place holder
+		return gzippedBody
+	}
 	// If there was an error response or body logging is enabled
 	// then we return the body contents
 	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		return lrw.body.Bytes()
 	}
-	// ... otherwise we return the <BODY> place holder
-	return BodyPlaceHolder
+	// ... otherwise we return the <BLOB> place holder
+	return blobBody
 }
 
 // WriteHeader - writes http status code
