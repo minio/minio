@@ -546,6 +546,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			return false
 		}
 		outputQueue = outputQueue[:0]
+		bufPool.Put(buf)
 		return true
 	}
 
