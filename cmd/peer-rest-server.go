@@ -31,7 +31,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"

@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
 )
