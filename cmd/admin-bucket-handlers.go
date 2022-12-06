@@ -863,7 +863,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Version in policy must not be empty
 			if bucketPolicy.Version == "" {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrMalformedPolicy.String()))
+				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrPolicyInvalidVersion.String()))
 				continue
 			}
 
