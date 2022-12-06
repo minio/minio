@@ -2329,35 +2329,42 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	var oldDstDataPath string
+	var oldDstDataPath, reqVID string
+
 	if fi.VersionID == "" {
-		// return the latest "null" versionId info
-		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
-		if err == nil && !ofi.Deleted {
-			if xlMeta.SharedDataDirCountStr(nullVersionID, ofi.DataDir) == 0 {
-				// Purge the destination path as we are not preserving anything
-				// versioned object was not requested.
-				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
-				// if old destination path is same as new destination path
-				// there is nothing to purge, this is true in case of healing
-				// avoid setting oldDstDataPath at that point.
-				if oldDstDataPath == dstDataPath {
-					oldDstDataPath = ""
-				}
-				xlMeta.data.remove(nullVersionID, ofi.DataDir)
+		reqVID = nullVersionID
+	} else {
+		reqVID = fi.VersionID
+	}
+
+	// Replace the data of null version or any other existing version-id
+	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID)
+	if err == nil && !ofi.Deleted {
+		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
+			// Purge the destination path as we are not preserving anything
+			// versioned object was not requested.
+			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			// if old destination path is same as new destination path
+			// there is nothing to purge, this is true in case of healing
+			// avoid setting oldDstDataPath at that point.
+			if oldDstDataPath == dstDataPath {
+				oldDstDataPath = ""
+			} else {
+				xlMeta.data.remove(reqVID, ofi.DataDir)
 			}
 		}
-		// Empty fi.VersionID indicates that versioning is either
-		// suspended or disabled on this bucket. RenameData will replace
-		// the 'null' version. We add a free-version to track its tiered
-		// content for asynchronous deletion.
-		if !fi.IsRestoreObjReq() {
-			// Note: Restore object request reuses PutObject/Multipart
-			// upload to copy back its data from the remote tier. This
-			// doesn't replace the existing version, so we don't need to add
-			// a free-version.
-			xlMeta.AddFreeVersion(fi)
-		}
+	}
+
+	// Empty fi.VersionID indicates that versioning is either
+	// suspended or disabled on this bucket. RenameData will replace
+	// the 'null' version. We add a free-version to track its tiered
+	// content for asynchronous deletion.
+	if fi.VersionID == "" && !fi.IsRestoreObjReq() {
+		// Note: Restore object request reuses PutObject/Multipart
+		// upload to copy back its data from the remote tier. This
+		// doesn't replace the existing version, so we don't need to add
+		// a free-version.
+		xlMeta.AddFreeVersion(fi)
 	}
 
 	// indicates if RenameData() is called by healing.
