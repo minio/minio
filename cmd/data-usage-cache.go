@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -879,13 +880,28 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 
 // save the content of the cache to minioMetaBackgroundOpsBucket with the provided name.
 func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) error {
-	pr, pw := io.Pipe()
-	go func() {
-		pw.CloseWithError(d.serializeTo(pw))
-	}()
-	defer pr.Close()
+	var r io.Reader
 
-	r, err := hash.NewReader(pr, -1, "", "", -1)
+	// If big, do streaming...
+	size := int64(-1)
+	if len(d.Cache) > 10000 {
+		pr, pw := io.Pipe()
+		go func() {
+			pw.CloseWithError(d.serializeTo(pw))
+		}()
+		defer pr.Close()
+		r = pr
+	} else {
+		var buf bytes.Buffer
+		err := d.serializeTo(&buf)
+		if err != nil {
+			return err
+		}
+		r = &buf
+		size = int64(buf.Len())
+	}
+
+	hr, err := hash.NewReader(r, size, "", "", size)
 	if err != nil {
 		return err
 	}
@@ -896,7 +912,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 	_, err = store.PutObject(ctx,
 		dataUsageBucket,
 		name,
-		NewPutObjReader(r),
+		NewPutObjReader(hr),
 		ObjectOptions{})
 	if isErrBucketNotFound(err) {
 		return nil
