@@ -38,6 +38,7 @@ import (
 
 const (
 	archiveType            = "zip"
+	archiveTypeEnc         = "zip-enc"
 	archiveExt             = "." + archiveType // ".zip"
 	archiveSeparator       = "/"
 	archivePattern         = archiveExt + archiveSeparator                // ".zip/"
@@ -152,6 +153,12 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	zipInfo := zipObjInfo.ArchiveInfo()
 	if len(zipInfo) == 0 {
+		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
@@ -451,6 +458,11 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 
 	zipInfo := zipObjInfo.ArchiveInfo()
 	if len(zipInfo) == 0 {
+		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
@@ -491,7 +503,8 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	w.WriteHeader(http.StatusOK)
 }
 
-// Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc..
+// Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc.
+// The returned zip index will de decrypted.
 func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer, bucket, object string, opts ObjectOptions) ([]byte, error) {
 	files, srcInfo, err := getFilesListFromZIPObject(ctx, objectAPI, bucket, object, opts)
 	if err != nil {
@@ -502,14 +515,18 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	if err != nil {
 		return nil, err
 	}
-
-	srcInfo.UserDefined[archiveTypeMetadataKey] = archiveType
+	at := archiveType
 	zipInfoStr := string(zipInfo)
+	if opts.EncryptFn != nil {
+		at = archiveTypeEnc
+		zipInfoStr = string(opts.EncryptFn(archiveTypeEnc, zipInfo))
+	}
+	srcInfo.UserDefined[archiveTypeMetadataKey] = at
 	popts := ObjectOptions{
 		MTime:     srcInfo.ModTime,
 		VersionID: srcInfo.VersionID,
 		EvalMetadataFn: func(oi *ObjectInfo) error {
-			oi.UserDefined[archiveTypeMetadataKey] = archiveType
+			oi.UserDefined[archiveTypeMetadataKey] = at
 			oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
 			return nil
 		},
