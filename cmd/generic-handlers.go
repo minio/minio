@@ -37,6 +37,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/http/stats"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 )
 
 const (
@@ -101,13 +102,13 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 // Limits body and header to specific allowed maximum limits as per S3/MinIO API requirements.
 func setRequestLimitHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		// Reject unsupported reserved metadata first before validation.
 		if containsReservedMetadata(r.Header) {
 			if ok {
-				tc.funcName = "handler.ValidRequest"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.ValidRequest"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
@@ -116,8 +117,8 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 		if isHTTPHeaderSizeTooLarge(r.Header) {
 			if ok {
-				tc.funcName = "handler.ValidRequest"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.ValidRequest"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
@@ -378,12 +379,12 @@ func hasMultipleAuth(r *http.Request) bool {
 // any malicious requests.
 func setRequestValidityHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		if err := hasBadHost(r.Host); err != nil {
 			if ok {
-				tc.funcName = "handler.ValidRequest"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.ValidRequest"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
@@ -396,8 +397,8 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// Check for bad components in URL path.
 		if hasBadPathComponent(r.URL.Path) {
 			if ok {
-				tc.funcName = "handler.ValidRequest"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.ValidRequest"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
@@ -409,8 +410,8 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
 					if ok {
-						tc.funcName = "handler.ValidRequest"
-						tc.responseRecorder.LogErrBody = true
+						tc.FuncName = "handler.ValidRequest"
+						tc.ResponseRecorder.LogErrBody = true
 					}
 
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
@@ -421,8 +422,8 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		}
 		if hasMultipleAuth(r) {
 			if ok {
-				tc.funcName = "handler.Auth"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.Auth"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
@@ -436,8 +437,8 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) && !isKMSReq(r) {
 				if ok {
-					tc.funcName = "handler.ValidRequest"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.ValidRequest"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
@@ -447,15 +448,15 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 			if r.Method == http.MethodHead {
 				if ok {
-					tc.funcName = "handler.ValidRequest"
-					tc.responseRecorder.LogErrBody = false
+					tc.FuncName = "handler.ValidRequest"
+					tc.ResponseRecorder.LogErrBody = false
 				}
 
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {
 				if ok {
-					tc.funcName = "handler.ValidRequest"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.ValidRequest"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)

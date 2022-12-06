@@ -59,6 +59,7 @@ import (
 	ioutilx "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
@@ -915,12 +916,14 @@ func updateReqContext(ctx context.Context, objects ...ObjectV) context.Context {
 
 // Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
+	reqID := w.Header().Get(xhttp.AmzRequestID)
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
-		RequestID:    w.Header().Get(xhttp.AmzRequestID),
+		RequestID:    reqID,
 		RemoteHost:   handlers.GetSourceIP(r),
 		Host:         getHostName(r),
 		UserAgent:    r.UserAgent(),
@@ -929,7 +932,15 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		ObjectName:   object,
 		VersionID:    strings.TrimSpace(r.Form.Get(xhttp.VersionID)),
 	}
-	return logger.SetReqInfo(r.Context(), reqInfo)
+
+	ctx := context.WithValue(r.Context(),
+		mcontext.ContextTraceKey,
+		&mcontext.TraceCtxt{
+			AmzReqID: reqID,
+		},
+	)
+
+	return logger.SetReqInfo(ctx, reqInfo)
 }
 
 // Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)

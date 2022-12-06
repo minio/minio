@@ -316,8 +316,6 @@ policies: []
 #
 ## Additional Annotations for the Kubernetes Job makePolicyJob
 makePolicyJob:
-  podAnnotations: {}
-  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -326,11 +324,6 @@ makePolicyJob:
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -353,8 +346,6 @@ users:
 
 ## Additional Annotations for the Kubernetes Job makeUserJob
 makeUserJob:
-  podAnnotations: {}
-  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -363,11 +354,6 @@ makeUserJob:
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -386,8 +372,6 @@ makeUserJob:
   #   user: console
 
 makeServiceAccountJob:
-  podAnnotations: {}
-  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -396,11 +380,6 @@ makeServiceAccountJob:
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -430,8 +409,6 @@ buckets:
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
 makeBucketJob:
-  podAnnotations: {}
-  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -440,11 +417,6 @@ makeBucketJob:
   resources:
     requests:
       memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  extraVolumes: []
-  extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
 
@@ -455,8 +427,6 @@ customCommands:
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:
-  podAnnotations: {}
-  annotations: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -465,11 +435,21 @@ customCommandJob:
   resources:
     requests:
       memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
+
+## Merge jobs
+postJob:
+  podAnnotations: {}
+  annotations: {}
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  # Command to run after the main command on exit
-  exitCommand: ""
 
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed

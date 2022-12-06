@@ -92,7 +92,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	// Version in policy must not be empty
 	if bucketPolicy.Version == "" {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPolicyInvalidVersion), r.URL)
 		return
 	}
 

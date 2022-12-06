@@ -222,8 +222,8 @@ func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 // getHealSequenceByToken - Retrieve a heal sequence by token. The second
 // argument returns if a heal sequence actually exists.
 func (ahs *allHealState) getHealSequenceByToken(token string) (h *healSequence, exists bool) {
-	ahs.Lock()
-	defer ahs.Unlock()
+	ahs.RLock()
+	defer ahs.RUnlock()
 	for _, healSeq := range ahs.healSeqMap {
 		if healSeq.clientToken == token {
 			return healSeq, true
@@ -235,8 +235,8 @@ func (ahs *allHealState) getHealSequenceByToken(token string) (h *healSequence, 
 // getHealSequence - Retrieve a heal sequence by path. The second
 // argument returns if a heal sequence actually exists.
 func (ahs *allHealState) getHealSequence(path string) (h *healSequence, exists bool) {
-	ahs.Lock()
-	defer ahs.Unlock()
+	ahs.RLock()
+	defer ahs.RUnlock()
 	h, exists = ahs.healSeqMap[path]
 	return h, exists
 }
