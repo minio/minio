@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/minio/internal/rest"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -2395,10 +2396,10 @@ func metricsServerHandler() http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.funcName = "handler.MetricsCluster"
-			tc.responseRecorder.LogErrBody = true
+			tc.FuncName = "handler.MetricsCluster"
+			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		mfs, err := gatherers.Gather()
@@ -2442,10 +2443,10 @@ func metricsNodeHandler() http.Handler {
 		registry,
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.funcName = "handler.MetricsNode"
-			tc.responseRecorder.LogErrBody = true
+			tc.FuncName = "handler.MetricsNode"
+			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		mfs, err := gatherers.Gather()
