@@ -993,14 +993,23 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	//
 	// Therefore, we adjust all ETags sent by the client to match what is stored
 	// on the backend.
-	kind, isEncrypted := crypto.IsEncrypted(fi.Metadata)
+	kind, _ := crypto.IsEncrypted(fi.Metadata)
 
 	var objectEncryptionKey []byte
-	if isEncrypted && kind == crypto.S3 {
+	switch kind {
+	case crypto.S3, crypto.S3KMS:
 		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
 		if err != nil {
 			return oi, err
 		}
+		if len(objectEncryptionKey) == 32 {
+			var key crypto.ObjectKey
+			copy(key[:], objectEncryptionKey)
+			opts.EncryptFn = metadataEncrypter(key)
+		}
+	case crypto.SSEC:
+		// TODO: Currently un-handled.
+		// We have not previously required SSE-C header to be sent on CompleteMultipartUpload.
 	}
 
 	for i, part := range partInfoFiles {
