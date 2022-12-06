@@ -151,7 +151,7 @@ const (
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
-	ErrMalformedPolicy
+	ErrPolicyInvalidVersion
 	ErrMissingFields
 	ErrMissingCredTag
 	ErrCredMalformed
@@ -715,9 +715,9 @@ var errorCodes = errorCodeMap{
 		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrMalformedPolicy: {
+	ErrPolicyInvalidVersion: {
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource.",
+		Description:    "The policy must contain a valid version string",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingFields: {
