@@ -231,7 +231,14 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 	d := xml.NewDecoder(lbody)
 	// Ignore any encoding set in the XML body
 	d.CharsetReader = nopCharsetConverter
-	return d.Decode(v)
+	err := d.Decode(v)
+	if errors.Is(err, io.EOF) {
+		err = &xml.SyntaxError{
+			Line: 0,
+			Msg:  err.Error(),
+		}
+	}
+	return err
 }
 
 // hasContentMD5 returns true if Content-MD5 header is set.
