@@ -997,8 +997,18 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	var objectEncryptionKey []byte
 	switch kind {
-	case crypto.S3, crypto.S3KMS:
-		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
+	case crypto.S3, crypto.S3KMS, crypto.SSEC:
+		var key []byte
+		if kind == crypto.SSEC {
+			if opts.EncryptFn == nil {
+				return oi, crypto.ErrMissingCustomerKey
+			}
+			key = opts.EncryptFn("", nil)
+			if len(key) != 32 {
+				return oi, crypto.ErrInvalidCustomerKey
+			}
+		}
+		objectEncryptionKey, err = decryptObjectMeta(key, bucket, object, fi.Metadata)
 		if err != nil {
 			return oi, err
 		}
@@ -1007,9 +1017,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			copy(key[:], objectEncryptionKey)
 			opts.EncryptFn = metadataEncrypter(key)
 		}
-	case crypto.SSEC:
-		// TODO: Currently un-handled.
-		// We have not previously required SSE-C header to be sent on CompleteMultipartUpload.
 	}
 
 	for i, part := range partInfoFiles {
