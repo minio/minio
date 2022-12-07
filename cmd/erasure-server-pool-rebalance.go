@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"

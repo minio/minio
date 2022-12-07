@@ -30,7 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -151,7 +151,7 @@ const (
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
-	ErrMalformedPolicy
+	ErrPolicyInvalidVersion
 	ErrMissingFields
 	ErrMissingCredTag
 	ErrCredMalformed
@@ -715,9 +715,9 @@ var errorCodes = errorCodeMap{
 		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrMalformedPolicy: {
+	ErrPolicyInvalidVersion: {
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource.",
+		Description:    "The policy must contain a valid version string",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingFields: {

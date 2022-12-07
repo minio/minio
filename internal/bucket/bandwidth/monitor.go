@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"golang.org/x/time/rate"
 )
 

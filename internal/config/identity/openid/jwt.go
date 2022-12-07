@@ -250,6 +250,7 @@ type DiscoveryDoc struct {
 	Issuer                           string   `json:"issuer,omitempty"`
 	AuthEndpoint                     string   `json:"authorization_endpoint,omitempty"`
 	TokenEndpoint                    string   `json:"token_endpoint,omitempty"`
+	EndSessionEndpoint               string   `json:"end_session_endpoint,omitempty"`
 	UserInfoEndpoint                 string   `json:"userinfo_endpoint,omitempty"`
 	RevocationEndpoint               string   `json:"revocation_endpoint,omitempty"`
 	JwksURI                          string   `json:"jwks_uri,omitempty"`

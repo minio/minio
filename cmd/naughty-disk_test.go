@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors

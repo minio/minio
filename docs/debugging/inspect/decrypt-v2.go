@@ -23,7 +23,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/minio/madmin-go/estream"
+	"github.com/minio/madmin-go/v2/estream"
 )
 
 func extractInspectV2(pk []byte, r io.Reader, w io.Writer) error {

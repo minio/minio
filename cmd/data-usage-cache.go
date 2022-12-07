@@ -32,7 +32,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zstd"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"

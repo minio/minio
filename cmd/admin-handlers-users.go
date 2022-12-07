@@ -29,7 +29,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
@@ -1489,7 +1489,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	// Version in policy must not be empty
 	if iamPolicy.Version == "" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyInvalidVersion), r.URL)
 		return
 	}
 
