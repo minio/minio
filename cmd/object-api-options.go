@@ -374,5 +374,16 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	}
 	opts.MTime = mtime
 	opts.UserDefined = make(map[string]string)
+
+	// Transfer SSEC key in opts.EncryptFn
+	if crypto.SSEC.IsRequested(r.Header) {
+		key, err := ParseSSECustomerRequest(r)
+		if err == nil {
+			// Set EncryptFn to return SSEC key
+			opts.EncryptFn = func(baseKey string, data []byte) []byte {
+				return key
+			}
+		}
+	}
 	return opts, nil
 }
