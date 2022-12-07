@@ -26,6 +26,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 )
 
 // BackendType - represents different backend types.
@@ -181,8 +182,9 @@ type ObjectInfo struct {
 	Checksum []byte
 }
 
-// ArchiveInfo returns any saved zip archive meta information
-func (o ObjectInfo) ArchiveInfo() []byte {
+// ArchiveInfo returns any saved zip archive meta information.
+// It will be decrypted if needed.
+func (o *ObjectInfo) ArchiveInfo() []byte {
 	if len(o.UserDefined) == 0 {
 		return nil
 	}
@@ -190,11 +192,20 @@ func (o ObjectInfo) ArchiveInfo() []byte {
 	if !ok {
 		return nil
 	}
-	return []byte(z)
+	data := []byte(z)
+	if v, ok := o.UserDefined[archiveTypeMetadataKey]; ok && v == archiveTypeEnc {
+		decrypted, err := o.metadataDecrypter()(archiveTypeEnc, data)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return nil
+		}
+		data = decrypted
+	}
+	return data
 }
 
 // Clone - Returns a cloned copy of current objectInfo
-func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
+func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 	cinfo = ObjectInfo{
 		Bucket:                     o.Bucket,
 		Name:                       o.Name,
