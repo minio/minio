@@ -999,7 +999,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	switch kind {
 	case crypto.S3, crypto.S3KMS, crypto.SSEC:
 		var key []byte
-		if kind == crypto.SSEC {
+		if kind == crypto.SSEC && checksumType.IsSet() {
 			if opts.EncryptFn == nil {
 				return oi, crypto.ErrMissingCustomerKey
 			}
