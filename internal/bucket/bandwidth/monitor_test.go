@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 const (

@@ -21,7 +21,7 @@ import (
 	"context"
 	"runtime"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 // healTask represents what to heal along with options

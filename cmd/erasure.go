@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"

@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
