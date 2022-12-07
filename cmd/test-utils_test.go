@@ -2267,6 +2267,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 	}
 
 	checkRespErr := func(rec *httptest.ResponseRecorder, exp int) {
+		t.Helper()
 		if rec.Code != exp {
 			b, err := io.ReadAll(rec.Body)
 			t.Fatalf("Expected: %v, Got: %v, Body: %s, err: %v", exp, rec.Code, string(b), err)

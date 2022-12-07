@@ -997,26 +997,30 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	var objectEncryptionKey []byte
 	switch kind {
-	case crypto.S3, crypto.S3KMS, crypto.SSEC:
-		var key []byte
-		if kind == crypto.SSEC && checksumType.IsSet() {
+	case crypto.SSEC:
+		if checksumType.IsSet() {
 			if opts.EncryptFn == nil {
 				return oi, crypto.ErrMissingCustomerKey
 			}
-			key = opts.EncryptFn("", nil)
-			if len(key) != 32 {
+			baseKey := opts.EncryptFn("", nil)
+			if len(baseKey) != 32 {
 				return oi, crypto.ErrInvalidCustomerKey
 			}
+			objectEncryptionKey, err = decryptObjectMeta(baseKey, bucket, object, fi.Metadata)
+			if err != nil {
+				return oi, err
+			}
 		}
-		objectEncryptionKey, err = decryptObjectMeta(key, bucket, object, fi.Metadata)
+	case crypto.S3, crypto.S3KMS:
+		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
 		if err != nil {
 			return oi, err
 		}
-		if len(objectEncryptionKey) == 32 {
-			var key crypto.ObjectKey
-			copy(key[:], objectEncryptionKey)
-			opts.EncryptFn = metadataEncrypter(key)
-		}
+	}
+	if len(objectEncryptionKey) == 32 {
+		var key crypto.ObjectKey
+		copy(key[:], objectEncryptionKey)
+		opts.EncryptFn = metadataEncrypter(key)
 	}
 
 	for i, part := range partInfoFiles {

@@ -378,12 +378,11 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	// Transfer SSEC key in opts.EncryptFn
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err := ParseSSECustomerRequest(r)
-		if err != nil {
-			return opts, err
-		}
-		// Set EncryptFn to return SSEC key
-		opts.EncryptFn = func(baseKey string, data []byte) []byte {
-			return key
+		if err == nil {
+			// Set EncryptFn to return SSEC key
+			opts.EncryptFn = func(baseKey string, data []byte) []byte {
+				return key
+			}
 		}
 	}
 	return opts, nil
