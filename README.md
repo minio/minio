@@ -1,14 +1,14 @@
 # Mantle Guide
 
-Copy mante config file
+1- Copy mante config file
 
 ```sh
 cp cmd/mantle/mantleconfig/config-mantle_template.json cmd/mantle/mantleconfig/config-mantle.json 
 ```
 
-open config-mantle.json
+2- open config-mantle.json
 
-enter x-api-key
+3- enter x-api-key
 
 
 # MinIO Quickstart Guide
