@@ -313,6 +313,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		Type:      madmin.HealItemObject,
 		Bucket:    bucket,
 		Object:    object,
+		VersionID: versionID,
 		DiskCount: len(storageDisks),
 	}
 
