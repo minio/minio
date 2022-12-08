@@ -678,6 +678,7 @@ func metaDataPoolGet() []byte {
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
+		//lint:ignore SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
@@ -1845,11 +1846,9 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 		}
 
 		var latest xlMetaV2ShallowVersion
-		var latestCount int
 		if consistent {
 			// All had the same signature, easy.
 			latest = tops[0]
-			latestCount = len(tops)
 			merged = append(merged, latest)
 
 			// Calculate latest 'n' non-free versions.
@@ -1859,6 +1858,7 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 
 		} else {
 			// Find latest.
+			var latestCount int
 			for i, ver := range tops {
 				if ver.header == latest.header {
 					latestCount++

@@ -32,6 +32,14 @@ helm install --namespace minio --set rootUser=rootuser,rootPassword=rootpass123 
 
 The command deploys MinIO on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
 
+### Installing the Chart (toy-setup)
+
+Minimal toy setup for testing purposes can be deployed using:
+
+```bash
+helm install --set resources.requests.memory=512Mi --set replicas=1 --set persistence.enabled=false --set mode=standalone --set rootUser=rootuser,rootPassword=rootpass123 --generate-name minio/minio
+```
+
 ### Upgrading the Chart
 
 You can use Helm to update MinIO version in a live release. Assuming your release is named as `my-release`, get the values using the command:

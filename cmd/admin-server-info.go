@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
 )
@@ -34,7 +34,6 @@ import (
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
 func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
-	var localEndpoints Endpoints
 	addr := globalLocalNodeName
 	if r != nil {
 		addr = r.Host
@@ -52,7 +51,6 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints
 				network[nodeName] = string(madmin.ItemOnline)
-				localEndpoints = append(localEndpoints, endpoint)
 				continue
 			}
 			_, present := network[nodeName]
@@ -143,10 +141,11 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil {
-		// only need Disks information in server mode.
-		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
+		storageInfo := objLayer.LocalStorageInfo(GlobalContext)
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks
+	} else {
+		props.State = string(madmin.ItemOffline)
 	}
 
 	return props

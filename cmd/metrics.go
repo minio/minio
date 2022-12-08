@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -478,7 +479,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(GetTotalCapacityFree(server.Disks)),
 	)
 
-	s, _ := objLayer.StorageInfo(GlobalContext)
+	sinfo := objLayer.StorageInfo(GlobalContext)
+
 	// Report total usable capacity
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -486,8 +488,9 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(GetTotalUsableCapacity(server.Disks, s)),
+		float64(GetTotalUsableCapacity(server.Disks, sinfo)),
 	)
+
 	// Report total usable capacity free
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
@@ -495,7 +498,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total free usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
-		float64(GetTotalUsableCapacityFree(server.Disks, s)),
+		float64(GetTotalUsableCapacityFree(server.Disks, sinfo)),
 	)
 
 	// MinIO Offline Disks per node
@@ -567,10 +570,10 @@ func metricsHandler() http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.funcName = "handler.MetricsLegacy"
-			tc.responseRecorder.LogErrBody = true
+			tc.FuncName = "handler.MetricsLegacy"
+			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		mfs, err := gatherers.Gather()
@@ -600,13 +603,13 @@ func metricsHandler() http.Handler {
 // AuthMiddleware checks if the bearer token is valid and authorized.
 func AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		claims, groups, owner, authErr := metricsRequestAuthenticate(r)
 		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
 			if ok {
-				tc.funcName = "handler.MetricsAuth"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.MetricsAuth"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), errAuthentication), r.URL)
@@ -622,8 +625,8 @@ func AuthMiddleware(h http.Handler) http.Handler {
 			Claims:          claims.Map(),
 		}) {
 			if ok {
-				tc.funcName = "handler.MetricsAuth"
-				tc.responseRecorder.LogErrBody = true
+				tc.FuncName = "handler.MetricsAuth"
+				tc.ResponseRecorder.LogErrBody = true
 			}
 
 			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), errAuthentication), r.URL)

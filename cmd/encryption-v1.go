@@ -1083,6 +1083,44 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 	}
 }
 
+// metadataEncryptFn provides an encryption function for metadata.
+// Will return nil, nil if unencrypted.
+func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn, error) {
+	kind, _ := crypto.IsEncrypted(o.UserDefined)
+	switch kind {
+	case crypto.SSEC:
+		if crypto.SSECopy.IsRequested(headers) {
+			key, err := crypto.SSECopy.ParseHTTP(headers)
+			if err != nil {
+				return nil, err
+			}
+			objectEncryptionKey, err := decryptObjectMeta(key[:], o.Bucket, o.Name, o.UserDefined)
+			if err != nil {
+				return nil, err
+			}
+			if len(objectEncryptionKey) == 32 {
+				var key crypto.ObjectKey
+				copy(key[:], objectEncryptionKey)
+				return metadataEncrypter(key), nil
+			}
+			return nil, errors.New("metadataEncryptFn: unexpected key size")
+		}
+	case crypto.S3, crypto.S3KMS:
+		objectEncryptionKey, err := decryptObjectMeta(nil, o.Bucket, o.Name, o.UserDefined)
+		if err != nil {
+			return nil, err
+		}
+		if len(objectEncryptionKey) == 32 {
+			var key crypto.ObjectKey
+			copy(key[:], objectEncryptionKey)
+			return metadataEncrypter(key), nil
+		}
+		return nil, errors.New("metadataEncryptFn: unexpected key size")
+	}
+
+	return nil, nil
+}
+
 // decryptChecksums will attempt to decode checksums and return it/them if set.
 func (o *ObjectInfo) decryptChecksums() map[string]string {
 	data := o.Checksum

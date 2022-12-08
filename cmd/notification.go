@@ -32,7 +32,7 @@ import (
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	bucketBandwidth "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -950,6 +950,39 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 		}
 	}
 	return offlineDisks
+}
+
+// StorageInfo returns disk information across all peers
+func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
+	var storageInfo StorageInfo
+	replies := make([]StorageInfo, len(sys.peerClients))
+
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			info, err := client.LocalStorageInfo()
+			if err != nil {
+				info.Disks = getOfflineDisks(client.host.String(), globalEndpoints)
+			}
+			replies[idx] = info
+		}(client, i)
+	}
+	wg.Wait()
+
+	// Add local to this server.
+	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext))
+
+	storageInfo.Backend = objLayer.BackendInfo()
+	for _, sinfo := range replies {
+		storageInfo.Disks = append(storageInfo.Disks, sinfo.Disks...)
+	}
+
+	return storageInfo
 }
 
 // ServerInfo - calls ServerInfo RPC call on all peers.

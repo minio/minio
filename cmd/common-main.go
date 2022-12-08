@@ -52,7 +52,7 @@ import (
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -231,6 +231,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 			Userinfo:                cfg.ClaimUserinfo,
 			RedirectCallbackDynamic: cfg.RedirectURIDynamic,
 			RedirectCallback:        callback,
+			EndSessionEndpoint:      cfg.DiscoveryDoc.EndSessionEndpoint,
 			RoleArn:                 cfg.GetRoleArn(),
 		}
 	}
@@ -854,6 +855,7 @@ func handleKMSConfig() {
 		defaultKeyID := env.Get(config.EnvKESKeyName, "")
 		KMS, err := kms.NewWithConfig(kms.Config{
 			Endpoints:        endpoints,
+			Enclave:          env.Get(config.EnvKESEnclave, ""),
 			DefaultKeyID:     defaultKeyID,
 			Certificate:      certificate,
 			ReloadCertEvents: reloadCertEvents,

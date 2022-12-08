@@ -7,7 +7,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
@@ -58,9 +58,10 @@ const (
 	scannerMetricLastRealtime
 
 	// Trace only metrics:
-	scannerMetricScanFolder     // Scan a folder on disk, recursively.
-	scannerMetricScanCycle      // Full cycle, cluster global
-	scannerMetricScanBucketDisk // Single bucket on one disk
+	scannerMetricScanFolder      // Scan a folder on disk, recursively.
+	scannerMetricScanCycle       // Full cycle, cluster global
+	scannerMetricScanBucketDrive // Single bucket on one drive
+	scannerMetricCompactFolder   // Folder compacted.
 
 	// Must be last:
 	scannerMetricLast
@@ -181,9 +182,9 @@ func (p *scannerMetrics) getCurrentPaths() []string {
 	return res
 }
 
-// activeDisks returns the number of currently active disks.
+// activeDrives returns the number of currently active disks.
 // (since this is concurrent it may not be 100% reliable)
-func (p *scannerMetrics) activeDisks() int {
+func (p *scannerMetrics) activeDrives() int {
 	var i int
 	p.currentPaths.Range(func(k, v interface{}) bool {
 		i++
@@ -194,7 +195,7 @@ func (p *scannerMetrics) activeDisks() int {
 
 // lifetime returns the lifetime count of the specified metric.
 func (p *scannerMetrics) lifetime(m scannerMetric) uint64 {
-	if m < 0 || m >= scannerMetricLast {
+	if m >= scannerMetricLast {
 		return 0
 	}
 	val := atomic.LoadUint64(&p.operations[m])
@@ -204,7 +205,7 @@ func (p *scannerMetrics) lifetime(m scannerMetric) uint64 {
 // lastMinute returns the last minute statistics of a metric.
 // m should be < scannerMetricLastRealtime
 func (p *scannerMetrics) lastMinute(m scannerMetric) AccElem {
-	if m < 0 || m >= scannerMetricLastRealtime {
+	if m >= scannerMetricLastRealtime {
 		return AccElem{}
 	}
 	val := p.latency[m].total()

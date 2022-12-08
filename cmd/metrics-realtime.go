@@ -21,7 +21,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/disk"
 )
 
@@ -91,10 +91,8 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 		return metrics
 	}
 
-	// only need Disks information in server mode.
-	storageInfo, errs := objLayer.LocalStorageInfo(GlobalContext)
-
-	for i, d := range storageInfo.Disks {
+	storageInfo := objLayer.LocalStorageInfo(GlobalContext)
+	for _, d := range storageInfo.Disks {
 		if len(disks) != 0 {
 			_, ok := disks[d.Endpoint]
 			if !ok {
@@ -102,7 +100,7 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 			}
 		}
 
-		if errs[i] != nil {
+		if d.State != madmin.DriveStateOk && d.State != madmin.DriveStateUnformatted {
 			metrics[d.Endpoint] = madmin.DiskMetric{NDisks: 1, Offline: 1}
 			continue
 		}

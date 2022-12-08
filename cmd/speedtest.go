@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/dperf/pkg/dperf"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 const speedTest = "speedtest"

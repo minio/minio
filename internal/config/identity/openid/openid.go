@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -506,14 +506,13 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 	if !r.Enabled {
 		return res
 	}
-
+	h := sha256.New()
 	for arn, provCfg := range r.arnProviderCfgsMap {
 		hashedSecret := ""
 		{
-			h := sha256.New()
+			h.Reset()
 			h.Write([]byte(provCfg.ClientSecret))
-			bs := h.Sum(nil)
-			hashedSecret = base64.RawURLEncoding.EncodeToString(bs)
+			hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 		}
 		if arn != DummyRoleARN {
 			if res.Roles == nil {

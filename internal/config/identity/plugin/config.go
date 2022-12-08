@@ -264,7 +264,7 @@ func (o *AuthNPlugin) Authenticate(roleArn arn.ARN, token string) (AuthNResponse
 		return AuthNResponse{}, fmt.Errorf("Invalid role ARN value: %s", roleArn.String())
 	}
 
-	var u url.URL = url.URL(*o.args.URL)
+	u := url.URL(*o.args.URL)
 	q := u.Query()
 	q.Set("token", token)
 	u.RawQuery = q.Encode()

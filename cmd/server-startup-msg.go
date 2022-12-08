@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	color "github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
@@ -35,11 +35,6 @@ import (
 func getFormatStr(strLen int, padding int) string {
 	formatStr := fmt.Sprintf("%ds", strLen+padding)
 	return "%" + formatStr
-}
-
-func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
-	storageInfo, _ := objAPI.StorageInfo(GlobalContext)
-	return storageInfo
 }
 
 // Prints the formatted startup message.
@@ -67,7 +62,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(mustGetStorageInfo(objAPI))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext))
 	}
 
 	// Prints credential, region and browser access.

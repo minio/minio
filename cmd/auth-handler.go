@@ -39,6 +39,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -564,7 +565,7 @@ func isSupportedS3AuthType(aType authType) bool {
 func setAuthHandler(h http.Handler) http.Handler {
 	// handler for validating incoming authorization headers.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		aType := getRequestAuthType(r)
 		switch aType {
@@ -573,8 +574,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 			amzDate, errCode := parseAmzDateHeader(r)
 			if errCode != ErrNone {
 				if ok {
-					tc.funcName = "handler.Auth"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.Auth"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 
 				// All our internal APIs are sensitive towards Date
@@ -589,8 +590,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 			curTime := UTCNow()
 			if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
 				if ok {
-					tc.funcName = "handler.Auth"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.Auth"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrRequestTimeTooSkewed), r.URL)
@@ -610,8 +611,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 		}
 
 		if ok {
-			tc.funcName = "handler.Auth"
-			tc.responseRecorder.LogErrBody = true
+			tc.FuncName = "handler.Auth"
+			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL)
