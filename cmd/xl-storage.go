@@ -38,6 +38,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
@@ -45,7 +46,6 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
-	"github.com/yargevad/filepathx"
 	"github.com/zeebo/xxh3"
 )
 
@@ -2689,7 +2689,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 	}
 	files := []string{pathJoin(volumeDir, path)}
 	if glob {
-		files, err = filepathx.Glob(pathJoin(volumeDir, path))
+		files, err = filepathx.Glob(filepath.Join(volumeDir, path))
 		if err != nil {
 			return nil, err
 		}
