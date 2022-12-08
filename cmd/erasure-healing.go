@@ -94,7 +94,7 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricBucket, startTime, bucket, "", "", &opts, err, &res)
+			healTrace(healingMetricBucket, startTime, bucket, "", &opts, err, &res)
 		}()
 	}
 
@@ -305,7 +305,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricObject, startTime, bucket, object, versionID, &opts, err, &result)
+			healTrace(healingMetricObject, startTime, bucket, object, &opts, err, &result)
 		}()
 	}
 	// Initialize heal result object
@@ -313,6 +313,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		Type:      madmin.HealItemObject,
 		Bucket:    bucket,
 		Object:    object,
+		VersionID: versionID,
 		DiskCount: len(storageDisks),
 	}
 
@@ -684,7 +685,7 @@ func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricCheckAbandonedParts, startTime, bucket, object, "", nil, err, nil)
+			healTrace(healingMetricCheckAbandonedParts, startTime, bucket, object, nil, err, nil)
 		}()
 	}
 	if !opts.NoLock {
@@ -1042,7 +1043,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 }
 
 // healTrace sends healing results to trace output.
-func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts *madmin.HealOpts, err error, result *madmin.HealResultItem) {
+func healTrace(funcName healingMetric, startTime time.Time, bucket, object string, opts *madmin.HealOpts, err error, result *madmin.HealResultItem) {
 	tr := madmin.TraceInfo{
 		TraceType: madmin.TraceHealing,
 		Time:      startTime,
@@ -1053,9 +1054,6 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object, vers
 	}
 	if opts != nil {
 		tr.Message = fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode)
-	}
-	if versionID != "" && versionID != "null" {
-		tr.Path += " v=" + versionID
 	}
 	if err != nil {
 		tr.Error = err.Error()
