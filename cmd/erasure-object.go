@@ -1556,13 +1556,24 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	defer NSUpdated(bucket, object)
 
 	storageDisks := er.getDisks()
-
-	//  Determine whether to mark object deleted for replication
-	var markDelete bool
+	versionFound := true
+	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
+	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	if gerr != nil && goi.Name == "" {
+		switch gerr.(type) {
+		case InsufficientReadQuorum:
+			return objInfo, InsufficientWriteQuorum{}
+		}
+		// For delete marker replication, versionID being replicated will not exist on disk
+		if opts.DeleteMarker {
+			versionFound = false
+		} else {
+			return objInfo, gerr
+		}
+	}
 
 	if opts.Expiration.Expire {
-		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
-		if err == nil {
+		if gerr == nil {
 			evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 			var isErr bool
 			switch evt.Action {
@@ -1584,15 +1595,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					Object: object,
 				}
 			}
-			markDelete = goi.VersionID != ""
 		}
 	}
 
-	versionFound := !(opts.DeleteMarker && opts.VersionID != "")
+	//  Determine whether to mark object deleted for replication
+	markDelete := goi.VersionID != ""
 
-	if !markDelete {
-		markDelete = !opts.DeleteMarker && opts.VersionID != ""
-	}
 	// Default deleteMarker to true if object is under versioning
 	// versioning suspended means we add `null` version as
 	// delete marker, if its not decided already.
@@ -1628,11 +1636,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			ExpireRestored:   opts.Transition.ExpireRestored,
 		}
 		fi.SetTierFreeVersionID(fvID)
-		if opts.Versioned {
+		if opts.VersionID != "" {
+			fi.VersionID = opts.VersionID
+		} else if opts.Versioned {
 			fi.VersionID = mustGetUUID()
-			if opts.VersionID != "" {
-				fi.VersionID = opts.VersionID
-			}
 		}
 		// versioning suspended means we add `null` version as
 		// delete marker. Add delete marker, since we don't have
