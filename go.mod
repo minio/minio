@@ -49,9 +49,9 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.22.0
-	github.com/minio/madmin-go/v2 v2.0.0
+	github.com/minio/madmin-go/v2 v2.0.1
 	github.com/minio/minio-go/v7 v7.0.44
-	github.com/minio/pkg v1.5.5
+	github.com/minio/pkg v1.5.6
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2

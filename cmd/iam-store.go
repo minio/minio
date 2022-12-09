@@ -862,6 +862,78 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 	return
 }
 
+// PolicyDBUpdate - adds or removes given policies to/from the user or group's
+// policy associations.
+func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGroup bool,
+	userType IAMUserType, policies []string, isAttach bool) (updatedAt time.Time, addedOrRemoved []string,
+	err error,
+) {
+	if name == "" {
+		return updatedAt, nil, errInvalidArgument
+	}
+
+	cache := store.lock()
+	defer store.unlock()
+
+	// Load existing policy mapping
+	var mp MappedPolicy
+	if !isGroup {
+		mp = cache.iamUserPolicyMap[name]
+	} else {
+		if store.getUsersSysType() == MinIOUsersSysType {
+			g, ok := cache.iamGroupsMap[name]
+			if !ok {
+				return updatedAt, nil, errNoSuchGroup
+			}
+
+			if g.Status == statusDisabled {
+				// TODO: return an error?
+				return updatedAt, nil, nil
+			}
+		}
+		mp = cache.iamGroupPolicyMap[name]
+	}
+
+	// Compute net policy change effect and updated policy mapping
+	existingPolicySet := mp.policySet()
+	policiesToUpdate := set.CreateStringSet(policies...)
+	newPolicyMapping := mp
+	if isAttach {
+		// new policies to attach => inputPolicies - existing (set difference)
+		policiesToUpdate = policiesToUpdate.Difference(existingPolicySet)
+		// validate that new policies to add are defined.
+		for _, p := range policiesToUpdate.ToSlice() {
+			if _, found := cache.iamPolicyDocsMap[p]; !found {
+				return updatedAt, nil, errNoSuchPolicy
+			}
+		}
+		newPolicyMapping.Policies = strings.Join(existingPolicySet.Union(policiesToUpdate).ToSlice(), ",")
+	} else {
+		// policies to detach => inputPolicies ∩ existing (intersection)
+		policiesToUpdate = policiesToUpdate.Intersection(existingPolicySet)
+		newPolicyMapping.Policies = strings.Join(existingPolicySet.Difference(policiesToUpdate).ToSlice(), ",")
+	}
+	newPolicyMapping.UpdatedAt = UTCNow()
+
+	// We return an error if the requested policy update will have no effect.
+	if policiesToUpdate.IsEmpty() {
+		return updatedAt, nil, errNoPolicyToAttachOrDetach
+	}
+
+	addedOrRemoved = policiesToUpdate.ToSlice()
+
+	if err := store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
+		return updatedAt, addedOrRemoved, err
+	}
+	if !isGroup {
+		cache.iamUserPolicyMap[name] = newPolicyMapping
+	} else {
+		cache.iamGroupPolicyMap[name] = newPolicyMapping
+	}
+	cache.updatedAt = UTCNow()
+	return cache.updatedAt, addedOrRemoved, nil
+}
+
 // PolicyDBSet - update the policy mapping for the given user or group in
 // storage and in cache. We do not check for the existence of the user here
 // since users can be virtual, such as for:

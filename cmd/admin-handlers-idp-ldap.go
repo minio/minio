@@ -19,8 +19,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -85,4 +87,95 @@ func (a adminAPIHandlers) ListLDAPPolicyMappingEntities(w http.ResponseWriter, r
 		return
 	}
 	writeSuccessResponseJSON(w, econfigData)
+}
+
+// AttachDetachPolicyLDAP attaches or detaches policies from an LDAP entity
+// (user or group).
+//
+// POST <admin-prefix>/idp/ldap/policy/{operation}
+func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AttachDetachPolicyLDAP")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	// Check authorization.
+
+	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.UpdatePolicyAssociationAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
+		// More than maxConfigSize bytes were available
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+		return
+	}
+
+	// Ensure body content type is opaque to ensure that request body has not
+	// been interpreted as form data.
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/octet-stream" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+		return
+	}
+
+	// Validate operation
+	operation := mux.Vars(r)["operation"]
+	if operation != "attach" && operation != "detach" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+		return
+	}
+
+	isAttach := operation == "attach"
+
+	// Validate API arguments in body.
+	password := cred.SecretKey
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		logger.LogIf(ctx, err, logger.Application)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	var par madmin.PolicyAssociationReq
+	err = json.Unmarshal(reqBytes, &par)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	if err := par.IsValid(); err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	// Call IAM subsystem
+	updatedAt, addedOrRemoved, err := globalIAMSys.PolicyDBUpdateLDAP(ctx, isAttach, par)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	respBody := madmin.PolicyAssociationResp{
+		UpdatedAt: updatedAt,
+	}
+	if isAttach {
+		respBody.PoliciesAttached = addedOrRemoved
+	} else {
+		respBody.PoliciesDetached = addedOrRemoved
+	}
+
+	data, err := json.Marshal(respBody)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
 }
