@@ -23,7 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/logger/target/console"
@@ -55,6 +55,11 @@ func NewConsoleLogger(ctx context.Context) *HTTPConsoleLoggerSys {
 		console: console.New(),
 		logBuf:  ring.New(defaultLogBufferCount),
 	}
+}
+
+// IsOnline always true in case of console logger
+func (sys *HTTPConsoleLoggerSys) IsOnline() bool {
+	return true
 }
 
 // SetNodeName - sets the node name if any after distributed setup has initialized

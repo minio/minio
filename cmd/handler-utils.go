@@ -29,7 +29,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -350,7 +350,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := logger.NewResponseWriter(w)
+		statsWriter := xhttp.NewResponseRecorder(w)
 
 		f.ServeHTTP(statsWriter, r)
 

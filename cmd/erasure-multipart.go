@@ -350,7 +350,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		rctx := lkctx.Context()
 		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
 		lk.RUnlock(lkctx.Cancel)
-		if err != nil {
+		if err != nil && !isErrVersionNotFound(err) {
 			return nil, err
 		}
 		if opts.CheckPrecondFn(obj) {
@@ -359,7 +359,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	userDefined := cloneMSS(opts.UserDefined)
-
+	if opts.PreserveETag != "" {
+		userDefined["etag"] = opts.PreserveETag
+	}
 	onlineDisks := er.getDisks()
 	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
 	if parityDrives < 0 {
@@ -991,14 +993,34 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	//
 	// Therefore, we adjust all ETags sent by the client to match what is stored
 	// on the backend.
-	kind, isEncrypted := crypto.IsEncrypted(fi.Metadata)
+	kind, _ := crypto.IsEncrypted(fi.Metadata)
 
 	var objectEncryptionKey []byte
-	if isEncrypted && kind == crypto.S3 {
+	switch kind {
+	case crypto.SSEC:
+		if checksumType.IsSet() {
+			if opts.EncryptFn == nil {
+				return oi, crypto.ErrMissingCustomerKey
+			}
+			baseKey := opts.EncryptFn("", nil)
+			if len(baseKey) != 32 {
+				return oi, crypto.ErrInvalidCustomerKey
+			}
+			objectEncryptionKey, err = decryptObjectMeta(baseKey, bucket, object, fi.Metadata)
+			if err != nil {
+				return oi, err
+			}
+		}
+	case crypto.S3, crypto.S3KMS:
 		objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, fi.Metadata)
 		if err != nil {
 			return oi, err
 		}
+	}
+	if len(objectEncryptionKey) == 32 {
+		var key crypto.ObjectKey
+		copy(key[:], objectEncryptionKey)
+		opts.EncryptFn = metadataEncrypter(key)
 	}
 
 	for i, part := range partInfoFiles {
@@ -1151,9 +1173,13 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Save successfully calculated md5sum.
-	fi.Metadata["etag"] = opts.UserDefined["etag"]
+	// for replica, newMultipartUpload would have already sent the replication ETag
 	if fi.Metadata["etag"] == "" {
-		fi.Metadata["etag"] = getCompleteMultipartMD5(parts)
+		if opts.UserDefined["etag"] != "" {
+			fi.Metadata["etag"] = opts.UserDefined["etag"]
+		} else { // fallback if not already calculated in handler.
+			fi.Metadata["etag"] = getCompleteMultipartMD5(parts)
+		}
 	}
 
 	// Save the consolidated actual size.

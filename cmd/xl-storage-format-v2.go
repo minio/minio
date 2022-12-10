@@ -678,6 +678,7 @@ func metaDataPoolGet() []byte {
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
+		//lint:ignore SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
@@ -1189,6 +1190,40 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 		x.sortByModTime()
 	}
 	return nil
+}
+
+// getDataDirs will return all data directories in the metadata
+// as well as all version ids used for inline data.
+func (x *xlMetaV2) getDataDirs() ([]string, error) {
+	dds := make([]string, len(x.versions)*2)
+	for i, ver := range x.versions {
+		if ver.header.Type == DeleteType {
+			continue
+		}
+
+		obj, err := x.getIdx(i)
+		if err != nil {
+			return nil, err
+		}
+		switch ver.header.Type {
+		case ObjectType:
+			if obj.ObjectV2 == nil {
+				return nil, errors.New("obj.ObjectV2 unexpectedly nil")
+			}
+			dds = append(dds, uuid.UUID(obj.ObjectV2.DataDir).String())
+			if obj.ObjectV2.VersionID == [16]byte{} {
+				dds = append(dds, nullVersionID)
+			} else {
+				dds = append(dds, uuid.UUID(obj.ObjectV2.VersionID).String())
+			}
+		case LegacyType:
+			if obj.ObjectV1 == nil {
+				return nil, errors.New("obj.ObjectV1 unexpectedly nil")
+			}
+			dds = append(dds, obj.ObjectV1.DataDir)
+		}
+	}
+	return dds, nil
 }
 
 // sortByModTime will sort versions by modtime in descending order,
@@ -1811,11 +1846,9 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 		}
 
 		var latest xlMetaV2ShallowVersion
-		var latestCount int
 		if consistent {
 			// All had the same signature, easy.
 			latest = tops[0]
-			latestCount = len(tops)
 			merged = append(merged, latest)
 
 			// Calculate latest 'n' non-free versions.
@@ -1825,6 +1858,7 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 
 		} else {
 			// Find latest.
+			var latestCount int
 			for i, ver := range tops {
 				if ver.header == latest.header {
 					latestCount++

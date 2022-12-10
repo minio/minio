@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -1069,7 +1069,7 @@ func (z *erasureServerPools) getDecommissionPoolSpaceInfo(idx int) (pi poolSpace
 		return pi, errInvalidArgument
 	}
 
-	info, _ := z.serverPools[idx].StorageInfo(context.Background())
+	info := z.serverPools[idx].StorageInfo(context.Background())
 	info.Backend = z.BackendInfo()
 
 	usableTotal := int64(GetTotalUsableCapacity(info.Disks, info))

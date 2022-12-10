@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/hash"
@@ -36,7 +36,7 @@ import (
 type CheckPreconditionFn func(o ObjectInfo) bool
 
 // EvalMetadataFn validates input objInfo and returns an updated metadata
-type EvalMetadataFn func(o ObjectInfo) error
+type EvalMetadataFn func(o *ObjectInfo) error
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
@@ -194,8 +194,8 @@ type ObjectLayer interface {
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, scanMode madmin.HealScanMode) error
 	BackendInfo() madmin.BackendInfo
-	StorageInfo(ctx context.Context) (StorageInfo, []error)
-	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
+	StorageInfo(ctx context.Context) StorageInfo
+	LocalStorageInfo(ctx context.Context) StorageInfo
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error
@@ -249,6 +249,7 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
+	CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult

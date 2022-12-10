@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 // commonTime returns a maximally occurring time from a list of time.

@@ -34,7 +34,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/tags"

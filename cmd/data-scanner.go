@@ -35,7 +35,7 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -813,9 +813,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		flat.Compacted = true
 		var compact bool
 		if flat.Objects < dataScannerCompactLeastObject {
-			if f.dataUsageScannerDebug && flat.Objects > 1 {
-				// Disabled, rather chatty:
-				// console.Debugf(scannerLogPrefix+" Only %d objects, compacting %s -> %+v\n", flat.Objects, folder.name, flat)
+			if flat.Objects > 1 {
+				globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			}
 			compact = true
 		} else {
@@ -829,9 +828,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-			if f.dataUsageScannerDebug && compact {
-				// Disabled, rather chatty:
-				// console.Debugf(scannerLogPrefix+" Only objects (%d), compacting %s -> %+v\n", flat.Objects, folder.name, flat)
+			if compact {
+				globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			}
 		}
 		if compact {
@@ -945,10 +943,6 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		logger.LogIf(ctx, err)
 	}
 	if i.lifeCycle == nil {
-		if i.debug {
-			// disabled, very chatty:
-			// console.Debugf(applyActionsLogPrefix+" no lifecycle rules to apply: %q\n", i.objectPath())
-		}
 		return false, size
 	}
 
@@ -1015,6 +1009,8 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	if i.lifeCycle == nil {
 		return fivs, nil
 	}
+	done := globalScannerMetrics.time(scannerMetricApplyNonCurrent)
+	defer done()
 
 	_, days, lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
 	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
@@ -1071,6 +1067,17 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]FileInfo, error) {
+	if i.heal.enabled {
+		if healDeleteDangling {
+			done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+			err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+			done()
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
+			}
+		}
+	}
+
 	return i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 }
 

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
@@ -85,20 +85,32 @@ func initHelp() {
 	// Captures help for each sub-system
 	helpSubSys := config.HelpKVS{
 		config.HelpKV{
+			Key:         config.SubnetSubSys,
+			Type:        "string",
+			Description: "register the cluster to MinIO SUBNET",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         config.CallhomeSubSys,
+			Type:        "string",
+			Description: "enable callhome to MinIO SUBNET",
+			Optional:    true,
+		},
+		config.HelpKV{
 			Key:         config.SiteSubSys,
 			Description: "label the server and its location",
 		},
 		config.HelpKV{
-			Key:         config.CacheSubSys,
-			Description: "add caching storage tier",
+			Key:         config.APISubSys,
+			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
+		},
+		config.HelpKV{
+			Key:         config.ScannerSubSys,
+			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:         config.CompressionSubSys,
 			Description: "enable server side compression of objects",
-		},
-		config.HelpKV{
-			Key:         config.EtcdSubSys,
-			Description: "federate multiple clusters for IAM and Bucket DNS",
 		},
 		config.HelpKV{
 			Key:             config.IdentityOpenIDSubSys,
@@ -120,14 +132,6 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.PolicyPluginSubSys,
 			Description: "enable Access Management Plugin for policy enforcement",
-		},
-		config.HelpKV{
-			Key:         config.APISubSys,
-			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
-		},
-		config.HelpKV{
-			Key:         config.ScannerSubSys,
-			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -195,16 +199,12 @@ func initHelp() {
 			MultipleTargets: true,
 		},
 		config.HelpKV{
-			Key:         config.SubnetSubSys,
-			Type:        "string",
-			Description: "set subnet config for the cluster e.g. api key",
-			Optional:    true,
+			Key:         config.EtcdSubSys,
+			Description: "persist IAM assets externally to etcd",
 		},
 		config.HelpKV{
-			Key:         config.CallhomeSubSys,
-			Type:        "string",
-			Description: "enable callhome for the cluster",
-			Optional:    true,
+			Key:         config.CacheSubSys,
+			Description: "[DEPRECATED] add caching storage tier",
 		},
 	}
 
@@ -590,11 +590,11 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-				loggerCfg.HTTP[n] = l
 			}
+			loggerCfg.HTTP[n] = l
 		}
-		if err = logger.UpdateSystemTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %w", err))
+		if errs := logger.UpdateSystemTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
@@ -607,12 +607,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				l.LogOnce = logger.LogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
-				loggerCfg.AuditWebhook[n] = l
 			}
+			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if err = logger.UpdateAuditWebhookTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %w", err))
+		if errs := logger.UpdateAuditWebhookTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
@@ -625,8 +625,8 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-		if err = logger.UpdateAuditKafkaTargets(loggerCfg); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %w", err))
+		if errs := logger.UpdateAuditKafkaTargets(loggerCfg); len(errs) > 0 {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:
 		for i, setDriveCount := range setDriveCounts {

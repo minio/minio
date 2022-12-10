@@ -34,6 +34,7 @@ import (
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -192,6 +193,10 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if body != nil {
 		req.Header.Set("Expect", "100-continue")
+	}
+
+	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
+		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
 	}
 
 	return req, nil

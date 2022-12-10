@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -125,7 +125,7 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	}
 
 	// Fetch disk capacity and available space.
-	si, _ := z.StorageInfo(ctx)
+	si := z.StorageInfo(ctx)
 	diskStats := make([]struct {
 		AvailableSpace uint64
 		TotalSpace     uint64
@@ -811,7 +811,6 @@ func (z *erasureServerPools) StartRebalance() {
 			stopfn(err)
 		}(poolIdx)
 	}
-	return
 }
 
 // StopRebalance signals the rebalance goroutine running on this node (if any)

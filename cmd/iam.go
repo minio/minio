@@ -33,7 +33,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -1510,6 +1510,58 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	}
 
 	return updatedAt, nil
+}
+
+// PolicyDBUpdateLDAP - adds or removes policies from a user or a group verified
+// to be in the LDAP directory.
+func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
+	r madmin.PolicyAssociationReq,
+) (updatedAt time.Time, addedOrRemoved []string, err error) {
+	if !sys.Initialized() {
+		return updatedAt, nil, errServerNotInitialized
+	}
+
+	var dn string
+	var isGroup bool
+	if r.User != "" {
+		dn, err = globalLDAPConfig.DoesUsernameExist(r.User)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		}
+		if dn == "" {
+			return updatedAt, nil, errNoSuchUser
+		}
+		isGroup = false
+	} else {
+		if exists, err := globalLDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		} else if !exists {
+			return updatedAt, nil, errNoSuchGroup
+		}
+		dn = r.Group
+		isGroup = true
+	}
+
+	userType := stsUser
+	updatedAt, addedOrRemoved, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
+		userType, r.Policies, isAttach)
+	if err != nil {
+		return updatedAt, nil, err
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(dn, userType, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return updatedAt, addedOrRemoved, nil
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is

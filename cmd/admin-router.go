@@ -23,7 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -198,7 +198,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListLDAPPolicyMappingEntities)))
-
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachDetachPolicyLDAP)))
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig

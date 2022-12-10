@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -545,16 +545,15 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	return
 }
 
-func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(z.serverPools))
-	storageInfosErrs := make([][]error, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].LocalStorageInfo(ctx)
+			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -567,40 +566,11 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) (StorageInfo,
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 	}
 
-	var errs []error
-	for i := range z.serverPools {
-		errs = append(errs, storageInfosErrs[i]...)
-	}
-	return storageInfo, errs
+	return storageInfo
 }
 
-func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []error) {
-	var storageInfo StorageInfo
-
-	storageInfos := make([]StorageInfo, len(z.serverPools))
-	storageInfosErrs := make([][]error, len(z.serverPools))
-	g := errgroup.WithNErrs(len(z.serverPools))
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].StorageInfo(ctx)
-			return nil
-		}, index)
-	}
-
-	// Wait for the go routines.
-	g.Wait()
-
-	storageInfo.Backend = z.BackendInfo()
-	for _, lstorageInfo := range storageInfos {
-		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-	}
-
-	var errs []error
-	for i := range z.serverPools {
-		errs = append(errs, storageInfosErrs[i]...)
-	}
-	return storageInfo, errs
+func (z *erasureServerPools) StorageInfo(ctx context.Context) StorageInfo {
+	return globalNotificationSys.StorageInfo(z)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
@@ -2072,7 +2042,12 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		if err != nil {
 			return healObjectFn(bucket, entry.name, "")
 		}
-
+		if opts.Remove && !opts.DryRun {
+			err := z.CheckAbandonedParts(ctx, bucket, entry.name, opts)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", bucket, entry.name, err))
+			}
+		}
 		for _, version := range fivs.Versions {
 			err := healObjectFn(bucket, version.Name, version.VersionID)
 			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -2216,9 +2191,7 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 
 	b := z.BackendInfo()
 	poolReadQuorums := make([]int, len(b.StandardSCData))
-	for i, data := range b.StandardSCData {
-		poolReadQuorums[i] = data
-	}
+	copy(poolReadQuorums, b.StandardSCData)
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
@@ -2423,4 +2396,31 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 	}
 
 	return z.serverPools[idx].RestoreTransitionedObject(ctx, bucket, object, opts)
+}
+
+func (z *erasureServerPools) CheckAbandonedParts(ctx context.Context, bucket, object string, opts madmin.HealOpts) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].CheckAbandonedParts(ctx, bucket, object, opts)
+	}
+	errs := make([]error, len(z.serverPools))
+	var wg sync.WaitGroup
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, pool *erasureSets) {
+			defer wg.Done()
+			err := pool.CheckAbandonedParts(ctx, bucket, object, opts)
+			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+				errs[idx] = err
+			}
+		}(idx, pool)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		return err
+	}
+	return nil
 }

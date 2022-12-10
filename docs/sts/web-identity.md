@@ -37,7 +37,7 @@ MINIO_IDENTITY_OPENID_REDIRECT_URI          (string)    [DEPRECATED use env 'MIN
 
 Either `MINIO_IDENTITY_OPENID_ROLE_POLICY` (recommended) or `MINIO_IDENTITY_OPENID_CLAIM_NAME` must be specified but not both. See the section Access Control Policies to understand the differences between the two.
 
-With role policies, it is possible to specify multiple OpenID provider configurations - this is useful to integrate multiple OpenID client applications to interact with object storage.
+**NOTE**: When configuring multiple OpenID based authentication providers on a MinIO cluster, any number of Role Policy based providers may be configured, and at most one JWT Claim based provider may be configured.
 
 <details><summary>Example 1: Two role policy providers</summary>
 
@@ -80,13 +80,13 @@ MINIO_IDENTITY_OPENID_CLAIM_NAME="groups"
 
 </details>
 
-## Access Control Policies
+## Specifying Access Control with IAM Policies
 
-MinIO's AssumeRoleWithWebIdentity supports specifying access control policies in two ways:
+The STS API authenticates the user by verifying the JWT provided in the request. However access to object storage resources are controlled via named IAM policies defined in the MinIO instance. Once authenticated via the STS API, the MinIO server applies one or more IAM policies to the generated credentials. MinIO's AssumeRoleWithWebIdentity implementation supports specifying IAM policies in two ways:
 
-1. Role Policy (Recommended): When specified, all users authenticating via this API are authorized to (only) use the specified role policy. The policy to associate with such users is specified when configuring OpenID provider in the server, via the `role_policy` configuration parameter or the `MINIO_IDENTITY_OPENID_ROLE_POLICY` environment variable. The value is a comma-separated list of IAM access policy names already defined in the server. In this situation, the server prints a role ARN at startup that must be specified as a `RoleARN` API request parameter in the STS AssumeRoleWithWebIdentity API call. When using Role Policies, multiple OpenID providers and/or client applications (with unique client IDs) may be configured with independent role policies. Each configuration is assigned a unique RoleARN by the MinIO server and this is used to select the policies to apply to temporary credentials generated in the AssumeRoleWithWebIdentity call.
+1. Role Policy (Recommended): When specified as part of the OpenID provider configuration, all users authenticating via this provider are authorized to (only) use the specified role policy. The policy to associate with such users is specified via the `role_policy` configuration parameter or the `MINIO_IDENTITY_OPENID_ROLE_POLICY` environment variable. The value is a comma-separated list of IAM access policy names already defined in the server. In this situation, the server prints a role ARN at startup that must be specified as a `RoleARN` API request parameter in the STS AssumeRoleWithWebIdentity API call. When using Role Policies, multiple OpenID providers and/or client applications (with unique client IDs) may be configured with independent role policies. Each configuration is assigned a unique RoleARN by the MinIO server and this is used to select the policies to apply to temporary credentials generated in the AssumeRoleWithWebIdentity call.
 
-2. `id_token` claims: When the role policy is not configured, MinIO looks for a specific claim in the `id_token` (JWT) returned by the OpenID provider. The default claim is `policy` and can be overridden by the `claim_name` configuration parameter or the `MINIO_IDENTITY_OPENID_CLAIM_NAME` environment variable. The claim value can be a string (comma-separated list) or an array of IAM access policy names defined in the server. A `RoleARN` API request parameter *must not* be specified in the STS AssumeRoleWithWebIdentity API call.
+2. `id_token` claims: When the role policy is not configured, MinIO looks for a specific claim in the `id_token` (JWT) returned by the OpenID provider in the STS request. The default claim is `policy` and can be overridden by the `claim_name` configuration parameter or the `MINIO_IDENTITY_OPENID_CLAIM_NAME` environment variable. The claim value can be a string (comma-separated list) or an array of IAM access policy names defined in the server. A `RoleARN` API request parameter *must not* be specified in the STS AssumeRoleWithWebIdentity API call.
 
 ## API Request Parameters
 

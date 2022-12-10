@@ -18,18 +18,21 @@ func _() {
 	_ = x[scannerMetricILM-7]
 	_ = x[scannerMetricCheckReplication-8]
 	_ = x[scannerMetricYield-9]
-	_ = x[scannerMetricStartTrace-10]
-	_ = x[scannerMetricScanObject-11]
-	_ = x[scannerMetricLastRealtime-12]
-	_ = x[scannerMetricScanFolder-13]
-	_ = x[scannerMetricScanCycle-14]
-	_ = x[scannerMetricScanBucketDisk-15]
-	_ = x[scannerMetricLast-16]
+	_ = x[scannerMetricCleanAbandoned-10]
+	_ = x[scannerMetricApplyNonCurrent-11]
+	_ = x[scannerMetricStartTrace-12]
+	_ = x[scannerMetricScanObject-13]
+	_ = x[scannerMetricLastRealtime-14]
+	_ = x[scannerMetricScanFolder-15]
+	_ = x[scannerMetricScanCycle-16]
+	_ = x[scannerMetricScanBucketDrive-17]
+	_ = x[scannerMetricCompactFolder-18]
+	_ = x[scannerMetricLast-19]
 }
 
-const _scannerMetric_name = "ReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldStartTraceScanObjectLastRealtimeScanFolderScanCycleScanBucketDiskLast"
+const _scannerMetric_name = "ReadMetadataCheckMissingSaveUsageApplyAllApplyVersionTierObjSweepHealCheckILMCheckReplicationYieldCleanAbandonedApplyNonCurrentStartTraceScanObjectLastRealtimeScanFolderScanCycleScanBucketDriveCompactFolderLast"
 
-var _scannerMetric_index = [...]uint8{0, 12, 24, 33, 41, 53, 65, 74, 77, 93, 98, 108, 118, 130, 140, 149, 163, 167}
+var _scannerMetric_index = [...]uint8{0, 12, 24, 33, 41, 53, 65, 74, 77, 93, 98, 112, 127, 137, 147, 159, 169, 178, 193, 206, 210}
 
 func (i scannerMetric) String() string {
 	if i >= scannerMetric(len(_scannerMetric_index)-1) {

@@ -31,7 +31,7 @@ import (
 	"sync"
 
 	"github.com/klauspost/readahead"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
@@ -636,10 +636,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		if errors.Is(reducedErr, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
-			if derr != nil {
-				err = derr
-			}
+			er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
 		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
 	}
@@ -943,7 +940,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	if opts.CheckPrecondFn != nil {
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err != nil {
+		if err != nil && !isErrVersionNotFound(err) {
 			return objInfo, err
 		}
 		if opts.CheckPrecondFn(obj) {
@@ -1559,13 +1556,24 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	defer NSUpdated(bucket, object)
 
 	storageDisks := er.getDisks()
-
-	//  Determine whether to mark object deleted for replication
-	var markDelete bool
+	versionFound := true
+	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
+	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	if gerr != nil && goi.Name == "" {
+		switch gerr.(type) {
+		case InsufficientReadQuorum:
+			return objInfo, InsufficientWriteQuorum{}
+		}
+		// For delete marker replication, versionID being replicated will not exist on disk
+		if opts.DeleteMarker {
+			versionFound = false
+		} else {
+			return objInfo, gerr
+		}
+	}
 
 	if opts.Expiration.Expire {
-		goi, _, err := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
-		if err == nil {
+		if gerr == nil {
 			evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
 			var isErr bool
 			switch evt.Action {
@@ -1587,15 +1595,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					Object: object,
 				}
 			}
-			markDelete = goi.VersionID != ""
 		}
 	}
 
-	versionFound := !(opts.DeleteMarker && opts.VersionID != "")
+	//  Determine whether to mark object deleted for replication
+	markDelete := goi.VersionID != ""
 
-	if !markDelete {
-		markDelete = !opts.DeleteMarker && opts.VersionID != ""
-	}
 	// Default deleteMarker to true if object is under versioning
 	// versioning suspended means we add `null` version as
 	// delete marker, if its not decided already.
@@ -1631,11 +1636,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			ExpireRestored:   opts.Transition.ExpireRestored,
 		}
 		fi.SetTierFreeVersionID(fvID)
-		if opts.Versioned {
+		if opts.VersionID != "" {
+			fi.VersionID = opts.VersionID
+		} else if opts.Versioned {
 			fi.VersionID = mustGetUUID()
-			if opts.VersionID != "" {
-				fi.VersionID = opts.VersionID
-			}
 		}
 		// versioning suspended means we add `null` version as
 		// delete marker. Add delete marker, since we don't have
@@ -1744,7 +1748,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	objInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if opts.EvalMetadataFn != nil {
-		if err := opts.EvalMetadataFn(objInfo); err != nil {
+		if err := opts.EvalMetadataFn(&objInfo); err != nil {
 			return ObjectInfo{}, err
 		}
 	}

@@ -36,15 +36,16 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
+	"github.com/klauspost/filepathx"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
-	"github.com/yargevad/filepathx"
 	"github.com/zeebo/xxh3"
 )
 
@@ -2328,35 +2329,42 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	var oldDstDataPath string
+	var oldDstDataPath, reqVID string
+
 	if fi.VersionID == "" {
-		// return the latest "null" versionId info
-		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
-		if err == nil && !ofi.Deleted {
-			if xlMeta.SharedDataDirCountStr(nullVersionID, ofi.DataDir) == 0 {
-				// Purge the destination path as we are not preserving anything
-				// versioned object was not requested.
-				oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
-				// if old destination path is same as new destination path
-				// there is nothing to purge, this is true in case of healing
-				// avoid setting oldDstDataPath at that point.
-				if oldDstDataPath == dstDataPath {
-					oldDstDataPath = ""
-				}
-				xlMeta.data.remove(nullVersionID, ofi.DataDir)
+		reqVID = nullVersionID
+	} else {
+		reqVID = fi.VersionID
+	}
+
+	// Replace the data of null version or any other existing version-id
+	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID)
+	if err == nil && !ofi.Deleted {
+		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
+			// Purge the destination path as we are not preserving anything
+			// versioned object was not requested.
+			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			// if old destination path is same as new destination path
+			// there is nothing to purge, this is true in case of healing
+			// avoid setting oldDstDataPath at that point.
+			if oldDstDataPath == dstDataPath {
+				oldDstDataPath = ""
+			} else {
+				xlMeta.data.remove(reqVID, ofi.DataDir)
 			}
 		}
-		// Empty fi.VersionID indicates that versioning is either
-		// suspended or disabled on this bucket. RenameData will replace
-		// the 'null' version. We add a free-version to track its tiered
-		// content for asynchronous deletion.
-		if !fi.IsRestoreObjReq() {
-			// Note: Restore object request reuses PutObject/Multipart
-			// upload to copy back its data from the remote tier. This
-			// doesn't replace the existing version, so we don't need to add
-			// a free-version.
-			xlMeta.AddFreeVersion(fi)
-		}
+	}
+
+	// Empty fi.VersionID indicates that versioning is either
+	// suspended or disabled on this bucket. RenameData will replace
+	// the 'null' version. We add a free-version to track its tiered
+	// content for asynchronous deletion.
+	if fi.VersionID == "" && !fi.IsRestoreObjReq() {
+		// Note: Restore object request reuses PutObject/Multipart
+		// upload to copy back its data from the remote tier. This
+		// doesn't replace the existing version, so we don't need to add
+		// a free-version.
+		xlMeta.AddFreeVersion(fi)
 	}
 
 	// indicates if RenameData() is called by healing.
@@ -2681,7 +2689,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 	}
 	files := []string{pathJoin(volumeDir, path)}
 	if glob {
-		files, err = filepathx.Glob(pathJoin(volumeDir, path))
+		files, err = filepathx.Glob(filepath.Join(volumeDir, path))
 		if err != nil {
 			return nil, err
 		}
@@ -2707,4 +2715,102 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		})
 	}
 	return stat, nil
+}
+
+// CleanAbandonedData will read metadata of the object on disk
+// and delete any data directories and inline data that isn't referenced in metadata.
+// Metadata itself is not modified, only inline data.
+func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path string) error {
+	if volume == "" || path == "" {
+		return nil // Ignore
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	baseDir := pathJoin(volumeDir, path+slashSeparator)
+	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
+	buf, _, err := s.readAllData(ctx, volumeDir, metaPath)
+	if err != nil {
+		return err
+	}
+	defer metaDataPoolPut(buf)
+
+	if !isXL2V1Format(buf) {
+		return nil
+	}
+	var xl xlMetaV2
+	err = xl.LoadOrConvert(buf)
+	if err != nil {
+		return err
+	}
+	foundDirs := make(map[string]struct{}, len(xl.versions))
+	err = readDirFn(baseDir, func(name string, typ os.FileMode) error {
+		if !typ.IsDir() {
+			return nil
+		}
+		// See if directory has a UUID name.
+		base := filepath.Base(name)
+		_, err := uuid.Parse(base)
+		if err == nil {
+			foundDirs[base] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	wantDirs, err := xl.getDataDirs()
+	if err != nil {
+		return err
+	}
+
+	// Delete all directories we expect to be there.
+	for _, dir := range wantDirs {
+		delete(foundDirs, dir)
+	}
+
+	// Delete excessive directories.
+	// Do not abort on context errors.
+	for dir := range foundDirs {
+		toRemove := pathJoin(volumeDir, path, dir+SlashSeparator)
+		err := s.deleteFile(volumeDir, toRemove, true, true)
+		diskHealthCheckOK(ctx, err)
+	}
+
+	// Do the same for inline data
+	dirs, err := xl.data.list()
+	if err != nil {
+		return err
+	}
+	// Clear and repopulate
+	for k := range foundDirs {
+		delete(foundDirs, k)
+	}
+	// Populate into map
+	for _, k := range dirs {
+		foundDirs[k] = struct{}{}
+	}
+	// Delete all directories we expect to be there.
+	for _, dir := range wantDirs {
+		delete(foundDirs, dir)
+	}
+
+	// Delete excessive inline entries.
+	if len(foundDirs) > 0 {
+		// Convert to slice.
+		dirs = dirs[:0]
+		for dir := range foundDirs {
+			dirs = append(dirs, dir)
+		}
+		if xl.data.remove(dirs...) {
+			newBuf, err := xl.AppendTo(metaDataPoolGet())
+			if err == nil {
+				defer metaDataPoolPut(newBuf)
+				return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, false)
+			}
+		}
+	}
+	return nil
 }

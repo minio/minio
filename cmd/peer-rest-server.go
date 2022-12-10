@@ -31,7 +31,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
@@ -328,6 +328,23 @@ func (s *peerRESTServer) DownloadProfilingDataHandler(w http.ResponseWriter, r *
 		return
 	}
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(profileData))
+}
+
+func (s *peerRESTServer) LocalStorageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "LocalStorageInfo")
+
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(objLayer.LocalStorageInfo(r.Context())))
 }
 
 // ServerInfoHandler - returns Server Info
@@ -1363,6 +1380,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLocalStorageInfo).HandlerFunc(httpTraceHdrs(server.LocalStorageInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(httpTraceHdrs(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(httpTraceHdrs(server.GetMemInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(httpTraceHdrs(server.GetMetricsHandler)).Queries(restQueries(peerRESTMetricsTypes)...)

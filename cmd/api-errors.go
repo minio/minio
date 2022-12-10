@@ -30,7 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -151,7 +151,7 @@ const (
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
-	ErrMalformedPolicy
+	ErrPolicyInvalidVersion
 	ErrMissingFields
 	ErrMissingCredTag
 	ErrCredMalformed
@@ -177,7 +177,6 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrBucketAlreadyExists
-	ErrTooManyBuckets
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
@@ -268,6 +267,7 @@ const (
 	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
+	ErrAdminPolicyChangeAlreadyApplied
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
@@ -697,11 +697,6 @@ var errorCodes = errorCodeMap{
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrTooManyBuckets: {
-		Code:           "TooManyBuckets",
-		Description:    "You have attempted to create more buckets than allowed",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty",
@@ -717,9 +712,9 @@ var errorCodes = errorCodeMap{
 		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrMalformedPolicy: {
+	ErrPolicyInvalidVersion: {
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource.",
+		Description:    "The policy must contain a valid version string",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingFields: {
@@ -1253,6 +1248,12 @@ var errorCodes = errorCodeMap{
 		Description:    "The canned policy does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminPolicyChangeAlreadyApplied: {
+		Code:           "XMinioAdminPolicyChangeAlreadyApplied",
+		Description:    "The specified policy change is already in effect.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	ErrAdminInvalidArgument: {
 		Code:           "XMinioAdminInvalidArgument",
 		Description:    "Invalid arguments specified.",
@@ -1984,6 +1985,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
+	case errNoPolicyToAttachOrDetach:
+		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:
@@ -2279,11 +2282,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types.
 		switch e := err.(type) {
 		case batchReplicationJobError:
-			apiErr = APIError{
-				Code:           e.Code,
-				Description:    e.Description,
-				HTTPStatusCode: e.HTTPStatusCode,
-			}
+			apiErr = APIError(e)
 		case InvalidArgument:
 			apiErr = APIError{
 				Code:           "InvalidArgument",

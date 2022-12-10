@@ -85,7 +85,7 @@ func _() {
 	_ = x[ErrSignatureVersionNotSupported-74]
 	_ = x[ErrBucketNotEmpty-75]
 	_ = x[ErrAllAccessDisabled-76]
-	_ = x[ErrMalformedPolicy-77]
+	_ = x[ErrPolicyInvalidVersion-77]
 	_ = x[ErrMissingFields-78]
 	_ = x[ErrMissingCredTag-79]
 	_ = x[ErrCredMalformed-80]

@@ -293,6 +293,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			Err:    fmt.Errorf("invalid/unknown checksum sent: %v", err),
 		}
 	}
+	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
 
 	if crypto.S3KMS.IsRequested(r.Header) {
 		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
@@ -311,6 +312,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 			WantChecksum:         wantCRC,
+			PreserveETag:         etag,
 		}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
@@ -325,6 +327,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	opts.ReplicationSourceLegalholdTimestamp = lholdtimestmp
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
 	opts.ReplicationSourceTaggingTimestamp = taggingtimestmp
+	opts.PreserveETag = etag
 	opts.WantChecksum = wantCRC
 
 	return opts, nil
@@ -371,5 +374,16 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	}
 	opts.MTime = mtime
 	opts.UserDefined = make(map[string]string)
+
+	// Transfer SSEC key in opts.EncryptFn
+	if crypto.SSEC.IsRequested(r.Header) {
+		key, err := ParseSSECustomerRequest(r)
+		if err == nil {
+			// Set EncryptFn to return SSEC key
+			opts.EncryptFn = func(baseKey string, data []byte) []byte {
+				return key
+			}
+		}
+	}
 	return opts, nil
 }

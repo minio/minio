@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -36,7 +36,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	sse "github.com/minio/minio/internal/bucket/encryption"
@@ -769,12 +769,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// check if client is attempting to create more buckets than allowed maximum.
+	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		apiErr := errorCodes.ToAPIErr(ErrTooManyBuckets)
-		apiErr.Description = fmt.Sprintf("You have attempted to create %d buckets than allowed %d", currBuckets+1, maxBuckets)
-		writeErrorResponse(ctx, w, apiErr, r.URL)
-		return
+		logger.LogIf(ctx, fmt.Errorf("An attempt to create %d buckets beyond recommended %d", currBuckets+1, maxBuckets))
 	}
 
 	opts := MakeBucketOptions{

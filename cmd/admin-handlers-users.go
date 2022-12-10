@@ -30,7 +30,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
@@ -1188,6 +1188,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	roleArn := iampolicy.Args{Claims: claims}.GetRoleArn()
+	policySetFromClaims, hasPolicyClaim := iampolicy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
 	var effectivePolicy iampolicy.Policy
 
 	var buf []byte
@@ -1199,15 +1200,18 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 				break
 			}
 		}
+
 	case roleArn != "":
 		_, policy, err := globalIAMSys.GetRolePolicy(roleArn)
 		if err != nil {
-			logger.LogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 		policySlice := newMappedPolicy(policy).toSlice()
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySlice...)
+
+	case hasPolicyClaim:
+		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySetFromClaims.ToSlice()...)
 
 	default:
 		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
@@ -1486,7 +1490,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	// Version in policy must not be empty
 	if iamPolicy.Version == "" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyInvalidVersion), r.URL)
 		return
 	}
 

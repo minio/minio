@@ -28,7 +28,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 type warmBackendAzure struct {
