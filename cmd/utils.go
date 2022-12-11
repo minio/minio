@@ -258,9 +258,6 @@ const (
 	// Minimum Part size for multipart upload is 5MiB
 	globalMinPartSize = 5 * humanize.MiByte
 
-	// Maximum Part size for multipart upload is 5GiB
-	globalMaxPartSize = 5 * humanize.GiByte
-
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
@@ -269,11 +266,6 @@ const (
 // isMaxObjectSize - verify if max object size
 func isMaxObjectSize(size int64) bool {
 	return size > globalMaxObjectSize
-}
-
-// // Check if part size is more than maximum allowed size.
-func isMaxAllowedPartSize(size int64) bool {
-	return size > globalMaxPartSize
 }
 
 // Check if part size is more than or equal to minimum allowed size.
