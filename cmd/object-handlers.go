@@ -28,6 +28,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -53,6 +55,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/img"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -557,6 +560,33 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	if rs != nil || opts.PartNumber > 0 {
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
+	}
+
+	ext := path.Ext(strings.ToLower(object))
+	// scale image
+	imgExts := set.CreateStringSet(
+		".jpg",
+		".jpeg",
+		".bmp",
+		".gif",
+		".png",
+		".tiff",
+	)
+	if imgExts.Contains(ext) {
+		var width, height int
+		imgWidth, imgHeight := r.Form.Get("width"), r.Form.Get("height")
+		if width, err = strconv.Atoi(imgWidth); err != nil {
+			width = 0
+		}
+		if height, err = strconv.Atoi(imgHeight); err != nil {
+			height = 0
+		}
+		if width > 0 || height > 0 {
+			if rd, err := img.ScaleImage(width, height, gr.Reader); err == nil {
+				w.Header().Set(xhttp.ContentLength, strconv.Itoa(rd.Len()))
+				gr.Reader = rd
+			}
+		}
 	}
 
 	// Write object content to response body

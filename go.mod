@@ -17,6 +17,7 @@ require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cosnicolaou/pbzip2 v1.0.1
 	github.com/dchest/siphash v1.2.3
+	github.com/disintegration/imaging v1.6.2
 	github.com/djherbis/atime v1.1.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.4.1
@@ -85,6 +86,7 @@ require (
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
 	golang.org/x/crypto v0.3.0
+	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8
 	golang.org/x/oauth2 v0.2.0
 	golang.org/x/sys v0.2.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9

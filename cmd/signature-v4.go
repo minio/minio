@@ -273,9 +273,15 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		xhttp.AmzSignature,
 	)
 
+	// No signature params required
+	notSignParams := set.CreateStringSet(
+		"width",
+		"height",
+	)
+
 	// Add missing query parameters if any provided in the request URL
 	for k, v := range req.Form {
-		if !defaultSigParams.Contains(k) {
+		if !defaultSigParams.Contains(k) && !notSignParams.Contains(k) {
 			query[k] = v
 		}
 	}
