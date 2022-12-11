@@ -1658,7 +1658,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	if isGroup {
 		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
 	} else {
-		existingPolicies, err = globalIAMSys.GetUserPolicies(ctx, userOrGroup)
+		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1778,7 +1778,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	if isGroup {
 		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
 	} else {
-		existingPolicies, err = globalIAMSys.GetUserPolicies(ctx, userOrGroup)
+		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

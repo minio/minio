@@ -858,15 +858,9 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 }
 
 // GetUserPolicies - get policies attached to a user.
-func (sys *IAMSys) GetUserPolicies(ctx context.Context, name string) (p []string, err error) {
+func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
 	if !sys.Initialized() {
 		return p, errServerNotInitialized
-	}
-
-	select {
-	case <-sys.configLoaded:
-	default:
-		sys.store.LoadUser(ctx, name)
 	}
 
 	return sys.store.GetUserPolicies(name)
