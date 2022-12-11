@@ -1565,8 +1565,7 @@ func (store *IAMStoreSys) GetUserPolicies(name string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	policies := strings.Split(cache.iamUserPolicyMap[name].Policies, ",")
-
+	policies := cache.iamUserPolicyMap[name].toSlice()
 	return policies, nil
 }
 
