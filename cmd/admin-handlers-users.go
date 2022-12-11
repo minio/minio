@@ -1583,9 +1583,9 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}
 }
 
-// GetPolicyAssosciationEntities - GET /minio/admin/v3/idp/builtin/entities?policy=xxx&user=xxx&group=xxx
-func (a adminAPIHandlers) GetPolicyAssosciationEntities(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetPolicyAssosciationEntities")
+// GetPolicyAssociationEntities - GET /minio/admin/v3/idp/builtin/entities?policy=xxx&user=xxx&group=xxx
+func (a adminAPIHandlers) GetPolicyAssociationEntities(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetPolicyAssociationEntities")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -1599,7 +1599,7 @@ func (a adminAPIHandlers) GetPolicyAssosciationEntities(w http.ResponseWriter, r
 	users := r.Form["user"]
 	groups := r.Form["group"]
 
-	// Where final assosciation entities are stored.
+	// Where final association entities are stored.
 	entities := madmin.PolicyEntitiesResult{}
 
 	// Get policies attached to each specified user.
