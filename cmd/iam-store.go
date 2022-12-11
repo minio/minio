@@ -90,6 +90,24 @@ func getIAMFormatFilePath() string {
 	return iamConfigPrefix + SlashSeparator + iamFormatFile
 }
 
+// GetUserPolicies - returns the policies attached to a user.
+func (store *IAMStoreSys) GetUserPolicies(name string) ([]string, error) {
+	if name == "" {
+		return nil, errInvalidArgument
+	}
+
+	cache := store.rlock()
+	defer store.runlock()
+
+	if cache.iamUserPolicyMap[name].Policies == "" {
+		return []string{}, nil
+	}
+
+	policies := strings.Split(cache.iamUserPolicyMap[name].Policies, ",")
+
+	return policies, nil
+}
+
 func getUserIdentityPath(user string, userType IAMUserType) string {
 	var basePath string
 	switch userType {

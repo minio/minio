@@ -1583,6 +1583,100 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}
 }
 
+// GetPolicyAssosciationEntities - GET /minio/admin/v3/idp/builtin/entities?policy=xxx&user=xxx&group=xxx
+func (a adminAPIHandlers) GetPolicyAssosciationEntities(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetPolicyAssosciationEntities")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportIAMAction)
+	if objectAPI == nil {
+		return
+	}
+
+	r.ParseForm()
+	policies := r.Form["policy"]
+	users := r.Form["user"]
+	groups := r.Form["group"]
+
+	// Where final assosciation entities are stored.
+	entities := madmin.PolicyEntitiesResult{}
+
+	// Get policies attached to each specified user.
+	for _, user := range users {
+		policies, err := globalIAMSys.GetUserPolicies(user)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		entities.UserMappings = append(entities.UserMappings, madmin.UserPolicyEntities{User: user, Policies: policies})
+	}
+
+	// Get policies attached to each specified group.
+	for _, group := range groups {
+		policies, err := globalIAMSys.PolicyDBGet(group, true)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		entities.GroupMappings = append(entities.GroupMappings, madmin.GroupPolicyEntities{Group: group, Policies: policies})
+	}
+
+	if len(policies) > 0 {
+		// Getting entites attached to policies requires getting all users and groups, and their policies.
+		allUsers, err := globalIAMSys.ListUsers(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		allGroups, err := globalIAMSys.ListGroups(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Map policies to the users they are attached to
+		policyUserMap := make(map[string][]string)
+		for user := range allUsers {
+			userPolicies, err := globalIAMSys.GetUserPolicies(user)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, userPolicy := range userPolicies {
+				policyUserMap[userPolicy] = append(policyUserMap[userPolicy], user)
+			}
+		}
+		groupPolicyMap := make(map[string][]string)
+		for _, group := range allGroups {
+			groupPolicies, err := globalIAMSys.PolicyDBGet(group, true)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, groupPolicy := range groupPolicies {
+				groupPolicyMap[groupPolicy] = append(groupPolicyMap[groupPolicy], group)
+			}
+		}
+
+		// Add the policy mappings to the response.
+		for _, policy := range policies {
+			entities.PolicyMappings = append(entities.PolicyMappings, madmin.PolicyEntities{
+				Policy: policy,
+				Users:  policyUserMap[policy],
+				Groups: groupPolicyMap[policy],
+			})
+		}
+	}
+
+	if err := json.NewEncoder(w).Encode(entities); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
 const (
 	allPoliciesFile            = "policies.json"
 	allUsersFile               = "users.json"

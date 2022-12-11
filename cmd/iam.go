@@ -133,6 +133,15 @@ func (sys *IAMSys) LoadPolicy(ctx context.Context, objAPI ObjectLayer, policyNam
 	return sys.store.PolicyNotificationHandler(ctx, policyName)
 }
 
+// GetUserPolicies - get policies attached to a user.
+func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
+	if !sys.Initialized() {
+		return p, errServerNotInitialized
+	}
+
+	return sys.store.GetUserPolicies(name)
+}
+
 // LoadPolicyMapping - loads the mapped policy for a user or group
 // from storage into server memory.
 func (sys *IAMSys) LoadPolicyMapping(ctx context.Context, objAPI ObjectLayer, userOrGroup string, userType IAMUserType, isGroup bool) error {
