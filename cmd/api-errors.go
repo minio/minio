@@ -1942,12 +1942,12 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrPolicyAlreadyAttached: {
-		Code:           "PolicyAlreadyAttached",
+		Code:           "XMinioPolicyAlreadyAttached",
 		Description:    "The specified policy is already attached.",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrPolicyNotAttached: {
-		Code:           "PolicyNotAttached",
+		Code:           "XMinioPolicyNotAttached",
 		Description:    "The specified policy is not found.",
 		HTTPStatusCode: http.StatusNotFound,
 	},

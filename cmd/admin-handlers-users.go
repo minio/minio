@@ -1702,6 +1702,8 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	writeResponse(w, http.StatusCreated, nil, mimeNone)
 }
 
 // DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/detach
@@ -1767,6 +1769,9 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 				return
 			}
 		}
+
+		// Return successful JSON response
+		writeSuccessNoContent(w)
 	}
 
 	userType := regUser
