@@ -149,7 +149,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListCannedPolicies)))
 
 		// Builtin IAM policy associations
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/builtin/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetPolicyAssociationEntities)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/builtin/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListPolicyMappingEntities)))
 
 		// Remove policy IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveCannedPolicy))).Queries("name", "{name:.*}")

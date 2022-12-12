@@ -1583,98 +1583,46 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}
 }
 
-// GetPolicyAssociationEntities - GET /minio/admin/v3/idp/builtin/entities?policy=xxx&user=xxx&group=xxx
-func (a adminAPIHandlers) GetPolicyAssociationEntities(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetPolicyAssociationEntities")
+// ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/polciy-entities?policy=xxx&user=xxx&group=xxx
+func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListPolicyMappingEntities")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportIAMAction)
+	// Check authorization.
+	objectAPI, cred := validateAdminReq(ctx, w, r,
+		iampolicy.ListGroupsAdminAction, iampolicy.ListUsersAdminAction, iampolicy.ListUserPoliciesAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
-	r.ParseForm()
-	policies := r.Form["policy"]
-	users := r.Form["user"]
-	groups := r.Form["group"]
-
-	// Where final association entities are stored.
-	entities := madmin.PolicyEntitiesResult{}
-
-	// Get policies attached to each specified user.
-	for _, user := range users {
-		policies, err := globalIAMSys.GetUserPolicies(user)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		entities.UserMappings = append(entities.UserMappings, madmin.UserPolicyEntities{User: user, Policies: policies})
+	// Validate API arguments.
+	q := madmin.PolicyEntitiesQuery{
+		Users:  r.Form["user"],
+		Groups: r.Form["group"],
+		Policy: r.Form["policy"],
 	}
 
-	// Get policies attached to each specified group.
-	for _, group := range groups {
-		policies, err := globalIAMSys.PolicyDBGet(group, true)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		entities.GroupMappings = append(entities.GroupMappings, madmin.GroupPolicyEntities{Group: group, Policies: policies})
-	}
-
-	if len(policies) > 0 {
-		// Getting entites attached to policies requires getting all users and groups, and their policies.
-		allUsers, err := globalIAMSys.ListUsers(ctx)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		allGroups, err := globalIAMSys.ListGroups(ctx)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Map policies to the users they are attached to
-		policyUserMap := make(map[string][]string)
-		for user := range allUsers {
-			userPolicies, err := globalIAMSys.GetUserPolicies(user)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-				return
-			}
-			for _, userPolicy := range userPolicies {
-				policyUserMap[userPolicy] = append(policyUserMap[userPolicy], user)
-			}
-		}
-		groupPolicyMap := make(map[string][]string)
-		for _, group := range allGroups {
-			groupPolicies, err := globalIAMSys.PolicyDBGet(group, true)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-				return
-			}
-			for _, groupPolicy := range groupPolicies {
-				groupPolicyMap[groupPolicy] = append(groupPolicyMap[groupPolicy], group)
-			}
-		}
-
-		// Add the policy mappings to the response.
-		for _, policy := range policies {
-			entities.PolicyMappings = append(entities.PolicyMappings, madmin.PolicyEntities{
-				Policy: policy,
-				Users:  policyUserMap[policy],
-				Groups: groupPolicyMap[policy],
-			})
-		}
-	}
-
-	if err := json.NewEncoder(w).Encode(entities); err != nil {
+	// Query IAM
+	res, err := globalIAMSys.QueryPolicyEntities(r.Context(), q)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	// Encode result and send response.
+	data, err := json.Marshal(res)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	password := cred.SecretKey
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, econfigData)
 }
 
 const (
