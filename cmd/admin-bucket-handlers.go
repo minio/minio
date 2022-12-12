@@ -201,7 +201,18 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	if update {
 		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
-		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		var exists bool // true if arn exists
+		target.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		if exists && target.Arn != "" { // return pre-existing ARN
+			data, err := json.Marshal(target.Arn)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			// Write success response.
+			writeSuccessResponseJSON(w, data)
+			return
+		}
 	}
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)

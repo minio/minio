@@ -217,10 +217,13 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	// validate if target credentials are ok
 	exists, err := clnt.BucketExists(ctx, tgt.TargetBucket)
 	if err != nil {
-		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
+		switch minio.ToErrorResponse(err).Code {
+		case "NoSuchBucket":
 			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+		case "AccessDenied":
+			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, AccessKey: tgt.Credentials.AccessKey, Err: err}
 		}
-		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: err}
+		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, AccessKey: tgt.Credentials.AccessKey, Err: err}
 	}
 	if !exists {
 		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
@@ -231,7 +234,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil {
-			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: err}
+			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: err, AccessKey: tgt.Credentials.AccessKey}
 		}
 		if !vcfg.Enabled() {
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
@@ -470,20 +473,20 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 }
 
 // getRemoteARN gets existing ARN for an endpoint or generates a new one.
-func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget) string {
+func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget) (arn string, exists bool) {
 	if target == nil {
-		return ""
+		return
 	}
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
-		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL().String() == tgt.URL().String() {
-			return tgt.Arn
+		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL().String() == tgt.URL().String() && tgt.Credentials.AccessKey == target.Credentials.AccessKey {
+			return tgt.Arn, true
 		}
 	}
 	if !target.Type.IsValid() {
-		return ""
+		return
 	}
-	return generateARN(target)
+	return generateARN(target), false
 }
 
 // getRemoteARNForPeer returns the remote target for a peer site in site replication
