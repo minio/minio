@@ -126,6 +126,8 @@ func TestMain(m *testing.M) {
 // concurrency level for certain parallel tests.
 const testConcurrencyLevel = 10
 
+const iso8601TimeFormat = "2006-01-02T15:04:05.000Z"
+
 // Excerpts from @lsegal - https://github.com/aws/aws-sdk-js/issues/659#issuecomment-120477258
 //
 //	User-Agent:
