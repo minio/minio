@@ -374,8 +374,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		subSys = config.PolicyPluginSubSys
 		fallthrough
 	case config.PolicyPluginSubSys:
-		if ppargs, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-			NewHTTPTransport(), xhttp.DrainBody); err != nil {
+		if ppargs, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody); err != nil {
 			return err
 		} else if ppargs.URL == nil {
 			// Check if legacy opa is configured.

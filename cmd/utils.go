@@ -568,6 +568,15 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
+// GetDefaultConnSettings returns default HTTP connection settings.
+func GetDefaultConnSettings() xhttp.ConnSettings {
+	return xhttp.ConnSettings{
+		DNSCache:    globalDNSCache,
+		DialTimeout: rest.DefaultTimeout,
+		RootCAs:     globalRootCAs,
+	}
+}
+
 // NewInternodeHTTPTransport returns a transport for internode MinIO
 // connections.
 func NewInternodeHTTPTransport() func() http.RoundTripper {
