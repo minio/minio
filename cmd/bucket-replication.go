@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -738,12 +739,9 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		putOpts.Mode = rmode
 	}
 	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
-		rdate, err := time.Parse(iso8601TimeFormat, retainDateStr)
+		rdate, err := amztime.ISO8601Parse(retainDateStr)
 		if err != nil {
-			rdate, err = time.Parse(time.RFC3339, retainDateStr)
-			if err != nil {
-				return putOpts, err
-			}
+			return putOpts, err
 		}
 		putOpts.RetainUntilDate = rdate
 		// set retention timestamp in opts
