@@ -116,6 +116,11 @@ bucketRoot: ""
 
 # Number of drives attached to a node
 drivesPerNode: 1
+# Whether each drive on a node should be a member of a separate pool.
+# Setting this to true allows for easy expansion of the MinIO deployment by simply adding additional drives
+# without the need to add additional nodes. Note that when set to true, then the total number of pools is
+# effectively multiplied by drivesPerNode as there is a separate pool for each drive on a node.
+drivesInSeparatePools: false
 # Number of MinIO containers running
 replicas: 16
 # Number of expanded MinIO clusters

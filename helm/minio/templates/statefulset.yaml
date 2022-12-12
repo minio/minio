@@ -3,6 +3,7 @@
 {{ $nodeCount := .Values.replicas | int }}
 {{ $replicas := mul $poolCount $nodeCount }}
 {{ $drivesPerNode := .Values.drivesPerNode | int }}
+{{ $drivesInSeparatePools := .Values.drivesInSeparatePools | not | not }}
 {{ $scheme := "http" }}
 {{- if .Values.tls.enabled }}
 {{ $scheme = "https" }}
@@ -104,12 +105,33 @@ spec:
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
-          command: [ "/bin/sh",
-            "-ce",
-            "/usr/bin/docker-entrypoint.sh minio server {{- range $i := until $poolCount }}{{ $factor := mul $i $nodeCount }}{{ $endIndex := add $factor $nodeCount }}{{ $beginIndex := mul $i $nodeCount }}  {{ $scheme }}://{{ template `minio.fullname` $ }}-{{ `{` }}{{ $beginIndex }}...{{ sub $endIndex 1 }}{{ `}`}}.{{ template `minio.fullname` $ }}-svc.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain }}{{if (gt $drivesPerNode 1)}}{{ $bucketRoot }}-{{ `{` }}0...{{ sub $drivesPerNode 1 }}{{ `}` }}{{else}}{{ $bucketRoot }}{{end}}{{- end}} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template `minio.extraArgs` . }}" ]
+          command:
+            - /bin/sh
+            - -ce
+            - /usr/bin/docker-entrypoint.sh minio server
+              {{- $fullname := include `minio.fullname` . }}
+              {{- $serviceDomain := printf "%s-svc.%s.svc.%s" $fullname .Release.Namespace .Values.clusterDomain }}
+              {{- range $i := until $poolCount }}
+                {{- $beginIndex := mul $i $nodeCount }}
+                {{- $endIndex := add $beginIndex $nodeCount -1 }}
+                {{- $bucketUrlPrefix := printf "%s://%s-{%d...%d}.%s%s" $scheme $fullname $beginIndex $endIndex $serviceDomain $bucketRoot }}
+                {{- if $drivesInSeparatePools }}
+                  {{- range $j := until $drivesPerNode }}
+                    {{- printf "%s-%d" $bucketUrlPrefix $j | nindent 14 }}
+                  {{- end }}
+                {{- else }}
+                  {{- if gt $drivesPerNode 1 }}
+                    {{- printf "%s-{0...%d}" $bucketUrlPrefix (sub $drivesPerNode 1) | nindent 14 }}
+                  {{- else }}
+                    {{- $bucketUrlPrefix | nindent 14 }}
+                  {{- end }}
+                {{- end }}
+              {{- end }}
+              -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }}
+              {{ template `minio.extraArgs` . }}
           volumeMounts:
             {{- if $penabled }}
-            {{- if (gt $drivesPerNode 1) }}
+            {{- if or (gt $drivesPerNode 1) $drivesInSeparatePools }}
             {{- range $i := until $drivesPerNode }}
             - name: export-{{ $i }}
               mountPath: {{ $mountPath }}-{{ $i }}
@@ -222,7 +244,7 @@ spec:
         {{- end }}
 {{- if .Values.persistence.enabled }}
   volumeClaimTemplates:
-  {{- if gt $drivesPerNode 1 }}
+  {{- if or (gt $drivesPerNode 1) $drivesInSeparatePools }}
     {{- range $diskId := until $drivesPerNode}}
     - metadata:
         name: export-{{ $diskId }}
