@@ -2702,7 +2702,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		stream := estream.NewWriter(w)
 		defer stream.Close()
 
-		clusterKey, err := bytesToPublicKey(subnetAdminPublicKey)
+		clusterKey, err := bytesToPublicKey(getSubnetAdminPublicKey())
 		if err != nil {
 			logger.LogIf(ctx, stream.AddError(err.Error()))
 			return
@@ -2835,6 +2835,13 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 	sb.WriteString("\n")
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes()))
+}
+
+func getSubnetAdminPublicKey() []byte {
+	if globalIsCICD {
+		return subnetAdminPublicKeyDev
+	}
+	return subnetAdminPublicKey
 }
 
 func createHostAnonymizerForFSMode() map[string]string {
