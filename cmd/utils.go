@@ -38,7 +38,6 @@ import (
 	"runtime/trace"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/coreos/go-oidc"
@@ -60,6 +59,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/mcontext"
+	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
@@ -568,163 +568,73 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
-func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() http.RoundTripper {
-	// For more details about various values used here refer
-	// https://golang.org/pkg/net/http/#Transport documentation
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
-		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
-		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
-		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Minute, // Set conservative timeouts for MinIO internode.
-		TLSHandshakeTimeout:   15 * time.Second,
-		ExpectContinueTimeout: 15 * time.Second,
-		TLSClientConfig:       tlsConfig,
-		// Go net/http automatically unzip if content-type is
-		// gzip disable this feature, as we are always interested
-		// in raw stream.
-		DisableCompression: true,
-	}
-
-	// https://github.com/golang/go/issues/23559
-	// https://github.com/golang/go/issues/42534
-	// https://github.com/golang/go/issues/43989
-	// https://github.com/golang/go/issues/33425
-	// https://github.com/golang/go/issues/29246
-	// if tlsConfig != nil {
-	// 	trhttp2, _ := http2.ConfigureTransports(tr)
-	// 	if trhttp2 != nil {
-	// 		// ReadIdleTimeout is the timeout after which a health check using ping
-	// 		// frame will be carried out if no frame is received on the
-	// 		// connection. 5 minutes is sufficient time for any idle connection.
-	// 		trhttp2.ReadIdleTimeout = 5 * time.Minute
-	// 		// PingTimeout is the timeout after which the connection will be closed
-	// 		// if a response to Ping is not received.
-	// 		trhttp2.PingTimeout = dialTimeout
-	// 		// DisableCompression, if true, prevents the Transport from
-	// 		// requesting compression with an "Accept-Encoding: gzip"
-	// 		trhttp2.DisableCompression = true
-	// 	}
-	// }
-
-	return func() http.RoundTripper {
-		return tr
-	}
+// NewInternodeHTTPTransport returns a transport for internode MinIO
+// connections.
+func NewInternodeHTTPTransport() func() http.RoundTripper {
+	return xhttp.ConnSettings{
+		DNSCache:         globalDNSCache,
+		DialTimeout:      rest.DefaultTimeout,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphers(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		EnableHTTP2:      false,
+	}.NewInternodeHTTPTransport()
 }
 
-// Used by only proxied requests, specifically only supports HTTP/1.1
-func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
-	// For more details about various values used here refer
-	// https://golang.org/pkg/net/http/#Transport documentation
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
-		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
-		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
-		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Minute, // Set larger timeouts for proxied requests.
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
-		TLSClientConfig:       tlsConfig,
-		// Go net/http automatically unzip if content-type is
-		// gzip disable this feature, as we are always interested
-		// in raw stream.
-		DisableCompression: true,
-	}
-
-	return func() *http.Transport {
-		return tr
-	}
-}
-
-func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
-	// For more details about various values used here refer
-	// https://golang.org/pkg/net/http/#Transport documentation
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
-		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
-		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
-		IdleConnTimeout:       15 * time.Second,
-		ResponseHeaderTimeout: 3 * time.Minute,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
-		TLSClientConfig:       tlsConfig,
-		// Go net/http automatically unzip if content-type is
-		// gzip disable this feature, as we are always interested
-		// in raw stream.
-		DisableCompression: true,
-	}
-
-	// https://github.com/golang/go/issues/23559
-	// https://github.com/golang/go/issues/42534
-	// https://github.com/golang/go/issues/43989
-	// https://github.com/golang/go/issues/33425
-	// https://github.com/golang/go/issues/29246
-	// if tlsConfig != nil {
-	// 	trhttp2, _ := http2.ConfigureTransports(tr)
-	// 	if trhttp2 != nil {
-	// 		// ReadIdleTimeout is the timeout after which a health check using ping
-	// 		// frame will be carried out if no frame is received on the
-	// 		// connection. 5 minutes is sufficient time for any idle connection.
-	// 		trhttp2.ReadIdleTimeout = 5 * time.Minute
-	// 		// PingTimeout is the timeout after which the connection will be closed
-	// 		// if a response to Ping is not received.
-	// 		trhttp2.PingTimeout = dialTimeout
-	// 		// DisableCompression, if true, prevents the Transport from
-	// 		// requesting compression with an "Accept-Encoding: gzip"
-	// 		trhttp2.DisableCompression = true
-	// 	}
-	// }
-
-	return func() *http.Transport {
-		return tr
-	}
+// NewCustomHTTPProxyTransport is used only for proxied requests, specifically
+// only supports HTTP/1.1
+func NewCustomHTTPProxyTransport() func() *http.Transport {
+	return xhttp.ConnSettings{
+		DNSCache:         globalDNSCache,
+		DialTimeout:      rest.DefaultTimeout,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphers(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		EnableHTTP2:      false,
+	}.NewCustomHTTPProxyTransport()
 }
 
 // NewHTTPTransportWithClientCerts returns a new http configuration
 // used while communicating with the cloud backends.
 func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
-	transport := newHTTPTransport(1 * time.Minute)
+	s := xhttp.ConnSettings{
+		DNSCache:    globalDNSCache,
+		DialTimeout: 1 * time.Minute,
+		RootCAs:     globalRootCAs,
+		EnableHTTP2: false,
+	}
+
 	if clientCert != "" && clientKey != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		c, err := certs.NewManager(ctx, clientCert, clientKey, tls.LoadX509KeyPair)
+		transport, err := s.NewHTTPTransportWithClientCerts(ctx, clientCert, clientKey)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("failed to load client key and cert, please check your endpoint configuration: %s",
 				err.Error()))
 		}
-		if c != nil {
-			c.UpdateReloadDuration(10 * time.Second)
-			c.ReloadOnSignal(syscall.SIGHUP) // allow reloads upon SIGHUP
-			transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
-		}
+		return transport
 	}
-	return transport
+
+	return s.NewHTTPTransportWithTimeout(1 * time.Minute)
 }
 
 // NewHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
 func NewHTTPTransport() *http.Transport {
-	return newHTTPTransport(1 * time.Minute)
+	return NewHTTPTransportWithTimeout(1 * time.Minute)
 }
 
 // Default values for dial timeout
 const defaultDialTimeout = 5 * time.Second
 
-func newHTTPTransport(timeout time.Duration) *http.Transport {
-	tr := newCustomHTTPTransport(&tls.Config{
-		RootCAs:            globalRootCAs,
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	}, defaultDialTimeout)()
-
-	// Customize response header timeout
-	tr.ResponseHeaderTimeout = timeout
-	return tr
+// NewHTTPTransportWithTimeout allows setting a timeout.
+func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
+	return xhttp.ConnSettings{
+		DNSCache:    globalDNSCache,
+		DialTimeout: defaultDialTimeout,
+		RootCAs:     globalRootCAs,
+		EnableHTTP2: false,
+	}.NewHTTPTransportWithTimeout(timeout)
 }
 
 type dialContext func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -753,29 +663,11 @@ func newCustomDialContext() dialContext {
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport() func() *http.Transport {
-	// For more details about various values used here refer
-	// https://golang.org/pkg/net/http/#Transport documentation
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(),
-		MaxIdleConnsPerHost:   1024,
-		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
-		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
-		IdleConnTimeout:       15 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ExpectContinueTimeout: 5 * time.Second,
-		TLSClientConfig: &tls.Config{
-			RootCAs:            globalRootCAs,
-			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-		},
-		// Go net/http automatically unzip if content-type is
-		// gzip disable this feature, as we are always interested
-		// in raw stream.
-		DisableCompression: true,
-	}
-	return func() *http.Transport {
-		return tr
-	}
+	return xhttp.ConnSettings{
+		DialContext: newCustomDialContext(),
+		RootCAs:     globalRootCAs,
+		EnableHTTP2: false,
+	}.NewCustomHTTPProxyTransport()
 }
 
 // Load the json (typically from disk file).

@@ -66,7 +66,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -112,7 +111,7 @@ func TestMain(m *testing.M) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
+	globalInternodeTransport = NewInternodeHTTPTransport()()
 
 	initHelp()
 
