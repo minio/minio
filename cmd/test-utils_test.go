@@ -223,6 +223,31 @@ func prepareErasure16(ctx context.Context) (ObjectLayer, []string, error) {
 	return prepareErasure(ctx, 16)
 }
 
+func preparePanFS(ctx context.Context) (obj ObjectLayer, fs string, err error) {
+	fs = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+
+	obj, err = initPanFSObjects(fs)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// Initialize FS objects.
+func initPanFSObjects(fs string) (obj ObjectLayer, err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, err = NewPANFSObjectLayer(ctx, fs)
+	if err != nil {
+		return
+		// t.Fatal(err)
+	}
+	newTestConfig(globalMinioDefaultRegion, obj)
+	initAllSubsystems(GlobalContext)
+	return
+}
+
 // Initialize FS objects.
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
@@ -476,6 +501,13 @@ func resetGlobalIAMSys() {
 	globalIAMSys = nil
 }
 
+// reset gateway specific globals
+func resetGlobalGw() {
+	globalIsGateway = false
+	globalGatewayName = ""
+	globalPanFSDefaultBucketPath = ""
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -493,6 +525,8 @@ func resetTestGlobals() {
 	resetGlobalHealState()
 	// Reset globalIAMSys to `nil`
 	resetGlobalIAMSys()
+	// Reser gateway globals
+	resetGlobalGw()
 }
 
 // Configure the server for the test run.
@@ -1357,6 +1391,13 @@ func getBucketLocationURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
+// return URL For fetching panfs path of the bucket.
+func getBucketPanFSPathURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("panfs-path", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL For set/get lifecycle of the bucket.
 func getBucketLifecycleURL(endPoint, bucketName string) (ret string) {
 	queryValue := url.Values{}
@@ -1545,8 +1586,14 @@ func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 
+	opts := MakeBucketOptions{}
+
+	if _, ok := obj.(*PANFSObjects); ok {
+		opts.PanFSBucketPath = globalPanFSDefaultBucketPath
+	}
+
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, MakeBucketOptions{})
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, opts)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
@@ -1795,6 +1842,45 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	removeRoots(append(erasureDisks, fsDir))
 }
 
+// ExecPanfsObjectLayerAPITest - executes object layer API tests.
+// Creates PanFS ObjectLayer instance, registers the specified API end points and runs test for both the layers.
+func ExecPanFSObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+	// set globalIsGateway true and globalGatewayName to PANFS
+	globalIsGateway = true
+	globalGatewayName = PANFSBackendGateway
+
+	objLayer, fsDir, err := preparePanFS(ctx)
+	globalPanFSDefaultBucketPath = fsDir
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
+	}
+
+	bucketFS, fsAPIRouter, err := initAPIHandlerTest(ctx, objLayer, endpoints)
+	if err != nil {
+		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
+	}
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
+	credentials := globalActiveCred
+
+	// Executing the object layer tests for single node setup.
+	objAPITest(objLayer, "PanFSGw", bucketFS, fsAPIRouter, credentials, t)
+
+	// clean up the temporary test backend.
+	removeRoots([]string{fsDir})
+}
+
 // ExecExtendedObjectLayerTest will execute the tests with combinations of encrypted & compressed.
 // This can be used to test functionality when reading and writing data.
 func ExecExtendedObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
@@ -1988,6 +2074,9 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 		case "GetBucketLocation":
 			// Register GetBucketLocation handler.
 			bucket.Methods(http.MethodGet).HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+		case "GetBucketPanFSPath":
+			// Register GetBucketPanFSPath handler.
+			bucket.Methods(http.MethodGet).HandlerFunc(api.GetBucketPanFSPathHandler).Queries("panfs-path", "")
 		case "HeadBucket":
 			// Register HeadBucket handler.
 			bucket.Methods(http.MethodHead).HandlerFunc(api.HeadBucketHandler)

@@ -218,6 +218,154 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
+func TestGetBucketPanFSPathHandler(t *testing.T) {
+	ExecPanFSObjectLayerAPITest(t, testGetBucketPanFSPathHandler, []string{"GetBucketPanFSPath"})
+}
+
+func testGetBucketPanFSPathHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T,
+) {
+	// test cases with sample input and expected output.
+	testCases := []struct {
+		bucketName string
+		accessKey  string
+		secretKey  string
+		// expected Response.
+		expectedRespStatus int
+		panFSResponse      []byte
+		errorResponse      APIErrorResponse
+		shouldPass         bool
+	}{
+		// Test case - 1.
+		// Tests for authenticated request and proper response.
+		{
+			bucketName:         bucketName,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+			panFSResponse: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<PanFSPath>` + globalPanFSDefaultBucketPath + `</PanFSPath>`),
+			errorResponse: APIErrorResponse{},
+			shouldPass:    true,
+		},
+		// Test case - 2.
+		// Tests for signature mismatch error.
+		{
+			bucketName:         bucketName,
+			accessKey:          "abcd",
+			secretKey:          "abcd",
+			expectedRespStatus: http.StatusForbidden,
+			panFSResponse:      []byte(""),
+			errorResponse: APIErrorResponse{
+				Resource: SlashSeparator + bucketName + SlashSeparator,
+				Code:     "InvalidAccessKeyId",
+				Message:  "The Access Key Id you provided does not exist in our records.",
+			},
+			shouldPass: false,
+		},
+	}
+
+	for i, testCase := range testCases {
+		// if i != 1 {
+		// 	continue
+		// }
+		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+
+		// err := obj.MakeBucketWithLocation(GlobalContext, testCase.bucketName, MakeBucketOptions{})
+		// if err != nil {
+		// 	t.Fatal(err)
+		// }
+
+		// construct HTTP request for Get bucket panfs.
+		req, err := newTestSignedRequestV4(http.MethodGet, getBucketPanFSPathURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketPanFSPathHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+
+		if !bytes.Equal(testCase.panFSResponse, rec.Body.Bytes()) && testCase.shouldPass {
+			t.Errorf("Test %d: %s: Expected the response to be `%s`, but instead found `%s`", i+1, instanceType, string(testCase.panFSResponse), rec.Body.String())
+		}
+		errorResponse := APIErrorResponse{}
+		err = xml.Unmarshal(rec.Body.Bytes(), &errorResponse)
+		if err != nil && !testCase.shouldPass {
+			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, rec.Body.String())
+		}
+		if errorResponse.Resource != testCase.errorResponse.Resource {
+			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
+		}
+		if errorResponse.Message != testCase.errorResponse.Message {
+			t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Message, errorResponse.Message)
+		}
+		if errorResponse.Code != testCase.errorResponse.Code {
+			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
+		}
+
+		// Verify response of the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2(http.MethodGet, getBucketPanFSPathURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+		}
+
+		errorResponse = APIErrorResponse{}
+		err = xml.Unmarshal(recV2.Body.Bytes(), &errorResponse)
+		if err != nil && !testCase.shouldPass {
+			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, recV2.Body.String())
+		}
+		if errorResponse.Resource != testCase.errorResponse.Resource {
+			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
+		}
+		if errorResponse.Message != testCase.errorResponse.Message {
+			t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Message, errorResponse.Message)
+		}
+		if errorResponse.Code != testCase.errorResponse.Code {
+			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
+		}
+
+	}
+	/**
+	// Test for Anonymous/unsigned http request.
+	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make any difference.
+	anonReq, err := newTestRequest(http.MethodGet, getBucketPanFSPathURL("", bucketName), 0, nil)
+	if err != nil {
+		t.Fatalf("MinIO %s: Failed to create an anonymous request.", instanceType)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, obj, "TestGetBucketPanFSPathHandler", bucketName, "", instanceType, apiRouter, anonReq, getAnonReadOnlyBucketPolicy(bucketName))
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilReq, err := newTestRequest(http.MethodGet, getBucketPanFSPathURL("", nilBucket), 0, nil)
+	if err != nil {
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// Executes the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)*/
+}
+
 // Wrapper for calling HeadBucket HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestHeadBucketHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testHeadBucketHandler, []string{"HeadBucket"})
