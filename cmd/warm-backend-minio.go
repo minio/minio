@@ -42,7 +42,7 @@ func newWarmBackendMinIO(conf madmin.TierMinIO) (*warmBackendMinIO, error) {
 	creds := credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
 
 	getRemoteTierTargetInstanceTransportOnce.Do(func() {
-		getRemoteTierTargetInstanceTransport = newHTTPTransport(10 * time.Minute)
+		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
 	})
 	opts := &minio.Options{
 		Creds:     creds,

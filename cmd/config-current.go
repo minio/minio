@@ -551,7 +551,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 
 		// Initialize remote instance transport once.
 		getRemoteInstanceTransportOnce.Do(func() {
-			getRemoteInstanceTransport = newHTTPTransport(apiConfig.RemoteTransportDeadline)
+			getRemoteInstanceTransport = NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline)
 		})
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
