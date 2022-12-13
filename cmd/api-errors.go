@@ -398,7 +398,7 @@ const (
 
 	ErrInvalidChecksum
 
-	// PanFS Gateway specifi errors
+	// PanFS Gateway specific errors
 	ErrPanFSBucketPahtNotFound
 )
 
