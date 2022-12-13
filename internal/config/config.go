@@ -1076,7 +1076,7 @@ func getEnvVarName(subSys, target, param string) string {
 		Default, target)
 }
 
-var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys, IdentityLDAPSubSys)
+var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys, IdentityLDAPSubSys, PolicyPluginSubSys)
 
 // ValueSource represents the source of a config parameter value.
 type ValueSource uint8
