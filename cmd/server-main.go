@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -466,8 +466,23 @@ func getServerListenAddrs() []string {
 			addrs.Add(net.JoinHostPort(ip.String(), globalMinioPort))
 		}
 	}
-	// Add the interface specified by the user
-	addrs.Add(globalMinioAddr)
+	host, _ := mustSplitHostPort(globalMinioAddr)
+	if host != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		haddrs, err := globalDNSCache.LookupHost(ctx, host)
+		if err == nil {
+			for _, addr := range haddrs {
+				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
+			}
+		} else {
+			// Unable to lookup host in 2-secs, let it fail later anyways.
+			addrs.Add(globalMinioAddr)
+		}
+	} else {
+		addrs.Add(globalMinioAddr)
+	}
 	return addrs.ToSlice()
 }
 
