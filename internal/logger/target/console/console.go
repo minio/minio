@@ -133,7 +133,7 @@ func (c *Target) Send(e interface{}, logKind string) error {
 		tagString = "\n       " + tagString
 	}
 
-	msg := color.FgRed(color.Bold(entry.Trace.Message))
+	msg := color.RedBold(entry.Trace.Message)
 	output := fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
 		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
