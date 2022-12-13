@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -1658,6 +1659,267 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			UserType:    int(userType),
 			IsGroup:     isGroup,
 			Policy:      policyName,
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
+// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/attach
+func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AttachPolicyBuiltin")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	cred, _, _, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+	password := cred.SecretKey
+
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	var par madmin.PolicyAssociationReq
+	if err = json.Unmarshal(reqBytes, &par); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err = par.IsValid(); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	userOrGroup := par.User
+	isGroup := false
+
+	if userOrGroup == "" {
+		userOrGroup = par.Group
+		isGroup = true
+	}
+
+	if isGroup {
+		_, err := globalIAMSys.GetGroupDescription(userOrGroup)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	} else {
+		ok, _, err := globalIAMSys.IsTempUser(userOrGroup)
+		if err != nil && err != errNoSuchUser {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
+
+		// Validate that user exists.
+		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
+			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
+			if !ok {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+				return
+			}
+		}
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	var existingPolicies []string
+	if isGroup {
+		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
+	} else {
+		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	policiesToAttach := par.Policies
+
+	// Check if policy is already attached to user.
+	for _, p := range policiesToAttach {
+		if _, ok := policyMap[p]; ok {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
+			return
+		}
+	}
+
+	existingPolicies = append(existingPolicies, policiesToAttach...)
+	newPolicies := strings.Join(existingPolicies, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: userOrGroup,
+			UserType:    int(userType),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(policiesToAttach, ","),
+		},
+		UpdatedAt: updatedAt,
+	}); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeResponse(w, http.StatusCreated, nil, mimeNone)
+}
+
+// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/detach
+func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DetachPolicyBuiltin")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	cred, _, _, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+	password := cred.SecretKey
+
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	var par madmin.PolicyAssociationReq
+	if err = json.Unmarshal(reqBytes, &par); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err = par.IsValid(); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	userOrGroup := par.User
+	isGroup := false
+
+	if userOrGroup == "" {
+		userOrGroup = par.Group
+		isGroup = true
+	}
+
+	if isGroup {
+		_, err := globalIAMSys.GetGroupDescription(userOrGroup)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	} else {
+		ok, _, err := globalIAMSys.IsTempUser(userOrGroup)
+		if err != nil && err != errNoSuchUser {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
+
+		// Validate that user exists.
+		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
+			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
+			if !ok {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+				return
+			}
+		}
+
+		// Return successful JSON response
+		writeSuccessNoContent(w)
+	}
+
+	userType := regUser
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
+		userType = stsUser
+	}
+
+	var existingPolicies []string
+	if isGroup {
+		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
+	} else {
+		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string]bool)
+	for _, p := range existingPolicies {
+		policyMap[p] = true
+	}
+
+	policiesToDetach := par.Policies
+
+	// Check if policy is already attached to user.
+	for _, p := range policiesToDetach {
+		if _, ok := policyMap[p]; ok {
+			delete(policyMap, p)
+		} else {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyNotAttached), r.URL)
+			return
+		}
+	}
+
+	newPoliciesSl := []string{}
+	for p := range policyMap {
+		newPoliciesSl = append(newPoliciesSl, p)
+	}
+
+	newPolicies := strings.Join(newPoliciesSl, ",")
+
+	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: userOrGroup,
+			UserType:    int(userType),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(policiesToDetach, ","),
 		},
 		UpdatedAt: updatedAt,
 	}); err != nil {

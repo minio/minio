@@ -857,6 +857,15 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 	return sys.store.GetUserInfo(name)
 }
 
+// GetUserPolicies - get policies attached to a user.
+func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
+	if !sys.Initialized() {
+		return p, errServerNotInitialized
+	}
+
+	return sys.store.GetUserPolicies(name)
+}
+
 // SetUserStatus - sets current user status, supports disabled or enabled.
 func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status madmin.AccountStatus) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
