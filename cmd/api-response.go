@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -38,12 +39,10 @@ import (
 )
 
 const (
-	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
-	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
-	maxDeleteList     = 1000                       // Limit number of objects deleted in a delete call.
-	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
-	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
+	maxObjectList  = 1000  // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxDeleteList  = 1000  // Limit number of objects deleted in a delete call.
+	maxUploadsList = 10000 // Limit number of uploads in a listUploadsResponse.
+	maxPartsList   = 10000 // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -482,7 +481,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	for _, bucket := range buckets {
 		listbuckets = append(listbuckets, Bucket{
 			Name:         bucket.Name,
-			CreationDate: bucket.Created.UTC().Format(iso8601TimeFormat),
+			CreationDate: amztime.ISO8601Format(bucket.Created.UTC()),
 		})
 	}
 
@@ -508,7 +507,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 		}
 		content := ObjectVersion{}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
+		content.LastModified = amztime.ISO8601Format(object.ModTime.UTC())
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -566,7 +565,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 			continue
 		}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
+		content.LastModified = amztime.ISO8601Format(object.ModTime.UTC())
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -615,7 +614,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			continue
 		}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
+		content.LastModified = amztime.ISO8601Format(object.ModTime.UTC())
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -678,7 +677,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.UTC().Format(iso8601TimeFormat),
+		LastModified: amztime.ISO8601Format(lastModified.UTC()),
 	}
 }
 
@@ -686,7 +685,7 @@ func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectR
 func generateCopyObjectPartResponse(etag string, lastModified time.Time) CopyObjectPartResponse {
 	return CopyObjectPartResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.UTC().Format(iso8601TimeFormat),
+		LastModified: amztime.ISO8601Format(lastModified.UTC()),
 	}
 }
 
@@ -746,7 +745,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.UTC().Format(iso8601TimeFormat)
+		newPart.LastModified = amztime.ISO8601Format(part.LastModified.UTC())
 		newPart.ChecksumCRC32 = part.ChecksumCRC32
 		newPart.ChecksumCRC32C = part.ChecksumCRC32C
 		newPart.ChecksumSHA1 = part.ChecksumSHA1
@@ -780,7 +779,7 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = s3EncodeName(upload.Object, encodingType)
-		newUpload.Initiated = upload.Initiated.UTC().Format(iso8601TimeFormat)
+		newUpload.Initiated = amztime.ISO8601Format(upload.Initiated.UTC())
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse

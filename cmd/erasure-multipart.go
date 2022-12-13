@@ -473,24 +473,6 @@ func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObjec
 	return partInfo, nil
 }
 
-func undoRenamePart(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, errs []error) {
-	// Undo rename object on disks where RenameFile succeeded.
-	g := errgroup.WithNErrs(len(disks))
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				_ = disks[index].RenameFile(context.TODO(), dstBucket, dstEntry, srcBucket, srcEntry)
-			}
-			return nil
-		}, index)
-	}
-	g.Wait()
-}
-
 // renamePart - renames multipart part to its relevant location under uploadID.
 func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
@@ -509,15 +491,13 @@ func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, ds
 	// Wait for all renames to finish.
 	errs := g.Wait()
 
+	// Do not need to undo partial successful operation since those will be cleaned up
+	// in 24hrs via multipart cleaner, never rename() back to `.minio.sys/tmp` as there
+	// is no way to clean them.
+
 	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
-	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
-		// Undo all the partial rename operations.
-		undoRenamePart(disks, srcBucket, srcEntry, dstBucket, dstEntry, errs)
-	}
-
-	return evalDisks(disks, errs), err
+	return evalDisks(disks, errs), reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 }
 
 // writeAllDisks - writes 'b' to all provided disks.

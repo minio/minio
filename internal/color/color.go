@@ -38,7 +38,14 @@ var (
 		return fmt.Sprintf
 	}()
 
-	RedBold = func() func(format string, a ...interface{}) string {
+	RedBold = func() func(a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgRed, color.Bold).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
+
+	RedBoldf = func() func(format string, a ...interface{}) string {
 		if IsTerminal() {
 			return color.New(color.FgRed, color.Bold).SprintfFunc()
 		}
