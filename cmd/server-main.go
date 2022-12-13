@@ -541,7 +541,7 @@ func serverMain(ctx *cli.Context) {
 	maxProcs := runtime.GOMAXPROCS(0)
 	cpuProcs := runtime.NumCPU()
 	if maxProcs < cpuProcs {
-		logger.Info(color.RedBold("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
+		logger.Info(color.RedBoldf("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	// Configure server.
