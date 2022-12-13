@@ -204,11 +204,11 @@ func (api objectAPIHandlers) GetBucketPanFSPathHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	// TODO: update policy check
-	// if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketLocationAction, bucket, ""); s3Error != ErrNone {
-	// 	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-	// 	return
-	// }
+	// Use GetBucketLocation policy at the moment
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketLocationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
 	bi, err := getBucketInfo(ctx, bucket, BucketOptions{})
