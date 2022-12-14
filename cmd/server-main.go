@@ -374,6 +374,10 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// do not retry to avoid high contention on startup.
 	lockTimeout.retryInterval = -1
 
+	// Do an initial random sleep to avoid stampeding herd of initial
+	// lock request. This will spread locks requests over 1 second.
+	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
+
 	for {
 		select {
 		case <-ctx.Done():
