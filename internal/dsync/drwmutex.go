@@ -60,7 +60,7 @@ const (
 	drwMutexRefreshInterval = 10 * time.Second
 
 	// maximum time to sleep before retrying a failed blocking lock()
-	lockRetryInterval = 50 * time.Millisecond
+	lockRetryInterval = 100 * time.Millisecond
 
 	drwMutexInfinite = 1<<63 - 1
 )
@@ -239,8 +239,11 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 			}
 
 			lockRetryInterval := dm.lockRetryInterval
-			if opts.RetryInterval > 0 {
+			if opts.RetryInterval != 0 {
 				lockRetryInterval = opts.RetryInterval
+			}
+			if lockRetryInterval < 0 {
+				return false
 			}
 			time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 		}

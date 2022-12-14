@@ -371,6 +371,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
+	// do not retry to avoid high contention on startup.
+	lockTimeout.retryInterval = -1
 
 	for {
 		select {
@@ -393,7 +395,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 
-			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+			// Sleep 0 -> 2 seconds to average 1 second retry interval.
+			time.Sleep(time.Duration(r.Float64() * 2 * float64(time.Second)))
 			continue
 		}
 
