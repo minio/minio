@@ -195,6 +195,8 @@ const (
 	ErrBucketTaggingNotFound
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -1938,6 +1940,16 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyAlreadyAttached: {
+		Code:           "XMinioPolicyAlreadyAttached",
+		Description:    "The specified policy is already attached.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPolicyNotAttached: {
+		Code:           "XMinioPolicyNotAttached",
+		Description:    "The specified policy is not found.",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	// Add your error structure here.
 }

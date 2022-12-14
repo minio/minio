@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -42,10 +41,8 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/fips"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
 )
@@ -236,19 +233,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
-	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs:            globalRootCAs,
-		CipherSuites:       fips.TLSCiphers(),
-		CurvePreferences:   fips.TLSCurveIDs(),
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	}, rest.DefaultTimeout)()
+	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
-	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs:            globalRootCAs,
-		CipherSuites:       fips.TLSCiphers(),
-		CurvePreferences:   fips.TLSCurveIDs(),
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	}, rest.DefaultTimeout)()
+	globalInternodeTransport = NewInternodeHTTPTransport()()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -466,8 +453,23 @@ func getServerListenAddrs() []string {
 			addrs.Add(net.JoinHostPort(ip.String(), globalMinioPort))
 		}
 	}
-	// Add the interface specified by the user
-	addrs.Add(globalMinioAddr)
+	host, _ := mustSplitHostPort(globalMinioAddr)
+	if host != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		haddrs, err := globalDNSCache.LookupHost(ctx, host)
+		if err == nil {
+			for _, addr := range haddrs {
+				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
+			}
+		} else {
+			// Unable to lookup host in 2-secs, let it fail later anyways.
+			addrs.Add(globalMinioAddr)
+		}
+	} else {
+		addrs.Add(globalMinioAddr)
+	}
 	return addrs.ToSlice()
 }
 
@@ -539,7 +541,7 @@ func serverMain(ctx *cli.Context) {
 	maxProcs := runtime.GOMAXPROCS(0)
 	cpuProcs := runtime.NumCPU()
 	if maxProcs < cpuProcs {
-		logger.Info(color.RedBold("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
+		logger.Info(color.RedBoldf("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	// Configure server.

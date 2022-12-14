@@ -1552,6 +1552,23 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 	}, nil
 }
 
+// GetUserPolicies - returns the policies attached to a user.
+func (store *IAMStoreSys) GetUserPolicies(name string) ([]string, error) {
+	if name == "" {
+		return nil, errInvalidArgument
+	}
+
+	cache := store.rlock()
+	defer store.runlock()
+
+	if cache.iamUserPolicyMap[name].Policies == "" {
+		return []string{}, nil
+	}
+
+	policies := cache.iamUserPolicyMap[name].toSlice()
+	return policies, nil
+}
+
 // PolicyMappingNotificationHandler - handles updating a policy mapping from storage.
 func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, userOrGroup string, isGroup bool, userType IAMUserType) error {
 	if userOrGroup == "" {
