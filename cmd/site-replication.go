@@ -852,21 +852,24 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				Region:          "",
 				ReplicationSync: false,
 			}
-			bucketTarget.Arn = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget)
-			err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, false)
-			if err != nil {
-				return c.annotatePeerErr(peer.Name, "Bucket target creation error", err)
-			}
-			targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
-			if err != nil {
-				return err
-			}
-			tgtBytes, err := json.Marshal(&targets)
-			if err != nil {
-				return err
-			}
-			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
-				return err
+			var exists bool // true if ARN already exists
+			bucketTarget.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget)
+			if !exists { // persist newly generated ARN to targets and metadata on disk
+				err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, false)
+				if err != nil {
+					return c.annotatePeerErr(peer.Name, "Bucket target creation error", err)
+				}
+				targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+				if err != nil {
+					return err
+				}
+				tgtBytes, err := json.Marshal(&targets)
+				if err != nil {
+					return err
+				}
+				if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+					return err
+				}
 			}
 			targetARN = bucketTarget.Arn
 		}
