@@ -134,7 +134,7 @@ func init() {
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
-		RoundTripper: newHTTPTransport(1 * time.Hour),
+		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
 		Logger: func(err error) {
 			if err != nil && !errors.Is(err, context.Canceled) {
 				logger.LogIf(GlobalContext, err)

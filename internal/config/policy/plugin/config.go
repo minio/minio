@@ -22,20 +22,23 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	xhttp "github.com/minio/minio/internal/http"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 )
 
 // Authorization Plugin config and env variables
 const (
-	URL       = "url"
-	AuthToken = "auth_token"
+	URL         = "url"
+	AuthToken   = "auth_token"
+	EnableHTTP2 = "enable_http2"
 
-	EnvPolicyPluginURL       = "MINIO_POLICY_PLUGIN_URL"
-	EnvPolicyPluginAuthToken = "MINIO_POLICY_PLUGIN_AUTH_TOKEN"
+	EnvPolicyPluginURL         = "MINIO_POLICY_PLUGIN_URL"
+	EnvPolicyPluginAuthToken   = "MINIO_POLICY_PLUGIN_AUTH_TOKEN"
+	EnvPolicyPluginEnableHTTP2 = "MINIO_POLICY_PLUGIN_ENABLE_HTTP2"
 )
 
 // DefaultKVS - default config for Authz plugin config
@@ -49,10 +52,14 @@ var (
 			Key:   AuthToken,
 			Value: "",
 		},
+		config.KV{
+			Key:   EnableHTTP2,
+			Value: "off",
+		},
 	}
 )
 
-// Args opa general purpose policy engine configuration.
+// Args for general purpose policy engine configuration.
 type Args struct {
 	URL         *xnet.URL             `json:"url"`
 	AuthToken   string                `json:"authToken"`
@@ -114,27 +121,43 @@ func Enabled(kvs config.KVS) bool {
 }
 
 // LookupConfig lookup AuthZPlugin from config, override with any ENVs.
-func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (Args, error) {
+func LookupConfig(s config.Config, httpSettings xhttp.ConnSettings, closeRespFn func(io.ReadCloser)) (Args, error) {
 	args := Args{}
 
-	if err := config.CheckValidKeys(config.PolicyPluginSubSys, kv, DefaultKVS); err != nil {
+	if err := s.CheckValidKeys(config.PolicyPluginSubSys, nil); err != nil {
 		return args, err
 	}
 
-	pluginURL := env.Get(EnvPolicyPluginURL, kv.Get(URL))
+	getCfg := func(cfgParam string) string {
+		// As parameters are already validated, we skip checking
+		// if the config param was found.
+		val, _ := s.ResolveConfigParam(config.PolicyPluginSubSys, config.Default, cfgParam)
+		return val
+	}
+
+	pluginURL := getCfg(URL)
 	if pluginURL == "" {
 		return args, nil
 	}
-
-	authToken := env.Get(EnvPolicyPluginAuthToken, kv.Get(AuthToken))
 
 	u, err := xnet.ParseHTTPURL(pluginURL)
 	if err != nil {
 		return args, err
 	}
+
+	enableHTTP2 := false
+	if v := getCfg(EnableHTTP2); v != "" {
+		enableHTTP2, err = config.ParseBool(v)
+		if err != nil {
+			return args, err
+		}
+	}
+	httpSettings.EnableHTTP2 = enableHTTP2
+	transport := httpSettings.NewHTTPTransportWithTimeout(time.Minute)
+
 	args = Args{
 		URL:         u,
-		AuthToken:   authToken,
+		AuthToken:   getCfg(AuthToken),
 		Transport:   transport,
 		CloseRespFn: closeRespFn,
 	}

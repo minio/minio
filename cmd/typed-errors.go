@@ -80,6 +80,10 @@ var errNoSuchAccount = errors.New("Specified account does not exist")
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")
 
+// error returned in IAM subsystem when a policy attach/detach request has no
+// net effect, i.e. it is already applied.
+var errNoPolicyToAttachOrDetach = errors.New("Specified policy update has no net effect")
+
 // error returned in IAM subsystem when a non-empty group needs to be
 // deleted.
 var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove it")

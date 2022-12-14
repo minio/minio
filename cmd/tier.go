@@ -22,8 +22,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"net/http"
 	"path"
 	"strings"
 	"sync"
@@ -37,10 +37,29 @@ import (
 //go:generate msgp -file $GOFILE
 
 var (
-	errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
-	errTierBackendInUse      = errors.New("remote tier backend already in use")
-	errTierTypeUnsupported   = errors.New("unsupported tier type")
-	errTierBackendNotEmpty   = errors.New("remote tier not empty")
+	errTierMissingCredentials = AdminError{
+		Code:       "XMinioAdminTierMissingCredentials",
+		Message:    "Specified remote credentials are empty",
+		StatusCode: http.StatusForbidden,
+	}
+
+	errTierBackendInUse = AdminError{
+		Code:       "XMinioAdminTierBackendInUse",
+		Message:    "Specified remote tier is already in use",
+		StatusCode: http.StatusConflict,
+	}
+
+	errTierTypeUnsupported = AdminError{
+		Code:       "XMinioAdminTierTypeUnsupported",
+		Message:    "Specified tier type is unsupported",
+		StatusCode: http.StatusBadRequest,
+	}
+
+	errTierBackendNotEmpty = AdminError{
+		Code:       "XMinioAdminTierBackendNotEmpty",
+		Message:    "Specified remote backend is not empty",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 const (
@@ -185,7 +204,7 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 	switch tierType {
 	case madmin.S3:
 		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
-			return errTierInsufficientCreds
+			return errTierMissingCredentials
 		}
 		switch {
 		case creds.AWSRole:
@@ -196,18 +215,18 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 		}
 	case madmin.Azure:
 		if creds.SecretKey == "" {
-			return errTierInsufficientCreds
+			return errTierMissingCredentials
 		}
 		cfg.Azure.AccountKey = creds.SecretKey
 
 	case madmin.GCS:
 		if creds.CredsJSON == nil {
-			return errTierInsufficientCreds
+			return errTierMissingCredentials
 		}
 		cfg.GCS.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
 	case madmin.MinIO:
 		if creds.AccessKey == "" || creds.SecretKey == "" {
-			return errTierInsufficientCreds
+			return errTierMissingCredentials
 		}
 		cfg.MinIO.AccessKey = creds.AccessKey
 		cfg.MinIO.SecretKey = creds.SecretKey

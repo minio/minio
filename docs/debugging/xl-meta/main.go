@@ -31,9 +31,9 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
+	"github.com/klauspost/filepathx"
 	"github.com/minio/cli"
 	"github.com/tinylib/msgp/msgp"
-	"github.com/yargevad/filepathx"
 )
 
 func main() {

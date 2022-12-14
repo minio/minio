@@ -233,8 +233,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
 
-	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-		NewHTTPTransport(), xhttp.DrainBody)
+	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err))
 	}
@@ -857,6 +856,15 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 	return sys.store.GetUserInfo(name)
 }
 
+// GetUserPolicies - get policies attached to a user.
+func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
+	if !sys.Initialized() {
+		return p, errServerNotInitialized
+	}
+
+	return sys.store.GetUserPolicies(name)
+}
+
 // SetUserStatus - sets current user status, supports disabled or enabled.
 func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status madmin.AccountStatus) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
@@ -1034,7 +1042,7 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 }
 
 func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
-	sa, embeddedPolicy, err := sys.getAccountWithEmbeddedPolicy(ctx, accessKey)
+	sa, jwtClaims, err := sys.getAccountWithClaims(ctx, accessKey)
 	if err != nil {
 		if err == errNoSuchAccount {
 			return UserIdentity{}, nil, errNoSuchServiceAccount
@@ -1045,11 +1053,38 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (Use
 		return UserIdentity{}, nil, errNoSuchServiceAccount
 	}
 
+	var embeddedPolicy *iampolicy.Policy
+
+	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
+	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
+	if ptok && spok && pt == embeddedPolicyType {
+		policyBytes, err := base64.StdEncoding.DecodeString(sp)
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+	}
+
 	return sa, embeddedPolicy, nil
 }
 
+// GetTemporaryAccount - wrapper method to get information about a temporary account
+func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
+	tmpAcc, embeddedPolicy, err := sys.getTempAccount(ctx, accessKey)
+	if err != nil {
+		return auth.Credentials{}, nil, err
+	}
+	// Hide secret & session keys
+	tmpAcc.Credentials.SecretKey = ""
+	tmpAcc.Credentials.SessionToken = ""
+	return tmpAcc.Credentials, embeddedPolicy, nil
+}
+
 func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
-	tmpAcc, embeddedPolicy, err := sys.getAccountWithEmbeddedPolicy(ctx, accessKey)
+	tmpAcc, claims, err := sys.getAccountWithClaims(ctx, accessKey)
 	if err != nil {
 		if err == errNoSuchAccount {
 			return UserIdentity{}, nil, errNoSuchTempAccount
@@ -1060,43 +1095,43 @@ func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserId
 		return UserIdentity{}, nil, errNoSuchTempAccount
 	}
 
-	return tmpAcc, embeddedPolicy, nil
-}
-
-// getAccountWithEmbeddedPolicy - gets information about an account with its embedded policy if found
-func (sys *IAMSys) getAccountWithEmbeddedPolicy(ctx context.Context, accessKey string) (u UserIdentity, p *iampolicy.Policy, err error) {
-	if !sys.Initialized() {
-		return u, nil, errServerNotInitialized
-	}
-
-	sa, ok := sys.store.GetUser(accessKey)
-	if !ok {
-		return u, nil, errNoSuchAccount
-	}
-
 	var embeddedPolicy *iampolicy.Policy
 
-	jwtClaims, err := auth.ExtractClaims(sa.Credentials.SessionToken, sa.Credentials.SecretKey)
-	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(sa.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return u, nil, err
-		}
-	}
-	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
-	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
-	if ptok && spok && pt == embeddedPolicyType {
+	sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
+	if spok {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
-			return u, nil, err
+			return UserIdentity{}, nil, err
 		}
 		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
 		if err != nil {
-			return u, nil, err
+			return UserIdentity{}, nil, err
 		}
 	}
 
-	return sa, embeddedPolicy, nil
+	return tmpAcc, embeddedPolicy, nil
+}
+
+// getAccountWithClaims - gets information about an account with claims
+func (sys *IAMSys) getAccountWithClaims(ctx context.Context, accessKey string) (UserIdentity, *jwt.MapClaims, error) {
+	if !sys.Initialized() {
+		return UserIdentity{}, nil, errServerNotInitialized
+	}
+
+	acc, ok := sys.store.GetUser(accessKey)
+	if !ok {
+		return UserIdentity{}, nil, errNoSuchAccount
+	}
+
+	jwtClaims, err := auth.ExtractClaims(acc.Credentials.SessionToken, acc.Credentials.SecretKey)
+	if err != nil {
+		jwtClaims, err = auth.ExtractClaims(acc.Credentials.SessionToken, globalActiveCred.SecretKey)
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+	}
+
+	return acc, jwtClaims, nil
 }
 
 // GetClaimsForSvcAcc - gets the claims associated with the service account.
@@ -1495,6 +1530,58 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	}
 
 	return updatedAt, nil
+}
+
+// PolicyDBUpdateLDAP - adds or removes policies from a user or a group verified
+// to be in the LDAP directory.
+func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
+	r madmin.PolicyAssociationReq,
+) (updatedAt time.Time, addedOrRemoved []string, err error) {
+	if !sys.Initialized() {
+		return updatedAt, nil, errServerNotInitialized
+	}
+
+	var dn string
+	var isGroup bool
+	if r.User != "" {
+		dn, err = globalLDAPConfig.DoesUsernameExist(r.User)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		}
+		if dn == "" {
+			return updatedAt, nil, errNoSuchUser
+		}
+		isGroup = false
+	} else {
+		if exists, err := globalLDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		} else if !exists {
+			return updatedAt, nil, errNoSuchGroup
+		}
+		dn = r.Group
+		isGroup = true
+	}
+
+	userType := stsUser
+	updatedAt, addedOrRemoved, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
+		userType, r.Policies, isAttach)
+	if err != nil {
+		return updatedAt, nil, err
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(dn, userType, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return updatedAt, addedOrRemoved, nil
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is
