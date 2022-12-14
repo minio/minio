@@ -3155,7 +3155,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 	w.WriteHeader(statusCode)
 	// Notify object restore started via a POST request.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectRestorePostInitiated,
+		EventName:  event.ObjectRestorePost,
 		BucketName: bucket,
 		Object:     objInfo,
 		ReqParams:  extractReqParams(r),
@@ -3224,7 +3224,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 
 		// Notify object restore completed via a POST request.
 		sendEvent(eventArgs{
-			EventName:  event.ObjectRestorePostCompleted,
+			EventName:  event.ObjectRestoreCompleted,
 			BucketName: bucket,
 			Object:     objInfo,
 			ReqParams:  extractReqParams(r),
