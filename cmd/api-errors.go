@@ -177,7 +177,6 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrBucketAlreadyExists
-	ErrTooManyBuckets
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
@@ -196,6 +195,8 @@ const (
 	ErrBucketTaggingNotFound
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -266,6 +267,7 @@ const (
 	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
+	ErrAdminPolicyChangeAlreadyApplied
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
@@ -693,11 +695,6 @@ var errorCodes = errorCodeMap{
 	ErrSignatureVersionNotSupported: {
 		Code:           "InvalidRequest",
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrTooManyBuckets: {
-		Code:           "TooManyBuckets",
-		Description:    "You have attempted to create more buckets than allowed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketNotEmpty: {
@@ -1251,6 +1248,12 @@ var errorCodes = errorCodeMap{
 		Description:    "The canned policy does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminPolicyChangeAlreadyApplied: {
+		Code:           "XMinioAdminPolicyChangeAlreadyApplied",
+		Description:    "The specified policy change is already in effect.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	ErrAdminInvalidArgument: {
 		Code:           "XMinioAdminInvalidArgument",
 		Description:    "Invalid arguments specified.",
@@ -1938,6 +1941,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPolicyAlreadyAttached: {
+		Code:           "XMinioPolicyAlreadyAttached",
+		Description:    "The specified policy is already attached.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPolicyNotAttached: {
+		Code:           "XMinioPolicyNotAttached",
+		Description:    "The specified policy is not found.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	// Add your error structure here.
 }
 
@@ -1972,6 +1985,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
+	case errNoPolicyToAttachOrDetach:
+		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:

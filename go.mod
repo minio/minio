@@ -36,6 +36,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.15.12
 	github.com/klauspost/cpuid/v2 v2.2.1
+	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.11.3
@@ -43,14 +44,14 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
 	github.com/minio/cli v1.24.0
-	github.com/minio/console v0.22.1
+	github.com/minio/console v0.22.2
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.22.0
-	github.com/minio/madmin-go/v2 v2.0.0
+	github.com/minio/madmin-go/v2 v2.0.1
 	github.com/minio/minio-go/v7 v7.0.44
-	github.com/minio/pkg v1.5.5
+	github.com/minio/pkg v1.5.8
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
@@ -78,7 +79,6 @@ require (
 	github.com/tinylib/msgp v1.1.7-0.20220719154719-f3635b96e483
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
-	github.com/yargevad/filepathx v1.0.0
 	github.com/zeebo/xxh3 v1.0.2
 	go.etcd.io/etcd/api/v3 v3.5.5
 	go.etcd.io/etcd/client/v3 v3.5.5

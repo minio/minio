@@ -38,6 +38,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/color"
@@ -45,7 +46,6 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
-	"github.com/yargevad/filepathx"
 	"github.com/zeebo/xxh3"
 )
 
@@ -1118,6 +1118,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	}
 
 	if len(xlMeta.versions) != 0 {
+		// xl.meta must still exist for other versions, dataDir is purged.
 		buf, err = xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
@@ -1127,17 +1128,13 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Move xl.meta to trash
-	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
+	// No more versions, this is the last version purge everything.
+	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
 
-	err = s.moveToTrash(filePath, false, false)
-	if err == nil || err == errFileNotFound {
-		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false, false)
-	}
-	return err
+	return s.deleteFile(volumeDir, filePath, true, false)
 }
 
 // Updates only metadata for a given version.
@@ -2689,7 +2686,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 	}
 	files := []string{pathJoin(volumeDir, path)}
 	if glob {
-		files, err = filepathx.Glob(pathJoin(volumeDir, path))
+		files, err = filepathx.Glob(filepath.Join(volumeDir, path))
 		if err != nil {
 			return nil, err
 		}

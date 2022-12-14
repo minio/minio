@@ -66,7 +66,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -112,7 +111,7 @@ func TestMain(m *testing.M) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
+	globalInternodeTransport = NewInternodeHTTPTransport()()
 
 	initHelp()
 
@@ -125,6 +124,8 @@ func TestMain(m *testing.M) {
 
 // concurrency level for certain parallel tests.
 const testConcurrencyLevel = 10
+
+const iso8601TimeFormat = "2006-01-02T15:04:05.000Z"
 
 // Excerpts from @lsegal - https://github.com/aws/aws-sdk-js/issues/659#issuecomment-120477258
 //

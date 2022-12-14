@@ -17,7 +17,10 @@
 
 package hash
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // SHA256Mismatch - when content sha256 does not match with what was sent from client.
 type SHA256Mismatch struct {
@@ -57,4 +60,10 @@ type ChecksumMismatch struct {
 
 func (e ChecksumMismatch) Error() string {
 	return "Bad checksum: Want " + e.Want + " does not match calculated " + e.Got
+}
+
+// IsChecksumMismatch matches if 'err' is hash.ChecksumMismatch
+func IsChecksumMismatch(err error) bool {
+	var herr ChecksumMismatch
+	return errors.As(err, &herr)
 }

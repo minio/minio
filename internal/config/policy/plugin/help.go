@@ -34,10 +34,16 @@ var (
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "authorization token for plugin hook endpoint" + defaultHelpPostfix(AuthToken),
+			Description: "authorization header for plugin hook endpoint" + defaultHelpPostfix(AuthToken),
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         EnableHTTP2,
+			Description: "Enable experimental HTTP2 support to connect to plugin service" + defaultHelpPostfix(EnableHTTP2),
+			Optional:    true,
+			Type:        "bool",
 		},
 		config.HelpKV{
 			Key:         config.Comment,

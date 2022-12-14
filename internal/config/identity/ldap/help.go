@@ -28,9 +28,16 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         ServerAddr,
-			Description: `AD/LDAP server address e.g. "myldapserver.com:636"` + defaultHelpPostfix(ServerAddr),
+			Description: `AD/LDAP server address e.g. "myldap.com" or "myldapserver.com:636"` + defaultHelpPostfix(ServerAddr),
 			Type:        "address",
 			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         SRVRecordName,
+			Description: `DNS SRV record name for LDAP service, if given, must be one of "ldap", "ldaps" or "on"` + defaultHelpPostfix(SRVRecordName),
+			Optional:    true,
+			Type:        "string",
+			Sensitive:   false,
 		},
 		config.HelpKV{
 			Key:         LookupBindDN,
