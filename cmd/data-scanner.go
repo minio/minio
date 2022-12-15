@@ -761,7 +761,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 						return
 					}
@@ -776,7 +778,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 					}
 				},
