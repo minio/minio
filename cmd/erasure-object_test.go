@@ -214,22 +214,19 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var objs []*erasureObjects
-	for i := 0; i < 32; i++ {
-		obj, fsDirs, err := prepareErasure(ctx, 16)
-		if err != nil {
-			t.Fatal("Unable to initialize 'Erasure' object layer.", err)
-		}
-		// Remove all dirs.
-		for _, dir := range fsDirs {
-			defer os.RemoveAll(dir)
-		}
-		z := obj.(*erasureServerPools)
-		xl := z.serverPools[0].sets[0]
-		objs = append(objs, xl)
+
+	obj, fsDirs, err := prepareErasureSets32(ctx)
+	if err != nil {
+		t.Fatal("Unable to initialize 'Erasure' object layer.", err)
 	}
 
-	erasureSets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
+	setObjectLayer(obj)
+	initConfigSubsystem(ctx, obj)
+
+	// Remove all dirs.
+	for _, dir := range fsDirs {
+		defer os.RemoveAll(dir)
+	}
 
 	type testCaseType struct {
 		bucket string
@@ -244,13 +241,12 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 		{bucketName, "obj_4"},
 	}
 
-	err := erasureSets.MakeBucket(ctx, bucketName, MakeBucketOptions{})
-	if err != nil {
+	if err = obj.MakeBucket(ctx, bucketName, MakeBucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, testCase := range testCases {
-		_, err = erasureSets.PutObject(ctx, testCase.bucket, testCase.object,
+		_, err = obj.PutObject(ctx, testCase.bucket, testCase.object,
 			mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("Erasure Object upload failed: <ERROR> %s", err)
@@ -270,7 +266,7 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	}
 
 	objectNames := toObjectNames(testCases)
-	_, delErrs := erasureSets.DeleteObjects(ctx, bucketName, objectNames, ObjectOptions{})
+	_, delErrs := obj.DeleteObjects(ctx, bucketName, objectNames, ObjectOptions{})
 
 	for i := range delErrs {
 		if delErrs[i] != nil {
@@ -279,7 +275,7 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		_, statErr := erasureSets.GetObjectInfo(ctx, test.bucket, test.object, ObjectOptions{})
+		_, statErr := obj.GetObjectInfo(ctx, test.bucket, test.object, ObjectOptions{})
 		switch statErr.(type) {
 		case ObjectNotFound:
 		default:

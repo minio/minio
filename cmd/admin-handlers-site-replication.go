@@ -114,8 +114,7 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 	default:
 		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.MakeWithVersioningBktOp:
-		createdAtStr := strings.TrimSpace(r.Form.Get("createdAt"))
-		createdAt, cerr := time.Parse(time.RFC3339Nano, createdAtStr)
+		createdAt, cerr := time.Parse(time.RFC3339Nano, strings.TrimSpace(r.Form.Get("createdAt")))
 		if cerr != nil {
 			createdAt = timeSentinel
 		}
@@ -132,7 +131,6 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 	case madmin.DeleteBucketBktOp, madmin.ForceDeleteBucketBktOp:
 		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
 			Force:      operation == madmin.ForceDeleteBucketBktOp,
-			NoRecreate: r.Form.Get("noRecreate") == "true",
 			SRDeleteOp: getSRBucketDeleteOp(true),
 		})
 	case madmin.PurgeDeletedBucketOp:

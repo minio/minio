@@ -59,12 +59,14 @@ type check struct {
 
 // Assert - checks if gotValue is same as expectedValue, if not fails the test.
 func (c *check) Assert(gotValue interface{}, expectedValue interface{}) {
+	c.Helper()
 	if !reflect.DeepEqual(gotValue, expectedValue) {
-		c.Fatalf("Test %s:%s expected %v, got %v", getSource(2), c.testType, expectedValue, gotValue)
+		c.Fatalf("Test %s expected %v, got %v", c.testType, expectedValue, gotValue)
 	}
 }
 
 func verifyError(c *check, response *http.Response, code, description string, statusCode int) {
+	c.Helper()
 	data, err := io.ReadAll(response.Body)
 	c.Assert(err, nil)
 	errorResponse := APIErrorResponse{}

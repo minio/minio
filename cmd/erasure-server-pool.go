@@ -61,6 +61,8 @@ type erasureServerPools struct {
 
 	// Active decommission canceler
 	decommissionCancelers []context.CancelFunc
+
+	s3Peer *S3PeerSys
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -79,6 +81,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
 		z            = &erasureServerPools{
 			serverPools: make([]*erasureSets, len(endpointServerPools)),
+			s3Peer:      NewS3PeerSys(endpointServerPools),
 		}
 	)
 
@@ -710,49 +713,34 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	defer NSUpdated(bucket, slashSeparator)
 
-	g := errgroup.WithNErrs(len(z.serverPools))
-
+	// Verify if bucket is valid.
 	if !isMinioMetaBucketName(bucket) {
-		// Verify if bucket is valid.
 		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 			return BucketNameInvalid{Bucket: bucket}
 		}
 
-		// Lock the bucket name before creating.
-		lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return err
-		}
+		if !opts.NoLock {
+			// Lock the bucket name before creating.
+			lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
+			lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+			if err != nil {
+				return err
+			}
 
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
+			ctx = lkctx.Context()
+			defer lk.Unlock(lkctx)
+		}
 	}
 
-	// Create buckets in parallel across all sets.
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			if z.IsSuspended(index) {
-				return nil
-			}
-			return z.serverPools[index].MakeBucket(ctx, bucket, opts)
-		}, index)
-	}
-
-	errs := g.Wait()
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			if _, ok := err.(BucketExists); !ok {
-				// Delete created buckets, ignoring errors.
-				z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
-					Force:      false,
-					NoRecreate: true,
-				})
-			}
-			return err
+	if err := z.s3Peer.MakeBucket(ctx, bucket, opts); err != nil {
+		if _, ok := err.(BucketExists); !ok {
+			// Delete created buckets, ignoring errors.
+			z.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
+				NoLock:     true,
+				NoRecreate: true,
+			})
 		}
+		return err
 	}
 
 	// If it doesn't exist we get a new, so ignore errors
@@ -1609,38 +1597,18 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 
 // GetBucketInfo - returns bucket info from one of the erasure coded serverPools.
 func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error) {
-	if z.SinglePool() {
-		bucketInfo, err = z.serverPools[0].GetBucketInfo(ctx, bucket, opts)
-		if err != nil {
-			return bucketInfo, err
-		}
-		meta, err := globalBucketMetadataSys.Get(bucket)
-		if err == nil {
-			bucketInfo.Created = meta.Created
-			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
-			bucketInfo.ObjectLocking = meta.LockEnabled
-		}
-		return bucketInfo, nil
+	bucketInfo, err = z.s3Peer.GetBucketInfo(ctx, bucket, opts)
+	if err != nil {
+		return bucketInfo, toObjectErr(err, bucket)
 	}
-	for _, pool := range z.serverPools {
-		bucketInfo, err = pool.GetBucketInfo(ctx, bucket, opts)
-		if err != nil {
-			if isErrBucketNotFound(err) {
-				continue
-			}
-			return bucketInfo, err
-		}
-		meta, err := globalBucketMetadataSys.Get(bucket)
-		if err == nil {
-			bucketInfo.Created = meta.Created
-			bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
-			bucketInfo.ObjectLocking = meta.LockEnabled
-		}
-		return bucketInfo, nil
+
+	meta, err := globalBucketMetadataSys.Get(bucket)
+	if err == nil {
+		bucketInfo.Created = meta.Created
+		bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
+		bucketInfo.ObjectLocking = meta.LockEnabled
 	}
-	return bucketInfo, BucketNotFound{
-		Bucket: bucket,
-	}
+	return bucketInfo, nil
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
@@ -1671,43 +1639,48 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
 func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
-	defer NSUpdated(bucket, slashSeparator)
-
-	g := errgroup.WithNErrs(len(z.serverPools))
-
-	// Delete buckets in parallel across all serverPools.
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			if z.IsSuspended(index) {
-				return nil
-			}
-			return z.serverPools[index].DeleteBucket(ctx, bucket, opts)
-		}, index)
+	if isMinioMetaBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	errs := g.Wait()
+	// Verify if bucket is valid.
+	if err := s3utils.CheckValidBucketName(bucket); err != nil {
+		return BucketNameInvalid{Bucket: bucket}
+	}
 
-	// For any write quorum failure, we undo all the delete
-	// buckets operation by creating all the buckets again.
-	for _, err := range errs {
+	defer NSUpdated(bucket, slashSeparator)
+	if !opts.NoLock {
+		// Lock the bucket name before creating.
+		lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
-			if !z.SinglePool() && !opts.NoRecreate {
-				undoDeleteBucketServerPools(context.Background(), bucket, z.serverPools, errs)
-			}
 			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
+
+	err := z.s3Peer.DeleteBucket(ctx, bucket, opts)
+	if err == nil || errors.Is(err, errVolumeNotFound) {
+		// If site replication is configured, hold on to deleted bucket state until sites sync
+		switch opts.SRDeleteOp {
+		case MarkDelete:
+			z.markDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
 		}
 	}
 
-	// Purge the entire bucket metadata entirely.
-	z.deleteAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
-	// If site replication is configured, hold on to deleted bucket state until sites sync
-	switch opts.SRDeleteOp {
-	case MarkDelete:
-		z.markDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+	if err != nil && !errors.Is(err, errVolumeNotFound) {
+		if !opts.NoRecreate {
+			z.s3Peer.MakeBucket(ctx, bucket, MakeBucketOptions{})
+		}
 	}
-	// Success.
-	return nil
+
+	if err == nil {
+		// Purge the entire bucket metadata entirely.
+		z.deleteAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
+	}
+
+	return toObjectErr(err, bucket)
 }
 
 // deleteAll will rename bucket+prefix unconditionally across all disks to
@@ -1744,42 +1717,20 @@ func (z *erasureServerPools) purgeDelete(ctx context.Context, bucket, prefix str
 	}
 }
 
-// This function is used to undo a successful DeleteBucket operation.
-func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools []*erasureSets, errs []error) {
-	g := errgroup.WithNErrs(len(serverPools))
-
-	// Undo previous delete bucket on all underlying serverPools.
-	for index := range serverPools {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return serverPools[index].MakeBucket(ctx, bucket, MakeBucketOptions{})
-			}
-			return nil
-		}, index)
-	}
-
-	g.Wait()
-}
-
 // List all buckets from one of the serverPools, we are not doing merge
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all serverPools.
 func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
-	if z.SinglePool() {
-		buckets, err = z.serverPools[0].ListBuckets(ctx, opts)
-	} else {
-		for idx, pool := range z.serverPools {
-			if z.IsSuspended(idx) {
-				continue
-			}
-			buckets, err = pool.ListBuckets(ctx, opts)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			break
+	for idx, pool := range z.serverPools {
+		if z.IsSuspended(idx) {
+			continue
 		}
+		buckets, err = pool.ListBuckets(ctx, opts)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+		break
 	}
 	if err != nil {
 		return nil, err

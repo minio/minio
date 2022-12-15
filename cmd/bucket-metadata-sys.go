@@ -66,7 +66,7 @@ func (sys *BucketMetadataSys) Remove(bucket string) {
 // so they should be replaced atomically and not appended to, etc.
 // Data is not persisted to disk.
 func (sys *BucketMetadataSys) Set(bucket string, meta BucketMetadata) {
-	if bucket != minioMetaBucket {
+	if !isMinioMetaBucketName(bucket) {
 		sys.Lock()
 		sys.metadataMap[bucket] = meta
 		sys.Unlock()
@@ -79,7 +79,7 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		return updatedAt, errServerNotInitialized
 	}
 
-	if bucket == minioMetaBucket {
+	if isMinioMetaBucketName(bucket) {
 		return updatedAt, errInvalidArgument
 	}
 
@@ -164,7 +164,7 @@ func (sys *BucketMetadataSys) Update(ctx context.Context, bucket string, configF
 // For all other bucket specific metadata, use the relevant
 // calls implemented specifically for each of those features.
 func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
-	if bucket == minioMetaBucket {
+	if isMinioMetaBucketName(bucket) {
 		return newBucketMetadata(bucket), errConfigNotFound
 	}
 
@@ -345,7 +345,7 @@ func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (Buc
 		return newBucketMetadata(bucket), errServerNotInitialized
 	}
 
-	if bucket == minioMetaBucket {
+	if isMinioMetaBucketName(bucket) {
 		return newBucketMetadata(bucket), errInvalidArgument
 	}
 
