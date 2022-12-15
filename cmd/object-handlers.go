@@ -397,7 +397,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Handle only errInvalidRange. Ignore other
 		// parse error and treat it as regular Get
 		// request like Amazon S3.
-		if rangeErr == errInvalidRange {
+		if errors.Is(rangeErr, errInvalidRange) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
 			return
 		}
@@ -433,7 +433,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
 				if !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
-					logger.LogIf(ctx, fmt.Errorf("Replication proxy failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+					logger.LogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 				}
 			}
 			if reader != nil && proxy.Proxy && perr == nil {
@@ -803,12 +803,12 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
 			// request like Amazon S3.
-			if err == errInvalidRange {
+			if errors.Is(err, errInvalidRange) {
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
 				return
 			}
 
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, err, logger.Application)
 		}
 	}
 
@@ -3155,7 +3155,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 	w.WriteHeader(statusCode)
 	// Notify object restore started via a POST request.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectRestorePostInitiated,
+		EventName:  event.ObjectRestorePost,
 		BucketName: bucket,
 		Object:     objInfo,
 		ReqParams:  extractReqParams(r),
@@ -3224,7 +3224,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 
 		// Notify object restore completed via a POST request.
 		sendEvent(eventArgs{
-			EventName:  event.ObjectRestorePostCompleted,
+			EventName:  event.ObjectRestoreCompleted,
 			BucketName: bucket,
 			Object:     objInfo,
 			ReqParams:  extractReqParams(r),

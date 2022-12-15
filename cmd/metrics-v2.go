@@ -2416,7 +2416,8 @@ func metricsServerHandler() http.Handler {
 		enc := expfmt.NewEncoder(w, contentType)
 		for _, mf := range mfs {
 			if err := enc.Encode(mf); err != nil {
-				logger.LogIf(r.Context(), err)
+				// client may disconnect for any reasons
+				// we do not have to log this.
 				return
 			}
 		}

@@ -22,6 +22,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -83,9 +84,16 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer
 	for {
 		var blocks [][]byte
 		n, err := io.ReadFull(src, buf)
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			logger.LogIf(ctx, err)
-			return 0, err
+		if err != nil {
+			if !IsErrIgnored(err, []error{
+				io.EOF,
+				io.ErrUnexpectedEOF,
+			}...) {
+				if !hash.IsChecksumMismatch(err) {
+					logger.LogIf(ctx, err)
+				}
+				return 0, err
+			}
 		}
 		eof := err == io.EOF || err == io.ErrUnexpectedEOF
 		if n == 0 && total != 0 {

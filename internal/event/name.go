@@ -53,8 +53,8 @@ const (
 	ObjectReplicationMissedThreshold
 	ObjectReplicationReplicatedAfterThreshold
 	ObjectReplicationNotTracked
-	ObjectRestorePostInitiated
-	ObjectRestorePostCompleted
+	ObjectRestorePost
+	ObjectRestoreCompleted
 	ObjectTransitionFailed
 	ObjectTransitionComplete
 
@@ -65,7 +65,7 @@ const (
 	ObjectCreatedAll
 	ObjectRemovedAll
 	ObjectReplicationAll
-	ObjectRestorePostAll
+	ObjectRestoreAll
 	ObjectTransitionAll
 	Everything
 )
@@ -103,10 +103,10 @@ func (name Name) Expand() []Name {
 			ObjectReplicationMissedThreshold,
 			ObjectReplicationReplicatedAfterThreshold,
 		}
-	case ObjectRestorePostAll:
+	case ObjectRestoreAll:
 		return []Name{
-			ObjectRestorePostInitiated,
-			ObjectRestorePostCompleted,
+			ObjectRestorePost,
+			ObjectRestoreCompleted,
 		}
 	case ObjectTransitionAll:
 		return []Name{
@@ -190,9 +190,11 @@ func (name Name) String() string {
 		return "s3:Replication:OperationMissedThreshold"
 	case ObjectReplicationReplicatedAfterThreshold:
 		return "s3:Replication:OperationReplicatedAfterThreshold"
-	case ObjectRestorePostInitiated:
+	case ObjectRestoreAll:
+		return "s3:ObjectRestore:*"
+	case ObjectRestorePost:
 		return "s3:ObjectRestore:Post"
-	case ObjectRestorePostCompleted:
+	case ObjectRestoreCompleted:
 		return "s3:ObjectRestore:Completed"
 	case ObjectTransitionAll:
 		return "s3:ObjectTransition:*"
@@ -301,11 +303,11 @@ func ParseName(s string) (Name, error) {
 	case "s3:Replication:OperationNotTracked":
 		return ObjectReplicationNotTracked, nil
 	case "s3:ObjectRestore:*":
-		return ObjectRestorePostAll, nil
+		return ObjectRestoreAll, nil
 	case "s3:ObjectRestore:Post":
-		return ObjectRestorePostInitiated, nil
+		return ObjectRestorePost, nil
 	case "s3:ObjectRestore:Completed":
-		return ObjectRestorePostCompleted, nil
+		return ObjectRestoreCompleted, nil
 	case "s3:ObjectTransition:Failed":
 		return ObjectTransitionFailed, nil
 	case "s3:ObjectTransition:Complete":
