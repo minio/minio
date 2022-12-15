@@ -35,6 +35,7 @@ func toObjectErr(err error, params ...string) error {
 		return context.Canceled
 	}
 	switch err.Error() {
+
 	case errVolumeNotFound.Error():
 		apiErr := BucketNotFound{}
 		if len(params) >= 1 {
@@ -110,6 +111,12 @@ func toObjectErr(err error, params ...string) error {
 			Bucket: params[0],
 			Object: params[1],
 		}
+	case errNotEnoughCredit.Error():
+		return NotEnoughCredit{}
+	case errNoOpenBill.Error():
+		return NoOpenBill{}
+	case errFileContentEmpty.Error():
+		return FileContentEmpty{}
 
 	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}
@@ -185,6 +192,24 @@ type ObjectNotConfirmed GenericError
 
 func (e ObjectNotConfirmed) Error() string {
 	return "The requested object:" + e.Object + "is not confirm in the blockchain"
+}
+
+type NotEnoughCredit GenericError
+
+func (e NotEnoughCredit) Error() string {
+	return "please add credit to your account in order to complete this action"
+}
+
+type NoOpenBill GenericError
+
+func (e NoOpenBill) Error() string {
+	return "no open bill"
+}
+
+type FileContentEmpty GenericError
+
+func (e FileContentEmpty) Error() string {
+	return "file content cannot be empty"
 }
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.

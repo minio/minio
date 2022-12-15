@@ -13,6 +13,25 @@ import (
 	"path"
 )
 
+type MantleError struct {
+	Message string `json:"message"`
+	Body    string `json:"body"`
+	Status  int    `json:"status"`
+}
+
+func toSdsErr(body string) error {
+	fmt.Println(body)
+	switch body {
+	case `["No open bill"]`:
+		return errors.New("no open bill")
+	case `["Please add credit to your account in order to complete this action"]`:
+		return errors.New("please add credit to your account in order to complete this action")
+	case `file content cannot be empty`:
+		return errors.New(`file content cannot be empty`)
+	}
+	return errors.New("unknown error")
+}
+
 func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
 	b := bytes.Buffer{}
 	w := multipart.NewWriter(&b)
@@ -58,9 +77,10 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 
 	if res.StatusCode >= http.StatusBadRequest {
 		b, _ := ioutil.ReadAll(res.Body)
-		fmt.Println(string(b))
-		err = fmt.Errorf("bad status: %s", res.Status)
-		return
+		var mantleError MantleError
+		err = json.Unmarshal(b, &mantleError)
+
+		return PutFileResp{}, toSdsErr(mantleError.Body)
 	}
 
 	bodyBytes, err := ioutil.ReadAll(res.Body)

@@ -389,6 +389,9 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrSDSFileNotConfirm
+	ErrSDSNotEnoughCredit
+	ErrNoOpenBill
+	ErrFileContentEmpty
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -418,9 +421,24 @@ func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
 // error code to APIError structure, these fields carry respective
 // descriptions for all the error responses.
 var errorCodes = errorCodeMap{
+	ErrSDSNotEnoughCredit: {
+		Code:           "NotEnoughCredit",
+		Description:    "Please add credit to your account in order to complete this action",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNoOpenBill: {
+		Code:           "NoOpenBill",
+		Description:    "No open bill",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrFileContentEmpty: {
+		Code:           "FileContentEmpty",
+		Description:    "File content cannot be empty",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrSDSFileNotConfirm: {
 		Code:           "NotConfirm",
-		Description:    "The requested object is not confirm in the blockchin",
+		Description:    "The requested object is not confirm in the blockchain",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrInvalidCopyDest: {
@@ -1990,6 +2008,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchKey
 	case ObjectNotConfirmed:
 		apiErr = ErrSDSFileNotConfirm
+	case NotEnoughCredit:
+		apiErr = ErrSDSNotEnoughCredit
+	case NoOpenBill:
+		apiErr = ErrNoOpenBill
+	case FileContentEmpty:
+		apiErr = ErrFileContentEmpty
 	case MethodNotAllowed:
 		apiErr = ErrMethodNotAllowed
 	case ObjectLocked:
