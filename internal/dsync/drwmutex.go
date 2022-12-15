@@ -45,7 +45,7 @@ func log(format string, data ...interface{}) {
 
 const (
 	// dRWMutexAcquireTimeout - default tolerance limit to wait for lock acquisition before.
-	drwMutexAcquireTimeout = 1 * time.Second // 1 second.
+	drwMutexAcquireTimeout = 5 * time.Second
 
 	// dRWMutexRefreshTimeout - default timeout for the refresh call
 	drwMutexRefreshCallTimeout = 5 * time.Second
@@ -430,11 +430,11 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 			var locked bool
 			var err error
 			if isReadLock {
-				if locked, err = c.RLock(context.Background(), args); err != nil {
+				if locked, err = c.RLock(ctx, args); err != nil {
 					log("dsync: Unable to call RLock failed with %s for %#v at %s\n", err, args, c)
 				}
 			} else {
-				if locked, err = c.Lock(context.Background(), args); err != nil {
+				if locked, err = c.Lock(ctx, args); err != nil {
 					log("dsync: Unable to call Lock failed with %s for %#v at %s\n", err, args, c)
 				}
 			}
