@@ -266,16 +266,8 @@ func testGetBucketPanFSPathHandler(obj ObjectLayer, instanceType, bucketName str
 	}
 
 	for i, testCase := range testCases {
-		// if i != 1 {
-		// 	continue
-		// }
 		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-
-		// err := obj.MakeBucketWithLocation(GlobalContext, testCase.bucketName, MakeBucketOptions{})
-		// if err != nil {
-		// 	t.Fatal(err)
-		// }
 
 		// construct HTTP request for Get bucket panfs.
 		req, err := newTestSignedRequestV4(http.MethodGet, getBucketPanFSPathURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
@@ -338,7 +330,6 @@ func testGetBucketPanFSPathHandler(obj ObjectLayer, instanceType, bucketName str
 		}
 
 	}
-	/**
 	// Test for Anonymous/unsigned http request.
 	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make any difference.
 	anonReq, err := newTestRequest(http.MethodGet, getBucketPanFSPathURL("", bucketName), 0, nil)
@@ -363,7 +354,7 @@ func testGetBucketPanFSPathHandler(obj ObjectLayer, instanceType, bucketName str
 	}
 	// Executes the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
-	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)*/
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling HeadBucket HTTP handler tests for both Erasure multiple disks and single node setup.
