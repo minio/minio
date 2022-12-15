@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 )
 
 type MantleError struct {
@@ -19,17 +20,8 @@ type MantleError struct {
 	Status  int    `json:"status"`
 }
 
-func toSdsErr(body string) error {
-	fmt.Println(body)
-	switch body {
-	case `["No open bill"]`:
-		return errors.New("no open bill")
-	case `["Please add credit to your account in order to complete this action"]`:
-		return errors.New("please add credit to your account in order to complete this action")
-	case `file content cannot be empty`:
-		return errors.New(`file content cannot be empty`)
-	}
-	return errors.New("unknown error")
+func parseMantleError(body string) error {
+	return errors.New(strings.NewReplacer("[", "", "]", "", `"`, "").Replace(body))
 }
 
 func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
@@ -80,7 +72,7 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 		var mantleError MantleError
 		err = json.Unmarshal(b, &mantleError)
 
-		return PutFileResp{}, toSdsErr(mantleError.Body)
+		return PutFileResp{}, parseMantleError(mantleError.Body)
 	}
 
 	bodyBytes, err := ioutil.ReadAll(res.Body)
