@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -32,9 +33,23 @@ import (
 // Indicator if logging is enabled.
 var dsyncLog bool
 
+// maximum time to sleep before retrying a failed blocking lock()
+var lockRetryInterval time.Duration
+
 func init() {
 	// Check for MINIO_DSYNC_TRACE env variable, if set logging will be enabled for failed REST operations.
 	dsyncLog = os.Getenv("MINIO_DSYNC_TRACE") == "1"
+
+	// lockRetryInterval specifies the maximum time between retries for failed locks.
+	// Average retry time will be value / 2.
+	lockRetryInterval = 100 * time.Millisecond
+	if lri := os.Getenv("_MINIO_LOCK_RETRY_INTERVAL"); lri != "" {
+		v, err := strconv.Atoi(lri)
+		if err != nil {
+			panic(err)
+		}
+		lockRetryInterval = time.Duration(v) * time.Millisecond
+	}
 }
 
 func log(format string, data ...interface{}) {
@@ -58,9 +73,6 @@ const (
 
 	// dRWMutexRefreshInterval - default the interval between two refresh calls
 	drwMutexRefreshInterval = 10 * time.Second
-
-	// maximum time to sleep before retrying a failed blocking lock()
-	lockRetryInterval = 50 * time.Millisecond
 
 	drwMutexInfinite = 1<<63 - 1
 )
@@ -239,8 +251,11 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 			}
 
 			lockRetryInterval := dm.lockRetryInterval
-			if opts.RetryInterval > 0 {
+			if opts.RetryInterval != 0 {
 				lockRetryInterval = opts.RetryInterval
+			}
+			if lockRetryInterval < 0 {
+				return false
 			}
 			time.Sleep(time.Duration(dm.rng.Float64() * float64(lockRetryInterval)))
 		}
