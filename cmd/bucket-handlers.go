@@ -431,7 +431,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Unmarshal list of keys to be deleted.
 	deleteObjectsReq := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjectsReq, maxBodySize); err != nil {
-		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -511,11 +510,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 		if object.VersionID != "" && object.VersionID != nullVersionID {
 			if _, err := uuid.Parse(object.VersionID); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("invalid version-id specified %w", err))
 				apiErr := errorCodes.ToAPIErr(ErrNoSuchVersion)
 				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
-					Message:   apiErr.Description,
+					Message:   fmt.Sprintf("%s (%s)", apiErr.Description, err),
 					Key:       object.ObjectName,
 					VersionID: object.VersionID,
 				}
@@ -924,16 +922,18 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
 	// Read multipart data and save in memory and in the disk if needed
 	form, err := reader.ReadForm(maxFormMemory)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -943,8 +943,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract all form fields
 	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(ctx, form)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
