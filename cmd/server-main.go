@@ -357,9 +357,11 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
-	// do not retry to avoid high contention on startup.
-	lockTimeout.retryInterval = -1
+	lockTimeout := newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
+		timeout:       5 * time.Second,
+		minimum:       3 * time.Second,
+		retryInterval: -1, // do not retry to avoid high contention on startup.
+	})
 
 	// Do an initial random sleep to avoid stampeding herd of initial
 	// lock request. This will spread locks requests over 1 second.
