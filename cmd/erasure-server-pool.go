@@ -1954,7 +1954,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string) error
 
-func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects, healEntry func(metaCacheEntry) error) error {
+func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects, healEntry func(string, metaCacheEntry) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1987,7 +1987,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 		minDisks:       1,
 		reportNotFound: false,
 		agreed: func(entry metaCacheEntry) {
-			if err := healEntry(entry); err != nil {
+			if err := healEntry(bucket, entry); err != nil {
 				logger.LogIf(ctx, err)
 				cancel()
 			}
@@ -2000,7 +2000,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 				entry, _ = entries.firstFound()
 			}
 
-			if err := healEntry(*entry); err != nil {
+			if err := healEntry(bucket, *entry); err != nil {
 				logger.LogIf(ctx, err)
 				cancel()
 				return
@@ -2017,7 +2017,7 @@ func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects
 }
 
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObjectFn HealObjectFn) error {
-	healEntry := func(entry metaCacheEntry) error {
+	healEntry := func(bucket string, entry metaCacheEntry) error {
 		if entry.isDir() {
 			return nil
 		}
