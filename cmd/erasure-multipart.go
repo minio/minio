@@ -1211,12 +1211,16 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Rename the multipart object to final location.
-	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
-		partsMetadata, bucket, object, writeQuorum); err != nil {
+	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
+		partsMetadata, bucket, object, writeQuorum)
+	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
-
 	defer NSUpdated(bucket, object)
+
+	if !opts.Speedtest && versionsDisparity {
+		listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)
+	}
 
 	// Check if there is any offline disk and add it to the MRF list
 	for _, disk := range onlineDisks {
