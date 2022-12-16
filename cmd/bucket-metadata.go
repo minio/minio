@@ -68,6 +68,7 @@ var (
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
 	Name                        string
+	PanFSPath                   string
 	Created                     time.Time
 	LockEnabled                 bool // legacy not used anymore.
 	PolicyConfigJSON            []byte
@@ -102,6 +103,15 @@ type BucketMetadata struct {
 	bucketTargetConfig     *madmin.BucketTargets
 	bucketTargetConfigMeta map[string]string
 }
+
+// This will generate a new Metadata structure for PanFS gateway mode. However applying such a structure into existing codebase
+// a lot of code should be updated. At the moment every bucket has additional metadata field - PanFSPath. For buckets created
+// in PanFS Gateway mode panfsPath will be set (if user provides such option). For all others buckets - this will be empty string.
+// go:generate msgp -file $GOFILE
+// type PanFSBucketMetadata struct {
+// 	Metadata BucketMetadata
+// 	Path     string
+// }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
 func newBucketMetadata(name string) BucketMetadata {

@@ -88,33 +88,57 @@ func TestPANFSShutdown(t *testing.T) {
 
 // TestPANFSGetBucketInfo - test GetBucketInfo with healty and faulty disks
 func TestPANFSGetBucketInfo(t *testing.T) {
-	t.Skip()
-
 	// Prepare for testing
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	obj := initFSObjects(disk, t)
+	obj, err := initPanFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fs := obj.(*PANFSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, "a", MakeBucketOptions{})
+	err = obj.MakeBucketWithLocation(GlobalContext, "a", MakeBucketOptions{})
 	if !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("BucketNameInvalid error not returned")
 	}
 
-	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
+	// Test default panfs bucket path
+	defaultPanfsBucket := "defaultpanfspath"
+	err = obj.MakeBucketWithLocation(GlobalContext, defaultPanfsBucket, MakeBucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := fs.GetBucketInfo(GlobalContext, defaultPanfsBucket, BucketOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.PanFSPath != globalPanFSDefaultBucketPath {
+		t.Fatalf("wrong bucket panfs path, expected: %s, found: %s", globalPanFSDefaultBucketPath, info.PanFSPath)
+	}
+
+	// Test custom bucket panfs path
+	panfsBucketPath := "/panfs/bucket/path"
+	opts := MakeBucketOptions{
+		PanFSBucketPath: panfsBucketPath,
+	}
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Test with valid parameters
-	info, err := fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{})
+	info, err = fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info.Name != bucketName {
 		t.Fatalf("wrong bucket name, expected: %s, found: %s", bucketName, info.Name)
+	}
+	if info.PanFSPath != panfsBucketPath {
+		t.Fatalf("wrong bucket panfs path, expected: %s, found: %s", panfsBucketPath, info.PanFSPath)
 	}
 
 	// Test with non-existent bucket

@@ -74,8 +74,8 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
 	// Name of the bucket.
-	Name string
-
+	Name      string
+	PanFSPath string
 	// Date and time when the bucket was created.
 	Created time.Time
 	Deleted time.Time

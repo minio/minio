@@ -104,7 +104,8 @@ func handleSignals() {
 		case confReloadSignal := <-globalConfReloadSignalCh:
 			logger.Info("%s signal received. Start reloading MinIO IAM sub-system", strings.ToUpper(confReloadSignal.String()))
 			// Reload IAM data from storage.
-			retryCtx, _ := context.WithCancel(GlobalContext)
+			retryCtx, cancel := context.WithCancel(GlobalContext)
+			defer cancel()
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 			for {
 				if err := globalIAMSys.Load(retryCtx); err != nil {

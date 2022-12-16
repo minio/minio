@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -180,6 +181,47 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}(bucket)
 	}
 	wg.Wait()
+}
+
+// GetBucketPanFSPathHandler - GET Bucket path in PanFS filesystem.
+// -------------------------
+// This operation returns path to the bucket in scope of PanFS filesystem.
+func (api objectAPIHandlers) GetBucketPanFSPathHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketPanFSPath")
+	if !globalIsGateway || globalGatewayName != PANFSBackendGateway {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	// Use GetBucketLocation policy at the moment
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketLocationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	getBucketInfo := objectAPI.GetBucketInfo
+	bi, err := getBucketInfo(ctx, bucket, BucketOptions{})
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	encodedSuccessResponse := encodeResponse(PanFSPathResponse{
+		PanFSPath: bi.PanFSPath,
+	})
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -707,6 +749,21 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	// Get PanFS path for bucket only if Minio is running in PanFS Gateway mode
+	// If PanFS path provided in any other mode - just ignore it
+	panfsBucketPath := ""
+	if globalIsGateway && globalGatewayName == PANFSBackendGateway {
+		if panfsPath := r.Header.Get(xhttp.PanFSBucketPath); len(panfsPath) > 0 {
+			if _, err := os.Stat(panfsPath); os.IsNotExist(err) {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPanFSBucketPahtNotFound), r.URL)
+				return
+			}
+			panfsBucketPath = panfsPath
+		} else {
+			panfsBucketPath = globalPanFSDefaultBucketPath
+		}
+	}
+
 	objectLockEnabled := false
 	if vs := r.Header.Get(xhttp.AmzObjectLockEnabled); len(vs) > 0 {
 		v := strings.ToLower(vs)
@@ -778,9 +835,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	opts := MakeBucketOptions{
-		Location:    location,
-		LockEnabled: objectLockEnabled,
-		ForceCreate: forceCreate,
+		Location:        location,
+		LockEnabled:     objectLockEnabled,
+		ForceCreate:     forceCreate,
+		PanFSBucketPath: panfsBucketPath,
 	}
 
 	if globalDNSConfig != nil {

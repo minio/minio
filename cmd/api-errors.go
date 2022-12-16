@@ -397,6 +397,9 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
+
+	// PanFS Gateway specific errors
+	ErrPanFSBucketPahtNotFound
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1897,6 +1900,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidChecksum: {
 		Code:           "InvalidArgument",
 		Description:    "Invalid checksum provided.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPanFSBucketPahtNotFound: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid path provided",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.

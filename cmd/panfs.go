@@ -48,7 +48,7 @@ import (
 	"github.com/minio/pkg/mimedb"
 )
 
-// Default etag is used for pre-existing objects.
+// PANdefaultEtag etag is used for pre-existing objects.
 var PANdefaultEtag = "00000000000000000000000000000000-2"
 
 // PANFSObjects - Implements panfs object layer.
@@ -463,6 +463,8 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 	}
 
 	meta := newBucketMetadata(bucket)
+	meta.PanFSPath = opts.PanFSBucketPath
+
 	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -519,15 +521,16 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	}
 
 	createdTime := st.ModTime()
-	meta, err := globalBucketMetadataSys.Get(bucket)
+	meta, err := loadBucketMetadata(ctx, fs, bucket)
 	if err == nil {
 		createdTime = meta.Created
 	}
 
-	return BucketInfo{
-		Name:    bucket,
-		Created: createdTime,
-	}, nil
+	bi.Name = bucket
+	bi.Created = createdTime
+	bi.PanFSPath = meta.PanFSPath
+
+	return
 }
 
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.

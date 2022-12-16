@@ -21,6 +21,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -388,6 +389,20 @@ func gatewayHandleEnvVars() {
 		if err != nil {
 			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
 		}
+	}
+
+	if globalGatewayName == PANFSBackendGateway {
+		path := env.Get(config.EnvPanFSBucketPath, "")
+		if path == "" {
+			logger.Fatal(config.ErrMissingEnvPanFSBucketPath(nil),
+				"Unable to get default bucket path in PanFS")
+		}
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			logger.Fatal(config.ErrInvalidDefaultPanFSBucketPath(nil),
+				"Path is not valid")
+		}
+		globalPanFSDefaultBucketPath = path
+
 	}
 }
 
