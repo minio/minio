@@ -1179,7 +1179,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 		bId, err := gateway.Put(f, object)
 		if err != nil {
-			//TODO: handleHttp error
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		err = f.Close()

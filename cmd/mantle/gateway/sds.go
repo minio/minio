@@ -20,7 +20,6 @@ func Put(f *os.File, fn string) (string, error) {
 
 	putResp, err := network.UploadFormData(client, urlJoin("files"), val, setMantleHeaders())
 	if err != nil {
-		//TODO:handle
 		return "", err
 	}
 

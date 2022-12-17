@@ -197,19 +197,19 @@ func (e ObjectNotConfirmed) Error() string {
 type NotEnoughCredit GenericError
 
 func (e NotEnoughCredit) Error() string {
-	return "please add credit to your account in order to complete this action"
+	return e.Err.Error()
 }
 
 type NoOpenBill GenericError
 
 func (e NoOpenBill) Error() string {
-	return "no open bill"
+	return e.Err.Error()
 }
 
 type FileContentEmpty GenericError
 
 func (e FileContentEmpty) Error() string {
-	return "file content cannot be empty"
+	return e.Err.Error()
 }
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
