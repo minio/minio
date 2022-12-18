@@ -2740,9 +2740,7 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 
 	newCfg := newServerConfig()
 
-	config.SetCredentials(newCfg, cfg.Credential)
 	config.SetRegion(newCfg, cfg.Region)
-
 	storageclass.SetStorageClass(newCfg, cfg.StorageClass)
 
 	for k, loggerArgs := range cfg.Logger.HTTP {

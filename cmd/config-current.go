@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go/v2"
-	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
@@ -65,7 +64,6 @@ func initHelp() {
 		config.SiteSubSys:           config.DefaultSiteKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
-		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultLoggerWebhookKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
@@ -427,15 +425,6 @@ func validateConfig(s config.Config, subSys string) error {
 func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	ctx := GlobalContext
 
-	var err error
-	if !globalActiveCred.IsValid() {
-		// Env doesn't seem to be set, we fallback to lookup creds from the config.
-		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Invalid credentials configuration: %w", err))
-		}
-	}
-
 	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
@@ -764,13 +753,6 @@ func newServerConfig() config.Config {
 func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
 	srvCfg := newServerConfig()
-
-	if globalActiveCred.IsValid() && !globalActiveCred.Equal(auth.DefaultCredentials) {
-		kvs := srvCfg[config.CredentialsSubSys][config.Default]
-		kvs.Set(config.AccessKey, globalActiveCred.AccessKey)
-		kvs.Set(config.SecretKey, globalActiveCred.SecretKey)
-		srvCfg[config.CredentialsSubSys][config.Default] = kvs
-	}
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
