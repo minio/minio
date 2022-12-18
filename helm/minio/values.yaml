@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-11-11T03-44-20Z
+  tag: RELEASE.2022-12-12T19-27-27Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-11-07T23-47-39Z
+  tag: RELEASE.2022-12-13T00-23-28Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
@@ -370,6 +370,20 @@ makeUserJob:
   #   existingSecret: my-secret
   #   existingSecretKey: password
   #   user: console
+  ## You also can pass custom policy
+  # - accessKey: console-svcacct
+  #   secretKey: console123
+  #   user: console
+  #   policy:
+  #     statements:
+  #       - resources:
+  #           - 'arn:aws:s3:::example*/*'
+  #         actions:
+  #           - "s3:AbortMultipartUpload"
+  #           - "s3:GetObject"
+  #           - "s3:DeleteObject"
+  #           - "s3:PutObject"
+  #           - "s3:ListMultipartUploadParts"
 
 makeServiceAccountJob:
   securityContext:

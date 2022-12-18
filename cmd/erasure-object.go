@@ -729,7 +729,7 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 }
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
-func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
+func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, bool, error) {
 	g := errgroup.WithNErrs(len(disks))
 
 	fvID := mustGetUUID()
@@ -768,20 +768,22 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	// Wait for all renames to finish.
 	errs := g.Wait()
 
+	var versionsDisparity bool
+
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if err == nil {
 		versions := reduceCommonVersions(diskVersions, writeQuorum)
-		for index, dversions := range diskVersions {
+		for _, dversions := range diskVersions {
 			if versions != dversions {
-				errs[index] = errFileNeedsHealing
+				versionsDisparity = true
+				break
 			}
 		}
-		err = reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	}
 
 	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure.
-	return evalDisks(disks, errs), err
+	return evalDisks(disks, errs), versionsDisparity, err
 }
 
 func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
@@ -932,6 +934,47 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 // object operations.
 func (er erasureObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return er.putObject(ctx, bucket, object, data, opts)
+}
+
+// Heal up to two versions of one object when there is disparity between disks
+func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
+	if entry.isDir() {
+		return nil
+	}
+	// We might land at .metacache, .trash, .multipart
+	// no need to heal them skip, only when bucket
+	// is '.minio.sys'
+	if bucket == minioMetaBucket {
+		if wildcard.Match("buckets/*/.metacache/*", entry.name) {
+			return nil
+		}
+		if wildcard.Match("tmp/*", entry.name) {
+			return nil
+		}
+		if wildcard.Match("multipart/*", entry.name) {
+			return nil
+		}
+		if wildcard.Match("tmp-old/*", entry.name) {
+			return nil
+		}
+	}
+
+	fivs, err := entry.fileInfoVersions(bucket)
+	if err != nil {
+		healObject(bucket, entry.name, "", madmin.HealNormalScan)
+		return err
+	}
+
+	if len(fivs.Versions) > 2 {
+		return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
+			bucket, entry.name, len(fivs.Versions))
+	}
+
+	for _, version := range fivs.Versions {
+		healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+	}
+
+	return nil
 }
 
 // putObject wrapper for erasureObjects PutObject
@@ -1205,7 +1248,17 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Rename the successfully written temporary object to final location.
-	onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
+	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
+	if err != nil {
+		if errors.Is(err, errFileNotFound) {
+			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+		}
+		logger.LogIf(ctx, err)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	defer NSUpdated(bucket, object)
+
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -1227,62 +1280,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			er.addPartial(bucket, object, fi.VersionID, fi.Size)
 			break
 		}
-	}
 
-	healEntry := func(entry metaCacheEntry) error {
-		if entry.isDir() {
-			return nil
-		}
-		// We might land at .metacache, .trash, .multipart
-		// no need to heal them skip, only when bucket
-		// is '.minio.sys'
-		if bucket == minioMetaBucket {
-			if wildcard.Match("buckets/*/.metacache/*", entry.name) {
-				return nil
-			}
-			if wildcard.Match("tmp/*", entry.name) {
-				return nil
-			}
-			if wildcard.Match("multipart/*", entry.name) {
-				return nil
-			}
-			if wildcard.Match("tmp-old/*", entry.name) {
-				return nil
-			}
-		}
-
-		fivs, err := entry.fileInfoVersions(bucket)
-		if err != nil {
-			healObject(bucket, entry.name, "", madmin.HealNormalScan)
-			return err
-		}
-
-		if len(fivs.Versions) > 2 {
-			return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
-				bucket, entry.name,
-				len(fivs.Versions))
-		}
-
-		for _, version := range fivs.Versions {
-			healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
-		}
-
-		return nil
-	}
-
-	if err != nil {
-		if errors.Is(err, errFileNotFound) {
-			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
-		}
-		if errors.Is(err, errFileNeedsHealing) && !opts.Speedtest {
-			listAndHeal(ctx, bucket, object, &er, healEntry)
-		} else {
-			logger.LogIf(ctx, err)
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		if versionsDisparity {
+			listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)
 		}
 	}
-
-	defer NSUpdated(bucket, object)
 
 	fi.ReplicationState = opts.PutReplicationState()
 	online = countOnlineDisks(onlineDisks)
