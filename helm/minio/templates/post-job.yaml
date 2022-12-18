@@ -165,7 +165,7 @@ spec:
               mountPath: {{ .Values.configPathmc }}certs
             {{ end }}
           resources:
-            {{- toYaml .Values.makePolicyJob.resources | indent 12 }}
+            {{- toYaml .Values.makePolicyJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.customCommands }}
         - name: minio-custom-command
@@ -196,7 +196,7 @@ spec:
               mountPath: {{ .Values.configPathmc }}certs
             {{ end }}
           resources:
-            {{- toYaml .Values.customCommandJob.resources | indent 12 }}
+            {{- toYaml .Values.customCommandJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.svcaccts }}
         - name: minio-make-svcacct
@@ -227,5 +227,5 @@ spec:
               mountPath: {{ .Values.configPathmc }}certs
             {{ end }}
           resources:
-            {{- toYaml .Values.makeServiceAccountJob.resources | indent 12 }}
+            {{- toYaml .Values.makeServiceAccountJob.resources | nindent 12 }}
         {{- end }}
