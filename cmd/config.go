@@ -152,30 +152,34 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, error) {
+// data is optional. If nil it will be loaded from backend.
+func readServerConfig(ctx context.Context, objAPI ObjectLayer, data []byte) (config.Config, error) {
 	srvCfg := config.New()
-	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	data, err := readConfig(ctx, objAPI, configFile)
-	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			lookupConfigs(srvCfg, objAPI)
-			return srvCfg, nil
-		}
-		return nil, err
-	}
-
-	if GlobalKMS != nil && !utf8.Valid(data) {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-			minioMetaBucket: path.Join(minioMetaBucket, configFile),
-		})
+	var err error
+	if len(data) == 0 {
+		configFile := path.Join(minioConfigPrefix, minioConfigFile)
+		data, err = readConfig(ctx, objAPI, configFile)
 		if err != nil {
-			lookupConfigs(srvCfg, objAPI)
+			if errors.Is(err, errConfigNotFound) {
+				lookupConfigs(srvCfg, objAPI)
+				return srvCfg, nil
+			}
 			return nil, err
+		}
+
+		if GlobalKMS != nil && !utf8.Valid(data) {
+			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+				minioMetaBucket: path.Join(minioMetaBucket, configFile),
+			})
+			if err != nil {
+				lookupConfigs(srvCfg, objAPI)
+				return nil, err
+			}
 		}
 	}
 
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	if err = json.Unmarshal(data, &srvCfg); err != nil {
+	if err := json.Unmarshal(data, &srvCfg); err != nil {
 		return nil, err
 	}
 
@@ -212,6 +216,15 @@ func initConfig(objAPI ObjectLayer) error {
 		}
 	}
 
+	// Check if the config version is latest (kvs), if not migrate.
+	ok, data, err := checkConfigVersion(objAPI, path.Join(minioConfigPrefix, minioConfigFile), "kvs")
+	if err != nil && !errors.Is(err, errConfigNotFound) {
+		return err
+	}
+	if ok {
+		return loadConfig(objAPI, data)
+	}
+
 	// Migrates ${HOME}/.minio/config.json or config.json.deprecated
 	// to '<export_path>/.minio.sys/config/config.json'
 	// ignore if the file doesn't exist.
@@ -232,5 +245,5 @@ func initConfig(objAPI ObjectLayer) error {
 		return fmt.Errorf("migrateMinioSysConfigToKV: %w", err)
 	}
 
-	return loadConfig(objAPI)
+	return loadConfig(objAPI, nil)
 }

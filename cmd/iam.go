@@ -856,6 +856,22 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 	return sys.store.GetUserInfo(name)
 }
 
+// QueryPolicyEntities - queries policy associations for builtin users/groups/policies.
+func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		pe := sys.store.ListPolicyMappings(q)
+		pe.Timestamp = UTCNow()
+		return &pe, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // GetUserPolicies - get policies attached to a user.
 func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
 	if !sys.Initialized() {

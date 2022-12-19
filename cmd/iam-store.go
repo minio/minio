@@ -1887,6 +1887,145 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	return res
 }
 
+// Assumes store is locked by caller. If users is empty, returns all user mappings.
+func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, users []string) []madmin.UserPolicyEntities {
+	var r []madmin.UserPolicyEntities
+	usersSet := set.CreateStringSet(users...)
+	for user, mappedPolicy := range cache.iamUserPolicyMap {
+		if !usersSet.IsEmpty() && !usersSet.Contains(user) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.UserPolicyEntities{
+			User:     user,
+			Policies: ps,
+		})
+	}
+
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].User < r[j].User
+	})
+
+	return r
+}
+
+// Assumes store is locked by caller. If groups is empty, returns all group mappings.
+func (store *IAMStoreSys) listGroupPolicyMappings(cache *iamCache, groups []string) []madmin.GroupPolicyEntities {
+	var r []madmin.GroupPolicyEntities
+	groupsSet := set.CreateStringSet(groups...)
+	for group, mappedPolicy := range cache.iamGroupPolicyMap {
+		if !groupsSet.IsEmpty() && !groupsSet.Contains(group) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.GroupPolicyEntities{
+			Group:    group,
+			Policies: ps,
+		})
+	}
+
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].Group < r[j].Group
+	})
+
+	return r
+}
+
+// Assumes store is locked by caller. If policies is empty, returns all policy mappings.
+func (store *IAMStoreSys) listPolicyMappings(cache *iamCache, policies []string) []madmin.PolicyEntities {
+	queryPolSet := set.CreateStringSet(policies...)
+
+	policyToUsersMap := make(map[string]set.StringSet)
+	for user, mappedPolicy := range cache.iamUserPolicyMap {
+		commonPolicySet := mappedPolicy.policySet()
+		if !queryPolSet.IsEmpty() {
+			commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+		}
+		for _, policy := range commonPolicySet.ToSlice() {
+			s, ok := policyToUsersMap[policy]
+			if !ok {
+				policyToUsersMap[policy] = set.CreateStringSet(user)
+			} else {
+				s.Add(user)
+				policyToUsersMap[policy] = s
+			}
+		}
+	}
+
+	policyToGroupsMap := make(map[string]set.StringSet)
+	for group, mappedPolicy := range cache.iamGroupPolicyMap {
+		commonPolicySet := mappedPolicy.policySet()
+		if !queryPolSet.IsEmpty() {
+			commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+		}
+		for _, policy := range commonPolicySet.ToSlice() {
+			s, ok := policyToGroupsMap[policy]
+			if !ok {
+				policyToGroupsMap[policy] = set.CreateStringSet(group)
+			} else {
+				s.Add(group)
+				policyToGroupsMap[policy] = s
+			}
+		}
+	}
+
+	m := make(map[string]madmin.PolicyEntities, len(policyToGroupsMap))
+	for policy, groups := range policyToGroupsMap {
+		s := groups.ToSlice()
+		sort.Strings(s)
+		m[policy] = madmin.PolicyEntities{
+			Policy: policy,
+			Groups: s,
+		}
+	}
+	for policy, users := range policyToUsersMap {
+		s := users.ToSlice()
+		sort.Strings(s)
+
+		// Update existing value in map
+		pe := m[policy]
+		pe.Policy = policy
+		pe.Users = s
+		m[policy] = pe
+	}
+
+	policyEntities := make([]madmin.PolicyEntities, 0, len(m))
+	for _, v := range m {
+		policyEntities = append(policyEntities, v)
+	}
+
+	sort.Slice(policyEntities, func(i, j int) bool {
+		return policyEntities[i].Policy < policyEntities[j].Policy
+	})
+
+	return policyEntities
+}
+
+// ListPolicyMappings - return builtin users/groups mapped to policies.
+func (store *IAMStoreSys) ListPolicyMappings(q madmin.PolicyEntitiesQuery) madmin.PolicyEntitiesResult {
+	cache := store.rlock()
+	defer store.runlock()
+
+	var result madmin.PolicyEntitiesResult
+
+	isAllPoliciesQuery := len(q.Users) == 0 && len(q.Groups) == 0 && len(q.Policy) == 0
+
+	if len(q.Users) > 0 {
+		result.UserMappings = store.listUserPolicyMappings(cache, q.Users)
+	}
+	if len(q.Groups) > 0 {
+		result.GroupMappings = store.listGroupPolicyMappings(cache, q.Groups)
+	}
+	if len(q.Policy) > 0 || isAllPoliciesQuery {
+		result.PolicyMappings = store.listPolicyMappings(cache, q.Policy)
+	}
+	return result
+}
+
 // SetUserStatus - sets current user status.
 func (store *IAMStoreSys) SetUserStatus(ctx context.Context, accessKey string, status madmin.AccountStatus) (updatedAt time.Time, err error) {
 	if accessKey != "" && status != madmin.AccountEnabled && status != madmin.AccountDisabled {
