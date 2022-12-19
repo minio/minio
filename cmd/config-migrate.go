@@ -2533,6 +2533,21 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 		}
 	}
 
+	if version == "kvs" {
+		// Check api config values are present.
+		var vcfg struct {
+			API struct {
+				E []struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+				} `json:"_"`
+			} `json:"api"`
+		}
+		if err = json.Unmarshal(data, &vcfg); err != nil {
+			return false, nil, nil
+		}
+		return len(vcfg.API.E) > 0, data, nil
+	}
 	var versionConfig struct {
 		Version string `json:"version"`
 	}

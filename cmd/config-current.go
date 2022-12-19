@@ -782,13 +782,14 @@ func newSrvConfig(objAPI ObjectLayer) error {
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
-	return readServerConfig(GlobalContext, objAPI)
+	return readServerConfig(GlobalContext, objAPI, nil)
 }
 
 // loadConfig - loads a new config from disk, overrides params
 // from env if found and valid
-func loadConfig(objAPI ObjectLayer) error {
-	srvCfg, err := getValidConfig(objAPI)
+// data is optional. If nil it will be loaded from backend.
+func loadConfig(objAPI ObjectLayer, data []byte) error {
+	srvCfg, err := readServerConfig(GlobalContext, objAPI, data)
 	if err != nil {
 		return err
 	}
