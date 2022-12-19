@@ -131,8 +131,8 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			}
 		}
 		// validate replication ARN against target endpoint
-		c, ok := globalBucketTargetSys.arnRemotesMap[arnStr]
-		if ok {
+		c := globalBucketTargetSys.GetRemoteTargetClient(ctx, arnStr)
+		if c != nil {
 			if c.EndpointURL().String() == clnt.EndpointURL().String() {
 				selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
 				if !sameTarget {
