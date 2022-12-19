@@ -65,7 +65,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -207,7 +207,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 

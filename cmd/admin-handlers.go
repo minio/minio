@@ -2135,7 +2135,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 
 	getAndWriteMinioConfig := func() {
 		if query.Get("minioconfig") == "true" {
-			config, err := readServerConfig(healthCtx, objectAPI)
+			config, err := readServerConfig(healthCtx, objectAPI, nil)
 			if err != nil {
 				healthInfo.Minio.Config = madmin.MinioConfig{
 					Error: err.Error(),
