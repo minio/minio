@@ -112,11 +112,11 @@ func toObjectErr(err error, params ...string) error {
 			Object: params[1],
 		}
 	case errNotEnoughCredit.Error():
-		return NotEnoughCredit{}
+		return errNotEnoughCredit
 	case errNoOpenBill.Error():
-		return NoOpenBill{}
+		return errNoOpenBill
 	case errFileContentEmpty.Error():
-		return FileContentEmpty{}
+		return errFileContentEmpty
 
 	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}
@@ -192,24 +192,6 @@ type ObjectNotConfirmed GenericError
 
 func (e ObjectNotConfirmed) Error() string {
 	return "The requested object:" + e.Object + "is not confirm in the blockchain"
-}
-
-type NotEnoughCredit GenericError
-
-func (e NotEnoughCredit) Error() string {
-	return e.Err.Error()
-}
-
-type NoOpenBill GenericError
-
-func (e NoOpenBill) Error() string {
-	return e.Err.Error()
-}
-
-type FileContentEmpty GenericError
-
-func (e FileContentEmpty) Error() string {
-	return e.Err.Error()
 }
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.

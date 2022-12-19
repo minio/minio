@@ -1890,6 +1890,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	}
 
 	switch err {
+	case errFileContentEmpty:
+		apiErr = ErrFileContentEmpty
+	case errNoOpenBill:
+		apiErr = ErrNoOpenBill
+	case errNotEnoughCredit:
+		apiErr = ErrSDSNotEnoughCredit
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
@@ -2008,12 +2014,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchKey
 	case ObjectNotConfirmed:
 		apiErr = ErrSDSFileNotConfirm
-	case NotEnoughCredit:
-		apiErr = ErrSDSNotEnoughCredit
-	case NoOpenBill:
-		apiErr = ErrNoOpenBill
-	case FileContentEmpty:
-		apiErr = ErrFileContentEmpty
 	case MethodNotAllowed:
 		apiErr = ErrMethodNotAllowed
 	case ObjectLocked:
@@ -2307,12 +2307,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 					Code:           "BadRequest",
 					Description:    err.Error(),
 					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else {
-				apiErr = APIError{
-					Code:           apiErr.Code,
-					Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
-					HTTPStatusCode: apiErr.HTTPStatusCode,
 				}
 			}
 		}
