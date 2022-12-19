@@ -218,7 +218,7 @@ func initConfig(objAPI ObjectLayer) error {
 
 	// Check if the config version is latest (kvs), if not migrate.
 	ok, data, err := checkConfigVersion(objAPI, path.Join(minioConfigPrefix, minioConfigFile), "kvs")
-	if err != nil {
+	if err != nil && !errors.Is(err, errConfigNotFound) {
 		return err
 	}
 	if ok {
