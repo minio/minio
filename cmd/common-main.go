@@ -773,6 +773,8 @@ func handleCommonEnvVars() {
 			logger.Info(color.RedBold(msg))
 		}
 		globalActiveCred = cred
+	} else {
+		globalActiveCred = auth.DefaultCredentials
 	}
 }
 

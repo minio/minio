@@ -96,7 +96,6 @@ const (
 
 // Top level config constants.
 const (
-	CredentialsSubSys    = madmin.CredentialsSubSys
 	PolicyOPASubSys      = madmin.PolicyOPASubSys
 	PolicyPluginSubSys   = madmin.PolicyPluginSubSys
 	IdentityOpenIDSubSys = madmin.IdentityOpenIDSubSys
@@ -178,7 +177,6 @@ var SubSystemsDynamic = set.CreateStringSet(
 
 // SubSystemsSingleTargets - subsystems which only support single target.
 var SubSystemsSingleTargets = set.CreateStringSet(
-	CredentialsSubSys,
 	SiteSubSys,
 	RegionSubSys,
 	EtcdSubSys,
@@ -463,9 +461,6 @@ func (c Config) RedactSensitiveInfo() Config {
 		}
 	}
 
-	// Remove the server credentials altogether
-	nc.DelKVS(CredentialsSubSys)
-
 	return nc
 }
 
@@ -500,20 +495,6 @@ var (
 		},
 	}
 )
-
-// LookupCreds - lookup credentials from config.
-func LookupCreds(kv KVS) (auth.Credentials, error) {
-	if err := CheckValidKeys(CredentialsSubSys, kv, DefaultCredentialKVS); err != nil {
-		return auth.Credentials{}, err
-	}
-	accessKey := kv.Get(AccessKey)
-	secretKey := kv.Get(SecretKey)
-	if accessKey == "" || secretKey == "" {
-		accessKey = auth.DefaultAccessKey
-		secretKey = auth.DefaultSecretKey
-	}
-	return auth.CreateCredentials(accessKey, secretKey)
-}
 
 // Site - holds site info - name and region.
 type Site struct {
