@@ -1526,6 +1526,7 @@ type ReplicationPool struct {
 	mrfWorkerKillCh chan struct{}
 	mrfReplicaCh    chan ReplicationWorkerOperation
 	mrfSaveCh       chan MRFReplicateEntry
+	mrfStopCh       chan struct{}
 	mrfWorkerSize   int
 	saveStateCh     chan struct{}
 	mrfWorkerWg     sync.WaitGroup
@@ -1582,6 +1583,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		mrfWorkerKillCh: make(chan struct{}, failedWorkers),
 		resyncer:        newresyncer(),
 		mrfSaveCh:       make(chan MRFReplicateEntry, 100000),
+		mrfStopCh:       make(chan struct{}, 1),
 		saveStateCh:     make(chan struct{}, 1),
 		ctx:             ctx,
 		objLayer:        o,
@@ -2831,6 +2833,7 @@ func (p *ReplicationPool) persistMRF() {
 			saveMRFToDisk(false)
 			mTimer.Reset(mrfTimeInterval)
 		case <-p.ctx.Done():
+			p.mrfStopCh <- struct{}{}
 			close(p.mrfSaveCh)
 			saveMRFToDisk(true)
 			return
@@ -2860,8 +2863,13 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 	select {
 	case <-GlobalContext.Done():
 		return
-	case p.mrfSaveCh <- entry:
+	case <-p.mrfStopCh:
+		return
 	default:
+		select {
+		case p.mrfSaveCh <- entry:
+		default:
+		}
 	}
 }
 
@@ -3005,7 +3013,7 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 		return map[string]BucketReplicationStats{}, nil
 	}
 
-	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName))
+	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath())
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
 			return rs, nil
@@ -3048,6 +3056,8 @@ func (p *ReplicationPool) saveStatsToDisk() {
 	if !p.initialized() {
 		return
 	}
+	ctx, cancel := globalLeaderLock.GetLock(p.ctx)
+	defer cancel()
 	sTimer := time.NewTimer(replStatsSaveInterval)
 	defer sTimer.Stop()
 	for {
@@ -3059,7 +3069,7 @@ func (p *ReplicationPool) saveStatsToDisk() {
 			}
 			p.saveStats(p.ctx)
 			sTimer.Reset(replStatsSaveInterval)
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -3075,20 +3085,5 @@ func (p *ReplicationPool) saveStats(ctx context.Context) error {
 	if data == nil {
 		return err
 	}
-	return saveConfig(ctx, p.objLayer, getReplicationStatsPath(globalLocalNodeName), data)
-}
-
-// SaveState saves replication stats and mrf data before server restart
-func (p *ReplicationPool) SaveState(ctx context.Context) error {
-	if !p.initialized() {
-		return nil
-	}
-	go func() {
-		select {
-		case p.saveStateCh <- struct{}{}:
-		case <-p.ctx.Done():
-			return
-		}
-	}()
-	return p.saveStats(ctx)
+	return saveConfig(ctx, p.objLayer, getReplicationStatsPath(), data)
 }
