@@ -254,11 +254,10 @@ func (r *ReplicationStats) serializeStats() ([]byte, error) {
 	}
 	r.mostRecentStatsMu.Lock()
 	defer r.mostRecentStatsMu.Unlock()
-	bsm := r.mostRecentStats
-	if len(bsm.Stats) == 0 {
+	if len(r.mostRecentStats.Stats) == 0 {
 		return nil, nil
 	}
-	data := make([]byte, 4, 4+bsm.Msgsize())
+	data := make([]byte, 4, 4+r.mostRecentStats.Msgsize())
 	// Add the replication stats meta header.
 	binary.LittleEndian.PutUint16(data[0:2], replStatsMetaFormat)
 	binary.LittleEndian.PutUint16(data[2:4], replStatsVersion)
@@ -333,6 +332,7 @@ func (r *ReplicationStats) calculateBucketReplicationStats(bucket string, u Buck
 	s = BucketReplicationStats{
 		Stats: make(map[string]*BucketReplicationStat, len(stats)),
 	}
+
 	var latestTotReplicatedSize int64
 	for _, st := range u.ReplicationInfo {
 		latestTotReplicatedSize += int64(st.ReplicatedSize)
@@ -372,7 +372,9 @@ func (r *ReplicationStats) calculateBucketReplicationStats(bucket string, u Buck
 	if len(r.mostRecentStats.Stats) == 0 {
 		r.mostRecentStats = BucketStatsMap{Stats: make(map[string]BucketStats, 1), Timestamp: UTCNow()}
 	}
-	r.mostRecentStats.Stats[bucket] = BucketStats{ReplicationStats: s}
+	if len(s.Stats) > 0 {
+		r.mostRecentStats.Stats[bucket] = BucketStats{ReplicationStats: s}
+	}
 	r.mostRecentStats.Timestamp = UTCNow()
 	r.mostRecentStatsMu.Unlock()
 	return s
