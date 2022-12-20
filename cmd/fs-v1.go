@@ -1175,13 +1175,26 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}*/
 
+	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
+	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
+	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
 	if bucket != minioMetaBucket {
 		// Write FS metadata after a successful namespace operation.
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
-	return ObjectInfo{}, nil
+
+	// Stat the file to fetch timestamp, size.
+	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
 func isSysCall(path string) bool {

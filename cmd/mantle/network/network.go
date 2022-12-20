@@ -10,18 +10,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
-	"strings"
 )
-
-type MantleError struct {
-	Message string `json:"message"`
-	Body    string `json:"body"`
-	Status  int    `json:"status"`
-}
-
-func parseMantleError(body string) error {
-	return errors.New(strings.NewReplacer("[", "", "]", "", `"`, "").Replace(body))
-}
 
 func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
 	b := bytes.Buffer{}
@@ -68,10 +57,8 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 
 	if res.StatusCode >= http.StatusBadRequest {
 		b, _ := ioutil.ReadAll(res.Body)
-		var mantleError MantleError
-		err = json.Unmarshal(b, &mantleError)
 
-		return PutFileResp{}, parseMantleError(mantleError.Body)
+		return PutFileResp{}, parseMantleError(b)
 	}
 
 	bodyBytes, err := ioutil.ReadAll(res.Body)
