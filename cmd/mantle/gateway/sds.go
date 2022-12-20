@@ -7,11 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 )
 
-func Put(f *os.File, fn string) (string, error) {
+func Put(f io.Reader, fn string) (string, error) {
 	client := &http.Client{}
 	val := map[string]io.Reader{
 		"file":        f,

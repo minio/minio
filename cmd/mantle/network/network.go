@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/hash"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path"
 	"strings"
 )
 
@@ -34,8 +33,8 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 			defer x.Close()
 		}
 
-		if x, ok := r.(*os.File); ok {
-			fw, err = w.CreateFormFile(key, path.Base(x.Name()))
+		if _, ok := r.(*hash.Reader); ok {
+			fw, err = w.CreateFormFile(key, "test")
 			if err != nil {
 				return
 			}

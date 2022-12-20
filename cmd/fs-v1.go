@@ -1101,6 +1101,27 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, errInvalidArgument
 	}
 
+	if !isSysCall(bucket) {
+		p := pathJoin(fs.fsPath, bucket, object)
+
+		bId, err := gateway.Put(data, object)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		if err := writeId(p, bId); err != nil {
+			return ObjectInfo{}, err
+		}
+		// Stat the file to fetch timestamp, size.
+		fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		// Success.
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	}
+
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
@@ -1154,44 +1175,13 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}*/
 
-	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
-	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
 	if bucket != minioMetaBucket {
 		// Write FS metadata after a successful namespace operation.
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
-
-	// Stat the file to fetch timestamp, size.
-	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
-	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-
-	if !isSysCall(bucket) {
-		p := pathJoin(fs.fsPath, bucket, object)
-		f, _ := os.Open(p)
-
-		bId, err := gateway.Put(f, object)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
-		err = f.Close()
-		if err != nil {
-			//TODO: handle
-		}
-		if err := writeId(p, bId); err != nil {
-			return ObjectInfo{}, err
-		}
-	}
-
-	// Success.
-	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	return ObjectInfo{}, nil
 }
 
 func isSysCall(path string) bool {
@@ -1199,9 +1189,6 @@ func isSysCall(path string) bool {
 }
 
 func writeId(path string, id string) error {
-	if err := os.Remove(path); err != nil {
-		return toObjectErr(err)
-	}
 
 	f, err := os.Create(path)
 	if err != nil {
