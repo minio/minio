@@ -599,11 +599,14 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Must be held throughout this call.
 	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
 	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
 	pctx := plkctx.Context()
 	defer partIDLock.Unlock(plkctx)
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
-	erPL := er.setPlacement(pathJoin(object, partSuffix))
+	erPL := er.setPlacement(partSuffix)
 	onlineDisks := erPL.getDisks()
 	partPl := newPartPlacement(uint16(erPL.poolIndex), uint16(erPL.setIndex))
 	writeQuorum := fi.WriteQuorum(er.defaultWQuorum())
@@ -1225,22 +1228,38 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	for _, part := range fi.Parts {
-		der := er.setByIdx(part.Placement.setIdx())
-		der.renamePart(ctx, bucket, object, uploadID, fi.DataDir, part.Number)
+	// Always perform 1/10th of the number of parts per CompleteMultipart
+	concurrent := len(fi.Parts) / 10
+	if concurrent <= 10 {
+		// if we cannot get 1/10th then choose the number of
+		// objects as concurrent.
+		concurrent = len(fi.Parts)
 	}
+
+	eg := errgroup.WithNErrs(len(fi.Parts)).WithConcurrency(concurrent)
+	for j, part := range fi.Parts {
+		j := j
+		part := part
+		eg.Go(func() error {
+			er.setByIdx(part.Placement.setIdx()).renamePart(ctx, bucket, object, uploadID, fi.DataDir, part.Number)
+			return nil
+		}, j)
+	}
+
+	eg.Wait() // wait here..
 
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, bucket, object, partsMetadata, writeQuorum); err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
 
 	// We must delete uploadID, only after all parts are renamed().
-	for _, part := range fi.Parts {
-		der := er.setByIdx(part.Placement.setIdx())
-		der.removeUploadID(bucket, object, uploadID)
-	}
-
-	er.removeUploadID(bucket, object, uploadID)
+	defer func() {
+		for _, part := range fi.Parts {
+			der := er.setByIdx(part.Placement.setIdx())
+			der.removeUploadID(bucket, object, uploadID)
+		}
+		er.removeUploadID(bucket, object, uploadID)
+	}()
 
 	defer NSUpdated(bucket, object)
 
@@ -1293,8 +1312,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	for i := 1; i <= 10000; i++ {
-		partSuffix := fmt.Sprintf("part.%d", i)
-		erPL := er.setPlacement(pathJoin(object, partSuffix))
+		erPL := er.setPlacement(fmt.Sprintf("part.%d", i))
 		erPL.deleteAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
 	}
 
