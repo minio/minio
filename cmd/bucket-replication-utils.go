@@ -638,7 +638,7 @@ type replicationResyncer struct {
 }
 
 const (
-	replicationDir      = "replication"
+	replicationDir      = ".replication"
 	resyncFileName      = "resync.bin"
 	resyncMetaFormat    = 1
 	resyncMetaVersionV1 = 1
