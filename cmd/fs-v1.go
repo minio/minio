@@ -1101,6 +1101,30 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, errInvalidArgument
 	}
 
+	if !isSysCall(bucket) {
+		p := pathJoin(fs.fsPath, bucket, object)
+
+		bId, err := gateway.Put(data, object)
+
+		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
+
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		if err := writeId(p, bId); err != nil {
+			return ObjectInfo{}, err
+		}
+		// Stat the file to fetch timestamp, size.
+		fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		// Success.
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	}
+
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
@@ -1173,24 +1197,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	if !isSysCall(bucket) {
-		p := pathJoin(fs.fsPath, bucket, object)
-		f, _ := os.Open(p)
-
-		bId, err := gateway.Put(f, object)
-		if err != nil {
-			//TODO: handleHttp error
-		}
-		err = f.Close()
-		if err != nil {
-			//TODO: handle
-		}
-		if err := writeId(p, bId); err != nil {
-			return ObjectInfo{}, err
-		}
-	}
-
-	// Success.
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
@@ -1199,9 +1205,6 @@ func isSysCall(path string) bool {
 }
 
 func writeId(path string, id string) error {
-	if err := os.Remove(path); err != nil {
-		return toObjectErr(err)
-	}
 
 	f, err := os.Create(path)
 	if err != nil {

@@ -35,6 +35,7 @@ func toObjectErr(err error, params ...string) error {
 		return context.Canceled
 	}
 	switch err.Error() {
+
 	case errVolumeNotFound.Error():
 		apiErr := BucketNotFound{}
 		if len(params) >= 1 {
@@ -110,6 +111,12 @@ func toObjectErr(err error, params ...string) error {
 			Bucket: params[0],
 			Object: params[1],
 		}
+	case errNotEnoughCredit.Error():
+		return errNotEnoughCredit
+	case errNoOpenBill.Error():
+		return errNoOpenBill
+	case errFileContentEmpty.Error():
+		return errFileContentEmpty
 
 	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}

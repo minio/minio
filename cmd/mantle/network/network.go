@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/hash"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path"
 )
 
 func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
@@ -23,8 +22,8 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 			defer x.Close()
 		}
 
-		if x, ok := r.(*os.File); ok {
-			fw, err = w.CreateFormFile(key, path.Base(x.Name()))
+		if _, ok := r.(*hash.Reader); ok {
+			fw, err = w.CreateFormFile(key, "test")
 			if err != nil {
 				return
 			}
@@ -58,9 +57,8 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 
 	if res.StatusCode >= http.StatusBadRequest {
 		b, _ := ioutil.ReadAll(res.Body)
-		fmt.Println(string(b))
-		err = fmt.Errorf("bad status: %s", res.Status)
-		return
+
+		return PutFileResp{}, parseMantleError(b)
 	}
 
 	bodyBytes, err := ioutil.ReadAll(res.Body)
