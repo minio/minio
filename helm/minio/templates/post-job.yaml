@@ -1,3 +1,4 @@
+{{- if or .Values.buckets .Values.users .Values.policies .Values.customCommands .Values.svcaccts }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -229,3 +230,4 @@ spec:
           resources:
             {{- toYaml .Values.makeServiceAccountJob.resources | nindent 12 }}
         {{- end }}
+{{- end }}
