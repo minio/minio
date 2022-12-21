@@ -206,7 +206,7 @@ func NewConfigSys() *ConfigSys {
 
 // Initialize and load config from remote etcd or local config directory
 func initConfig(objAPI ObjectLayer) error {
-	globalTrace.Publish(bootstrapTrace("load the configuration"))
+	bootstrapTrace("load the configuration")
 
 	if objAPI == nil {
 		return errServerNotInitialized

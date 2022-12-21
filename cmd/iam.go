@@ -208,7 +208,7 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
-	globalTrace.Publish(bootstrapTrace("IAM initialization started"))
+	bootstrapTrace("IAM initialization started")
 	globalServerConfigMu.RLock()
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
@@ -316,7 +316,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
-	globalTrace.Publish(bootstrapTrace("finishing IAM loading"))
+	bootstrapTrace("finishing IAM loading")
 
 	refreshInterval := sys.iamRefreshInterval
 

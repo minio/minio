@@ -346,14 +346,18 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, os.ErrDeadlineExceeded)
 }
 
-func bootstrapTrace(msg string) madmin.TraceInfo {
-	return madmin.TraceInfo{
+func bootstrapTrace(msg string) {
+	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
+		return
+	}
+
+	globalTrace.Publish(madmin.TraceInfo{
 		TraceType: madmin.TraceBootstrap,
 		Time:      time.Now().UTC(),
 		NodeName:  globalLocalNodeName,
 		FuncName:  "BOOTSTRAP",
-		Message:   msg,
-	}
+		Message:   fmt.Sprintf("%s %s", getSource(2), msg),
+	})
 }
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
@@ -385,7 +389,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		default:
 		}
 
-		globalTrace.Publish(bootstrapTrace("trying to acquire transaction.lock"))
+		bootstrapTrace("trying to acquire transaction.lock")
 
 		// Make sure to hold lock for entire migration to avoid
 		// such that only one server should migrate the entire config
@@ -399,7 +403,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
-			globalTrace.Publish(bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping before retry", err)))
+			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping before retry", err))
 
 			// Sleep 0 -> 2 seconds to average 1 second retry interval.
 			time.Sleep(time.Duration(r.Float64() * 2 * float64(time.Second)))
@@ -589,7 +593,7 @@ func serverMain(ctx *cli.Context) {
 	setHTTPServer(httpServer)
 
 	if globalIsDistErasure {
-		globalTrace.Publish(bootstrapTrace("verifying system configuration"))
+		bootstrapTrace("verifying system configuration")
 		// Additionally in distributed setup, validate the setup and configuration.
 		if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
 			logger.Fatal(err, "Unable to start the server")
@@ -621,7 +625,7 @@ func serverMain(ctx *cli.Context) {
 		logger.Info(color.RedBold(msg))
 	}
 
-	globalTrace.Publish(bootstrapTrace("initializing the server"))
+	bootstrapTrace("initializing the server")
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
 		// For any config error, we don't need to drop into safe-mode

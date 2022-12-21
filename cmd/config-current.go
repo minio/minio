@@ -511,13 +511,13 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	transport := NewHTTPTransport()
 
-	globalTrace.Publish(bootstrapTrace("lookup the event notification targets"))
+	bootstrapTrace("lookup the event notification targets")
 	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalTrace.Publish(bootstrapTrace("applying the dynamic configuration"))
+	bootstrapTrace("applying the dynamic configuration")
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
 		logger.LogIf(ctx, err)
@@ -773,13 +773,13 @@ func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
 // from env if found and valid
 // data is optional. If nil it will be loaded from backend.
 func loadConfig(objAPI ObjectLayer, data []byte) error {
-	globalTrace.Publish(bootstrapTrace("load the configuration"))
+	bootstrapTrace("load the configuration")
 	srvCfg, err := readServerConfig(GlobalContext, objAPI, data)
 	if err != nil {
 		return err
 	}
 
-	globalTrace.Publish(bootstrapTrace("lookup the configuration"))
+	bootstrapTrace("lookup the configuration")
 	// Override any values from ENVs.
 	lookupConfigs(srvCfg, objAPI)
 
