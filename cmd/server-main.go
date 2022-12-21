@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -345,6 +346,20 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, os.ErrDeadlineExceeded)
 }
 
+func bootstrapTrace(msg string) {
+	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
+		return
+	}
+
+	globalTrace.Publish(madmin.TraceInfo{
+		TraceType: madmin.TraceBootstrap,
+		Time:      time.Now().UTC(),
+		NodeName:  globalLocalNodeName,
+		FuncName:  "BOOTSTRAP",
+		Message:   fmt.Sprintf("%s %s", getSource(2), msg),
+	})
+}
+
 func initServer(ctx context.Context, newObject ObjectLayer) error {
 	t1 := time.Now()
 
@@ -374,6 +389,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		default:
 		}
 
+		bootstrapTrace("trying to acquire transaction.lock")
+
 		// Make sure to hold lock for entire migration to avoid
 		// such that only one server should migrate the entire config
 		// at a given time, this big transaction lock ensures this
@@ -386,6 +403,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping before retry", err))
 
 			// Sleep 0 -> 2 seconds to average 1 second retry interval.
 			time.Sleep(time.Duration(r.Float64() * 2 * float64(time.Second)))
@@ -575,6 +593,7 @@ func serverMain(ctx *cli.Context) {
 	setHTTPServer(httpServer)
 
 	if globalIsDistErasure {
+		bootstrapTrace("verifying system configuration")
 		// Additionally in distributed setup, validate the setup and configuration.
 		if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
 			logger.Fatal(err, "Unable to start the server")
@@ -606,6 +625,7 @@ func serverMain(ctx *cli.Context) {
 		logger.Info(color.RedBold(msg))
 	}
 
+	bootstrapTrace("initializing the server")
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
 		// For any config error, we don't need to drop into safe-mode

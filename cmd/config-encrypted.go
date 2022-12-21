@@ -37,7 +37,10 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer) error {
 	if err != nil {
 		return fmt.Errorf("Unable to encrypt config %w", err)
 	}
-	if err = migrateConfigPrefixToEncrypted(objAPI, encrypted); err != nil {
+	if !encrypted {
+		return nil
+	}
+	if err = migrateConfigPrefixToEncrypted(objAPI); err != nil {
 		return fmt.Errorf("Unable to migrate all config at .minio.sys/config/: %w", err)
 	}
 	return nil
@@ -48,6 +51,7 @@ const backendEncryptedFile = "backend-encrypted"
 var backendEncryptedMigrationComplete = []byte("encrypted")
 
 func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, error) {
+	bootstrapTrace("check if etcd backend is encrypted")
 	data, err := readKeyEtcd(ctx, client, backendEncryptedFile)
 	if err != nil && err != errConfigNotFound {
 		return false, err
@@ -56,6 +60,7 @@ func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, 
 }
 
 func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
+	bootstrapTrace("check if the config backend is encrypted")
 	data, err := readConfig(GlobalContext, objAPI, backendEncryptedFile)
 	if err != nil && err != errConfigNotFound {
 		return false, err
@@ -75,7 +80,9 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		return nil
 	}
 
-	if encrypted && GlobalKMS != nil {
+	bootstrapTrace("encrypt etcd config")
+
+	if GlobalKMS != nil {
 		stat, err := GlobalKMS.Stat(ctx)
 		if err != nil {
 			return err
@@ -136,18 +143,16 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		}
 	}
 
-	if encrypted && GlobalKMS != nil {
+	if GlobalKMS != nil {
 		logger.Info("Migration of encrypted IAM config data completed. All data is now encrypted on etcd.")
 	}
 
 	return deleteKeyEtcd(ctx, client, backendEncryptedFile)
 }
 
-func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
-	if !encrypted {
-		return nil
-	}
-	if encrypted && GlobalKMS != nil {
+func migrateConfigPrefixToEncrypted(objAPI ObjectLayer) error {
+	bootstrapTrace("migrating config prefix to encrypted")
+	if GlobalKMS != nil {
 		stat, err := GlobalKMS.Stat(context.Background())
 		if err != nil {
 			return err
@@ -202,7 +207,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, encrypted bool) error {
 		}
 	}
 
-	if encrypted && GlobalKMS != nil {
+	if GlobalKMS != nil {
 		logger.Info("Migration of encrypted config data completed. All config data is now encrypted.")
 	}
 
