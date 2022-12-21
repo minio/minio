@@ -96,6 +96,8 @@ type ObjectOptions struct {
 	// IndexCB will return any index created but the compression.
 	// Object must have been read at this point.
 	IndexCB func() []byte
+
+	InclFreeVersions bool
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.

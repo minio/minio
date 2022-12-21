@@ -211,7 +211,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 				ModTime:  timeSentinel1970,
 			}, nil
 		}
-		return e.cached.ToFileInfo(bucket, e.name, "")
+		return e.cached.ToFileInfo(bucket, e.name, "", false)
 	}
 	return getFileInfo(e.metadata, bucket, e.name, "", false)
 }

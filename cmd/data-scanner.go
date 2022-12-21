@@ -997,7 +997,8 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 
 	// Remove this free version
 	_, err = o.DeleteObject(ctx, oi.Bucket, oi.Name, ObjectOptions{
-		VersionID: oi.VersionID,
+		VersionID:        oi.VersionID,
+		InclFreeVersions: true,
 	})
 	if err == nil {
 		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete)
