@@ -1384,7 +1384,7 @@ var errorCodes = errorCodeMap{
 	ErrSiteReplicationPeerResp: {
 		Code:           "XMinioSiteReplicationPeerResp",
 		Description:    "Error received when contacting a peer site",
-		HTTPStatusCode: http.StatusServiceUnavailable,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSiteReplicationBackendIssue: {
 		Code:           "XMinioSiteReplicationBackendIssue",
