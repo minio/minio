@@ -72,6 +72,10 @@ var (
 		Cause: errors.New("peer not found"),
 		Code:  ErrSiteReplicationInvalidRequest,
 	}
+	errSRRequestorNotFound = SRError{
+		Cause: errors.New("requesting site not found in site replication config"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
 	errSRNotEnabled = SRError{
 		Cause: errors.New("site replication is not enabled"),
 		Code:  ErrSiteReplicationInvalidRequest,
@@ -2060,12 +2064,12 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 		}
 	}
 	for _, s := range siteNames {
-		info, ok := peerMap[s]
+		pinfo, ok := peerMap[s]
 		if !ok {
 			return st, errSRConfigMissingError(errMissingSRConfig)
 		}
-		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
-		delete(updatedPeers, info.DeploymentID)
+		rmvEndpoints = append(rmvEndpoints, pinfo.Endpoint)
+		delete(updatedPeers, pinfo.DeploymentID)
 	}
 	var wg sync.WaitGroup
 	errs := make(map[string]error, len(c.state.Peers))
@@ -2087,6 +2091,8 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", pi.Name, err))
 				return
 			}
+			// set the requesting site's deploymentID for verification of peer request
+			rreq.RequestingDepID = globalDeploymentID
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
 				if errors.Is(err, errMissingSRConfig) {
 					// ignore if peer is already removed.
@@ -2100,9 +2106,11 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	wg.Wait()
 
 	errdID := ""
+	selfTgtsDeleted := errs[globalDeploymentID] == nil // true if all remote targets and replication config cleared successfully on local cluster
+
 	for dID, err := range errs {
 		if err != nil {
-			if !rreq.RemoveAll {
+			if !rreq.RemoveAll && !selfTgtsDeleted {
 				return madmin.ReplicateRemoveStatus{
 					ErrDetail: err.Error(),
 					Status:    madmin.ReplicateRemoveStatusPartial,
@@ -2146,12 +2154,17 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 		return madmin.ReplicateRemoveStatus{
 			Status:    madmin.ReplicateRemoveStatusPartial,
 			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, nil
+		}, err
 	}
 
-	return madmin.ReplicateRemoveStatus{
+	st = madmin.ReplicateRemoveStatus{
 		Status: madmin.ReplicateRemoveStatusSuccess,
-	}, nil
+	}
+	if errs[errdID] != nil {
+		st.Status = madmin.ReplicateRemoveStatusPartial
+		st.ErrDetail = errs[errdID].Error()
+	}
+	return st, nil
 }
 
 // InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
@@ -2159,6 +2172,19 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) error {
 	if !c.isEnabled() {
 		return errSRNotEnabled
+	}
+	if rreq.RequestingDepID != "" {
+		// validate if requesting site is still part of site replication
+		var foundRequestor bool
+		for _, p := range c.state.Peers {
+			if p.DeploymentID == rreq.RequestingDepID {
+				foundRequestor = true
+				break
+			}
+		}
+		if !foundRequestor {
+			return errSRRequestorNotFound
+		}
 	}
 
 	ourName := ""
