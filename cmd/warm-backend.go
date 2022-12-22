@@ -60,7 +60,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 		}
 	}
 
-	r, err = w.Get(ctx, probeObject, rv, WarmBackendGetOpts{})
+	r, err := w.Get(ctx, probeObject, rv, WarmBackendGetOpts{})
 	if err != nil {
 		switch err.(type) {
 		case BackendDown:
