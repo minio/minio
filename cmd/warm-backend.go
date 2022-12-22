@@ -22,9 +22,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	xhttp "github.com/minio/minio/internal/http"
 	"io"
 
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/madmin-go/v2"
 )
 
