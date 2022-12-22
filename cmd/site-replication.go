@@ -2119,10 +2119,7 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 			errdID = dID
 		}
 	}
-	var remoteErr error // make sure to return err from remote if any
-	if errdID != "" {
-		remoteErr = errs[errdID]
-	}
+
 	// force local config to be cleared even if peers failed since the remote targets are deleted
 	// by now from the replication config and user intended to forcibly clear all site replication
 	if rreq.RemoveAll {
@@ -2157,16 +2154,17 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 		return madmin.ReplicateRemoveStatus{
 			Status:    madmin.ReplicateRemoveStatusPartial,
 			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, remoteErr
+		}, err
 	}
 
 	st = madmin.ReplicateRemoveStatus{
 		Status: madmin.ReplicateRemoveStatusSuccess,
 	}
-	if remoteErr != nil {
+	if errs[errdID] != nil {
 		st.Status = madmin.ReplicateRemoveStatusPartial
+		st.ErrDetail = errs[errdID].Error()
 	}
-	return st, remoteErr
+	return st, nil
 }
 
 // InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
