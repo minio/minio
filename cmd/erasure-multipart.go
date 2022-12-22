@@ -1254,10 +1254,22 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// We must delete uploadID, only after all parts are renamed().
 	defer func() {
+		// deduplicate erasure sets to remove uploadID from
+		sets := make(map[*erasureObjects]struct{})
 		for _, part := range fi.Parts {
-			der := er.setByIdx(part.Placement.setIdx())
-			der.removeUploadID(bucket, object, uploadID)
+			sets[er.setByIdx(part.Placement.setIdx())] = struct{}{}
 		}
+		eg := errgroup.WithNErrs(len(sets)).WithConcurrency(concurrent)
+		i := 0
+		for set := range sets {
+			set := set
+			eg.Go(func() error {
+				set.removeUploadID(bucket, object, uploadID)
+				return nil
+			}, i)
+			i++
+		}
+		eg.Wait()
 		er.removeUploadID(bucket, object, uploadID)
 	}()
 
