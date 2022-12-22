@@ -114,9 +114,6 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 	default:
 		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.MakeWithVersioningBktOp:
-		_, isLockEnabled := r.Form["lockEnabled"]
-		_, isVersioningEnabled := r.Form["versioningEnabled"]
-		_, isForceCreate := r.Form["forceCreate"]
 		createdAtStr := strings.TrimSpace(r.Form.Get("createdAt"))
 		createdAt, cerr := time.Parse(time.RFC3339Nano, createdAtStr)
 		if cerr != nil {
@@ -124,27 +121,18 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 		}
 
 		opts := MakeBucketOptions{
-			Location:          r.Form.Get("location"),
-			LockEnabled:       isLockEnabled,
-			VersioningEnabled: isVersioningEnabled,
-			ForceCreate:       isForceCreate,
+			LockEnabled:       r.Form.Get("lockEnabled") == "true",
+			VersioningEnabled: r.Form.Get("versioningEnabled") == "true",
+			ForceCreate:       r.Form.Get("forceCreate") == "true",
 			CreatedAt:         createdAt,
 		}
 		err = globalSiteReplicationSys.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
 	case madmin.ConfigureReplBktOp:
 		err = globalSiteReplicationSys.PeerBucketConfigureReplHandler(ctx, bucket)
-	case madmin.DeleteBucketBktOp:
-		_, noRecreate := r.Form["noRecreate"]
+	case madmin.DeleteBucketBktOp, madmin.ForceDeleteBucketBktOp:
 		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
-			Force:      false,
-			NoRecreate: noRecreate,
-			SRDeleteOp: getSRBucketDeleteOp(true),
-		})
-	case madmin.ForceDeleteBucketBktOp:
-		_, noRecreate := r.Form["noRecreate"]
-		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
-			Force:      true,
-			NoRecreate: noRecreate,
+			Force:      operation == madmin.ForceDeleteBucketBktOp,
+			NoRecreate: r.Form.Get("noRecreate") == "true",
 			SRDeleteOp: getSRBucketDeleteOp(true),
 		})
 	case madmin.PurgeDeletedBucketOp:

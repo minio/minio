@@ -117,7 +117,6 @@ type TransitionOptions struct {
 
 // MakeBucketOptions represents bucket options for ObjectLayer bucket operations
 type MakeBucketOptions struct {
-	Location          string
 	LockEnabled       bool
 	VersioningEnabled bool
 	ForceCreate       bool      // Create buckets even if they are already created.
@@ -200,7 +199,7 @@ type ObjectLayer interface {
 	LocalStorageInfo(ctx context.Context) StorageInfo
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error
+	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error

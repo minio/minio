@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 )
@@ -35,16 +34,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 // Bucket operations
 
 // MakeBucket - make a bucket.
-func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
-	defer NSUpdated(bucket, slashSeparator)
-
-	// Verify if bucket is valid.
-	if !isMinioMetaBucketName(bucket) {
-		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
-			return BucketNameInvalid{Bucket: bucket}
-		}
-	}
-
+func (er erasureObjects) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -149,9 +139,6 @@ func (er erasureObjects) GetBucketInfo(ctx context.Context, bucket string, opts 
 
 // DeleteBucket - deletes a bucket.
 func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
-	// Collect if all disks report volume not found.
-	defer NSUpdated(bucket, slashSeparator)
-
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))

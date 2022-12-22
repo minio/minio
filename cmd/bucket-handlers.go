@@ -773,7 +773,6 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	opts := MakeBucketOptions{
-		Location:    location,
 		LockEnabled: objectLockEnabled,
 		ForceCreate: forceCreate,
 	}
@@ -785,7 +784,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			// exists elsewhere
 			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
@@ -837,7 +836,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Proceed to creating a bucket.
-	if err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+	if err := objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 		if _, ok := err.(BucketExists); ok {
 			// Though bucket exists locally, we send the site-replication
 			// hook to ensure all sites have this bucket. If the hook
