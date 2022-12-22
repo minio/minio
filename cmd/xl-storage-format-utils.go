@@ -122,7 +122,7 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 			}, nil
 		}
 		inData = xlMeta.data
-		fi, err = xlMeta.ToFileInfo(volume, path, versionID)
+		fi, err = xlMeta.ToFileInfo(volume, path, versionID, false)
 	}
 	if !data || err != nil {
 		return fi, err

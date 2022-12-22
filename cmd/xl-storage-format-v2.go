@@ -1700,7 +1700,7 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
-func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
+func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers bool) (fi FileInfo, err error) {
 	var uv uuid.UUID
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
@@ -1712,12 +1712,29 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	var succModTime int64
 	isLatest := true
 	nonFreeVersions := len(x.versions)
+
+	var (
+		freeFi    FileInfo
+		freeFound bool
+	)
 	found := false
 	for _, ver := range x.versions {
 		header := &ver.header
 		// skip listing free-version unless explicitly requested via versionID
 		if header.FreeVersion() {
 			nonFreeVersions--
+			// remember the latest free version; will return this FileInfo if no non-free version remain
+			var freeVersion xlMetaV2Version
+			if inclFreeVers && !freeFound {
+				// ignore unmarshalling errors, will return errFileNotFound in that case
+				if _, err := freeVersion.unmarshalV(x.metaV, ver.meta); err == nil {
+					if freeFi, err = freeVersion.ToFileInfo(volume, path); err == nil {
+						freeFi.IsLatest = true // when this is returned, it would be the latest free version remaining.
+						freeFound = true
+					}
+				}
+			}
+
 			if header.VersionID != uv {
 				continue
 			}
@@ -1749,6 +1766,11 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 	}
 	if !found {
 		if versionID == "" {
+			if inclFreeVers && nonFreeVersions == 0 {
+				if freeFound {
+					return freeFi, nil
+				}
+			}
 			return FileInfo{}, errFileNotFound
 		}
 

@@ -2335,7 +2335,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	}
 
 	// Replace the data of null version or any other existing version-id
-	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID)
+	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID, false)
 	if err == nil && !ofi.Deleted {
 		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
 			// Purge the destination path as we are not preserving anything
