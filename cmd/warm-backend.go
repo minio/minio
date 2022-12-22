@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/madmin-go/v2"
 )
 
@@ -78,7 +79,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 			}
 		}
 	}
-	r.Close()
+	xhttp.DrainBody(r)
 	if err = w.Remove(ctx, probeObject, rv); err != nil {
 		switch err.(type) {
 		case BackendDown:
