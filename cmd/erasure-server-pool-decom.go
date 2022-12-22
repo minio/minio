@@ -1007,9 +1007,9 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 		return
 	}
 
-	z.poolMetaMutex.Lock()
+	z.poolMetaMutex.RLock()
 	failed := z.poolMeta.Pools[idx].Decommission.ItemsDecommissionFailed > 0
-	z.poolMetaMutex.Unlock()
+	z.poolMetaMutex.RUnlock()
 
 	if failed {
 		// Decommission failed indicate as such.
