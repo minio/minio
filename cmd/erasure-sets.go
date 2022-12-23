@@ -679,14 +679,14 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 
 // MakeBucketLocation - creates a new bucket across all sets simultaneously,
 // then return the first encountered error
-func (s *erasureSets) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
+func (s *erasureSets) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].MakeBucketWithLocation(ctx, bucket, opts)
+			return s.sets[index].MakeBucket(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -815,7 +815,7 @@ func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObj
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+				return sets[index].MakeBucket(ctx, bucket, MakeBucketOptions{})
 			}
 			return nil
 		}, index)

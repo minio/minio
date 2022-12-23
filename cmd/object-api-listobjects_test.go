@@ -41,7 +41,7 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 		"test-bucket-files",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
+		err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: true,
 		})
 		if err != nil {
@@ -331,7 +331,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		6: "test-bucket-custom-delimiter",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
+		err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: versioned,
 		})
 		if err != nil {
@@ -1036,7 +1036,7 @@ func testDeleteObjectVersion(obj ObjectLayer, instanceType string, t1 TestErrHan
 		"bucket-suspended-version-id",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{
+		err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{
 			VersioningEnabled: true,
 		})
 		if err != nil {
@@ -1123,7 +1123,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		"test-bucket-max-keys-prefixes",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{VersioningEnabled: true})
+		err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{VersioningEnabled: true})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1753,7 +1753,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 		"test-bucket-list-object-continuation-2",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{})
+		err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1908,7 +1908,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, MakeBucketOptions{})
+	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}

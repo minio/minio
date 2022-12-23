@@ -707,7 +707,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				opts := MakeBucketOptions{
 					LockEnabled: config.ObjectLockEnabled == "Enabled",
 				}
-				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
+				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
@@ -768,7 +768,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{}); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{}); err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
 						continue
@@ -820,7 +820,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		bucket, fileName := slc[0], slc[1]
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
 					rpt.SetStatus(bucket, "", err)

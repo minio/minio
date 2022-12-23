@@ -682,9 +682,6 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	}
 
 	optsMap := make(map[string]string)
-	if opts.Location != "" {
-		optsMap["location"] = opts.Location
-	}
 	if opts.LockEnabled {
 		optsMap["lockEnabled"] = "true"
 		optsMap["versioningEnabled"] = "true"
@@ -780,7 +777,7 @@ func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Con
 		return errServerNotInitialized
 	}
 
-	err := objAPI.MakeBucketWithLocation(ctx, bucket, opts)
+	err := objAPI.MakeBucket(ctx, bucket, opts)
 	if err != nil {
 		// Check if this is a bucket exists error.
 		_, ok1 := err.(BucketExists)
@@ -3209,7 +3206,6 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				Bucket:    bucket,
 				CreatedAt: bucketInfo.Created.UTC(),
 				DeletedAt: bucketInfo.Deleted.UTC(),
-				Location:  globalSite.Region,
 			}
 			if !bucketExists {
 				info.Buckets[bucket] = bms
@@ -4280,11 +4276,6 @@ func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer,
 	if isMakeBucket {
 		var opts MakeBucketOptions
 		optsMap := make(map[string]string)
-		if bStatus.Location != "" {
-			optsMap["location"] = bStatus.Location
-			opts.Location = bStatus.Location
-		}
-
 		optsMap["versioningEnabled"] = "true"
 		opts.VersioningEnabled = true
 		opts.CreatedAt = bStatus.CreatedAt

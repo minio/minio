@@ -223,7 +223,7 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 
 	bucket := "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
@@ -398,7 +398,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	}
 
 	bucket := "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
@@ -519,7 +519,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	z := obj.(*erasureServerPools)
 	s := z.serverPools[0].sets[0]
 	erasureDisks := s.getDisks()
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
