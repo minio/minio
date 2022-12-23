@@ -256,6 +256,10 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 				found = true
 				continue
 			}
+			// fail if endpoint is already present in list of targets and not a matching ARN
+			if t.Endpoint == tgt.Endpoint {
+				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
+			}
 		}
 		newtgts[idx] = t
 	}
