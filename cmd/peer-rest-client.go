@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -814,7 +815,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 }
 
 // MonitorBandwidth - send http trace request to peer nodes
-func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*madmin.BucketBandwidthReport, error) {
+func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.BucketBandwidthReport, error) {
 	values := make(url.Values)
 	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
@@ -824,7 +825,7 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 	defer xhttp.DrainBody(respBody)
 
 	dec := gob.NewDecoder(respBody)
-	var bandwidthReport madmin.BucketBandwidthReport
+	var bandwidthReport bandwidth.BucketBandwidthReport
 	err = dec.Decode(&bandwidthReport)
 	return &bandwidthReport, err
 }

@@ -1144,10 +1144,11 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 
 	opts := &bandwidth.MonitorReaderOptions{
 		Bucket:     objInfo.Bucket,
+		TargetARN:  tgt.ARN,
 		HeaderSize: headerSize,
 	}
 	newCtx := ctx
-	if globalBucketMonitor.IsThrottled(bucket) {
+	if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
 		var cancel context.CancelFunc
 		newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 		defer cancel()
@@ -1344,10 +1345,11 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 
 		opts := &bandwidth.MonitorReaderOptions{
 			Bucket:     objInfo.Bucket,
+			TargetARN:  tgt.ARN,
 			HeaderSize: headerSize,
 		}
 		newCtx := ctx
-		if globalBucketMonitor.IsThrottled(bucket) {
+		if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
 			var cancel context.CancelFunc
 			newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 			defer cancel()
