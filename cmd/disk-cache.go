@@ -728,7 +728,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if cerr != nil {
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
 	hashReader, err := hash.NewReader(pipeReader, size, "", "", r.ActualSize())

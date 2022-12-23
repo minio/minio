@@ -422,7 +422,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initConfigSubsystem(lkctx.Context(), newObject); err == nil {
-				txnLk.Unlock(lkctx.Cancel)
+				txnLk.Unlock(lkctx)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -433,7 +433,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		}
 
 		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
-		txnLk.Unlock(lkctx.Cancel)
+		txnLk.Unlock(lkctx)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)

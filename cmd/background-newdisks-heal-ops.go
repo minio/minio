@@ -316,7 +316,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		return err
 	}
 	ctx = lkctx.Context()
-	defer locker.Unlock(lkctx.Cancel)
+	defer locker.Unlock(lkctx)
 
 	buckets, _ := z.ListBuckets(ctx, BucketOptions{})
 	// Buckets data are dispersed in multiple zones/sets, make

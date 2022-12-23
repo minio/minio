@@ -1170,7 +1170,7 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
 		return
 	}
-	defer nsLock.Unlock(lkctx.Cancel)
+	defer nsLock.Unlock(lkctx)
 
 	durationStr := r.Form.Get(peerRESTDuration)
 	duration, err := time.ParseDuration(durationStr)
@@ -2286,7 +2286,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	defer nsLock.Unlock(lkctx.Cancel)
+	defer nsLock.Unlock(lkctx)
 	healthCtx, healthCancel := context.WithTimeout(lkctx.Context(), deadline)
 	defer healthCancel()
 

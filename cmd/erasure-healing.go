@@ -324,7 +324,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			return result, err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 
 	// Re-read when we have lock...
@@ -695,7 +695,7 @@ func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string
 			return err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 	var wg sync.WaitGroup
 	for _, disk := range er.getDisks() {

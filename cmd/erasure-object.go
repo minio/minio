@@ -81,7 +81,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 			return oi, err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
@@ -206,14 +206,14 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.Unlock(lkctx) }
 		case readLock:
 			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.RUnlock(lkctx) }
 		}
 		unlockOnDefer = true
 	}
@@ -434,7 +434,7 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer lk.RUnlock(lkctx.Cancel)
+		defer lk.RUnlock(lkctx)
 	}
 
 	return er.getObjectInfo(ctx, bucket, object, opts)
@@ -1195,7 +1195,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 
 	modTime := opts.MTime
@@ -1702,7 +1702,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 
 	disks := er.getDisks()
@@ -1776,7 +1776,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		return ObjectInfo{}, err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	disks := er.getDisks()
 
@@ -1886,7 +1886,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {
