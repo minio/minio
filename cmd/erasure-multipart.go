@@ -349,7 +349,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		}
 		rctx := lkctx.Context()
 		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
-		lk.RUnlock(lkctx.Cancel)
+		lk.RUnlock(lkctx)
 		if err != nil && !isErrVersionNotFound(err) {
 			return nil, err
 		}
@@ -557,7 +557,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return PartInfo{}, err
 	}
 	rctx := rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx.Cancel)
+	defer uploadIDRLock.RUnlock(rlkctx)
 
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 	// Validates if upload ID exists.
@@ -583,7 +583,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return PartInfo{}, err
 	}
 	pctx := plkctx.Context()
-	defer partIDLock.Unlock(plkctx.Cancel)
+	defer partIDLock.Unlock(plkctx)
 
 	onlineDisks := er.getDisks()
 	writeQuorum := fi.WriteQuorum(er.defaultWQuorum())
@@ -755,7 +755,7 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		return MultipartInfo{}, err
 	}
 	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx.Cancel)
+	defer uploadIDLock.RUnlock(lkctx)
 
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
@@ -782,7 +782,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		return ListPartsInfo{}, err
 	}
 	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx.Cancel)
+	defer uploadIDLock.RUnlock(lkctx)
 
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
@@ -915,7 +915,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, err
 	}
 	wctx := wlkctx.Context()
-	defer uploadIDLock.Unlock(wlkctx.Cancel)
+	defer uploadIDLock.Unlock(wlkctx)
 
 	fi, partsMetadata, err := er.checkUploadIDExists(wctx, bucket, object, uploadID, true)
 	if err != nil {
@@ -1184,7 +1184,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	// Write final `xl.meta` at uploadID location
 	onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum)
@@ -1263,7 +1263,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 		return err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	// Validates if upload ID exists.
 	if _, _, err = er.checkUploadIDExists(ctx, bucket, object, uploadID, false); err != nil {

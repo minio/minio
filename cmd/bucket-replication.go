@@ -425,7 +425,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		return
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	var wg sync.WaitGroup
 	var rinfos replicatedInfos
@@ -937,7 +937,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		return
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	var wg sync.WaitGroup
 	var rinfos replicatedInfos

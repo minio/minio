@@ -708,8 +708,9 @@ func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts
 		if err != nil {
 			return err
 		}
+
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 
 	// Create buckets in parallel across all sets.
@@ -789,14 +790,14 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.Unlock(lkctx) }
 		case readLock:
 			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.RUnlock(lkctx) }
 		}
 		unlockOnDefer = true
 	}
@@ -917,7 +918,7 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer lk.RUnlock(lkctx.Cancel)
+		defer lk.RUnlock(lkctx)
 	}
 
 	objInfo, _, err = z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
@@ -946,7 +947,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer ns.Unlock(lkctx.Cancel)
+		defer ns.Unlock(lkctx)
 		opts.NoLock = true
 	}
 
@@ -987,7 +988,7 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return ObjectInfo{}, err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	gopts := opts
 	gopts.NoLock = true
@@ -1032,7 +1033,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		return dobjects, derrs
 	}
 	ctx = lkctx.Context()
-	defer multiDeleteLock.Unlock(lkctx.Cancel)
+	defer multiDeleteLock.Unlock(lkctx)
 
 	// Fetch location of up to 10 objects concurrently.
 	poolObjIdxMap := map[int][]ObjectToDelete{}
@@ -1132,7 +1133,7 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer ns.Unlock(lkctx.Cancel)
+		defer ns.Unlock(lkctx)
 		dstOpts.NoLock = true
 	}
 
@@ -1784,7 +1785,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 		return madmin.HealResultItem{}, err
 	}
 	ctx = lkctx.Context()
-	defer formatLock.Unlock(lkctx.Cancel)
+	defer formatLock.Unlock(lkctx)
 
 	r := madmin.HealResultItem{
 		Type:   madmin.HealItemMetadata,

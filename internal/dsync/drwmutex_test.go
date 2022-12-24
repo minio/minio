@@ -48,13 +48,13 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 
 	go func() {
 		time.Sleep(2 * testDrwMutexAcquireTimeout)
-		drwm1.RUnlock()
+		drwm1.RUnlock(context.Background())
 		// fmt.Println("1st read lock released, waiting...")
 	}()
 
 	go func() {
 		time.Sleep(3 * testDrwMutexAcquireTimeout)
-		drwm2.RUnlock()
+		drwm2.RUnlock(context.Background())
 		// fmt.Println("2nd read lock released, waiting...")
 	}()
 
@@ -66,7 +66,7 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 		// fmt.Println("Write lock acquired, waiting...")
 		time.Sleep(testDrwMutexAcquireTimeout)
 
-		drwm3.Unlock()
+		drwm3.Unlock(context.Background())
 	}
 	// fmt.Println("Write lock failed due to timeout")
 	return
@@ -101,7 +101,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 
 	go func() {
 		time.Sleep(3 * testDrwMutexAcquireTimeout)
-		drwm1.Unlock()
+		drwm1.Unlock(context.Background())
 		// fmt.Println("Initial write lock released, waiting...")
 	}()
 
@@ -113,7 +113,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 		// fmt.Println("2nd write lock acquired, waiting...")
 		time.Sleep(testDrwMutexAcquireTimeout)
 
-		drwm2.Unlock()
+		drwm2.Unlock(context.Background())
 	}
 	// fmt.Println("2nd write lock failed due to timeout")
 	return
@@ -144,7 +144,7 @@ func parallelReader(ctx context.Context, m *DRWMutex, clocked, cunlock, cdone ch
 	if m.GetRLock(ctx, nil, id, source, Options{Timeout: time.Second}) {
 		clocked <- true
 		<-cunlock
-		m.RUnlock()
+		m.RUnlock(context.Background())
 		cdone <- true
 	}
 }
@@ -193,7 +193,7 @@ func reader(resource string, numIterations int, activity *int32, cdone chan bool
 			for i := 0; i < 100; i++ {
 			}
 			atomic.AddInt32(activity, -1)
-			rwm.RUnlock()
+			rwm.RUnlock(context.Background())
 		}
 	}
 	cdone <- true
@@ -211,7 +211,7 @@ func writer(resource string, numIterations int, activity *int32, cdone chan bool
 			for i := 0; i < 100; i++ {
 			}
 			atomic.AddInt32(activity, -10000)
-			rwm.Unlock()
+			rwm.Unlock(context.Background())
 		}
 	}
 	cdone <- true
@@ -268,7 +268,7 @@ func TestUnlockPanic(t *testing.T) {
 		}
 	}()
 	mu := NewDRWMutex(ds, "test")
-	mu.Unlock()
+	mu.Unlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -278,10 +278,10 @@ func TestUnlockPanic2(t *testing.T) {
 		if recover() == nil {
 			t.Fatalf("unlock of unlocked RWMutex did not panic")
 		}
-		mu.RUnlock() // Unlock, so -test.count > 1 works
+		mu.RUnlock(context.Background()) // Unlock, so -test.count > 1 works
 	}()
 	mu.RLock(id, source)
-	mu.Unlock()
+	mu.Unlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -292,7 +292,7 @@ func TestRUnlockPanic(t *testing.T) {
 		}
 	}()
 	mu := NewDRWMutex(ds, "test")
-	mu.RUnlock()
+	mu.RUnlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -302,10 +302,10 @@ func TestRUnlockPanic2(t *testing.T) {
 		if recover() == nil {
 			t.Fatalf("read unlock of unlocked RWMutex did not panic")
 		}
-		mu.Unlock() // Unlock, so -test.count > 1 works
+		mu.Unlock(context.Background()) // Unlock, so -test.count > 1 works
 	}()
 	mu.Lock(id, source)
-	mu.RUnlock()
+	mu.RUnlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -320,14 +320,14 @@ func benchmarkRWMutex(b *testing.B, localWork, writeRatio int) {
 			foo++
 			if foo%writeRatio == 0 {
 				rwm.Lock(id, source)
-				rwm.Unlock()
+				rwm.Unlock(context.Background())
 			} else {
 				rwm.RLock(id, source)
 				for i := 0; i != localWork; i++ {
 					foo *= 2
 					foo /= 2
 				}
-				rwm.RUnlock()
+				rwm.RUnlock(context.Background())
 			}
 		}
 		_ = foo
