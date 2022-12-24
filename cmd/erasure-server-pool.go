@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -49,6 +50,9 @@ type erasureServerPools struct {
 
 	rebalMu   sync.RWMutex
 	rebalMeta *rebalanceMeta
+
+	deploymentID     [16]byte
+	distributionAlgo string
 
 	serverPools []*erasureSets
 
@@ -124,6 +128,14 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if err != nil {
 			return nil, err
 		}
+
+		if deploymentID != "" && bytes.Equal(z.deploymentID[:], []byte{}) {
+			z.deploymentID = uuid.MustParse(deploymentID)
+		}
+
+		if distributionAlgo != "" && z.distributionAlgo == "" {
+			z.distributionAlgo = distributionAlgo
+		}
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
@@ -154,7 +166,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 }
 
 func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocker {
-	return z.serverPools[0].NewNSLock(bucket, objects...)
+	poolID := hashKey(z.distributionAlgo, "", len(z.serverPools), z.deploymentID)
+	if len(objects) >= 1 {
+		poolID = hashKey(z.distributionAlgo, objects[0], len(z.serverPools), z.deploymentID)
+	}
+	return z.serverPools[poolID].NewNSLock(bucket, objects...)
 }
 
 // GetDisksID will return disks by their ID.
