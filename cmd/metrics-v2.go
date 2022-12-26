@@ -48,7 +48,6 @@ var (
 func init() {
 	clusterMetricsGroups := []*MetricsGroup{
 		getBucketUsageMetrics(),
-		getMinioHealingMetrics(),
 		getNodeHealthMetrics(),
 		getClusterStorageMetrics(),
 		getClusterTierMetrics(),
@@ -69,6 +68,7 @@ func init() {
 		getScannerNodeMetrics(),
 		getIAMNodeMetrics(),
 		getKMSNodeMetrics(),
+		getMinioHealingMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -1045,7 +1045,9 @@ func getMinIOProcessCPUTime() MetricDescription {
 }
 
 func getMinioProcMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		if runtime.GOOS == "windows" {
 			return nil
@@ -1165,7 +1167,9 @@ func getMinioProcMetrics() *MetricsGroup {
 }
 
 func getGoMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = append(metrics, Metric{
 			Description: getMinIOGORoutineCountMD(),
@@ -1177,7 +1181,9 @@ func getGoMetrics() *MetricsGroup {
 }
 
 func getS3TTFBMetric() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		// Read prometheus metric on this channel
 		ch := make(chan prometheus.Metric)
@@ -1250,7 +1256,9 @@ func getExpiryPendingTasksMD() MetricDescription {
 }
 
 func getILMNodeMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(_ context.Context) []Metric {
 		expPendingTasks := Metric{
 			Description: getExpiryPendingTasksMD(),
@@ -1278,7 +1286,9 @@ func getILMNodeMetrics() *MetricsGroup {
 }
 
 func getScannerNodeMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(_ context.Context) []Metric {
 		metrics := []Metric{
 			{
@@ -1365,7 +1375,9 @@ func getScannerNodeMetrics() *MetricsGroup {
 }
 
 func getIAMNodeMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		lastSyncTime := atomic.LoadUint64(&globalIAMSys.LastRefreshTimeUnixNano)
 		var sinceLastSyncMillis uint64
@@ -1421,7 +1433,9 @@ func getIAMNodeMetrics() *MetricsGroup {
 }
 
 func getMinioVersionMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = append(metrics, Metric{
 			Description:    getMinIOCommitMD(),
@@ -1437,7 +1451,9 @@ func getMinioVersionMetrics() *MetricsGroup {
 }
 
 func getNodeHealthMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Minute,
+	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 16)
 		nodesUp, nodesDown := globalNotificationSys.GetPeerOnlineCount()
@@ -1455,7 +1471,9 @@ func getNodeHealthMetrics() *MetricsGroup {
 }
 
 func getMinioHealingMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 5)
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
@@ -1572,7 +1590,9 @@ func getCacheMetrics() *MetricsGroup {
 }
 
 func getNotificationMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		stats := globalConfigTargetList.Stats()
 		metrics := make([]Metric, 0, 1+len(stats.TargetStats))
@@ -1642,7 +1662,9 @@ func getNotificationMetrics() *MetricsGroup {
 }
 
 func getHTTPMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		httpStats := globalHTTPStats.toServerHTTPStats()
 		metrics = make([]Metric, 0, 3+
@@ -1724,7 +1746,9 @@ func getHTTPMetrics() *MetricsGroup {
 }
 
 func getNetworkMetrics() *MetricsGroup {
-	mg := &MetricsGroup{}
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 10)
 		connStats := globalConnStats.toServerConnStats()
@@ -1766,7 +1790,7 @@ func getNetworkMetrics() *MetricsGroup {
 
 func getBucketUsageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval: 1 * time.Minute,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
@@ -1912,7 +1936,7 @@ func getClusterTransitionedVersionsMD() MetricDescription {
 
 func getClusterTierMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval: 1 * time.Minute,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
@@ -1939,7 +1963,7 @@ func getClusterTierMetrics() *MetricsGroup {
 
 func getLocalStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval: 1 * time.Minute,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
@@ -2001,7 +2025,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 
 func getLocalDriveStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 3 * time.Second,
+		cacheInterval: 1 * time.Minute,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
@@ -2034,7 +2058,7 @@ func getLocalDriveStorageMetrics() *MetricsGroup {
 
 func getClusterStorageMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval: 1 * time.Minute,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
