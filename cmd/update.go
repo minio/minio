@@ -181,7 +181,7 @@ func getHelmVersion(helmInfoFilePath string) string {
 		}
 		return ""
 	}
-
+	defer helmInfoFile.Close()
 	scanner := bufio.NewScanner(helmInfoFile)
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "chart=") {
