@@ -43,8 +43,12 @@ export MINIO_IDENTITY_OPENID_REDIRECT_URI="http://127.0.0.1:12000/oauth_callback
 minio server --address ":9003" --console-address ":12000" /tmp/minio3/{1...4} >/tmp/minio3_1.log 2>&1 &
 
 if [ ! -f ./mc ]; then
-    wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
-        && chmod +x mc
+  git clone -b RELEASE.2022-10-22T03-39-29Z https://github.com/minio/mc.git && mv mc mc_repo && cd mc_repo
+  go mod tidy
+  make
+  cp -f mc ./../
+  cd -
+  chmod +x mc
 fi
 
 sleep 10

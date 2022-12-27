@@ -29,8 +29,12 @@ export MINIO_PROMETHEUS_AUTH_TYPE=public
 export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
 
 if [ ! -f ./mc ]; then
-    wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
-        && chmod +x mc
+  git clone -b RELEASE.2022-10-22T03-39-29Z https://github.com/minio/mc.git && mv mc mc_repo && cd mc_repo
+  go mod tidy
+  make
+  cp -f mc ./../
+  cd -
+  chmod +x mc
 fi
 
 minio server --config-dir /tmp/minio-internal --address ":9001" /tmp/minio-internal-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
