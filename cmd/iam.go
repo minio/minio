@@ -210,7 +210,7 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
 	bootstrapTrace("IAM initialization started")
 	globalServerConfigMu.RLock()
-	s := globalServerConfig
+	s := globalServerConfig.Clone()
 	globalServerConfigMu.RUnlock()
 
 	var err error
