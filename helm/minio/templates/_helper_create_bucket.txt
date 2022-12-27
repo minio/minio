@@ -39,7 +39,7 @@ connectToMinio() {
 # Check if the bucket exists, by using the exit code of `mc ls`
 checkBucketExists() {
   BUCKET=$1
-  CMD=$(${MC} ls myminio/$BUCKET > /dev/null 2>&1)
+  CMD=$(${MC} stat myminio/$BUCKET > /dev/null 2>&1)
   return $?
 }
 
