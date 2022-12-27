@@ -171,7 +171,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if rs == nil && opts.PartNumber > 0 {
 		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
 	}
-
+	if rs == nil {
+		return fmt.Errorf("Can't get empty RangeSpec. %s", objInfo.Name)
+	}
 	// For providing ranged content
 	start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
 	if err != nil {
