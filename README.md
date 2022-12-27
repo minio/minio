@@ -11,6 +11,9 @@ $ git clone -b gateway git@github.com:juicedata/minio.git && cd minio
 
 # Will generate a binary named minio
 $ make build
+
+# If you need juicefs to support ceph RADOS as an object store, you need to install librados-dev first and then run:
+$ make build-ceph
 ```
 
 ## Usage

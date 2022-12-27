@@ -86,6 +86,10 @@ build: checks ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
+build-ceph: checks ## builds minio to $(PWD)
+	@echo "Building minio binary to './minio'"
+	@CGO_ENABLED=1 go build -tags "kqueue ceph" -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+
 s3-gateway-test: checks
 	@echo "Running s3gateway tests"
 	@(env bash $(PWD)/cmd/gateway/s3gateway_test.sh)
