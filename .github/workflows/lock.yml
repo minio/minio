@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   action:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: dessant/lock-threads@v3
         with:

@@ -1,19 +1,5 @@
 #!/bin/bash
 
-#  Mint (C) 2017-2020 Minio, Inc.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-
 # environment
 
 os="linux"
@@ -25,9 +11,17 @@ fi
 echo "os=$os"
 
 set -x
+os="linux"
+errno=$errno
+if [[ `uname  -a` =~ "Darwin" ]];then
+    os="mac"
+    errno=254
+fi
+echo "os=$os"
 
 
 MINT_DATA_DIR=testdata
+MINT_MODE=core
 SERVER_ENDPOINT="127.0.0.1:9008"
 ACCESS_KEY="testUser"
 SECRET_KEY="testUserPassword"
@@ -1660,7 +1654,7 @@ function test_get_object_error(){
 
     # if make bucket succeeds upload a file
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key /dir1/datafile-1-kB"
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
         out=$($function 2>&1)
         rv=$?
     else
@@ -1669,40 +1663,19 @@ function test_get_object_error(){
     fi
 
     # if upload succeeds download the file
-    if [ $rv -eq 0 ]; then
-        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1 /tmp/datafile-1-kB"
-        # save the ref to function being tested, so it can be logged
-        test_function=${function}
-        out=$($function 2>&1)
-        if [ $? -eq $errno ];then
-            rv=0
+        if [ $rv -eq 0 ]; then
+            function="${AWS} s3api get-object --bucket ${bucket_name} --key datafile-1-kB/ /tmp/datafile-1-kB"
+            # save the ref to function being tested, so it can be logged
+            test_function=${function}
+            out=$($function 2>&1)
+            if [ $? -eq $errno ];then
+                rv=0
+            fi
+            if ! [[ "$out" =~ "The specified key does not exist" ]];then
+                log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+                rv=1
+            fi
         fi
-        if ! [[ "$out" =~ "The specified key does not exist" ]];then
-            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
-            rv=1
-        fi
-    fi
-
-    if [ $rv -eq 0 ]; then
-        function="${AWS} s3api get-object --bucket ${bucket_name} --key /dir1/ /tmp/datafile-1-kB"
-        # save the ref to function being tested, so it can be logged
-        test_function=${function}
-        out=$($function 2>&1)
-        if [ $? -eq $errno ];then
-            rv=0
-        fi
-        if [[ "$out" =~ "The specified key does not exist" ]];then
-            log_failure "$(get_duration "$start_time")" "${function}" "${out}"
-            rv=1
-        fi
-    fi
-
-    # delete bucket
-    if [ $rv -eq 0 ]; then
-        function="delete_bucket"
-        out=$(delete_bucket "$bucket_name")
-        rv=$?
-    fi
     return $rv
 }
 

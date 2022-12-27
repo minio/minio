@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.17.x]
-        os: [ubuntu-latest]
+        os: [ubuntu-20.04]
 
     steps:
       - uses: actions/checkout@v1

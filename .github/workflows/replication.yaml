@@ -14,7 +14,7 @@ concurrency:
 jobs:
   replication-test:
     name: Replication Tests with Go ${{ matrix.go-version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     strategy:
       matrix:
