@@ -17,15 +17,13 @@
 # environment
 
 os="linux"
-errno=$errno
+errno=254
 if [[ `uname  -a` =~ "Darwin" ]];then
     os="mac"
-    errno=254
 fi
 echo "os=$os"
 
 set -x
-
 
 MINT_DATA_DIR=testdata
 SERVER_ENDPOINT="127.0.0.1:9008"
@@ -34,9 +32,6 @@ SECRET_KEY="testUserPassword"
 ENABLE_HTTPS=0
 SERVER_REGION=us-east-1
 ENABLE_VIRTUAL_STYLE=0
-
-
-
 
 # create testdata
 declare -A data_file_map

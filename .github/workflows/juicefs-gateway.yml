@@ -33,5 +33,14 @@ jobs:
           export MINIO_ROOT_PASSWORD=testUserPassword
           ./minio  gateway  juicefs --multi-buckets --keep-etag --address 127.0.0.1:9008 "redis://localhost:6379/1" > minio.log 2>&1 &
           sleep 2
+          rm -rf `which aws`
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+          sleep 2
           make s3-gateway-test
-          
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: lhotari/action-upterm@v1
