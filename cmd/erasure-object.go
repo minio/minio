@@ -1604,11 +1604,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	markDelete := goi.VersionID != ""
 
 	// Default deleteMarker to true if object is under versioning
-	// versioning suspended means we add `null` version as
-	// delete marker, if its not decided already.
-	deleteMarker := (opts.Versioned || opts.VersionSuspended) && opts.VersionID == "" || (opts.DeleteMarker && opts.VersionID != "")
+	deleteMarker := opts.Versioned
 
-	if markDelete && opts.VersionID != "" {
+	if opts.VersionID != "" {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus() == replication.Replica {
 			markDelete = false
@@ -1619,6 +1617,22 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus() == Complete {
 			markDelete = false
 		}
+		// now, since VersionPurgeStatus() is already set, we can let the
+		// lower layers decide this. This fixes a regression that was introduced
+		// in PR #14555 where !VersionPurgeStatus.Empty() is automatically
+		// considered as Delete marker true to avoid listing such objects by
+		// regular ListObjects() calls. However for delete replication this
+		// ends up being a problem because "upon" a successful delete this
+		// ends up creating a new delete marker that is spurious and unnecessary.
+		//
+		// Regression introduced by #14555 was reintroduced in #15564
+		if versionFound {
+			if !goi.VersionPurgeStatus.Empty() {
+				deleteMarker = false
+			} else if !goi.DeleteMarker { // implies a versioned delete of object
+				deleteMarker = false
+			}
+		}
 	}
 
 	modTime := opts.MTime
@@ -1628,9 +1642,14 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	fvID := mustGetUUID()
 
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
+		if !deleteMarker {
+			// versioning suspended means we add `null` version as
+			// delete marker, if its not decided already.
+			deleteMarker = opts.VersionSuspended && opts.VersionID == ""
+		}
 		fi := FileInfo{
 			Name:             object,
-			Deleted:          true,
+			Deleted:          deleteMarker,
 			MarkDeleted:      markDelete,
 			ModTime:          modTime,
 			ReplicationState: opts.DeleteReplication,
