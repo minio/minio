@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -163,6 +162,11 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 }
 
 func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
+	cm, err := strconv.ParseUint(c.String("cache-mode"), 8, 32)
+	if err != nil {
+		logger.Warnf("Invalid cache-mode %s, using default value 0600", c.String("cache-mode"))
+		cm = 0600
+	}
 	chunkConf := &chunk.Config{
 		BlockSize:  format.BlockSize * 1024,
 		Compress:   format.Compression,
@@ -183,7 +187,7 @@ func getChunkConf(c *cli.Context, format *meta.Format) *chunk.Config {
 		CacheDir:       c.String("cache-dir"),
 		CacheSize:      int64(c.Int("cache-size")),
 		FreeSpace:      float32(c.Float64("free-space-ratio")),
-		CacheMode:      os.FileMode(0600),
+		CacheMode:      os.FileMode(cm),
 		CacheFullBlock: !c.Bool("cache-partial-only"),
 		AutoCreate:     true,
 	}
@@ -246,22 +250,17 @@ func createStorage(format meta.Format) (object.ObjectStorage, error) {
 
 	if format.EncryptKey != "" {
 		passphrase := os.Getenv("JFS_RSA_PASSPHRASE")
-		block, _ := pem.Decode([]byte(format.EncryptKey))
-		if block == nil {
-			return nil, errors.New("failed to parse PEM block containing the key")
-		}
-		// nolint:staticcheck
-		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
-			if passphrase == "" {
+		if passphrase == "" {
+			block, _ := pem.Decode([]byte(format.EncryptKey))
+			// nolint:staticcheck
+			if block != nil && strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") && x509.IsEncryptedPEMBlock(block) {
 				return nil, fmt.Errorf("passphrase is required to private key, please try again after setting the 'JFS_RSA_PASSPHRASE' environment variable")
 			}
-		} else if passphrase != "" {
-			logger.Warningf("passphrase is not used, because private key is not encrypted")
 		}
 
-		privKey, err := object.ParseRsaPrivateKeyFromPem(block, passphrase)
+		privKey, err := object.ParseRsaPrivateKeyFromPem([]byte(format.EncryptKey), []byte(passphrase))
 		if err != nil {
-			return nil, fmt.Errorf("incorrect passphrase: %s", err)
+			return nil, fmt.Errorf("parse rsa: %s", err)
 		}
 		encryptor := object.NewAESEncryptor(object.NewRSAEncryptor(privKey))
 		blob = object.NewEncrypted(blob, encryptor)
@@ -527,7 +526,7 @@ func clientFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:  "max-deletes",
-			Value: 2,
+			Value: 10,
 			Usage: "number of threads to delete objects",
 		},
 		&cli.IntFlag{
@@ -564,6 +563,11 @@ func clientFlags() []cli.Flag {
 			Name:  "cache-dir",
 			Value: defaultCacheDir,
 			Usage: "directory paths of local cache, use colon to separate multiple paths",
+		},
+		&cli.StringFlag{
+			Name:  "cache-mode",
+			Value: "0600", // only owner can read/write cache
+			Usage: "file permissions for cached blocks",
 		},
 		&cli.IntFlag{
 			Name:  "cache-size",

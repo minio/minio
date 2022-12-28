@@ -39,7 +39,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jcmturner/gokrb5/v8 v8.4.2
 	github.com/json-iterator/go v1.1.12
-	github.com/juicedata/juicefs v1.0.2
+	github.com/juicedata/juicefs v1.0.3
 	github.com/klauspost/compress v1.14.4
 	github.com/klauspost/cpuid/v2 v2.0.11
 	github.com/klauspost/pgzip v1.2.5
@@ -80,7 +80,7 @@ require (
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.21.12
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/streadway/amqp v1.0.0
 	github.com/tinylib/msgp v1.1.7-0.20211026165309-e818a1881b0e
 	github.com/valyala/bytebufferpool v1.0.0
@@ -93,7 +93,7 @@ require (
 	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
-	golang.org/x/sys v0.0.0-20220327210214-530d0810a4d0
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11
 	google.golang.org/api v0.73.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -173,7 +173,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/btree v1.0.1 // indirect
+	github.com/google/btree v1.1.2 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
@@ -246,8 +246,8 @@ require (
 	github.com/pengsrc/go-shared v0.2.1-0.20190131101655-1999055a4a14 // indirect
 	github.com/pingcap/errors v0.11.5-0.20211224045212-9687c2b0f87c // indirect
 	github.com/pingcap/failpoint v0.0.0-20210918120811-547c13e3eb00 // indirect
-	github.com/pingcap/kvproto v0.0.0-20220106070556-3fa8fa04f898 // indirect
-	github.com/pingcap/log v0.0.0-20211215031037-e024ba4eb0ee // indirect
+	github.com/pingcap/kvproto v0.0.0-20221026112947-f8d61344b172 // indirect
+	github.com/pingcap/log v1.1.1-0.20221015072633-39906604fb81 // indirect
 	github.com/pkg/profile v1.6.0 // indirect
 	github.com/pkg/sftp v1.13.4 // indirect
 	github.com/pkg/xattr v0.4.6 // indirect
@@ -266,6 +266,7 @@ require (
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/stathat/consistent v1.0.0 // indirect
 	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.34 // indirect
@@ -273,8 +274,8 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.3 // indirect
-	github.com/tikv/client-go/v2 v2.0.1 // indirect
-	github.com/tikv/pd/client v0.0.0-20220216070739-26c668271201 // indirect
+	github.com/tikv/client-go/v2 v2.0.2 // indirect
+	github.com/tikv/pd/client v0.0.0-20221031025758-80f0d8ca4d07 // indirect
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
 	github.com/twmb/murmur3 v1.1.3 // indirect
@@ -283,7 +284,9 @@ require (
 	github.com/urfave/cli/v2 v2.4.0 // indirect
 	github.com/vbauerster/mpb/v7 v7.0.3 // indirect
 	github.com/viki-org/dnscache v0.0.0-20130720023526-c70c1f23c5d8 // indirect
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.4.2 // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.etcd.io/etcd v3.3.27+incompatible // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
@@ -292,7 +295,7 @@ require (
 	go.uber.org/multierr v1.7.0 // indirect
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20220325170049-de3da57026de // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.8 // indirect
@@ -307,7 +310,7 @@ require (
 	gopkg.in/kothar/go-backblaze.v0 v0.0.0-20210124194846-35409b867216 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.23.3 // indirect
 	k8s.io/apimachinery v0.23.3 // indirect
 	k8s.io/client-go v0.23.3 // indirect
