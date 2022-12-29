@@ -842,7 +842,7 @@ func (s *erasureSets) ListBuckets(ctx context.Context, opts BucketOptions) (buck
 
 	if opts.Deleted {
 		for _, set := range s.sets {
-			// lists all unique buckets across drives.
+			// lists all deleted buckets across drives.
 			if err := listDeletedBuckets(ctx, set.getDisks(), deletedBuckets, s.defaultParityCount); err != nil {
 				return nil, err
 			}
@@ -887,25 +887,21 @@ func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBucke
 			}
 			volsInfo, err := storageDisks[index].ListDir(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix), -1)
 			if err != nil {
-				if err == errFileNotFound {
+				if errors.Is(err, errFileNotFound) {
 					return nil
 				}
 				return err
 			}
 			for _, volName := range volsInfo {
-				mu.Lock()
-				if _, ok := delBuckets[volName]; !ok {
-					vi, err := storageDisks[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, volName))
-					if err != nil {
-						return err
+				vi, err := storageDisks[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, volName))
+				if err == nil {
+					vi.Name = strings.TrimSuffix(volName, SlashSeparator)
+					mu.Lock()
+					if _, ok := delBuckets[volName]; !ok {
+						delBuckets[volName] = vi
 					}
-					bkt := strings.TrimPrefix(vi.Name, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix))
-					bkt = strings.TrimPrefix(bkt, slashSeparator)
-					bkt = strings.TrimSuffix(bkt, slashSeparator)
-					vi.Name = bkt
-					delBuckets[bkt] = vi
+					mu.Unlock()
 				}
-				mu.Unlock()
 			}
 			return nil
 		}, index)
