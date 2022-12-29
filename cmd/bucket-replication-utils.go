@@ -797,9 +797,8 @@ func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	}
 }
 
-func getReplicationStatsPath(nodeName string) string {
-	nodeStr := strings.ReplaceAll(nodeName, ":", "_")
-	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + nodeStr + ".stats"
+func getReplicationStatsPath() string {
+	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + "replication.stats"
 }
 
 const (

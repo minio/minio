@@ -32,7 +32,9 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -48,6 +50,9 @@ type erasureServerPools struct {
 
 	rebalMu   sync.RWMutex
 	rebalMeta *rebalanceMeta
+
+	deploymentID     [16]byte
+	distributionAlgo string
 
 	serverPools []*erasureSets
 
@@ -123,6 +128,14 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if err != nil {
 			return nil, err
 		}
+
+		if deploymentID != "" && bytes.Equal(z.deploymentID[:], []byte{}) {
+			z.deploymentID = uuid.MustParse(deploymentID)
+		}
+
+		if distributionAlgo != "" && z.distributionAlgo == "" {
+			z.distributionAlgo = distributionAlgo
+		}
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
@@ -153,7 +166,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 }
 
 func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocker {
-	return z.serverPools[0].NewNSLock(bucket, objects...)
+	poolID := hashKey(z.distributionAlgo, "", len(z.serverPools), z.deploymentID)
+	if len(objects) >= 1 {
+		poolID = hashKey(z.distributionAlgo, objects[0], len(z.serverPools), z.deploymentID)
+	}
+	return z.serverPools[poolID].NewNSLock(bucket, objects...)
 }
 
 // GetDisksID will return disks by their ID.
@@ -687,20 +704,30 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 	return firstErr
 }
 
-// MakeBucketWithLocation - creates a new bucket across all serverPools simultaneously
+// MakeBucket - creates a new bucket across all serverPools simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
-func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error {
+func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
+	defer NSUpdated(bucket, slashSeparator)
+
 	g := errgroup.WithNErrs(len(z.serverPools))
 
-	// Lock the bucket name before creating.
-	lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return err
+	if !isMinioMetaBucketName(bucket) {
+		// Verify if bucket is valid.
+		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
+			return BucketNameInvalid{Bucket: bucket}
+		}
+
+		// Lock the bucket name before creating.
+		lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return err
+		}
+
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
 
 	// Create buckets in parallel across all sets.
 	for index := range z.serverPools {
@@ -709,7 +736,7 @@ func (z *erasureServerPools) MakeBucketWithLocation(ctx context.Context, bucket 
 			if z.IsSuspended(index) {
 				return nil
 			}
-			return z.serverPools[index].MakeBucketWithLocation(ctx, bucket, opts)
+			return z.serverPools[index].MakeBucket(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -779,14 +806,14 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.Unlock(lkctx) }
 		case readLock:
 			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
 			if err != nil {
 				return nil, err
 			}
 			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx.Cancel) }
+			nsUnlocker = func() { lock.RUnlock(lkctx) }
 		}
 		unlockOnDefer = true
 	}
@@ -907,7 +934,7 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer lk.RUnlock(lkctx.Cancel)
+		defer lk.RUnlock(lkctx)
 	}
 
 	objInfo, _, err = z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
@@ -936,7 +963,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer ns.Unlock(lkctx.Cancel)
+		defer ns.Unlock(lkctx)
 		opts.NoLock = true
 	}
 
@@ -977,7 +1004,7 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return ObjectInfo{}, err
 	}
 	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx.Cancel)
+	defer lk.Unlock(lkctx)
 
 	gopts := opts
 	gopts.NoLock = true
@@ -1022,7 +1049,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		return dobjects, derrs
 	}
 	ctx = lkctx.Context()
-	defer multiDeleteLock.Unlock(lkctx.Cancel)
+	defer multiDeleteLock.Unlock(lkctx)
 
 	// Fetch location of up to 10 objects concurrently.
 	poolObjIdxMap := map[int][]ObjectToDelete{}
@@ -1122,7 +1149,7 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 			return ObjectInfo{}, err
 		}
 		ctx = lkctx.Context()
-		defer ns.Unlock(lkctx.Cancel)
+		defer ns.Unlock(lkctx)
 		dstOpts.NoLock = true
 	}
 
@@ -1644,6 +1671,8 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
 func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
+	defer NSUpdated(bucket, slashSeparator)
+
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Delete buckets in parallel across all serverPools.
@@ -1724,7 +1753,7 @@ func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return serverPools[index].MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+				return serverPools[index].MakeBucket(ctx, bucket, MakeBucketOptions{})
 			}
 			return nil
 		}, index)
@@ -1772,7 +1801,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 		return madmin.HealResultItem{}, err
 	}
 	ctx = lkctx.Context()
-	defer formatLock.Unlock(lkctx.Cancel)
+	defer formatLock.Unlock(lkctx)
 
 	r := madmin.HealResultItem{
 		Type:   madmin.HealItemMetadata,

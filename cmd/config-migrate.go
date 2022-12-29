@@ -2425,6 +2425,7 @@ func migrateV27ToV28() error {
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 // if etcd is configured then migrates /config/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
+	bootstrapTrace("migrate config to .minio.sys/config/config.json")
 	// Construct path to config.json for the given bucket.
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
@@ -2472,6 +2473,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 
 // Migrates '.minio.sys/config.json' to v33.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
+	bootstrapTrace("migrate .minio.sys/config/config.json to latest version")
 	// Construct path to config.json for the given bucket.
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
@@ -2737,6 +2739,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 }
 
 func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
+	bootstrapTrace("migrate config to KV style")
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Check if the config version is latest, if not migrate.

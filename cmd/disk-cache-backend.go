@@ -512,7 +512,7 @@ func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (me
 		return
 	}
 	ctx = lkctx.Context()
-	defer cLock.RUnlock(lkctx.Cancel)
+	defer cLock.RUnlock(lkctx)
 	return c.statCache(ctx, cacheObjPath)
 }
 
@@ -597,7 +597,7 @@ func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, met
 		return err
 	}
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	if err = c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly); err != nil {
 		return err
 	}
@@ -842,7 +842,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		return oi, err
 	}
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 
 	return c.put(ctx, bucket, object, data, size, rs, opts, incHitsOnly, writeback)
 }
@@ -1076,7 +1076,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		return nil, numHits, err
 	}
 	ctx = lkctx.Context()
-	defer cLock.RUnlock(lkctx.Cancel)
+	defer cLock.RUnlock(lkctx)
 
 	var objInfo ObjectInfo
 	var rngInfo RangeInfo
@@ -1213,7 +1213,7 @@ func (c *diskCache) Delete(ctx context.Context, bucket, object string) (err erro
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	return removeAll(cacheObjPath)
 }
 
@@ -1324,7 +1324,7 @@ func (c *diskCache) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	ctx = lkctx.Context()
-	defer partIDLock.Unlock(lkctx.Cancel)
+	defer partIDLock.Unlock(lkctx)
 	meta, _, _, err := c.statCache(ctx, uploadIDDir)
 	// Case where object not yet cached
 	if err != nil {
@@ -1381,7 +1381,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	if err != nil {
 		return err
 	}
-	defer uploadLock.Unlock(ulkctx.Cancel)
+	defer uploadLock.Unlock(ulkctx)
 
 	metaPath := pathJoin(uploadDir, cacheMetaJSONFile)
 	f, err := OpenFile(metaPath, os.O_RDWR|writeMode, 0o666)
@@ -1480,7 +1480,7 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	}
 
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	mpartCachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(mpartCachePath, uploadID)
 

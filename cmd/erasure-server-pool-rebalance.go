@@ -655,7 +655,7 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 		logger.LogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
 		return err
 	}
-	defer lock.Unlock(lkCtx.Cancel)
+	defer lock.Unlock(lkCtx)
 
 	ctx = lkCtx.Context()
 	noLockOpts := ObjectOptions{NoLock: true}

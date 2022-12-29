@@ -93,7 +93,7 @@ connectToMinio $scheme
 {{- range .Values.users }}
 echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
-cat /config/secrets/{{ tpl .existingSecret $global }}/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+cat /config/secrets/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 # Add a new line if it doesn't exist
 sed -i '$a\' $MINIO_ACCESSKEY_SECRETKEY_TMP
 createUser {{ .policy }}

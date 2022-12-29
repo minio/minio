@@ -194,7 +194,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 	ctx = lkctx.Context()
-	defer lock.RUnlock(lkctx.Cancel)
+	defer lock.RUnlock(lkctx)
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
