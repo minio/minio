@@ -309,7 +309,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		for _, tgtArn := range tgtArns {
 			opts.TargetArn = tgtArn
 			replicate = rcfg.Replicate(opts)
-			// when incoming delete is removal of a delete marker( a.k.a versioned delete),
+			// when incoming delete is removal of a delete marker(a.k.a versioned delete),
 			// GetObjectInfo returns extra information even though it returns errFileNotFound
 			if gerr != nil {
 				validReplStatus := false
