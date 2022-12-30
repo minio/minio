@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go-version: [1.18.5b7]
+        go-version: [1.19.x]
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v2
@@ -30,9 +30,10 @@ jobs:
 
       - name: Setup dockerfile for build test
         run: |
-          echo "FROM us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto/golang:${{ matrix.go-version }}" > Dockerfile.fips.test
+          echo "FROM golang:1.19.4" >> Dockerfile.fips.test
           echo "COPY . /minio" >> Dockerfile.fips.test
           echo "WORKDIR /minio" >> Dockerfile.fips.test
+          echo "ENV GOEXPERIMENT=boringcrypto" >> Dockerfile.fips.test
           echo "RUN make" >> Dockerfile.fips.test
 
       - name: Build
