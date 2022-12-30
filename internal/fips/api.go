@@ -139,8 +139,8 @@ func TLSCurveIDs() []tls.CurveID {
 		curves = append(curves, tls.X25519) // Only enable X25519 in non-FIPS mode
 	}
 	curves = append(curves, tls.CurveP256)
-	if go18 {
-		// With go1.18 enable P384, P521 newer constant time implementations.
+	if go19 {
+		// With go1.19 enable P384, P521 newer constant time implementations.
 		curves = append(curves, tls.CurveP384, tls.CurveP521)
 	}
 	return curves
