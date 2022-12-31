@@ -15,9 +15,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build go1.18
-// +build go1.18
+//go:build go1.19
+// +build go1.19
 
 package fips
 
-const go18 = true
+const go19 = true
