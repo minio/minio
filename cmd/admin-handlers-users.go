@@ -1904,9 +1904,6 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 				return
 			}
 		}
-
-		// Return successful JSON response
-		writeSuccessNoContent(w)
 	}
 
 	userType := regUser
@@ -1968,6 +1965,9 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	// Return successful JSON response
+	writeSuccessNoContent(w)
 }
 
 const (
