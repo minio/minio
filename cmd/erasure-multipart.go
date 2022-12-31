@@ -606,7 +606,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	defer partIDLock.Unlock(plkctx)
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
-	erPL := er.setPlacement(partSuffix)
+	erPL := er.setPlacement(pathJoin(object, partSuffix))
 	onlineDisks := erPL.getDisks()
 	partPl := newPartPlacement(uint16(erPL.poolIndex), uint16(erPL.setIndex))
 	writeQuorum := fi.WriteQuorum(er.defaultWQuorum())
@@ -1312,7 +1312,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	for i := 1; i <= 10000; i++ {
-		erPL := er.setPlacement(fmt.Sprintf("part.%d", i))
+		erPL := er.setPlacement(pathJoin(object, fmt.Sprintf("part.%d", i)))
 		erPL.deleteAll(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID))
 	}
 
