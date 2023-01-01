@@ -1796,15 +1796,9 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	}
 
 	or := &xioutil.ODirectReader{
-		File:      file,
-		SmallFile: false,
-	}
-
-	if length <= smallFileThreshold {
-		or = &xioutil.ODirectReader{
-			File:      file,
-			SmallFile: true,
-		}
+		File: file,
+		// Select bigger blocks when reading at least 50% of a big block.
+		SmallFile: length <= xioutil.BlockSizeLarge/2,
 	}
 
 	r := struct {
