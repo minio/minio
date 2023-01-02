@@ -377,10 +377,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		minimum: 3 * time.Second,
 	})
 
-	// Do an initial random sleep to avoid stampeding herd of initial
-	// lock request. This will spread locks requests over 1 second.
-	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -403,10 +399,11 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
-			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping before retry", err))
+			waitDuration := time.Duration(r.Float64() * 2 * float64(time.Second))
+			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping for %v before retry", err, waitDuration))
 
 			// Sleep 0 -> 2 seconds to average 1 second retry interval.
-			time.Sleep(time.Duration(r.Float64() * 2 * float64(time.Second)))
+			time.Sleep(waitDuration)
 			continue
 		}
 
