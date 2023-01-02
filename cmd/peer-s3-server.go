@@ -78,12 +78,7 @@ func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
-	concurrency := len(globalLocalDrives) / 10
-	if concurrency <= 10 {
-		concurrency = len(globalLocalDrives)
-	}
-
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(concurrency)
+	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 	bucketsInfo := make([]BucketInfo, len(globalLocalDrives))
 
 	// Make a volume entry on all underlying storage disks.
@@ -128,12 +123,7 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 }
 
 func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
-	concurrency := len(globalLocalDrives) / 10
-	if concurrency <= 10 {
-		concurrency = len(globalLocalDrives)
-	}
-
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(concurrency)
+	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range globalLocalDrives {
@@ -168,12 +158,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
-	concurrency := len(globalLocalDrives) / 10
-	if concurrency <= 10 {
-		concurrency = len(globalLocalDrives)
-	}
-
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(concurrency)
+	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range globalLocalDrives {
