@@ -121,12 +121,14 @@ type MakeBucketOptions struct {
 	VersioningEnabled bool
 	ForceCreate       bool      // Create buckets even if they are already created.
 	CreatedAt         time.Time // only for site replication
+	NoLock            bool      // does not lock the make bucket call if set to 'true'
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.
 type DeleteBucketOptions struct {
+	NoLock     bool             // does not lock the delete bucket call if set to 'true'
+	NoRecreate bool             // do not recreate bucket on delete failures
 	Force      bool             // Force deletion
-	NoRecreate bool             // Do not recreate on delete failures
 	SRDeleteOp SRBucketDeleteOp // only when site replication is enabled
 }
 

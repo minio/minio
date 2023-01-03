@@ -791,8 +791,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
-						Force:      false,
-						NoRecreate: true,
+						Force:      true,
 						SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 					})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)

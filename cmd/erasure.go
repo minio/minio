@@ -89,10 +89,6 @@ func (er erasureObjects) defaultWQuorum() int {
 	return dataCount
 }
 
-func (er erasureObjects) defaultRQuorum() int {
-	return er.setDriveCount - er.defaultParityCount
-}
-
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []madmin.Disk
 

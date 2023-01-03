@@ -31,6 +31,9 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
 
+	// Register peer S3 router only if its a distributed setup.
+	registerPeerS3Handlers(router)
+
 	// Register bootstrap REST router for distributed setups.
 	registerBootstrapRESTHandlers(router)
 

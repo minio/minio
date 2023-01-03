@@ -677,32 +677,6 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// MakeBucketLocation - creates a new bucket across all sets simultaneously,
-// then return the first encountered error
-func (s *erasureSets) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
-	g := errgroup.WithNErrs(len(s.sets))
-
-	// Create buckets in parallel across all sets.
-	for index := range s.sets {
-		index := index
-		g.Go(func() error {
-			return s.sets[index].MakeBucket(ctx, bucket, opts)
-		}, index)
-	}
-
-	errs := g.Wait()
-
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	// Success.
-	return nil
-}
-
 // hashes the key returning an integer based on the input algorithm.
 // This function currently supports
 // - CRCMOD
@@ -749,11 +723,6 @@ func (s *erasureSets) getHashedSet(input string) (set *erasureObjects) {
 	return s.sets[s.getHashedSetIndex(input)]
 }
 
-// GetBucketInfo - returns bucket info from one of the erasure coded set.
-func (s *erasureSets) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error) {
-	return s.getHashedSet("").GetBucketInfo(ctx, bucket, opts)
-}
-
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (s *erasureSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
@@ -776,52 +745,6 @@ func (s *erasureSets) IsCompressionSupported() bool {
 
 func (s *erasureSets) IsTaggingSupported() bool {
 	return true
-}
-
-// DeleteBucket - deletes a bucket on all sets simultaneously,
-// even if one of the sets fail to delete buckets, we proceed to
-// undo a successful operation.
-func (s *erasureSets) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
-	g := errgroup.WithNErrs(len(s.sets))
-
-	// Delete buckets in parallel across all sets.
-	for index := range s.sets {
-		index := index
-		g.Go(func() error {
-			return s.sets[index].DeleteBucket(ctx, bucket, opts)
-		}, index)
-	}
-
-	errs := g.Wait()
-	// For any failure, we attempt undo all the delete buckets operation
-	// by creating buckets again on all sets which were successfully deleted.
-	for _, err := range errs {
-		if err != nil && !opts.NoRecreate {
-			undoDeleteBucketSets(ctx, bucket, s.sets, errs)
-			return err
-		}
-	}
-
-	// Success.
-	return nil
-}
-
-// This function is used to undo a successful DeleteBucket operation.
-func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObjects, errs []error) {
-	g := errgroup.WithNErrs(len(sets))
-
-	// Undo previous delete bucket on all underlying sets.
-	for index := range sets {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return sets[index].MakeBucket(ctx, bucket, MakeBucketOptions{})
-			}
-			return nil
-		}, index)
-	}
-
-	g.Wait()
 }
 
 // List all buckets from one of the set, we are not doing merge

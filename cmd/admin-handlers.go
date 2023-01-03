@@ -1332,7 +1332,6 @@ func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName
 func deleteObjectPerfBucket(objectAPI ObjectLayer) {
 	objectAPI.DeleteBucket(context.Background(), globalObjectPerfBucket, DeleteBucketOptions{
 		Force:      true,
-		NoRecreate: true,
 		SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 	})
 }
