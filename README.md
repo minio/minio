@@ -4,7 +4,7 @@ This is a fork base on [MinIO RELEASE.2022-03-05T06-32-39Z version](https://gith
 
 ## Compile
 
-> **Note**: This branch relies on a newer version of JuiceFS. Please refer to the [`go.mod`](go.mod) file for the specific JuiceFS version.
+> **Note**: The [gateway branch](https://github.com/juicedata/minio/tree/gateway) relies on a newer [release version](https://github.com/juicedata/juicefs/releases) of JuiceFS. Please refer to the [`go.mod`](go.mod) file for the specific JuiceFS version. If you want to use JuiceFS of the main line branch, please change the [main branch](https://github.com/juicedata/minio/tree/main) of this repository.
 
 ```shell
 $ git clone -b gateway git@github.com:juicedata/minio.git && cd minio
