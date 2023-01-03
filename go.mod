@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.13
+	github.com/klauspost/compress v1.15.14
 	github.com/klauspost/cpuid/v2 v2.2.3
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.5
@@ -93,8 +93,6 @@ require (
 )
 
 replace github.com/mattn/go-ieproxy => github.com/mattn/go-ieproxy v0.0.1 // do not remove until https://github.com/mattn/go-ieproxy/issues/45 is fixed
-
-replace github.com/klauspost/compress => github.com/harshavardhana/compress v1.15.14-0.20221229182712-881121b1ca7f
 
 require (
 	aead.dev/mem v0.2.0 // indirect
