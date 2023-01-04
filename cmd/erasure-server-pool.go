@@ -1721,17 +1721,7 @@ func (z *erasureServerPools) purgeDelete(ctx context.Context, bucket, prefix str
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all serverPools.
 func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
-	for idx, pool := range z.serverPools {
-		if z.IsSuspended(idx) {
-			continue
-		}
-		buckets, err = pool.ListBuckets(ctx, opts)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		break
-	}
+	buckets, err = z.s3Peer.ListBuckets(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

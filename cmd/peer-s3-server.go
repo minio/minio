@@ -22,6 +22,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"net/http"
+	"sort"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/logger"
@@ -41,6 +42,7 @@ const (
 	peerS3MethodMakeBucket    = "/make-bucket"
 	peerS3MethodGetBucketInfo = "/get-bucket-info"
 	peerS3MethodDeleteBucket  = "/delete-bucket"
+	peerS3MethodListBuckets   = "/list-buckets"
 )
 
 const (
@@ -75,6 +77,54 @@ func (s *peerS3Server) IsValid(w http.ResponseWriter, r *http.Request) bool {
 // HealthHandler - returns true of health
 func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsValid(w, r)
+}
+
+func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
+	quorum := (len(globalLocalDrives) / 2)
+
+	buckets = make([]BucketInfo, 0, 32)
+	healBuckets := map[string]VolInfo{}
+
+	// lists all unique buckets across drives.
+	if err := listAllBuckets(ctx, globalLocalDrives, healBuckets, quorum); err != nil {
+		return nil, err
+	}
+
+	// include deleted buckets in listBuckets output
+	deletedBuckets := map[string]VolInfo{}
+
+	if opts.Deleted {
+		// lists all deleted buckets across drives.
+		if err := listDeletedBuckets(ctx, globalLocalDrives, deletedBuckets, quorum); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, v := range healBuckets {
+		bi := BucketInfo{
+			Name:    v.Name,
+			Created: v.Created,
+		}
+		if vi, ok := deletedBuckets[v.Name]; ok {
+			bi.Deleted = vi.Created
+		}
+		buckets = append(buckets, bi)
+	}
+
+	for _, v := range deletedBuckets {
+		if _, ok := healBuckets[v.Name]; !ok {
+			buckets = append(buckets, BucketInfo{
+				Name:    v.Name,
+				Deleted: v.Created,
+			})
+		}
+	}
+
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].Name < buckets[j].Name
+	})
+
+	return buckets, nil
 }
 
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
@@ -184,6 +234,24 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
 }
 
+func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+
+	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
+
+	buckets, err := listBucketsLocal(r.Context(), BucketOptions{
+		Deleted: bucketDeleted,
+	})
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
+}
+
 // GetBucketInfoHandler implements peer BuckeInfo call, returns bucket create date.
 func (s *peerS3Server) GetBucketInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -253,4 +321,5 @@ func registerPeerS3Handlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodMakeBucket).HandlerFunc(httpTraceHdrs(server.MakeBucketHandler))
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler))
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodGetBucketInfo).HandlerFunc(httpTraceHdrs(server.GetBucketInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(httpTraceHdrs(server.ListBucketsHandler))
 }

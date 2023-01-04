@@ -26,7 +26,6 @@ import (
 	"math/rand"
 	"net/http"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -745,56 +744,6 @@ func (s *erasureSets) IsCompressionSupported() bool {
 
 func (s *erasureSets) IsTaggingSupported() bool {
 	return true
-}
-
-// List all buckets from one of the set, we are not doing merge
-// sort here just for simplification. As per design it is assumed
-// that all buckets are present on all sets.
-func (s *erasureSets) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
-	var listBuckets []BucketInfo
-	healBuckets := map[string]VolInfo{}
-	for _, set := range s.sets {
-		// lists all unique buckets across drives.
-		if err := listAllBuckets(ctx, set.getDisks(), healBuckets, s.defaultParityCount); err != nil {
-			return nil, err
-		}
-	}
-
-	// include deleted buckets in listBuckets output
-	deletedBuckets := map[string]VolInfo{}
-
-	if opts.Deleted {
-		for _, set := range s.sets {
-			// lists all deleted buckets across drives.
-			if err := listDeletedBuckets(ctx, set.getDisks(), deletedBuckets, s.defaultParityCount); err != nil {
-				return nil, err
-			}
-		}
-	}
-	for _, v := range healBuckets {
-		bi := BucketInfo{
-			Name:    v.Name,
-			Created: v.Created,
-		}
-		if vi, ok := deletedBuckets[v.Name]; ok {
-			bi.Deleted = vi.Created
-		}
-		listBuckets = append(listBuckets, bi)
-	}
-	for _, v := range deletedBuckets {
-		if _, ok := healBuckets[v.Name]; !ok {
-			listBuckets = append(listBuckets, BucketInfo{
-				Name:    v.Name,
-				Deleted: v.Created,
-			})
-		}
-	}
-
-	sort.Slice(listBuckets, func(i, j int) bool {
-		return listBuckets[i].Name < listBuckets[j].Name
-	})
-
-	return listBuckets, nil
 }
 
 // listDeletedBuckets lists deleted buckets from all disks.
