@@ -96,10 +96,6 @@ cat ./replpolicy.json
 # assign this replication policy to repluser
 mc admin policy set dest replpolicy user=repluser
 
-# define remote target for replication from source/bucket -> dest/bucket
-remote_arn=$(mc admin bucket remote add repladminAlias/bucket http://repluser:repluser123@localhost:9000/bucket --service replication --json | jq -r ".RemoteARN")
-
-echo "Now, use this ARN to add replication rules using 'mc replicate add' command"
-# use arn returned by above command to create a replication policy on the source/bucket with `mc replicate add`
-mc replicate add source/bucket --priority 1 --remote-bucket "${remote_arn}" \
+# configure replication config to remote bucket at http://localhost:9000
+mc replicate add source/bucket --priority 1 --remote-bucket http://repluser:repluser123@localhost:9000/bucket \
    --replicate existing-objects,delete,delete-marker,replica-metadata-sync

@@ -80,127 +80,76 @@ export MC_HOST_sitec=http://minio:minio123@127.0.0.1:9006
 ./mc version enable sitec/bucket/
 ./mc mb -l sitec/olockbucket
 
-echo "adding replication config for site a -> site b"
-remote_arn=$(./mc admin bucket remote add sitea/bucket/ \
-   http://minio:minio123@127.0.0.1:9004/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
 echo "adding replication rule for a -> b : ${remote_arn}"
 sleep 1
 ./mc replicate add sitea/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9004/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync"
 sleep 1
 
-echo "adding replication config for site b -> site a"
-remote_arn=$(./mc admin bucket remote add siteb/bucket/ \
-   http://minio:minio123@127.0.0.1:9001/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
 echo "adding replication rule for b -> a : ${remote_arn}"
 ./mc replicate add siteb/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9001/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync"
 sleep 1
 
-echo "adding replication config for site a -> site c"
-remote_arn=$(./mc admin bucket remote add sitea/bucket/ \
-   http://minio:minio123@127.0.0.1:9006/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
 echo "adding replication rule for a -> c : ${remote_arn}"
 ./mc replicate add sitea/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9006/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 2
 sleep 1
-echo "adding replication config for site c -> site a"
-remote_arn=$(./mc admin bucket remote add sitec/bucket/ \
-   http://minio:minio123@127.0.0.1:9001/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for c -> a : ${remote_arn}"
 ./mc replicate add sitec/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9001/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 2
 sleep 1
-echo "adding replication config for site b -> site c"
-remote_arn=$(./mc admin bucket remote add siteb/bucket/ \
-   http://minio:minio123@127.0.0.1:9006/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for b -> c : ${remote_arn}"
 ./mc replicate add siteb/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9006/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 3
 sleep 1
 
-echo "adding replication config for site c -> site b"
-remote_arn=$(././mc admin bucket remote add sitec/bucket \
-   http://minio:minio123@127.0.0.1:9004/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
 echo "adding replication rule for c -> b : ${remote_arn}"
 ./mc replicate add sitec/bucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9004/bucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 3
 sleep 1
-echo "adding replication config for olockbucket site a -> site b"
-remote_arn=$(././mc admin bucket remote add sitea/olockbucket/ \
-   http://minio:minio123@127.0.0.1:9004/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket a -> b : ${remote_arn}"
 ./mc replicate add sitea/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9004/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync"
 sleep 1
-echo "adding replication config for site b -> site a"
-remote_arn=$(././mc admin bucket remote add siteb/olockbucket/ \
-   http://minio:minio123@127.0.0.1:9001/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket b -> a : ${remote_arn}"
 ./mc replicate add siteb/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9001/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync"
 sleep 1
-echo "adding replication config for olockbucket site a -> site c"
-remote_arn=$(././mc admin bucket remote add sitea/olockbucket/ \
-   http://minio:minio123@127.0.0.1:9006/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket a -> c : ${remote_arn}"
 ./mc replicate add sitea/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9006/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 2
 sleep 1
-echo "adding replication config for site c -> site a"
-remote_arn=$(././mc admin bucket remote add sitec/olockbucket/ \
-   http://minio:minio123@127.0.0.1:9001/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket c -> a : ${remote_arn}"
 ./mc replicate add sitec/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9001/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 2
 sleep 1
-echo "adding replication config for site b -> site c"
-remote_arn=$(././mc admin bucket remote add siteb/olockbucket/ \
-   http://minio:minio123@127.0.0.1:9006/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket b -> c : ${remote_arn}"
 ./mc replicate add siteb/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9006/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 3
 sleep 1
-echo "adding replication config for site c -> site b"
-remote_arn=$(././mc admin bucket remote add sitec/olockbucket \
-   http://minio:minio123@127.0.0.1:9004/olockbucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-sleep 1
+
 echo "adding replication rule for olockbucket c -> b : ${remote_arn}"
 ./mc replicate add sitec/olockbucket/ \
-   --remote-bucket "${remote_arn}" \
+   --remote-bucket http://minio:minio123@127.0.0.1:9004/olockbucket \
    --replicate "existing-objects,delete,delete-marker,replica-metadata-sync" --priority 3
 sleep 1
 

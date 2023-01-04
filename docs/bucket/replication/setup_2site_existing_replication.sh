@@ -76,14 +76,11 @@ done
 ./mc mb siteb/bucket/
 ./mc version enable siteb/bucket/
 
-echo "adding replication config for site a -> site b"
-remote_arn=$(./mc admin bucket remote add sitea/bucket/ \
-   http://minio:minio123@127.0.0.1:9004/bucket \
-   --service "replication" --json | jq -r ".RemoteARN")
-echo "adding replication rule for a -> b : ${remote_arn}"
-
+echo "adding replication rule for site a -> site b"
 ./mc replicate add sitea/bucket/ \
-   --remote-bucket "${remote_arn}"
+     --remote-bucket http://minio:minio123@127.0.0.1:9004/bucket
+
+remote_arn=$(./mc replicate ls sitea/bucket --json | jq -r .rule.Destination.Bucket)
 sleep 1
 
 ./mc replicate resync start sitea/bucket/ --remote-bucket "${remote_arn}"
