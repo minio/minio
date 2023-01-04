@@ -81,7 +81,7 @@ func NewS3PeerSys(endpoints EndpointServerPools) *S3PeerSys {
 }
 
 // ListBuckets lists buckets across all servers and returns a possible consistent view
-func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
+func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (result []BucketInfo, err error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
 	localBuckets, err := listBucketsLocal(ctx, opts)
@@ -116,13 +116,21 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (buck
 		return nil, err
 	}
 
+	bucketsMap := make(map[string]struct{})
 	for idx, buckets := range nodeBuckets {
-		if errs[idx] == nil {
-			return buckets, nil
+		if errs[idx] != nil {
+			continue
+		}
+		for _, bi := range buckets {
+			_, ok := bucketsMap[bi.Name]
+			if !ok {
+				bucketsMap[bi.Name] = struct{}{}
+				result = append(result, bi)
+			}
 		}
 	}
 
-	return []BucketInfo{}, nil
+	return result, nil
 }
 
 // GetBucketInfo returns bucket stat info about bucket on disk across all peers
