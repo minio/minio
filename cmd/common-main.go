@@ -117,7 +117,8 @@ func init() {
 	go func() {
 		var t *time.Ticker
 		if containers {
-			t = time.NewTicker(1 * time.Minute)
+			// k8s DNS TTL is 30s (Attempt a refresh only after)
+			t = time.NewTicker(30 * time.Second)
 		} else {
 			t = time.NewTicker(10 * time.Minute)
 		}
