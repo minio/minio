@@ -62,8 +62,7 @@ export MC_HOST_myminio2=http://minioadmin:minioadmin@localhost:9002
 ./mc mb myminio2/testbucket/
 ./mc version enable myminio2/testbucket/
 
-arn=$(mc admin bucket remote add myminio1/testbucket/ http://minioadmin:minioadmin@localhost:9002/testbucket/ --service "replication" --json | jq -r .RemoteARN)
-./mc replicate add myminio1/testbucket --remote-bucket "$arn" --priority 1
+./mc replicate add myminio1/testbucket --remote-bucket http://minioadmin:minioadmin@localhost:9002/testbucket/ --priority 1
 
 ./mc cp README.md myminio1/testbucket/dir/file
 ./mc cp README.md myminio1/testbucket/dir/file
