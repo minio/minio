@@ -81,5 +81,6 @@ const (
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
 
-	EnvPanFSBucketPath = "MINIO_PANFS_BUCKET_PATH"
+	EnvPanFSBucketPath       = "MINIO_PANFS_BUCKET_PATH"
+	EnvPanasasConfigAgentURL = "MINIO_PANFS_CONFIG_AGENT_URL"
 )

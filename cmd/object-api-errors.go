@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	panconfig "github.com/minio/minio/cmd/panasas/config"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -97,6 +99,8 @@ func toObjectErr(err error, params ...string) error {
 		}
 		return apiErr
 	case errFileNotFound.Error():
+		fallthrough
+	case panconfig.ErrNotFound.Error():
 		apiErr := ObjectNotFound{}
 		if len(params) >= 1 {
 			apiErr.Bucket = params[0]

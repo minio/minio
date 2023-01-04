@@ -46,7 +46,16 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mountinfo"
 	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/env"
 	"github.com/minio/pkg/mimedb"
+
+	panconfig "github.com/minio/minio/cmd/panasas/config"
+)
+
+const (
+	panfsBucketListPrefix     = "buckets"
+	panfsObjectsPrefix        = "data"
+	panfsConfigAgentNamespace = "s3"
 )
 
 // PANdefaultEtag etag is used for pre-existing objects.
@@ -89,6 +98,8 @@ type PANFSObjects struct {
 
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
+
+	configAgent *panconfig.Client
 }
 
 // Represents the background append file.
@@ -155,6 +166,11 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		return nil, err
 	}
 
+	panasasConfigClient := panconfig.NewClient(
+		env.Get(config.EnvPanasasConfigAgentURL, ""),
+		panfsConfigAgentNamespace,
+	)
+
 	// Initialize fs objects.
 	fs := &PANFSObjects{
 		fsPath:       fsPath,
@@ -167,6 +183,7 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*panfsAppendFile),
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
+		configAgent:   panasasConfigClient,
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -530,6 +547,16 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 		return toObjectErr(err, bucket)
 	}
 
+	if fs.configAgent != nil {
+		err = fs.configAgent.PutObject(
+			pathJoin(panfsBucketListPrefix, bucket),
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	globalBucketMetadataSys.Set(bucket, meta)
 
 	return nil
@@ -611,7 +638,26 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 		return nil, err
 	}
 
-	entries, err := readDirWithOpts(fs.fsPath, readDirOpts{count: -1, followDirSymlink: true})
+	var entries []string
+	var err error
+
+	if fs.configAgent != nil {
+		// We need "buckets/" here, not "buckets" to list all the
+		// objects included in the "buckets" directory but ignore a
+		// directory/object whose name would begin with "buckets".
+		entries, err = fs.configAgent.GetObjectsList(panfsBucketListPrefix + SlashSeparator)
+
+		if err == nil {
+			// The entries will have a prefix. In order to get the
+			// names of the buffers, we need to remove the prefixes.
+			for idx, entry := range entries {
+				entries[idx] = strings.TrimPrefix(entry, panfsBucketListPrefix+SlashSeparator)
+			}
+		}
+	} else {
+		entries, err = readDirWithOpts(fs.fsPath, readDirOpts{count: -1, followDirSymlink: true})
+	}
+
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
 		return nil, toObjectErr(errDiskNotFound)
@@ -688,6 +734,17 @@ func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts De
 
 	// Delete all bucket metadata.
 	deleteBucketMetadata(ctx, fs, bucket)
+
+	if fs.configAgent != nil {
+		noLockID := ""
+		err = fs.configAgent.DeleteObject(
+			pathJoin(panfsBucketListPrefix, bucket),
+			noLockID,
+		)
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+	}
 
 	return nil
 }
@@ -853,9 +910,21 @@ func (fs *PANFSObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 		return nil, err
 	}
 
-	// Read the object, doesn't exist returns an s3 compatible error.
-	fsObjPath := pathJoin(fs.fsPath, bucket, object)
-	readCloser, size, err := fsOpenFile(ctx, fsObjPath, off)
+	var readCloser io.ReadCloser
+	var size int64
+	if fs.isConfigAgentObject(bucket, object) {
+		objectName := pathJoin(panfsObjectsPrefix, bucket, object)
+		readCloser, objectInfo, err := fs.configAgent.GetObject(objectName)
+		if err == nil {
+			size = objectInfo.Size()
+			io.Copy(io.Discard, io.LimitReader(readCloser, off))
+		}
+	} else {
+		// Read the object, doesn't exist returns an s3 compatible error.
+		fsObjPath := pathJoin(fs.fsPath, bucket, object)
+		readCloser, size, err = fsOpenFile(ctx, fsObjPath, off)
+	}
+
 	if err != nil {
 		rwPoolUnlocker()
 		nsUnlocker()
@@ -957,7 +1026,12 @@ func (fs *PANFSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, objec
 	}
 
 	// Stat the file to get file size.
-	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	var fi os.FileInfo
+	if fs.isConfigAgentObject(bucket, object) {
+		fi, err = fs.configAgent.GetObjectInfo(pathJoin(panfsObjectsPrefix, bucket, object))
+	} else {
+		fi, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	}
 	if err != nil {
 		return oi, err
 	}
@@ -1007,7 +1081,12 @@ func (fs *PANFSObjects) getObjectInfo(ctx context.Context, bucket, object string
 	}
 
 	// Stat the file to get file size.
-	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	var fi os.FileInfo
+	if fs.isConfigAgentObject(bucket, object) {
+		fi, err = fs.configAgent.GetObjectInfo(pathJoin(panfsObjectsPrefix, bucket, object))
+	} else {
+		fi, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	}
 	if err != nil {
 		return oi, err
 	}
@@ -1188,35 +1267,39 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 	// so that cleaning it up will be easy if the server goes down.
 	tempObj := mustGetUUID()
 
-	var fsTmpObjPath string
-	// This is to handle bucket metadata which is still using .minio.sys
-	if bucket != minioMetaBucket {
-		fsTmpObjPath = pathJoin(bucketDir, panfsMetaDir, tmpDir, fs.fsUUID, tempObj)
+	var fsNSObjPath string
+
+	if fs.isConfigAgentObject(bucket, object) {
+		fsNSObjPath = pathJoin(panfsObjectsPrefix, bucket, object)
+		retErr = fs.configAgent.PutObject(fsNSObjPath, data)
+		if retErr != nil {
+			return ObjectInfo{}, retErr
+		}
 	} else {
-		fsTmpObjPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	}
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
+		fsTmpObjPath := pathJoin(bucketDir, panfsMetaDir, tmpDir, fs.fsUUID, tempObj)
+		bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
-	// Delete the temporary object in the case of a
-	// failure. If PutObject succeeds, then there would be
-	// nothing to delete.
-	defer fsRemoveFile(ctx, fsTmpObjPath)
+		// Delete the temporary object in the case of a
+		// failure. If PutObject succeeds, then there would be
+		// nothing to delete.
+		defer fsRemoveFile(ctx, fsTmpObjPath)
 
-	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-	fsMeta.Meta["etag"] = r.MD5CurrentHexString()
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
 
-	// Should return IncompleteBody{} error when reader has fewer
-	// bytes than specified in request header.
-	if bytesWritten < data.Size() {
-		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
-	}
+		// Should return IncompleteBody{} error when reader has fewer
+		// bytes than specified in request header.
+		if bytesWritten < data.Size() {
+			return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
+		}
 
-	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
-	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		// Entire object was written to the temp location, now it's safe to rename it to the actual location.
+		fsNSObjPath = pathJoin(fs.fsPath, bucket, object)
+		if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 	}
 
 	if bucket != minioMetaBucket {
@@ -1227,11 +1310,16 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 	}
 
 	// Stat the file to fetch timestamp, size.
-	fi, err := fsStatFile(ctx, fsNSObjPath)
+	var fi os.FileInfo
+	if fs.isConfigAgentObject(bucket, object) {
+		fi, err = fs.configAgent.GetObjectInfo(pathJoin(panfsObjectsPrefix, bucket, object))
+	} else {
+		fi, err = fsStatFile(ctx, fsNSObjPath)
+	}
+
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-
 	// Success.
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
@@ -1317,16 +1405,22 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 	}
 
 	// Delete the object.
-	if err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
-		if rwlk != nil {
-			rwlk.Close()
-		}
-		return objInfo, toObjectErr(err, bucket, object)
+	if fs.isConfigAgentObject(bucket, object) {
+		objectName := pathJoin(panfsObjectsPrefix, bucket, object)
+		noLock := ""
+		err = fs.configAgent.DeleteObject(objectName, noLock)
+	} else {
+		err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object))
 	}
 
-	// Close fsMetaPath before deletion
+	// Close fsMetaPath before returning due to error or fsMetaPath
+	// deletion.
 	if rwlk != nil {
 		rwlk.Close()
+	}
+
+	if err != nil {
+		return objInfo, toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
@@ -1347,6 +1441,56 @@ func (fs *PANFSObjects) isLeaf(bucket string, leafPath string) bool {
 	return !strings.HasSuffix(leafPath, slashSeparator)
 }
 
+// filterImmediateDirectoryContents leaves only the entries which are included
+// in directory (excluding its subdirectories).
+// Assumption: all entries are prefixed with directory name.
+func filterImmediateDirectoryContents(entries []string, directory string) []string {
+	if len(entries) == 0 {
+		return entries
+	}
+
+	result := entries[:0]
+
+	directoryLength := len(directory)
+
+	var needSlashPrefix bool
+	var entryNameOffset int
+	if strings.HasSuffix(directory, slashSeparator) {
+		needSlashPrefix = false
+		entryNameOffset = directoryLength
+	} else {
+		needSlashPrefix = true
+		entryNameOffset = directoryLength + 1
+	}
+
+	subdirectories := map[string]bool{}
+
+	for _, entry := range entries {
+		if needSlashPrefix && !strings.HasPrefix(entry[directoryLength:], slashSeparator) {
+			continue
+		}
+
+		relativeName := entry[entryNameOffset:]
+		slashIdx := strings.Index(relativeName, slashSeparator)
+		if slashIdx < 0 {
+			// OK - no "/" found - this entry is not in a subdirectory.
+		} else if slashIdx == len(relativeName)-1 {
+			// OK - "/" found but is the suffix of the entry.
+		} else {
+			// Skip the entry - it is in a subdirectory.
+			dirName := relativeName[:slashIdx+1]
+			subdirectories[dirName] = true
+			continue
+		}
+
+		result = append(result, relativeName)
+	}
+	for subDir := range subdirectories {
+		result = append(result, subDir)
+	}
+	return result
+}
+
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
@@ -1359,6 +1503,19 @@ func (fs *PANFSObjects) listDirFactory() ListDirFunc {
 			logger.LogIf(GlobalContext, err)
 			return false, nil, false
 		}
+		var agentEntries []string
+		if fs.configAgent != nil {
+			prefix := pathJoin(panfsObjectsPrefix, bucket, prefixDir)
+			agentEntries, err = fs.configAgent.GetObjectsList(prefix)
+			if err != nil {
+				return false, nil, false
+			}
+			agentEntries = filterImmediateDirectoryContents(agentEntries, prefix)
+			if len(agentEntries) > 0 {
+				entries = append(entries, agentEntries...)
+			}
+		}
+
 		if len(entries) == 0 {
 			return true, nil, false
 		}
@@ -1387,6 +1544,15 @@ func (fs *PANFSObjects) filterOutPanFSS3Dir(entries []string) (filtered []string
 // and the prefix represents an empty directory. An S3 empty directory
 // is also an empty directory in the FS backend.
 func (fs *PANFSObjects) isObjectDir(bucket, prefix string) bool {
+	if fs.configAgent != nil {
+		entries, err := fs.configAgent.GetObjectsList(pathJoin(panfsObjectsPrefix, bucket, prefix, slashSeparator))
+		if err != nil {
+			return false
+		}
+		if len(entries) > 0 {
+			return false
+		}
+	}
 	entries, err := readDirN(pathJoin(fs.fsPath, bucket, prefix), 1)
 	if err != nil {
 		return false
@@ -1619,4 +1785,35 @@ func (fs *PANFSObjects) GetRawData(ctx context.Context, volume, file string, fn 
 		return nil
 	}
 	return fn(f, "fs", fs.fsUUID, file, st.Size(), st.ModTime(), st.IsDir())
+}
+
+// isConfigAgentObject - return true if the requested object should be
+// accessed using the Panasas Config Agent API.
+//
+// The result will be false if:
+// - the Config Agent is not configured (we should fall back to the local mode
+// in that case),
+// - the object should be stored locally - on the filesystem.
+func (fs *PANFSObjects) isConfigAgentObject(bucket, object string) bool {
+	if fs.configAgent == nil {
+		// Config Agent has not been configured.
+		return false
+	}
+
+	if bucket != minioMetaBucket {
+		return false
+	}
+
+	switch {
+	case strings.HasPrefix(object, "buckets/"):
+		return false
+	case strings.HasPrefix(object, "multipart/"):
+		return false
+	case strings.HasPrefix(object, "tmp/"):
+		return false
+	case object == formatConfigFile:
+		return false
+	}
+
+	return true
 }
