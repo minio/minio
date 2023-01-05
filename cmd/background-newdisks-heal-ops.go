@@ -330,9 +330,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		if err == errFileNotFound {
 			return nil
 		}
-		// So someone changed the drives underneath, healing tracker missing.
-		logger.LogIf(ctx, fmt.Errorf("Healing tracker missing on '%s', drive was swapped again on %s pool: %w",
-			disk, humanize.Ordinal(poolIdx+1), err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to load a healing tracker on '%s': %w", disk, err))
 		tracker = newHealingTracker(disk, mustGetUUID())
 	}
 
