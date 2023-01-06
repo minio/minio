@@ -174,7 +174,7 @@ func IsValidObjectPrefix(object string) bool {
 	// work with file systems, we will reject here
 	// to return object name invalid rather than
 	// a cryptic error from the file system.
-	if strings.Contains(object, "\x00") {
+	if strings.ContainsRune(object, 0) {
 		return false
 	}
 	return true
