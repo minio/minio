@@ -102,6 +102,7 @@ type Credentials struct {
 	ParentUser   string                 `xml:"-" json:"parentUser,omitempty"`
 	Groups       []string               `xml:"-" json:"groups,omitempty"`
 	Claims       map[string]interface{} `xml:"-" json:"claims,omitempty"`
+	Comment      string                 `xml:"-" json:"comment,omitempty"`
 }
 
 func (cred Credentials) String() string {
