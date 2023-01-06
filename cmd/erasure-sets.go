@@ -1149,6 +1149,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, errNoHealRequired
 	}
 
+	formatOpID := mustGetUUID()
+
 	// Initialize a new set of set formats which will be written to disk.
 	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
 
@@ -1170,7 +1172,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			if storageDisks[index] == nil || format == nil {
 				continue
 			}
-			if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
+			if err := saveFormatErasure(storageDisks[index], format, formatOpID); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Drive %s failed to write updated 'format.json': %v", storageDisks[index], err))
 				tmpNewFormats[index] = nil // this disk failed to write new format
 			}
