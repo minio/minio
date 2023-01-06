@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -719,6 +719,9 @@ func serverMain(ctx *cli.Context) {
 
 			setCacheObjectLayer(cacheAPI)
 		}
+
+		// Initialize the license update job
+		initLicenseUpdateJob(GlobalContext, newObject)
 
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -117,6 +117,26 @@ func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config,
 	w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 }
 
+type badConfigErr struct {
+	Err error
+}
+
+// Error - return the error message
+func (bce badConfigErr) Error() string {
+	return bce.Err.Error()
+}
+
+// Unwrap the error to its underlying error.
+func (bce badConfigErr) Unwrap() error {
+	return bce.Err
+}
+
+type setConfigResult struct {
+	Cfg     config.Config
+	SubSys  string
+	Dynamic bool
+}
+
 // SetConfigKVHandler - PUT /minio/admin/v3/set-config-kv
 func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigKV")
@@ -142,46 +162,53 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI, nil)
+	result, err := setConfigKV(ctx, objectAPI, kvBytes)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		switch err.(type) {
+		case badConfigErr:
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		default:
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		}
 		return
 	}
 
-	dynamic, err := cfg.ReadConfig(bytes.NewReader(kvBytes))
+	if result.Dynamic {
+		applyDynamic(ctx, objectAPI, result.Cfg, result.SubSys, r, w)
+	}
+
+	writeSuccessResponseHeadersOnly(w)
+}
+
+func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (result setConfigResult, err error) {
+	result.Cfg, err = readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	subSys, _, _, err := config.GetSubSys(string(kvBytes))
+	result.Dynamic, err = result.Cfg.ReadConfig(bytes.NewReader(kvBytes))
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if err = validateConfig(cfg, subSys); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+	result.SubSys, _, _, err = config.GetSubSys(string(kvBytes))
+	if err != nil {
+		return
+	}
+
+	if verr := validateConfig(result.Cfg, result.SubSys); verr != nil {
+		err = badConfigErr{Err: verr}
 		return
 	}
 
 	// Update the actual server config on disk.
-	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	if err = saveServerConfig(ctx, objectAPI, result.Cfg); err != nil {
 		return
 	}
 
-	// Write to the config input KV to history.
-	if err = saveServerConfigHistory(ctx, objectAPI, kvBytes); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	if dynamic {
-		applyDynamic(ctx, objectAPI, cfg, subSys, r, w)
-	}
-
-	writeSuccessResponseHeadersOnly(w)
+	// Write the config input KV to history.
+	err = saveServerConfigHistory(ctx, objectAPI, kvBytes)
+	return
 }
 
 // GetConfigKVHandler - GET /minio/admin/v3/get-config-kv?key={key}
