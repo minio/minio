@@ -63,7 +63,16 @@ spec:
                   name: {{ tpl .existingSecret $ }}
                   items:
                     - key: {{ .existingSecretKey }}
-                      path: secrets/{{ tpl .existingSecretKey $ }}
+                      path: secrets/{{ tpl .existingSecret $ }}/{{ tpl .existingSecretKey $ }}
+              {{- end }}
+              {{- end }}
+              {{- range ( default list .Values.svcaccts ) }}
+              {{- if .existingSecret }}
+              - secret:
+                  name: {{ tpl .existingSecret $ }}
+                  items:
+                    - key: {{ .existingSecretKey }}
+                      path: secrets-svc/{{ tpl .existingSecret $ }}/{{ tpl .existingSecretKey $ }}
               {{- end }}
               {{- end }}
         {{- if .Values.tls.enabled }}
