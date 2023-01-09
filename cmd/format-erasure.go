@@ -741,7 +741,10 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID, distributionAlgo string, sErrs []error) (*formatErasureV3, error) {
 	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, len(storageDisks))
-	wantAtMost := ecDrivesNoConfig(setDriveCount)
+	wantAtMost, err := ecDrivesNoConfig(setDriveCount)
+	if err != nil {
+		return nil, err
+	}
 
 	for i := 0; i < setCount; i++ {
 		hostCount := make(map[string]int, setDriveCount)
@@ -795,13 +798,12 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
-func ecDrivesNoConfig(setDriveCount int) int {
-	sc, _ := storageclass.LookupConfig(config.KVS{}, setDriveCount)
-	ecDrives := sc.GetParityForSC(storageclass.STANDARD)
-	if ecDrives < 0 {
-		ecDrives = storageclass.DefaultParityBlocks(setDriveCount)
+func ecDrivesNoConfig(setDriveCount int) (int, error) {
+	sc, err := storageclass.LookupConfig(config.KVS{}, setDriveCount)
+	if err != nil {
+		return 0, err
 	}
-	return ecDrives
+	return sc.GetParityForSC(storageclass.STANDARD), nil
 }
 
 // Make Erasure backend meta volumes.

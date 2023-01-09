@@ -94,11 +94,14 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
 		// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
 		if commonParityDrives == 0 {
-			commonParityDrives = ecDrivesNoConfig(ep.DrivesPerSet)
+			commonParityDrives, err = ecDrivesNoConfig(ep.DrivesPerSet)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if err = storageclass.ValidateParity(commonParityDrives, ep.DrivesPerSet); err != nil {
-			return nil, fmt.Errorf("parity validation returned an error %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
+			return nil, fmt.Errorf("parity validation returned an error: %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
 		}
 
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
