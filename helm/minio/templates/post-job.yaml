@@ -57,7 +57,7 @@ spec:
                   name: {{ template "minio.fullname" . }}
               - secret:
                   name: {{ template "minio.secretName" . }}
-              {{- range .Values.users }}
+              {{- range (concat .Values.users (default (list) .Values.svcaccts)) }}
               {{- if .existingSecret }}
               - secret:
                   name: {{ tpl .existingSecret $ }}
