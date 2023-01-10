@@ -1007,7 +1007,9 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 		for _, bi := range buckets {
 			var objectsFound int
 			err := set.listObjectsToDecommission(ctx, bi, func(entry metaCacheEntry) {
-				objectsFound++
+				if entry.isObject() {
+					objectsFound++
+				}
 			})
 			if err != nil {
 				return err
@@ -1041,7 +1043,7 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 	z.poolMetaMutex.Unlock()
 
 	if !failed {
-		logger.Info("Decommissioning almost complete - doing further checks")
+		logger.Info("Decommissioning almost complete - checking for left over objects")
 		err := z.checkAfterDecom(ctx, idx)
 		if err != nil {
 			logger.LogIf(ctx, err)
