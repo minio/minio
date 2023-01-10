@@ -1015,7 +1015,7 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 				return err
 			}
 			if objectsFound > 0 {
-				return fmt.Errorf("at least %d objects were found after decommissioning", objectsFound)
+				return fmt.Errorf("at least %d objects were found in bucket `%s` after decommissioning", objectsFound, bi.Name)
 			}
 		}
 	}
