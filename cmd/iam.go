@@ -919,6 +919,7 @@ type newServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	accessKey     string
 	secretKey     string
+	comment       string
 
 	claims map[string]interface{}
 }
@@ -989,6 +990,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.ParentUser = parentUser
 	cred.Groups = groups
 	cred.Status = string(auth.AccountOn)
+	cred.Comment = opts.comment
 
 	updatedAt, err := sys.store.AddServiceAccount(ctx, cred)
 	if err != nil {
@@ -1003,6 +1005,7 @@ type updateServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	secretKey     string
 	status        string
+	comment       string
 }
 
 // UpdateServiceAccount - edit a service account
