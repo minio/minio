@@ -1044,7 +1044,7 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 
 	if !failed {
 		logger.Info("Decommissioning almost complete - checking for left over objects")
-		err := z.checkAfterDecom(ctx, idx)
+		err := z.checkAfterDecom(dctx, idx)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			failed = true
