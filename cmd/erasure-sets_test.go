@@ -191,7 +191,12 @@ func TestNewErasureSets(t *testing.T) {
 	}
 
 	ep := PoolEndpoints{Endpoints: endpoints}
-	if _, err := newErasureSets(ctx, ep, storageDisks, format, ecDrivesNoConfig(16), 0); err != nil {
+
+	parity, err := ecDrivesNoConfig(16)
+	if err != nil {
+		t.Fatalf("Unexpected error during EC drive config: %v", err)
+	}
+	if _, err := newErasureSets(ctx, ep, storageDisks, format, parity, 0); err != nil {
 		t.Fatalf("Unable to initialize erasure")
 	}
 }

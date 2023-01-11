@@ -142,17 +142,18 @@ func TestNewHTTPListener(t *testing.T) {
 		{[]string{"example.org:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
 		{[]string{"unknown-host"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
 		{[]string{"unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"localhost:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
 		{[]string{"localhost:65432", "93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
 		{[]string{"localhost:65432", "unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
 		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
 		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
+		{[]string{"[::1]:9090", "localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
 	}
 
 	for _, testCase := range testCases {
 		listener, err := newHTTPListener(context.Background(),
 			testCase.serverAddrs,
 		)
-
 		if !testCase.expectedErr {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
