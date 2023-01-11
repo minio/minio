@@ -54,6 +54,11 @@ func initLicenseUpdateJob(ctx context.Context, objAPI ObjectLayer) {
 				duration = time.Hour
 			}
 			time.Sleep(duration)
+
+			select {
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 }
@@ -74,14 +79,18 @@ func runLicenseUpdate(ctx context.Context, objAPI ObjectLayer) {
 	defer licenseUpdateTimer.Stop()
 
 	for {
-		<-licenseUpdateTimer.C
+		select {
+		case <-ctx.Done():
+			return
+		case <-licenseUpdateTimer.C:
 
-		if globalSubnetConfig.Registered() {
-			performLicenseUpdate(ctx, objAPI)
+			if globalSubnetConfig.Registered() {
+				performLicenseUpdate(ctx, objAPI)
+			}
+
+			// Reset the timer for next cycle.
+			licenseUpdateTimer.Reset(licUpdateCycle)
 		}
-
-		// Reset the timer for next cycle.
-		licenseUpdateTimer.Reset(licUpdateCycle)
 	}
 }
 
