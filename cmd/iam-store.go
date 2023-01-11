@@ -2133,6 +2133,10 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		cr.SecretKey = opts.secretKey
 	}
 
+	if opts.comment != "" {
+		cr.Comment = opts.comment
+	}
+
 	switch opts.status {
 	// The caller did not ask to update status account, do nothing
 	case "":
