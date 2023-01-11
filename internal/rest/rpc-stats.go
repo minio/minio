@@ -32,7 +32,8 @@ var globalStats = struct {
 	tcpDialTotalDur uint64
 }{}
 
-// RPCStats holds information about the DHCP/TCP metrics and errors
+// RPCStats holds information about the connection dials metrics and errors
+// Dial metrics will include DHCP resolution/TCP and TLS handshakes
 type RPCStats struct {
 	Errs uint64
 
@@ -40,19 +41,25 @@ type RPCStats struct {
 	DialErrs        uint64
 }
 
-// GetRPCStats returns RPC stats, include calls errors and dhcp/tcp metrics
+// GetRPCStats returns RPC stats, include calls errors and dial metrics
+// TCP avg time metrics should be reset, users do not need to see average
+// prometheus metrics since the start of the cluster
 func GetRPCStats() RPCStats {
 	s := RPCStats{
 		Errs:     atomic.LoadUint64(&globalStats.errs),
 		DialErrs: atomic.LoadUint64(&globalStats.tcpDialErrs),
 	}
+
 	if v := atomic.LoadUint64(&globalStats.tcpDialCount); v > 0 {
 		s.DialAvgDuration = atomic.LoadUint64(&globalStats.tcpDialTotalDur) / v
+
+		atomic.StoreUint64(&globalStats.tcpDialCount, 0)
+		atomic.StoreUint64(&globalStats.tcpDialTotalDur, 0)
 	}
 	return s
 }
 
-// Return a function which update the global stats related to tcp connections
+// Return a function which update the global stats related to request connections
 func setupReqStatsUpdate(req *http.Request) (*http.Request, func()) {
 	var dialStart, dialEnd int64
 
