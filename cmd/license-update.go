@@ -54,11 +54,6 @@ func initLicenseUpdateJob(ctx context.Context, objAPI ObjectLayer) {
 				duration = time.Hour
 			}
 			time.Sleep(duration)
-
-			select {
-			case <-ctx.Done():
-				return
-			}
 		}
 	}()
 }
