@@ -33,42 +33,32 @@ const (
 	licRenewURLDev = "http://localhost:9000/api/cluster/renew-license"
 )
 
-var licUpdateLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
-
 // initlicenseUpdateJob start the periodic license update job in the background.
 func initLicenseUpdateJob(ctx context.Context, objAPI ObjectLayer) {
 	go func() {
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		// Leader node (that successfully acquires the lock inside runLicenseUpdate)
+		// Leader node (that successfully acquires the lock inside licenceUpdaterLoop)
 		// will keep performing the license update. If the leader goes down for some
 		// reason, the lock will be released and another node will acquire it and
 		// take over because of this loop.
 		for {
-			runLicenseUpdate(ctx, objAPI)
+			licenceUpdaterLoop(ctx, objAPI)
 
-			// license update running on a different node.
+			// license update stopped for some reason.
 			// sleep for some time and try again.
-			duration := time.Duration(r.Float64() * float64(licUpdateCycle))
-			if duration < time.Hour {
-				// Make sure to sleep atleast an hour.
-				duration = time.Hour
+			duration := time.Duration(r.Float64() * float64(time.Hour))
+			if duration < time.Second {
+				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				duration = time.Second
 			}
 			time.Sleep(duration)
 		}
 	}()
 }
 
-func runLicenseUpdate(ctx context.Context, objAPI ObjectLayer) {
-	// Make sure only 1 license update job is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "licenseUpdate/runLicenseUpdate.lock")
-	lkctx, err := locker.GetLock(ctx, licUpdateLeaderLockTimeout)
-	if err != nil {
-		// lock timedout means some other node is the leader
-		return
-	}
-
-	ctx = lkctx.Context()
-	defer locker.Unlock(lkctx)
+func licenceUpdaterLoop(ctx context.Context, objAPI ObjectLayer) {
+	ctx, cancel := globalLeaderLock.GetLock(ctx)
+	defer cancel()
 
 	licenseUpdateTimer := time.NewTimer(licUpdateCycle)
 	defer licenseUpdateTimer.Stop()
