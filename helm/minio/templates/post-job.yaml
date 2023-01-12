@@ -82,7 +82,6 @@ spec:
           securityContext:
             runAsUser: {{ .Values.makeBucketJob.securityContext.runAsUser }}
             runAsGroup: {{ .Values.makeBucketJob.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.makeBucketJob.securityContext.fsGroup }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeBucketJob.exitCommand }}
@@ -113,7 +112,6 @@ spec:
           securityContext:
             runAsUser: {{ .Values.makeUserJob.securityContext.runAsUser }}
             runAsGroup: {{ .Values.makeUserJob.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.makeUserJob.securityContext.fsGroup }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeUserJob.exitCommand }}
@@ -144,7 +142,6 @@ spec:
           securityContext:
             runAsUser: {{ .Values.makePolicyJob.securityContext.runAsUser }}
             runAsGroup: {{ .Values.makePolicyJob.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.makePolicyJob.securityContext.fsGroup }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makePolicyJob.exitCommand }}
@@ -175,7 +172,6 @@ spec:
           securityContext:
             runAsUser: {{ .Values.customCommandJob.securityContext.runAsUser }}
             runAsGroup: {{ .Values.customCommandJob.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.customCommandJob.securityContext.fsGroup }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.customCommandJob.exitCommand }}
@@ -206,7 +202,6 @@ spec:
           securityContext:
             runAsUser: {{ .Values.makeServiceAccountJob.securityContext.runAsUser }}
             runAsGroup: {{ .Values.makeServiceAccountJob.securityContext.runAsGroup }}
-            fsGroup: {{ .Values.makeServiceAccountJob.securityContext.fsGroup }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeServiceAccountJob.exitCommand }}
