@@ -95,6 +95,12 @@ type erasureSets struct {
 	lastConnectDisksOpTime time.Time
 }
 
+func (s *erasureSets) getErasureDisks() [][]StorageAPI {
+	s.erasureDisksMu.RLock()
+	defer s.erasureDisksMu.RUnlock()
+	return s.erasureDisks
+}
+
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 	diskMap := make(map[Endpoint]StorageAPI)
 
