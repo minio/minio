@@ -25,7 +25,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -98,12 +97,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(srcBucket, minioMetaBucket) {
-			_, derr := er.deleteIfDangling(ctx, srcBucket, srcObject, metaArr, errs, nil, srcOpts)
-			if derr != nil {
-				err = derr
-			}
-		}
 		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 	}
 
@@ -440,67 +433,6 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
-func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, tags map[string]interface{}) {
-	if len(logger.AuditTargets()) == 0 {
-		return
-	}
-
-	opts := AuditLogOptions{
-		Event:     "DeleteDanglingObject",
-		Bucket:    bucket,
-		Object:    object,
-		VersionID: versionID,
-		Tags:      tags,
-	}
-
-	auditLogInternal(ctx, opts)
-}
-
-func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
-	_, file, line, cok := runtime.Caller(1)
-	var err error
-	m, ok := isObjectDangling(metaArr, errs, dataErrs)
-	if ok {
-		tags := make(map[string]interface{}, 4)
-		tags["set"] = er.setIndex
-		tags["pool"] = er.poolIndex
-		tags["parity"] = m.Erasure.ParityBlocks
-		if cok {
-			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
-		}
-
-		defer auditDanglingObjectDeletion(ctx, bucket, object, m.VersionID, tags)
-
-		err = errFileNotFound
-		if opts.VersionID != "" {
-			err = errFileVersionNotFound
-		}
-		defer NSUpdated(bucket, object)
-
-		fi := FileInfo{
-			VersionID: m.VersionID,
-		}
-		if opts.VersionID != "" {
-			fi.VersionID = opts.VersionID
-		}
-
-		disks := er.getDisks()
-		g := errgroup.WithNErrs(len(disks))
-		for index := range disks {
-			index := index
-			g.Go(func() error {
-				if disks[index] == nil {
-					return errDiskNotFound
-				}
-				return disks[index].DeleteVersion(ctx, bucket, object, fi, false)
-			}, index)
-		}
-
-		g.Wait()
-	}
-	return m, err
-}
-
 func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, readData, inclFreeVers bool) ([]FileInfo, []error) {
 	metadataArray := make([]*xlMetaV2, len(disks))
 	metaFileInfos := make([]FileInfo, len(metadataArray))
@@ -625,19 +557,10 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
-			if derr != nil {
-				err = derr
-			}
-		}
 		return fi, nil, nil, toObjectErr(err, bucket, object)
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		if errors.Is(reducedErr, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
-		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -1738,12 +1661,6 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
-			if derr != nil {
-				err = derr
-			}
-		}
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1811,12 +1728,6 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
-			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
-			if derr != nil {
-				err = derr
-			}
-		}
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 

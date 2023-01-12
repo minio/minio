@@ -345,23 +345,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
-		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, nil, ObjectOptions{
-			VersionID: versionID,
-		})
-		errs = make([]error, len(errs))
-		for i := range errs {
-			errs[i] = err
-		}
-		if err == nil {
-			// Dangling object successfully purged, size is '0'
-			m.Size = 0
-		}
-		// Generate file/version not found with default heal result
-		err = errFileNotFound
-		if versionID != "" {
-			err = errFileVersionNotFound
-		}
-		return er.defaultHealResult(m, storageDisks, storageEndpoints,
+		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints,
 			errs, bucket, object, versionID), err
 	}
 
