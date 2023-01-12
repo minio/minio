@@ -428,7 +428,13 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = -1
 			continue
 		}
-		parities[index] = metadata.Erasure.ParityBlocks
+		if !metadata.IsValid() {
+			parities[index] = -1
+			continue
+		}
+		if !metadata.Deleted {
+			parities[index] = metadata.Erasure.ParityBlocks
+		}
 	}
 	return
 }
