@@ -1,0 +1,106 @@
+#!/bin/sh
+set -e ; # Have script exit in the event of a failed command.
+
+{{- if .Values.configPathmc }}
+MC_CONFIG_DIR="{{ .Values.configPathmc }}"
+MC="/usr/bin/mc --insecure --config-dir ${MC_CONFIG_DIR}"
+{{- else }}
+MC="/usr/bin/mc --insecure"
+{{- end }}
+
+# AccessKey and secretkey credentials file are added to prevent shell execution errors caused by special characters.
+# Special characters for example : ',",<,>,{,}
+MINIO_ACCESSKEY_SECRETKEY_TMP="/tmp/accessKey_and_secretKey_svcacct_tmp"
+
+# connectToMinio
+# Use a check-sleep-check loop to wait for MinIO service to be available
+connectToMinio() {
+  SCHEME=$1
+  ATTEMPTS=0 ; LIMIT=29 ; # Allow 30 attempts
+  set -e ; # fail if we can't read the keys.
+  ACCESS=$(cat /config/rootUser) ; SECRET=$(cat /config/rootPassword) ;
+  set +e ; # The connections to minio are allowed to fail.
+  echo "Connecting to MinIO server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT" ;
+  MC_COMMAND="${MC} alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
+  $MC_COMMAND ;
+  STATUS=$? ;
+  until [ $STATUS = 0 ]
+  do
+    ATTEMPTS=`expr $ATTEMPTS + 1` ;
+    echo \"Failed attempts: $ATTEMPTS\" ;
+    if [ $ATTEMPTS -gt $LIMIT ]; then
+      exit 1 ;
+    fi ;
+    sleep 2 ; # 2 second intervals between attempts
+    $MC_COMMAND ;
+    STATUS=$? ;
+  done ;
+  set -e ; # reset `e` as active
+  return 0
+}
+
+# checkSvcacctExists ()
+# Check if the svcacct exists, by using the exit code of `mc admin user svcacct info`
+checkSvcacctExists() {
+  CMD=$(${MC} admin user svcacct info myminio $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) > /dev/null 2>&1)
+  return $?
+}
+
+# createSvcacct ($user)
+createSvcacct () {
+  USER=$1
+  FILENAME=$2
+  #check accessKey_and_secretKey_tmp file
+  if [[ ! -f $MINIO_ACCESSKEY_SECRETKEY_TMP ]];then
+    echo "credentials file does not exist"
+    return 1
+  fi
+  if [[ $(cat $MINIO_ACCESSKEY_SECRETKEY_TMP|wc -l) -ne 2 ]];then
+    echo "credentials file is invalid"
+    rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
+    return 1
+  fi
+  SVCACCT=$(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP)
+  # Create the svcacct if it does not exist
+  if ! checkSvcacctExists ; then
+    echo "Creating svcacct '$SVCACCT'"
+    # Check if policy file is define
+    if [ -z $FILENAME ]; then
+      ${MC} admin user svcacct add --access-key $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --secret-key $(tail -n1 $MINIO_ACCESSKEY_SECRETKEY_TMP) myminio $USER
+    else
+      ${MC} admin user svcacct add --access-key $(head -1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --secret-key $(tail -n1 $MINIO_ACCESSKEY_SECRETKEY_TMP) --policy /config/$FILENAME.json myminio $USER
+    fi
+  else
+    echo "Svcacct '$SVCACCT' already exists."
+  fi
+  #clean up credentials files.
+  rm -f $MINIO_ACCESSKEY_SECRETKEY_TMP
+}
+
+# Try connecting to MinIO instance
+{{- if .Values.tls.enabled }}
+scheme=https
+{{- else }}
+scheme=http
+{{- end }}
+connectToMinio $scheme
+
+{{ if .Values.svcaccts }}
+{{ $global := . }}
+# Create the svcaccts
+{{- range $idx, $svc := .Values.svcaccts }}
+echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
+{{- if .existingSecret }}
+cat /config/secrets/{{ tpl .existingSecret $global }}/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+# Add a new line if it doesn't exist
+sed -i '$a\' $MINIO_ACCESSKEY_SECRETKEY_TMP
+{{ else }}
+echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+{{- end }}
+{{- if $svc.policy}}
+createSvcacct {{ .user }} svc_policy_{{ $idx }}
+{{ else }}
+createSvcacct {{ .user }}
+{{- end }}
+{{- end }}
+{{- end }}

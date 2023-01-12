@@ -46,15 +46,18 @@ Only the last operation would fail with a permissions error.
 Access Management Plugin can be configured with environment variables:
 
 ```sh
-$ mc admin config set dminio1 policy_plugin --env
+$ mc admin config set myminio policy_plugin --env
 KEY:
 policy_plugin  enable Access Management Plugin for policy enforcement
 
 ARGS:
-MINIO_POLICY_PLUGIN_URL*        (url)       plugin hook endpoint (HTTP(S)) e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"
-MINIO_POLICY_PLUGIN_AUTH_TOKEN  (string)    authorization token for plugin hook endpoint
-MINIO_POLICY_PLUGIN_COMMENT     (sentence)  optionally add a comment to this setting
+MINIO_POLICY_PLUGIN_URL*          (url)       plugin hook endpoint (HTTP(S)) e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"
+MINIO_POLICY_PLUGIN_AUTH_TOKEN    (string)    authorization header for plugin hook endpoint
+MINIO_POLICY_PLUGIN_ENABLE_HTTP2  (bool)      Enable experimental HTTP2 support to connect to plugin service (default: 'off')
+MINIO_POLICY_PLUGIN_COMMENT       (sentence)  optionally add a comment to this setting
 ```
+
+By default this plugin uses HTTP 1.x. To enable HTTP2 use the `MINIO_POLICY_PLUGIN_ENABLE_HTTP2` environment variable.
 
 ## Request and Response
 

@@ -31,9 +31,9 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
+	"github.com/klauspost/filepathx"
 	"github.com/minio/cli"
 	"github.com/tinylib/msgp/msgp"
-	"github.com/yargevad/filepathx"
 )
 
 func main() {
@@ -465,7 +465,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 
 const (
 	xlHeaderVersion = 2
-	xlMetaVersion   = 1
+	xlMetaVersion   = 2
 )
 
 func decodeXLHeaders(buf []byte) (versions int, b []byte, err error) {

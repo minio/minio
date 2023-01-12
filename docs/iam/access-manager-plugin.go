@@ -22,12 +22,23 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 )
+
+var (
+	keyFile  string
+	certFile string
+)
+
+func init() {
+	flag.StringVar(&keyFile, "key-file", "", "Path to TLS cert key file")
+	flag.StringVar(&certFile, "cert-file", "", "Path to TLS cert file")
+}
 
 func writeErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
@@ -77,8 +88,22 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	flag.Parse()
+	serveFunc := func() error {
+		return http.ListenAndServe(":8080", nil)
+	}
+
+	if certFile != "" || keyFile != "" {
+		if certFile == "" || keyFile == "" {
+			log.Fatal("Please provide both a key file and a cert file to enable TLS.")
+		}
+		serveFunc = func() error {
+			return http.ListenAndServeTLS(":8080", certFile, keyFile, nil)
+		}
+	}
+
 	http.HandleFunc("/", mainHandler)
 
 	log.Print("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(serveFunc())
 }

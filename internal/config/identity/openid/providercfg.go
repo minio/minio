@@ -94,6 +94,14 @@ func (p *providerCfg) initializeProvider(cfgGet func(string) string, transport h
 	}
 }
 
+// GetRoleArn returns the role ARN.
+func (p *providerCfg) GetRoleArn() string {
+	if p.RolePolicy == "" {
+		return ""
+	}
+	return p.roleArn.String()
+}
+
 // UserInfo returns claims for authenticated user from userInfo endpoint.
 //
 // Some OIDC implementations such as GitLab do not support

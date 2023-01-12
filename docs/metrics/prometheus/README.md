@@ -8,7 +8,7 @@ MinIO exports Prometheus compatible data by default as an authorized endpoint at
 
 ## Prerequisites
 
-To get started with MinIO, refer [MinIO QuickStart Document](https://docs.min.io/docs/minio-quickstart-guide).
+To get started with MinIO, refer [MinIO QuickStart Document](https://min.io/docs/minio/linux/index.html#quickstart-for-linux).
 Follow below steps to get started with MinIO monitoring using Prometheus.
 
 ### 1. Download Prometheus
@@ -48,7 +48,7 @@ minio server ~/test
 
 > If MinIO is configured to expose metrics without authentication, you don't need to use `mc` to generate prometheus config. You can skip reading further and move to 3.2 section.
 
-The Prometheus endpoint in MinIO requires authentication by default. Prometheus supports a bearer token approach to authenticate prometheus scrape requests, override the default Prometheus config with the one generated using mc. To generate a Prometheus config for an alias, use [mc](https://docs.min.io/docs/minio-client-quickstart-guide) as follows `mc admin prometheus generate <alias>`.
+The Prometheus endpoint in MinIO requires authentication by default. Prometheus supports a bearer token approach to authenticate prometheus scrape requests, override the default Prometheus config with the one generated using mc. To generate a Prometheus config for an alias, use [mc](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart) as follows `mc admin prometheus generate <alias>`.
 
 The command will generate the `scrape_configs` section of the prometheus.yml as follows:
 

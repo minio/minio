@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	color "github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
@@ -37,11 +37,6 @@ func getFormatStr(strLen int, padding int) string {
 	return "%" + formatStr
 }
 
-func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
-	storageInfo, _ := objAPI.StorageInfo(GlobalContext)
-	return storageInfo
-}
-
 // Prints the formatted startup message.
 func printStartupMessage(apiEndpoints []string, err error) {
 	logger.Info(color.Bold("MinIO Object Storage Server"))
@@ -51,7 +46,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 		}
 	}
 
-	if len(globalSubnetConfig.APIKey) == 0 && err == nil {
+	if !globalSubnetConfig.Registered() {
 		var builder strings.Builder
 		startupBanner(&builder)
 		logger.Info(builder.String())
@@ -67,7 +62,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(mustGetStorageInfo(objAPI))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext))
 	}
 
 	// Prints credential, region and browser access.
@@ -152,9 +147,9 @@ func printServerCommonMsg(apiEndpoints []string) {
 	}
 }
 
-// Prints startup message for Object API acces, prints link to our SDK documentation.
+// Prints startup message for Object API access, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	logger.Info(color.Blue("\nDocumentation: ") + "https://docs.min.io")
+	logger.Info(color.Blue("\nDocumentation: ") + "https://min.io/docs/minio/linux/index.html")
 }
 
 // Prints bucket notification configurations.
@@ -182,7 +177,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	// Get saved credentials.
 	cred := globalActiveCred
 
-	const mcQuickStartGuide = "https://docs.min.io/docs/minio-client-quickstart-guide"
+	const mcQuickStartGuide = "https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart"
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {

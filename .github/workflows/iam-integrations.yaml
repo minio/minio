@@ -61,7 +61,7 @@ jobs:
       # are turned off - i.e. if ldap="", then ldap server is not enabled for
       # the tests.
       matrix:
-        go-version: [1.18.x]
+        go-version: [1.19.x]
         ldap: ["", "localhost:389"]
         etcd: ["", "http://localhost:2379"]
         openid: ["", "http://127.0.0.1:5556/dex"]
@@ -80,14 +80,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.go-version }}-go-
       - name: Test LDAP/OpenID/Etcd combo
         env:
           LDAP_TEST_SERVER: ${{ matrix.ldap }}

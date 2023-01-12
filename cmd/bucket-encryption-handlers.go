@@ -27,7 +27,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/kes"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -204,7 +204,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	}
 
 	// Delete bucket encryption config from object layer
-	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, nil)
+	updatedAt, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketSSEConfig)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

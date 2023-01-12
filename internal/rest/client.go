@@ -34,6 +34,7 @@ import (
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -45,19 +46,6 @@ const (
 	online
 	closed
 )
-
-// Hold the number of failed RPC calls due to networking errors
-var networkErrsCounter uint64
-
-// GetNetworkErrsCounter returns the number of failed RPC requests
-func GetNetworkErrsCounter() uint64 {
-	return atomic.LoadUint64(&networkErrsCounter)
-}
-
-// ResetNetworkErrsCounter resets the number of failed RPC requests
-func ResetNetworkErrsCounter() {
-	atomic.StoreUint64(&networkErrsCounter, 0)
-}
 
 // NetworkError - error type in case of errors related to http/transport
 // for ex. connection refused, connection reset, dns resolution failure etc.
@@ -207,25 +195,30 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 		req.Header.Set("Expect", "100-continue")
 	}
 
+	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
+		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
+	}
+
 	return req, nil
 }
 
 type respBodyMonitor struct {
 	io.ReadCloser
+	expectTimeouts bool
 }
 
 func (r respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	if err != nil && err != io.EOF {
-		atomic.AddUint64(&networkErrsCounter, 1)
+	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
+		atomic.AddUint64(&globalStats.errs, 1)
 	}
 	return
 }
 
 func (r respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
-	if err != nil {
-		atomic.AddUint64(&networkErrsCounter, 1)
+	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
+		atomic.AddUint64(&globalStats.errs, 1)
 	}
 	return
 }
@@ -252,11 +245,15 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	if length > 0 {
 		req.ContentLength = length
 	}
+
+	req, update := setupReqStatsUpdate(req)
+	defer update()
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 			if !c.NoMetrics {
-				atomic.AddUint64(&networkErrsCounter, 1)
+				atomic.AddUint64(&globalStats.errs, 1)
 			}
 			if c.MarkOffline(err) {
 				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
@@ -292,7 +289,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 				if !c.NoMetrics {
-					atomic.AddUint64(&networkErrsCounter, 1)
+					atomic.AddUint64(&globalStats.errs, 1)
 				}
 				if c.MarkOffline(err) {
 					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
@@ -306,7 +303,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		return nil, errors.New(resp.Status)
 	}
 	if !c.NoMetrics && !c.ExpectTimeouts {
-		resp.Body = &respBodyMonitor{resp.Body}
+		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: c.ExpectTimeouts}
 	}
 	return resp.Body, nil
 }

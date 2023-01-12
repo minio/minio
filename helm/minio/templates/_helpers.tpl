@@ -166,7 +166,7 @@ Formats volume for MinIO TLS keys and trusted certs
 {{- if .Values.tls.enabled }}
 - name: cert-secret-volume
   secret:
-    secretName: {{ .Values.tls.certSecret }}
+    secretName: {{ tpl .Values.tls.certSecret $ }}
     items:
     - key: {{ .Values.tls.publicCrt }}
       path: public.crt

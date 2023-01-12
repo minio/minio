@@ -31,7 +31,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	uuid2 "github.com/google/uuid"
+	"github.com/minio/madmin-go/v2"
 )
 
 // Tests isObjectDangling function
@@ -230,13 +231,20 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer obj.Shutdown(context.Background())
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureServerPools)
 	er := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +273,12 @@ func TestHealing(t *testing.T) {
 	// Remove the object - to simulate the case where the disk was down when the object
 	// was created.
 	err = removeAll(pathJoin(disk.String(), bucket, object))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Checking abandoned parts should do nothing
+	err = er.checkAbandonedParts(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,6 +327,214 @@ func TestHealing(t *testing.T) {
 		t.Fatal("HealObject failed")
 	}
 
+	uuid, _ := uuid2.NewRandom()
+	for _, drive := range fsDirs {
+		dir := path.Join(drive, bucket, object, uuid.String())
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(pathJoin(dir, "part.1"), []byte("some data"), os.ModePerm)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// This should remove all the unreferenced parts.
+	err = er.checkAbandonedParts(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, drive := range fsDirs {
+		dir := path.Join(drive, bucket, object, uuid.String())
+		_, err := os.ReadFile(pathJoin(dir, "part.1"))
+		if err == nil {
+			t.Fatal("expected data dit to be cleaned up")
+		}
+	}
+
+	// Remove the bucket - to simulate the case where bucket was
+	// created when the disk was down.
+	err = os.RemoveAll(path.Join(fsDirs[0], bucket))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This would create the bucket.
+	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+		DryRun: false,
+		Remove: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stat the bucket to make sure that it was created.
+	_, err = er.getDisks()[0].StatVol(context.Background(), bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests both object and bucket healing.
+func TestHealingVersioned(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDirs, err := prepareErasure16(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer obj.Shutdown(context.Background())
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
+	defer removeRoots(fsDirs)
+
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
+
+	// Create "bucket"
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{VersioningEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+
+	data := make([]byte, 1*humanize.MiByte)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oi1, err := obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), length, "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2nd version.
+	_, _ = rand.Read(data)
+	oi2, err := obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), length, "", ""), ObjectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	disk := er.getDisks()[0]
+	fileInfoPreHeal1, err := disk.ReadVersion(context.Background(), bucket, object, oi1.VersionID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileInfoPreHeal2, err := disk.ReadVersion(context.Background(), bucket, object, oi2.VersionID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove the object - to simulate the case where the disk was down when the object
+	// was created.
+	err = removeAll(pathJoin(disk.String(), bucket, object))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Checking abandoned parts should do nothing
+	err = er.checkAbandonedParts(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = er.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal1, err := disk.ReadVersion(context.Background(), bucket, object, oi1.VersionID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileInfoPostHeal2, err := disk.ReadVersion(context.Background(), bucket, object, oi2.VersionID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// After heal the meta file should be as expected.
+	if !fileInfoPreHeal1.Equals(fileInfoPostHeal1) {
+		t.Fatal("HealObject failed")
+	}
+	if !fileInfoPreHeal1.Equals(fileInfoPostHeal2) {
+		t.Fatal("HealObject failed")
+	}
+
+	err = os.RemoveAll(path.Join(fsDirs[0], bucket, object, "xl.meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write xl.meta with different modtime to simulate the case where a disk had
+	// gone down when an object was replaced by a new object.
+	fileInfoOutDated := fileInfoPreHeal1
+	fileInfoOutDated.ModTime = time.Now()
+	err = disk.WriteMetadata(context.Background(), bucket, object, fileInfoOutDated)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = er.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealDeepScan})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fileInfoPostHeal1, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// After heal the meta file should be as expected.
+	if !fileInfoPreHeal1.Equals(fileInfoPostHeal1) {
+		t.Fatal("HealObject failed")
+	}
+
+	fileInfoPostHeal2, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// After heal the meta file should be as expected.
+	if !fileInfoPreHeal2.Equals(fileInfoPostHeal2) {
+		t.Fatal("HealObject failed")
+	}
+
+	uuid, _ := uuid2.NewRandom()
+	for _, drive := range fsDirs {
+		dir := path.Join(drive, bucket, object, uuid.String())
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(pathJoin(dir, "part.1"), []byte("some data"), os.ModePerm)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// This should remove all the unreferenced parts.
+	err = er.checkAbandonedParts(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, drive := range fsDirs {
+		dir := path.Join(drive, bucket, object, uuid.String())
+		_, err := os.ReadFile(pathJoin(dir, "part.1"))
+		if err == nil {
+			t.Fatal("expected data dit to be cleaned up")
+		}
+	}
+
 	// Remove the bucket - to simulate the case where bucket was
 	// created when the disk was down.
 	err = os.RemoveAll(path.Join(fsDirs[0], bucket))
@@ -359,7 +581,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	object := getRandomObjectName()
 	data := bytes.Repeat([]byte("a"), 128*1024)
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -554,7 +776,7 @@ func TestHealCorrectQuorum(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -685,7 +907,7 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -862,7 +1084,7 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1005,7 +1227,7 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1162,7 +1384,7 @@ func TestHealObjectErasure(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1259,7 +1481,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	object := "empty-dir/"
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -1360,7 +1582,7 @@ func TestHealLastDataShard(t *testing.T) {
 			}
 			var opts ObjectOptions
 
-			err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+			err = obj.MakeBucket(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				t.Fatalf("Failed to make a bucket - %v", err)
 			}

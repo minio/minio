@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/etcd"
@@ -71,7 +71,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -81,12 +81,19 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
 	if err = validateConfig(cfg, subSys); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
 	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// freshly retrieve the config so that default values are loaded for reset config
+	if cfg, err = getValidConfig(objectAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -135,7 +142,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -173,6 +180,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	if dynamic {
 		applyDynamic(ctx, objectAPI, cfg, subSys, r, w)
 	}
+
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -217,7 +225,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	var s strings.Builder
 	for _, subSysConfig := range subSysConfigs {
-		subSysConfig.AddString(&s, false)
+		subSysConfig.WriteTo(&s, false)
 	}
 
 	password := cred.SecretKey
@@ -288,7 +296,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -446,10 +454,6 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	var s strings.Builder
 	hkvs := config.HelpSubSysMap[""]
-	var count int
-	for _, hkv := range hkvs {
-		count += len(cfg[hkv.Key])
-	}
 	for _, hkv := range hkvs {
 		// We ignore the error below, as we cannot get one.
 		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key, "")
@@ -474,7 +478,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			case config.IdentityPluginSubSys:
 				off = !idplugin.Enabled(item.Config)
 			}
-			item.AddString(&s, off)
+			item.WriteTo(&s, off)
 		}
 	}
 

@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
@@ -1200,6 +1200,47 @@ func (c *check) mustNotListObjects(ctx context.Context, client *minio.Client, bu
 	v, ok := <-res
 	if !ok || v.Err == nil {
 		c.Fatalf("user was able to list unexpectedly! on %s", bucket)
+	}
+}
+
+func (c *check) mustPutObjectWithTags(ctx context.Context, client *minio.Client, bucket, object string) {
+	c.Helper()
+	_, err := client.PutObject(ctx, bucket, object, bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{
+		UserTags: map[string]string{
+			"security": "public",
+			"virus":    "true",
+		},
+	})
+	if err != nil {
+		c.Fatalf("user was unable to upload the object: %v", err)
+	}
+}
+
+func (c *check) mustGetObject(ctx context.Context, client *minio.Client, bucket, object string) {
+	c.Helper()
+
+	r, err := client.GetObject(ctx, bucket, object, minio.GetObjectOptions{})
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+	defer r.Close()
+
+	_, err = io.Copy(io.Discard, r)
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+}
+
+func (c *check) mustHeadObject(ctx context.Context, client *minio.Client, bucket, object string, tagCount int) {
+	c.Helper()
+
+	oinfo, err := client.StatObject(ctx, bucket, object, minio.StatObjectOptions{})
+	if err != nil {
+		c.Fatalf("user was unable to download the object: %v", err)
+	}
+
+	if oinfo.UserTagCount != tagCount {
+		c.Fatalf("expected tagCount: %d, got %d", tagCount, oinfo.UserTagCount)
 	}
 }
 

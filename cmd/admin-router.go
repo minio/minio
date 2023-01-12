@@ -23,7 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -60,7 +60,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// Info operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/info").HandlerFunc(gz(httpTraceAll(adminAPI.ServerInfoHandler)))
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/inspect-data").HandlerFunc(httpTraceHdrs(adminAPI.InspectDataHandler)).Queries("volume", "{volume:.*}", "file", "{file:.*}")
+		adminRouter.Methods(http.MethodGet, http.MethodPost).Path(adminVersion + "/inspect-data").HandlerFunc(httpTraceAll(adminAPI.InspectDataHandler))
 
 		// StorageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(gz(httpTraceAll(adminAPI.StorageInfoHandler)))
@@ -84,6 +84,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/pools/decommission").HandlerFunc(gz(httpTraceAll(adminAPI.StartDecommission))).Queries("pool", "{pool:.*}")
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/pools/cancel").HandlerFunc(gz(httpTraceAll(adminAPI.CancelDecommission))).Queries("pool", "{pool:.*}")
+
+			// Rebalance operations
+			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/rebalance/start").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStart)))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/rebalance/status").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStatus)))
+			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/rebalance/stop").HandlerFunc(gz(httpTraceAll(adminAPI.RebalanceStop)))
 		}
 
 		// Profiling operations - deprecated API
@@ -137,11 +142,17 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListServiceAccounts)))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteServiceAccount))).Queries("accessKey", "{accessKey:.*}")
 
+		// STS accounts ops
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/temporary-account-info").HandlerFunc(gz(httpTraceHdrs(adminAPI.TemporaryAccountInfo))).Queries("accessKey", "{accessKey:.*}")
+
 		// Info policy IAM latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(gz(httpTraceHdrs(adminAPI.InfoCannedPolicy))).Queries("name", "{name:.*}")
 		// List policies latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-canned-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListBucketPolicies))).Queries("bucket", "{bucket:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListCannedPolicies)))
+
+		// Builtin IAM policy associations
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/builtin/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListPolicyMappingEntities)))
 
 		// Remove policy IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveCannedPolicy))).Queries("name", "{name:.*}")
@@ -150,6 +161,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-or-group-policy").
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup))).
 			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
+
+		// Attach policies to user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/attach").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyBuiltin)))
+
+		// Detach policies from user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/detach").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyBuiltin)))
 
 		// Remove user IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveUser))).Queries("accessKey", "{accessKey:.*}")
@@ -179,10 +196,15 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(httpTraceHdrs(adminAPI.ImportIAM))
 
 		// IDentity Provider configuration APIs
-		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.SetIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg))).Queries("type", "{type:.*}")
-		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/idp-config").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg))).Queries("type", "{type:.*}").Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AddIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.UpdateIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetIdentityProviderCfg)))
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteIdentityProviderCfg)))
 
+		// LDAP IAM operations
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListLDAPPolicyMappingEntities)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachDetachPolicyLDAP)))
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig
@@ -205,6 +227,16 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// ReplicationDiff - MinIO extension API
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/replication/diff").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.ReplicationDiffHandler))).Queries("bucket", "{bucket:.*}")
+
+		// Batch job operations
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/start-job").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.StartBatchJob)))
+
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-jobs").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ListBatchJobs)))
+
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/describe-job").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.DescribeBatchJob)))
 
 		// Bucket migration operations
 		// ExportBucketMetaHandler
@@ -238,6 +270,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/edit").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationEdit)))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/edit").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerEdit)))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/remove").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerRemove)))
+		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/site-replication/resync/op").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationResyncOp))).Queries("operation", "{operation:.*}")
 
 		if globalIsDistErasure {
 			// Top locks
@@ -264,16 +297,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/kms/key/create").HandlerFunc(gz(httpTraceAll(adminAPI.KMSCreateKeyHandler))).Queries("key-id", "{key-id:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(gz(httpTraceAll(adminAPI.KMSKeyStatusHandler)))
 
-		if !globalIsGateway {
-			// Keep obdinfo for backward compatibility with mc
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-			// -- Health API --
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
-				HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
-		}
+		// Keep obdinfo for backward compatibility with mc
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
+		// -- Health API --
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
+			HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 	}
 
 	// If none of the routes match add default error handler routes

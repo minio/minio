@@ -29,10 +29,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/amztime"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
@@ -67,16 +72,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -97,7 +95,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
 	// Validate storage class metadata if present
@@ -129,6 +126,20 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
+		if !objectAPI.IsTaggingSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
+		}
+
+		if _, err := tags.ParseObjectTags(objTags); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		metadata[xhttp.AmzObjectTagging] = objTags
+	}
+
 	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)
 	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectLegalHoldAction)
 
@@ -140,7 +151,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	retentionMode, retentionDate, legalHold, s3Err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
 	if s3Err == ErrNone && retentionMode.Valid() {
 		metadata[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
-		metadata[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
+		metadata[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = amztime.ISO8601Format(retentionDate.UTC())
 	}
 	if s3Err == ErrNone && legalHold.Status.Valid() {
 		metadata[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = string(legalHold.Status)
@@ -217,6 +228,344 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
+// CopyObjectPartHandler - uploads a part by copying data from an existing object as data source.
+func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "CopyObjectPart")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	dstBucket := vars["bucket"]
+	dstObject, err := unescapePath(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, dstBucket, dstObject); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	// Read escaped copy source path to check for parameters.
+	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
+	var vid string
+	if u, err := url.Parse(cpSrcPath); err == nil {
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
+		// Note that url.Parse does the unescaping
+		cpSrcPath = u.Path
+	}
+
+	srcBucket, srcObject := path2BucketObject(cpSrcPath)
+	// If source object is empty or bucket is empty, reply back invalid copy source.
+	if srcObject == "" || srcBucket == "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL)
+		return
+	}
+
+	if vid != "" && vid != nullVersionID {
+		_, err := uuid.Parse(vid)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, VersionNotFound{
+				Bucket:    srcBucket,
+				Object:    srcObject,
+				VersionID: vid,
+			}), r.URL)
+			return
+		}
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, srcBucket, srcObject); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	uploadID := r.Form.Get(xhttp.UploadID)
+	partIDString := r.Form.Get(xhttp.PartNumber)
+
+	partID, err := strconv.Atoi(partIDString)
+	if err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPart), r.URL)
+		return
+	}
+
+	// check partID with maximum part ID for multipart objects
+	if isMaxPartID(partID) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidMaxParts), r.URL)
+		return
+	}
+
+	var srcOpts, dstOpts ObjectOptions
+	srcOpts, err = copySrcOpts(ctx, r, srcBucket, srcObject)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	srcOpts.VersionID = vid
+
+	// convert copy src and dst encryption options for GET/PUT calls
+	getOpts := ObjectOptions{VersionID: srcOpts.VersionID}
+	if srcOpts.ServerSideEncryption != nil {
+		getOpts.ServerSideEncryption = encrypt.SSE(srcOpts.ServerSideEncryption)
+	}
+
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
+
+	// Get request range.
+	var rs *HTTPRangeSpec
+	var parseRangeErr error
+	if rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange); rangeHeader != "" {
+		rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader)
+	} else {
+		// This check is to see if client specified a header but the value
+		// is empty for 'x-amz-copy-source-range'
+		_, ok := r.Header[xhttp.AmzCopySourceRange]
+		if ok {
+			parseRangeErr = errInvalidRange
+		}
+	}
+
+	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
+		if objectAPI.IsEncryptionSupported() {
+			if _, err := DecryptObjectInfo(&o, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return true
+			}
+		}
+		if checkCopyObjectPartPreconditions(ctx, w, r, o) {
+			return true
+		}
+		if parseRangeErr != nil {
+			logger.LogIf(ctx, parseRangeErr)
+			writeCopyPartErr(ctx, w, parseRangeErr, r.URL)
+			// Range header mismatch is pre-condition like failure
+			// so return true to indicate Range precondition failed.
+			return true
+		}
+		return false
+	}
+	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
+	if err != nil {
+		if isErrPreconditionFailed(err) {
+			return
+		}
+		if globalBucketVersioningSys.PrefixEnabled(srcBucket, srcObject) && gr != nil {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+			}
+		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	defer gr.Close()
+	srcInfo := gr.ObjInfo
+
+	actualPartSize, err := srcInfo.GetActualSize()
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if err := enforceBucketQuotaHard(ctx, dstBucket, actualPartSize); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Special care for CopyObjectPart
+	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
+		writeCopyPartErr(ctx, w, partRangeErr, r.URL)
+		return
+	}
+
+	// Get the object offset & length
+	startOffset, length, err := rs.GetOffsetLength(actualPartSize)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// maximum copy size for multipart objects in a single operation
+	if isMaxObjectSize(length) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
+		return
+	}
+
+	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
+		var dstRecords []dns.SrvRecord
+		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		// Send PutObject request to appropriate instance (in federated deployment)
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		if rerr != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL)
+			return
+		}
+
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, "", "", dstOpts.ServerSideEncryption)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
+		response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
+		encodedSuccessResponse := encodeResponse(response)
+
+		// Write success response.
+		writeSuccessResponseXML(w, encodedSuccessResponse)
+		return
+	}
+
+	actualPartSize = length
+	var reader io.Reader = etag.NewReader(gr, nil)
+
+	mi, err := objectAPI.GetMultipartInfo(ctx, dstBucket, dstObject, uploadID, dstOpts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Read compression metadata preserved in the init multipart for the decision.
+	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
+	// Compress only if the compression is enabled during initial multipart.
+	var idxCb func() []byte
+	if isCompressed {
+		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		s2c, cb := newS2CompressReader(reader, actualPartSize, wantEncryption)
+		idxCb = cb
+		defer s2c.Close()
+		reader = etag.Wrap(s2c, reader)
+		length = -1
+	}
+
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, mi.UserDefined)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	dstOpts.IndexCB = idxCb
+
+	rawReader := srcInfo.Reader
+	pReader := NewPutObjReader(rawReader)
+
+	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+	var objectEncryptionKey crypto.ObjectKey
+	if objectAPI.IsEncryptionSupported() && isEncrypted {
+		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
+			return
+		}
+		if crypto.S3.IsEncrypted(mi.UserDefined) && crypto.SSEC.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
+			return
+		}
+		var key []byte
+		if crypto.SSEC.IsRequested(r.Header) {
+			key, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+		}
+		key, err = decryptObjectMeta(key, dstBucket, dstObject, mi.UserDefined)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		copy(objectEncryptionKey[:], key)
+
+		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+		encReader, err := sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		reader = etag.Wrap(encReader, reader)
+
+		wantSize := int64(-1)
+		if length >= 0 {
+			info := ObjectInfo{Size: length}
+			wantSize = info.EncryptedSize()
+		}
+
+		srcInfo.Reader, err = hash.NewReader(reader, wantSize, "", "", actualPartSize)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		pReader, err = pReader.WithEncryption(srcInfo.Reader, &objectEncryptionKey)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		if dstOpts.IndexCB != nil {
+			dstOpts.IndexCB = compressionIndexEncrypter(objectEncryptionKey, dstOpts.IndexCB)
+		}
+	}
+
+	srcInfo.PutObjReader = pReader
+	copyObjectPart := objectAPI.CopyObjectPart
+	if api.CacheAPI() != nil {
+		copyObjectPart = api.CacheAPI().CopyObjectPart
+	}
+	// Copy source object to destination, if source and destination
+	// object is same then only metadata is updated.
+	partInfo, err := copyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
+		startOffset, length, srcInfo, srcOpts, dstOpts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if isEncrypted {
+		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
+	}
+
+	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
+	encodedSuccessResponse := encodeResponse(response)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
 // PutObjectPartHandler - uploads an incoming part for an ongoing multipart operation.
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectPart")
@@ -230,16 +579,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	if crypto.Requested(r.Header) {
-		if globalIsGateway {
-			if crypto.SSEC.IsRequested(r.Header) && !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
-		} else {
-			if !objectAPI.IsEncryptionSupported() {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-				return
-			}
+		if !objectAPI.IsEncryptionSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+			return
 		}
 	}
 
@@ -286,18 +628,18 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// maximum Upload size for multipart objects in a single operation
-	if isMaxAllowedPartSize(size) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
-		return
-	}
-
 	uploadID := r.Form.Get(xhttp.UploadID)
 	partIDString := r.Form.Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPart), r.URL)
+		return
+	}
+
+	// maximum size for multipart objects in a single operation
+	if isMaxObjectSize(size) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
 	}
 
@@ -427,7 +769,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, mi.UserDefined)
+		key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -646,47 +988,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	multipartETag := etag.Multipart(completeETags...)
 	opts.UserDefined["etag"] = multipartETag.String()
 
-	// However, in case of encryption, the persisted part ETags don't match
-	// what we have sent to the client during PutObjectPart. The reason is
-	// that ETags are encrypted. Hence, the client will send a list of complete
-	// part ETags of which non can match the ETag of any part. For example
-	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
-	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
-	//
-	// Therefore, we adjust all ETags sent by the client to match what is stored
-	// on the backend.
-	// TODO(klauspost): This should be done while object is finalized instead of fetching the data twice
-	if objectAPI.IsEncryptionSupported() {
-		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-
-		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
-			// Only fetch parts in between first and last.
-			// We already checked if we have at least one part.
-			start := complMultipartUpload.Parts[0].PartNumber
-			maxParts := complMultipartUpload.Parts[len(complMultipartUpload.Parts)-1].PartNumber - start + 1
-			listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, start-1, maxParts, ObjectOptions{})
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
-			sort.Slice(listPartsInfo.Parts, func(i, j int) bool {
-				return listPartsInfo.Parts[i].PartNumber < listPartsInfo.Parts[j].PartNumber
-			})
-			for i := range listPartsInfo.Parts {
-				for j := range complMultipartUpload.Parts {
-					if listPartsInfo.Parts[i].PartNumber == complMultipartUpload.Parts[j].PartNumber {
-						complMultipartUpload.Parts[j].ETag = listPartsInfo.Parts[i].ETag
-						continue
-					}
-				}
-			}
-		}
-	}
-
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(ctx, w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
@@ -717,6 +1018,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 	}
 
+	opts.EncryptFn, err = objInfo.metadataEncryptFn(r.Header)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
 	if r.Header.Get(xMinIOExtract) == "true" && strings.HasSuffix(object, archiveExt) {
 		opts := ObjectOptions{VersionID: objInfo.VersionID, MTime: objInfo.ModTime}
 		if _, err := updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, object, opts); err != nil {
@@ -854,7 +1160,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
 		var objectEncryptionKey []byte
 		if kind == crypto.S3 {
-			objectEncryptionKey, err = decryptObjectInfo(nil, bucket, object, listPartsInfo.UserDefined)
+			objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, listPartsInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return

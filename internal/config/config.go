@@ -25,25 +25,51 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/pkg/env"
 )
 
-// Error config error type
-type Error struct {
-	Err string
+// ErrorConfig holds the config error types
+type ErrorConfig interface {
+	ErrConfigGeneric | ErrConfigNotFound
 }
 
-// Errorf - formats according to a format specifier and returns
-// the string as a value that satisfies error of type config.Error
-func Errorf(format string, a ...interface{}) error {
-	return Error{Err: fmt.Sprintf(format, a...)}
+// ErrConfigGeneric is a generic config type
+type ErrConfigGeneric struct {
+	msg string
 }
 
-func (e Error) Error() string {
-	return e.Err
+func (ge *ErrConfigGeneric) setMsg(msg string) {
+	ge.msg = msg
+}
+
+func (ge ErrConfigGeneric) Error() string {
+	return ge.msg
+}
+
+// ErrConfigNotFound is an error to indicate
+// that a config parameter is not found
+type ErrConfigNotFound struct {
+	ErrConfigGeneric
+}
+
+// Error creates an error message and wraps
+// it with the error type specified in the type parameter
+func Error[T ErrorConfig, PT interface {
+	*T
+	setMsg(string)
+}](format string, vals ...interface{},
+) T {
+	pt := PT(new(T))
+	pt.setMsg(fmt.Sprintf(format, vals...))
+	return *pt
+}
+
+// Errorf formats an error and returns it as a generic config error
+func Errorf(format string, vals ...interface{}) ErrConfigGeneric {
+	return Error[ErrConfigGeneric](format, vals...)
 }
 
 // Default keys
@@ -70,7 +96,6 @@ const (
 
 // Top level config constants.
 const (
-	CredentialsSubSys    = madmin.CredentialsSubSys
 	PolicyOPASubSys      = madmin.PolicyOPASubSys
 	PolicyPluginSubSys   = madmin.PolicyPluginSubSys
 	IdentityOpenIDSubSys = madmin.IdentityOpenIDSubSys
@@ -152,7 +177,6 @@ var SubSystemsDynamic = set.CreateStringSet(
 
 // SubSystemsSingleTargets - subsystems which only support single target.
 var SubSystemsSingleTargets = set.CreateStringSet(
-	CredentialsSubSys,
 	SiteSubSys,
 	RegionSubSys,
 	EtcdSubSys,
@@ -232,6 +256,23 @@ func RegisterHelpDeprecatedSubSys(helpDeprecatedKVMap map[string]HelpKV) {
 type KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+
+	Deprecated bool `json:"-"`
+}
+
+func (kv KV) String() string {
+	var s strings.Builder
+	s.WriteString(kv.Key)
+	s.WriteString(KvSeparator)
+	spc := madmin.HasSpace(kv.Value)
+	if spc {
+		s.WriteString(KvDoubleQuote)
+	}
+	s.WriteString(kv.Value)
+	if spc {
+		s.WriteString(KvDoubleQuote)
+	}
+	return s.String()
 }
 
 // KVS - is a shorthand for some wrapper functions
@@ -277,20 +318,7 @@ func (kvs KVS) Keys() []string {
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for _, kv := range kvs {
-		// Do not need to print if state is on
-		if kv.Key == Enable && kv.Value == EnableOn {
-			continue
-		}
-		s.WriteString(kv.Key)
-		s.WriteString(KvSeparator)
-		spc := madmin.HasSpace(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
-		s.WriteString(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
+		s.WriteString(kv.String())
 		s.WriteString(KvSpaceSeparator)
 	}
 	return s.String()
@@ -347,6 +375,16 @@ func (kvs *KVS) Delete(key string) {
 			return
 		}
 	}
+}
+
+// LookupKV returns the KV by its key
+func (kvs KVS) LookupKV(key string) (KV, bool) {
+	for _, kv := range kvs {
+		if kv.Key == key {
+			return kv, true
+		}
+	}
+	return KV{}, false
 }
 
 // Lookup - lookup a key in a list of KVS
@@ -423,43 +461,7 @@ func (c Config) RedactSensitiveInfo() Config {
 		}
 	}
 
-	// Remove the server credentials altogether
-	nc.DelKVS(CredentialsSubSys)
-
 	return nc
-}
-
-type configWriteTo struct {
-	Config
-	filterByKey string
-}
-
-// NewConfigWriteTo - returns a struct which
-// allows for serializing the config/kv struct
-// to a io.WriterTo
-func NewConfigWriteTo(cfg Config, key string) io.WriterTo {
-	return &configWriteTo{Config: cfg, filterByKey: key}
-}
-
-// WriteTo - implements io.WriterTo interface implementation for config.
-func (c *configWriteTo) WriteTo(w io.Writer) (int64, error) {
-	kvsTargets, err := c.GetKVS(c.filterByKey, DefaultKVS)
-	if err != nil {
-		return 0, err
-	}
-	var n int
-	for _, target := range kvsTargets {
-		m1, _ := w.Write([]byte(target.SubSystem))
-		m2, _ := w.Write([]byte(KvSpaceSeparator))
-		m3, _ := w.Write([]byte(target.KVS.String()))
-		if len(kvsTargets) > 1 {
-			m4, _ := w.Write([]byte(KvNewline))
-			n += m1 + m2 + m3 + m4
-		} else {
-			n += m1 + m2 + m3
-		}
-	}
-	return int64(n), nil
 }
 
 // Default KV configs for worm and region
@@ -493,20 +495,6 @@ var (
 		},
 	}
 )
-
-// LookupCreds - lookup credentials from config.
-func LookupCreds(kv KVS) (auth.Credentials, error) {
-	if err := CheckValidKeys(CredentialsSubSys, kv, DefaultCredentialKVS); err != nil {
-		return auth.Credentials{}, err
-	}
-	accessKey := kv.Get(AccessKey)
-	secretKey := kv.Get(SecretKey)
-	if accessKey == "" || secretKey == "" {
-		accessKey = auth.DefaultAccessKey
-		secretKey = auth.DefaultSecretKey
-	}
-	return auth.CreateCredentials(accessKey, secretKey)
-}
 
 // Site - holds site info - name and region.
 type Site struct {
@@ -758,7 +746,7 @@ func (c Config) DelKVS(s string) error {
 
 	ck, ok := c[subSys][tgt]
 	if !ok {
-		return Errorf("sub-system %s:%s already deleted or does not exist", subSys, tgt)
+		return Error[ErrConfigNotFound]("sub-system %s:%s already deleted or does not exist", subSys, tgt)
 	}
 
 	if len(inputs) == 2 {
@@ -767,7 +755,7 @@ func (c Config) DelKVS(s string) error {
 		for _, delKey := range strings.Fields(inputs[1]) {
 			_, ok := currKVS.Lookup(delKey)
 			if !ok {
-				return Errorf("key %s doesn't exist", delKey)
+				return Error[ErrConfigNotFound]("key %s doesn't exist", delKey)
 			}
 			defVal, isDef := defKVS.Lookup(delKey)
 			if isDef {
@@ -1069,7 +1057,7 @@ func getEnvVarName(subSys, target, param string) string {
 		Default, target)
 }
 
-var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys)
+var resolvableSubsystems = set.CreateStringSet(IdentityOpenIDSubSys, IdentityLDAPSubSys, PolicyPluginSubSys)
 
 // ValueSource represents the source of a config parameter value.
 type ValueSource uint8
@@ -1301,10 +1289,10 @@ func (cs *SubsysInfo) AddEnvString(b *strings.Builder) {
 	}
 }
 
-// AddString adds the string representation of the configuration to the given
+// WriteTo writes the string representation of the configuration to the given
 // builder. When off is true, adds a comment character before the config system
-// output.
-func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
+// output. It also ignores values when empty and deprecated.
+func (cs *SubsysInfo) WriteTo(b *strings.Builder, off bool) {
 	cs.AddEnvString(b)
 	if off {
 		b.WriteString(KvComment)
@@ -1316,6 +1304,22 @@ func (cs *SubsysInfo) AddString(b *strings.Builder, off bool) {
 		b.WriteString(cs.Target)
 	}
 	b.WriteString(KvSpaceSeparator)
-	b.WriteString(cs.Config.String())
+	for _, kv := range cs.Config {
+		dkv, ok := cs.Defaults.LookupKV(kv.Key)
+		if !ok {
+			continue
+		}
+		// Ignore empty and deprecated values
+		if dkv.Deprecated && kv.Value == "" {
+			continue
+		}
+		// Do not need to print if state is on
+		if kv.Key == Enable && kv.Value == EnableOn {
+			continue
+		}
+		b.WriteString(kv.String())
+		b.WriteString(KvSpaceSeparator)
+	}
+
 	b.WriteString(KvNewline)
 }

@@ -182,6 +182,12 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "HealID":
+			z.HealID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "HealID")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -195,9 +201,9 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 22
+	// map header, size 23
 	// write "ID"
-	err = en.Append(0xde, 0x0, 0x16, 0xa2, 0x49, 0x44)
+	err = en.Append(0xde, 0x0, 0x17, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -430,15 +436,25 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "HealID"
+	err = en.Append(0xa6, 0x48, 0x65, 0x61, 0x6c, 0x49, 0x44)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.HealID)
+	if err != nil {
+		err = msgp.WrapError(err, "HealID")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 22
+	// map header, size 23
 	// string "ID"
-	o = append(o, 0xde, 0x0, 0x16, 0xa2, 0x49, 0x44)
+	o = append(o, 0xde, 0x0, 0x17, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "PoolIndex"
 	o = append(o, 0xa9, 0x50, 0x6f, 0x6f, 0x6c, 0x49, 0x6e, 0x64, 0x65, 0x78)
@@ -509,6 +525,9 @@ func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0002 := range z.HealedBuckets {
 		o = msgp.AppendString(o, z.HealedBuckets[za0002])
 	}
+	// string "HealID"
+	o = append(o, 0xa6, 0x48, 0x65, 0x61, 0x6c, 0x49, 0x44)
+	o = msgp.AppendString(o, z.HealID)
 	return
 }
 
@@ -688,6 +707,12 @@ func (z *healingTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "HealID":
+			z.HealID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "HealID")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -710,5 +735,6 @@ func (z *healingTracker) Msgsize() (s int) {
 	for za0002 := range z.HealedBuckets {
 		s += msgp.StringPrefixSize + len(z.HealedBuckets[za0002])
 	}
+	s += 7 + msgp.StringPrefixSize + len(z.HealID)
 	return
 }

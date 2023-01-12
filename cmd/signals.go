@@ -75,14 +75,13 @@ func handleSignals() {
 
 	for {
 		select {
-		case <-globalHTTPServerErrorCh:
+		case err := <-globalHTTPServerErrorCh:
+			logger.LogIf(context.Background(), err)
 			exit(stopProcess())
 		case osSignal := <-globalOSSignalCh:
-			globalReplicationPool.SaveState(context.Background())
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
-			globalReplicationPool.SaveState(context.Background())
 			switch signal {
 			case serviceRestart:
 				logger.Info("Restarting on service signal")

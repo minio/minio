@@ -24,7 +24,7 @@ import (
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -74,11 +74,6 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -105,6 +100,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTierReservedName), r.URL)
 		return
 	}
+
 	// Refresh from the disk in case we had missed notifications about edits from peers.
 	if err := globalTierConfigMgr.Reload(ctx, objAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -132,11 +128,6 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -157,11 +148,6 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "EditTier")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
@@ -210,11 +196,6 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -247,11 +228,6 @@ func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -272,11 +248,6 @@ func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Requ
 	ctx := newContext(r, w, "TierStats")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {

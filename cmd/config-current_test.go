@@ -26,7 +26,10 @@ import (
 )
 
 func TestServerConfig(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Initialize server config.
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }

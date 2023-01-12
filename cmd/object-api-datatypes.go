@@ -18,15 +18,15 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"io"
 	"math"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/logger"
 )
 
 // BackendType - represents different backend types.
@@ -39,8 +39,6 @@ const (
 	BackendFS = BackendType(madmin.FS)
 	// Multi disk BackendErasure (single, distributed) backend.
 	BackendErasure = BackendType(madmin.Erasure)
-	// Gateway backend.
-	BackendGateway = BackendType(madmin.Gateway)
 	// Add your own backend.
 )
 
@@ -79,6 +77,9 @@ type BucketInfo struct {
 	// Date and time when the bucket was created.
 	Created time.Time
 	Deleted time.Time
+
+	// Bucket features enabled
+	Versioning, ObjectLocking bool
 }
 
 // ObjectInfo - represents object metadata.
@@ -100,9 +101,6 @@ type ObjectInfo struct {
 
 	// Hex encoded unique entity tag of the object.
 	ETag string
-
-	// The ETag stored in the gateway backend
-	InnerETag string
 
 	// Version ID of this object.
 	VersionID string
@@ -184,8 +182,9 @@ type ObjectInfo struct {
 	Checksum []byte
 }
 
-// ArchiveInfo returns any saved zip archive meta information
-func (o ObjectInfo) ArchiveInfo() []byte {
+// ArchiveInfo returns any saved zip archive meta information.
+// It will be decrypted if needed.
+func (o *ObjectInfo) ArchiveInfo() []byte {
 	if len(o.UserDefined) == 0 {
 		return nil
 	}
@@ -193,19 +192,20 @@ func (o ObjectInfo) ArchiveInfo() []byte {
 	if !ok {
 		return nil
 	}
-	if len(z) > 0 && z[0] >= 32 {
-		// FS/gateway mode does base64 encoding on roundtrip.
-		// zipindex has version as first byte, which is below any base64 value.
-		zipInfo, _ := base64.StdEncoding.DecodeString(z)
-		if len(zipInfo) != 0 {
-			return zipInfo
+	data := []byte(z)
+	if v, ok := o.UserDefined[archiveTypeMetadataKey]; ok && v == archiveTypeEnc {
+		decrypted, err := o.metadataDecrypter()(archiveTypeEnc, data)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return nil
 		}
+		data = decrypted
 	}
-	return []byte(z)
+	return data
 }
 
 // Clone - Returns a cloned copy of current objectInfo
-func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
+func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 	cinfo = ObjectInfo{
 		Bucket:                     o.Bucket,
 		Name:                       o.Name,
@@ -213,7 +213,6 @@ func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
 		Size:                       o.Size,
 		IsDir:                      o.IsDir,
 		ETag:                       o.ETag,
-		InnerETag:                  o.InnerETag,
 		VersionID:                  o.VersionID,
 		IsLatest:                   o.IsLatest,
 		DeleteMarker:               o.DeleteMarker,

@@ -19,12 +19,6 @@ package config
 
 // UI errors
 var (
-	ErrInvalidFSValue = newErrFn(
-		"Invalid drive path",
-		"Please provide an existing deployment with MinIO",
-		"MinIO does not support newer NAS gateway deployments anymore refer https://github.com/minio/minio/issues/14331",
-	)
-
 	ErrInvalidXLValue = newErrFn(
 		"Invalid drive path",
 		"Please provide a fresh drive for single drive MinIO setup",
@@ -109,12 +103,6 @@ var (
 		"MINIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
 	)
 
-	ErrInvalidCacheEncryptionKey = newErrFn(
-		"Invalid cache encryption master key value",
-		"Please check the passed value",
-		"MINIO_CACHE_ENCRYPTION_SECRET_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
-	)
-
 	ErrInvalidCacheRange = newErrFn(
 		"Invalid cache range value",
 		"Please check the passed value",
@@ -172,13 +160,13 @@ var (
 	ErrInvalidErasureEndpoints = newErrFn(
 		"Invalid endpoint(s) in erasure mode",
 		"Please provide correct combination of local/remote paths",
-		"For more information, please refer to https://docs.min.io/docs/minio-erasure-code-quickstart-guide",
+		"For more information, please refer to https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html",
 	)
 
 	ErrInvalidNumberOfErasureEndpoints = newErrFn(
 		"Invalid total number of endpoints for erasure mode",
 		"Please provide number of endpoints greater or equal to 2",
-		"For more information, please refer to https://docs.min.io/docs/minio-erasure-code-quickstart-guide",
+		"For more information, please refer to https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html",
 	)
 
 	ErrStorageClassValue = newErrFn(
@@ -204,12 +192,13 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 		  --address '[fe80::da00:a6c8:e3ae:ddd7]:9000'`,
 	)
 
-	ErrInvalidFSEndpoint = newErrFn(
-		"Invalid endpoint for standalone FS mode",
-		"Please check the FS endpoint",
-		`FS mode requires only one writable disk path
-Example 1:
-   $ minio server /data/minio/`,
+	ErrInvalidEndpoint = newErrFn(
+		"Invalid endpoint for single drive mode",
+		"Please check the endpoint",
+		`Single-Node modes requires absolute path without hostnames:
+Examples:
+   $ minio server /data/minio/ #Single Node Single Drive
+   $ minio server /data-{1...4}/minio # Single Node Multi Drive`,
 	)
 
 	ErrUnsupportedBackend = newErrFn(
@@ -257,7 +246,7 @@ Example 1:
 	ErrNoCertsAndHTTPSEndpoints = newErrFn(
 		"HTTPS specified in endpoints, but no TLS certificate is found on the local machine",
 		"Please add TLS certificate or use HTTP endpoints only",
-		"Refer to https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server",
+		"Refer to https://min.io/docs/minio/linux/operations/network-encryption.html for information about how to load a TLS certificate in your server",
 	)
 
 	ErrCertsAndHTTPEndpoints = newErrFn(
@@ -282,18 +271,6 @@ Example 1:
 		"Invalid compression include value",
 		"Please check the passed value",
 		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_MIME_TYPES=\"A,B,C\"",
-	)
-
-	ErrInvalidGWSSEValue = newErrFn(
-		"Invalid gateway SSE value",
-		"Please check the passed value",
-		"MINIO_GATEWAY_SSE: Gateway SSE accepts only C and S3 as valid values. Delimit by `;` to set more than one value",
-	)
-
-	ErrInvalidGWSSEEnvValue = newErrFn(
-		"Invalid gateway SSE configuration",
-		"",
-		"Refer to https://docs.min.io/docs/minio-kms-quickstart-guide.html for setting up SSE",
 	)
 
 	ErrInvalidReplicationWorkersValue = newErrFn(

@@ -66,7 +66,7 @@ __init__() {
     mc mb minio/minio-test/
     mc cp ./minio minio/minio-test/to-read/
     mc cp /etc/hosts minio/minio-test/to-read/hosts
-    mc policy set download minio/minio-test
+    mc anonymous set download minio/minio-test
 
     verify_checksum_mc ./minio minio/minio-test/to-read/minio
 

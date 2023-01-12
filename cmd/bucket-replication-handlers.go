@@ -46,10 +46,6 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -59,7 +55,10 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
+	if globalSiteReplicationSys.isEnabled() && logger.GetReqInfo(ctx).Cred.AccessKey != globalActiveCred.AccessKey {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
+		return
+	}
 	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNeedsVersioningError), r.URL)
 		return
@@ -165,11 +164,26 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationDenyEditError), r.URL)
 		return
 	}
-	if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketReplicationConfig, nil); err != nil {
+	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketReplicationConfig); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	for _, tgt := range targets.Targets {
+		if err := globalBucketTargetSys.RemoveTarget(ctx, bucket, tgt.Arn); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketTargetsFile); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -277,7 +291,13 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if !config.HasExistingObjectReplication(arn) {
+	hasARN, hasExistingObjEnabled := config.HasExistingObjectReplication(arn)
+	if !hasARN {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrRemoteTargetNotFoundError), r.URL)
+		return
+	}
+
+	if !hasExistingObjEnabled {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNoExistingObjects), r.URL)
 		return
 	}
@@ -316,7 +336,27 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		}
 	}
-	if err := startReplicationResync(ctx, bucket, arn, resetID, resetBeforeDate, objectAPI); err != nil {
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	tgtBytes, err := json.Marshal(&targets)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+	if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if err := globalReplicationPool.resyncer.start(ctx, objectAPI, resyncOpts{
+		bucket:       bucket,
+		arn:          arn,
+		resyncID:     resetID,
+		resyncBefore: resetBeforeDate,
+	}); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
 			Bucket: bucket,
 			Err:    err,
@@ -365,10 +405,13 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
-	globalReplicationPool.resyncState.RLock()
-	brs, ok := globalReplicationPool.resyncState.statusMap[bucket]
-	globalReplicationPool.resyncState.RUnlock()
+	var tgtStats map[string]TargetReplicationResyncStatus
+	globalReplicationPool.resyncer.RLock()
+	brs, ok := globalReplicationPool.resyncer.statusMap[bucket]
+	if ok {
+		tgtStats = brs.cloneTgtStats()
+	}
+	globalReplicationPool.resyncer.RUnlock()
 	if !ok {
 		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
 		if err != nil {
@@ -378,10 +421,11 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 			}), r.URL)
 			return
 		}
+		tgtStats = brs.cloneTgtStats()
 	}
 
 	var rinfo ResyncTargetsInfo
-	for tarn, st := range brs.TargetsMap {
+	for tarn, st := range tgtStats {
 		if arn != "" && tarn != arn {
 			continue
 		}
@@ -389,7 +433,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 			Arn:             tarn,
 			ResetID:         st.ResyncID,
 			StartTime:       st.StartTime,
-			EndTime:         st.EndTime,
+			EndTime:         st.LastUpdate,
 			ResyncStatus:    st.ResyncStatus.String(),
 			ReplicatedSize:  st.ReplicatedSize,
 			ReplicatedCount: st.ReplicatedCount,

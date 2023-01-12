@@ -81,6 +81,10 @@ func ReadFile(name string) ([]byte, error) {
 	if err != nil {
 		return io.ReadAll(r)
 	}
+
+	// Select bigger blocks when reading at least 50% of a big block.
+	r.SmallFile = st.Size() <= BlockSizeLarge/2
+
 	dst := make([]byte, st.Size())
 	_, err = io.ReadFull(r, dst)
 	return dst, err

@@ -32,7 +32,7 @@ import (
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	bucketBandwidth "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -315,12 +315,12 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	// Send profiling data to zip as file
 	for typ, data := range data {
 		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data)
-		if err != nil {
-			logger.LogIf(ctx, err)
-		}
+		logger.LogIf(ctx, err)
+	}
+	if b := getClusterMetaInfo(ctx); len(b) > 0 {
+		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b))
 	}
 
-	appendClusterMetaInfoToZip(ctx, zipWriter)
 	return
 }
 
@@ -491,10 +491,6 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 
 // LoadBucketMetadata - calls LoadBucketMetadata call on all peers
 func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName string) {
-	if globalIsGateway {
-		return
-	}
-
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -634,6 +630,49 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	}
 }
 
+// StopRebalance notifies all MinIO nodes to signal any ongoing rebalance
+// goroutine to stop.
+func (sys *NotificationSys) StopRebalance(ctx context.Context) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.StopRebalance(ctx)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
+// LoadRebalanceMeta notifies all peers to load rebalance.bin from object layer.
+// Note: Only peers participating in rebalance operation, namely the first node
+// in each pool will load rebalance.bin.
+func (sys *NotificationSys) LoadRebalanceMeta(ctx context.Context, startRebalance bool) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.LoadRebalanceMeta(ctx, startRebalance)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
 // LoadTransitionTierConfig notifies remote peers to load their remote tier
 // configs from config store.
 func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
@@ -731,7 +770,7 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 }
 
 // GetMetrics - Get metrics from all peers.
-func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) []madmin.RealtimeMetrics {
+func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType, opts collectMetricsOpts) []madmin.RealtimeMetrics {
 	reply := make([]madmin.RealtimeMetrics, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
@@ -740,8 +779,8 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 			continue
 		}
 		host := client.host.String()
-		if len(hosts) > 0 {
-			if _, ok := hosts[host]; !ok {
+		if len(opts.hosts) > 0 {
+			if _, ok := opts.hosts[host]; !ok {
 				continue
 			}
 		}
@@ -749,7 +788,7 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, disks)
+			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, opts)
 			return err
 		}, index)
 	}
@@ -911,6 +950,39 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 		}
 	}
 	return offlineDisks
+}
+
+// StorageInfo returns disk information across all peers
+func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
+	var storageInfo StorageInfo
+	replies := make([]StorageInfo, len(sys.peerClients))
+
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			info, err := client.LocalStorageInfo()
+			if err != nil {
+				info.Disks = getOfflineDisks(client.host.String(), globalEndpoints)
+			}
+			replies[idx] = info
+		}(client, i)
+	}
+	wg.Wait()
+
+	// Add local to this server.
+	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext))
+
+	storageInfo.Backend = objLayer.BackendInfo()
+	for _, sinfo := range replies {
+		storageInfo.Disks = append(storageInfo.Disks, sinfo.Disks...)
+	}
+
+	return storageInfo
 }
 
 // ServerInfo - calls ServerInfo RPC call on all peers.

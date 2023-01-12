@@ -87,7 +87,7 @@ export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
 ```
 
-Assuming that MinIO server is configured to support STS API by following the doc [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide), execute the following command to temporary credentials from MinIO server.
+Assuming that MinIO server is configured to support STS API by following the doc [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html), execute the following command to temporary credentials from MinIO server.
 
 ```
 go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
@@ -105,5 +105,5 @@ These credentials can now be used to perform MinIO API operations, these credent
 
 ## Explore Further
 
-- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

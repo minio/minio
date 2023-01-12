@@ -33,7 +33,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/kes"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -160,11 +160,6 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	bucket := pathClean(vars["bucket"])
 	update := r.Form.Get("update") == "true"
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
 	if objectAPI == nil {
@@ -206,7 +201,18 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	if update {
 		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
-		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		var exists bool // true if arn exists
+		target.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		if exists && target.Arn != "" { // return pre-existing ARN
+			data, err := json.Marshal(target.Arn)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			// Write success response.
+			writeSuccessResponseJSON(w, data)
+			return
+		}
 	}
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
@@ -222,8 +228,10 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		for _, op := range ops {
 			switch op {
 			case madmin.CredentialsUpdateType:
-				tgt.Credentials = target.Credentials
-				tgt.TargetBucket = target.TargetBucket
+				if !globalSiteReplicationSys.isEnabled() {
+					tgt.Credentials = target.Credentials
+					tgt.TargetBucket = target.TargetBucket
+				}
 				tgt.Secure = target.Secure
 				tgt.Endpoint = target.Endpoint
 			case madmin.SyncUpdateType:
@@ -289,10 +297,6 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 	bucket := pathClean(vars["bucket"])
 	arnType := vars["type"]
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketTargetAction)
 	if objectAPI == nil {
@@ -328,10 +332,6 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 	bucket := pathClean(vars["bucket"])
 	arn := vars["arn"]
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
 	if objectAPI == nil {
@@ -373,10 +373,6 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	bucket := pathClean(r.Form.Get("bucket"))
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportBucketMetadataAction)
 	if objectAPI == nil {
@@ -661,10 +657,6 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ImportBucketMetadataAction)
 	if objectAPI == nil {
@@ -717,7 +709,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				opts := MakeBucketOptions{
 					LockEnabled: config.ObjectLockEnabled == "Enabled",
 				}
-				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
+				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
@@ -778,7 +770,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{}); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{}); err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
 						continue
@@ -830,7 +822,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		bucket, fileName := slc[0], slc[1]
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
 					rpt.SetStatus(bucket, "", err)
@@ -884,7 +876,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Version in policy must not be empty
 			if bucketPolicy.Version == "" {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrMalformedPolicy.String()))
+				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrPolicyInvalidVersion.String()))
 				continue
 			}
 
@@ -1083,7 +1075,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 }
 
 // ReplicationDiffHandler - POST returns info on unreplicated versions for a remote target ARN
-// to the connected HTTP client. This is a MinIO only extension
+// to the connected HTTP client.
 func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ReplicationDiff")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
@@ -1091,20 +1083,8 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ReplicationDiff)
 	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-	// check if user has permissions to perform this operation
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketVersionsAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 

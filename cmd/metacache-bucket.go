@@ -45,6 +45,10 @@ type bucketMetacache struct {
 	updated bool         `msg:"-"`
 }
 
+type deleteAllStorager interface {
+	deleteAll(ctx context.Context, bucket, prefix string)
+}
+
 // newBucketMetacache creates a new bucketMetacache.
 // Optionally remove all existing caches.
 func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
@@ -52,10 +56,10 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 		// Recursively delete all caches.
 		objAPI := newObjectLayerFn()
 		if objAPI != nil {
-			ez, ok := objAPI.(renameAllStorager)
+			ez, ok := objAPI.(deleteAllStorager)
 			if ok {
 				ctx := context.Background()
-				ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+				ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
 			}
 		}
 	}
@@ -215,9 +219,9 @@ func (b *bucketMetacache) deleteAll() {
 		return
 	}
 
-	ez, ok := objAPI.(renameAllStorager)
+	ez, ok := objAPI.(deleteAllStorager)
 	if !ok {
-		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be 'renameAllStorager'"))
+		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be 'deleteAllStorager'"))
 		return
 	}
 
@@ -226,7 +230,7 @@ func (b *bucketMetacache) deleteAll() {
 
 	b.updated = true
 	// Delete all.
-	ez.renameAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
+	ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
 	b.caches = make(map[string]metacache, 10)
 	b.cachesRoot = make(map[string][]string, 10)
 }

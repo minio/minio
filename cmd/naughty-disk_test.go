@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -308,4 +308,11 @@ func (d *naughtyDisk) ReadMultiple(ctx context.Context, req ReadMultipleReq, res
 		return err
 	}
 	return d.disk.ReadMultiple(ctx, req, resp)
+}
+
+func (d *naughtyDisk) CleanAbandonedData(ctx context.Context, volume string, path string) error {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.CleanAbandonedData(ctx, volume, path)
 }

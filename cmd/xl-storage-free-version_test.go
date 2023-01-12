@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -128,6 +129,11 @@ func TestFreeVersion(t *testing.T) {
 	report()
 	fatalErr(err)
 
+	// At this point the version stack must look as below,
+	// v3 --> free version      00000000-0000-0000-0000-0000000000f2 (from removal of null version)
+	// v2 --> free version      00000000-0000-0000-0000-0000000000f1 (from overwriting of null version )
+	// v1 --> non-free version  00000000-0000-0000-0000-000000000001
+
 	// Check number of free-versions
 	freeVersions, err := xl.listFreeVersions(newtierfi.Volume, newtierfi.Name)
 	if err != nil {
@@ -135,6 +141,57 @@ func TestFreeVersion(t *testing.T) {
 	}
 	if len(freeVersions) != 2 {
 		t.Fatalf("Expected two free versions but got %d", len(freeVersions))
+	}
+
+	freeVersionsTests := []struct {
+		vol          string
+		name         string
+		inclFreeVers bool
+		afterFn      func(fi FileInfo) (string, error)
+		expectedFree bool
+		expectedErr  error
+	}{
+		// ToFileInfo with 'inclFreeVers = true' should return the latest
+		// non-free version if one is present
+		{
+			vol:          newtierfi.Volume,
+			name:         newtierfi.Name,
+			inclFreeVers: true,
+			afterFn:      xl.DeleteVersion,
+			expectedFree: false,
+		},
+		// ToFileInfo with 'inclFreeVers = true' must return the latest free
+		// version when no non-free versions are present.
+		{
+			vol:          newtierfi.Volume,
+			name:         newtierfi.Name,
+			inclFreeVers: true,
+			expectedFree: true,
+		},
+		// ToFileInfo with 'inclFreeVers = false' must return errFileNotFound
+		// when no non-free version exist.
+		{
+			vol:          newtierfi.Volume,
+			name:         newtierfi.Name,
+			inclFreeVers: false,
+			expectedErr:  errFileNotFound,
+		},
+	}
+
+	for _, ft := range freeVersionsTests {
+		fi, err := xl.ToFileInfo(ft.vol, ft.name, "", ft.inclFreeVers)
+		if err != nil && !errors.Is(err, ft.expectedErr) {
+			t.Fatalf("ToFileInfo failed due to %v", err)
+		}
+		if got := fi.TierFreeVersion(); got != ft.expectedFree {
+			t.Fatalf("Expected free-version=%v but got free-version=%v", ft.expectedFree, got)
+		}
+		if ft.afterFn != nil {
+			_, err = ft.afterFn(fi)
+			if err != nil {
+				t.Fatalf("ft.afterFn failed with err %v", err)
+			}
+		}
 	}
 
 	// Simulate scanner removing free-version

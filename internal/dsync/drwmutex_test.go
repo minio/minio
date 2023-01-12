@@ -32,40 +32,41 @@ const (
 )
 
 func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-	drwm := NewDRWMutex(ds, "simplelock")
-
+	drwm1 := NewDRWMutex(ds, "simplelock")
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if !drwm.GetRLock(ctx1, cancel1, id, source, Options{Timeout: time.Second}) {
+	if !drwm1.GetRLock(ctx1, cancel1, id, source, Options{Timeout: time.Second}) {
 		panic("Failed to acquire read lock")
 	}
 	// fmt.Println("1st read lock acquired, waiting...")
 
+	drwm2 := NewDRWMutex(ds, "simplelock")
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	if !drwm.GetRLock(ctx2, cancel2, id, source, Options{Timeout: time.Second}) {
+	if !drwm2.GetRLock(ctx2, cancel2, id, source, Options{Timeout: time.Second}) {
 		panic("Failed to acquire read lock")
 	}
 	// fmt.Println("2nd read lock acquired, waiting...")
 
 	go func() {
 		time.Sleep(2 * testDrwMutexAcquireTimeout)
-		drwm.RUnlock()
+		drwm1.RUnlock(context.Background())
 		// fmt.Println("1st read lock released, waiting...")
 	}()
 
 	go func() {
 		time.Sleep(3 * testDrwMutexAcquireTimeout)
-		drwm.RUnlock()
+		drwm2.RUnlock(context.Background())
 		// fmt.Println("2nd read lock released, waiting...")
 	}()
 
+	drwm3 := NewDRWMutex(ds, "simplelock")
 	// fmt.Println("Trying to acquire write lock, waiting...")
 	ctx3, cancel3 := context.WithCancel(context.Background())
-	locked = drwm.GetLock(ctx3, cancel3, id, source, Options{Timeout: duration})
+	locked = drwm3.GetLock(ctx3, cancel3, id, source, Options{Timeout: duration})
 	if locked {
 		// fmt.Println("Write lock acquired, waiting...")
 		time.Sleep(testDrwMutexAcquireTimeout)
 
-		drwm.Unlock()
+		drwm3.Unlock(context.Background())
 	}
 	// fmt.Println("Write lock failed due to timeout")
 	return
@@ -90,28 +91,29 @@ func TestSimpleWriteLockTimedOut(t *testing.T) {
 }
 
 func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-	drwm := NewDRWMutex(ds, "duallock")
+	drwm1 := NewDRWMutex(ds, "duallock")
 
 	// fmt.Println("Getting initial write lock")
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if !drwm.GetLock(ctx1, cancel1, id, source, Options{Timeout: time.Second}) {
+	if !drwm1.GetLock(ctx1, cancel1, id, source, Options{Timeout: time.Second}) {
 		panic("Failed to acquire initial write lock")
 	}
 
 	go func() {
 		time.Sleep(3 * testDrwMutexAcquireTimeout)
-		drwm.Unlock()
+		drwm1.Unlock(context.Background())
 		// fmt.Println("Initial write lock released, waiting...")
 	}()
 
 	// fmt.Println("Trying to acquire 2nd write lock, waiting...")
+	drwm2 := NewDRWMutex(ds, "duallock")
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	locked = drwm.GetLock(ctx2, cancel2, id, source, Options{Timeout: duration})
+	locked = drwm2.GetLock(ctx2, cancel2, id, source, Options{Timeout: duration})
 	if locked {
 		// fmt.Println("2nd write lock acquired, waiting...")
 		time.Sleep(testDrwMutexAcquireTimeout)
 
-		drwm.Unlock()
+		drwm2.Unlock(context.Background())
 	}
 	// fmt.Println("2nd write lock failed due to timeout")
 	return
@@ -142,7 +144,7 @@ func parallelReader(ctx context.Context, m *DRWMutex, clocked, cunlock, cdone ch
 	if m.GetRLock(ctx, nil, id, source, Options{Timeout: time.Second}) {
 		clocked <- true
 		<-cunlock
-		m.RUnlock()
+		m.RUnlock(context.Background())
 		cdone <- true
 	}
 }
@@ -180,7 +182,8 @@ func TestParallelReaders(t *testing.T) {
 }
 
 // Borrowed from rwmutex_test.go
-func reader(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) {
+func reader(resource string, numIterations int, activity *int32, cdone chan bool) {
+	rwm := NewDRWMutex(ds, resource)
 	for i := 0; i < numIterations; i++ {
 		if rwm.GetRLock(context.Background(), nil, id, source, Options{Timeout: time.Second}) {
 			n := atomic.AddInt32(activity, 1)
@@ -190,14 +193,15 @@ func reader(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) 
 			for i := 0; i < 100; i++ {
 			}
 			atomic.AddInt32(activity, -1)
-			rwm.RUnlock()
+			rwm.RUnlock(context.Background())
 		}
 	}
 	cdone <- true
 }
 
 // Borrowed from rwmutex_test.go
-func writer(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) {
+func writer(resource string, numIterations int, activity *int32, cdone chan bool) {
+	rwm := NewDRWMutex(ds, resource)
 	for i := 0; i < numIterations; i++ {
 		if rwm.GetLock(context.Background(), nil, id, source, Options{Timeout: time.Second}) {
 			n := atomic.AddInt32(activity, 10000)
@@ -207,7 +211,7 @@ func writer(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) 
 			for i := 0; i < 100; i++ {
 			}
 			atomic.AddInt32(activity, -10000)
-			rwm.Unlock()
+			rwm.Unlock(context.Background())
 		}
 	}
 	cdone <- true
@@ -216,19 +220,19 @@ func writer(rwm *DRWMutex, numIterations int, activity *int32, cdone chan bool) 
 // Borrowed from rwmutex_test.go
 func hammerRWMutex(t *testing.T, gomaxprocs, numReaders, numIterations int) {
 	t.Run(fmt.Sprintf("%d-%d-%d", gomaxprocs, numReaders, numIterations), func(t *testing.T) {
+		resource := "test"
 		runtime.GOMAXPROCS(gomaxprocs)
 		// Number of active readers + 10000 * number of active writers.
 		var activity int32
-		rwm := NewDRWMutex(ds, "test")
 		cdone := make(chan bool)
-		go writer(rwm, numIterations, &activity, cdone)
+		go writer(resource, numIterations, &activity, cdone)
 		var i int
 		for i = 0; i < numReaders/2; i++ {
-			go reader(rwm, numIterations, &activity, cdone)
+			go reader(resource, numIterations, &activity, cdone)
 		}
-		go writer(rwm, numIterations, &activity, cdone)
+		go writer(resource, numIterations, &activity, cdone)
 		for ; i < numReaders; i++ {
-			go reader(rwm, numIterations, &activity, cdone)
+			go reader(resource, numIterations, &activity, cdone)
 		}
 		// Wait for the 2 writers and all readers to finish.
 		for i := 0; i < 2+numReaders; i++ {
@@ -264,7 +268,7 @@ func TestUnlockPanic(t *testing.T) {
 		}
 	}()
 	mu := NewDRWMutex(ds, "test")
-	mu.Unlock()
+	mu.Unlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -274,10 +278,10 @@ func TestUnlockPanic2(t *testing.T) {
 		if recover() == nil {
 			t.Fatalf("unlock of unlocked RWMutex did not panic")
 		}
-		mu.RUnlock() // Unlock, so -test.count > 1 works
+		mu.RUnlock(context.Background()) // Unlock, so -test.count > 1 works
 	}()
 	mu.RLock(id, source)
-	mu.Unlock()
+	mu.Unlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -288,7 +292,7 @@ func TestRUnlockPanic(t *testing.T) {
 		}
 	}()
 	mu := NewDRWMutex(ds, "test")
-	mu.RUnlock()
+	mu.RUnlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -298,10 +302,10 @@ func TestRUnlockPanic2(t *testing.T) {
 		if recover() == nil {
 			t.Fatalf("read unlock of unlocked RWMutex did not panic")
 		}
-		mu.Unlock() // Unlock, so -test.count > 1 works
+		mu.Unlock(context.Background()) // Unlock, so -test.count > 1 works
 	}()
 	mu.Lock(id, source)
-	mu.RUnlock()
+	mu.RUnlock(context.Background())
 }
 
 // Borrowed from rwmutex_test.go
@@ -309,21 +313,21 @@ func benchmarkRWMutex(b *testing.B, localWork, writeRatio int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	rwm := NewDRWMutex(ds, "test")
 	b.RunParallel(func(pb *testing.PB) {
 		foo := 0
 		for pb.Next() {
+			rwm := NewDRWMutex(ds, "test")
 			foo++
 			if foo%writeRatio == 0 {
 				rwm.Lock(id, source)
-				rwm.Unlock()
+				rwm.Unlock(context.Background())
 			} else {
 				rwm.RLock(id, source)
 				for i := 0; i != localWork; i++ {
 					foo *= 2
 					foo /= 2
 				}
-				rwm.RUnlock()
+				rwm.RUnlock(context.Background())
 			}
 		}
 		_ = foo

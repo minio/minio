@@ -512,7 +512,7 @@ func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (me
 		return
 	}
 	ctx = lkctx.Context()
-	defer cLock.RUnlock(lkctx.Cancel)
+	defer cLock.RUnlock(lkctx)
 	return c.statCache(ctx, cacheObjPath)
 }
 
@@ -597,7 +597,7 @@ func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, met
 		return err
 	}
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	if err = c.saveMetadata(ctx, bucket, object, meta, actualSize, rs, rsFileName, incHitsOnly); err != nil {
 		return err
 	}
@@ -706,7 +706,7 @@ func (c *diskCache) updateMetadata(ctx context.Context, bucket, object, etag str
 
 	if globalCacheKMS != nil {
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, m.Meta)
+		key, err = decryptObjectMeta(key, bucket, object, m.Meta)
 		if err != nil {
 			return err
 		}
@@ -842,7 +842,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		return oi, err
 	}
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 
 	return c.put(ctx, bucket, object, data, size, rs, opts, incHitsOnly, writeback)
 }
@@ -953,7 +953,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 		objSize, _ = sio.EncryptedSize(uint64(size))
 
 	}
-	cacheFile := MustGetUUID()
+	cacheFile := mustGetUUID()
 	n, _, err := c.bitrotWriteToCache(cachePath, cacheFile, reader, actualSize)
 	if IsErr(err, baseErrs...) {
 		// take the cache drive offline
@@ -1003,6 +1003,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 	if err != nil {
 		return err
 	}
+	defer rc.Close()
 	bufp := c.pool.Get().(*[]byte)
 	defer c.pool.Put(bufp)
 
@@ -1075,7 +1076,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		return nil, numHits, err
 	}
 	ctx = lkctx.Context()
-	defer cLock.RUnlock(lkctx.Cancel)
+	defer cLock.RUnlock(lkctx)
 
 	var objInfo ObjectInfo
 	var rngInfo RangeInfo
@@ -1212,7 +1213,7 @@ func (c *diskCache) Delete(ctx context.Context, bucket, object string) (err erro
 	if err != nil {
 		return err
 	}
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	return removeAll(cacheObjPath)
 }
 
@@ -1323,7 +1324,7 @@ func (c *diskCache) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	ctx = lkctx.Context()
-	defer partIDLock.Unlock(lkctx.Cancel)
+	defer partIDLock.Unlock(lkctx)
 	meta, _, _, err := c.statCache(ctx, uploadIDDir)
 	// Case where object not yet cached
 	if err != nil {
@@ -1380,7 +1381,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	if err != nil {
 		return err
 	}
-	defer uploadLock.Unlock(ulkctx.Cancel)
+	defer uploadLock.Unlock(ulkctx)
 
 	metaPath := pathJoin(uploadDir, cacheMetaJSONFile)
 	f, err := OpenFile(metaPath, os.O_RDWR|writeMode, 0o666)
@@ -1397,7 +1398,7 @@ func (c *diskCache) SavePartMetadata(ctx context.Context, bucket, object, upload
 	var objectEncryptionKey crypto.ObjectKey
 	if globalCacheKMS != nil {
 		// Calculating object encryption key
-		key, err = decryptObjectInfo(key, bucket, object, m.Meta)
+		key, err = decryptObjectMeta(key, bucket, object, m.Meta)
 		if err != nil {
 			return err
 		}
@@ -1427,7 +1428,7 @@ func newCachePartEncryptReader(ctx context.Context, bucket, object string, partI
 	var objectEncryptionKey, partEncryptionKey crypto.ObjectKey
 
 	// Calculating object encryption key
-	key, err = decryptObjectInfo(key, bucket, object, metadata)
+	key, err = decryptObjectMeta(key, bucket, object, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -1479,7 +1480,7 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	}
 
 	ctx = lkctx.Context()
-	defer cLock.Unlock(lkctx.Cancel)
+	defer cLock.Unlock(lkctx)
 	mpartCachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(mpartCachePath, uploadID)
 

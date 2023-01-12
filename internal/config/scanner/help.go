@@ -27,22 +27,10 @@ var (
 	// Help provides help for config values
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         Delay,
-			Description: `scanner delay multiplier` + defaultHelpPostfix(Delay),
+			Key:         Speed,
+			Description: `scanner speed` + defaultHelpPostfix(Speed),
 			Optional:    true,
-			Type:        "float",
-		},
-		config.HelpKV{
-			Key:         MaxWait,
-			Description: `maximum wait time between operations` + defaultHelpPostfix(MaxWait),
-			Optional:    true,
-			Type:        "duration",
-		},
-		config.HelpKV{
-			Key:         Cycle,
-			Description: `time duration between scanner cycles` + defaultHelpPostfix(Cycle),
-			Optional:    true,
-			Type:        "duration",
+			Type:        "default|slowest|slow|fast|fastest",
 		},
 	}
 )

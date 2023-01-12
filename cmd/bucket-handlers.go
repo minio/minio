@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -36,7 +36,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	sse "github.com/minio/minio/internal/bucket/encryption"
@@ -300,7 +300,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.ListAllMyBucketsAction)
 	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -431,7 +431,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Unmarshal list of keys to be deleted.
 	deleteObjectsReq := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjectsReq, maxBodySize); err != nil {
-		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -511,11 +510,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 		if object.VersionID != "" && object.VersionID != nullVersionID {
 			if _, err := uuid.Parse(object.VersionID); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("invalid version-id specified %w", err))
 				apiErr := errorCodes.ToAPIErr(ErrNoSuchVersion)
 				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
-					Message:   apiErr.Description,
+					Message:   fmt.Sprintf("%s (%s)", apiErr.Description, err),
 					Key:       object.ObjectName,
 					VersionID: object.VersionID,
 				}
@@ -731,7 +729,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.CreateBucketAction, bucket, "")
+	cred, owner, s3Error := checkRequestAuthTypeCredential(ctx, r, policy.CreateBucketAction)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -769,16 +767,12 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// check if client is attempting to create more buckets than allowed maximum.
+	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		apiErr := errorCodes.ToAPIErr(ErrTooManyBuckets)
-		apiErr.Description = fmt.Sprintf("You have attempted to create %d buckets than allowed %d", currBuckets+1, maxBuckets)
-		writeErrorResponse(ctx, w, apiErr, r.URL)
-		return
+		logger.LogIf(ctx, fmt.Errorf("An attempt to create %d buckets beyond recommended %d", currBuckets+1, maxBuckets))
 	}
 
 	opts := MakeBucketOptions{
-		Location:    location,
 		LockEnabled: objectLockEnabled,
 		ForceCreate: forceCreate,
 	}
@@ -790,15 +784,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			// exists elsewhere
 			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
-						Force:      false,
-						NoRecreate: true,
+						Force:      true,
 						SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 					})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -842,7 +835,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Proceed to creating a bucket.
-	if err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+	if err := objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 		if _, ok := err.(BucketExists); ok {
 			// Though bucket exists locally, we send the site-replication
 			// hook to ensure all sites have this bucket. If the hook
@@ -858,10 +851,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	if err := globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
 
 	// Make sure to add Location information here only for bucket
 	if cp := pathClean(r.URL.Path); cp != "" {
@@ -930,16 +920,18 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
 	// Read multipart data and save in memory and in the disk if needed
 	form, err := reader.ReadForm(maxFormMemory)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -949,8 +941,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract all form fields
 	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(ctx, form)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -1065,10 +1058,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
 	sseConfig.Apply(r.Header, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
-		Passthrough: globalIsGateway && globalGatewayName == S3BackendGateway,
 	})
 
-	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -1398,10 +1389,6 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	if globalIsGateway {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketObjectLockConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -1618,7 +1605,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, nil)
+	updatedAt, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketTaggingConfig)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

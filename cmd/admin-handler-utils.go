@@ -24,7 +24,7 @@ import (
 	"net/http"
 
 	"github.com/minio/kes"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -84,7 +84,13 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			Description:    e.Error(),
 			HTTPStatusCode: http.StatusBadRequest,
 		}
-	case config.Error:
+	case config.ErrConfigNotFound:
+		apiErr = APIError{
+			Code:           "XMinioConfigNotFoundError",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusNotFound,
+		}
+	case config.ErrConfigGeneric:
 		apiErr = APIError{
 			Code:           "XMinioConfigError",
 			Description:    e.Error(),
@@ -121,6 +127,18 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		case errors.Is(err, errDecommissionComplete):
 			apiErr = APIError{
 				Code:           "XMinioDecommissionNotAllowed",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errDecommissionRebalanceAlreadyRunning):
+			apiErr = APIError{
+				Code:           "XMinioDecommissionNotAllowed",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errRebalanceDecommissionAlreadyRunning):
+			apiErr = APIError{
+				Code:           "XMinioRebalanceNotAllowed",
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
@@ -189,24 +207,6 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		case errors.Is(err, madmin.ErrTierTypeUnsupported):
 			apiErr = APIError{
 				Code:           "XMinioAdminTierTypeUnsupported",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendInUse):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendInUse",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendNotEmpty):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendNotEmpty",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierInsufficientCreds):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientCreds",
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

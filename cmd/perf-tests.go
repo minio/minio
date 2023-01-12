@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/pkg/randreader"
 )
@@ -261,8 +261,8 @@ func (n *netPerfRX) ActiveConnections() uint64 {
 }
 
 func (n *netPerfRX) Reset() {
-	n.RLock()
-	defer n.RUnlock()
+	n.Lock()
+	defer n.Unlock()
 	n.RX = 0
 	n.RXSample = 0
 	n.lastToConnect = time.Time{}

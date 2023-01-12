@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
@@ -41,8 +41,6 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
-	GatewayUnsupported
-
 	setDriveCount      int
 	defaultParityCount int
 
@@ -68,8 +66,6 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers,
 	// legacy objects.
 	bpOld *bpool.BytePoolCap
-
-	deletedCleanupSleeper *dynamicSleeper
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -93,10 +89,6 @@ func (er erasureObjects) defaultWQuorum() int {
 	return dataCount
 }
 
-func (er erasureObjects) defaultRQuorum() int {
-	return er.setDriveCount - er.defaultParityCount
-}
-
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []madmin.Disk
 
@@ -107,9 +99,8 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 func diskErrToDriveState(err error) (state string) {
-	state = madmin.DriveStateUnknown
 	switch {
-	case errors.Is(err, errDiskNotFound):
+	case errors.Is(err, errDiskNotFound) || errors.Is(err, context.DeadlineExceeded):
 		state = madmin.DriveStateOffline
 	case errors.Is(err, errCorruptedFormat):
 		state = madmin.DriveStateCorrupt
@@ -121,7 +112,10 @@ func diskErrToDriveState(err error) (state string) {
 		state = madmin.DriveStateFaulty
 	case err == nil:
 		state = madmin.DriveStateOk
+	default:
+		state = fmt.Sprintf("%s (cause: %s)", madmin.DriveStateUnknown, err)
 	}
+
 	return
 }
 
@@ -177,25 +171,25 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk, errs []error) {
+func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
 		index := index
 		g.Go(func() error {
+			diskEndpoint := endpoints[index].String()
 			if disks[index] == OfflineDisk {
 				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
-					Endpoint: endpoints[index].String(),
+					Endpoint: diskEndpoint,
 				}
-				// Storage disk is empty, perhaps ignored disk or not available.
-				return errDiskNotFound
+				return nil
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
 			di := madmin.Disk{
-				Endpoint:       info.Endpoint,
+				Endpoint:       diskEndpoint,
 				DrivePath:      info.MountPath,
 				TotalSpace:     info.Total,
 				UsedSpace:      info.Used,
@@ -232,16 +226,17 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				di.Utilization = float64(info.Used / info.Total * 100)
 			}
 			disksInfo[index] = di
-			return err
+			return nil
 		}, index)
 	}
 
-	return disksInfo, g.Wait()
+	g.Wait()
+	return disksInfo
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) (StorageInfo, []error) {
-	disksInfo, errs := getDisksInfo(disks, endpoints)
+func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
+	disksInfo := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -251,18 +246,18 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) (StorageInfo, []er
 	}
 
 	storageInfo.Backend.Type = madmin.Erasure
-	return storageInfo, errs
+	return storageInfo
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (er erasureObjects) StorageInfo(ctx context.Context) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
 	return getStorageInfo(disks, endpoints)
 }
 
 // LocalStorageInfo - returns underlying local storage statistics.
-func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+func (er erasureObjects) LocalStorageInfo(ctx context.Context) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
 
@@ -337,7 +332,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					wait := er.deletedCleanupSleeper.Timer(ctx)
+					wait := deletedCleanupSleeper.Timer(ctx)
 					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
 					wait()
 					return nil

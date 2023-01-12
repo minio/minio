@@ -31,6 +31,9 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
 
+	// Register peer S3 router only if its a distributed setup.
+	registerPeerS3Handlers(router)
+
 	// Register bootstrap REST router for distributed setups.
 	registerBootstrapRESTHandlers(router)
 
@@ -61,6 +64,8 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setRequestValidityHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
+	// Add upload forwarding handler for site replication
+	setUploadForwardingHandler,
 	// Add bucket forwarding handler
 	setBucketForwardingHandler,
 	// Add new handlers here.
@@ -88,6 +93,9 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 
 	// Add STS router always.
 	registerSTSRouter(router)
+
+	// Add KMS router
+	registerKMSRouter(router)
 
 	// Add API router
 	registerAPIRouter(router)

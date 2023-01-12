@@ -30,6 +30,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"google.golang.org/api/googleapi"
 
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -150,7 +151,7 @@ const (
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
-	ErrMalformedPolicy
+	ErrPolicyInvalidVersion
 	ErrMissingFields
 	ErrMissingCredTag
 	ErrCredMalformed
@@ -176,7 +177,6 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrBucketAlreadyExists
-	ErrTooManyBuckets
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
@@ -195,6 +195,8 @@ const (
 	ErrBucketTaggingNotFound
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -263,7 +265,9 @@ const (
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
+	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
+	ErrAdminPolicyChangeAlreadyApplied
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
@@ -273,6 +277,10 @@ const (
 	ErrAdminNoSuchConfigTarget
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
+	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPValidation
+	ErrAdminConfigIDPCfgNameAlreadyExists
+	ErrAdminConfigIDPCfgNameDoesNotExist
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
@@ -286,6 +294,10 @@ const (
 	ErrSiteReplicationBucketMetaError
 	ErrSiteReplicationIAMError
 	ErrSiteReplicationConfigMissing
+
+	// Pool rebalance errors
+	ErrAdminRebalanceAlreadyStarted
+	ErrAdminRebalanceNotStarted
 
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
@@ -685,11 +697,6 @@ var errorCodes = errorCodeMap{
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrTooManyBuckets: {
-		Code:           "TooManyBuckets",
-		Description:    "You have attempted to create more buckets than allowed",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty",
@@ -705,9 +712,9 @@ var errorCodes = errorCodeMap{
 		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrMalformedPolicy: {
+	ErrPolicyInvalidVersion: {
 		Code:           "MalformedPolicy",
-		Description:    "Policy has invalid resource.",
+		Description:    "The policy must contain a valid version string",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingFields: {
@@ -1226,6 +1233,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified group does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminNoSuchJob: {
+		Code:           "XMinioAdminNoSuchJob",
+		Description:    "The specified job does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrAdminGroupNotEmpty: {
 		Code:           "XMinioAdminGroupNotEmpty",
 		Description:    "The specified group is not empty - cannot remove it.",
@@ -1236,6 +1248,12 @@ var errorCodes = errorCodeMap{
 		Description:    "The canned policy does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminPolicyChangeAlreadyApplied: {
+		Code:           "XMinioAdminPolicyChangeAlreadyApplied",
+		Description:    "The specified policy change is already in effect.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	ErrAdminInvalidArgument: {
 		Code:           "XMinioAdminInvalidArgument",
 		Description:    "Invalid arguments specified.",
@@ -1280,6 +1298,26 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigDuplicateKeys: {
 		Code:           "XMinioAdminConfigDuplicateKeys",
 		Description:    "JSON configuration provided has objects with duplicate keys",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigInvalidIDPType: {
+		Code:           "XMinioAdminConfigInvalidIDPType",
+		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigLDAPValidation: {
+		Code:           "XMinioAdminConfigLDAPValidation",
+		Description:    "LDAP Configuration validation failed",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigIDPCfgNameAlreadyExists: {
+		Code:           "XMinioAdminConfigIDPCfgNameAlreadyExists",
+		Description:    "An IDP configuration with the given name aleady exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigIDPCfgNameDoesNotExist: {
+		Code:           "XMinioAdminConfigIDPCfgNameDoesNotExist",
+		Description:    "No such IDP configuration exists",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigNotificationTargetsFailed: {
@@ -1346,7 +1384,7 @@ var errorCodes = errorCodeMap{
 	ErrSiteReplicationPeerResp: {
 		Code:           "XMinioSiteReplicationPeerResp",
 		Description:    "Error received when contacting a peer site",
-		HTTPStatusCode: http.StatusServiceUnavailable,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSiteReplicationBackendIssue: {
 		Code:           "XMinioSiteReplicationBackendIssue",
@@ -1377,6 +1415,16 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioSiteReplicationConfigMissingError",
 		Description:    "Site not found in site replication configuration",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminRebalanceAlreadyStarted: {
+		Code:           "XMinioAdminRebalanceAlreadyStarted",
+		Description:    "Pool rebalance is already started",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAdminRebalanceNotStarted: {
+		Code:           "XMinioAdminRebalanceNotStarted",
+		Description:    "Pool rebalance is not started",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
@@ -1893,6 +1941,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPolicyAlreadyAttached: {
+		Code:           "XMinioPolicyAlreadyAttached",
+		Description:    "The specified policy is already attached.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPolicyNotAttached: {
+		Code:           "XMinioPolicyNotAttached",
+		Description:    "The specified policy is not found.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	// Add your error structure here.
 }
 
@@ -1923,8 +1981,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty
+	case errNoSuchJob:
+		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
+	case errNoPolicyToAttachOrDetach:
+		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:
@@ -2217,9 +2279,10 @@ func toAPIError(ctx context.Context, err error) APIError {
 	if apiErr.Code == "InternalError" {
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
-		// their internal error types. This code is only
-		// useful with gateway implementations.
+		// their internal error types.
 		switch e := err.(type) {
+		case batchReplicationJobError:
+			apiErr = APIError(e)
 		case InvalidArgument:
 			apiErr = APIError{
 				Code:           "InvalidArgument",
@@ -2282,7 +2345,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
 			}
-			if globalIsGateway && strings.Contains(e.Message, "KMS is not configured") {
+			if strings.Contains(e.Message, "KMS is not configured") {
 				apiErr = APIError{
 					Code:           "NotImplemented",
 					Description:    e.Message,
@@ -2306,7 +2369,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Description:    e.Error(),
 				HTTPStatusCode: e.Response().StatusCode,
 			}
-			// Add more Gateway SDKs here if any in future.
+			// Add more other SDK related errors here if any in future.
 		default:
 			//nolint:gocritic
 			if errors.Is(err, errMalformedEncoding) {

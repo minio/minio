@@ -19,10 +19,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"runtime"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/internal/logger"
 )
@@ -41,16 +41,13 @@ func checkDelObjArgs(ctx context.Context, bucket, object string) error {
 func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
 	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketName(bucket) != nil {
-		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
 		return BucketNameInvalid{Bucket: bucket}
 	}
 	// Verify if object is valid.
 	if len(object) == 0 {
-		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if !IsValidObjectPrefix(object) {
-		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 	if runtime.GOOS == globalWindowsOSName && strings.Contains(object, "\\") {
@@ -112,7 +109,8 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 				KeyMarker:      keyMarker,
 			}
 		}
-		if _, err := uuid.Parse(uploadIDMarker); err != nil {
+		_, err := base64.RawURLEncoding.DecodeString(uploadIDMarker)
+		if err != nil {
 			logger.LogIf(ctx, err)
 			return MalformedUploadID{
 				UploadID: uploadIDMarker,

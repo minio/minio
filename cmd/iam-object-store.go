@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -91,7 +92,7 @@ func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}
 }
 
 func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context, objPath string) ([]byte, ObjectInfo, error) {
-	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath)
+	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath, ObjectOptions{})
 	if err != nil {
 		return nil, meta, err
 	}
@@ -155,7 +156,7 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]Po
 		}
 
 		policyName := path.Dir(item.Item)
-		if err := iamOS.loadPolicyDoc(ctx, policyName, m); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadPolicyDoc(ctx, policyName, m); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
@@ -280,7 +281,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, userOrGroupName, userType, isGroup, m); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadMappedPolicy(ctx, userOrGroupName, userType, isGroup, m); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
@@ -339,6 +340,8 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 
 // Assumes cache is locked by caller.
 func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
+	bootstrapTrace("loading all IAM items")
+
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
 		return err
@@ -346,17 +349,19 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 
 	// Loads things in the same order as `LoadIAMCache()`
 
+	bootstrapTrace("loading policy documents")
+
 	policiesList := listedConfigItems[policiesListKey]
 	for _, item := range policiesList {
 		policyName := path.Dir(item)
-		if err := iamOS.loadPolicyDoc(ctx, policyName, cache.iamPolicyDocsMap); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadPolicyDoc(ctx, policyName, cache.iamPolicyDocsMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 
 	if iamOS.usersSysType == MinIOUsersSysType {
-
+		bootstrapTrace("loading regular IAM users")
 		regUsersList := listedConfigItems[usersListKey]
 		for _, item := range regUsersList {
 			userName := path.Dir(item)
@@ -365,6 +370,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			}
 		}
 
+		bootstrapTrace("loading regular IAM groups")
 		groupsList := listedConfigItems[groupsListKey]
 		for _, item := range groupsList {
 			group := path.Dir(item)
@@ -374,22 +380,25 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
+	bootstrapTrace("loading user policy mapping")
 	userPolicyMappingsList := listedConfigItems[policyDBUsersListKey]
 	for _, item := range userPolicyMappingsList {
 		userName := strings.TrimSuffix(item, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, userName, regUser, false, cache.iamUserPolicyMap); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadMappedPolicy(ctx, userName, regUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
 
+	bootstrapTrace("loading group policy mapping")
 	groupPolicyMappingsList := listedConfigItems[policyDBGroupsListKey]
 	for _, item := range groupPolicyMappingsList {
 		groupName := strings.TrimSuffix(item, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, groupName, regUser, true, cache.iamGroupPolicyMap); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadMappedPolicy(ctx, groupName, regUser, true, cache.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
 
+	bootstrapTrace("loading service accounts")
 	svcAccList := listedConfigItems[svcAccListKey]
 	for _, item := range svcAccList {
 		userName := path.Dir(item)
@@ -398,6 +407,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
+	bootstrapTrace("loading STS users")
 	stsUsersList := listedConfigItems[stsListKey]
 	for _, item := range stsUsersList {
 		userName := path.Dir(item)
@@ -406,10 +416,11 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
+	bootstrapTrace("loading STS policy mapping")
 	stsPolicyMappingsList := listedConfigItems[policyDBSTSUsersListKey]
 	for _, item := range stsPolicyMappingsList {
 		stsName := strings.TrimSuffix(item, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamUserPolicyMap); err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}

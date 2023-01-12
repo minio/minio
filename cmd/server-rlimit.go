@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/minio/madmin-go/kernel"
+	"github.com/minio/madmin-go/v2/kernel"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sys"
 )
@@ -45,8 +45,8 @@ func oldLinux() bool {
 
 func setMaxResources() (err error) {
 	// Set the Go runtime max threads threshold to 90% of kernel setting.
-	sysMaxThreads, mErr := sys.GetMaxThreads()
-	if mErr == nil {
+	sysMaxThreads, err := sys.GetMaxThreads()
+	if err == nil {
 		minioMaxThreads := (sysMaxThreads * 90) / 100
 		// Only set max threads if it is greater than the default one
 		if minioMaxThreads > 10000 {

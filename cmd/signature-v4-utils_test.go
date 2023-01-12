@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -33,7 +33,7 @@ func TestCheckValid(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	objLayer, fsDir, err := prepareFS()
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +42,7 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	initAllSubsystems()
-
+	initAllSubsystems(ctx)
 	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)

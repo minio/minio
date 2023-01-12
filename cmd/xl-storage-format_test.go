@@ -485,7 +485,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal(err)
 					}
 					// List...
-					_, err = xl.ToFileInfo("volume", "path", ids[rng.Intn(size)])
+					_, err = xl.ToFileInfo("volume", "path", ids[rng.Intn(size)], false)
 					if err != nil {
 						b.Fatal(err)
 					}

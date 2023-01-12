@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/highwayhash"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/message/log"
@@ -63,7 +63,6 @@ const TimeFormat string = "15:04:05 MST 01/02/2006"
 var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
 	"cmd.serverMain",
-	"cmd.StartGateway",
 	// add more here ..
 }
 
@@ -290,8 +289,9 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 
 	// Get the cause for the Error
 	message := fmt.Sprintf("%v (%T)", err, err)
+	deploymentID := req.DeploymentID
 	if req.DeploymentID == "" {
-		req.DeploymentID = xhttp.GlobalDeploymentID
+		deploymentID = xhttp.GlobalDeploymentID
 	}
 
 	objects := make([]log.ObjectVersion, 0, len(req.Objects))
@@ -303,7 +303,7 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	}
 
 	entry := log.Entry{
-		DeploymentID: req.DeploymentID,
+		DeploymentID: deploymentID,
 		Level:        ErrorLvl.String(),
 		LogKind:      logKind,
 		RemoteHost:   req.RemoteHost,

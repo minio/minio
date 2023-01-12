@@ -21,27 +21,34 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/disk"
 )
 
-func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
+type collectMetricsOpts struct {
+	hosts map[string]struct{}
+	disks map[string]struct{}
+	jobID string
+	depID string
+}
+
+func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if types == madmin.MetricsNone {
 		return
 	}
 
-	if len(hosts) > 0 {
-		if _, ok := hosts[globalMinioAddr]; !ok {
+	if len(opts.hosts) > 0 {
+		if _, ok := opts.hosts[globalMinioAddr]; !ok {
 			return
 		}
 	}
 
-	if types.Contains(madmin.MetricsDisk) && !globalIsGateway {
+	if types.Contains(madmin.MetricsDisk) {
 		m.ByDisk = make(map[string]madmin.DiskMetric)
 		aggr := madmin.DiskMetric{
 			CollectedAt: time.Now(),
 		}
-		for name, disk := range collectLocalDisksMetrics(disks) {
+		for name, disk := range collectLocalDisksMetrics(opts.disks) {
 			m.ByDisk[name] = disk
 			aggr.Merge(&disk)
 		}
@@ -55,6 +62,12 @@ func collectLocalMetrics(types madmin.MetricType, hosts map[string]struct{}, dis
 	if types.Contains(madmin.MetricsOS) {
 		metrics := globalOSMetrics.report()
 		m.Aggregated.OS = &metrics
+	}
+	if types.Contains(madmin.MetricsBatchJobs) {
+		m.Aggregated.BatchJobs = globalBatchJobsMetrics.report(opts.jobID)
+	}
+	if types.Contains(madmin.MetricsSiteResync) {
+		m.Aggregated.SiteResync = globalSiteResyncMetrics.report(opts.depID)
 	}
 	// Add types...
 
@@ -78,10 +91,8 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 		return metrics
 	}
 
-	// only need Disks information in server mode.
-	storageInfo, errs := objLayer.LocalStorageInfo(GlobalContext)
-
-	for i, d := range storageInfo.Disks {
+	storageInfo := objLayer.LocalStorageInfo(GlobalContext)
+	for _, d := range storageInfo.Disks {
 		if len(disks) != 0 {
 			_, ok := disks[d.Endpoint]
 			if !ok {
@@ -89,7 +100,7 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 			}
 		}
 
-		if errs[i] != nil {
+		if d.State != madmin.DriveStateOk && d.State != madmin.DriveStateUnformatted {
 			metrics[d.Endpoint] = madmin.DiskMetric{NDisks: 1, Offline: 1}
 			continue
 		}
@@ -143,11 +154,11 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 	return metrics
 }
 
-func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, hosts map[string]struct{}, disks map[string]struct{}) (m madmin.RealtimeMetrics) {
+func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if !globalIsDistErasure {
 		return
 	}
-	all := globalNotificationSys.GetMetrics(ctx, types, hosts, disks)
+	all := globalNotificationSys.GetMetrics(ctx, types, opts)
 	for _, remote := range all {
 		m.Merge(&remote)
 	}

@@ -39,7 +39,7 @@ connectToMinio() {
 # Check if the bucket exists, by using the exit code of `mc ls`
 checkBucketExists() {
   BUCKET=$1
-  CMD=$(${MC} ls myminio/$BUCKET > /dev/null 2>&1)
+  CMD=$(${MC} stat myminio/$BUCKET > /dev/null 2>&1)
   return $?
 }
 
@@ -103,7 +103,7 @@ if ! checkBucketExists $BUCKET ; then
   # At this point, the bucket should exist, skip checking for existence
   # Set policy on the bucket
   echo "Setting policy of bucket '$BUCKET' to '$POLICY'."
-  ${MC} policy set $POLICY myminio/$BUCKET
+  ${MC} anonymous set $POLICY myminio/$BUCKET
 }
 
 # Try connecting to MinIO instance
@@ -118,6 +118,6 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy }} {{ .purge }} {{ .versioning }} {{ .objectlocking }}
+createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default false }} {{ .objectlocking  | default false }}
 {{- end }}
 {{- end }}

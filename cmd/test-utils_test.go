@@ -66,7 +66,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -112,7 +111,7 @@ func TestMain(m *testing.M) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
+	globalInternodeTransport = NewInternodeHTTPTransport()()
 
 	initHelp()
 
@@ -125,6 +124,8 @@ func TestMain(m *testing.M) {
 
 // concurrency level for certain parallel tests.
 const testConcurrencyLevel = 10
+
+const iso8601TimeFormat = "2006-01-02T15:04:05.000Z"
 
 // Excerpts from @lsegal - https://github.com/aws/aws-sdk-js/issues/659#issuecomment-120477258
 //
@@ -184,7 +185,7 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 	return streamLen
 }
 
-func prepareFS() (ObjectLayer, string, error) {
+func prepareFS(ctx context.Context) (ObjectLayer, string, error) {
 	nDisks := 1
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -195,9 +196,9 @@ func prepareFS() (ObjectLayer, string, error) {
 		return nil, "", err
 	}
 
-	initAllSubsystems()
+	initAllSubsystems(ctx)
 
-	globalIAMSys.Init(context.Background(), obj, globalEtcdClient, 2*time.Second)
+	globalIAMSys.Init(ctx, obj, globalEtcdClient, 2*time.Second)
 	return obj, fsDirs[0], nil
 }
 
@@ -215,6 +216,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 		removeRoots(fsDirs)
 		return nil, nil, err
 	}
+
 	return obj, fsDirs, nil
 }
 
@@ -231,7 +233,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 
 	newTestConfig(globalMinioDefaultRegion, obj)
 
-	initAllSubsystems()
+	initAllSubsystems(GlobalContext)
 	return obj
 }
 
@@ -364,13 +366,15 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	initAllSubsystems()
+	initAllSubsystems(ctx)
 
 	globalEtcdClient = nil
 
 	initConfigSubsystem(ctx, objLayer)
 
 	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
+
+	globalEventNotifier.InitBucketTargets(ctx, objLayer)
 
 	return testServer
 }
@@ -443,7 +447,7 @@ func resetGlobalIsErasure() {
 func resetGlobalHealState() {
 	// Init global heal state
 	if globalAllHealState == nil {
-		globalAllHealState = newHealState(false)
+		globalAllHealState = newHealState(GlobalContext, false)
 	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
@@ -456,7 +460,7 @@ func resetGlobalHealState() {
 
 	// Init background heal state
 	if globalBackgroundHealState == nil {
-		globalBackgroundHealState = newHealState(false)
+		globalBackgroundHealState = newHealState(GlobalContext, false)
 	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {
@@ -501,6 +505,8 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)
+
+	applyDynamicConfigForSubSys(context.Background(), obj, globalServerConfig, config.StorageClassSubSys)
 
 	// Save config.
 	return saveServerConfig(context.Background(), obj, globalServerConfig)
@@ -1316,6 +1322,13 @@ func getMakeBucketURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
 }
 
+// return URL for creating the bucket.
+func getBucketVersioningConfigURL(endPoint, bucketName string) string {
+	vals := make(url.Values)
+	vals.Set("versioning", "")
+	return makeTestTargetURL(endPoint, bucketName, "", vals)
+}
+
 // return URL for listing buckets.
 func getListBucketURL(endPoint string) string {
 	return makeTestTargetURL(endPoint, "", "", url.Values{})
@@ -1361,6 +1374,19 @@ func getListObjectsV1URL(endPoint, bucketName, prefix, maxKeys, encodingType str
 	if encodingType != "" {
 		queryValue.Set("encoding-type", encodingType)
 	}
+	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
+}
+
+// return URL for listing objects in the bucket with V1 legacy API.
+func getListObjectVersionsURL(endPoint, bucketName, prefix, maxKeys, encodingType string) string {
+	queryValue := url.Values{}
+	if maxKeys != "" {
+		queryValue.Set("max-keys", maxKeys)
+	}
+	if encodingType != "" {
+		queryValue.Set("encoding-type", encodingType)
+	}
+	queryValue.Set("versions", "")
 	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
 }
 
@@ -1467,7 +1493,7 @@ func getRandomDisks(N int) ([]string, error) {
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (newObject ObjectLayer, err error) {
-	initAllSubsystems()
+	initAllSubsystems(ctx)
 
 	return newErasureServerPools(ctx, endpointServerPools)
 }
@@ -1511,7 +1537,7 @@ func removeDiskN(disks []string, n int) {
 // initialies the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
-	initAllSubsystems()
+	initAllSubsystems(ctx)
 
 	initConfigSubsystem(ctx, obj)
 
@@ -1521,7 +1547,7 @@ func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, MakeBucketOptions{})
+	err := obj.MakeBucket(context.Background(), bucketName, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
@@ -1549,7 +1575,7 @@ func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, 
 		return prepareErasure16(ctx)
 	default:
 		// return FS backend by default.
-		obj, disk, err := prepareFS()
+		obj, disk, err := prepareFS(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1721,7 +1747,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
 
-	objLayer, fsDir, err := prepareFS()
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
@@ -1742,6 +1768,10 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, ErasureSDStr, bucketFS, fsAPIRouter, credentials, t)
 
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+
 	objLayer, erasureDisks, err := prepareErasure16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
@@ -1752,6 +1782,13 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+
 	// Executing the object layer tests for Erasure.
 	objAPITest(objLayer, ErasureTestStr, bucketErasure, erAPIRouter, credentials, t)
 
@@ -1789,13 +1826,12 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			localMetacacheMgr.deleteAll()
 		}
 
-		objLayer, fsDir, err := prepareFS()
+		objLayer, fsDir, err := prepareFS(ctx)
 		if err != nil {
 			t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 		}
 		setObjectLayer(objLayer)
-
-		initAllSubsystems()
+		initAllSubsystems(ctx)
 
 		// initialize the server and obtain the credentials and root.
 		// credentials are necessary to sign the HTTP request.
@@ -1821,7 +1857,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 			localMetacacheMgr.deleteAll()
 		}
 
-		initAllSubsystems()
+		initAllSubsystems(ctx)
 		objLayer, fsDirs, err := prepareErasureSets32(ctx)
 		if err != nil {
 			t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
@@ -2232,6 +2268,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 	}
 
 	checkRespErr := func(rec *httptest.ResponseRecorder, exp int) {
+		t.Helper()
 		if rec.Code != exp {
 			b, err := io.ReadAll(rec.Body)
 			t.Fatalf("Expected: %v, Got: %v, Body: %s, err: %v", exp, rec.Code, string(b), err)

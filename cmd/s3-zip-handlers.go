@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/crypto"
+	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -38,6 +38,7 @@ import (
 
 const (
 	archiveType            = "zip"
+	archiveTypeEnc         = "zip-enc"
 	archiveExt             = "." + archiveType // ".zip"
 	archiveSeparator       = "/"
 	archivePattern         = archiveExt + archiveSeparator                // ".zip/"
@@ -77,7 +78,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, zipPath)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -122,6 +122,17 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
+	// We do not allow offsetting into extracted files.
+	if opts.PartNumber != 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
+		return
+	}
+
+	if r.Header.Get(xhttp.Range) != "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
+	}
+
 	// Validate pre-conditions if any.
 	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		if objectAPI.IsEncryptionSupported() {
@@ -142,6 +153,12 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	zipInfo := zipObjInfo.ArchiveInfo()
 	if len(zipInfo) == 0 {
+		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
@@ -169,8 +186,13 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	var rc io.ReadCloser
 
 	if file.UncompressedSize64 > 0 {
-		// We do not know where the file ends, but the returned reader only returns UncompressedSize.
-		rs := &HTTPRangeSpec{Start: file.Offset, End: -1}
+		// There may be number of header bytes before the content.
+		// Reading 64K extra. This should more than cover name and any "extra" details.
+		end := file.Offset + int64(file.CompressedSize64) + 64<<10
+		if end > zipObjInfo.Size {
+			end = zipObjInfo.Size
+		}
+		rs := &HTTPRangeSpec{Start: file.Offset, End: end}
 		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, readLock, opts)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -192,6 +214,8 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	// s3zip does not allow ranges
+	w.Header().Del(xhttp.AcceptRanges)
 
 	setHeadGetRespHeaders(w, r.Form)
 
@@ -410,11 +434,20 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
-	var rs *HTTPRangeSpec
-
 	// Validate pre-conditions if any.
 	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		return checkPreconditions(ctx, w, r, oi, opts)
+	}
+
+	// We do not allow offsetting into extracted files.
+	if opts.PartNumber != 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
+		return
+	}
+
+	if r.Header.Get(xhttp.Range) != "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		return
 	}
 
 	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, opts)
@@ -425,6 +458,11 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 
 	zipInfo := zipObjInfo.ArchiveInfo()
 	if len(zipInfo) == 0 {
+		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
@@ -455,18 +493,18 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
+	// s3zip does not allow ranges.
+	w.Header().Del(xhttp.AcceptRanges)
+
 	// Set any additional requested response headers.
 	setHeadGetRespHeaders(w, r.Form)
 
 	// Successful response.
-	if rs != nil {
-		w.WriteHeader(http.StatusPartialContent)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
-// Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc..
+// Update the passed zip object metadata with the zip contents info, file name, modtime, size, etc.
+// The returned zip index will de decrypted.
 func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer, bucket, object string, opts ObjectOptions) ([]byte, error) {
 	files, srcInfo, err := getFilesListFromZIPObject(ctx, objectAPI, bucket, object, opts)
 	if err != nil {
@@ -477,36 +515,26 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	if err != nil {
 		return nil, err
 	}
-
-	srcInfo.UserDefined[archiveTypeMetadataKey] = archiveType
-	var zipInfoStr string
-	if globalIsGateway {
-		zipInfoStr = base64.StdEncoding.EncodeToString(zipInfo)
-	} else {
-		zipInfoStr = string(zipInfo)
+	at := archiveType
+	zipInfoStr := string(zipInfo)
+	if opts.EncryptFn != nil {
+		at = archiveTypeEnc
+		zipInfoStr = string(opts.EncryptFn(archiveTypeEnc, zipInfo))
+	}
+	srcInfo.UserDefined[archiveTypeMetadataKey] = at
+	popts := ObjectOptions{
+		MTime:     srcInfo.ModTime,
+		VersionID: srcInfo.VersionID,
+		EvalMetadataFn: func(oi *ObjectInfo) error {
+			oi.UserDefined[archiveTypeMetadataKey] = at
+			oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
+			return nil
+		},
 	}
 
-	if globalIsGateway {
-		srcInfo.UserDefined[archiveInfoMetadataKey] = zipInfoStr
-
-		// Use CopyObject API only for Gateway mode.
-		if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, srcInfo, opts, opts); err != nil {
-			return nil, err
-		}
-	} else {
-		popts := ObjectOptions{
-			MTime:     srcInfo.ModTime,
-			VersionID: srcInfo.VersionID,
-			EvalMetadataFn: func(oi ObjectInfo) error {
-				oi.UserDefined[archiveTypeMetadataKey] = archiveType
-				oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
-				return nil
-			},
-		}
-		// For all other modes use in-place update to update metadata on a specific version.
-		if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
-			return nil, err
-		}
+	// For all other modes use in-place update to update metadata on a specific version.
+	if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
+		return nil, err
 	}
 
 	return zipInfo, nil

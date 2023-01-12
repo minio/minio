@@ -18,16 +18,18 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
-
-	"github.com/minio/minio/internal/config"
 )
 
 // Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
-	objLayer, fsDir, err := prepareFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +63,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -154,10 +156,12 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 // Test if a config migration from v2 to v33 is successfully done
 func TestServerConfigMigrateV2toV33(t *testing.T) {
 	rootPath := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	globalConfigDir = &ConfigDir{path: rootPath}
 
-	objLayer, fsDir, err := prepareFS()
+	objLayer, fsDir, err := prepareFS(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,19 +205,8 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
-	}
-
-	// Check if accessKey and secretKey are not altered during migration
-	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
-	if caccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
-	}
-
-	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
-	if csecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}
 }
 

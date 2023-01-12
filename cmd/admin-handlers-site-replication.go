@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -114,37 +114,23 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 	default:
 		err = errSRInvalidRequest(errInvalidArgument)
 	case madmin.MakeWithVersioningBktOp:
-		_, isLockEnabled := r.Form["lockEnabled"]
-		_, isVersioningEnabled := r.Form["versioningEnabled"]
-		_, isForceCreate := r.Form["forceCreate"]
-		createdAtStr := strings.TrimSpace(r.Form.Get("createdAt"))
-		createdAt, cerr := time.Parse(time.RFC3339Nano, createdAtStr)
+		createdAt, cerr := time.Parse(time.RFC3339Nano, strings.TrimSpace(r.Form.Get("createdAt")))
 		if cerr != nil {
 			createdAt = timeSentinel
 		}
 
 		opts := MakeBucketOptions{
-			Location:          r.Form.Get("location"),
-			LockEnabled:       isLockEnabled,
-			VersioningEnabled: isVersioningEnabled,
-			ForceCreate:       isForceCreate,
+			LockEnabled:       r.Form.Get("lockEnabled") == "true",
+			VersioningEnabled: r.Form.Get("versioningEnabled") == "true",
+			ForceCreate:       r.Form.Get("forceCreate") == "true",
 			CreatedAt:         createdAt,
 		}
 		err = globalSiteReplicationSys.PeerBucketMakeWithVersioningHandler(ctx, bucket, opts)
 	case madmin.ConfigureReplBktOp:
 		err = globalSiteReplicationSys.PeerBucketConfigureReplHandler(ctx, bucket)
-	case madmin.DeleteBucketBktOp:
-		_, noRecreate := r.Form["noRecreate"]
+	case madmin.DeleteBucketBktOp, madmin.ForceDeleteBucketBktOp:
 		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
-			Force:      false,
-			NoRecreate: noRecreate,
-			SRDeleteOp: getSRBucketDeleteOp(true),
-		})
-	case madmin.ForceDeleteBucketBktOp:
-		_, noRecreate := r.Form["noRecreate"]
-		err = globalSiteReplicationSys.PeerBucketDeleteHandler(ctx, bucket, DeleteBucketOptions{
-			Force:      true,
-			NoRecreate: noRecreate,
+			Force:      operation == madmin.ForceDeleteBucketBktOp,
 			SRDeleteOp: getSRBucketDeleteOp(true),
 		})
 	case madmin.PurgeDeletedBucketOp:
@@ -514,4 +500,46 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+}
+
+// SiteReplicationResyncOp - PUT /minio/admin/v3/site-replication/resync/op
+func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationResyncOp")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationResyncAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var peerSite madmin.PeerInfo
+	if err := parseJSONBody(ctx, r.Body, &peerSite, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	vars := mux.Vars(r)
+	op := madmin.SiteResyncOp(vars["operation"])
+	var (
+		status madmin.SRResyncOpStatus
+		err    error
+	)
+	switch op {
+	case madmin.SiteResyncStart:
+		status, err = globalSiteReplicationSys.startResync(ctx, objectAPI, peerSite)
+	case madmin.SiteResyncCancel:
+		status, err = globalSiteReplicationSys.cancelResync(ctx, objectAPI, peerSite)
+	default:
+		err = errSRInvalidRequest(errInvalidArgument)
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	body, err := json.Marshal(status)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, body)
 }

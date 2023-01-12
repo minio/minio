@@ -42,7 +42,7 @@ In this document we will explain in detail on how to configure all the prerequis
 ### Prerequisites
 
 - [Configuring keycloak](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md) or [Configuring Casdoor](https://github.com/minio/minio/blob/master/docs/sts/casdoor.md)
-- [Configuring etcd (optional needed only in gateway or federation mode)](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
+- [Configuring etcd](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
 
 ### Setup MinIO with Identity Provider
 
@@ -66,21 +66,6 @@ export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://CASDOOR_ENDPOINT/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
-```
-
-### Setup MinIO Gateway with Keycloak and Etcd
-
-Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use MinIO STS API and MinIO gateway to use these credentials to perform object API operations.
-
-> NOTE: MinIO gateway requires etcd to be configured to use STS API.
-
-```
-export MINIO_ROOT_USER=aws_access_key
-export MINIO_ROOT_PASSWORD=aws_secret_key
-export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
-export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
-export MINIO_ETCD_ENDPOINTS=http://localhost:2379
-minio gateway s3
 ```
 
 ### Using WebIdentiy API
@@ -121,5 +106,5 @@ These credentials can now be used to perform MinIO API operations.
 
 ## Explore Further
 
-- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
-- [The MinIO documentation website](https://docs.min.io)
+- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

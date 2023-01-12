@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	minio "github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -36,6 +36,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	// The STS for root test needs to be the first one after setup.
 	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
+	suite.TestSTSWithTags(c)
 	suite.TestSTSWithGroupPolicy(c)
 	suite.TearDownSuite(c)
 }
@@ -69,6 +70,118 @@ func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
 				runAllIAMSTSTests(testCase, &check{t, testCase.serverType})
 			},
 		)
+	}
+}
+
+func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	object := getRandomObjectName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect":     "Allow",
+      "Action":     "s3:GetObject",
+      "Resource":    "arn:aws:s3:::%s/*",
+      "Condition": {  "StringEquals": {"s3:ExistingObjectTag/security": "public" } }
+    },
+    {
+      "Effect":     "Allow",
+      "Action":     "s3:DeleteObjectTagging",
+      "Resource":    "arn:aws:s3:::%s/*",
+      "Condition": {  "StringEquals": {"s3:ExistingObjectTag/security": "public" } }
+    },
+    {
+      "Effect":     "Allow",
+      "Action":     "s3:DeleteObject",
+      "Resource":    "arn:aws:s3:::%s/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::%s/*"
+      ],
+      "Condition": {
+        "ForAllValues:StringLike": {
+          "s3:RequestObjectTagKeys": [
+            "security",
+            "virus"
+          ]
+        }
+      }
+    }
+  ]
+}`, bucket, bucket, bucket, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// confirm that the user is able to access the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
+	c.mustGetObject(ctx, uClient, bucket, object)
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("err calling assumeRole: %v", err)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate sts creds can access the object
+	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
+	c.mustGetObject(ctx, uClient, bucket, object)
+	c.mustHeadObject(ctx, uClient, bucket, object, 2)
+
+	// Validate that the client can remove objects
+	if err = minioClient.RemoveObjectTagging(ctx, bucket, object, minio.RemoveObjectTaggingOptions{}); err != nil {
+		c.Fatalf("user is unable to delete the object tags: %v", err)
+	}
+
+	if err = minioClient.RemoveObject(ctx, bucket, object, minio.RemoveObjectOptions{}); err != nil {
+		c.Fatalf("user is unable to delete the object: %v", err)
 	}
 }
 
@@ -1450,7 +1563,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSWithRolePolicyWithPolVar(c *check, roleARN s
 	c.mustNotListObjects(ctx, lisaClient, "other")
 }
 
-func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
+func TestIAMWithOpenIDMultipleConfigsValidation1(t *testing.T) {
 	openIDServer := os.Getenv(EnvTestOpenIDServer)
 	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
 	if openIDServer == "" || openIDServer2 == "" {
@@ -1474,8 +1587,40 @@ func TestIAMWithOpenIDMultipleConfigsValidation(t *testing.T) {
 				defer suite.TearDownSuite(c)
 
 				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
+				if err != nil {
+					c.Fatalf("config with 1 claim based and 1 role based provider should pass but got: %v", err)
+				}
+			},
+		)
+	}
+}
+
+func TestIAMWithOpenIDMultipleConfigsValidation2(t *testing.T) {
+	openIDServer := os.Getenv(EnvTestOpenIDServer)
+	openIDServer2 := os.Getenv(EnvTestOpenIDServer2)
+	if openIDServer == "" || openIDServer2 == "" {
+		t.Skip("Skipping OpenID test as enough OpenID servers are not provided.")
+	}
+	testApps := testClientApps
+
+	rolePolicies := []string{
+		"", // Treated as claim-based provider as no role policy is given.
+		"", // Treated as claim-based provider as no role policy is given.
+	}
+
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				suite.SetUpSuite(c)
+				defer suite.TearDownSuite(c)
+
+				err := suite.SetUpOpenIDs(c, testApps, rolePolicies)
 				if err == nil {
-					c.Fatal("config with both claim based and role policy based providers should fail")
+					c.Fatalf("config with 2 claim based provider should fail")
 				}
 			},
 		)

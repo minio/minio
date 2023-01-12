@@ -27,6 +27,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	defer objLayer.Shutdown(context.Background())
 	defer removeRoots(disks)
 
-	err = objLayer.MakeBucketWithLocation(ctx, "bucket1", MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, "bucket1", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestErasureDeleteObjectBasic(t *testing.T) {
 	}
 	defer xl.Shutdown(context.Background())
 
-	err = xl.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = xl.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 		{bucketName, "dir/obj1"},
 	}
 
-	err = obj.MakeBucketWithLocation(ctx, bucketName, MakeBucketOptions{
+	err = obj.MakeBucket(ctx, bucketName, MakeBucketOptions{
 		VersioningEnabled: true,
 	})
 	if err != nil {
@@ -213,22 +214,19 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var objs []*erasureObjects
-	for i := 0; i < 32; i++ {
-		obj, fsDirs, err := prepareErasure(ctx, 16)
-		if err != nil {
-			t.Fatal("Unable to initialize 'Erasure' object layer.", err)
-		}
-		// Remove all dirs.
-		for _, dir := range fsDirs {
-			defer os.RemoveAll(dir)
-		}
-		z := obj.(*erasureServerPools)
-		xl := z.serverPools[0].sets[0]
-		objs = append(objs, xl)
+
+	obj, fsDirs, err := prepareErasureSets32(ctx)
+	if err != nil {
+		t.Fatal("Unable to initialize 'Erasure' object layer.", err)
 	}
 
-	erasureSets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
+	setObjectLayer(obj)
+	initConfigSubsystem(ctx, obj)
+
+	// Remove all dirs.
+	for _, dir := range fsDirs {
+		defer os.RemoveAll(dir)
+	}
 
 	type testCaseType struct {
 		bucket string
@@ -243,13 +241,12 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 		{bucketName, "obj_4"},
 	}
 
-	err := erasureSets.MakeBucketWithLocation(ctx, bucketName, MakeBucketOptions{})
-	if err != nil {
+	if err = obj.MakeBucket(ctx, bucketName, MakeBucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, testCase := range testCases {
-		_, err = erasureSets.PutObject(ctx, testCase.bucket, testCase.object,
+		_, err = obj.PutObject(ctx, testCase.bucket, testCase.object,
 			mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("Erasure Object upload failed: <ERROR> %s", err)
@@ -269,7 +266,7 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	}
 
 	objectNames := toObjectNames(testCases)
-	_, delErrs := erasureSets.DeleteObjects(ctx, bucketName, objectNames, ObjectOptions{})
+	_, delErrs := obj.DeleteObjects(ctx, bucketName, objectNames, ObjectOptions{})
 
 	for i := range delErrs {
 		if delErrs[i] != nil {
@@ -278,7 +275,7 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		_, statErr := erasureSets.GetObjectInfo(ctx, test.bucket, test.object, ObjectOptions{})
+		_, statErr := obj.GetObjectInfo(ctx, test.bucket, test.object, ObjectOptions{})
 		switch statErr.(type) {
 		case ObjectNotFound:
 		default:
@@ -304,7 +301,7 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +370,7 @@ func TestErasureDeleteObjectDiskNotFoundErasure4(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +430,7 @@ func TestErasureDeleteObjectDiskNotFoundErr(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +501,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -613,7 +610,7 @@ func TestHeadObjectNoQuorum(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +688,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -754,7 +751,7 @@ func TestPutObjectNoQuorumSmall(t *testing.T) {
 	xl := z.serverPools[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -823,7 +820,7 @@ func TestPutObjectSmallInlineData(t *testing.T) {
 	object := "object"
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err = obj.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -891,7 +888,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	ctx, cancel := context.WithCancel(GlobalContext)
 	defer cancel()
 
-	err := obj.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+	err := obj.MakeBucket(ctx, bucket, MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
@@ -1090,7 +1087,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Create a testbucket
-	err = objLayer.MakeBucketWithLocation(ctx, "testbucket", MakeBucketOptions{})
+	err = objLayer.MakeBucket(ctx, "testbucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1123,6 +1120,10 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 
 // Test reading an object with some outdated data in some disks
 func TestGetObjectWithOutdatedDisks(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1156,7 +1157,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 
 	for i, testCase := range testCases {
 		// Step 1: create a bucket
-		err = z.MakeBucketWithLocation(ctx, testCase.bucket, MakeBucketOptions{VersioningEnabled: testCase.versioned})
+		err = z.MakeBucket(ctx, testCase.bucket, MakeBucketOptions{VersioningEnabled: testCase.versioned})
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create a bucket: %v", i+1, err)
 		}

@@ -18,7 +18,6 @@
 package openid
 
 import (
-	"crypto"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -30,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -116,6 +115,18 @@ var (
 			Key:   Scopes,
 			Value: "",
 		},
+		config.KV{
+			Key:   Vendor,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakRealm,
+			Value: "",
+		},
+		config.KV{
+			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
 	}
 )
 
@@ -186,17 +197,14 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		ProviderCfgs:       map[string]*providerCfg{},
 		pubKeys: publicKeys{
 			RWMutex: &sync.RWMutex{},
-			pkMap:   map[string]crypto.PublicKey{},
+			pkMap:   map[string]interface{}{},
 		},
 		roleArnPolicyMap: map[arn.ARN]string{},
 		transport:        openIDClientTransport,
 		closeRespFn:      closeRespFn,
 	}
 
-	var (
-		hasLegacyPolicyMapping = false
-		seenClientIDs          = set.NewStringSet()
-	)
+	seenClientIDs := set.NewStringSet()
 
 	deprecatedKeys := []string{JwksURL}
 
@@ -365,9 +373,8 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		arnKey := p.roleArn
 		if p.RolePolicy == "" {
 			arnKey = DummyRoleARN
-			hasLegacyPolicyMapping = true
-			// Ensure that when a JWT policy claim based provider
-			// exists, it is the only one.
+			// Ensure that at most one JWT policy claim based provider may be
+			// defined.
 			if _, ok := c.arnProviderCfgsMap[DummyRoleARN]; ok {
 				return c, errSingleProvider
 			}
@@ -379,12 +386,6 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		if err = c.PopulatePublicKey(arnKey); err != nil {
 			return c, err
 		}
-	}
-
-	// Ensure that when a JWT policy claim based provider
-	// exists, it is the only one.
-	if hasLegacyPolicyMapping && len(c.ProviderCfgs) > 1 {
-		return c, errSingleProvider
 	}
 
 	c.Enabled = true
@@ -505,14 +506,13 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 	if !r.Enabled {
 		return res
 	}
-
+	h := sha256.New()
 	for arn, provCfg := range r.arnProviderCfgsMap {
 		hashedSecret := ""
 		{
-			h := sha256.New()
+			h.Reset()
 			h.Write([]byte(provCfg.ClientSecret))
-			bs := h.Sum(nil)
-			hashedSecret = base64.RawURLEncoding.EncodeToString(bs)
+			hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 		}
 		if arn != DummyRoleARN {
 			if res.Roles == nil {

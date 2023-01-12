@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -42,7 +42,7 @@ func newWarmBackendMinIO(conf madmin.TierMinIO) (*warmBackendMinIO, error) {
 	creds := credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
 
 	getRemoteTierTargetInstanceTransportOnce.Do(func() {
-		getRemoteTierTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
+		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
 	})
 	opts := &minio.Options{
 		Creds:     creds,

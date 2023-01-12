@@ -27,7 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/console/restapi"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
@@ -79,7 +80,6 @@ const (
 	globalMinioModeErasureSD       = "mode-server-xl-single"
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
-	globalMinioModeGatewayPrefix   = "mode-gateway-"
 	globalDirSuffix                = "__XLDIR__"
 	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
 
@@ -147,14 +147,8 @@ var (
 	// Indicates if the running minio server is in single drive XL mode.
 	globalIsErasureSD = false
 
-	// Indicates if the running minio is in gateway mode.
-	globalIsGateway = false
-
 	// Indicates if server code should go through testing path.
 	globalIsTesting = false
-
-	// Name of gateway server, e.g S3, NAS etc
-	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
@@ -192,8 +186,6 @@ var (
 
 	globalEventNotifier    *EventNotifier
 	globalConfigTargetList *event.TargetList
-	// globalEnvTargetList has list of targets configured via env.
-	globalEnvTargetList *event.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
 	globalBucketMonitor     *bandwidth.Monitor
@@ -229,11 +221,10 @@ var (
 
 	// global Trace system to send HTTP request/response
 	// and Storage/OS calls info to registered listeners.
-	globalTrace = pubsub.New(8)
+	globalTrace = pubsub.New[madmin.TraceInfo, madmin.TraceType](8)
 
 	// global Listen system to send S3 API events to registered listeners
-	// Objects are expected to be event.Event
-	globalHTTPListen = pubsub.New(0)
+	globalHTTPListen = pubsub.New[event.Event, pubsub.Mask](0)
 
 	// global console system to send console logs to
 	// registered listeners
@@ -290,6 +281,9 @@ var (
 	// Cluster replication manager.
 	globalSiteReplicationSys SiteReplicationSys
 
+	// Cluster replication resync metrics
+	globalSiteResyncMetrics *siteResyncMetrics
+
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty
 	globalBucketFederation bool
@@ -299,6 +293,9 @@ var (
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS kms.KMS
+
+	// Common lock for various subsystems performing the leader tasks
+	globalLeaderLock *sharedLock
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
@@ -320,9 +317,6 @@ var (
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
-
-	// GlobalGatewaySSE sse options
-	GlobalGatewaySSE gatewaySSE
 
 	globalAllHealState *allHealState
 
@@ -381,6 +375,16 @@ var (
 
 	// MinIO client
 	globalMinioClient *minio.Client
+
+	// Public key for subnet confidential information
+	subnetAdminPublicKey    = []byte("-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEAyC+ol5v0FP+QcsR6d1KypR/063FInmNEFsFzbEwlHQyEQN3O7kNI\nwVDN1vqp1wDmJYmv4VZGRGzfFw1q+QV7K1TnysrEjrqpVxfxzDQCoUadAp8IxLLc\ns2fjyDNxnZjoC6fTID9C0khKnEa5fPZZc3Ihci9SiCGkPmyUyCGVSxWXIKqL2Lrj\nyDc0pGeEhWeEPqw6q8X2jvTC246tlzqpDeNsPbcv2KblXRcKniQNbBrizT37CKHQ\nM6hc9kugrZbFuo8U5/4RQvZPJnx/DVjLDyoKo2uzuVQs4s+iBrA5sSSLp8rPED/3\n6DgWw3e244Dxtrg972dIT1IOqgn7KUJzVQIDAQAB\n-----END PUBLIC KEY-----")
+	subnetAdminPublicKeyDev = []byte("-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEArhQYXQd6zI4uagtVfthAPOt6i4AYHnEWCoNeAovM4MNl42I9uQFh\n3VHkbWj9Gpx9ghf6PgRgK+8FcFvy+StmGcXpDCiFywXX24uNhcZjscX1C4Esk0BW\nidfI2eXYkOlymD4lcK70SVgJvC693Qa7Z3FE1KU8Nfv2bkxEE4bzOkojX9t6a3+J\nR8X6Z2U8EMlH1qxJPgiPogELhWP0qf2Lq7GwSAflo1Tj/ytxvD12WrnE0Rrj/8yP\nSnp7TbYm91KocKMExlmvx3l2XPLxeU8nf9U0U+KOmorejD3MDMEPF+tlk9LB3JWP\nZqYYe38rfALVTn4RVJriUcNOoEpEyC0WEwIDAQAB\n-----END PUBLIC KEY-----")
+
+	globalConnReadDeadline  time.Duration
+	globalConnWriteDeadline time.Duration
+
+	// Controller for deleted file sweeper.
+	deletedCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
 
 	// Add new variable global values here.
 )

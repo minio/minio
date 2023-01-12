@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"path"
 	"strconv"
@@ -32,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -48,7 +49,10 @@ func isNetworkError(err error) bool {
 	if nerr, ok := err.(*rest.NetworkError); ok {
 		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
-	return false
+
+	// A peer node can be in shut down phase and proactively
+	// return 503 server closed error,consider it as an offline node
+	return err.Error() == http.ErrServerClosed.Error()
 }
 
 // Converts network error to storageErr. This function is
@@ -771,6 +775,24 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		case resp <- file:
 		}
 	}
+}
+
+// CleanAbandonedData will read metadata of the object on disk
+// and delete any data directories and inline data that isn't referenced in metadata.
+func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume string, path string) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	respBody, err := client.call(ctx, storageRESTMethodCleanAbandoned, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+	respReader, err := waitForHTTPResponse(respBody)
+	if err == nil {
+		io.Copy(io.Discard, respReader)
+	}
+	return err
 }
 
 // Close - marks the client as closed.

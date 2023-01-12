@@ -16,9 +16,18 @@ data:
   add-policy: |-
 {{ include (print $.Template.BasePath "/_helper_create_policy.txt") . | indent 4 }}
 {{- range $idx, $policy := .Values.policies }}
-  # {{ $policy.name }}
+  # Policy: {{ $policy.name }}
   policy_{{ $idx }}.json: |-
 {{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
 {{ end }}
+{{- range $idx, $svc := .Values.svcaccts }}
+{{- if $svc.policy }}
+  # SVC: {{ $svc.accessKey }}
+  svc_policy_{{ $idx }}.json: |-
+{{ include (print $.Template.BasePath "/_helper_policy.tpl") .policy | indent 4 }}
+{{- end }}
+{{ end }}
+  add-svcacct: |-
+{{ include (print $.Template.BasePath "/_helper_create_svcacct.txt") . | indent 4 }}
   custom-command: |-
 {{ include (print $.Template.BasePath "/_helper_custom_command.txt") . | indent 4 }}

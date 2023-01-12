@@ -473,7 +473,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	return newEncryptReader(r.Context(), content, kind, keyID, key, bucket, object, metadata, ctx)
 }
 
-func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
+func decryptObjectMeta(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch kind, _ := crypto.IsEncrypted(metadata); kind {
 	case crypto.S3:
 		var KMS kms.KMS = GlobalKMS
@@ -544,7 +544,7 @@ func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string,
 }
 
 func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	objectEncryptionKey, err := decryptObjectInfo(key, bucket, object, metadata)
+	objectEncryptionKey, err := decryptObjectMeta(key, bucket, object, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -656,7 +656,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 		return err
 	}
 
-	objectEncryptionKey, err := decryptObjectInfo(key, d.bucket, d.object, m)
+	objectEncryptionKey, err := decryptObjectMeta(key, d.bucket, d.object, m)
 	if err != nil {
 		return err
 	}
@@ -822,7 +822,7 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 		return objInfo.ETag[len(objInfo.ETag)-32:]
 	}
 
-	objectEncryptionKey, err := decryptObjectInfo(key[:], objInfo.Bucket, objInfo.Name, objInfo.UserDefined)
+	objectEncryptionKey, err := decryptObjectMeta(key[:], objInfo.Bucket, objInfo.Name, objInfo.UserDefined)
 	if err != nil {
 		return objInfo.ETag
 	}
@@ -1043,18 +1043,6 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 	return encrypted, nil
 }
 
-// The customer key in the header is used by the gateway for encryption in the case of
-// s3 gateway double encryption. A new client key is derived from the customer provided
-// key to be sent to the s3 backend for encryption at the backend.
-func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
-	var key [32]byte
-	mac := hmac.New(sha256.New, clientKey[:])
-	mac.Write([]byte(crypto.SSEC.String()))
-	mac.Write([]byte(path.Join(bucket, object)))
-	mac.Sum(key[:0])
-	return key
-}
-
 type (
 	objectMetaEncryptFn func(baseKey string, data []byte) []byte
 	objectMetaDecryptFn func(baseKey string, data []byte) ([]byte, error)
@@ -1085,7 +1073,7 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 			return input, nil
 		}
 
-		key, err := decryptObjectInfo(nil, o.Bucket, o.Name, o.UserDefined)
+		key, err := decryptObjectMeta(nil, o.Bucket, o.Name, o.UserDefined)
 		if err != nil {
 			return nil, err
 		}
@@ -1093,6 +1081,44 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 		mac.Write([]byte(baseKey))
 		return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
 	}
+}
+
+// metadataEncryptFn provides an encryption function for metadata.
+// Will return nil, nil if unencrypted.
+func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn, error) {
+	kind, _ := crypto.IsEncrypted(o.UserDefined)
+	switch kind {
+	case crypto.SSEC:
+		if crypto.SSECopy.IsRequested(headers) {
+			key, err := crypto.SSECopy.ParseHTTP(headers)
+			if err != nil {
+				return nil, err
+			}
+			objectEncryptionKey, err := decryptObjectMeta(key[:], o.Bucket, o.Name, o.UserDefined)
+			if err != nil {
+				return nil, err
+			}
+			if len(objectEncryptionKey) == 32 {
+				var key crypto.ObjectKey
+				copy(key[:], objectEncryptionKey)
+				return metadataEncrypter(key), nil
+			}
+			return nil, errors.New("metadataEncryptFn: unexpected key size")
+		}
+	case crypto.S3, crypto.S3KMS:
+		objectEncryptionKey, err := decryptObjectMeta(nil, o.Bucket, o.Name, o.UserDefined)
+		if err != nil {
+			return nil, err
+		}
+		if len(objectEncryptionKey) == 32 {
+			var key crypto.ObjectKey
+			copy(key[:], objectEncryptionKey)
+			return metadataEncrypter(key), nil
+		}
+		return nil, errors.New("metadataEncryptFn: unexpected key size")
+	}
+
+	return nil, nil
 }
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.

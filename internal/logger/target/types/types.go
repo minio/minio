@@ -20,6 +20,8 @@ package types
 // TargetType indicates type of the target e.g. console, http, kafka
 type TargetType uint8
 
+//go:generate stringer -type=TargetType -trimprefix=Target $GOFILE
+
 // Constants for target types
 const (
 	_ TargetType = iota
@@ -27,3 +29,15 @@ const (
 	TargetHTTP
 	TargetKafka
 )
+
+// TargetStats contains statistics for a target.
+type TargetStats struct {
+	// QueueLength is the queue length if any messages are queued.
+	QueueLength int
+
+	// TotalMessages is the total number of messages sent in the lifetime of the target
+	TotalMessages int64
+
+	// FailedMessages should log message count that failed to send.
+	FailedMessages int64
+}

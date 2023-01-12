@@ -12,7 +12,7 @@ You can use the Select API to query objects with following features:
 
 Type inference and automatic conversion of values is performed based on the context when the value is un-typed (such as when reading CSV data). If present, the CAST function overrides automatic conversion.
 
-The [mc sql](https://docs.min.io/docs/minio-client-complete-guide.html#sql) command can be used for executing queries using the command line.
+The [mc sql](https://min.io/docs/minio/linux/reference/minio-mc/mc-sql.html) command can be used for executing queries using the command line.
 
 (*) Parquet is disabled on the MinIO server by default. See below how to enable it.
 
@@ -27,7 +27,7 @@ To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 
 ### 1. Prerequisites
 
-- Install MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
+- Install MinIO Server from [here](https://min.io/docs/minio/linux/index.html#procedure).
 - Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 
@@ -113,12 +113,11 @@ For a more detailed SELECT SQL reference, please see [here](https://docs.aws.ama
 
 ## 5. Explore Further
 
-- [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
-- [Use `mc sql` with MinIO Server](https://docs.min.io/docs/minio-client-complete-guide.html#sql)
-- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
-- [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with MinIO Server](https://docs.min.io/docs/s3cmd-with-minio)
-- [The MinIO documentation website](https://docs.min.io)
+- [Use `mc` with MinIO Server](https://min.io/docs/minio/linux/reference/minio-mc.html)
+- [Use `mc sql` with MinIO Server](https://min.io/docs/minio/linux/reference/minio-mc/mc-sql.html#command-mc.sql)
+- [Use `minio-go` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/go/minio-go.html)
+- [Use `aws-cli` with MinIO Server](https://min.io/docs/minio/linux/integrations/aws-cli-with-minio.html)
+- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)
 
 ## 6. Implementation Status
 

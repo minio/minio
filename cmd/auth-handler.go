@@ -39,6 +39,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -84,6 +85,8 @@ func isRequestSignStreamingV4(r *http.Request) bool {
 }
 
 // Authorization type.
+//
+//go:generate stringer -type=authType -trimprefix=authType $GOFILE
 type authType int
 
 // List of all supported auth types.
@@ -148,9 +151,6 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		s3Err = isReqAuthenticated(ctx, r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
-		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
 		return cred, nil, owner, s3Err
 	}
 
@@ -293,24 +293,27 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 //
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
-	_, _, s3Err = checkRequestAuthTypeCredential(ctx, r, action, bucketName, objectName)
+	logger.GetReqInfo(ctx).BucketName = bucketName
+	logger.GetReqInfo(ctx).ObjectName = objectName
+
+	_, _, s3Err = checkRequestAuthTypeCredential(ctx, r, action)
 	return s3Err
 }
 
-// Check request auth type verifies the incoming http request
-//   - validates the request signature
-//   - validates the policy action if anonymous tests bucket policies if any,
-//     for authenticated requests validates IAM policies.
-//
-// returns APIErrorCode if any to be replied to the client.
-// Additionally returns the accessKey used in the request, and if this request is by an admin.
-func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (cred auth.Credentials, owner bool, s3Err APIErrorCode) {
+func authenticateRequest(ctx context.Context, r *http.Request, action policy.Action) (s3Err APIErrorCode) {
+	if logger.GetReqInfo(ctx) == nil {
+		logger.LogIf(ctx, errors.New("unexpected context.Context does not have a logger.ReqInfo"), logger.Minio)
+		return ErrAccessDenied
+	}
+
+	var cred auth.Credentials
+	var owner bool
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return cred, owner, ErrSignatureVersionNotSupported
+		return ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return cred, owner, s3Err
+			return s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
@@ -320,52 +323,67 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 			region = ""
 		}
 		if s3Err = isReqAuthenticated(ctx, r, region, serviceS3); s3Err != ErrNone {
-			return cred, owner, s3Err
+			return s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
-		return cred, owner, s3Err
+		return s3Err
 	}
 
-	// LocationConstraint is valid only for CreateBucketAction.
-	var locationConstraint string
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+
+	// region is valid only for CreateBucketAction.
+	var region string
 	if action == policy.CreateBucketAction {
 		// To extract region from XML in request body, get copy of request body.
 		payload, err := io.ReadAll(io.LimitReader(r.Body, maxLocationConstraintSize))
 		if err != nil {
 			logger.LogIf(ctx, err, logger.Application)
-			return cred, owner, ErrMalformedXML
+			return ErrMalformedXML
 		}
 
 		// Populate payload to extract location constraint.
 		r.Body = io.NopCloser(bytes.NewReader(payload))
-
-		var s3Error APIErrorCode
-		locationConstraint, s3Error = parseLocationConstraint(r)
-		if s3Error != ErrNone {
-			return cred, owner, s3Error
+		region, s3Err = parseLocationConstraint(r)
+		if s3Err != ErrNone {
+			return s3Err
 		}
 
 		// Populate payload again to handle it in HTTP handler.
 		r.Body = io.NopCloser(bytes.NewReader(payload))
 	}
-	if cred.AccessKey != "" {
-		logger.GetReqInfo(ctx).AccessKey = cred.AccessKey
+
+	logger.GetReqInfo(ctx).Region = region
+
+	return s3Err
+}
+
+func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action) (s3Err APIErrorCode) {
+	reqInfo := logger.GetReqInfo(ctx)
+	if reqInfo == nil {
+		return ErrAccessDenied
 	}
 
+	cred := reqInfo.Cred
+	owner := reqInfo.Owner
+	region := reqInfo.Region
+	bucket := reqInfo.BucketName
+	object := reqInfo.ObjectName
+
 	if action != policy.ListAllMyBucketsAction && cred.AccessKey == "" {
-		// Anonymous checks are not meant for ListBuckets action
+		// Anonymous checks are not meant for ListAllBuckets action
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Action:          action,
-			BucketName:      bucketName,
-			ConditionValues: getConditionValues(r, locationConstraint, "", nil),
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, region, "", nil),
 			IsOwner:         false,
-			ObjectName:      objectName,
+			ObjectName:      object,
 		}) {
 			// Request is allowed return the appropriate access key.
-			return cred, owner, ErrNone
+			return ErrNone
 		}
 
 		if action == policy.ListBucketVersionsAction {
@@ -374,31 +392,31 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 			if globalPolicySys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
 				Action:          policy.ListBucketAction,
-				BucketName:      bucketName,
-				ConditionValues: getConditionValues(r, locationConstraint, "", nil),
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, region, "", nil),
 				IsOwner:         false,
-				ObjectName:      objectName,
+				ObjectName:      object,
 			}) {
 				// Request is allowed return the appropriate access key.
-				return cred, owner, ErrNone
+				return ErrNone
 			}
 		}
 
-		return cred, owner, ErrAccessDenied
+		return ErrAccessDenied
 	}
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          iampolicy.Action(action),
-		BucketName:      bucketName,
+		BucketName:      bucket,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
-		ObjectName:      objectName,
+		ObjectName:      object,
 		IsOwner:         owner,
 		Claims:          cred.Claims,
 	}) {
 		// Request is allowed return the appropriate access key.
-		return cred, owner, ErrNone
+		return ErrNone
 	}
 
 	if action == policy.ListBucketVersionsAction {
@@ -408,18 +426,41 @@ func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          iampolicy.ListBucketAction,
-			BucketName:      bucketName,
+			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
-			ObjectName:      objectName,
+			ObjectName:      object,
 			IsOwner:         owner,
 			Claims:          cred.Claims,
 		}) {
 			// Request is allowed return the appropriate access key.
-			return cred, owner, ErrNone
+			return ErrNone
 		}
 	}
 
-	return cred, owner, ErrAccessDenied
+	return ErrAccessDenied
+}
+
+// Check request auth type verifies the incoming http request
+//   - validates the request signature
+//   - validates the policy action if anonymous tests bucket policies if any,
+//     for authenticated requests validates IAM policies.
+//
+// returns APIErrorCode if any to be replied to the client.
+// Additionally returns the accessKey used in the request, and if this request is by an admin.
+func checkRequestAuthTypeCredential(ctx context.Context, r *http.Request, action policy.Action) (cred auth.Credentials, owner bool, s3Err APIErrorCode) {
+	s3Err = authenticateRequest(ctx, r, action)
+	reqInfo := logger.GetReqInfo(ctx)
+	if reqInfo == nil {
+		return cred, owner, ErrAccessDenied
+	}
+
+	cred = reqInfo.Cred
+	owner = reqInfo.Owner
+	if s3Err != ErrNone {
+		return cred, owner, s3Err
+	}
+
+	return cred, owner, authorizeRequest(ctx, r, action)
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -501,7 +542,7 @@ func isSupportedS3AuthType(aType authType) bool {
 func setAuthHandler(h http.Handler) http.Handler {
 	// handler for validating incoming authorization headers.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(contextTraceReqKey).(*traceCtxt)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		aType := getRequestAuthType(r)
 		if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
@@ -509,8 +550,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 			amzDate, errCode := parseAmzDateHeader(r)
 			if errCode != ErrNone {
 				if ok {
-					tc.funcName = "handler.Auth"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.Auth"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 
 				// All our internal APIs are sensitive towards Date
@@ -525,8 +566,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 			curTime := UTCNow()
 			if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
 				if ok {
-					tc.funcName = "handler.Auth"
-					tc.responseRecorder.LogErrBody = true
+					tc.FuncName = "handler.Auth"
+					tc.ResponseRecorder.LogErrBody = true
 				}
 
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrRequestTimeTooSkewed), r.URL)
@@ -540,8 +581,8 @@ func setAuthHandler(h http.Handler) http.Handler {
 		}
 
 		if ok {
-			tc.funcName = "handler.Auth"
-			tc.responseRecorder.LogErrBody = true
+			tc.FuncName = "handler.Auth"
+			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL)
@@ -583,7 +624,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 
 	conditions := getConditionValues(r, "", cred.AccessKey, cred.Claims)
 	conditions["object-lock-mode"] = []string{string(retMode)}
-	conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+	conditions["object-lock-retain-until-date"] = []string{retDate.UTC().Format(time.RFC3339)}
 	if retDays > 0 {
 		conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
 	}
@@ -623,22 +664,22 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectName string, r *http.Request, action iampolicy.Action) (s3Err APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
+	region := globalSite.Region
 	switch atype {
 	case authTypeUnknown:
 		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
-		region := globalSite.Region
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
 		return s3Err
 	}
 
-	if cred.AccessKey != "" {
-		logger.GetReqInfo(ctx).AccessKey = cred.AccessKey
-	}
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = region
 
 	// Do not check for PutObjectRetentionAction permission,
 	// if mode and retain until date are not set.

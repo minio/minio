@@ -20,7 +20,6 @@ package lifecycle
 import (
 	"encoding/xml"
 	"io"
-	"log"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 )
@@ -172,7 +171,6 @@ func (f Filter) TestTags(userTags string) bool {
 
 	parsedTags, err := tags.ParseObjectTags(userTags)
 	if err != nil {
-		log.Printf("Unexpected object tag found: `%s`\n", userTags)
 		return false
 	}
 	tagsMap := parsedTags.ToMap()

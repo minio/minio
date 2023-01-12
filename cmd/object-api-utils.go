@@ -170,6 +170,13 @@ func IsValidObjectPrefix(object string) bool {
 	if strings.Contains(object, `//`) {
 		return false
 	}
+	// This is valid for AWS S3 but it will never
+	// work with file systems, we will reject here
+	// to return object name invalid rather than
+	// a cryptic error from the file system.
+	if strings.ContainsRune(object, 0) {
+		return false
+	}
 	return true
 }
 
@@ -938,20 +945,6 @@ func sealETagFn(key crypto.ObjectKey) SealMD5CurrFn {
 		return sealETag(key, md5sumcurr)
 	}
 	return fn
-}
-
-// CleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
-// encryption metadata that was sent by minio gateway
-func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]string {
-	newMeta := make(map[string]string, len(metadata))
-	for k, v := range metadata {
-		if strings.HasPrefix(k, "X-Amz-Meta-X-Minio-Internal-") {
-			newMeta[strings.TrimPrefix(k, "X-Amz-Meta-")] = v
-		} else {
-			newMeta[k] = v
-		}
-	}
-	return newMeta
 }
 
 // compressOpts are the options for writing compressed data.

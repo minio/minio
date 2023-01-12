@@ -33,7 +33,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -163,22 +163,12 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if sys.ldapConfig.Enabled {
+	if sys.ldapConfig.Enabled() {
 		sys.SetUsersSysType(LDAPUsersSysType)
 	}
 
 	if etcdClient == nil {
-		if globalIsGateway {
-			if globalGatewayName == NASBackendGateway {
-				sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
-			} else {
-				sys.store = &IAMStoreSys{newIAMDummyStore(sys.usersSysType)}
-				logger.Info("WARNING: %s gateway is running in-memory IAM store, for persistence please configure etcd",
-					globalGatewayName)
-			}
-		} else {
-			sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
-		}
+		sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
 	} else {
 		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
@@ -218,42 +208,40 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
+	bootstrapTrace("IAM initialization started")
 	globalServerConfigMu.RLock()
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
-	ldapCfg := s[config.IdentityLDAPSubSys][config.Default]
-
 	var err error
 	globalOpenIDConfig, err = openid.LookupConfig(s,
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
 
 	// Initialize if LDAP is enabled
-	globalLDAPConfig, err = xldap.Lookup(ldapCfg, globalRootCAs)
+	globalLDAPConfig, err = xldap.Lookup(s, globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
 
 	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
 	}
 
 	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
 
-	authZPluginCfg, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody)
+	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err))
 	}
 
 	if authZPluginCfg.URL == nil {
 		opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-			NewGatewayHTTPTransport(), xhttp.DrainBody)
+			NewHTTPTransport(), xhttp.DrainBody)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
 		} else {
@@ -328,6 +316,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	bootstrapTrace("finishing IAM loading")
+
 	refreshInterval := sys.iamRefreshInterval
 
 	// Set up polling for expired accounts and credentials purging.
@@ -347,7 +337,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case sys.ldapConfig.Enabled:
+	case sys.ldapConfig.Enabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
@@ -774,7 +764,7 @@ func (sys *IAMSys) ListUsers(ctx context.Context) (map[string]madmin.UserInfo, e
 }
 
 // ListLDAPUsers - list LDAP users which has
-func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
+func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInfo, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -783,16 +773,39 @@ func (sys *IAMSys) ListLDAPUsers() (map[string]madmin.UserInfo, error) {
 		return nil, errIAMActionNotAllowed
 	}
 
-	<-sys.configLoaded
-
-	ldapUsers := make(map[string]madmin.UserInfo)
-	for user, policy := range sys.store.GetUsersWithMappedPolicies() {
-		ldapUsers[user] = madmin.UserInfo{
-			PolicyName: policy,
-			Status:     madmin.AccountEnabled,
+	select {
+	case <-sys.configLoaded:
+		ldapUsers := make(map[string]madmin.UserInfo)
+		for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+			ldapUsers[user] = madmin.UserInfo{
+				PolicyName: policy,
+				Status:     madmin.AccountEnabled,
+			}
 		}
+		return ldapUsers, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	return ldapUsers, nil
+}
+
+// QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
+func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	if sys.usersSysType != LDAPUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
+	select {
+	case <-sys.configLoaded:
+		pe := sys.store.ListLDAPPolicyMappings(q, sys.ldapConfig.IsLDAPUserDN, sys.ldapConfig.IsLDAPGroupDN)
+		pe.Timestamp = UTCNow()
+		return &pe, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // IsTempUser - returns if given key is a temporary user.
@@ -846,6 +859,31 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 	return sys.store.GetUserInfo(name)
 }
 
+// QueryPolicyEntities - queries policy associations for builtin users/groups/policies.
+func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		pe := sys.store.ListPolicyMappings(q)
+		pe.Timestamp = UTCNow()
+		return &pe, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// GetUserPolicies - get policies attached to a user.
+func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
+	if !sys.Initialized() {
+		return p, errServerNotInitialized
+	}
+
+	return sys.store.GetUserPolicies(name)
+}
+
 // SetUserStatus - sets current user status, supports disabled or enabled.
 func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status madmin.AccountStatus) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
@@ -881,6 +919,7 @@ type newServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	accessKey     string
 	secretKey     string
+	comment       string
 
 	claims map[string]interface{}
 }
@@ -951,6 +990,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.ParentUser = parentUser
 	cred.Groups = groups
 	cred.Status = string(auth.AccountOn)
+	cred.Comment = opts.comment
 
 	updatedAt, err := sys.store.AddServiceAccount(ctx, cred)
 	if err != nil {
@@ -965,6 +1005,7 @@ type updateServiceAccountOpts struct {
 	sessionPolicy *iampolicy.Policy
 	secretKey     string
 	status        string
+	comment       string
 }
 
 // UpdateServiceAccount - edit a service account
@@ -1014,7 +1055,7 @@ func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]Us
 func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
 	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
 	if err != nil {
-		return auth.Credentials{}, embeddedPolicy, err
+		return auth.Credentials{}, nil, err
 	}
 	// Hide secret & session keys
 	sa.Credentials.SecretKey = ""
@@ -1022,40 +1063,97 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 	return sa.Credentials, embeddedPolicy, nil
 }
 
-// getServiceAccount - gets information about a service account
-func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (u UserIdentity, p *iampolicy.Policy, err error) {
-	if !sys.Initialized() {
-		return u, nil, errServerNotInitialized
+func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+	sa, jwtClaims, err := sys.getAccountWithClaims(ctx, accessKey)
+	if err != nil {
+		if err == errNoSuchAccount {
+			return UserIdentity{}, nil, errNoSuchServiceAccount
+		}
+		return UserIdentity{}, nil, err
 	}
-
-	sa, ok := sys.store.GetUser(accessKey)
-	if !ok || !sa.Credentials.IsServiceAccount() {
-		return u, nil, errNoSuchServiceAccount
+	if !sa.Credentials.IsServiceAccount() {
+		return UserIdentity{}, nil, errNoSuchServiceAccount
 	}
 
 	var embeddedPolicy *iampolicy.Policy
 
-	jwtClaims, err := auth.ExtractClaims(sa.Credentials.SessionToken, sa.Credentials.SecretKey)
-	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(sa.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return u, nil, err
-		}
-	}
 	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
 	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
 	if ptok && spok && pt == embeddedPolicyType {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
-			return u, nil, err
+			return UserIdentity{}, nil, err
 		}
 		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
 		if err != nil {
-			return u, nil, err
+			return UserIdentity{}, nil, err
 		}
 	}
 
 	return sa, embeddedPolicy, nil
+}
+
+// GetTemporaryAccount - wrapper method to get information about a temporary account
+func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
+	tmpAcc, embeddedPolicy, err := sys.getTempAccount(ctx, accessKey)
+	if err != nil {
+		return auth.Credentials{}, nil, err
+	}
+	// Hide secret & session keys
+	tmpAcc.Credentials.SecretKey = ""
+	tmpAcc.Credentials.SessionToken = ""
+	return tmpAcc.Credentials, embeddedPolicy, nil
+}
+
+func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+	tmpAcc, claims, err := sys.getAccountWithClaims(ctx, accessKey)
+	if err != nil {
+		if err == errNoSuchAccount {
+			return UserIdentity{}, nil, errNoSuchTempAccount
+		}
+		return UserIdentity{}, nil, err
+	}
+	if !tmpAcc.Credentials.IsTemp() {
+		return UserIdentity{}, nil, errNoSuchTempAccount
+	}
+
+	var embeddedPolicy *iampolicy.Policy
+
+	sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
+	if spok {
+		policyBytes, err := base64.StdEncoding.DecodeString(sp)
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+	}
+
+	return tmpAcc, embeddedPolicy, nil
+}
+
+// getAccountWithClaims - gets information about an account with claims
+func (sys *IAMSys) getAccountWithClaims(ctx context.Context, accessKey string) (UserIdentity, *jwt.MapClaims, error) {
+	if !sys.Initialized() {
+		return UserIdentity{}, nil, errServerNotInitialized
+	}
+
+	acc, ok := sys.store.GetUser(accessKey)
+	if !ok {
+		return UserIdentity{}, nil, errNoSuchAccount
+	}
+
+	jwtClaims, err := auth.ExtractClaims(acc.Credentials.SessionToken, acc.Credentials.SecretKey)
+	if err != nil {
+		jwtClaims, err = auth.ExtractClaims(acc.Credentials.SessionToken, globalActiveCred.SecretKey)
+		if err != nil {
+			return UserIdentity{}, nil, err
+		}
+	}
+
+	return acc, jwtClaims, nil
 }
 
 // GetClaimsForSvcAcc - gets the claims associated with the service account.
@@ -1456,6 +1554,58 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	return updatedAt, nil
 }
 
+// PolicyDBUpdateLDAP - adds or removes policies from a user or a group verified
+// to be in the LDAP directory.
+func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
+	r madmin.PolicyAssociationReq,
+) (updatedAt time.Time, addedOrRemoved []string, err error) {
+	if !sys.Initialized() {
+		return updatedAt, nil, errServerNotInitialized
+	}
+
+	var dn string
+	var isGroup bool
+	if r.User != "" {
+		dn, err = globalLDAPConfig.DoesUsernameExist(r.User)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		}
+		if dn == "" {
+			return updatedAt, nil, errNoSuchUser
+		}
+		isGroup = false
+	} else {
+		if exists, err := globalLDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+			logger.LogIf(ctx, err)
+			return updatedAt, nil, err
+		} else if !exists {
+			return updatedAt, nil, errNoSuchGroup
+		}
+		dn = r.Group
+		isGroup = true
+	}
+
+	userType := stsUser
+	updatedAt, addedOrRemoved, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
+		userType, r.Policies, isAttach)
+	if err != nil {
+		return updatedAt, nil, err
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(dn, userType, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return updatedAt, addedOrRemoved, nil
+}
+
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is
 // given, policies associated with them are included as well.
 func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
@@ -1655,10 +1805,10 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	if !isOwnerDerived {
 		var err error
 		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
-		if err == errNoSuchPolicy {
+		if errors.Is(err, errNoSuchPolicy) {
 			for _, pname := range policies {
 				_, err := sys.store.GetPolicy(pname)
-				if err == errNoSuchPolicy {
+				if errors.Is(err, errNoSuchPolicy) {
 					// all policies presented in the claim should exist
 					logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
 					return false

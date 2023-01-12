@@ -23,11 +23,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/words"
@@ -129,7 +131,7 @@ func newApp(name string) *cli.App {
 
 	// Register all commands.
 	registerCommand(serverCmd)
-	registerCommand(gatewayCmd)
+	registerCommand(gatewayCmd) // hidden kept for guiding users.
 
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{
@@ -189,8 +191,27 @@ func Main(args []string) {
 	// Set the minio app name.
 	appName := filepath.Base(args[0])
 
+	if os.Getenv("_MINIO_DEBUG_NO_EXIT") != "" {
+		freeze := func(_ int) {
+			// Infinite blocking op
+			<-make(chan struct{})
+		}
+
+		// Override the logger os.Exit()
+		logger.ExitFunc = freeze
+
+		defer func() {
+			if err := recover(); err != nil {
+				fmt.Println("panic:", err)
+				fmt.Println("")
+				fmt.Println(string(debug.Stack()))
+			}
+			freeze(-1)
+		}()
+	}
+
 	// Run the app - exit on error.
 	if err := newApp(appName).Run(args); err != nil {
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic
 	}
 }
