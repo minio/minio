@@ -203,6 +203,10 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				continue
 			}
+			if entry.isMarkedAsDeleted() {
+				continue
+			}
+
 			if o.Limit > 0 && results.len() >= o.Limit {
 				// We have enough and we have more.
 				// Do not return io.EOF
@@ -364,6 +368,9 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 				return true
 			}
 			if !entry.isInDir(o.Prefix, o.Separator) {
+				return true
+			}
+			if entry.isMarkedAsDeleted() {
 				return true
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {

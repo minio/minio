@@ -73,6 +73,20 @@ func (j xlMetaV2Version) FreeVersion() bool {
 	return false
 }
 
+// MarkedAsDeleted returns true if this version contains
+// version purge meta information
+func (j xlMetaV2Version) MarkedAsDeleted() bool {
+	switch j.Type {
+	case DeleteType:
+		_, ok := j.DeleteMarker.MetaSys[VersionPurgeStatusKey]
+		return ok
+	case ObjectType:
+		_, ok := j.ObjectV2.MetaSys[VersionPurgeStatusKey]
+		return ok
+	}
+	return false
+}
+
 // AddFreeVersion adds a free-version if needed for fi.VersionID version.
 // Free-version will be added if fi.VersionID has transitioned.
 func (x *xlMetaV2) AddFreeVersion(fi FileInfo) error {

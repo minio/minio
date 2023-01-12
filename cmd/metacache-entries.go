@@ -189,6 +189,27 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	return xlMeta.versions[0].header.Type == DeleteType
 }
 
+// isMarkedAsDeleted returns whether the latest version is marked as deleted
+func (e *metaCacheEntry) isMarkedAsDeleted() bool {
+	if e.cached != nil {
+		return e.cached.versions[0].header.Flags&xlFlagMarkedAsDeleted != 0
+	}
+	if !isXL2V1Format(e.metadata) {
+		return false
+	}
+	if meta, _, err := isIndexedMetaV2(e.metadata); meta != nil {
+		return meta.IsMarkedAsDeleted()
+	} else if err != nil {
+		return false
+	}
+	// Fall back...
+	xlMeta, err := e.xlmeta()
+	if err != nil || len(xlMeta.versions) == 0 {
+		return false
+	}
+	return e.cached.versions[0].header.Flags&xlFlagMarkedAsDeleted != 0
+}
+
 // fileInfo returns the decoded metadata.
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.

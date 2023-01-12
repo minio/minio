@@ -194,6 +194,7 @@ const (
 	xlFlagFreeVersion xlFlags = 1 << iota
 	xlFlagUsesDataDir
 	xlFlagInlineData
+	xlFlagMarkedAsDeleted
 )
 
 func (x xlFlags) String() string {
@@ -340,6 +341,9 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 	}
 	if j.Type == ObjectType && j.ObjectV2.InlineData() {
 		flags |= xlFlagInlineData
+	}
+	if j.MarkedAsDeleted() {
+		flags |= xlFlagMarkedAsDeleted
 	}
 	return xlMetaV2VersionHeader{
 		VersionID: j.getVersionID(),
@@ -2128,4 +2132,23 @@ func (x xlMetaBuf) IsLatestDeleteMarker() bool {
 		return errDoneForNow
 	})
 	return isDeleteMarker
+}
+
+// IsMarkedAsDeleted returns true if latest version is marked as deleted
+// If any error occurs false is returned.
+func (x xlMetaBuf) IsMarkedAsDeleted() bool {
+	vers, headerV, _, buf, err := decodeXLHeaders(x)
+	if err != nil {
+		return false
+	}
+	isMarkedAsDeleted := false
+	_ = decodeVersions(buf, vers, func(idx int, hdr, _ []byte) error {
+		var xl xlMetaV2VersionHeader
+		if _, err := xl.unmarshalV(headerV, hdr); err != nil {
+			return errDoneForNow
+		}
+		isMarkedAsDeleted = xl.Flags&xlFlagMarkedAsDeleted != 0
+		return errDoneForNow
+	})
+	return isMarkedAsDeleted
 }
