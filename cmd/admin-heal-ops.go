@@ -176,11 +176,12 @@ func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
 	return endpoints
 }
 
-func (ahs *allHealState) markDiskForHealing(ep Endpoint) {
+// Set, in the memory, the state of the disk as currently healing or not
+func (ahs *allHealState) setDiskHealingStatus(ep Endpoint, healing bool) {
 	ahs.Lock()
 	defer ahs.Unlock()
 
-	ahs.healLocalDisks[ep] = true
+	ahs.healLocalDisks[ep] = healing
 }
 
 func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {

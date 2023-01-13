@@ -441,9 +441,10 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 
 			for _, disk := range healDisks {
 				go func(disk Endpoint) {
-					globalBackgroundHealState.markDiskForHealing(disk)
+					globalBackgroundHealState.setDiskHealingStatus(disk, true)
 					err := healFreshDisk(ctx, z, disk)
 					if err != nil {
+						globalBackgroundHealState.setDiskHealingStatus(disk, false)
 						printEndpointError(disk, err, false)
 						return
 					}
