@@ -937,19 +937,22 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	// We can consider an object data not reliable
 	// when xl.meta is not found in read quorum disks.
 	// or when xl.meta is not readable in read quorum disks.
-	danglingErrsCount := func(cerrs []error) (int, int) {
+	danglingErrsCount := func(cerrs []error) (int, int, int) {
 		var (
-			notFoundCount  int
-			corruptedCount int
+			notFoundCount     int
+			corruptedCount    int
+			diskNotFoundCount int
 		)
 		for _, readErr := range cerrs {
 			if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
 				notFoundCount++
 			} else if errors.Is(readErr, errFileCorrupt) {
 				corruptedCount++
+			} else if errors.Is(readErr, errDiskNotFound) {
+				diskNotFoundCount++
 			}
 		}
-		return notFoundCount, corruptedCount
+		return notFoundCount, corruptedCount, diskNotFoundCount
 	}
 
 	ndataErrs := make([]error, len(dataErrs))
@@ -963,9 +966,12 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		}
 	}
 
-	notFoundMetaErrs, corruptedMetaErrs := danglingErrsCount(errs)
-	notFoundPartsErrs, corruptedPartsErrs := danglingErrsCount(ndataErrs)
+	notFoundMetaErrs, corruptedMetaErrs, driveNotFoundMetaErrs := danglingErrsCount(errs)
+	notFoundPartsErrs, corruptedPartsErrs, driveNotFoundPartsErrs := danglingErrsCount(ndataErrs)
 
+	if driveNotFoundMetaErrs > 0 || driveNotFoundPartsErrs > 0 {
+		return validMeta, false
+	}
 	for _, m := range metaArr {
 		if m.IsValid() {
 			validMeta = m
