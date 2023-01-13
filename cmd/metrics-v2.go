@@ -1802,6 +1802,7 @@ func getBucketUsageMetrics() *MetricsGroup {
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return
 		}
 
@@ -1947,8 +1948,9 @@ func getClusterTierMetrics() *MetricsGroup {
 			return
 		}
 
-		dui, err := loadDataUsageFromBackend(GlobalContext, objLayer)
+		dui, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return
 		}
 		// data usage has not captured any tier stats yet.
