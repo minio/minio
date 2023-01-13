@@ -403,6 +403,10 @@ func gatewayHandleEnvVars() {
 		}
 		globalPanFSDefaultBucketPath = path
 
+		panOnlyLocalAdminApi := env.Get("MINIO_PANFS_ONLY_LOCAL_ADMIN_API", "1")
+		if panOnlyLocalAdminApi == "0" {
+			globalPanOnlyLocalAdminApi = false
+		}
 	}
 }
 
