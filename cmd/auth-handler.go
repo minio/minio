@@ -371,6 +371,7 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 	region := reqInfo.Region
 	bucket := reqInfo.BucketName
 	object := reqInfo.ObjectName
+	versionID := reqInfo.VersionID
 
 	if action != policy.ListAllMyBucketsAction && cred.AccessKey == "" {
 		// Anonymous checks are not meant for ListAllBuckets action
@@ -404,7 +405,21 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 
 		return ErrAccessDenied
 	}
-
+	if action == policy.DeleteObjectAction && versionID != "" {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          iampolicy.Action(policy.DeleteObjectVersionAction),
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+			ObjectName:      object,
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+			DenyOnly:        true,
+		}) { // Request is not allowed if Deny action on DeleteObjectVersionAction
+			return ErrAccessDenied
+		}
+	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,

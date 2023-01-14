@@ -187,10 +187,8 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 	}
 	res := make([]StorageAPI, 0, len(idMap))
 	for _, s := range z.serverPools {
-		s.erasureDisksMu.RLock()
-		defer s.erasureDisksMu.RUnlock()
-		for _, disks := range s.erasureDisks {
-			for _, disk := range disks {
+		for _, set := range s.sets {
+			for _, disk := range set.getDisks() {
 				if disk == OfflineDisk {
 					continue
 				}
@@ -211,8 +209,8 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, info StatInfo) error) error {
 	found := 0
 	for _, s := range z.serverPools {
-		for _, disks := range s.erasureDisks {
-			for _, disk := range disks {
+		for _, set := range s.sets {
+			for _, disk := range set.getDisks() {
 				if disk == OfflineDisk {
 					continue
 				}
