@@ -49,7 +49,7 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes v0.22.2
-	github.com/minio/madmin-go/v2 v2.0.6
+	github.com/minio/madmin-go/v2 v2.0.7
 	github.com/minio/minio-go/v7 v7.0.45
 	github.com/minio/pkg v1.5.8
 	github.com/minio/selfupdate v0.5.0

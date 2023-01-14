@@ -1102,7 +1102,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 // If no ObjectLayer is provided no set status is returned.
 func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmin.BgHealState, error) {
 	// Get local heal status first
-	bgHealStates, ok := getBackgroundHealStatus(ctx, o)
+	bgHealStates, ok := getLocalBackgroundHealStatus(ctx, o)
 	if !ok {
 		return bgHealStates, errServerNotInitialized
 	}
