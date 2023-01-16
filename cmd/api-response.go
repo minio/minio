@@ -314,12 +314,12 @@ func (s *Metadata) Set(k, v string) {
 }
 
 type xmlKeyEntry struct {
-	XMLName xml.Name
+	XMLName xxml.Name
 	Value   string `xml:",chardata"`
 }
 
 // MarshalXML - StringMap marshals into XML.
-func (s *Metadata) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+func (s *Metadata) MarshalXML(e *xxml.Encoder, start xxml.StartElement) error {
 	if s == nil {
 		return nil
 	}
@@ -334,7 +334,7 @@ func (s *Metadata) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 	for _, item := range s.Items {
 		if err := e.Encode(xmlKeyEntry{
-			XMLName: xml.Name{Local: item.Key},
+			XMLName: xxml.Name{Local: item.Key},
 			Value:   item.Value,
 		}); err != nil {
 			return err

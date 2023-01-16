@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -64,15 +65,31 @@ func setCommonHeaders(w http.ResponseWriter) {
 
 // Encodes the response headers into XML format.
 func encodeResponse(response interface{}) []byte {
-	var bytesBuffer bytes.Buffer
-	bytesBuffer.WriteString(xxml.Header)
-	buf, err := xxml.Marshal(response)
-	if err != nil {
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	if err := xml.NewEncoder(&buf).Encode(response); err != nil {
 		logger.LogIf(GlobalContext, err)
 		return nil
 	}
-	bytesBuffer.Write(buf)
-	return bytesBuffer.Bytes()
+	return buf.Bytes()
+}
+
+// Use this encodeResponseList() to support control characters
+// this function must be used by only ListObjects() for objects
+// with control characters, this is a specialized extension
+// to support AWS S3 compatible behavior.
+//
+// Do not use this function for anything other than ListObjects()
+// variants, please open a github discussion if you wish to use
+// this in other places.
+func encodeResponseList(response interface{}) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(xxml.Header)
+	if err := xxml.NewEncoder(&buf).Encode(response); err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // Encodes the response headers into JSON format.

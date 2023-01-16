@@ -320,7 +320,7 @@ func (rDate *RetentionDate) UnmarshalXML(d *xml.Decoder, startElement xml.StartE
 
 // MarshalXML encodes expiration date if it is non-zero and encodes
 // empty string otherwise
-func (rDate *RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
+func (rDate RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
 	if rDate.IsZero() {
 		return nil
 	}
