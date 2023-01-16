@@ -115,7 +115,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo)
 
 	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(response))
+	writeSuccessResponseXML(w, encodeResponseList(response))
 }
 
 // ListObjectsV2MHandler - GET Bucket (List Objects) Version 2 with metadata.
@@ -185,7 +185,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, true)
 
 	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(response))
+	writeSuccessResponseXML(w, encodeResponseList(response))
 }
 
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
@@ -260,7 +260,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
 
 	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(response))
+	writeSuccessResponseXML(w, encodeResponseList(response))
 }
 
 func parseRequestToken(token string) (subToken string, nodeIndex int) {
@@ -357,5 +357,5 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType, maxKeys, listObjectsInfo)
 
 	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(response))
+	writeSuccessResponseXML(w, encodeResponseList(response))
 }

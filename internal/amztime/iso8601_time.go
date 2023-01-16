@@ -23,7 +23,10 @@ import (
 )
 
 // RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-const iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+const (
+	iso8601TimeFormat     = "2006-01-02T15:04:05.000Z"    // Reply date format with millisecond precision.
+	iso8601TimeFormatLong = "2006-01-02T15:04:05.000000Z" // Reply date format with nanosecond precision.
+)
 
 // ISO8601Format converts time 't' into ISO8601 time format expected in AWS S3 spec.
 //
@@ -43,6 +46,7 @@ func ISO8601Format(t time.Time) string {
 func ISO8601Parse(iso8601 string) (t time.Time, err error) {
 	for _, layout := range []string{
 		iso8601TimeFormat,
+		iso8601TimeFormatLong,
 		time.RFC3339,
 	} {
 		t, err = time.Parse(layout, iso8601)
