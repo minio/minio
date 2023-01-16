@@ -70,8 +70,8 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-// getBackgroundHealStatus will return the
-func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
+// getLocalBackgroundHealStatus will return the heal status of the local node
+func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
 		return madmin.BgHealState{}, false
 	}
@@ -105,7 +105,7 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		return status, true
 	}
 
-	si := o.StorageInfo(ctx)
+	si := o.LocalStorageInfo(ctx)
 
 	indexed := make(map[string][]madmin.Disk)
 	for _, disk := range si.Disks {
