@@ -4206,7 +4206,7 @@ func (c *SiteReplicationSys) purgeDeletedBucket(ctx context.Context, objAPI Obje
 	if !ok {
 		return
 	}
-	z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+	z.s3Peer.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), DeleteBucketOptions{})
 }
 
 // healBucket creates/deletes the bucket according to latest state across clusters participating in site replication.

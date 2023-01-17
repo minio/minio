@@ -71,13 +71,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if crypto.Requested(r.Header) {
-		if !objectAPI.IsEncryptionSupported() {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-			return
-		}
-	}
-
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := unescapePath(vars["object"])
@@ -107,16 +100,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	encMetadata := map[string]string{}
 
-	if objectAPI.IsEncryptionSupported() {
-		if crypto.Requested(r.Header) {
-			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
-			// Set this for multipart only operations, we need to differentiate during
-			// decryption if the file was actually multipart or not.
-			encMetadata[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
+	if crypto.Requested(r.Header) {
+		if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
 		}
+		// Set this for multipart only operations, we need to differentiate during
+		// decryption if the file was actually multipart or not.
+		encMetadata[ReservedMetadataPrefix+"Encrypted-Multipart"] = ""
 	}
 
 	// Extract metadata that needs to be saved.
@@ -127,11 +118,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
-		if !objectAPI.IsTaggingSupported() {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-			return
-		}
-
 		if _, err := tags.ParseObjectTags(objTags); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -176,7 +162,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
 
-	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) {
+	if isCompressible(r.Header, object) {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
@@ -189,11 +175,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
 		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
-			if objectAPI.IsEncryptionSupported() {
-				if _, err := DecryptObjectInfo(&oi, r); err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return true
-				}
+			if _, err := DecryptObjectInfo(&oi, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return true
 			}
 			return checkPreconditionsPUT(ctx, w, r, oi, opts)
 		}
@@ -241,11 +225,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
@@ -351,11 +330,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
-		if objectAPI.IsEncryptionSupported() {
-			if _, err := DecryptObjectInfo(&o, r); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return true
-			}
+		if _, err := DecryptObjectInfo(&o, r); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return true
 		}
 		if checkCopyObjectPartPreconditions(ctx, w, r, o) {
 			return true
@@ -462,7 +439,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Compress only if the compression is enabled during initial multipart.
 	var idxCb func() []byte
 	if isCompressed {
-		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		wantEncryption := crypto.Requested(r.Header)
 		s2c, cb := newS2CompressReader(reader, actualPartSize, wantEncryption)
 		idxCb = cb
 		defer s2c.Close()
@@ -488,7 +465,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
-	if objectAPI.IsEncryptionSupported() && isEncrypted {
+	if isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
 			return
@@ -576,13 +553,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if objectAPI == nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
-	}
-
-	if crypto.Requested(r.Header) {
-		if !objectAPI.IsEncryptionSupported() {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-			return
-		}
 	}
 
 	vars := mux.Vars(r)
@@ -711,7 +681,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 
 	var idxCb func() []byte
-	if objectAPI.IsCompressionSupported() && isCompressed {
+	if isCompressed {
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -723,7 +693,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		wantEncryption := objectAPI.IsEncryptionSupported() && crypto.Requested(r.Header)
+		wantEncryption := crypto.Requested(r.Header)
 		s2c, cb := newS2CompressReader(actualReader, actualSize, wantEncryption)
 		idxCb = cb
 		defer s2c.Close()
@@ -747,7 +717,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
-	if objectAPI.IsEncryptionSupported() && isEncrypted {
+	if isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
 			return
@@ -1157,7 +1127,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	// Due to AWS S3, SSE-S3 encrypted parts return the plaintext ETag
 	// being the content MD5 of that particular part. This is not the
 	// case for SSE-C and SSE-KMS objects.
-	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
+	if kind, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok {
 		var objectEncryptionKey []byte
 		if kind == crypto.S3 {
 			objectEncryptionKey, err = decryptObjectMeta(nil, bucket, object, listPartsInfo.UserDefined)

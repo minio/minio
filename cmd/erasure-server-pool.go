@@ -1612,30 +1612,6 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 	return bucketInfo, nil
 }
 
-// IsNotificationSupported returns whether bucket notification is applicable for this layer.
-func (z *erasureServerPools) IsNotificationSupported() bool {
-	return true
-}
-
-// IsListenSupported returns whether listen bucket notification is applicable for this layer.
-func (z *erasureServerPools) IsListenSupported() bool {
-	return true
-}
-
-// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
-func (z *erasureServerPools) IsEncryptionSupported() bool {
-	return true
-}
-
-// IsCompressionSupported returns whether compression is applicable for this layer.
-func (z *erasureServerPools) IsCompressionSupported() bool {
-	return true
-}
-
-func (z *erasureServerPools) IsTaggingSupported() bool {
-	return true
-}
-
 // DeleteBucket - deletes a bucket on all serverPools simultaneously,
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
@@ -1666,7 +1642,7 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 		// If site replication is configured, hold on to deleted bucket state until sites sync
 		switch opts.SRDeleteOp {
 		case MarkDelete:
-			z.markDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+			z.s3Peer.MakeBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), MakeBucketOptions{})
 		}
 	}
 
@@ -1693,27 +1669,6 @@ func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix strin
 	for _, servers := range z.serverPools {
 		for _, set := range servers.sets {
 			set.deleteAll(ctx, bucket, prefix)
-		}
-	}
-}
-
-// markDelete will create a directory of deleted bucket in .minio.sys/buckets/.deleted across all disks
-// in situations where the deleted bucket needs to be held on to until all sites are in sync for
-// site replication
-func (z *erasureServerPools) markDelete(ctx context.Context, bucket, prefix string) {
-	for _, servers := range z.serverPools {
-		for _, set := range servers.sets {
-			set.markDelete(ctx, bucket, prefix)
-		}
-	}
-}
-
-// purgeDelete deletes vol entry in .minio.sys/buckets/.deleted after site replication
-// syncs the delete to peers.
-func (z *erasureServerPools) purgeDelete(ctx context.Context, bucket, prefix string) {
-	for _, servers := range z.serverPools {
-		for _, set := range servers.sets {
-			set.purgeDelete(ctx, bucket, prefix)
 		}
 	}
 }

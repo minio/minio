@@ -890,11 +890,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	bucket := mux.Vars(r)["bucket"]
 
 	// Require Content-Length to be set in the request
@@ -1066,50 +1061,49 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-	if objectAPI.IsEncryptionSupported() {
-		if crypto.Requested(formValues) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
-			if crypto.SSECopy.IsRequested(r.Header) {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
-				return
-			}
-			var (
-				reader io.Reader
-				keyID  string
-				key    []byte
-				kmsCtx kms.Context
-			)
-			kind, _ := crypto.IsRequested(formValues)
-			switch kind {
-			case crypto.SSEC:
-				key, err = ParseSSECustomerHeader(formValues)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-			case crypto.S3KMS:
-				keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-			}
-			reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+
+	if crypto.Requested(formValues) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.SSECopy.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
+			return
+		}
+		var (
+			reader io.Reader
+			keyID  string
+			key    []byte
+			kmsCtx kms.Context
+		)
+		kind, _ := crypto.IsRequested(formValues)
+		switch kind {
+		case crypto.SSEC:
+			key, err = ParseSSECustomerHeader(formValues)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
-			info := ObjectInfo{Size: fileSize}
-			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
+		case crypto.S3KMS:
+			keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
-			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
+		}
+		reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		info := ObjectInfo{Size: fileSize}
+		// do not try to verify encrypted content
+		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
 		}
 	}
 

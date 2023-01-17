@@ -297,15 +297,8 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.CompressionSubSys:
-		compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-		if err != nil {
+		if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
 			return err
-		}
-
-		if objAPI != nil {
-			if compCfg.Enabled && !objAPI.IsCompressionSupported() {
-				return fmt.Errorf("Backend does not support compression")
-			}
 		}
 	case config.HealSubSys:
 		if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
@@ -547,10 +540,6 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 		if err != nil {
 			return fmt.Errorf("Unable to setup Compression: %w", err)
-		}
-		// Validate if the object layer supports compression.
-		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
-			return fmt.Errorf("Backend does not support compression")
 		}
 		globalCompressConfigMu.Lock()
 		globalCompressConfig = cmpCfg
