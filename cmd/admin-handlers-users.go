@@ -650,10 +650,11 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	opts := newServiceAccountOpts{
-		accessKey: createReq.AccessKey,
-		secretKey: createReq.SecretKey,
-		comment:   createReq.Comment,
-		claims:    make(map[string]interface{}),
+		accessKey:  createReq.AccessKey,
+		secretKey:  createReq.SecretKey,
+		comment:    createReq.Comment,
+		expiration: createReq.Expiration,
+		claims:     make(map[string]interface{}),
 	}
 
 	// Find the user for the request sender (as it may be sent via a service
@@ -775,8 +776,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 	createResp := madmin.AddServiceAccountResp{
 		Credentials: madmin.Credentials{
-			AccessKey: newCred.AccessKey,
-			SecretKey: newCred.SecretKey,
+			AccessKey:  newCred.AccessKey,
+			SecretKey:  newCred.SecretKey,
+			Expiration: newCred.Expiration,
 		},
 	}
 
@@ -809,6 +811,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					Claims:        opts.claims,
 					SessionPolicy: createReq.Policy,
 					Status:        auth.AccountOn,
+					Expiration:    createReq.Expiration,
 				},
 			},
 			UpdatedAt: updatedAt,
@@ -891,6 +894,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		secretKey:     updateReq.NewSecretKey,
 		status:        updateReq.NewStatus,
 		comment:       updateReq.NewComment,
+		expiration:    updateReq.NewExpiration,
 		sessionPolicy: sp,
 	}
 	updatedAt, err := globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
@@ -910,6 +914,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					Status:        opts.status,
 					Comment:       opts.comment,
 					SessionPolicy: updateReq.NewPolicy,
+					Expiration:    updateReq.NewExpiration,
 				},
 			},
 			UpdatedAt: updatedAt,
@@ -988,12 +993,18 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var expiration *time.Time
+	if !svcAccount.Expiration.IsZero() && !svcAccount.Expiration.Equal(timeSentinel) {
+		expiration = &svcAccount.Expiration
+	}
+
 	infoResp := madmin.InfoServiceAccountResp{
 		ParentUser:    svcAccount.ParentUser,
 		Comment:       svcAccount.Comment,
 		AccountStatus: svcAccount.Status,
 		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
+		Expiration:    expiration,
 	}
 
 	data, err := json.Marshal(infoResp)
@@ -2436,6 +2447,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 						secretKey:     svcAcctReq.SecretKey,
 						status:        svcAcctReq.Status,
 						comment:       svcAcctReq.Comment,
+						expiration:    svcAcctReq.Expiration,
 						sessionPolicy: sp,
 					}
 					_, err = globalIAMSys.UpdateServiceAccount(ctx, svcAcctReq.AccessKey, opts)
@@ -2451,6 +2463,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					sessionPolicy: sp,
 					claims:        svcAcctReq.Claims,
 					comment:       svcAcctReq.Comment,
+					expiration:    svcAcctReq.Expiration,
 				}
 
 				// In case of LDAP we need to resolve the targetUser to a DN and

@@ -184,6 +184,14 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 		u.Credentials.AccessKey = user
 	}
 
+	if u.Credentials.SessionToken != "" {
+		jwtClaims, err := extractJWTClaims(u)
+		if err != nil {
+			return err
+		}
+		u.Credentials.Claims = jwtClaims.Map()
+	}
+
 	m[user] = u
 	return nil
 }
