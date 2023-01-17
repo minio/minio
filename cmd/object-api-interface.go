@@ -239,12 +239,6 @@ type ObjectLayer interface {
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
-	// Supported operations check
-	IsNotificationSupported() bool
-	IsListenSupported() bool
-	IsEncryptionSupported() bool
-	IsTaggingSupported() bool
-	IsCompressionSupported() bool
 	SetDriveCounts() []int // list of erasure stripe size for each pool in order.
 
 	// Healing operations.
