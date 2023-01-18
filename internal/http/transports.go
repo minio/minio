@@ -113,8 +113,8 @@ func (s ConnSettings) NewInternodeHTTPTransport() func() http.RoundTripper {
 	tr := s.getDefaultTransport()
 
 	// Settings specific to internode requests.
-	tr.TLSHandshakeTimeout = 15 * time.Minute
-	tr.ExpectContinueTimeout = 15 * time.Minute
+	tr.TLSHandshakeTimeout = 15 * time.Second
+	tr.ExpectContinueTimeout = 15 * time.Second
 
 	return func() http.RoundTripper {
 		return tr

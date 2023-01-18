@@ -608,7 +608,7 @@ func NewCustomHTTPProxyTransport() func() *http.Transport {
 func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
 	s := xhttp.ConnSettings{
 		DNSCache:    globalDNSCache,
-		DialTimeout: 1 * time.Minute,
+		DialTimeout: defaultDialTimeout,
 		RootCAs:     globalRootCAs,
 		EnableHTTP2: false,
 	}
@@ -676,7 +676,7 @@ func NewRemoteTargetHTTPTransport() func() *http.Transport {
 		DialContext: newCustomDialContext(),
 		RootCAs:     globalRootCAs,
 		EnableHTTP2: false,
-	}.NewCustomHTTPProxyTransport()
+	}.NewRemoteTargetHTTPTransport()
 }
 
 // Load the json (typically from disk file).
