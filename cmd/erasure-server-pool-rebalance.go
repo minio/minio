@@ -649,7 +649,7 @@ const (
 )
 
 func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int, opts rebalSaveOpts) error {
-	lock := z.serverPools[0].NewNSLock(minioMetaBucket, rebalMetaName)
+	lock := z.NewNSLock(minioMetaBucket, rebalMetaName)
 	lkCtx, err := lock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
@@ -675,8 +675,7 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 	}
 	z.rebalMeta = r
 
-	err = z.rebalMeta.saveWithOpts(ctx, z.serverPools[0], noLockOpts)
-	return err
+	return z.rebalMeta.saveWithOpts(ctx, z.serverPools[0], noLockOpts)
 }
 
 func auditLogRebalance(ctx context.Context, apiName, bucket, object, versionID string, err error) {
@@ -775,7 +774,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 func (z *erasureServerPools) StartRebalance() {
 	z.rebalMu.Lock()
-	if z.rebalMeta == nil || !z.rebalMeta.StoppedAt.IsZero() { // rebalance not running, nothing to do
+	if z.rebalMeta == nil { // rebalance not running, nothing to do
 		z.rebalMu.Unlock()
 		return
 	}
@@ -818,16 +817,17 @@ func (z *erasureServerPools) StopRebalance() error {
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
 
-	r := z.rebalMeta
-	if r == nil { // rebalance not running in this node, nothing to do
+	if z.rebalMeta == nil {
+		// rebalance not running in this node, nothing to do
 		return nil
 	}
 
-	if cancel := r.cancel; cancel != nil {
+	if z.rebalMeta.cancel != nil {
 		// cancel != nil only on pool leaders
-		r.cancel = nil
-		cancel()
+		z.rebalMeta.cancel()
+		z.rebalMeta.cancel = nil
 	}
+
 	return nil
 }
 

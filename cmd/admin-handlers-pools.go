@@ -360,14 +360,31 @@ func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// NB rebalance-stop admin API is always coordinated from first pool's
+	// first node. The following is required to serialize (the effects of)
+	// concurrent rebalance-stop commands.
+	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
+		for nodeIdx, proxyEp := range globalProxyEndpoints {
+			if proxyEp.Endpoint.Host == ep.Host {
+				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+					return
+				}
+			}
+		}
+	}
+
 	pools, ok := objectAPI.(*erasureServerPools)
-	if !ok {
+	if !ok || len(pools.serverPools) == 1 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
 	// Cancel any ongoing rebalance operation
-	globalNotificationSys.StopRebalance(r.Context())
+	if err := pools.StopRebalance(); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	writeSuccessResponseHeadersOnly(w)
 	logger.LogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
 }

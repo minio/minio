@@ -563,16 +563,6 @@ func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 	return nil
 }
 
-func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodStopRebalance, nil, nil, 0)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	defer xhttp.DrainBody(respBody)
-	return nil
-}
-
 func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebalance bool) error {
 	values := url.Values{}
 	values.Set(peerRESTStartRebalance, strconv.FormatBool(startRebalance))
