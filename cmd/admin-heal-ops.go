@@ -701,7 +701,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		object:    source.object,
 		versionID: source.versionID,
 		opts:      h.settings,
-		respCh:    h.respCh,
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
@@ -727,6 +726,8 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 			return nil
 		}
 	} else {
+		// respCh must be set for guaranteed result
+		task.respCh = h.respCh
 		select {
 		case globalBackgroundHealRoutine.tasks <- task:
 			if serverDebugLog {
