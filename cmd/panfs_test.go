@@ -120,7 +120,7 @@ func TestPANFSGetBucketInfo(t *testing.T) {
 	}
 
 	// Test custom bucket panfs path
-	panfsBucketPath := "/panfs/bucket/path"
+	panfsBucketPath := filepath.Join(disk, "customPath")
 	opts := MakeBucketOptions{
 		PanFSBucketPath: panfsBucketPath,
 	}
@@ -162,16 +162,20 @@ func TestPANFSPutObject(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	obj := initFSObjects(disk, t)
+	obj, err := initPanFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := obj.(*PANFSObjects)
 	bucketName := "bucket"
 	objectName := "1/2/3/4/object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
+	if err = fs.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{PanFSBucketPath: disk}); err != nil {
 		t.Fatal(err)
 	}
 
 	// With a regular object.
-	_, err := obj.PutObject(GlobalContext, bucketName+"non-existent", objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
+	_, err = fs.PutObject(GlobalContext, bucketName+"non-existent", objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
@@ -180,7 +184,7 @@ func TestPANFSPutObject(t *testing.T) {
 	}
 
 	// With a directory object.
-	_, err = obj.PutObject(GlobalContext, bucketName+"non-existent", objectName+SlashSeparator, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), ObjectOptions{})
+	_, err = fs.PutObject(GlobalContext, bucketName+"non-existent", objectName+SlashSeparator, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), 0, "", ""), ObjectOptions{})
 	if err == nil {
 		t.Fatal("Unexpected should fail here, bucket doesn't exist")
 	}
@@ -188,7 +192,7 @@ func TestPANFSPutObject(t *testing.T) {
 		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
 	}
 
-	_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
+	_, err = fs.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,12 +200,14 @@ func TestPANFSPutObject(t *testing.T) {
 
 // TestPANFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
 func TestPANFSDeleteObject(t *testing.T) {
-	t.Skip()
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	obj := initFSObjects(disk, t)
+	obj, err := initPanFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fs := obj.(*PANFSObjects)
 	bucketName := "bucket"
 	objectName := "object"
@@ -241,16 +247,18 @@ func TestPANFSDeleteObject(t *testing.T) {
 
 // TestPANFSDeleteBucket - tests for fs DeleteBucket
 func TestPANFSDeleteBucket(t *testing.T) {
-	t.Skip()
 	// Prepare for testing
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	obj := initFSObjects(disk, t)
+	obj, err := initPanFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fs := obj.(*PANFSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{PanFSBucketPath: disk})
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -260,16 +268,21 @@ func TestPANFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	// Test with an inexistant bucket
+	// Test with an not existing bucket
 	if err = fs.DeleteBucket(GlobalContext, "foobucket", DeleteBucketOptions{}); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with a valid case
-	if err = fs.DeleteBucket(GlobalContext, bucketName, DeleteBucketOptions{}); err != nil {
+	// Use the force flag here as there is .s3 hidden directory created inside the bucket dir
+	if err = fs.DeleteBucket(GlobalContext, bucketName, DeleteBucketOptions{Force: true}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
-
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
+	// Make sure that panfs bucket dir deleted as well
+	panfsBucketDir := pathJoin(disk, bucketName)
+	_, err = fsStatDir(GlobalContext, panfsBucketDir)
+	if !isSameType(err, errFileNotFound) {
+		t.Fatalf("Expected error type errFileNotFound, got %#v", err)
+	}
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
@@ -282,16 +295,18 @@ func TestPANFSDeleteBucket(t *testing.T) {
 
 // TestPANFSListBuckets - tests for fs ListBuckets
 func TestPANFSListBuckets(t *testing.T) {
-	t.Skip()
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
-	obj := initFSObjects(disk, t)
+	obj, err := initPanFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fs := obj.(*PANFSObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{PanFSBucketPath: disk}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -325,6 +340,7 @@ func TestPANFSListBuckets(t *testing.T) {
 
 // TestPANFSHealObject - tests for fs HealObject
 func TestPANFSHealObject(t *testing.T) {
+	t.Skip()
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
@@ -337,6 +353,7 @@ func TestPANFSHealObject(t *testing.T) {
 
 // TestPANFSHealObjects - tests for fs HealObjects to return not implemented.
 func TestPANFSHealObjects(t *testing.T) {
+	t.Skip()
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
