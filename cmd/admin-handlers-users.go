@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -679,7 +680,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		requestorParentUser = cred.ParentUser
 		requestorIsDerivedCredential = true
 	}
-
+	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType && targetUser != cred.AccessKey {
+		if _, ok := globalIAMSys.GetUser(ctx, targetUser); !ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+				fmt.Errorf("parent user %s does not exist. Cannot create service account", targetUser)), r.URL)
+			return
+		}
+	}
 	// Check if we are creating svc account for request sender.
 	isSvcAccForRequestor := false
 	if targetUser == requestorUser || targetUser == requestorParentUser {
