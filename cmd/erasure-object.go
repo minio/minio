@@ -773,7 +773,10 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if err == nil {
 		versions := reduceCommonVersions(diskVersions, writeQuorum)
-		for _, dversions := range diskVersions {
+		for index, dversions := range diskVersions {
+			if errs[index] != nil {
+				continue
+			}
 			if versions != dversions {
 				versionsDisparity = true
 				break
@@ -961,7 +964,7 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 
 	fivs, err := entry.fileInfoVersions(bucket)
 	if err != nil {
-		healObject(bucket, entry.name, "", madmin.HealNormalScan)
+		go healObject(bucket, entry.name, "", madmin.HealNormalScan)
 		return err
 	}
 
@@ -971,7 +974,7 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 	}
 
 	for _, version := range fivs.Versions {
-		healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+		go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
 	}
 
 	return nil
