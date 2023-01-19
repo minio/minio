@@ -649,6 +649,15 @@ func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
 		}
 	}
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		logger.LogIf(ctx, errServerNotInitialized)
+		return
+	}
+	if pools, ok := objAPI.(*erasureServerPools); ok {
+		pools.StopRebalance()
+	}
 }
 
 // LoadRebalanceMeta notifies all peers to load rebalance.bin from object layer.
