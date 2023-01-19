@@ -303,8 +303,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// -- Health API --
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
-			HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 	}
 
 	// If none of the routes match add default error handler routes

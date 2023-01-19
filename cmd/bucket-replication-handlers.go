@@ -231,7 +231,19 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	if err = enc.Encode(globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)); err != nil {
+	stats := globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)
+	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
+	bwMap := bwRpt.BucketStats[bucket]
+	for arn, st := range stats.Stats {
+		if bwMap != nil {
+			if bw, ok := bwMap[arn]; ok {
+				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
+				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
+				stats.Stats[arn] = st
+			}
+		}
+	}
+	if err = enc.Encode(stats); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

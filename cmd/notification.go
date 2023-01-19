@@ -33,7 +33,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v2"
-	bucketBandwidth "github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
 	xnet "github.com/minio/pkg/net"
@@ -1104,8 +1104,8 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 }
 
 // GetBandwidthReports - gets the bandwidth report from all nodes including self.
-func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) madmin.BucketBandwidthReport {
-	reports := make([]*madmin.BucketBandwidthReport, len(sys.peerClients))
+func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) bandwidth.BucketBandwidthReport {
+	reports := make([]*bandwidth.BucketBandwidthReport, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {
@@ -1125,9 +1125,9 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
-	reports = append(reports, globalBucketMonitor.GetReport(bucketBandwidth.SelectBuckets(buckets...)))
-	consolidatedReport := madmin.BucketBandwidthReport{
-		BucketStats: make(map[string]madmin.BandwidthDetails),
+	reports = append(reports, globalBucketMonitor.GetReport(bandwidth.SelectBuckets(buckets...)))
+	consolidatedReport := bandwidth.BucketBandwidthReport{
+		BucketStats: make(map[string]map[string]bandwidth.Details),
 	}
 	for _, report := range reports {
 		if report == nil || report.BucketStats == nil {
@@ -1136,15 +1136,26 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		for bucket := range report.BucketStats {
 			d, ok := consolidatedReport.BucketStats[bucket]
 			if !ok {
-				consolidatedReport.BucketStats[bucket] = madmin.BandwidthDetails{}
+				consolidatedReport.BucketStats[bucket] = make(map[string]bandwidth.Details)
 				d = consolidatedReport.BucketStats[bucket]
-				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+				for arn := range d {
+					d[arn] = bandwidth.Details{
+						LimitInBytesPerSecond: report.BucketStats[bucket][arn].LimitInBytesPerSecond,
+					}
+				}
 			}
-			if d.LimitInBytesPerSecond < report.BucketStats[bucket].LimitInBytesPerSecond {
-				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+			for arn, st := range report.BucketStats[bucket] {
+				bwDet := bandwidth.Details{}
+				if bw, ok := d[arn]; ok {
+					bwDet = bw
+				}
+				if bwDet.LimitInBytesPerSecond < st.LimitInBytesPerSecond {
+					bwDet.LimitInBytesPerSecond = st.LimitInBytesPerSecond
+				}
+				bwDet.CurrentBandwidthInBytesPerSecond += st.CurrentBandwidthInBytesPerSecond
+				d[arn] = bwDet
+				consolidatedReport.BucketStats[bucket] = d
 			}
-			d.CurrentBandwidthInBytesPerSecond += report.BucketStats[bucket].CurrentBandwidthInBytesPerSecond
-			consolidatedReport.BucketStats[bucket] = d
 		}
 	}
 	return consolidatedReport
