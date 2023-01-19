@@ -397,6 +397,7 @@ type healSource struct {
 	bucket    string
 	object    string
 	versionID string
+	noWait    bool             // a non blocking call, if task queue is full return right away.
 	opts      *madmin.HealOpts // optional heal option overrides default setting
 }
 
@@ -700,7 +701,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		object:    source.object,
 		versionID: source.versionID,
 		opts:      h.settings,
-		respCh:    h.respCh,
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
@@ -713,15 +713,32 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	h.lastHealActivity = UTCNow()
 	h.mutex.Unlock()
 
-	select {
-	case globalBackgroundHealRoutine.tasks <- task:
-		if serverDebugLog {
-			logger.Info("Task in the queue: %#v", task)
+	if source.noWait {
+		select {
+		case globalBackgroundHealRoutine.tasks <- task:
+			if serverDebugLog {
+				logger.Info("Task in the queue: %#v", task)
+			}
+		case <-h.ctx.Done():
+			return nil
+		default:
+			// task queue is full, no more workers, we shall move on and heal later.
+			return nil
 		}
-	case <-h.ctx.Done():
-		return nil
+	} else {
+		// respCh must be set for guaranteed result
+		task.respCh = h.respCh
+		select {
+		case globalBackgroundHealRoutine.tasks <- task:
+			if serverDebugLog {
+				logger.Info("Task in the queue: %#v", task)
+			}
+		case <-h.ctx.Done():
+			return nil
+		}
 	}
 
+	// task queued, now wait for the response.
 	select {
 	case res := <-h.respCh:
 		if !h.reportProgress {

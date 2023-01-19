@@ -449,6 +449,7 @@ func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 			bucket:    bucket,
 			object:    object,
 			versionID: versionID,
+			noWait:    true, // do not block callers.
 			opts: &madmin.HealOpts{
 				Remove:   healDeleteDangling, // if found dangling purge it.
 				ScanMode: scan,
