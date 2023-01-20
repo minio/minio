@@ -500,7 +500,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}) by (instance)",
+	  "expr": "max(sum(minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}) by (instance,server))",
           "interval": "",
           "legendFormat": "Usage",
           "refId": "A",
