@@ -1066,7 +1066,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 					derrs[j] = err
 				}
 				dobjects[j] = DeletedObject{
-					ObjectName: obj.ObjectName,
+					ObjectName: decodeDirObject(obj.ObjectName),
 					VersionID:  obj.VersionID,
 				}
 				return nil
@@ -1078,7 +1078,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 					DeleteMarker:          pinfo.ObjInfo.DeleteMarker,
 					DeleteMarkerVersionID: pinfo.ObjInfo.VersionID,
 					DeleteMarkerMTime:     DeleteMarkerMTime{pinfo.ObjInfo.ModTime},
-					ObjectName:            pinfo.ObjInfo.Name,
+					ObjectName:            decodeDirObject(pinfo.ObjInfo.Name),
 				}
 				return nil
 			}
