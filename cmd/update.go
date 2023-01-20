@@ -41,6 +41,7 @@ import (
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
 	"github.com/minio/selfupdate"
+	gopsutilcpu "github.com/shirou/gopsutil/v3/cpu"
 )
 
 const (
@@ -275,6 +276,18 @@ func getUserAgent(mode string) string {
 		if pcfTileVersion != "" {
 			uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
 		}
+	}
+
+	if cpus, err := gopsutilcpu.Info(); err == nil && len(cpus) > 0 {
+		cpuMap := make(map[string]struct{}, len(cpus))
+		coreMap := make(map[string]struct{}, len(cpus))
+		for i := range cpus {
+			cpuMap[cpus[i].PhysicalID] = struct{}{}
+			coreMap[cpus[i].CoreID] = struct{}{}
+		}
+		cpu := cpus[0]
+		uaAppend(" CPU ", fmt.Sprintf("(total_cpus:%d, total_cores:%d; vendor:%s; family:%s; model:%s; stepping:%d; model_name:%s)",
+			len(cpuMap), len(coreMap), cpu.VendorID, cpu.Family, cpu.Model, cpu.Stepping, cpu.ModelName))
 	}
 
 	return strings.Join(userAgentParts, "")
