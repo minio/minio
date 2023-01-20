@@ -40,19 +40,15 @@ type adminAPIHandlers struct{}
 // adminApiHostHandler - allow access to the  Admin APIs only from local interface by default.
 func adminApiHostHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanOnlyLocalAdminApi {
-			host := strings.Split(r.Host, ":")[0]
-			if host == "localhost" || host == "127.0.0.1" {
-				next.ServeHTTP(w, r)
-			} else {
-				writeErrorResponse(r.Context(), w, APIError{
-					Code:           "Forbidden",
-					Description:    fmt.Sprintf("Admin API allowed from localhost only by default"),
-					HTTPStatusCode: http.StatusForbidden,
-				}, r.URL)
-			}
-		} else {
+		host := strings.Split(r.Host, ":")[0]
+		if host == "localhost" || host == "127.0.0.1" {
 			next.ServeHTTP(w, r)
+		} else {
+			writeErrorResponse(r.Context(), w, APIError{
+				Code:           "Forbidden",
+				Description:    fmt.Sprintf("Admin API allowed from localhost only by default"),
+				HTTPStatusCode: http.StatusForbidden,
+			}, r.URL)
 		}
 	})
 }
@@ -307,7 +303,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		}
 	}
 
-	adminRouter.Use(adminApiHostHandler)
+	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanOnlyLocalAdminApi {
+		adminRouter.Use(adminApiHostHandler)
+	}
 
 	// If none of the routes match add default error handler routes
 	adminRouter.NotFoundHandler = httpTraceAll(errorResponseHandler)
