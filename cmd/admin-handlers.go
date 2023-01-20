@@ -48,6 +48,7 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/madmin-go/v2/estream"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
@@ -2859,10 +2860,16 @@ func createHostAnonymizer() map[string]string {
 	}
 
 	hostAnonymizer := map[string]string{}
+	hosts := set.NewStringSet()
+	srvrIdx := 0
 
 	for poolIdx, pool := range globalEndpoints {
-		for srvrIdx, endpoint := range pool.Endpoints {
-			anonymizeHost(hostAnonymizer, endpoint, poolIdx+1, srvrIdx+1)
+		for _, endpoint := range pool.Endpoints {
+			if !hosts.Contains(endpoint.Host) {
+				hosts.Add(endpoint.Host)
+				srvrIdx++
+			}
+			anonymizeHost(hostAnonymizer, endpoint, poolIdx+1, srvrIdx)
 		}
 	}
 	return hostAnonymizer
