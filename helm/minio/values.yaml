@@ -320,7 +320,6 @@ makePolicyJob:
     enabled: false
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -350,7 +349,6 @@ makeUserJob:
     enabled: false
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -390,7 +388,6 @@ makeServiceAccountJob:
     enabled: false
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -427,7 +424,6 @@ makeBucketJob:
     enabled: false
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
@@ -445,7 +441,6 @@ customCommandJob:
     enabled: false
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
   resources:
     requests:
       memory: 128Mi
