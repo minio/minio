@@ -282,7 +282,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	// Call hook for site replication.
 	if cred.ParentUser != globalActiveCred.AccessKey {
-		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSTSAcc,
 			STSCredential: &madmin.SRSTSCredential{
 				AccessKey:    cred.AccessKey,
@@ -291,9 +291,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 				ParentUser:   cred.ParentUser,
 			},
 			UpdatedAt: updatedAt,
-		}); err != nil {
-			logger.LogIf(ctx, err)
-		}
+		}))
 	}
 
 	assumeRoleResponse := &AssumeRoleResponse{
@@ -484,7 +482,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Call hook for site replication.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:           cred.AccessKey,
@@ -494,9 +492,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			ParentPolicyMapping: policyName,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		logger.LogIf(ctx, err)
-	}
+	}))
 
 	var encodedSuccessResponse []byte
 	switch action {
@@ -657,7 +653,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Call hook for site replication.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    cred.AccessKey,
@@ -666,9 +662,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			ParentUser:   cred.ParentUser,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		logger.LogIf(ctx, err)
-	}
+	}))
 
 	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
 		Result: LDAPIdentityResult{
@@ -820,7 +814,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Call hook for site replication.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:           tmpCredentials.AccessKey,
@@ -830,9 +824,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			ParentPolicyMapping: policyName,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		logger.LogIf(ctx, err)
-	}
+	}))
 
 	response := new(AssumeRoleWithCertificateResponse)
 	response.Result.Credentials = tmpCredentials
@@ -943,7 +935,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	}
 
 	// Call hook for site replication.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    tmpCredentials.AccessKey,
@@ -952,10 +944,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 			ParentUser:   tmpCredentials.ParentUser,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	response := new(AssumeRoleWithCustomTokenResponse)
 	response.Result.Credentials = tmpCredentials
