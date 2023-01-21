@@ -1358,13 +1358,21 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		if objInfo.isMultipart() {
 			if err := replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
 				r, objInfo, putOpts); err != nil {
-				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				if minio.ToErrorResponse(err).Code != "PreConditionFailed" {
+					rinfo.ReplicationStatus = replication.Failed
+					logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				} else {
+					rinfo.ReplicationStatus = replication.Completed
+				}
 			}
 		} else {
 			if _, err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts); err != nil {
-				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				if minio.ToErrorResponse(err).Code != "PreConditionFailed" {
+					rinfo.ReplicationStatus = replication.Failed
+					logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				} else {
+					rinfo.ReplicationStatus = replication.Completed
+				}
 			}
 		}
 	}
