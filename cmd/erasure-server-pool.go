@@ -81,7 +81,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
 		z            = &erasureServerPools{
 			serverPools: make([]*erasureSets, len(endpointServerPools)),
-			s3Peer:      NewS3PeerSys(endpointServerPools),
 		}
 	)
 
@@ -165,7 +164,8 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		drives = append(drives, localDrive.Endpoint().Path)
 	}
 
-	globalLocalDrives = localDrives
+	z.s3Peer = NewS3PeerSys(endpointServerPools, localDrives)
+
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, drives...)
 	return z, nil

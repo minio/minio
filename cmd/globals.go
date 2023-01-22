@@ -356,9 +356,6 @@ var (
 	globalServiceFreezeCnt int32
 	globalServiceFreezeMu  sync.Mutex // Updates.
 
-	// List of local drives to this node, this is only set during server startup.
-	globalLocalDrives []StorageAPI
-
 	// Is MINIO_CI_CD set?
 	globalIsCICD bool
 

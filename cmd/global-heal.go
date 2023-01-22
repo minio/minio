@@ -91,11 +91,6 @@ func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.Bg
 		}
 	}
 
-	healDisksMap := map[string]struct{}{}
-	for _, ep := range getLocalDisksToHeal() {
-		healDisksMap[ep.String()] = struct{}{}
-	}
-
 	if o == nil {
 		healing := globalBackgroundHealState.getLocalHealingDisks()
 		for _, disk := range healing {
@@ -103,6 +98,16 @@ func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.Bg
 		}
 
 		return status, true
+	}
+
+	z, ok := o.(*erasureServerPools)
+	if !ok {
+		return madmin.BgHealState{}, false
+	}
+
+	healDisksMap := map[string]struct{}{}
+	for _, ep := range getLocalDisksToHeal(z) {
+		healDisksMap[ep.String()] = struct{}{}
 	}
 
 	si := o.LocalStorageInfo(ctx)

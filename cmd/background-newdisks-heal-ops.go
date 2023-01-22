@@ -265,13 +265,13 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 
 	initBackgroundHealing(ctx, objAPI) // start quick background healing
 
-	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
+	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal(z)...)
 
 	go monitorLocalDisksAndHeal(ctx, z)
 }
 
-func getLocalDisksToHeal() (disksToHeal Endpoints) {
-	for _, disk := range globalLocalDrives {
+func getLocalDisksToHeal(z *erasureServerPools) (disksToHeal Endpoints) {
+	for _, disk := range z.s3Peer.LocalDrives() {
 		_, err := disk.GetDiskID()
 		if errors.Is(err, errUnformattedDisk) {
 			disksToHeal = append(disksToHeal, disk.Endpoint())

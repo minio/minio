@@ -69,15 +69,24 @@ func (client *peerS3Client) callWithContext(ctx context.Context, method string, 
 type S3PeerSys struct {
 	peerClients    []*peerS3Client // Excludes self
 	allPeerClients []*peerS3Client // Includes nil client for self
+	localDrives    []StorageAPI
 }
 
 // NewS3PeerSys - creates new S3 peer calls.
-func NewS3PeerSys(endpoints EndpointServerPools) *S3PeerSys {
+func NewS3PeerSys(endpoints EndpointServerPools, localDrives []StorageAPI) *S3PeerSys {
 	remote, all := newPeerS3Clients(endpoints)
 	return &S3PeerSys{
 		peerClients:    remote,
 		allPeerClients: all,
+		localDrives:    localDrives,
 	}
+}
+
+// LocalDrives returns all the local drives for a given peer.
+func (sys *S3PeerSys) LocalDrives() []StorageAPI {
+	disks := make([]StorageAPI, len(sys.localDrives))
+	copy(disks, sys.localDrives)
+	return disks
 }
 
 // ListBuckets lists buckets across all servers and returns a possible consistent view
