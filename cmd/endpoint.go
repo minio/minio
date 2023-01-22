@@ -203,6 +203,7 @@ type PoolEndpoints struct {
 	DrivesPerSet int
 	Endpoints    Endpoints
 	CmdLine      string
+	Platform     string
 }
 
 // EndpointServerPools - list of list of endpoints

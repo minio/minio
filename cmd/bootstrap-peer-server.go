@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"runtime"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -53,24 +52,22 @@ type bootstrapRESTServer struct{}
 
 // ServerSystemConfig - captures information about server configuration.
 type ServerSystemConfig struct {
-	MinioPlatform  string
 	MinioEndpoints EndpointServerPools
 	MinioEnv       map[string]string
 }
 
 // Diff - returns error on first difference found in two configs.
 func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
-	if s1.MinioPlatform != s2.MinioPlatform {
-		return fmt.Errorf("Expected platform '%s', found to be running '%s'",
-			s1.MinioPlatform, s2.MinioPlatform)
-	}
-
 	if s1.MinioEndpoints.NEndpoints() != s2.MinioEndpoints.NEndpoints() {
 		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.NEndpoints(),
 			s2.MinioEndpoints.NEndpoints())
 	}
 
 	for i, ep := range s1.MinioEndpoints {
+		if ep.CmdLine != s2.MinioEndpoints[i].CmdLine {
+			return fmt.Errorf("Expected command line argument %s, seen %s", ep.CmdLine,
+				s2.MinioEndpoints[i].CmdLine)
+		}
 		if ep.SetCount != s2.MinioEndpoints[i].SetCount {
 			return fmt.Errorf("Expected set count %d, seen %d", ep.SetCount,
 				s2.MinioEndpoints[i].SetCount)
@@ -79,11 +76,9 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 			return fmt.Errorf("Expected drives pet set %d, seen %d", ep.DrivesPerSet,
 				s2.MinioEndpoints[i].DrivesPerSet)
 		}
-		for j, endpoint := range ep.Endpoints {
-			if endpoint.String() != s2.MinioEndpoints[i].Endpoints[j].String() {
-				return fmt.Errorf("Expected endpoint %s, seen %s", endpoint,
-					s2.MinioEndpoints[i].Endpoints[j])
-			}
+		if ep.Platform != s2.MinioEndpoints[i].Platform {
+			return fmt.Errorf("Expected platform '%s', found to be on '%s'",
+				ep.Platform, s2.MinioEndpoints[i].Platform)
 		}
 	}
 	if !reflect.DeepEqual(s1.MinioEnv, s2.MinioEnv) {
@@ -126,7 +121,6 @@ func getServerSystemCfg() ServerSystemConfig {
 		envValues[envK] = env.Get(envK, "")
 	}
 	return ServerSystemConfig{
-		MinioPlatform:  fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
 		MinioEndpoints: globalEndpoints,
 		MinioEnv:       envValues,
 	}
@@ -232,7 +226,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 					logger.Info(fmt.Sprintf("Following servers are currently offline or unreachable %s", offlineEndpoints))
 				}
 				if len(incorrectConfigs) > 0 {
-					logger.Info(fmt.Sprintf("Following servers mismatch in their configuration %s", incorrectConfigs))
+					logger.Info(fmt.Sprintf("Following servers have mismatching configuration %s", incorrectConfigs))
 				}
 				retries = 0 // reset to log again after 5 retries.
 			}
