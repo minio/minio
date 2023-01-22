@@ -44,7 +44,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/madmin-go/v2/estream"
@@ -55,6 +54,7 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"

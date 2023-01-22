@@ -25,11 +25,11 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/kes"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 )
 

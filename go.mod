@@ -51,6 +51,7 @@ require (
 	github.com/minio/kes v0.22.2
 	github.com/minio/madmin-go/v2 v2.0.7
 	github.com/minio/minio-go/v7 v7.0.46-0.20230104182320-4eab739c18fd
+	github.com/minio/mux v1.8.2
 	github.com/minio/pkg v1.5.8
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
@@ -76,6 +77,7 @@ require (
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.22.11
+	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.7
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
@@ -204,7 +206,6 @@ require (
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/rs/xid v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
-	github.com/tidwall/gjson v1.14.4 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect

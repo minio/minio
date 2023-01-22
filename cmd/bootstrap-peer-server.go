@@ -28,11 +28,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/env"
 )
 

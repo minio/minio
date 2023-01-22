@@ -22,10 +22,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 )
 

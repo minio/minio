@@ -29,13 +29,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/wildcard"
 )

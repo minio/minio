@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/cache"
@@ -37,6 +36,7 @@ import (
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 

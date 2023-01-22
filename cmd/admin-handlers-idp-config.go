@@ -26,13 +26,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	cfgldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/ldap"
 )

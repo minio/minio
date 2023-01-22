@@ -58,7 +58,6 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
@@ -66,6 +65,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 )
 
