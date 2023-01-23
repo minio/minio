@@ -25,6 +25,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
 	"net/http"
+	"net/netip"
 	"strings"
 )
 
@@ -40,8 +41,10 @@ type adminAPIHandlers struct{}
 // adminApiHostHandler - allow access to the  Admin APIs only from local interface by default.
 func adminApiHostHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := strings.Split(r.Host, ":")[0]
-		if host == "localhost" || host == "127.0.0.1" {
+		clientIP := strings.Split(r.RemoteAddr, ":")[0]
+		addr, err := netip.ParseAddr(clientIP)
+
+		if err == nil && addr.IsLoopback() {
 			next.ServeHTTP(w, r)
 		} else {
 			writeErrorResponse(r.Context(), w, APIError{
@@ -303,7 +306,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		}
 	}
 
-	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanOnlyLocalAdminApi {
+	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanFSOnlyLocalAdminApi {
 		adminRouter.Use(adminApiHostHandler)
 	}
 

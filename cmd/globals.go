@@ -160,7 +160,7 @@ var (
 	globalPanFSDefaultBucketPath = ""
 
 	// Allow Admin API endpoints only from localhost. Only for PanFS gateway mode
-	globalPanOnlyLocalAdminApi = true
+	globalPanFSOnlyLocalAdminApi = true
 
 	// This flag is set to 'true' by default
 	globalBrowserEnabled = true
