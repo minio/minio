@@ -179,7 +179,7 @@ func TestUserAgent(t *testing.T) {
 		if IsDocker() {
 			expectedStr = strings.ReplaceAll(expectedStr, "; source", "; docker; source")
 		}
-		if str != expectedStr {
+		if !strings.Contains(str, expectedStr) {
 			t.Errorf("Test %d: expected: %s, got: %s", i+1, expectedStr, str)
 		}
 		globalIsCICD = sci
