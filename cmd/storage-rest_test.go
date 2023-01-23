@@ -25,7 +25,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/gorilla/mux"
+	"github.com/minio/mux"
 	xnet "github.com/minio/pkg/net"
 )
 

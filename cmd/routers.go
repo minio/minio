@@ -20,7 +20,7 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
+	"github.com/minio/mux"
 )
 
 // Composed function registering routers for only distributed Erasure setup.
@@ -73,7 +73,7 @@ var globalHandlers = []mux.MiddlewareFunc{
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handler, error) {
-	// Initialize router. `SkipClean(true)` stops gorilla/mux from
+	// Initialize router. `SkipClean(true)` stops minio/mux from
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 

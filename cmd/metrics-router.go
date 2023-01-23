@@ -20,7 +20,7 @@ package cmd
 import (
 	"strings"
 
-	"github.com/gorilla/mux"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/env"
 )
 

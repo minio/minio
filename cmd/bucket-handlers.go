@@ -34,7 +34,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
+	"github.com/minio/mux"
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"

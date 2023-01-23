@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 
 	"github.com/minio/pkg/bucket/policy"
 )
