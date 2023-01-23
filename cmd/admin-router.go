@@ -18,13 +18,15 @@
 package cmd
 
 import (
-	"net/http"
-
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
+	"net/http"
+	"net/netip"
+	"strings"
 )
 
 const (
@@ -35,6 +37,24 @@ const (
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
 type adminAPIHandlers struct{}
+
+// adminApiHostHandler - allow access to the  Admin APIs only from local interface by default.
+func adminApiHostHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientIP := strings.Split(r.RemoteAddr, ":")[0]
+		addr, err := netip.ParseAddr(clientIP)
+
+		if err == nil && addr.IsLoopback() {
+			next.ServeHTTP(w, r)
+		} else {
+			writeErrorResponse(r.Context(), w, APIError{
+				Code:           "Forbidden",
+				Description:    fmt.Sprintf("Admin API allowed from localhost only by default"),
+				HTTPStatusCode: http.StatusForbidden,
+			}, r.URL)
+		}
+	})
+}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
 func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
@@ -284,6 +304,10 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
 				HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 		}
+	}
+
+	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanFSOnlyLocalAdminApi {
+		adminRouter.Use(adminApiHostHandler)
 	}
 
 	// If none of the routes match add default error handler routes
