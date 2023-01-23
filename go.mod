@@ -30,7 +30,6 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.4.3
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/uuid v1.3.0
-	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
@@ -52,7 +51,7 @@ require (
 	github.com/minio/madmin-go/v2 v2.0.7
 	github.com/minio/minio-go/v7 v7.0.46-0.20230104182320-4eab739c18fd
 	github.com/minio/mux v1.8.2
-	github.com/minio/pkg v1.5.8
+	github.com/minio/pkg v1.6.0
 	github.com/minio/selfupdate v0.5.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.2
