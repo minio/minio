@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -678,6 +679,17 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	if cred.IsServiceAccount() || cred.IsTemp() {
 		requestorParentUser = cred.ParentUser
 		requestorIsDerivedCredential = true
+	}
+
+	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType && targetUser != cred.AccessKey {
+		// For internal IDP, ensure that the targetUser's parent account exists.
+		// It could be a regular user account or the root account.
+		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
+		if !isRegularUser && targetUser != globalActiveCred.AccessKey {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+				fmt.Errorf("parent user %s does not exist. Cannot create service account", targetUser)), r.URL)
+			return
+		}
 	}
 
 	// Check if we are creating svc account for request sender.

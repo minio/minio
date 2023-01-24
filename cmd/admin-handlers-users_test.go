@@ -1136,7 +1136,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
 
 	// 6. Check that service account **can** be created for some other user.
-	// This is possible because of the policy enforced in the plugin.
+	// This is possible because the policy enforced in the plugin.
 	c.mustCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
 }
 
