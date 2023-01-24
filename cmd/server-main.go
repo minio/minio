@@ -589,7 +589,7 @@ func serverMain(ctx *cli.Context) {
 		UseIdleTimeout(ctx.Duration("idle-timeout")).
 		UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
 		UseBaseContext(GlobalContext).
-		UseCustomLogger(log.New(io.Discard, "", 0)) // Turn-off random logging by Go stdlib
+		UseCustomLogger(log.New(&goHTTPLogger{}, "", 0))
 
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
