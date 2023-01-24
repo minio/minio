@@ -55,6 +55,7 @@ var PANdefaultEtag = "00000000000000000000000000000000-2"
 const (
 	panfsMetaDir   = ".s3"
 	objMetadataDir = "metadata"
+	tmpDir         = "tmp"
 )
 
 // PANFSObjects - Implements panfs object layer.
@@ -512,9 +513,14 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 		return toObjectErr(err, bucket)
 	}
 
-	// Creates dir for object metadata for current bucket
-	objectMetadataPath := pathJoin(opts.PanFSBucketPath, bucket, panfsMetaDir, objMetadataDir)
-	if err := mkdirAll(objectMetadataPath, 0o777); err != nil {
+	bucketMetaDir := pathJoin(opts.PanFSBucketPath, bucket, panfsMetaDir)
+	// Create dir for object metadata
+	if err := mkdirAll(pathJoin(bucketMetaDir, objMetadataDir), 0o777); err != nil {
+		return toObjectErr(err, bucket)
+	}
+
+	// Create dir for temporary uploads
+	if err := mkdirAll(pathJoin(bucketMetaDir, tmpDir), 0o777); err != nil {
 		return toObjectErr(err, bucket)
 	}
 
@@ -1182,7 +1188,13 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 	// so that cleaning it up will be easy if the server goes down.
 	tempObj := mustGetUUID()
 
-	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
+	var fsTmpObjPath string
+	// This is to handle bucket metadata which is still using .minio.sys
+	if bucket != minioMetaBucket {
+		fsTmpObjPath = pathJoin(bucketDir, panfsMetaDir, tmpDir, fs.fsUUID, tempObj)
+	} else {
+		fsTmpObjPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
+	}
 	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
 	// Delete the temporary object in the case of a
