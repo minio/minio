@@ -197,7 +197,8 @@ func (r *ReplicationStats) loadInitialReplicationMetrics(ctx context.Context) {
 	m := make(map[string]*BucketReplicationStats)
 	if stats, err := globalReplicationPool.loadStatsFromDisk(); err == nil {
 		for b, st := range stats {
-			m[b] = &st
+			c := st.Clone()
+			m[b] = &c
 		}
 		r.ulock.Lock()
 		r.UsageCache = m
