@@ -264,6 +264,16 @@ When Bucket Versioning with excluded prefixes are configured objects matching th
 
 In the above sample config, objects under prefixes matching any of the `ExcludedPrefixes` glob patterns will neither be versioned nor replicated.
 
+### SSE-C Encryption
+
+MinIO does not support SSE-C encrypted objects on replicated buckets, any application uploading SSE-C encrypted objects will be rejected with an error on replicated buckets.
+
+#### Rationale
+
+- SSE-C requires application to remember the keys for all GET/PUT operations, any unfortunate loss of keys would automatically mean the objects cannot be accessed anymore.
+- SSE-C is hardly adopted by most widely used applications, applications prefer server to manage the keys via SSE-KMS or SSE-S3.
+- MinIO recommends applications to use SSE-KMS, SSE-S3 for simpler, safer and robust encryption mechanism for replicated buckets.
+
 ## Explore Further
 
 - [MinIO Bucket Replication Design](https://github.com/minio/minio/blob/master/docs/bucket/replication/DESIGN.md)
