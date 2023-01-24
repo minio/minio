@@ -569,7 +569,10 @@ func (z *erasureServerPools) IsDecommissionRunning() bool {
 	defer z.poolMetaMutex.RUnlock()
 	meta := z.poolMeta
 	for _, pool := range meta.Pools {
-		if pool.Decommission != nil {
+		if pool.Decommission != nil &&
+			!pool.Decommission.Complete &&
+			!pool.Decommission.Failed &&
+			!pool.Decommission.Canceled {
 			return true
 		}
 	}
