@@ -33,7 +33,7 @@ const (
 	peerS3Version = "v1" // First implementation
 
 	peerS3VersionPrefix = SlashSeparator + peerS3Version
-	peerS3Prefix        = minioReservedBucketPath + "/peer"
+	peerS3Prefix        = minioReservedBucketPath + "/peer-s3"
 	peerS3Path          = peerS3Prefix + peerS3VersionPrefix
 )
 
