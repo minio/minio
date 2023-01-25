@@ -154,15 +154,9 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusForbidden,
 			}
-		case errors.Is(err, errIAMServiceAccount):
+		case errors.Is(err, errIAMServiceAccountNotAllowed):
 			apiErr = APIError{
-				Code:           "XMinioIAMServiceAccount",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errIAMServiceAccountUsed):
-			apiErr = APIError{
-				Code:           "XMinioIAMServiceAccountUsed",
+				Code:           "XMinioIAMServiceAccountNotAllowed",
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

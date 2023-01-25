@@ -2093,14 +2093,14 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 	if su, found := cache.iamUsersMap[accessKey]; found {
 		scred := su.Credentials
 		if scred.ParentUser != parentUser {
-			return updatedAt, errIAMServiceAccountUsed
+			return updatedAt, fmt.Errorf("%w: the service account access key is taken by another user", errIAMServiceAccountNotAllowed)
 		}
-		return updatedAt, errIAMServiceAccount
+		return updatedAt, fmt.Errorf("%w: the service account access key already taken", errIAMServiceAccountNotAllowed)
 	}
 
 	// Parent user must not be a service account.
 	if u, found := cache.iamUsersMap[parentUser]; found && u.Credentials.IsServiceAccount() {
-		return updatedAt, errIAMServiceAccount
+		return updatedAt, fmt.Errorf("%w: unable to create a service account for another service account", errIAMServiceAccountNotAllowed)
 	}
 
 	u := newUserIdentity(cred)
