@@ -306,6 +306,7 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 
 		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
 			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+			strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
 			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
 			globalConnStats.incInputBytes(meteredRequest.BytesRead())
 			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
