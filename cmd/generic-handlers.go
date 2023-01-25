@@ -551,6 +551,9 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		// part of the log entry, Error response XML and auditing.
 		// Set custom headers such as x-amz-request-id for each request.
 		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
+		if globalLocalNodeName != "" {
+			w.Header().Set(xhttp.AmzRequestNodeID, globalLocalNodeName)
+		}
 		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
 	})
 }
