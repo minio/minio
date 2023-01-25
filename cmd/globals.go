@@ -233,7 +233,8 @@ var (
 	globalEndpoints EndpointServerPools
 
 	// The name of this local node, fetched from arguments
-	globalLocalNodeName string
+	globalLocalNodeName    string
+	globalLocalNodeNameHex string
 
 	// The global subnet config
 	globalSubnetConfig subnet.Config

@@ -552,7 +552,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		// Set custom headers such as x-amz-request-id for each request.
 		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
 		if globalLocalNodeName != "" {
-			w.Header().Set(xhttp.AmzRequestNodeID, globalLocalNodeName)
+			w.Header().Set(xhttp.AmzRequestNodeID, globalLocalNodeNameHex)
 		}
 		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
 	})
