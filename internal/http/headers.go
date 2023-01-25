@@ -145,7 +145,8 @@ const (
 	AmzAccessKeyID = "AWSAccessKeyId"
 
 	// Response request id.
-	AmzRequestID = "x-amz-request-id"
+	AmzRequestID     = "x-amz-request-id"
+	AmzRequestNodeID = "x-amz-id-2"
 
 	// Deployment id.
 	MinioDeploymentID = "x-minio-deployment-id"
