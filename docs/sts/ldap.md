@@ -104,6 +104,7 @@ The search filter must use the LDAP username to find the user DN. This is done v
 
 The returned user's DN and their password are then verified with the LDAP server. The user DN may also be associated with an [access policy](#managing-usergroup-access-policy).
 
+
 ### Group membership search
 
 MinIO can be optionally configured to find the groups of a user from AD/LDAP by specifying the folllowing variables:
@@ -116,6 +117,14 @@ MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of gr
 The search filter must use the username or the DN to find the user's groups. This is done via [variable substitution](#variable-substitution-in-configuration-strings).
 
 A group's DN may be associated with an [access policy](#managing-usergroup-access-policy).
+
+#### Nested groups usage in LDAP/AD
+If you are using Active directory with nested groups you have to add LDAP_MATCHING_RULE_IN_CHAIN: :1.2.840.113556.1.4.1941: to your query.
+For example:
+```shell
+group_search_filter: (&(objectClass=group)(member:1.2.840.113556.1.4.1941:=%d))
+user_dn_search_filter: (&(memberOf:1.2.840.113556.1.4.1941:=CN=group,DC=dc,DC=net)(sAMAccountName=%s))
+```
 
 ### Sample settings
 
