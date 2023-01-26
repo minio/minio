@@ -1245,3 +1245,13 @@ func MockOpenIDTestUserInteraction(ctx context.Context, pro OpenIDClientAppParam
 	// fmt.Printf("TOKEN: %s\n", rawIDToken)
 	return rawIDToken, nil
 }
+
+// Custom logger for golang http logs
+type goHTTPLogger struct{}
+
+func (goHTTPLogger) Write(p []byte) (int, error) {
+	// Golang std logger ensures that the error message will be sent
+	// in one Write call so it is okay to print it directly.
+	logger.LogOnceIf(context.Background(), fmt.Errorf("%s", string(p)), "go-http-logging")
+	return len(p), nil
+}
