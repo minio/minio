@@ -851,7 +851,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
+	logger.LogIf(ctx, globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts))
 
 	// Make sure to add Location information here only for bucket
 	if cp := pathClean(r.URL.Path); cp != "" {
@@ -1352,11 +1352,9 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 	globalReplicationPool.deleteResyncMetadata(ctx, bucket)
+
 	// Call site replication hook.
-	if err := globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	logger.LogIf(ctx, globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete))
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1425,15 +1423,12 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:             madmin.SRBucketMetaTypeObjectLockConfig,
 		Bucket:           bucket,
 		ObjectLockConfig: &cfgStr,
 		UpdatedAt:        updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -1532,15 +1527,12 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		Tags:      &cfgStr,
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -1611,14 +1603,11 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)

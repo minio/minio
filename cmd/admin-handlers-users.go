@@ -67,17 +67,14 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
 			IsDeleteReq: true,
 		},
 		UpdatedAt: UTCNow(),
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // ListBucketUsers - GET /minio/admin/v3/list-users?bucket={bucket}
@@ -262,16 +259,13 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemGroupInfo,
 		GroupInfo: &madmin.SRGroupInfo{
 			UpdateReq: updReq,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // GetGroup - /minio/admin/v3/group?group=mygroup1
@@ -361,7 +355,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemGroupInfo,
 		GroupInfo: &madmin.SRGroupInfo{
 			UpdateReq: madmin.GroupAddRemove{
@@ -371,10 +365,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 			},
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // SetUserStatus - PUT /minio/admin/v3/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
@@ -404,7 +395,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
@@ -414,10 +405,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 			},
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // AddUser - PUT /minio/admin/v3/add-user?accessKey=<access_key>
@@ -516,7 +504,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
@@ -524,10 +512,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			UserReq:     &ureq,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // TemporaryAccountInfo - GET /minio/admin/v3/temporary-account-info
@@ -810,7 +795,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	// Call hook for cluster-replication if the service account is not for a
 	// root user.
 	if newCred.ParentUser != globalActiveCred.AccessKey {
-		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Create: &madmin.SRSvcAccCreate{
@@ -825,11 +810,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 				},
 			},
 			UpdatedAt: updatedAt,
-		})
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return
-		}
+		}))
 	}
 }
 
@@ -917,7 +898,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Call site replication hook - non-root user accounts are replicated.
 	if svcAccount.ParentUser != globalActiveCred.AccessKey {
-		err = globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Update: &madmin.SRSvcAccUpdate{
@@ -929,11 +910,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 				},
 			},
 			UpdatedAt: updatedAt,
-		})
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+		}))
 	}
 
 	writeSuccessNoContent(w)
@@ -1162,7 +1139,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Call site replication hook - non-root user accounts are replicated.
 	if svcAccount.ParentUser != "" && svcAccount.ParentUser != globalActiveCred.AccessKey {
-		if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Delete: &madmin.SRSvcAccDelete{
@@ -1170,10 +1147,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 				},
 			},
 			UpdatedAt: UTCNow(),
-		}); err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+		}))
 	}
 
 	writeSuccessNoContent(w)
@@ -1534,14 +1508,11 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 
 	// Call cluster-replication policy creation hook to replicate policy deletion to
 	// other minio clusters.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type:      madmin.SRIAMItemPolicy,
 		Name:      policyName,
 		UpdatedAt: UTCNow(),
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // AddCannedPolicy - PUT /minio/admin/v3/add-canned-policy?name=<policy_name>
@@ -1602,15 +1573,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	// Call cluster-replication policy creation hook to replicate policy to
 	// other minio clusters.
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type:      madmin.SRIAMItemPolicy,
 		Name:      policyName,
 		Policy:    iamPolicyBytes,
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // SetPolicyForUserOrGroup - PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
@@ -1669,7 +1637,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
 			UserOrGroup: entityName,
@@ -1678,10 +1646,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			Policy:      policyName,
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 }
 
 // ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/polciy-entities?policy=xxx&user=xxx&group=xxx
@@ -1836,7 +1801,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
 			UserOrGroup: userOrGroup,
@@ -1845,10 +1810,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			Policy:      strings.Join(policiesToAttach, ","),
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	writeResponse(w, http.StatusCreated, nil, mimeNone)
 }
@@ -1969,7 +1931,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
 			UserOrGroup: userOrGroup,
@@ -1978,10 +1940,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			Policy:      strings.Join(policiesToDetach, ","),
 		},
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Return successful JSON response
 	writeSuccessNoContent(w)

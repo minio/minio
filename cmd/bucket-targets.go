@@ -98,7 +98,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 		select {
 		case <-hcTimer.C:
 			sys.hMutex.RLock()
-			var eps []madmin.ServerProperties
+			eps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			for _, ep := range sys.hc {
 				eps = append(eps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
 			}
@@ -106,16 +106,12 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				m := map[string]epHealth{}
+				m := make(map[string]epHealth, len(eps))
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
-					var online bool
-					if result.Error == nil {
-						online = result.Online
-					}
 					m[result.Endpoint.Host] = epHealth{
 						Endpoint: result.Endpoint.Host,
 						Scheme:   result.Endpoint.Scheme,
-						Online:   online,
+						Online:   result.Online,
 					}
 				}
 				cancel()

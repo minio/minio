@@ -262,12 +262,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		return nil, &NetworkError{err}
 	}
 
-	final := resp.Trailer.Get("FinalStatus")
-	if final != "" && final != "Success" {
-		defer xhttp.DrainBody(resp.Body)
-		return nil, errors.New(final)
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		// If server returns 412 pre-condition failed, it would
 		// mean that authentication succeeded, but another

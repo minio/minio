@@ -107,10 +107,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	}
 
 	// Call site replication hook.
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
