@@ -30,6 +30,7 @@ import (
 	"path"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/cosnicolaou/pbzip2"
 	"github.com/klauspost/compress/s2"
@@ -257,6 +258,12 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 				}
 			}(name, header.FileInfo(), b)
 			continue
+		}
+
+		// If zero or earlier modtime, set to current.
+		// Otherwise the resulting objects will be invalid.
+		if header.ModTime.UnixNano() <= 0 {
+			header.ModTime = time.Now()
 		}
 
 		// Sync upload.
