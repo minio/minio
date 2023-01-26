@@ -1943,7 +1943,7 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	if opts.VersionSuspended {
 		return &madmin.BucketTargets{}
 	}
-	if !opts.ProxyRequest {
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) {
 		return &madmin.BucketTargets{}
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
