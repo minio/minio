@@ -20,7 +20,7 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@f3635b96e4838a6c773babb65ef35297fe5fe2f9
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.7
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 	@echo "Installing staticcheck" && go install honnef.co/go/tools/cmd/staticcheck@latest
 
@@ -64,10 +64,17 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
-test-replication: install ## verify multi site replication
-	@echo "Running tests for replicating three sites"
-	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
+test-replication-2site:
 	@(env bash $(PWD)/docs/bucket/replication/setup_2site_existing_replication.sh)
+
+test-replication-3site:
+	@(env bash $(PWD)/docs/bucket/replication/setup_3site_replication.sh)
+
+test-delete-replication:
+	@(env bash $(PWD)/docs/bucket/replication/delete-replication.sh)
+
+test-replication: install test-replication-2site test-replication-3site test-delete-replication ## verify multi site replication
+	@echo "Running tests for replicating three sites"
 
 test-site-replication-ldap: install ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with LDAP)"
@@ -135,7 +142,7 @@ docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix t
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) --build-arg RELEASE=$(VERSION) . -f Dockerfile.hotfix
 
-docker: build checks ## builds minio docker container
+docker: build ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 

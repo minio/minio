@@ -62,6 +62,7 @@ func (l *Config) Clone() Config {
 // LDAP keys and envs.
 const (
 	ServerAddr         = "server_addr"
+	SRVRecordName      = "srv_record_name"
 	LookupBindDN       = "lookup_bind_dn"
 	LookupBindPassword = "lookup_bind_password"
 	UserDNSearchBaseDN = "user_dn_search_base_dn"
@@ -73,6 +74,7 @@ const (
 	ServerStartTLS     = "server_starttls"
 
 	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
+	EnvSRVRecordName      = "MINIO_IDENTITY_LDAP_SRV_RECORD_NAME"
 	EnvTLSSkipVerify      = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
 	EnvServerInsecure     = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
 	EnvServerStartTLS     = "MINIO_IDENTITY_LDAP_SERVER_STARTTLS"
@@ -98,6 +100,10 @@ var (
 	DefaultKVS = config.KVS{
 		config.KV{
 			Key:   ServerAddr,
+			Value: "",
+		},
+		config.KV{
+			Key:   SRVRecordName,
 			Value: "",
 		},
 		config.KV{
@@ -173,9 +179,10 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, nil
 	}
 	l.LDAP = ldap.Config{
-		Enabled:    true,
-		RootCAs:    rootCAs,
-		ServerAddr: ldapServer,
+		Enabled:       true,
+		RootCAs:       rootCAs,
+		ServerAddr:    ldapServer,
+		SRVRecordName: getCfgVal(SRVRecordName),
 	}
 	l.stsExpiryDuration = defaultLDAPExpiry
 

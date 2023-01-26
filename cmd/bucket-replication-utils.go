@@ -638,7 +638,7 @@ type replicationResyncer struct {
 }
 
 const (
-	replicationDir      = "replication"
+	replicationDir      = ".replication"
 	resyncFileName      = "resync.bin"
 	resyncMetaFormat    = 1
 	resyncMetaVersionV1 = 1
@@ -797,9 +797,8 @@ func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	}
 }
 
-func getReplicationStatsPath(nodeName string) string {
-	nodeStr := strings.ReplaceAll(nodeName, ":", "_")
-	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + nodeStr + ".stats"
+func getReplicationStatsPath() string {
+	return bucketMetaPrefix + SlashSeparator + replicationDir + SlashSeparator + "replication.stats"
 }
 
 const (

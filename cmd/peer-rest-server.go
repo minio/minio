@@ -30,13 +30,13 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/mux"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -1029,7 +1029,7 @@ func (s *peerRESTServer) BackgroundHealStatusHandler(w http.ResponseWriter, r *h
 	}
 	ctx := newContext(r, w, "BackgroundHealStatus")
 
-	state, ok := getBackgroundHealStatus(ctx, newObjectLayerFn())
+	state, ok := getLocalBackgroundHealStatus(ctx, newObjectLayerFn())
 	if !ok {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return

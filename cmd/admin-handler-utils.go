@@ -154,15 +154,9 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusForbidden,
 			}
-		case errors.Is(err, errIAMServiceAccount):
+		case errors.Is(err, errIAMServiceAccountNotAllowed):
 			apiErr = APIError{
-				Code:           "XMinioIAMServiceAccount",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errIAMServiceAccountUsed):
-			apiErr = APIError{
-				Code:           "XMinioIAMServiceAccountUsed",
+				Code:           "XMinioIAMServiceAccountNotAllowed",
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
@@ -207,24 +201,6 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 		case errors.Is(err, madmin.ErrTierTypeUnsupported):
 			apiErr = APIError{
 				Code:           "XMinioAdminTierTypeUnsupported",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendInUse):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendInUse",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierBackendNotEmpty):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierBackendNotEmpty",
-				Description:    err.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case errors.Is(err, errTierInsufficientCreds):
-			apiErr = APIError{
-				Code:           "XMinioAdminTierInsufficientCreds",
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

@@ -170,6 +170,13 @@ func IsValidObjectPrefix(object string) bool {
 	if strings.Contains(object, `//`) {
 		return false
 	}
+	// This is valid for AWS S3 but it will never
+	// work with file systems, we will reject here
+	// to return object name invalid rather than
+	// a cryptic error from the file system.
+	if strings.ContainsRune(object, 0) {
+		return false
+	}
 	return true
 }
 

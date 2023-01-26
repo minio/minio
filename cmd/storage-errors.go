@@ -69,9 +69,6 @@ var errTooManyOpenFiles = StorageErr("too many open files, please increase 'ulim
 // errFileNameTooLong - given file name is too long than supported length.
 var errFileNameTooLong = StorageErr("file name too long")
 
-// errFileNeedsHealing - given file name needs to heal.
-var errFileNeedsHealing = StorageErr("file name needs healing")
-
 // errVolumeExists - cannot create same volume again.
 var errVolumeExists = StorageErr("volume already exists")
 

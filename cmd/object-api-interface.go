@@ -96,6 +96,8 @@ type ObjectOptions struct {
 	// IndexCB will return any index created but the compression.
 	// Object must have been read at this point.
 	IndexCB func() []byte
+
+	InclFreeVersions bool
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
@@ -115,17 +117,18 @@ type TransitionOptions struct {
 
 // MakeBucketOptions represents bucket options for ObjectLayer bucket operations
 type MakeBucketOptions struct {
-	Location          string
 	LockEnabled       bool
 	VersioningEnabled bool
 	ForceCreate       bool      // Create buckets even if they are already created.
 	CreatedAt         time.Time // only for site replication
+	NoLock            bool      // does not lock the make bucket call if set to 'true'
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.
 type DeleteBucketOptions struct {
+	NoLock     bool             // does not lock the delete bucket call if set to 'true'
+	NoRecreate bool             // do not recreate bucket on delete failures
 	Force      bool             // Force deletion
-	NoRecreate bool             // Do not recreate on delete failures
 	SRDeleteOp SRBucketDeleteOp // only when site replication is enabled
 }
 
@@ -198,7 +201,7 @@ type ObjectLayer interface {
 	LocalStorageInfo(ctx context.Context) StorageInfo
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, opts MakeBucketOptions) error
+	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
@@ -236,12 +239,6 @@ type ObjectLayer interface {
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
-	// Supported operations check
-	IsNotificationSupported() bool
-	IsListenSupported() bool
-	IsEncryptionSupported() bool
-	IsTaggingSupported() bool
-	IsCompressionSupported() bool
 	SetDriveCounts() []int // list of erasure stripe size for each pool in order.
 
 	// Healing operations.

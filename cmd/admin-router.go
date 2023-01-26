@@ -20,11 +20,11 @@ package cmd
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 )
 
 const (
@@ -142,11 +142,17 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListServiceAccounts)))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(gz(httpTraceHdrs(adminAPI.DeleteServiceAccount))).Queries("accessKey", "{accessKey:.*}")
 
+		// STS accounts ops
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/temporary-account-info").HandlerFunc(gz(httpTraceHdrs(adminAPI.TemporaryAccountInfo))).Queries("accessKey", "{accessKey:.*}")
+
 		// Info policy IAM latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(gz(httpTraceHdrs(adminAPI.InfoCannedPolicy))).Queries("name", "{name:.*}")
 		// List policies latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-canned-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListBucketPolicies))).Queries("bucket", "{bucket:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-canned-policies").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListCannedPolicies)))
+
+		// Builtin IAM policy associations
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/builtin/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListPolicyMappingEntities)))
 
 		// Remove policy IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-canned-policy").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveCannedPolicy))).Queries("name", "{name:.*}")
@@ -155,6 +161,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-or-group-policy").
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup))).
 			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
+
+		// Attach policies to user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/attach").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyBuiltin)))
+
+		// Detach policies from user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/detach").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyBuiltin)))
 
 		// Remove user IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveUser))).Queries("accessKey", "{accessKey:.*}")
@@ -192,7 +204,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(gz(httpTraceHdrs(adminAPI.ListLDAPPolicyMappingEntities)))
-
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachDetachPolicyLDAP)))
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig
@@ -291,8 +303,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// -- Health API --
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.HealthInfoHandler)))
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
-			HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 	}
 
 	// If none of the routes match add default error handler routes

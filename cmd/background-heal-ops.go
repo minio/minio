@@ -88,8 +88,7 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 			var err error
 			switch task.bucket {
 			case nopHeal:
-				task.respCh <- healResult{err: errSkipFile}
-				continue
+				err = errSkipFile
 			case SlashSeparator:
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
 			default:
@@ -100,7 +99,10 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 				}
 			}
 
-			task.respCh <- healResult{result: res, err: err}
+			if task.respCh != nil {
+				task.respCh <- healResult{result: res, err: err}
+			}
+
 		case <-ctx.Done():
 			return
 		}

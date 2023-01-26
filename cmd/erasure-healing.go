@@ -94,7 +94,7 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricBucket, startTime, bucket, "", "", &opts, err, &res)
+			healTrace(healingMetricBucket, startTime, bucket, "", &opts, err, &res)
 		}()
 	}
 
@@ -235,6 +235,10 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 				// we ignore disk not found errors
 				return nil
 			}
+			if storageDisks[index].Healing() != nil {
+				// we ignore disks under healing
+				return nil
+			}
 			volsInfo, err := storageDisks[index].ListVols(ctx)
 			if err != nil {
 				return err
@@ -305,7 +309,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricObject, startTime, bucket, object, versionID, &opts, err, &result)
+			healTrace(healingMetricObject, startTime, bucket, object, &opts, err, &result)
 		}()
 	}
 	// Initialize heal result object
@@ -313,6 +317,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		Type:      madmin.HealItemObject,
 		Bucket:    bucket,
 		Object:    object,
+		VersionID: versionID,
 		DiskCount: len(storageDisks),
 	}
 
@@ -323,7 +328,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			return result, err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 
 	// Re-read when we have lock...
@@ -684,7 +689,7 @@ func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
 		defer func() {
-			healTrace(healingMetricCheckAbandonedParts, startTime, bucket, object, "", nil, err, nil)
+			healTrace(healingMetricCheckAbandonedParts, startTime, bucket, object, nil, err, nil)
 		}()
 	}
 	if !opts.NoLock {
@@ -694,7 +699,7 @@ func (er *erasureObjects) checkAbandonedParts(ctx context.Context, bucket string
 			return err
 		}
 		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx.Cancel)
+		defer lk.Unlock(lkctx)
 	}
 	var wg sync.WaitGroup
 	for _, disk := range er.getDisks() {
@@ -932,19 +937,22 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	// We can consider an object data not reliable
 	// when xl.meta is not found in read quorum disks.
 	// or when xl.meta is not readable in read quorum disks.
-	danglingErrsCount := func(cerrs []error) (int, int) {
+	danglingErrsCount := func(cerrs []error) (int, int, int) {
 		var (
-			notFoundCount  int
-			corruptedCount int
+			notFoundCount     int
+			corruptedCount    int
+			diskNotFoundCount int
 		)
 		for _, readErr := range cerrs {
 			if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
 				notFoundCount++
 			} else if errors.Is(readErr, errFileCorrupt) {
 				corruptedCount++
+			} else if errors.Is(readErr, errDiskNotFound) {
+				diskNotFoundCount++
 			}
 		}
-		return notFoundCount, corruptedCount
+		return notFoundCount, corruptedCount, diskNotFoundCount
 	}
 
 	ndataErrs := make([]error, len(dataErrs))
@@ -958,9 +966,12 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		}
 	}
 
-	notFoundMetaErrs, corruptedMetaErrs := danglingErrsCount(errs)
-	notFoundPartsErrs, corruptedPartsErrs := danglingErrsCount(ndataErrs)
+	notFoundMetaErrs, corruptedMetaErrs, driveNotFoundMetaErrs := danglingErrsCount(errs)
+	notFoundPartsErrs, corruptedPartsErrs, driveNotFoundPartsErrs := danglingErrsCount(ndataErrs)
 
+	if driveNotFoundMetaErrs > 0 || driveNotFoundPartsErrs > 0 {
+		return validMeta, false
+	}
 	for _, m := range metaArr {
 		if m.IsValid() {
 			validMeta = m
@@ -1042,7 +1053,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 }
 
 // healTrace sends healing results to trace output.
-func healTrace(funcName healingMetric, startTime time.Time, bucket, object, versionID string, opts *madmin.HealOpts, err error, result *madmin.HealResultItem) {
+func healTrace(funcName healingMetric, startTime time.Time, bucket, object string, opts *madmin.HealOpts, err error, result *madmin.HealResultItem) {
 	tr := madmin.TraceInfo{
 		TraceType: madmin.TraceHealing,
 		Time:      startTime,
@@ -1053,9 +1064,6 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object, vers
 	}
 	if opts != nil {
 		tr.Message = fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode)
-	}
-	if versionID != "" && versionID != "null" {
-		tr.Path += " v=" + versionID
 	}
 	if err != nil {
 		tr.Error = err.Error()

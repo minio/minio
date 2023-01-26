@@ -177,7 +177,6 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrBucketAlreadyExists
-	ErrTooManyBuckets
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
@@ -196,6 +195,8 @@ const (
 	ErrBucketTaggingNotFound
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
+	ErrPolicyAlreadyAttached
+	ErrPolicyNotAttached
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -207,6 +208,8 @@ const (
 	ErrSSEMultipartEncrypted
 	ErrSSEEncryptedObject
 	ErrInvalidEncryptionParameters
+	ErrInvalidEncryptionParametersSSEC
+
 	ErrInvalidSSECustomerAlgorithm
 	ErrInvalidSSECustomerKey
 	ErrMissingSSECustomerKey
@@ -266,6 +269,7 @@ const (
 	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
+	ErrAdminPolicyChangeAlreadyApplied
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
@@ -695,11 +699,6 @@ var errorCodes = errorCodeMap{
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrTooManyBuckets: {
-		Code:           "TooManyBuckets",
-		Description:    "You have attempted to create more buckets than allowed",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty",
@@ -1117,6 +1116,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The encryption parameters are not applicable to this object.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidEncryptionParametersSSEC: {
+		Code:           "InvalidRequest",
+		Description:    "SSE-C encryption parameters are not supported on replicated bucket.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidSSECustomerAlgorithm: {
 		Code:           "InvalidArgument",
 		Description:    "Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm.",
@@ -1251,6 +1255,12 @@ var errorCodes = errorCodeMap{
 		Description:    "The canned policy does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminPolicyChangeAlreadyApplied: {
+		Code:           "XMinioAdminPolicyChangeAlreadyApplied",
+		Description:    "The specified policy change is already in effect.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	ErrAdminInvalidArgument: {
 		Code:           "XMinioAdminInvalidArgument",
 		Description:    "Invalid arguments specified.",
@@ -1381,7 +1391,7 @@ var errorCodes = errorCodeMap{
 	ErrSiteReplicationPeerResp: {
 		Code:           "XMinioSiteReplicationPeerResp",
 		Description:    "Error received when contacting a peer site",
-		HTTPStatusCode: http.StatusServiceUnavailable,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSiteReplicationBackendIssue: {
 		Code:           "XMinioSiteReplicationBackendIssue",
@@ -1938,6 +1948,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPolicyAlreadyAttached: {
+		Code:           "XMinioPolicyAlreadyAttached",
+		Description:    "The specified policy is already attached.",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPolicyNotAttached: {
+		Code:           "XMinioPolicyNotAttached",
+		Description:    "The specified policy is not found.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	// Add your error structure here.
 }
 
@@ -1972,6 +1992,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchJob
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
+	case errNoPolicyToAttachOrDetach:
+		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:
@@ -1991,6 +2013,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters
+	case errInvalidEncryptionParametersSSEC:
+		apiErr = ErrInvalidEncryptionParametersSSEC
 	case crypto.ErrInvalidEncryptionMethod:
 		apiErr = ErrInvalidEncryptionMethod
 	case crypto.ErrInvalidEncryptionKeyID:

@@ -36,6 +36,7 @@ type MonitoredReader struct {
 // MonitorReaderOptions provides configurable options for monitor reader implementation.
 type MonitorReaderOptions struct {
 	Bucket     string
+	TargetARN  string
 	HeaderSize int
 }
 
@@ -79,7 +80,7 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 		r.lastErr = err
 		return
 	}
-	r.m.updateMeasurement(r.opts.Bucket, uint64(tokens))
+	r.m.updateMeasurement(r.opts.Bucket, r.opts.TargetARN, uint64(tokens))
 	return
 }
 
@@ -88,11 +89,11 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 func NewMonitoredReader(ctx context.Context, m *Monitor, r io.Reader, opts *MonitorReaderOptions) *MonitoredReader {
 	reader := MonitoredReader{
 		r:        r,
-		throttle: m.throttle(opts.Bucket),
+		throttle: m.throttle(opts.Bucket, opts.TargetARN),
 		m:        m,
 		opts:     opts,
 		ctx:      ctx,
 	}
-	reader.m.track(opts.Bucket)
+	reader.m.track(opts.Bucket, opts.TargetARN)
 	return &reader
 }

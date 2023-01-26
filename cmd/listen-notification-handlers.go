@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -22,10 +22,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -38,16 +38,6 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	if !objAPI.IsNotificationSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if !objAPI.IsListenSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 

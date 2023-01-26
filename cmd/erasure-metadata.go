@@ -147,9 +147,9 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 	// Add replication status to the object info
 	objInfo.ReplicationStatusInternal = fi.ReplicationState.ReplicationStatusInternal
 	objInfo.VersionPurgeStatusInternal = fi.ReplicationState.VersionPurgeStatusInternal
-	objInfo.ReplicationStatus = fi.ReplicationState.CompositeReplicationStatus()
+	objInfo.ReplicationStatus = fi.ReplicationStatus()
+	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus()
 
-	objInfo.VersionPurgeStatus = fi.ReplicationState.CompositeVersionPurgeStatus()
 	objInfo.TransitionedObject = TransitionedObject{
 		Name:        fi.TransitionedObjName,
 		VersionID:   fi.TransitionVersionID,
@@ -176,7 +176,6 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
 
-	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus()
 	// set restore status for transitioned object
 	restoreHdr, ok := fi.Metadata[xhttp.AmzRestore]
 	if ok {
@@ -429,7 +428,13 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = -1
 			continue
 		}
-		parities[index] = metadata.Erasure.ParityBlocks
+		if !metadata.IsValid() {
+			parities[index] = -1
+			continue
+		}
+		if !metadata.Deleted {
+			parities[index] = metadata.Erasure.ParityBlocks
+		}
 	}
 	return
 }
@@ -532,6 +537,11 @@ func (fi *FileInfo) IsRestoreObjReq() bool {
 // VersionPurgeStatus returns overall version purge status for this object version across targets
 func (fi *FileInfo) VersionPurgeStatus() VersionPurgeStatusType {
 	return fi.ReplicationState.CompositeVersionPurgeStatus()
+}
+
+// ReplicationStatus returns overall version replication status for this object version across targets
+func (fi *FileInfo) ReplicationStatus() replication.StatusType {
+	return fi.ReplicationState.CompositeReplicationStatus()
 }
 
 // DeleteMarkerReplicationStatus returns overall replication status for this delete marker version across targets

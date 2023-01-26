@@ -80,6 +80,10 @@ var errNoSuchAccount = errors.New("Specified account does not exist")
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")
 
+// error returned in IAM subsystem when a policy attach/detach request has no
+// net effect, i.e. it is already applied.
+var errNoPolicyToAttachOrDetach = errors.New("Specified policy update has no net effect")
+
 // error returned in IAM subsystem when a non-empty group needs to be
 // deleted.
 var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove it")
@@ -98,10 +102,7 @@ var errTooManyPolicies = errors.New("Only a single policy may be specified here.
 var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed")
 
 // error returned in IAM service account
-var errIAMServiceAccount = errors.New("Specified service account cannot be updated in this API call")
-
-// error returned in IAM service account is already used.
-var errIAMServiceAccountUsed = errors.New("Specified service account is used by another user")
+var errIAMServiceAccountNotAllowed = errors.New("Specified service account action is not allowed")
 
 // error returned in IAM subsystem when IAM sub-system is still being initialized.
 var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")

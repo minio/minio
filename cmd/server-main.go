@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,7 +19,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -42,10 +43,9 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
 )
@@ -223,6 +223,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
+	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeNameHex))
+	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
 
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
@@ -236,19 +238,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
-	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
-		RootCAs:            globalRootCAs,
-		CipherSuites:       fips.TLSCiphers(),
-		CurvePreferences:   fips.TLSCurveIDs(),
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	}, rest.DefaultTimeout)()
+	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
-	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
-		RootCAs:            globalRootCAs,
-		CipherSuites:       fips.TLSCiphers(),
-		CurvePreferences:   fips.TLSCurveIDs(),
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	}, rest.DefaultTimeout)()
+	globalInternodeTransport = NewInternodeHTTPTransport()()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -358,6 +350,20 @@ func configRetriableErrors(err error) bool {
 		errors.Is(err, os.ErrDeadlineExceeded)
 }
 
+func bootstrapTrace(msg string) {
+	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
+		return
+	}
+
+	globalTrace.Publish(madmin.TraceInfo{
+		TraceType: madmin.TraceBootstrap,
+		Time:      time.Now().UTC(),
+		NodeName:  globalLocalNodeName,
+		FuncName:  "BOOTSTRAP",
+		Message:   fmt.Sprintf("%s %s", getSource(2), msg),
+	})
+}
+
 func initServer(ctx context.Context, newObject ObjectLayer) error {
 	t1 := time.Now()
 
@@ -370,7 +376,10 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
+	lockTimeout := newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
+		timeout: 5 * time.Second,
+		minimum: 3 * time.Second,
+	})
 
 	for {
 		select {
@@ -379,6 +388,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			return fmt.Errorf("Initializing sub-systems stopped gracefully %w", ctx.Err())
 		default:
 		}
+
+		bootstrapTrace("trying to acquire transaction.lock")
 
 		// Make sure to hold lock for entire migration to avoid
 		// such that only one server should migrate the entire config
@@ -392,8 +403,15 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
 		if err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+			waitDuration := time.Duration(r.Float64() * 5 * float64(time.Second))
+			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping for %v before retry", err, waitDuration))
 
-			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+			// Sleep 0 -> 5 seconds, provider a higher range such that sleeps()
+			// and retries for lock are more spread out, needed orchestrated
+			// systems take 30s minimum to respond to DNS resolvers.
+			//
+			// Do not change this value.
+			time.Sleep(waitDuration)
 			continue
 		}
 
@@ -409,7 +427,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initConfigSubsystem(lkctx.Context(), newObject); err == nil {
-				txnLk.Unlock(lkctx.Cancel)
+				txnLk.Unlock(lkctx)
 				// All successful return.
 				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
@@ -420,7 +438,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		}
 
 		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
-		txnLk.Unlock(lkctx.Cancel)
+		txnLk.Unlock(lkctx)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
@@ -466,8 +484,23 @@ func getServerListenAddrs() []string {
 			addrs.Add(net.JoinHostPort(ip.String(), globalMinioPort))
 		}
 	}
-	// Add the interface specified by the user
-	addrs.Add(globalMinioAddr)
+	host, _ := mustSplitHostPort(globalMinioAddr)
+	if host != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		haddrs, err := globalDNSCache.LookupHost(ctx, host)
+		if err == nil {
+			for _, addr := range haddrs {
+				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
+			}
+		} else {
+			// Unable to lookup host in 2-secs, let it fail later anyways.
+			addrs.Add(globalMinioAddr)
+		}
+	} else {
+		addrs.Add(globalMinioAddr)
+	}
 	return addrs.ToSlice()
 }
 
@@ -524,10 +557,6 @@ func serverMain(ctx *cli.Context) {
 		}
 	}()
 
-	if !globalActiveCred.IsValid() && globalIsDistErasure {
-		globalActiveCred = auth.DefaultCredentials
-	}
-
 	// Set system resources to maximum.
 	setMaxResources()
 
@@ -539,7 +568,7 @@ func serverMain(ctx *cli.Context) {
 	maxProcs := runtime.GOMAXPROCS(0)
 	cpuProcs := runtime.NumCPU()
 	if maxProcs < cpuProcs {
-		logger.Info(color.RedBold("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
+		logger.Info(color.RedBoldf("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	// Configure server.
@@ -569,6 +598,7 @@ func serverMain(ctx *cli.Context) {
 	setHTTPServer(httpServer)
 
 	if globalIsDistErasure {
+		bootstrapTrace("verifying system configuration")
 		// Additionally in distributed setup, validate the setup and configuration.
 		if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
 			logger.Fatal(err, "Unable to start the server")
@@ -594,6 +624,13 @@ func serverMain(ctx *cli.Context) {
 		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 	}
 
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+			globalActiveCred)
+		logger.Info(color.RedBold(msg))
+	}
+
+	bootstrapTrace("initializing the server")
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
 		// For any config error, we don't need to drop into safe-mode
@@ -608,19 +645,6 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		logger.LogIf(GlobalContext, err)
-	}
-
-	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
-			globalActiveCred)
-		logger.Info(color.RedBold(msg))
-	}
-
-	savedCreds, _ := config.LookupCreds(globalServerConfig[config.CredentialsSubSys][config.Default])
-	if globalActiveCred.Equal(auth.DefaultCredentials) && !globalActiveCred.Equal(savedCreds) {
-		msg := fmt.Sprintf("WARNING: Detected credentials changed to '%s', please set them back to previously set values",
-			globalActiveCred)
-		logger.Info(color.RedBold(msg))
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
@@ -700,8 +724,16 @@ func serverMain(ctx *cli.Context) {
 			setCacheObjectLayer(cacheAPI)
 		}
 
+		// Initialize the license update job
+		initLicenseUpdateJob(GlobalContext, newObject)
+
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)
+
+		// Print a warning at the end of the startup banner so it is more noticeable
+		if globalStorageClass.GetParityForSC("") == 0 {
+			logger.Error("Warning: The standard parity is set to 0. This can lead to data loss.")
+		}
 	}()
 
 	region := globalSite.Region

@@ -55,7 +55,8 @@ var (
 	// Additional MinIO errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 	// error returned when invalid encryption parameters are specified
-	errInvalidEncryptionParameters = errors.New("The encryption parameters are not applicable to this object")
+	errInvalidEncryptionParameters     = errors.New("The encryption parameters are not applicable to this object")
+	errInvalidEncryptionParametersSSEC = errors.New("SSE-C encryption parameters are not supported on this bucket")
 )
 
 const (

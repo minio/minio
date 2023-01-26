@@ -69,7 +69,7 @@ func TestSimpleLock(t *testing.T) {
 	// fmt.Println("Lock acquired, waiting...")
 	time.Sleep(testDrwMutexRefreshCallTimeout)
 
-	dm.Unlock()
+	dm.Unlock(context.Background())
 }
 
 func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
@@ -77,23 +77,23 @@ func TestSimpleLockUnlockMultipleTimes(t *testing.T) {
 
 	dm.Lock(id, source)
 	time.Sleep(time.Duration(10+(rand.Float32()*50)) * time.Millisecond)
-	dm.Unlock()
+	dm.Unlock(context.Background())
 
 	dm.Lock(id, source)
 	time.Sleep(time.Duration(10+(rand.Float32()*50)) * time.Millisecond)
-	dm.Unlock()
+	dm.Unlock(context.Background())
 
 	dm.Lock(id, source)
 	time.Sleep(time.Duration(10+(rand.Float32()*50)) * time.Millisecond)
-	dm.Unlock()
+	dm.Unlock(context.Background())
 
 	dm.Lock(id, source)
 	time.Sleep(time.Duration(10+(rand.Float32()*50)) * time.Millisecond)
-	dm.Unlock()
+	dm.Unlock(context.Background())
 
 	dm.Lock(id, source)
 	time.Sleep(time.Duration(10+(rand.Float32()*50)) * time.Millisecond)
-	dm.Unlock()
+	dm.Unlock(context.Background())
 }
 
 // Test two locks for same resource, one succeeds, one fails (after timeout)
@@ -108,7 +108,7 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 		time.Sleep(5 * testDrwMutexAcquireTimeout)
 		// fmt.Println("Unlocking dm1")
 
-		dm1st.Unlock()
+		dm1st.Unlock(context.Background())
 	}()
 
 	dm2nd.Lock(id, source)
@@ -116,7 +116,7 @@ func TestTwoSimultaneousLocksForSameResource(t *testing.T) {
 	// fmt.Printf("2nd lock obtained after 1st lock is released\n")
 	time.Sleep(testDrwMutexRefreshCallTimeout * 2)
 
-	dm2nd.Unlock()
+	dm2nd.Unlock(context.Background())
 }
 
 // Test three locks for same resource, one succeeds, one fails (after timeout)
@@ -134,7 +134,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 		time.Sleep(2 * testDrwMutexAcquireTimeout)
 		// fmt.Println("Unlocking dm1")
 
-		dm1st.Unlock()
+		dm1st.Unlock(context.Background())
 	}()
 	expect += 2 * testDrwMutexAcquireTimeout
 
@@ -151,7 +151,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 			time.Sleep(2 * testDrwMutexAcquireTimeout)
 			// fmt.Println("Unlocking dm2")
 
-			dm2nd.Unlock()
+			dm2nd.Unlock(context.Background())
 		}()
 
 		dm3rd.Lock(id, source)
@@ -159,7 +159,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 		// fmt.Printf("3rd lock obtained after 1st & 2nd locks are released\n")
 		time.Sleep(testDrwMutexRefreshCallTimeout)
 
-		dm3rd.Unlock()
+		dm3rd.Unlock(context.Background())
 	}()
 	expect += 2*testDrwMutexAcquireTimeout + testDrwMutexRefreshCallTimeout
 
@@ -173,7 +173,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 			time.Sleep(2 * testDrwMutexAcquireTimeout)
 			// fmt.Println("Unlocking dm3")
 
-			dm3rd.Unlock()
+			dm3rd.Unlock(context.Background())
 		}()
 
 		dm2nd.Lock(id, source)
@@ -181,7 +181,7 @@ func TestThreeSimultaneousLocksForSameResource(t *testing.T) {
 		// fmt.Printf("2nd lock obtained after 1st & 3rd locks are released\n")
 		time.Sleep(testDrwMutexRefreshCallTimeout)
 
-		dm2nd.Unlock()
+		dm2nd.Unlock(context.Background())
 	}()
 	expect += 2*testDrwMutexAcquireTimeout + testDrwMutexRefreshCallTimeout
 
@@ -201,8 +201,8 @@ func TestTwoSimultaneousLocksForDifferentResources(t *testing.T) {
 
 	dm1.Lock(id, source)
 	dm2.Lock(id, source)
-	dm1.Unlock()
-	dm2.Unlock()
+	dm1.Unlock(context.Background())
+	dm2.Unlock(context.Background())
 }
 
 // Test refreshing lock - refresh should always return true
@@ -230,7 +230,7 @@ func TestSuccessfulLockRefresh(t *testing.T) {
 	}
 
 	// Should be safe operation in all cases
-	dm.Unlock()
+	dm.Unlock(context.Background())
 }
 
 // Test canceling context while quorum servers report lock not found
@@ -267,7 +267,7 @@ func TestFailedRefreshLock(t *testing.T) {
 	}
 
 	// Should be safe operation in all cases
-	dm.Unlock()
+	dm.Unlock(context.Background())
 }
 
 // Test Unlock should not timeout
@@ -290,7 +290,9 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 
 	unlockReturned := make(chan struct{}, 1)
 	go func() {
-		dm.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		dm.Unlock(ctx)
 		unlockReturned <- struct{}{}
 	}()
 
@@ -308,7 +310,7 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 func HammerMutex(m *DRWMutex, loops int, cdone chan bool) {
 	for i := 0; i < loops; i++ {
 		m.Lock(id, source)
-		m.Unlock()
+		m.Unlock(context.Background())
 	}
 	cdone <- true
 }
@@ -340,7 +342,7 @@ func BenchmarkMutexUncontended(b *testing.B) {
 		mu := PaddedMutex{NewDRWMutex(ds, "")}
 		for pb.Next() {
 			mu.Lock(id, source)
-			mu.Unlock()
+			mu.Unlock(context.Background())
 		}
 	})
 }
@@ -357,7 +359,7 @@ func benchmarkMutex(b *testing.B, slack, work bool) {
 		foo := 0
 		for pb.Next() {
 			mu.Lock(id, source)
-			mu.Unlock()
+			mu.Unlock(context.Background())
 			if work {
 				for i := 0; i < 100; i++ {
 					foo *= 2
@@ -406,7 +408,7 @@ func BenchmarkMutexNoSpin(b *testing.B) {
 				m.Lock(id, source)
 				acc0 -= 100
 				acc1 += 100
-				m.Unlock()
+				m.Unlock(context.Background())
 			} else {
 				for i := 0; i < len(data); i += 4 {
 					data[i]++
@@ -438,7 +440,7 @@ func BenchmarkMutexSpin(b *testing.B) {
 			m.Lock(id, source)
 			acc0 -= 100
 			acc1 += 100
-			m.Unlock()
+			m.Unlock(context.Background())
 			for i := 0; i < len(data); i += 4 {
 				data[i]++
 			}

@@ -26,13 +26,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	cfgldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/ldap"
 )
@@ -107,7 +107,7 @@ func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.Resp
 		cfgData = subSys + tgtSuffix + config.KvSpaceSeparator + string(reqBytes)
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -408,7 +408,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
+	cfg, err := readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

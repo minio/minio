@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-
-	"github.com/minio/minio/internal/config"
 )
 
 // Test if config v1 is purged
@@ -65,7 +63,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -207,19 +205,8 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, nil); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
-	}
-
-	// Check if accessKey and secretKey are not altered during migration
-	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
-	if caccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
-	}
-
-	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
-	if csecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}
 }
 

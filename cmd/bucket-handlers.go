@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2022 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -34,7 +34,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
+	"github.com/minio/mux"
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -431,7 +431,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Unmarshal list of keys to be deleted.
 	deleteObjectsReq := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjectsReq, maxBodySize); err != nil {
-		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -511,11 +510,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 		if object.VersionID != "" && object.VersionID != nullVersionID {
 			if _, err := uuid.Parse(object.VersionID); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("invalid version-id specified %w", err))
 				apiErr := errorCodes.ToAPIErr(ErrNoSuchVersion)
 				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
-					Message:   apiErr.Description,
+					Message:   fmt.Sprintf("%s (%s)", apiErr.Description, err),
 					Key:       object.ObjectName,
 					VersionID: object.VersionID,
 				}
@@ -769,16 +767,12 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// check if client is attempting to create more buckets than allowed maximum.
+	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		apiErr := errorCodes.ToAPIErr(ErrTooManyBuckets)
-		apiErr.Description = fmt.Sprintf("You have attempted to create %d buckets than allowed %d", currBuckets+1, maxBuckets)
-		writeErrorResponse(ctx, w, apiErr, r.URL)
-		return
+		logger.LogIf(ctx, fmt.Errorf("An attempt to create %d buckets beyond recommended %d", currBuckets+1, maxBuckets))
 	}
 
 	opts := MakeBucketOptions{
-		Location:    location,
 		LockEnabled: objectLockEnabled,
 		ForceCreate: forceCreate,
 	}
@@ -790,15 +784,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			// exists elsewhere
 			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 					return
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(context.Background(), bucket, DeleteBucketOptions{
-						Force:      false,
-						NoRecreate: true,
+						Force:      true,
 						SRDeleteOp: getSRBucketDeleteOp(globalSiteReplicationSys.isEnabled()),
 					})
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -842,7 +835,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Proceed to creating a bucket.
-	if err := objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
+	if err := objectAPI.MakeBucket(ctx, bucket, opts); err != nil {
 		if _, ok := err.(BucketExists); ok {
 			// Though bucket exists locally, we send the site-replication
 			// hook to ensure all sites have this bucket. If the hook
@@ -897,11 +890,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if crypto.Requested(r.Header) && !objectAPI.IsEncryptionSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
 	bucket := mux.Vars(r)["bucket"]
 
 	// Require Content-Length to be set in the request
@@ -927,16 +915,18 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
 	// Read multipart data and save in memory and in the disk if needed
 	form, err := reader.ReadForm(maxFormMemory)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -946,8 +936,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract all form fields
 	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(ctx, form)
 	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -1070,50 +1061,55 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-	if objectAPI.IsEncryptionSupported() {
-		if crypto.Requested(formValues) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
-			if crypto.SSECopy.IsRequested(r.Header) {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
-				return
-			}
-			var (
-				reader io.Reader
-				keyID  string
-				key    []byte
-				kmsCtx kms.Context
-			)
-			kind, _ := crypto.IsRequested(formValues)
-			switch kind {
-			case crypto.SSEC:
-				key, err = ParseSSECustomerHeader(formValues)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-			case crypto.S3KMS:
-				keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-					return
-				}
-			}
-			reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+
+	if crypto.Requested(formValues) {
+		if crypto.SSECopy.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
+			return
+		}
+
+		var (
+			reader io.Reader
+			keyID  string
+			key    []byte
+			kmsCtx kms.Context
+		)
+		kind, _ := crypto.IsRequested(formValues)
+		switch kind {
+		case crypto.SSEC:
+			key, err = ParseSSECustomerHeader(formValues)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
-			info := ObjectInfo{Size: fileSize}
-			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
+		case crypto.S3KMS:
+			keyID, kmsCtx, err = crypto.S3KMS.ParseHTTP(formValues)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
 			}
-			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-				return
-			}
+		}
+		reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		info := ObjectInfo{Size: fileSize}
+		// do not try to verify encrypted content
+		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
 		}
 	}
 

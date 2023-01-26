@@ -102,6 +102,11 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			if rw, ok := v.ResponseWriter.(*xhttp.ResponseRecorder); ok {
 				st = rw
 			}
+		case *gzhttp.NoGzipResponseWriter:
+			// the writer may be obscured by no-gzip response writer
+			if rw, ok := v.ResponseWriter.(*xhttp.ResponseRecorder); ok {
+				st = rw
+			}
 		}
 		if st != nil {
 			statusCode = st.StatusCode

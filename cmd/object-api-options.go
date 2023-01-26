@@ -96,9 +96,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 
 	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
 	if vid != "" && vid != nullVersionID {
-		_, err := uuid.Parse(vid)
-		if err != nil {
-			logger.LogIf(ctx, err)
+		if _, err := uuid.Parse(vid); err != nil {
 			return opts, InvalidVersionID{
 				Bucket:    bucket,
 				Object:    object,

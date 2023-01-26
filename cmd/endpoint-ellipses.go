@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -364,6 +365,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 			CmdLine:      strings.Join(args, " "),
+			Platform:     fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
 		})
 		setupType = newSetupType
 		return endpointServerPools, setupType, nil
@@ -389,6 +391,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 			CmdLine:      arg,
+			Platform:     fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
 		}); err != nil {
 			return nil, -1, err
 		}

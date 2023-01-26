@@ -89,6 +89,18 @@ func (z *BucketReplicationStat) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 				}
 			}
+		case "BandWidthLimitInBytesPerSecond":
+			z.BandWidthLimitInBytesPerSecond, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "BandWidthLimitInBytesPerSecond")
+				return
+			}
+		case "CurrentBandwidthInBytesPerSecond":
+			z.CurrentBandwidthInBytesPerSecond, err = dc.ReadFloat64()
+			if err != nil {
+				err = msgp.WrapError(err, "CurrentBandwidthInBytesPerSecond")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -102,9 +114,9 @@ func (z *BucketReplicationStat) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketReplicationStat) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 7
+	// map header, size 9
 	// write "PendingSize"
-	err = en.Append(0x87, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	err = en.Append(0x89, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
 	if err != nil {
 		return
 	}
@@ -179,15 +191,35 @@ func (z *BucketReplicationStat) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Latency", "UploadHistogram")
 		return
 	}
+	// write "BandWidthLimitInBytesPerSecond"
+	err = en.Append(0xbe, 0x42, 0x61, 0x6e, 0x64, 0x57, 0x69, 0x64, 0x74, 0x68, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x49, 0x6e, 0x42, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.BandWidthLimitInBytesPerSecond)
+	if err != nil {
+		err = msgp.WrapError(err, "BandWidthLimitInBytesPerSecond")
+		return
+	}
+	// write "CurrentBandwidthInBytesPerSecond"
+	err = en.Append(0xd9, 0x20, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x42, 0x61, 0x6e, 0x64, 0x77, 0x69, 0x64, 0x74, 0x68, 0x49, 0x6e, 0x42, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteFloat64(z.CurrentBandwidthInBytesPerSecond)
+	if err != nil {
+		err = msgp.WrapError(err, "CurrentBandwidthInBytesPerSecond")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketReplicationStat) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 7
+	// map header, size 9
 	// string "PendingSize"
-	o = append(o, 0x87, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
+	o = append(o, 0x89, 0xab, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x53, 0x69, 0x7a, 0x65)
 	o = msgp.AppendInt64(o, z.PendingSize)
 	// string "ReplicatedSize"
 	o = append(o, 0xae, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x65, 0x64, 0x53, 0x69, 0x7a, 0x65)
@@ -214,6 +246,12 @@ func (z *BucketReplicationStat) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Latency", "UploadHistogram")
 		return
 	}
+	// string "BandWidthLimitInBytesPerSecond"
+	o = append(o, 0xbe, 0x42, 0x61, 0x6e, 0x64, 0x57, 0x69, 0x64, 0x74, 0x68, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x49, 0x6e, 0x42, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64)
+	o = msgp.AppendInt64(o, z.BandWidthLimitInBytesPerSecond)
+	// string "CurrentBandwidthInBytesPerSecond"
+	o = append(o, 0xd9, 0x20, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x42, 0x61, 0x6e, 0x64, 0x77, 0x69, 0x64, 0x74, 0x68, 0x49, 0x6e, 0x42, 0x79, 0x74, 0x65, 0x73, 0x50, 0x65, 0x72, 0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64)
+	o = msgp.AppendFloat64(o, z.CurrentBandwidthInBytesPerSecond)
 	return
 }
 
@@ -300,6 +338,18 @@ func (z *BucketReplicationStat) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			}
+		case "BandWidthLimitInBytesPerSecond":
+			z.BandWidthLimitInBytesPerSecond, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BandWidthLimitInBytesPerSecond")
+				return
+			}
+		case "CurrentBandwidthInBytesPerSecond":
+			z.CurrentBandwidthInBytesPerSecond, bts, err = msgp.ReadFloat64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "CurrentBandwidthInBytesPerSecond")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -314,7 +364,7 @@ func (z *BucketReplicationStat) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketReplicationStat) Msgsize() (s int) {
-	s = 1 + 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size + 8 + 1 + 16 + z.Latency.UploadHistogram.Msgsize()
+	s = 1 + 12 + msgp.Int64Size + 15 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 13 + msgp.Int64Size + 12 + msgp.Int64Size + 8 + 1 + 16 + z.Latency.UploadHistogram.Msgsize() + 31 + msgp.Int64Size + 34 + msgp.Float64Size
 	return
 }
 

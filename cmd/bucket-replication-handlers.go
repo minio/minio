@@ -25,10 +25,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 )
 
@@ -169,6 +169,21 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 		return
 	}
 
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	for _, tgt := range targets.Targets {
+		if err := globalBucketTargetSys.RemoveTarget(ctx, bucket, tgt.Arn); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketTargetsFile); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -216,7 +231,19 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	if err = enc.Encode(globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)); err != nil {
+	stats := globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)
+	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
+	bwMap := bwRpt.BucketStats[bucket]
+	for arn, st := range stats.Stats {
+		if bwMap != nil {
+			if bw, ok := bwMap[arn]; ok {
+				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
+				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
+				stats.Stats[arn] = st
+			}
+		}
+	}
+	if err = enc.Encode(stats); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

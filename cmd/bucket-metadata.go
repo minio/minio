@@ -135,7 +135,7 @@ func (b *BucketMetadata) SetCreatedAt(createdAt time.Time) {
 func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string) error {
 	if name == "" {
 		logger.LogIf(ctx, errors.New("bucket name cannot be empty"))
-		return errors.New("bucket name cannot be empty")
+		return errInvalidArgument
 	}
 	configFile := path.Join(bucketMetaPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, api, configFile)

@@ -57,15 +57,16 @@ type rebalanceStats struct {
 	Info              rebalanceInfo `json:"info" msg:"inf"`
 }
 
-func (rs *rebalanceStats) update(bucket string, oi ObjectInfo) {
-	if oi.IsLatest {
+func (rs *rebalanceStats) update(bucket string, fi FileInfo) {
+	if fi.IsLatest {
 		rs.NumObjects++
 	}
 
 	rs.NumVersions++
-	rs.Bytes += uint64(oi.Size)
+	onDiskSz := fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	rs.Bytes += uint64(onDiskSz)
 	rs.Bucket = bucket
-	rs.Object = oi.Name
+	rs.Object = fi.Name
 }
 
 type rstats []*rebalanceStats
@@ -168,7 +169,7 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	return r.ID, nil
 }
 
-func (z *erasureServerPools) updatePoolStats(poolIdx int, bucket string, oi ObjectInfo) {
+func (z *erasureServerPools) updatePoolStats(poolIdx int, bucket string, fi FileInfo) {
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
 
@@ -177,7 +178,7 @@ func (z *erasureServerPools) updatePoolStats(poolIdx int, bucket string, oi Obje
 		return
 	}
 
-	r.PoolStats[poolIdx].update(bucket, oi)
+	r.PoolStats[poolIdx].update(bucket, fi)
 }
 
 const (
@@ -352,6 +353,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				z.rebalMu.Lock()
 				z.rebalMeta.PoolStats[poolIdx].Info.Status = rebalStopped
 				z.rebalMeta.PoolStats[poolIdx].Info.EndTime = now
+				z.rebalMeta.cancel = nil // remove the already used context.CancelFunc
 				z.rebalMu.Unlock()
 
 				rebalDone = true
@@ -534,14 +536,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					}
 
 					if !failure {
-						z.updatePoolStats(poolIdx, bucket, version.ToObjectInfo(bucket, version.Name, vc.PrefixEnabled(version.Name)))
+						z.updatePoolStats(poolIdx, bucket, version)
 						rebalanced++
 					}
 					continue
 				}
 
 				var failure bool
-				var oi ObjectInfo
 				for try := 0; try < 3; try++ {
 					// GetObjectReader.Close is called by rebalanceObject
 					gr, err := set.GetObjectNInfo(ctx,
@@ -574,14 +575,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 					stopFn(nil)
 					failure = false
-					oi = gr.ObjInfo
 					break
 				}
 
 				if failure {
 					break // break out on first error
 				}
-				z.updatePoolStats(poolIdx, bucket, oi)
+				z.updatePoolStats(poolIdx, bucket, version)
 				rebalanced++
 			}
 
@@ -656,7 +656,7 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 		logger.LogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
 		return err
 	}
-	defer lock.Unlock(lkCtx.Cancel)
+	defer lock.Unlock(lkCtx)
 
 	ctx = lkCtx.Context()
 	noLockOpts := ObjectOptions{NoLock: true}

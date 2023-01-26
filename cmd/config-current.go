@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"github.com/minio/madmin-go/v2"
-	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
@@ -65,7 +64,6 @@ func initHelp() {
 		config.SiteSubSys:           config.DefaultSiteKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.APISubSys:            api.DefaultKVS,
-		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultLoggerWebhookKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
@@ -299,15 +297,8 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.CompressionSubSys:
-		compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-		if err != nil {
+		if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
 			return err
-		}
-
-		if objAPI != nil {
-			if compCfg.Enabled && !objAPI.IsCompressionSupported() {
-				return fmt.Errorf("Backend does not support compression")
-			}
 		}
 	case config.HealSubSys:
 		if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
@@ -374,8 +365,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		subSys = config.PolicyPluginSubSys
 		fallthrough
 	case config.PolicyPluginSubSys:
-		if ppargs, err := polplugin.LookupConfig(s[config.PolicyPluginSubSys][config.Default],
-			NewHTTPTransport(), xhttp.DrainBody); err != nil {
+		if ppargs, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody); err != nil {
 			return err
 		} else if ppargs.URL == nil {
 			// Check if legacy opa is configured.
@@ -427,15 +417,6 @@ func validateConfig(s config.Config, subSys string) error {
 
 func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	ctx := GlobalContext
-
-	var err error
-	if !globalActiveCred.IsValid() {
-		// Env doesn't seem to be set, we fallback to lookup creds from the config.
-		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Invalid credentials configuration: %w", err))
-		}
-	}
 
 	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
@@ -523,11 +504,13 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	transport := NewHTTPTransport()
 
+	bootstrapTrace("lookup the event notification targets")
 	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
+	bootstrapTrace("applying the dynamic configuration")
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
 		logger.LogIf(ctx, err)
@@ -551,16 +534,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 
 		// Initialize remote instance transport once.
 		getRemoteInstanceTransportOnce.Do(func() {
-			getRemoteInstanceTransport = newHTTPTransport(apiConfig.RemoteTransportDeadline)
+			getRemoteInstanceTransport = NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline)
 		})
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 		if err != nil {
 			return fmt.Errorf("Unable to setup Compression: %w", err)
-		}
-		// Validate if the object layer supports compression.
-		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
-			return fmt.Errorf("Backend does not support compression")
 		}
 		globalCompressConfigMu.Lock()
 		globalCompressConfig = cmpCfg
@@ -766,13 +745,6 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
 	srvCfg := newServerConfig()
 
-	if globalActiveCred.IsValid() && !globalActiveCred.Equal(auth.DefaultCredentials) {
-		kvs := srvCfg[config.CredentialsSubSys][config.Default]
-		kvs.Set(config.AccessKey, globalActiveCred.AccessKey)
-		kvs.Set(config.SecretKey, globalActiveCred.SecretKey)
-		srvCfg[config.CredentialsSubSys][config.Default] = kvs
-	}
-
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
 	globalServerConfig = srvCfg
@@ -783,17 +755,20 @@ func newSrvConfig(objAPI ObjectLayer) error {
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
-	return readServerConfig(GlobalContext, objAPI)
+	return readServerConfig(GlobalContext, objAPI, nil)
 }
 
 // loadConfig - loads a new config from disk, overrides params
 // from env if found and valid
-func loadConfig(objAPI ObjectLayer) error {
-	srvCfg, err := getValidConfig(objAPI)
+// data is optional. If nil it will be loaded from backend.
+func loadConfig(objAPI ObjectLayer, data []byte) error {
+	bootstrapTrace("load the configuration")
+	srvCfg, err := readServerConfig(GlobalContext, objAPI, data)
 	if err != nil {
 		return err
 	}
 
+	bootstrapTrace("lookup the configuration")
 	// Override any values from ENVs.
 	lookupConfigs(srvCfg, objAPI)
 

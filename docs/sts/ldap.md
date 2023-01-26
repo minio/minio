@@ -34,7 +34,8 @@ KEY:
 identity_ldap  enable LDAP SSO support
 
 ARGS:
-MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldap.com" or "myldapserver.com:1686"
+MINIO_IDENTITY_LDAP_SRV_RECORD_NAME          (string)    DNS SRV record name for LDAP service, if given, must be one of ldap, ldaps or on
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN*          (string)    DN for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD     (string)    Password for LDAP read-only service account used to perform DN and group lookups
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN*  (list)      ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
@@ -52,17 +53,32 @@ MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a commen
 The variables relevant to configuring connectivity to the LDAP service are:
 
 ```
-MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e.g. "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldap.com" or "myldapserver.com:1686"
+MINIO_IDENTITY_LDAP_SRV_RECORD_NAME          (string)    DNS SRV record name for LDAP service, if given, must be one of ldap, ldaps or on
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
 MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
 MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
 ```
 
-The server address variable is _required_. TLS is assumed to be on by default.
+The server address variable is _required_. TLS is assumed to be on by default. The port in the server address is optional and defaults to 636 if not provided.
 
 **MinIO sends LDAP credentials to the LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
 
 If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
+
+#### DNS SRV Records
+
+Many Active Directory and other LDAP services are setup with [DNS SRV Records](https://ldap.com/dns-srv-records-for-ldap/) for high-availability of the directory service. To use this to find LDAP servers to connect to, an LDAP client makes a DNS SRV record request to the DNS service on a domain that looks like `_service._proto.example.com`. For LDAP the `proto` value is always `tcp`, and `service` is usually `ldap` or `ldaps`.
+
+To enable MinIO to use the SRV records, specify the `srv_record_name` config parameter (or equivalently the `MINIO_IDENTITY_LDAP_SRV_RECORD_NAME` environment variable). This parameter can be set to `ldap` or `ldaps` and MinIO will substitute it into the `service` value. For example, when `server_addr=myldapserver.com` and `srv_record_name=ldap`, MinIO will lookup the SRV record for `_ldap._tcp.myldapserver.com` and pick an appropriate target for LDAP requests.
+
+If the DNS SRV record is at an entirely different place, say `_ldapsrv._tcpish.myldapserver.com`, then set `srv_record_name` to the special value `on` and set `server_addr=_ldapsrv._tcpish.myldapserver.com`.
+
+When using this feature, do not specify a port in the `server_addr` as the port is picked up automatically from the SRV record.
+
+With the default (empty) value for `srv_record_name`, MinIO **will not** perform any SRV record request.
+
+The value of `srv_record_name` does not affect any TLS settings - they must be configured with their own parameters.
 
 ### Lookup-Bind
 

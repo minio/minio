@@ -72,6 +72,10 @@ var (
 		Cause: errors.New("peer not found"),
 		Code:  ErrSiteReplicationInvalidRequest,
 	}
+	errSRRequestorNotFound = SRError{
+		Cause: errors.New("requesting site not found in site replication config"),
+		Code:  ErrSiteReplicationInvalidRequest,
+	}
 	errSRNotEnabled = SRError{
 		Cause: errors.New("site replication is not enabled"),
 		Code:  ErrSiteReplicationInvalidRequest,
@@ -678,9 +682,6 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	}
 
 	optsMap := make(map[string]string)
-	if opts.Location != "" {
-		optsMap["location"] = opts.Location
-	}
 	if opts.LockEnabled {
 		optsMap["lockEnabled"] = "true"
 		optsMap["versioningEnabled"] = "true"
@@ -776,7 +777,7 @@ func (c *SiteReplicationSys) PeerBucketMakeWithVersioningHandler(ctx context.Con
 		return errServerNotInitialized
 	}
 
-	err := objAPI.MakeBucketWithLocation(ctx, bucket, opts)
+	err := objAPI.MakeBucket(ctx, bucket, opts)
 	if err != nil {
 		// Check if this is a bucket exists error.
 		_, ok1 := err.(BucketExists)
@@ -852,21 +853,24 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				Region:          "",
 				ReplicationSync: false,
 			}
-			bucketTarget.Arn = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget)
-			err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, false)
-			if err != nil {
-				return c.annotatePeerErr(peer.Name, "Bucket target creation error", err)
-			}
-			targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
-			if err != nil {
-				return err
-			}
-			tgtBytes, err := json.Marshal(&targets)
-			if err != nil {
-				return err
-			}
-			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
-				return err
+			var exists bool // true if ARN already exists
+			bucketTarget.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget)
+			if !exists { // persist newly generated ARN to targets and metadata on disk
+				err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, false)
+				if err != nil {
+					return c.annotatePeerErr(peer.Name, "Bucket target creation error", err)
+				}
+				targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+				if err != nil {
+					return err
+				}
+				tgtBytes, err := json.Marshal(&targets)
+				if err != nil {
+					return err
+				}
+				if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
+					return err
+				}
 			}
 			targetARN = bucketTarget.Arn
 		}
@@ -1181,6 +1185,7 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			secretKey:     change.Create.SecretKey,
 			sessionPolicy: sp,
 			claims:        change.Create.Claims,
+			comment:       change.Create.Comment,
 		}
 		_, _, err = globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
 		if err != nil {
@@ -1205,6 +1210,7 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		opts := updateServiceAccountOpts{
 			secretKey:     change.Update.SecretKey,
 			status:        change.Update.Status,
+			comment:       change.Update.Comment,
 			sessionPolicy: sp,
 		}
 
@@ -1866,6 +1872,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        acc.Credentials.Status,
+						Comment:       acc.Credentials.Comment,
 					},
 				},
 				UpdatedAt: acc.UpdatedAt,
@@ -2057,12 +2064,12 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 		}
 	}
 	for _, s := range siteNames {
-		info, ok := peerMap[s]
+		pinfo, ok := peerMap[s]
 		if !ok {
 			return st, errSRConfigMissingError(errMissingSRConfig)
 		}
-		rmvEndpoints = append(rmvEndpoints, info.Endpoint)
-		delete(updatedPeers, info.DeploymentID)
+		rmvEndpoints = append(rmvEndpoints, pinfo.Endpoint)
+		delete(updatedPeers, pinfo.DeploymentID)
 	}
 	var wg sync.WaitGroup
 	errs := make(map[string]error, len(c.state.Peers))
@@ -2084,6 +2091,8 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 				errs[pi.DeploymentID] = errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", pi.Name, err))
 				return
 			}
+			// set the requesting site's deploymentID for verification of peer request
+			rreq.RequestingDepID = globalDeploymentID
 			if _, err = admClient.SRPeerRemove(ctx, rreq); err != nil {
 				if errors.Is(err, errMissingSRConfig) {
 					// ignore if peer is already removed.
@@ -2097,9 +2106,11 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 	wg.Wait()
 
 	errdID := ""
+	selfTgtsDeleted := errs[globalDeploymentID] == nil // true if all remote targets and replication config cleared successfully on local cluster
+
 	for dID, err := range errs {
 		if err != nil {
-			if !rreq.RemoveAll {
+			if !rreq.RemoveAll && !selfTgtsDeleted {
 				return madmin.ReplicateRemoveStatus{
 					ErrDetail: err.Error(),
 					Status:    madmin.ReplicateRemoveStatusPartial,
@@ -2143,12 +2154,17 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 		return madmin.ReplicateRemoveStatus{
 			Status:    madmin.ReplicateRemoveStatusPartial,
 			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, nil
+		}, err
 	}
 
-	return madmin.ReplicateRemoveStatus{
+	st = madmin.ReplicateRemoveStatus{
 		Status: madmin.ReplicateRemoveStatusSuccess,
-	}, nil
+	}
+	if errs[errdID] != nil {
+		st.Status = madmin.ReplicateRemoveStatusPartial
+		st.ErrDetail = errs[errdID].Error()
+	}
+	return st, nil
 }
 
 // InternalRemoveReq - sends an unlink request to peer cluster to remove one or more sites
@@ -2156,6 +2172,19 @@ func (c *SiteReplicationSys) RemovePeerCluster(ctx context.Context, objectAPI Ob
 func (c *SiteReplicationSys) InternalRemoveReq(ctx context.Context, objectAPI ObjectLayer, rreq madmin.SRRemoveReq) error {
 	if !c.isEnabled() {
 		return errSRNotEnabled
+	}
+	if rreq.RequestingDepID != "" {
+		// validate if requesting site is still part of site replication
+		var foundRequestor bool
+		for _, p := range c.state.Peers {
+			if p.DeploymentID == rreq.RequestingDepID {
+				foundRequestor = true
+				break
+			}
+		}
+		if !foundRequestor {
+			return errSRRequestorNotFound
+		}
 	}
 
 	ourName := ""
@@ -3180,7 +3209,6 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				Bucket:    bucket,
 				CreatedAt: bucketInfo.Created.UTC(),
 				DeletedAt: bucketInfo.Deleted.UTC(),
-				Location:  globalSite.Region,
 			}
 			if !bucketExists {
 				info.Buckets[bucket] = bms
@@ -4178,7 +4206,7 @@ func (c *SiteReplicationSys) purgeDeletedBucket(ctx context.Context, objAPI Obje
 	if !ok {
 		return
 	}
-	z.purgeDelete(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, deletedBucketsPrefix, bucket))
+	z.s3Peer.DeleteBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), DeleteBucketOptions{})
 }
 
 // healBucket creates/deletes the bucket according to latest state across clusters participating in site replication.
@@ -4251,11 +4279,6 @@ func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer,
 	if isMakeBucket {
 		var opts MakeBucketOptions
 		optsMap := make(map[string]string)
-		if bStatus.Location != "" {
-			optsMap["location"] = bStatus.Location
-			opts.Location = bStatus.Location
-		}
-
 		optsMap["versioningEnabled"] = "true"
 		opts.VersioningEnabled = true
 		opts.CreatedAt = bStatus.CreatedAt
@@ -4686,6 +4709,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        creds.Status,
+						Comment:       creds.Comment,
 					},
 				},
 				UpdatedAt: lastUpdate,

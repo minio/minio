@@ -29,7 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/kes"
@@ -41,6 +40,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -201,7 +201,18 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	if update {
 		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
-		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		var exists bool // true if arn exists
+		target.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		if exists && target.Arn != "" { // return pre-existing ARN
+			data, err := json.Marshal(target.Arn)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			// Write success response.
+			writeSuccessResponseJSON(w, data)
+			return
+		}
 	}
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
@@ -217,8 +228,10 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		for _, op := range ops {
 			switch op {
 			case madmin.CredentialsUpdateType:
-				tgt.Credentials = target.Credentials
-				tgt.TargetBucket = target.TargetBucket
+				if !globalSiteReplicationSys.isEnabled() {
+					tgt.Credentials = target.Credentials
+					tgt.TargetBucket = target.TargetBucket
+				}
 				tgt.Secure = target.Secure
 				tgt.Endpoint = target.Endpoint
 			case madmin.SyncUpdateType:
@@ -696,7 +709,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				opts := MakeBucketOptions{
 					LockEnabled: config.ObjectLockEnabled == "Enabled",
 				}
-				err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts)
+				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
@@ -757,7 +770,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{}); err != nil {
+				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{}); err != nil {
 					if _, ok := err.(BucketExists); !ok {
 						rpt.SetStatus(bucket, fileName, err)
 						continue
@@ -809,7 +822,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		bucket, fileName := slc[0], slc[1]
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucketWithLocation(ctx, bucket, MakeBucketOptions{})
+			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{})
 			if err != nil {
 				if _, ok := err.(BucketExists); !ok {
 					rpt.SetStatus(bucket, "", err)

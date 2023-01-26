@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/minio/madmin-go/v2"
 )
 
 const (
@@ -31,7 +29,7 @@ const (
 
 func TestMonitor_GetReport(t *testing.T) {
 	type fields struct {
-		activeBuckets map[string]*bucketMeasurement
+		activeBuckets map[string]map[string]*bucketMeasurement
 		endTime       time.Time
 		update2       uint64
 		endTime2      time.Time
@@ -44,44 +42,52 @@ func TestMonitor_GetReport(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   *madmin.BucketBandwidthReport
-		want2  *madmin.BucketBandwidthReport
+		want   *BucketBandwidthReport
+		want2  *BucketBandwidthReport
 	}{
 		{
 			name: "ZeroToOne",
 			fields: fields{
-				activeBuckets: map[string]*bucketMeasurement{
-					"bucket": m0,
+				activeBuckets: map[string]map[string]*bucketMeasurement{
+					"bucket": {
+						"arn": m0,
+					},
 				},
 				endTime:  start.Add(1 * time.Second),
 				update2:  oneMiB,
 				endTime2: start.Add(2 * time.Second),
 			},
-			want: &madmin.BucketBandwidthReport{
-				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: 0}},
+			want: &BucketBandwidthReport{
+				BucketStats: map[string]map[string]Details{
+					"bucket": {
+						"arn": Details{LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: 0},
+					},
+				},
 			},
-			want2: &madmin.BucketBandwidthReport{
-				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: (1024 * 1024) / start.Add(2*time.Second).Sub(start.Add(1*time.Second)).Seconds()}},
+			want2: &BucketBandwidthReport{
+				BucketStats: map[string]map[string]Details{"bucket": {"arn": Details{LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: (1024 * 1024) / start.Add(2*time.Second).Sub(start.Add(1*time.Second)).Seconds()}}},
 			},
 		},
 		{
 			name: "OneToTwo",
 			fields: fields{
-				activeBuckets: map[string]*bucketMeasurement{
-					"bucket": m1MiBPS,
+				activeBuckets: map[string]map[string]*bucketMeasurement{
+					"bucket": {
+						"arn": m1MiBPS,
+					},
 				},
 				endTime:  start.Add(1 * time.Second),
 				update2:  2 * oneMiB,
 				endTime2: start.Add(2 * time.Second),
 			},
-			want: &madmin.BucketBandwidthReport{
-				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: float64(oneMiB)}},
+			want: &BucketBandwidthReport{
+				BucketStats: map[string]map[string]Details{"bucket": {"arn": Details{LimitInBytesPerSecond: 1024 * 1024, CurrentBandwidthInBytesPerSecond: float64(oneMiB)}}},
 			},
-			want2: &madmin.BucketBandwidthReport{
-				BucketStats: map[string]madmin.BandwidthDetails{"bucket": {
+			want2: &BucketBandwidthReport{
+				BucketStats: map[string]map[string]Details{"bucket": {"arn": Details{
 					LimitInBytesPerSecond:            1024 * 1024,
 					CurrentBandwidthInBytesPerSecond: exponentialMovingAverage(betaBucket, float64(oneMiB), 2*float64(oneMiB)),
-				}},
+				}}},
 			},
 		},
 	}
@@ -92,21 +98,23 @@ func TestMonitor_GetReport(t *testing.T) {
 			thr := throttle{
 				NodeBandwidthPerSec: 1024 * 1024,
 			}
+			th := make(map[string]map[string]*throttle)
+			th["bucket"] = map[string]*throttle{"arn": &thr}
 			m := &Monitor{
 				activeBuckets:  tt.fields.activeBuckets,
-				bucketThrottle: map[string]*throttle{"bucket": &thr},
+				bucketThrottle: th,
 				NodeCount:      1,
 			}
-			m.activeBuckets["bucket"].updateExponentialMovingAverage(tt.fields.endTime)
+			m.activeBuckets["bucket"]["arn"].updateExponentialMovingAverage(tt.fields.endTime)
 			got := m.GetReport(SelectBuckets())
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetReport() = %v, want %v", got, tt.want)
 			}
-			m.activeBuckets["bucket"].incrementBytes(tt.fields.update2)
-			m.activeBuckets["bucket"].updateExponentialMovingAverage(tt.fields.endTime2)
+			m.activeBuckets["bucket"]["arn"].incrementBytes(tt.fields.update2)
+			m.activeBuckets["bucket"]["arn"].updateExponentialMovingAverage(tt.fields.endTime2)
 			got = m.GetReport(SelectBuckets())
-			if !reflect.DeepEqual(got, tt.want2) {
-				t.Errorf("GetReport() = %v, want %v", got, tt.want2)
+			if !reflect.DeepEqual(got.BucketStats, tt.want2.BucketStats) {
+				t.Errorf("GetReport() = %v, want %v", got.BucketStats, tt.want2.BucketStats)
 			}
 		})
 	}

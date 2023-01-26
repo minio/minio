@@ -36,6 +36,12 @@ import (
 	"github.com/minio/pkg/console"
 )
 
+// list all errors that can be ignore in a bucket operation.
+var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
+
+// list all errors that can be ignored in a bucket metadata operation.
+var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
+
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
@@ -87,10 +93,6 @@ func (er erasureObjects) defaultWQuorum() int {
 		return dataCount + 1
 	}
 	return dataCount
-}
-
-func (er erasureObjects) defaultRQuorum() int {
-	return er.setDriveCount - er.defaultParityCount
 }
 
 // byDiskTotal is a collection satisfying sort.Interface.

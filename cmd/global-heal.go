@@ -70,8 +70,8 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-// getBackgroundHealStatus will return the
-func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
+// getLocalBackgroundHealStatus will return the heal status of the local node
+func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
 		return madmin.BgHealState{}, false
 	}
@@ -105,7 +105,7 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 		return status, true
 	}
 
-	si := o.StorageInfo(ctx)
+	si := o.LocalStorageInfo(ctx)
 
 	indexed := make(map[string][]madmin.Disk)
 	for _, disk := range si.Disks {
@@ -437,7 +437,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	return retErr
 }
 
-// healObject heals given object path in deep to fix bitrot.
+// healObject sends the given object/version to the background healing workers
+// and only returns when healing of the object is done.
 func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 	// Get background heal sequence to send elements to heal
 	globalHealStateLK.Lock()
@@ -448,6 +449,7 @@ func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 			bucket:    bucket,
 			object:    object,
 			versionID: versionID,
+			noWait:    true, // do not block callers.
 			opts: &madmin.HealOpts{
 				Remove:   healDeleteDangling, // if found dangling purge it.
 				ScanMode: scan,

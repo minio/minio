@@ -120,6 +120,10 @@ type BucketReplicationStat struct {
 	FailedCount int64 `json:"failedReplicationCount"`
 	// Replication latency information
 	Latency ReplicationLatency `json:"replicationLatency"`
+	// bandwidth limit for target
+	BandWidthLimitInBytesPerSecond int64 `json:"limitInBits"`
+	// current bandwidth reported
+	CurrentBandwidthInBytesPerSecond float64 `json:"currentBandwidth"`
 }
 
 func (bs *BucketReplicationStat) hasReplicationUsage() bool {

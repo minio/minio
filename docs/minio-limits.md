@@ -17,21 +17,21 @@ For best deployment experience MinIO recommends operating systems RHEL/CentOS 8.
 
 ## Limits of S3 API
 
-| Item                                                                            | Specification                                 |
-|:--------------------------------------------------------------------------------|:----------------------------------------------|
-| Maximum number of buckets                                                       | 500000                                        |
-| Maximum number of objects per bucket                                            | no-limit                                      |
-| Maximum object size                                                             | 50 TiB                                        |
-| Minimum object size                                                             | 0 B                                           |
-| Maximum object size per PUT operation                                           | 5 TiB                                         |
-| Maximum number of parts per upload                                              | 10,000                                        |
-| Part size range                                                                 | 5 MiB to 5 GiB. Last part can be 0 B to 5 GiB |
-| Maximum number of parts returned per list parts request                         | 10000                                         |
-| Maximum number of objects returned per list objects request                     | 1000                                          |
-| Maximum number of multipart uploads returned per list multipart uploads request | 1000                                          |
-| Maximum length for bucket names                                                 | 63                                            |
-| Maximum length for object names                                                 | 1024                                          |
-| Maximum length for '/' separated object name segment                            | 255                                           |
+| Item                                                                            | Specification                                   |
+|:--------------------------------------------------------------------------------|:------------------------------------------------|
+| Maximum number of buckets                                                       | unlimited (recommend not beyond 500000 buckets) |
+| Maximum number of objects per bucket                                            | no-limit                                        |
+| Maximum object size                                                             | 50 TiB                                          |
+| Minimum object size                                                             | 0 B                                             |
+| Maximum object size per PUT operation                                           | 5 TiB                                           |
+| Maximum number of parts per upload                                              | 10,000                                          |
+| Part size range                                                                 | 5 MiB to 5 GiB. Last part can be 0 B to 5 GiB   |
+| Maximum number of parts returned per list parts request                         | 10000                                           |
+| Maximum number of objects returned per list objects request                     | 1000                                            |
+| Maximum number of multipart uploads returned per list multipart uploads request | 1000                                            |
+| Maximum length for bucket names                                                 | 63                                              |
+| Maximum length for object names                                                 | 1024                                            |
+| Maximum length for '/' separated object name segment                            | 255                                             |
 
 ## List of Amazon S3 API's not supported on MinIO
 

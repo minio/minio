@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/klauspost/compress v1.15.9
 	github.com/minio/colorjson v1.0.2
-	github.com/minio/madmin-go v1.7.3
+	github.com/minio/madmin-go/v2 v2.0.7
 	github.com/secure-io/sio-go v0.3.1
 	github.com/tinylib/msgp v1.1.6
 )
