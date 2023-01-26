@@ -261,6 +261,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 		}
 
 		// If zero or earlier modtime, set to current.
+		// Otherwise the resulting objects will be invalid.
 		if header.ModTime.UnixNano() <= 0 {
 			header.ModTime = time.Now()
 		}
