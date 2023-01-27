@@ -377,7 +377,12 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 		case <-ctx.Done():
 			return
 		case out <- obj:
-			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
+			if fiv, err := obj.fileInfoVersions(o.Bucket); err == nil {
+				for _, version := range fiv.Versions {
+					objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
+					queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
+				}
+			}
 		}
 	}
 }
