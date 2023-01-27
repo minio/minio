@@ -1918,7 +1918,7 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 		return nil, proxy, err
 	}
 	c := minio.Core{Client: tgt.Client}
-	obj, _, h, err := c.GetObject(ctx, bucket, object, gopts)
+	obj, _, h, err := c.GetObject(ctx, tgt.Bucket, object, gopts)
 	if err != nil {
 		return nil, proxy, err
 	}
