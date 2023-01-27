@@ -388,9 +388,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
 			return
 		}
-		if rangeErr != nil {
-			logger.LogIf(ctx, rangeErr, logger.Application)
-		}
 	}
 
 	// Validate pre-conditions if any.
@@ -416,7 +413,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
 			if perr != nil {
 				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
-				if !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
+				if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
 					logger.LogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 				}
