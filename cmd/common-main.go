@@ -661,6 +661,7 @@ func handleCommonEnvVars() {
 		}
 		u.Path = "" // remove any path component such as `/`
 		globalMinioEndpoint = u.String()
+		globalMinioEndpointURL = u
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
