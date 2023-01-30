@@ -189,6 +189,43 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	return xlMeta.versions[0].header.Type == DeleteType
 }
 
+// isAllFreeVersions returns if all objects are free versions.
+// If metadata is NOT versioned false will always be returned.
+// If v2 and UNABLE to load metadata true will be returned.
+func (e *metaCacheEntry) isAllFreeVersions() bool {
+	if e.cached != nil {
+		if len(e.cached.versions) == 0 {
+			return true
+		}
+		for _, v := range e.cached.versions {
+			if !v.header.FreeVersion() {
+				return false
+			}
+		}
+		return true
+	}
+	if !isXL2V1Format(e.metadata) {
+		return false
+	}
+	if meta, _, err := isIndexedMetaV2(e.metadata); meta != nil {
+		return meta.AllHidden(false)
+	} else if err != nil {
+		return true
+	}
+	// Fall back...
+	xlMeta, err := e.xlmeta()
+	if err != nil || len(xlMeta.versions) == 0 {
+		return true
+	}
+	// Check versions..
+	for _, v := range e.cached.versions {
+		if !v.header.FreeVersion() {
+			return false
+		}
+	}
+	return true
+}
+
 // fileInfo returns the decoded metadata.
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.

@@ -367,7 +367,10 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 				return true
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
-				return entries.len() < o.Limit
+				return true
+			}
+			if entry.isAllFreeVersions() {
+				return true
 			}
 			entries.o = append(entries.o, entry)
 			return entries.len() < o.Limit
