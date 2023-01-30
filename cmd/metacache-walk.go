@@ -93,7 +93,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if opts.Limit <= 0 {
 			return
 		}
-		if m, _, _ := isIndexedMetaV2(metadata); m != nil && !m.IsLatestDeleteMarker() {
+		if m, _, _ := isIndexedMetaV2(metadata); m != nil && !m.AllHidden(true) {
 			objsReturned++
 		}
 	}
