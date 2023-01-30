@@ -32,6 +32,11 @@ func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
 func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
 	for _, disk := range diskInfo {
+		// Ignore invalid.
+		if disk.PoolIndex < 0 || len(s.Backend.StandardSCData) <= disk.PoolIndex {
+			// https://github.com/minio/minio/issues/16500
+			continue
+		}
 		// Ignore parity disks
 		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {
 			capacity += disk.TotalSpace
@@ -51,6 +56,11 @@ func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
 func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
 	for _, disk := range diskInfo {
+		// Ignore invalid.
+		if disk.PoolIndex < 0 || len(s.Backend.StandardSCData) <= disk.PoolIndex {
+			// https://github.com/minio/minio/issues/16500
+			continue
+		}
 		// Ignore parity disks
 		if disk.DiskIndex < s.Backend.StandardSCData[disk.PoolIndex] {
 			capacity += disk.AvailableSpace

@@ -61,6 +61,11 @@ func rebalanceStatus(ctx context.Context, z *erasureServerPools) (r rebalanceAdm
 		TotalSpace     uint64
 	}, len(z.serverPools))
 	for _, disk := range si.Disks {
+		// Ignore invalid.
+		if disk.PoolIndex < 0 || len(diskStats) <= disk.PoolIndex {
+			// https://github.com/minio/minio/issues/16500
+			continue
+		}
 		diskStats[disk.PoolIndex].AvailableSpace += disk.AvailableSpace
 		diskStats[disk.PoolIndex].TotalSpace += disk.TotalSpace
 	}
