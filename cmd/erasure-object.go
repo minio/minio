@@ -2091,6 +2091,8 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = er.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ropts)
+	_, err = er.CompleteMultipartUpload(ctx, bucket, object, res.UploadID, uploadedParts, ObjectOptions{
+		MTime: oi.ModTime,
+	})
 	return setRestoreHeaderFn(oi, err)
 }
