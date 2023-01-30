@@ -134,7 +134,7 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	var totalCap, totalFree uint64
 	for _, disk := range si.Disks {
 		// Ignore invalid.
-		if len(diskStats) <= disk.PoolIndex {
+		if disk.PoolIndex < 0 || len(diskStats) <= disk.PoolIndex {
 			// https://github.com/minio/minio/issues/16500
 			continue
 		}

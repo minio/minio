@@ -33,7 +33,7 @@ func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
 	for _, disk := range diskInfo {
 		// Ignore invalid.
-		if len(s.Backend.StandardSCData) <= disk.PoolIndex {
+		if disk.PoolIndex < 0 || len(s.Backend.StandardSCData) <= disk.PoolIndex {
 			// https://github.com/minio/minio/issues/16500
 			continue
 		}
@@ -57,7 +57,7 @@ func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity uint64) {
 	for _, disk := range diskInfo {
 		// Ignore invalid.
-		if len(s.Backend.StandardSCData) <= disk.PoolIndex {
+		if disk.PoolIndex < 0 || len(s.Backend.StandardSCData) <= disk.PoolIndex {
 			// https://github.com/minio/minio/issues/16500
 			continue
 		}
