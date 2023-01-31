@@ -2129,3 +2129,34 @@ func (x xlMetaBuf) IsLatestDeleteMarker() bool {
 	})
 	return isDeleteMarker
 }
+
+// AllHidden returns true are no versions that would show up in a listing (ie all free markers)
+// Optionally also return early if top is a delete marker.
+func (x xlMetaBuf) AllHidden(topDeleteMarker bool) bool {
+	vers, headerV, _, buf, err := decodeXLHeaders(x)
+	if err != nil {
+		return false
+	}
+	if vers == 0 {
+		return true
+	}
+	hidden := true
+
+	var xl xlMetaV2VersionHeader
+	_ = decodeVersions(buf, vers, func(idx int, hdr, _ []byte) error {
+		if _, err := xl.unmarshalV(headerV, hdr); err != nil {
+			return errDoneForNow
+		}
+		if topDeleteMarker && idx == 0 && xl.Type == DeleteType {
+			hidden = true
+			return errDoneForNow
+		}
+		if !xl.FreeVersion() {
+			hidden = false
+			return errDoneForNow
+		}
+		// Check next version
+		return nil
+	})
+	return hidden
+}
