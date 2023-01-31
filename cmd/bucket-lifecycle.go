@@ -660,7 +660,9 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 	if len(objInfo.UserTags) != 0 {
 		meta[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
-
+	// Set restore object status
+	restoreExpiry := lifecycle.ExpectedExpiryTime(time.Now().UTC(), rreq.Days)
+	meta[xhttp.AmzRestore] = completedRestoreObj(restoreExpiry).String()
 	return ObjectOptions{
 		Versioned:        globalBucketVersioningSys.PrefixEnabled(bucket, object),
 		VersionSuspended: globalBucketVersioningSys.PrefixSuspended(bucket, object),
