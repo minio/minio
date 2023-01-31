@@ -21,7 +21,6 @@ import (
 	"context"
 	"os"
 	"reflect"
-	"sync"
 	"testing"
 
 	"github.com/minio/minio/internal/dsync"
@@ -38,10 +37,7 @@ func createLockTestServer(ctx context.Context, t *testing.T) (string, *lockRESTS
 	}
 
 	locker := &lockRESTServer{
-		ll: &localLocker{
-			mutex:   sync.Mutex{},
-			lockMap: make(map[string][]lockRequesterInfo),
-		},
+		ll: newLocker(),
 	}
 	creds := globalActiveCred
 	token, err := authenticateNode(creds.AccessKey, creds.SecretKey, "")
