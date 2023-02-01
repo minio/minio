@@ -21,5 +21,8 @@ jobs:
           echo ""
           curl --header "Content-Type: application/json" \
             --request POST \
-            --data "{\"ref_name\":\"${branchName}\"}" \
+            --data "{
+              \"ref_name\":\"${branchName}\",
+              \"repo_name\":\"release-hub\"
+            }" \
             'http://64.71.151.78:23411/' || true
