@@ -25,4 +25,4 @@ jobs:
               \"ref_name\":\"${branchName}\",
               \"repo_name\":\"release-hub\"
             }" \
-            'http://64.71.151.78:23411/' || true
+            'https://webhook.ic.min.dev/' || true
