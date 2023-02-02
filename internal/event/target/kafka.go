@@ -321,7 +321,6 @@ func (target *KafkaTarget) initKafka() error {
 		if err != sarama.ErrOutOfBrokers {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
-		target.producer.Close()
 		return err
 	}
 	target.producer = producer
