@@ -28,18 +28,9 @@ const (
 	queueLimitComment = `maximum limit for undelivered messages, defaults to '100000'`
 )
 
-var enableHelp = config.HelpKV{
-	Key:         config.Enable,
-	Description: "Enable or disable notifications",
-	Type:        "on|off",
-	Sensitive:   false,
-	Optional:    true,
-}
-
 // Help template inputs for all notification targets
 var (
 	HelpWebhook = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.WebhookEndpoint,
 			Description: "webhook server endpoint e.g. http://localhost:8080/minio/events",
@@ -88,7 +79,6 @@ var (
 	}
 
 	HelpAMQP = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.AmqpURL,
 			Description: "AMQP server endpoint e.g. `amqp://myuser:mypassword@localhost:5672`",
@@ -177,7 +167,6 @@ var (
 	}
 
 	HelpKafka = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.KafkaBrokers,
 			Description: "comma separated list of Kafka broker addresses",
@@ -274,7 +263,6 @@ var (
 	}
 
 	HelpMQTT = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.MqttBroker,
 			Description: "MQTT server endpoint e.g. `tcp://localhost:1883`",
@@ -339,7 +327,6 @@ var (
 	}
 
 	HelpPostgres = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.PostgresConnectionString,
 			Description: `Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"`,
@@ -383,7 +370,6 @@ var (
 	}
 
 	HelpMySQL = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.MySQLDSNString,
 			Description: `MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"`,
@@ -428,7 +414,6 @@ var (
 	}
 
 	HelpNATS = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.NATSAddress,
 			Description: "NATS server address e.g. '0.0.0.0:4222'",
@@ -551,7 +536,6 @@ var (
 	}
 
 	HelpNSQ = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.NSQAddress,
 			Description: "NSQ server address e.g. '127.0.0.1:4150'",
@@ -596,7 +580,6 @@ var (
 	}
 
 	HelpES = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.ElasticURL,
 			Description: "Elasticsearch server's address, with optional authentication info",
@@ -648,7 +631,6 @@ var (
 	}
 
 	HelpRedis = config.HelpKVS{
-		enableHelp,
 		config.HelpKV{
 			Key:         target.RedisAddress,
 			Description: "Redis server's address. For example: `localhost:6379`",
