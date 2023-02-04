@@ -564,7 +564,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "max by (range) (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"})",
+          "expr": "max by (range) (sum (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"}) by (range))",
           "format": "time_series",
           "instant": false,
           "interval": "",
