@@ -61,6 +61,9 @@ var (
 	ErrInvalidSecretKeyLength = fmt.Errorf("secret key length should be between %d and %d", secretKeyMinLen, secretKeyMaxLen)
 )
 
+// AnonymousCredentials simply points to empty credentials
+var AnonymousCredentials = Credentials{}
+
 // IsAccessKeyValid - validate access key for right length.
 func IsAccessKeyValid(accessKey string) bool {
 	return len(accessKey) >= accessKeyMinLen

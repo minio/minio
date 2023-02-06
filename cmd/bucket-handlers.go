@@ -39,6 +39,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/auth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -359,7 +360,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          cred.Claims,
@@ -371,7 +372,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.GetBucketLocationAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          cred.Claims,
@@ -742,7 +743,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
 				Action:          action,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				BucketName:      bucket,
 				IsOwner:         owner,
 				Claims:          cred.Claims,
@@ -983,7 +984,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          iampolicy.PutObjectAction,
-		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+		ConditionValues: getConditionValues(r, "", cred),
 		BucketName:      bucket,
 		ObjectName:      object,
 		IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
@@ -1200,7 +1201,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	readable := globalPolicySys.IsAllowed(policy.Args{
 		Action:          policy.ListBucketAction,
 		BucketName:      bucket,
-		ConditionValues: getConditionValues(r, "", "", nil),
+		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 		IsOwner:         false,
 	})
 
@@ -1208,7 +1209,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	writable := globalPolicySys.IsAllowed(policy.Args{
 		Action:          policy.PutObjectAction,
 		BucketName:      bucket,
-		ConditionValues: getConditionValues(r, "", "", nil),
+		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 		IsOwner:         false,
 	})
 

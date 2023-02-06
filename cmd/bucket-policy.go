@@ -28,6 +28,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -65,8 +66,14 @@ func NewPolicySys() *PolicySys {
 	return &PolicySys{}
 }
 
-func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {
+func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[string][]string {
 	currTime := UTCNow()
+
+	var (
+		username = cred.AccessKey
+		claims   = cred.Claims
+		groups   = cred.Groups
+	)
 
 	principalType := "Anonymous"
 	if username != "" {
@@ -203,6 +210,7 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 			}
 		}
 	}
+
 	// Add groups claim which could be a list. This will ensure that the claim
 	// `jwt:groups` works.
 	if grpsVal, ok := claims["groups"]; ok {
@@ -216,6 +224,13 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 			if len(grps) > 0 {
 				args["groups"] = grps
 			}
+		}
+	}
+
+	// if not claim groups are available use the one with auth.Credentials
+	if _, ok := args["groups"]; !ok {
+		if len(groups) > 0 {
+			args["groups"] = groups
 		}
 	}
 
