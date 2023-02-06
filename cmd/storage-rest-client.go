@@ -50,9 +50,18 @@ func isNetworkError(err error) bool {
 		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
 
+	switch {
 	// A peer node can be in shut down phase and proactively
 	// return 503 server closed error,consider it as an offline node
-	return err.Error() == http.ErrServerClosed.Error()
+	case strings.Contains(err.Error(), http.ErrServerClosed.Error()):
+		return true
+	// Corner case, the server closed the connection with a keep-alive timeout
+	// some requests are not retried internally, such as POST request with written body
+	case strings.Contains(err.Error(), "server closed idle connection"):
+		return true
+	}
+
+	return false
 }
 
 // Converts network error to storageErr. This function is
