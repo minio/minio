@@ -701,37 +701,42 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 		h = config.HelpKVS{value}
 	}
 
-	envHelp := config.HelpKVS{}
-	if envOnly {
-		// Only for multiple targets, make sure
-		// to list the ENV, for regular k/v EnableKey is
-		// implicit, for ENVs we cannot make it implicit.
-		if subSysHelp.MultipleTargets {
-			envK := config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(madmin.EnableKey)
-			envHelp = append(envHelp, config.HelpKV{
-				Key:         envK,
-				Description: fmt.Sprintf("enable %s target, default is 'off'", subSys),
-				Optional:    false,
-				Type:        "on|off",
-			})
+	help := config.HelpKVS{}
+
+	// Only for multiple targets, make sure
+	// to list the ENV, for regular k/v EnableKey is
+	// implicit, for ENVs we cannot make it implicit.
+	if subSysHelp.MultipleTargets {
+		key := madmin.EnableKey
+		if envOnly {
+			key = config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(madmin.EnableKey)
 		}
-		for _, hkv := range h {
-			envK := config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(hkv.Key)
-			envHelp = append(envHelp, config.HelpKV{
-				Key:         envK,
-				Description: hkv.Description,
-				Optional:    hkv.Optional,
-				Type:        hkv.Type,
-			})
+		help = append(help, config.HelpKV{
+			Key:         key,
+			Description: fmt.Sprintf("enable %s target, default is 'off'", subSys),
+			Optional:    false,
+			Type:        "on|off",
+		})
+	}
+
+	for _, hkv := range h {
+		key := hkv.Key
+		if envOnly {
+			key = config.EnvPrefix + strings.ToTitle(subSys) + config.EnvWordDelimiter + strings.ToTitle(hkv.Key)
 		}
-		h = envHelp
+		help = append(help, config.HelpKV{
+			Key:         key,
+			Description: hkv.Description,
+			Optional:    hkv.Optional,
+			Type:        hkv.Type,
+		})
 	}
 
 	return Help{
 		SubSys:          subSys,
 		Description:     subSysHelp.Description,
 		MultipleTargets: subSysHelp.MultipleTargets,
-		KeysHelp:        h,
+		KeysHelp:        help,
 	}, nil
 }
 
