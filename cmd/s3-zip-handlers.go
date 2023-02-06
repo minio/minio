@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -105,7 +106,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, zipPath, opts)
@@ -411,7 +412,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, zipPath, opts)

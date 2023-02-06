@@ -492,7 +492,7 @@ func TestValidateAdminSignature(t *testing.T) {
 		if err := signRequestV4(req, testCase.AccessKey, testCase.SecretKey); err != nil {
 			t.Fatalf("Unable to inititalized new signed http request %s", err)
 		}
-		_, _, _, s3Error := validateAdminSignature(ctx, req, globalMinioDefaultRegion)
+		_, _, s3Error := validateAdminSignature(ctx, req, globalMinioDefaultRegion)
 		if s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i+1, testCase.ErrCode, s3Error)
 		}

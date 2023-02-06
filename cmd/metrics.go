@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -616,14 +617,21 @@ func AuthMiddleware(h http.Handler) http.Handler {
 			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), errAuthentication), r.URL)
 			return
 		}
+
+		cred := auth.Credentials{
+			AccessKey: claims.AccessKey,
+			Claims:    claims.Map(),
+			Groups:    groups,
+		}
+
 		// For authenticated users apply IAM policy.
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey,
-			Groups:          groups,
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
 			Action:          iampolicy.PrometheusAdminAction,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
-			Claims:          claims.Map(),
+			Claims:          cred.Claims,
 		}) {
 			if ok {
 				tc.FuncName = "handler.MetricsAuth"
