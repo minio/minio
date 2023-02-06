@@ -1901,7 +1901,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 		ki.Error = err.Error()
 		return ki
 	}
-
+	defer resp.Body.Close()
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&ki); err != nil {
 		ki.Error = err.Error()
