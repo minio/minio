@@ -21,6 +21,8 @@ import "errors"
 
 // DiscoveryDoc - parses the output from openid-configuration
 // for example https://accounts.google.com/.well-known/openid-configuration
+//
+//nolint:unused
 type DiscoveryDoc struct {
 	Issuer                           string   `json:"issuer,omitempty"`
 	AuthEndpoint                     string   `json:"authorization_endpoint,omitempty"`
