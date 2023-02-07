@@ -1261,6 +1261,25 @@ func (c *check) mustListBuckets(ctx context.Context, client *minio.Client) {
 	}
 }
 
+func (c *check) mustDownload(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
+	rd, err := client.GetObject(ctx, bucket, "some-object", minio.GetObjectOptions{})
+	if err != nil {
+		c.Fatalf("download did not succeed got %#v", err)
+	}
+	if _, err = io.Copy(io.Discard, rd); err != nil {
+		c.Fatalf("download did not succeed got %#v", err)
+	}
+}
+
+func (c *check) mustUpload(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
+	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
+	if err != nil {
+		c.Fatalf("upload did not succeed got %#v", err)
+	}
+}
+
 func (c *check) mustNotUpload(ctx context.Context, client *minio.Client, bucket string) {
 	c.Helper()
 	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
