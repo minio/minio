@@ -199,15 +199,8 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 	for k, v := range claims {
 		vStr, ok := v.(string)
 		if ok {
-			// Special case for AD/LDAP STS users
-			switch k {
-			case ldapUser:
-				args["user"] = []string{vStr}
-			case ldapUserN:
-				args["username"] = []string{vStr}
-			default:
-				args[k] = []string{vStr}
-			}
+			// Trim any LDAP specific prefix
+			args[strings.ToLower(strings.TrimPrefix(k, "ldap"))] = []string{vStr}
 		}
 	}
 
