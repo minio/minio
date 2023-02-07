@@ -300,6 +300,17 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	return s3Err
 }
 
+// checkRequestAuthTypeWithVID is similar to checkRequestAuthType
+// passes versionID additionally.
+func checkRequestAuthTypeWithVID(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName, versionID string) (s3Err APIErrorCode) {
+	logger.GetReqInfo(ctx).BucketName = bucketName
+	logger.GetReqInfo(ctx).ObjectName = objectName
+	logger.GetReqInfo(ctx).VersionID = versionID
+
+	_, _, s3Err = checkRequestAuthTypeCredential(ctx, r, action)
+	return s3Err
+}
+
 func authenticateRequest(ctx context.Context, r *http.Request, action policy.Action) (s3Err APIErrorCode) {
 	if logger.GetReqInfo(ctx) == nil {
 		logger.LogIf(ctx, errors.New("unexpected context.Context does not have a logger.ReqInfo"), logger.Minio)
