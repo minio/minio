@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -162,6 +162,30 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 
 		if objInfo.ETag != "" {
 			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+		}
+	}
+
+	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
+	// otherwise return a 412 (precondition failed).
+	ifMatchETagHeader := r.Header.Get(xhttp.IfMatch)
+	if ifMatchETagHeader != "" {
+		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
+			// If the object ETag does not match with the specified ETag.
+			writeHeaders()
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
+			return true
+		}
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
+	if ifNoneMatchETagHeader != "" {
+		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+			// If the object ETag matches with the specified ETag.
+			writeHeaders()
+			w.WriteHeader(http.StatusNotModified)
+			return true
 		}
 	}
 
