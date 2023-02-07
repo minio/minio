@@ -337,6 +337,20 @@ func (sys *BucketMetadataSys) GetBucketTargetsConfig(bucket string) (*madmin.Buc
 	return meta.bucketTargetConfig, nil
 }
 
+// GetConfigFromDisk read bucket metadata config from disk.
+func (sys *BucketMetadataSys) GetConfigFromDisk(ctx context.Context, bucket string) (BucketMetadata, error) {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return newBucketMetadata(bucket), errServerNotInitialized
+	}
+
+	if isMinioMetaBucketName(bucket) {
+		return newBucketMetadata(bucket), errInvalidArgument
+	}
+
+	return loadBucketMetadata(ctx, objAPI, bucket)
+}
+
 // GetConfig returns a specific configuration from the bucket metadata.
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (BucketMetadata, error) {
