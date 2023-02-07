@@ -465,7 +465,7 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 		}
 
 		// Any other config errors we simply print a message and proceed forward.
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing: %w", err))
 	}
 
 	return nil
