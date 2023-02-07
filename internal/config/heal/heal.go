@@ -70,39 +70,11 @@ func (opts Config) BitrotScanCycle() (d time.Duration) {
 	return opts.cache.bitrotCycle
 }
 
-// Wait waits for IOCount to go down or max sleep to elapse before returning.
-// usually used in healing paths to wait for specified amount of time to
-// throttle healing.
-func (opts Config) Wait(currentIO func() int, activeListeners func() int) {
+// Clone safely the heal configuration
+func (opts Config) Clone() (int, time.Duration, string) {
 	configMutex.RLock()
-	maxIO, maxWait := opts.IOCount, opts.Sleep
-	configMutex.RUnlock()
-
-	// No need to wait run at full speed.
-	if maxIO <= 0 {
-		return
-	}
-
-	// At max 10 attempts to wait with 100 millisecond interval before proceeding
-	waitTick := 100 * time.Millisecond
-
-	tmpMaxWait := maxWait
-
-	if currentIO != nil {
-		for currentIO() >= maxIO+activeListeners() {
-			if tmpMaxWait > 0 {
-				if tmpMaxWait < waitTick {
-					time.Sleep(tmpMaxWait)
-				} else {
-					time.Sleep(waitTick)
-				}
-				tmpMaxWait -= waitTick
-			}
-			if tmpMaxWait <= 0 {
-				return
-			}
-		}
-	}
+	defer configMutex.RUnlock()
+	return opts.IOCount, opts.Sleep, opts.Bitrot
 }
 
 // Update updates opts with nopts
