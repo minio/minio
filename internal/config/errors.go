@@ -121,10 +121,10 @@ var (
 		"MINIO_CACHE_AFTER cannot be used with MINIO_CACHE_COMMIT setting",
 	)
 
-	ErrInvalidCredentialsBackendEncrypted = newErrFn(
-		"Invalid credentials",
-		"Please set correct credentials in the environment for decryption",
-		`Detected encrypted config backend, correct access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD to be able to decrypt the MinIO config, user IAM and policies`,
+	ErrInvalidConfigDecryptionKey = newErrFn(
+		"Incorrect encryption key to decrypt internal data",
+		"Please set the correct default KMS key value or the correct root credentials for older MinIO versions.",
+		`Revert MINIO_KMS_KES_KEY_NAME or MINIO_ROOT_USER/MINIO_ROOT_PASSWORD (for older MinIO versions) to be able to decrypt the internal data again.`,
 	)
 
 	ErrInvalidCredentials = newErrFn(

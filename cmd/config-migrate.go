@@ -46,7 +46,7 @@ import (
 	"github.com/minio/pkg/quick"
 )
 
-// DO NOT EDIT following message template, please open a GitHub issue to discuss instead.
+// Do not edit following message template, please open a GitHub issue to discuss instead.
 var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully."
 
 // Save config file to corresponding backend
@@ -2515,20 +2515,13 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
 				minioMetaBucket: path.Join(minioMetaBucket, configFile),
 			})
-			if err != nil {
-				data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
-				if err != nil {
-					if err == madmin.ErrMaliciousData {
-						return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
-					}
-					return false, nil, err
-				}
-			}
-		} else {
+		}
+
+		if GlobalKMS == nil && err != nil {
 			data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 			if err != nil {
-				if err == madmin.ErrMaliciousData {
-					return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+				if err == madmin.ErrMaliciousData || err == madmin.ErrUnexpectedHeader {
+					return false, nil, config.ErrInvalidConfigDecryptionKey(nil)
 				}
 				return false, nil, err
 			}

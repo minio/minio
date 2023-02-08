@@ -1693,9 +1693,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 
 	parentArgs := args
 	parentArgs.AccountName = parentUser
-	// These are dynamic values set them appropriately.
-	parentArgs.ConditionValues["username"] = []string{parentUser}
-	parentArgs.ConditionValues["userid"] = []string{parentUser}
 
 	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
 	if !ok {
@@ -1821,10 +1818,6 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	}
 
 	// 3. If an inline session-policy is present, evaluate it.
-
-	// These are dynamic values set them appropriately.
-	args.ConditionValues["username"] = []string{parentUser}
-	args.ConditionValues["userid"] = []string{parentUser}
 
 	// Now check if we have a sessionPolicy.
 	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
