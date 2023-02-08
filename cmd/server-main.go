@@ -323,6 +323,7 @@ func initAllSubsystems(ctx context.Context) {
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
 
+	globalTransitionState = newTransitionState(GlobalContext)
 	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
 }
 
@@ -674,8 +675,7 @@ func serverMain(ctx *cli.Context) {
 		// Initialize background replication
 		initBackgroundReplication(GlobalContext, newObject)
 
-		// Initialize background transition
-		initBackgroundTransition(GlobalContext, newObject)
+		globalTransitionState.Init(newObject)
 
 		// Initialize batch job pool.
 		globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)

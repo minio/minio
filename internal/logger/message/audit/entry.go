@@ -66,6 +66,9 @@ type Entry struct {
 	RespHeader map[string]string      `json:"responseHeader,omitempty"`
 	Tags       map[string]interface{} `json:"tags,omitempty"`
 
+	AccessKey  string `json:"accessKey,omitempty"`
+	ParentUser string `json:"parentUser,omitempty"`
+
 	Error string `json:"error,omitempty"`
 }
 

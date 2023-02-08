@@ -19,9 +19,13 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"runtime"
+	"strconv"
 
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 // healTask represents what to heal along with options
@@ -111,9 +115,19 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 
 func newHealRoutine() *healRoutine {
 	workers := runtime.GOMAXPROCS(0) / 2
+
+	if envHealWorkers := env.Get("_MINIO_HEAL_WORKERS", ""); envHealWorkers != "" {
+		if numHealers, err := strconv.Atoi(envHealWorkers); err != nil {
+			logger.LogIf(context.Background(), fmt.Errorf("invalid _MINIO_HEAL_WORKERS value: %w", err))
+		} else {
+			workers = numHealers
+		}
+	}
+
 	if workers == 0 {
 		workers = 4
 	}
+
 	return &healRoutine{
 		tasks:   make(chan healTask),
 		workers: workers,

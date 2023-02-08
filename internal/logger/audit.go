@@ -116,6 +116,9 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			headerBytes = int64(st.HeaderSize())
 		}
 
+		entry.AccessKey = reqInfo.Cred.AccessKey
+		entry.ParentUser = reqInfo.Cred.ParentUser
+
 		entry.API.Name = reqInfo.API
 		entry.API.Bucket = reqInfo.BucketName
 		entry.API.Object = reqInfo.ObjectName

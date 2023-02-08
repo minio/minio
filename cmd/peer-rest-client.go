@@ -838,14 +838,20 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	dec := gob.NewDecoder(respBody)
 	ch := make(chan Metric)
 	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
 		for {
 			var metric Metric
 			if err := dec.Decode(&metric); err != nil {
-				xhttp.DrainBody(respBody)
-				close(ch)
 				return
 			}
-			ch <- metric
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
 		}
 	}(ch)
 	return ch, nil
