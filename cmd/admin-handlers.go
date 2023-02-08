@@ -2078,8 +2078,8 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 			// No ellipses pattern. Anonymize host name from every pool arg
 			pools := strings.Fields(poolsArgs)
 			anonPools = make([]string, len(pools))
-			for _, arg := range pools {
-				anonPools = append(anonPools, anonAddr(arg))
+			for index, arg := range pools {
+				anonPools[index] = anonAddr(arg)
 			}
 			return cmdLineWithoutPools + strings.Join(anonPools, " ")
 		}
