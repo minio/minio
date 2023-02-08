@@ -36,6 +36,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	// The STS for root test needs to be the first one after setup.
 	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
+	suite.TestSTSWithDenyDeleteVersion(c)
 	suite.TestSTSWithTags(c)
 	suite.TestSTSWithGroupPolicy(c)
 	suite.TearDownSuite(c)
@@ -71,6 +72,101 @@ func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
 			},
 		)
 	}
+}
+
+func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{ObjectLocking: true})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+   {
+    "Sid": "ObjectActionsRW",
+    "Effect": "Allow",
+    "Action": [
+     "s3:PutObject",
+     "s3:PutObjectTagging",
+     "s3:AbortMultipartUpload",
+     "s3:DeleteObject",
+     "s3:GetObject",
+     "s3:GetObjectTagging",
+     "s3:GetObjectVersion",
+     "s3:ListMultipartUploadParts"
+    ],
+    "Resource": [
+     "arn:aws:s3:::%s/*"
+    ]
+   },
+   {
+    "Sid": "DenyDeleteVersionAction",
+    "Effect": "Deny",
+    "Action": [
+     "s3:DeleteObjectVersion"
+    ],
+    "Resource": [
+     "arn:aws:s3:::%s/*"
+    ]
+   }
+  ]
+ }
+`, bucket, bucket))
+
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// confirm that the user is able to access the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	versions := c.mustUploadReturnVersions(ctx, uClient, bucket)
+	c.mustNotDelete(ctx, uClient, bucket, versions[0])
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("err calling assumeRole: %v", err)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	versions = c.mustUploadReturnVersions(ctx, minioClient, bucket)
+	c.mustNotDelete(ctx, minioClient, bucket, versions[0])
 }
 
 func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
@@ -171,9 +267,9 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 	}
 
 	// Validate sts creds can access the object
-	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
-	c.mustGetObject(ctx, uClient, bucket, object)
-	c.mustHeadObject(ctx, uClient, bucket, object, 2)
+	c.mustPutObjectWithTags(ctx, minioClient, bucket, object)
+	c.mustGetObject(ctx, minioClient, bucket, object)
+	c.mustHeadObject(ctx, minioClient, bucket, object, 2)
 
 	// Validate that the client can remove objects
 	if err = minioClient.RemoveObjectTagging(ctx, bucket, object, minio.RemoveObjectTaggingOptions{}); err != nil {
