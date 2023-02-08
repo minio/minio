@@ -953,8 +953,14 @@ func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func(err
 
 func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx int) error {
 	pool := z.serverPools[idx]
-	for _, bucket := range z.poolMeta.PendingBuckets(idx) {
-		if z.poolMeta.isBucketDecommissioned(idx, bucket.String()) {
+	z.poolMetaMutex.RLock()
+	buckets := z.poolMeta.PendingBuckets(idx)
+	z.poolMetaMutex.Unlock()
+	for _, bucket := range buckets {
+		z.poolMetaMutex.RLock()
+		isBucketDecommissioned := z.poolMeta.isBucketDecommissioned(idx, bucket.String())
+		z.poolMetaMutex.Unlock()
+		if isBucketDecommissioned {
 			if serverDebugLog {
 				console.Debugln("decommission: already done, moving on", bucket)
 			}
