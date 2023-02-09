@@ -57,6 +57,7 @@ const metacacheStreamVersion = 2
 // metacacheWriter provides a serializer of metacache objects.
 type metacacheWriter struct {
 	streamErr   error
+	ctx         context.Context
 	mw          *msgp.Writer
 	creator     func() error
 	closer      func() error
@@ -68,15 +69,19 @@ type metacacheWriter struct {
 // newMetacacheWriter will create a serializer that will write objects in given order to the output.
 // Provide a block size that affects latency. If 0 a default of 128KiB will be used.
 // Block size can be up to 4MiB.
-func newMetacacheWriter(out io.Writer, blockSize int) *metacacheWriter {
+func newMetacacheWriter(ctx context.Context, out io.Writer, blockSize int) *metacacheWriter {
 	if blockSize < 8<<10 {
 		blockSize = 128 << 10
 	}
 	w := metacacheWriter{
 		mw:        nil,
+		ctx:       ctx,
 		blockSize: blockSize,
 	}
 	w.creator = func() error {
+		if contextCanceled(w.ctx) {
+			return w.ctx.Err()
+		}
 		s2w := s2.NewWriter(out, s2.WriterBlockSize(blockSize), s2.WriterConcurrency(2))
 		w.mw = msgp.NewWriter(s2w)
 		w.creator = nil
@@ -153,6 +158,9 @@ func (w *metacacheWriter) write(objs ...metaCacheEntry) error {
 // The returned channel should be closed when done.
 // Any error is reported when closing the metacacheWriter.
 func (w *metacacheWriter) stream() (chan<- metaCacheEntry, error) {
+	if contextCanceled(w.ctx) {
+		return nil, w.ctx.Err()
+	}
 	if w.creator != nil {
 		err := w.creator()
 		w.creator = nil
@@ -168,28 +176,34 @@ func (w *metacacheWriter) stream() (chan<- metaCacheEntry, error) {
 	w.streamWg.Add(1)
 	go func() {
 		defer w.streamWg.Done()
-		for o := range objs {
-			if len(o.name) == 0 || w.streamErr != nil {
-				continue
-			}
-			// Indicate EOS
-			err := w.mw.WriteBool(true)
-			if err != nil {
-				w.streamErr = err
-				continue
-			}
-			err = w.mw.WriteString(o.name)
-			if err != nil {
-				w.streamErr = err
-				continue
-			}
-			err = w.mw.WriteBytes(o.metadata)
-			if w.reuseBlocks || o.reusable {
-				metaDataPoolPut(o.metadata)
-			}
-			if err != nil {
-				w.streamErr = err
-				continue
+		for {
+			select {
+			case <-w.ctx.Done():
+				return
+			case o, ok := <-objs:
+				if !ok {
+					return
+				}
+				if len(o.name) == 0 || w.streamErr != nil {
+					continue
+				}
+				// Indicate EOS
+				if err := w.mw.WriteBool(true); err != nil {
+					w.streamErr = err
+					continue
+				}
+				if err := w.mw.WriteString(o.name); err != nil {
+					w.streamErr = err
+					continue
+				}
+				err := w.mw.WriteBytes(o.metadata)
+				if w.reuseBlocks || o.reusable {
+					metaDataPoolPut(o.metadata)
+				}
+				if err != nil {
+					w.streamErr = err
+					continue
+				}
 			}
 		}
 	}()
@@ -767,7 +781,7 @@ type metacacheBlockWriter struct {
 // newMetacacheBlockWriter provides a streaming block writer.
 // Each block is the size of the capacity of the input channel.
 // The caller should close to indicate the stream has ended.
-func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacacheBlock) error) *metacacheBlockWriter {
+func newMetacacheBlockWriter(ctx context.Context, in <-chan metaCacheEntry, nextBlock func(b *metacacheBlock) error) *metacacheBlockWriter {
 	w := metacacheBlockWriter{blockEntries: cap(in)}
 	w.wg.Add(1)
 	go func() {
@@ -781,7 +795,7 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 			bytebufferpool.Put(buf)
 		}()
 
-		block := newMetacacheWriter(buf, 1<<20)
+		block := newMetacacheWriter(ctx, buf, 1<<20)
 		defer block.Close()
 		finishBlock := func() {
 			if err := block.Close(); err != nil {

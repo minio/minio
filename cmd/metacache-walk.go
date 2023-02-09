@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -79,7 +79,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 
 	// Use a small block size to start sending quickly
-	w := newMetacacheWriter(wr, 16<<10)
+	w := newMetacacheWriter(ctx, wr, 16<<10)
 	w.reuseBlocks = true // We are not sharing results, so reuse buffers.
 	defer w.Close()
 	out, err := w.stream()
@@ -108,9 +108,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// if baseDir is already a directory object, consider it
 			// as part of the list call, this is AWS S3 specific
 			// behavior.
-			out <- metaCacheEntry{
+			select {
+			case out <- metaCacheEntry{
 				name:     opts.BaseDir,
 				metadata: metadata,
+			}:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 			objReturned(metadata)
 		} else {
@@ -216,7 +220,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = decodeDirObject(meta.name)
 
 				objReturned(meta.metadata)
-				out <- meta
+				select {
+				case out <- meta:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 				return nil
 			}
 			// Check legacy.
@@ -237,7 +245,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = pathJoin(current, meta.name)
 				objReturned(meta.metadata)
 
-				out <- meta
+				select {
+				case out <- meta:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
 				return nil
 			}
 			// Skip all other files.
@@ -272,7 +285,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If directory entry on stack before this, pop it now.
 			for len(dirStack) > 0 && dirStack[len(dirStack)-1] < meta.name {
 				pop := dirStack[len(dirStack)-1]
-				out <- metaCacheEntry{name: pop}
+				select {
+				case out <- metaCacheEntry{name: pop}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
 					err := scanDir(pop)
@@ -302,7 +320,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 				objReturned(meta.metadata)
 
-				out <- meta
+				select {
+				case out <- meta:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				diskHealthCheckOK(ctx, err)
@@ -310,7 +333,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// It was an object
 					objReturned(meta.metadata)
 
-					out <- meta
+					select {
+					case out <- meta:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+
 					continue
 				}
 
@@ -337,7 +365,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return ctx.Err()
 			}
 			pop := dirStack[len(dirStack)-1]
-			out <- metaCacheEntry{name: pop}
+			select {
+			case out <- metaCacheEntry{name: pop}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
 				logger.LogIf(ctx, scanDir(pop))

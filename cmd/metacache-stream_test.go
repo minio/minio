@@ -367,7 +367,7 @@ func Test_metacacheReader_peek(t *testing.T) {
 func Test_newMetacacheStream(t *testing.T) {
 	r := loadMetacacheSample(t)
 	var buf bytes.Buffer
-	w := newMetacacheWriter(&buf, 1<<20)
+	w := newMetacacheWriter(context.Background(), &buf, 1<<20)
 	defer w.Close()
 	err := r.readFn(func(object metaCacheEntry) bool {
 		err := w.write(object)

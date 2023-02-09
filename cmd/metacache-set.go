@@ -739,7 +739,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 
 	// Keep destination...
 	// Write results to disk.
-	bw := newMetacacheBlockWriter(entries, func(b *metacacheBlock) error {
+	bw := newMetacacheBlockWriter(ctx, entries, func(b *metacacheBlock) error {
 		// if the block is 0 bytes and its a first block skip it.
 		// skip only this for Transient caches.
 		if len(b.data) == 0 && b.n == 0 && o.Transient {
