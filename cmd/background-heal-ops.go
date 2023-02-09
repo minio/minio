@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
@@ -60,13 +61,43 @@ func activeListeners() int {
 	return int(globalHTTPListen.Subscribers()) + int(globalTrace.Subscribers())
 }
 
-func waitForLowHTTPReq() {
-	var currentIO func() int
-	if httpServer := newHTTPServerFn(); httpServer != nil {
-		currentIO = httpServer.GetRequestCount
+func waitForLowIO(maxIO int, maxWait time.Duration, currentIO func() int) {
+	// No need to wait run at full speed.
+	if maxIO <= 0 {
+		return
 	}
 
-	globalHealConfig.Wait(currentIO, activeListeners)
+	const waitTick = 100 * time.Millisecond
+
+	tmpMaxWait := maxWait
+
+	for currentIO() >= maxIO {
+		if tmpMaxWait > 0 {
+			if tmpMaxWait < waitTick {
+				time.Sleep(tmpMaxWait)
+			} else {
+				time.Sleep(waitTick)
+			}
+			tmpMaxWait -= waitTick
+		}
+		if tmpMaxWait <= 0 {
+			return
+		}
+	}
+}
+
+func currentHTTPIO() int {
+	httpServer := newHTTPServerFn()
+	if httpServer == nil {
+		return 0
+	}
+
+	return httpServer.GetRequestCount() - activeListeners()
+}
+
+func waitForLowHTTPReq() {
+	maxIO, maxWait, _ := globalHealConfig.Clone()
+	waitForLowIO(maxIO, maxWait, currentHTTPIO)
 }
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
