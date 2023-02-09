@@ -191,6 +191,9 @@ type SiteReplicationSys struct {
 
 	// In-memory and persisted multi-site replication state.
 	state srState
+
+	iamMetaCache srIAMCache
+	iamInfoLk    sync.RWMutex
 }
 
 type srState srStateV1
@@ -3124,6 +3127,32 @@ func isBktReplCfgReplicated(total int, cfgs []*sreplication.Config) bool {
 	return true
 }
 
+// cache of IAM info fetched in last SiteReplicationMetaInfo call
+type srIAMCache struct {
+	sync.RWMutex
+	lastUpdate time.Time
+	srIAMInfo  madmin.SRInfo // caches IAM info
+}
+
+func (c *SiteReplicationSys) getSRCachedIAMInfo() (info madmin.SRInfo, ok bool) {
+	c.iamMetaCache.RLock()
+	defer c.iamMetaCache.RUnlock()
+	if c.iamMetaCache.lastUpdate.IsZero() {
+		return info, false
+	}
+	if time.Since(c.iamMetaCache.lastUpdate) < siteHealTimeInterval {
+		return c.iamMetaCache.srIAMInfo, true
+	}
+	return info, false
+}
+
+func (c *SiteReplicationSys) srCacheIAMInfo(info madmin.SRInfo) {
+	c.iamMetaCache.Lock()
+	defer c.iamMetaCache.Unlock()
+	c.iamMetaCache.srIAMInfo = info
+	c.iamMetaCache.lastUpdate = time.Now()
+}
+
 // SiteReplicationMetaInfo returns the metadata info on buckets, policies etc for the replicated site
 func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI ObjectLayer, opts madmin.SRStatusOptions) (info madmin.SRInfo, err error) {
 	if objAPI == nil {
@@ -3217,6 +3246,15 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 		}
 	}
 
+	if opts.Users && opts.Groups && opts.Policies && !opts.Buckets {
+		// serialize SiteReplicationMetaInfo calls - if data in cache is within
+		// healing interval, avoid fetching IAM data again from disk.
+		c.iamInfoLk.Lock()
+		defer c.iamInfoLk.Unlock()
+		if metaInfo, ok := c.getSRCachedIAMInfo(); ok {
+			return metaInfo, nil
+		}
+	}
 	if opts.Policies || opts.Entity == madmin.SRPolicyEntity {
 		var allPolicies map[string]PolicyDoc
 		if opts.Entity == madmin.SRPolicyEntity {
@@ -3225,7 +3263,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			// Replicate IAM policies on local to all peers.
-			allPolicies, err = globalIAMSys.ListPolicyDocs(ctx, "")
+			allPolicies, err = globalIAMSys.store.listPolicyDocs(ctx, "")
 			if err != nil {
 				return info, errSRBackendIssue(err)
 			}
@@ -3361,7 +3399,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			//  get users/group info on local.
-			groups, errG := globalIAMSys.ListGroups(ctx)
+			groups, errG := globalIAMSys.store.listGroups(ctx)
 			if errG != nil {
 				return info, errSRBackendIssue(errG)
 			}
@@ -3377,6 +3415,11 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		}
 	}
+	// cache SR metadata info for IAM
+	if opts.Users && opts.Groups && opts.Policies && !opts.Buckets {
+		c.srCacheIAMInfo(info)
+	}
+
 	return info, nil
 }
 

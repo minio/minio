@@ -874,6 +874,25 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 	return
 }
 
+// listGroups - lists groups - fetch groups from cache
+func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	if store.getUsersSysType() == MinIOUsersSysType {
+		for k := range cache.iamGroupsMap {
+			res = append(res, k)
+		}
+	}
+
+	if store.getUsersSysType() == LDAPUsersSysType {
+		for k := range cache.iamGroupPolicyMap {
+			res = append(res, k)
+		}
+	}
+	return
+}
+
 // PolicyDBUpdate - adds or removes given policies to/from the user or group's
 // policy associations.
 func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGroup bool,
@@ -1228,6 +1247,20 @@ func (store *IAMStoreSys) ListPolicyDocs(ctx context.Context, bucketName string)
 		}
 	}
 
+	return ret, nil
+}
+
+// fetches all policy docs from cache.
+// If bucketName is non-empty, returns policy docs matching the bucket.
+func (store *IAMStoreSys) listPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	cache := store.rlock()
+	defer store.runlock()
+	ret := map[string]PolicyDoc{}
+	for k, v := range cache.iamPolicyDocsMap {
+		if bucketName == "" || v.Policy.MatchResource(bucketName) {
+			ret[k] = v
+		}
+	}
 	return ret, nil
 }
 
