@@ -270,7 +270,9 @@ func (t *transitionState) getDailyAllTierStats() DailyAllTierStats {
 func (t *transitionState) UpdateWorkers(n int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
+	if t.objAPI == nil { // Init hasn't been called yet.
+		return
+	}
 	t.updateWorkers(n)
 }
 
