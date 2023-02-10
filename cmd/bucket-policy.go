@@ -75,6 +75,11 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 		groups   = cred.Groups
 	)
 
+	if cred.IsTemp() || cred.IsServiceAccount() {
+		// For derived credentials, check the parent user's permissions.
+		username = cred.ParentUser
+	}
+
 	principalType := "Anonymous"
 	if username != "" {
 		principalType = "User"
