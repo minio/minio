@@ -49,6 +49,7 @@ type listPathOptions struct {
 	Bucket string
 
 	// Directory inside the bucket.
+	// When unset listPath will set this based on Prefix
 	BaseDir string
 
 	// Scan/return only content with prefix.

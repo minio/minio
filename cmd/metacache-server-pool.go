@@ -96,7 +96,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 
 	// Decode and get the optional list id from the marker.
 	o.parseMarker()
-	o.BaseDir = baseDirFromPrefix(o.Prefix)
+	if o.BaseDir == "" {
+		o.BaseDir = baseDirFromPrefix(o.Prefix)
+	}
 	o.Transient = o.Transient || isReservedOrInvalidBucket(o.Bucket, false)
 	o.SetFilter()
 	if o.Transient {
