@@ -33,7 +33,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -1207,6 +1207,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
+
 	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -1217,6 +1218,17 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 		Versioned:   true,
 	}
+
+	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
+	// It requests unique blocks with a specific prefix.
+	// We skip scanning the parent directory for
+	// more objects matching the prefix.
+	ri := logger.GetReqInfo(ctx)
+	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
+		opts.BaseDir = prefix
+		opts.Transient = true
+	}
+
 	// set bucket metadata in opts
 	opts.setBucketMeta(ctx)
 
