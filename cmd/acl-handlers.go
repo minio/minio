@@ -90,7 +90,7 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 	if aclHeader == "" {
 		acl := &accessControlPolicy{}
 		if err = xmlDecoder(r.Body, acl, r.ContentLength); err != nil {
-			if err == io.EOF {
+			if terr, ok := err.(*xml.SyntaxError); ok && terr.Msg == io.EOF.Error() {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingSecurityHeader),
 					r.URL)
 				return
