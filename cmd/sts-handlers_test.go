@@ -38,6 +38,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	suite.TestSTS(c)
 	suite.TestSTSWithDenyDeleteVersion(c)
 	suite.TestSTSWithTags(c)
+	suite.TestSTSServiceAccountsWithUsername(c)
 	suite.TestSTSWithGroupPolicy(c)
 	suite.TearDownSuite(c)
 }
@@ -72,6 +73,99 @@ func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
 			},
 		)
 	}
+}
+
+func (s *TestSuiteIAM) TestSTSServiceAccountsWithUsername(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := "dillon-bucket"
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy-username"
+	policyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::${aws:username}-*"
+   ]
+  }
+ ]
+}`)
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	if err = s.adm.AddUser(ctx, "dillon", "dillon-123"); err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, "dillon", false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: "dillon",
+			SecretKey: "dillon-123",
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Check that the LDAP sts cred is actually working.
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+
+	// 1. Check S3 access for service account ListObjects()
+	c.mustListObjects(ctx, svcClient, bucket)
+
+	// 2. Check S3 access for upload
+	c.mustUpload(ctx, svcClient, bucket)
+
+	// 3. Check S3 access for download
+	c.mustDownload(ctx, svcClient, bucket)
 }
 
 func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {

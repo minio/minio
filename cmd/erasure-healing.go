@@ -411,6 +411,11 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			erasure.ShardFileSize(latestMeta.Parts[0].ActualSize) < smallFileThreshold)
 	}
 
+	result.ObjectSize, err = latestMeta.GetActualSize()
+	if err != nil {
+		return result, err
+	}
+
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs
 	// to be healed.
@@ -421,9 +426,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		switch {
 		case v != nil:
 			driveState = madmin.DriveStateOk
-			// If data is sane on any one disk, we can
-			// extract the correct object size.
-			result.ObjectSize = partsMetadata[i].Size
 		case errs[i] == errDiskNotFound, dataErrs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
 		case errs[i] == errFileNotFound, errs[i] == errFileVersionNotFound, errs[i] == errVolumeNotFound:
@@ -672,9 +674,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			},
 		})
 	}
-
-	// Set the size of the object in the heal result
-	result.ObjectSize = latestMeta.Size
 
 	return result, nil
 }
