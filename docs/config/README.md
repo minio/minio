@@ -326,4 +326,4 @@ minio server /data
 ## Explore Further
 
 * [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linux)
-* [Configure MinIO Server with TLS](https://min.io/docs/minio/linux/operations/network-encryption.htmls)
+* [Configure MinIO Server with TLS](https://min.io/docs/minio/linux/operations/network-encryption.html)
