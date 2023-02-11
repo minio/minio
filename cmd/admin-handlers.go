@@ -1776,7 +1776,43 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseJSON(w, resp)
 }
 
-func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
+func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]madmin.ErasureSetInfo, error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+
+	z, _ := objectAPI.(*erasureServerPools)
+
+	poolsInfo := make(map[int]map[int]madmin.ErasureSetInfo)
+	for _, d := range allDisks {
+		poolInfo, ok := poolsInfo[d.PoolIndex]
+		if !ok {
+			poolInfo = make(map[int]madmin.ErasureSetInfo)
+		}
+		erasureSet, ok := poolInfo[d.SetIndex]
+		if !ok {
+			erasureSet.ID = d.SetIndex
+			cache := dataUsageCache{}
+			if err := cache.load(ctx, z.serverPools[d.PoolIndex].sets[d.SetIndex], dataUsageCacheName); err == nil {
+				dataUsageInfo := cache.dui(dataUsageRoot, nil)
+				erasureSet.ObjectsCount = dataUsageInfo.ObjectsTotalCount
+				erasureSet.VersionsCount = dataUsageInfo.VersionsTotalCount
+				erasureSet.Usage = dataUsageInfo.ObjectsTotalSize
+			}
+		}
+		erasureSet.RawCapacity += d.TotalSpace
+		erasureSet.RawUsage += d.UsedSpace
+		if d.Healing {
+			erasureSet.HealDisks = 1
+		}
+		poolInfo[d.SetIndex] = erasureSet
+		poolsInfo[d.PoolIndex] = poolInfo
+	}
+	return poolsInfo, nil
+}
+
+func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) madmin.InfoMessage {
 	kmsStat := fetchKMSStatus()
 
 	ldap := madmin.LDAP{}
@@ -1805,7 +1841,9 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 	assignPoolNumbers(servers)
 
+	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
 	var backend interface{}
+
 	mode := madmin.ItemInitializing
 
 	buckets := madmin.Buckets{}
@@ -1832,25 +1870,23 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 		// Fetching the backend information
 		backendInfo := objectAPI.BackendInfo()
-		if backendInfo.Type == madmin.Erasure {
-			// Calculate the number of online/offline disks of all nodes
-			var allDisks []madmin.Disk
-			for _, s := range servers {
-				allDisks = append(allDisks, s.Disks...)
-			}
-			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(allDisks)
+		// Calculate the number of online/offline disks of all nodes
+		var allDisks []madmin.Disk
+		for _, s := range servers {
+			allDisks = append(allDisks, s.Disks...)
+		}
+		onlineDisks, offlineDisks := getOnlineOfflineDisksStats(allDisks)
 
-			backend = madmin.ErasureBackend{
-				Type:             madmin.ErasureType,
-				OnlineDisks:      onlineDisks.Sum(),
-				OfflineDisks:     offlineDisks.Sum(),
-				StandardSCParity: backendInfo.StandardSCParity,
-				RRSCParity:       backendInfo.RRSCParity,
-			}
-		} else {
-			backend = madmin.FSBackend{
-				Type: madmin.FsType,
-			}
+		backend = madmin.ErasureBackend{
+			Type:             madmin.ErasureType,
+			OnlineDisks:      onlineDisks.Sum(),
+			OfflineDisks:     offlineDisks.Sum(),
+			StandardSCParity: backendInfo.StandardSCParity,
+			RRSCParity:       backendInfo.RRSCParity,
+		}
+
+		if poolsInfoEnabled {
+			poolsInfo, _ = getPoolsInfo(ctx, allDisks)
 		}
 	}
 
@@ -1876,6 +1912,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		Services:     services,
 		Backend:      backend,
 		Servers:      servers,
+		Pools:        poolsInfo,
 	}
 }
 
@@ -2182,7 +2219,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWriteSysConfig()
 
 		if query.Get("minioinfo") == "true" {
-			infoMessage := getServerInfo(healthCtx, nil)
+			infoMessage := getServerInfo(healthCtx, false, nil)
 			servers := make([]madmin.ServerInfo, 0, len(infoMessage.Servers))
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
@@ -2357,7 +2394,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Marshal API response
-	jsonBytes, err := json.Marshal(getServerInfo(ctx, r))
+	jsonBytes, err := json.Marshal(getServerInfo(ctx, true, r))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
