@@ -63,6 +63,8 @@ func mergeContext(ctx1, ctx2 context.Context) (context.Context, context.CancelFu
 		select {
 		case <-ctx1.Done():
 		case <-ctx2.Done():
+		// The lock acquirer decides to cancel, exit this goroutine
+		case <-ctx.Done():
 		}
 
 		cancel()
