@@ -1543,7 +1543,6 @@ type ReplicationPool struct {
 	mrfStopCh       chan struct{}
 	mrfWorkerSize   int
 	saveStateCh     chan struct{}
-	mrfWorkerWg     sync.WaitGroup
 }
 
 // ReplicationWorkerOperation is a shared interface of replication operations.
@@ -1617,7 +1616,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 // AddMRFWorker adds a pending/failed replication worker to handle requests that could not be queued
 // to the other workers
 func (p *ReplicationPool) AddMRFWorker() {
-	defer p.mrfWorkerWg.Done()
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -1744,7 +1742,6 @@ func (p *ReplicationPool) ResizeFailedWorkers(n int) {
 
 	for p.mrfWorkerSize < n {
 		p.mrfWorkerSize++
-		p.mrfWorkerWg.Add(1)
 		go p.AddMRFWorker()
 	}
 	for p.mrfWorkerSize > n {
