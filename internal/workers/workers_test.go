@@ -1,4 +1,4 @@
-// Copyright (c) 2022 MinIO, Inc.
+// Copyright (c) 2022-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package jobtokens
+package workers
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func TestJobTokens(t *testing.T) {
+func TestWorkers(t *testing.T) {
 	tests := []struct {
 		n        int
 		jobs     int
@@ -59,7 +59,7 @@ func TestJobTokens(t *testing.T) {
 	testFn := func(n, jobs int, mustFail bool) {
 		var mu sync.Mutex
 		var jobsDone int
-		// Create jobTokens for n concurrent workers
+		// Create workers for n concurrent workers
 		jt, err := New(n)
 		if err == nil && mustFail {
 			t.Fatal("Expected test to return error")
@@ -92,8 +92,8 @@ func TestJobTokens(t *testing.T) {
 		})
 	}
 
-	// Verify that jobTokens can be reused after full drain
-	t.Run("test-jobTokens-reuse", func(t *testing.T) {
+	// Verify that workers can be reused after full drain
+	t.Run("test-workers-reuse", func(t *testing.T) {
 		var mu sync.Mutex
 		jt, _ := New(5)
 		for reuse := 0; reuse < 3; reuse++ {
@@ -115,7 +115,7 @@ func TestJobTokens(t *testing.T) {
 	})
 }
 
-func benchmarkJobTokens(b *testing.B, n, jobs int) {
+func benchmarkWorkers(b *testing.B, n, jobs int) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -139,10 +139,10 @@ func benchmarkJobTokens(b *testing.B, n, jobs int) {
 	})
 }
 
-func BenchmarkJobTokens_N5_J10(b *testing.B) {
-	benchmarkJobTokens(b, 5, 10)
+func BenchmarkWorkers_N5_J10(b *testing.B) {
+	benchmarkWorkers(b, 5, 10)
 }
 
-func BenchmarkJobTokens_N5_J100(b *testing.B) {
-	benchmarkJobTokens(b, 5, 100)
+func BenchmarkWorkers_N5_J100(b *testing.B) {
+	benchmarkWorkers(b, 5, 100)
 }
