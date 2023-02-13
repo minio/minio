@@ -898,8 +898,9 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			defer wg.Done()
 			err := set.listObjectsToDecommission(ctx, bi,
 				func(entry metaCacheEntry) {
-					parallelWorkers <- struct{}{}
+					// Wait must be synchronized here.
 					wg.Add(1)
+					parallelWorkers <- struct{}{}
 					go decommissionEntry(entry)
 				},
 			)
