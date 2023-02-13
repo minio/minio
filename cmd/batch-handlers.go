@@ -1029,7 +1029,6 @@ type BatchJobPool struct {
 	mu           sync.Mutex
 	jobCh        chan *BatchJobRequest
 	workerKillCh chan struct{}
-	workerWg     sync.WaitGroup
 	workerSize   int
 }
 
@@ -1074,7 +1073,6 @@ func (j *BatchJobPool) AddWorker() {
 	if j == nil {
 		return
 	}
-	defer j.workerWg.Done()
 	for {
 		select {
 		case <-j.ctx.Done():
@@ -1110,7 +1108,6 @@ func (j *BatchJobPool) ResizeWorkers(n int) {
 
 	for j.workerSize < n {
 		j.workerSize++
-		j.workerWg.Add(1)
 		go j.AddWorker()
 	}
 	for j.workerSize > n {

@@ -1535,7 +1535,6 @@ type ReplicationPool struct {
 	// workers:
 	workers         []chan ReplicationWorkerOperation
 	existingWorkers chan ReplicationWorkerOperation
-	workerWg        sync.WaitGroup
 
 	// mrf:
 	mrfWorkerKillCh chan struct{}
@@ -1544,7 +1543,6 @@ type ReplicationPool struct {
 	mrfStopCh       chan struct{}
 	mrfWorkerSize   int
 	saveStateCh     chan struct{}
-	mrfWorkerWg     sync.WaitGroup
 }
 
 // ReplicationWorkerOperation is a shared interface of replication operations.
@@ -1607,7 +1605,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 
 	pool.ResizeWorkers(workers, 0)
 	pool.ResizeFailedWorkers(failedWorkers)
-	pool.workerWg.Add(1)
 	go pool.AddWorker(pool.existingWorkers, nil)
 	go pool.resyncer.PersistToDisk(ctx, o)
 	go pool.processMRF()
@@ -1619,7 +1616,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 // AddMRFWorker adds a pending/failed replication worker to handle requests that could not be queued
 // to the other workers
 func (p *ReplicationPool) AddMRFWorker() {
-	defer p.mrfWorkerWg.Done()
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -1646,7 +1642,6 @@ func (p *ReplicationPool) AddMRFWorker() {
 // An optional pointer to a tracker that will be atomically
 // incremented when operations are running can be provided.
 func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opTracker *int32) {
-	defer p.workerWg.Done()
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -1704,7 +1699,6 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 		input := make(chan ReplicationWorkerOperation, 10000)
 		p.workers = append(p.workers, input)
 
-		p.workerWg.Add(1)
 		go p.AddWorker(input, &p.activeWorkers)
 	}
 	for len(p.workers) > n {
@@ -1748,7 +1742,6 @@ func (p *ReplicationPool) ResizeFailedWorkers(n int) {
 
 	for p.mrfWorkerSize < n {
 		p.mrfWorkerSize++
-		p.mrfWorkerWg.Add(1)
 		go p.AddMRFWorker()
 	}
 	for p.mrfWorkerSize > n {
