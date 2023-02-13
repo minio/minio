@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -3537,7 +3538,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 	return nil
 }
 
-const siteHealTimeInterval = 1 * time.Minute
+const siteHealTimeInterval = 30 * time.Second
 
 func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI ObjectLayer) {
 	ctx, cancel := globalLeaderLock.GetLock(ctx)
@@ -3546,6 +3547,8 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 	healTimer := time.NewTimer(siteHealTimeInterval)
 	defer healTimer.Stop()
 
+	var maxRefreshDurationSecondsForLog float64 = 10 // 10 seconds..
+
 	for {
 		select {
 		case <-healTimer.C:
@@ -3553,8 +3556,18 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 			enabled := c.enabled
 			c.RUnlock()
 			if enabled {
+				refreshStart := time.Now()
 				c.healIAMSystem(ctx, objAPI) // heal IAM system first
 				c.healBuckets(ctx, objAPI)   // heal buckets subsequently
+
+				took := time.Since(refreshStart).Seconds()
+				if took > maxRefreshDurationSecondsForLog {
+					// Log if we took a lot of time.
+					logger.Info("Site replication healing refresh took %.2fs", took)
+				}
+
+				// wait for 200 millisecond, if we are experience lot of I/O
+				waitForLowIO(runtime.GOMAXPROCS(0), 200*time.Millisecond, currentHTTPIO)
 			}
 			healTimer.Reset(siteHealTimeInterval)
 

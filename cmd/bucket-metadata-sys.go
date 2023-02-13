@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	bucketsse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -56,11 +57,27 @@ func (sys *BucketMetadataSys) Count() int {
 }
 
 // Remove bucket metadata from memory.
-func (sys *BucketMetadataSys) Remove(bucket string) {
+func (sys *BucketMetadataSys) Remove(buckets ...string) {
 	sys.Lock()
-	delete(sys.metadataMap, bucket)
-	globalBucketMonitor.DeleteBucket(bucket)
+	for _, bucket := range buckets {
+		delete(sys.metadataMap, bucket)
+		globalBucketMonitor.DeleteBucket(bucket)
+	}
 	sys.Unlock()
+}
+
+// RemoveStaleBuckets removes all stale buckets in memory that are not on disk.
+func (sys *BucketMetadataSys) RemoveStaleBuckets(diskBuckets set.StringSet) {
+	sys.Lock()
+	defer sys.Unlock()
+
+	for bucket := range sys.metadataMap {
+		if diskBuckets.Contains(bucket) {
+			continue
+		} // doesn't exist on disk remove from memory.
+		delete(sys.metadataMap, bucket)
+		globalBucketMonitor.DeleteBucket(bucket)
+	}
 }
 
 // Set - sets a new metadata in-memory.
@@ -406,15 +423,13 @@ func (sys *BucketMetadataSys) loadBucketMetadata(ctx context.Context, bucket Buc
 	sys.metadataMap[bucket.Name] = meta
 	sys.Unlock()
 
-	globalEventNotifier.set(bucket, meta)   // set notification targets
-	globalBucketTargetSys.set(bucket, meta) // set remote replication targets
-
 	return nil
 }
 
 // concurrently load bucket metadata to speed up loading bucket metadata.
 func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo) {
 	g := errgroup.WithNErrs(len(buckets))
+	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
 		index := index
 		g.Go(func() error {
@@ -423,13 +438,39 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 				ScanMode: madmin.HealDeepScan,
 				Recreate: true,
 			})
-			return sys.loadBucketMetadata(ctx, buckets[index])
+			meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[index].Name)
+			if err != nil {
+				return err
+			}
+			bucketMetas[index] = meta
+			return nil
 		}, index)
 	}
-	for _, err := range g.Wait() {
+
+	errs := g.Wait()
+	for _, err := range errs {
 		if err != nil {
 			logger.LogIf(ctx, err)
 		}
+	}
+
+	// Hold lock here to update in-memory map at once,
+	// instead of serializing the Go routines.
+	sys.Lock()
+	for i, meta := range bucketMetas {
+		if errs[i] != nil {
+			continue
+		}
+		sys.metadataMap[buckets[i].Name] = meta
+	}
+	sys.Unlock()
+
+	for i, meta := range bucketMetas {
+		if errs[i] != nil {
+			continue
+		}
+		globalEventNotifier.set(buckets[i], meta)   // set notification targets
+		globalBucketTargetSys.set(buckets[i], meta) // set remote replication targets
 	}
 }
 
@@ -448,14 +489,24 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 				logger.LogIf(ctx, err)
 				continue
 			}
-			for i := range buckets {
-				err := sys.loadBucketMetadata(ctx, buckets[i])
+
+			// Handle if we have some buckets in-memory those are stale.
+			// first delete them and then replace the newer state()
+			// from disk.
+			diskBuckets := set.CreateStringSet()
+			for _, bucket := range buckets {
+				diskBuckets.Add(bucket.Name)
+			}
+			sys.RemoveStaleBuckets(diskBuckets)
+
+			for _, bucket := range buckets {
+				err := sys.loadBucketMetadata(ctx, bucket)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				// Check if there is a spare core, wait 100ms instead
-				waitForLowIO(runtime.NumCPU(), 100*time.Millisecond, currentHTTPIO)
+				// Check if there is a spare procs, wait 100ms instead
+				waitForLowIO(runtime.GOMAXPROCS(0), 100*time.Millisecond, currentHTTPIO)
 			}
 
 			t.Reset(bucketMetadataRefresh)
