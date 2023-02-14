@@ -683,7 +683,7 @@ type limitedReadCloser struct {
 
 func (l *limitedReadCloser) Close() error {
 	var err error
-	l.Once.Do(func() {
+	l.once.Do(func() {
 		if l.Closer != nil {
 			err = l.Closer.Close()
 		}
