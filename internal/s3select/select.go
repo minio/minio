@@ -286,10 +286,9 @@ type S3Select struct {
 	Progress       RequestProgress     `xml:"RequestProgress"`
 	ScanRange      *ScanRange          `xml:"ScanRange"`
 
-	statement        *sql.SelectStatement
-	progressReader   *progressReader
-	recordReader     recordReader
-	openReaderCloser []io.Closer
+	statement      *sql.SelectStatement
+	progressReader *progressReader
+	recordReader   recordReader
 }
 
 var legacyXMLName = "SelectObjectContentRequest"
@@ -363,12 +362,6 @@ func (s3Select *S3Select) getProgress() (bytesScanned, bytesProcessed int64) {
 // Open - opens S3 object by using callback for SQL selection query.
 // Currently CSV, JSON and Apache Parquet formats are supported.
 func (s3Select *S3Select) Open(rsc io.ReadSeekCloser) error {
-	if rsc != nil {
-		if s3Select.openReaderCloser == nil {
-			s3Select.openReaderCloser = []io.Closer{}
-		}
-		s3Select.openReaderCloser = append(s3Select.openReaderCloser, rsc.(io.Closer))
-	}
 	offset, length, err := s3Select.ScanRange.StartLen()
 	if err != nil {
 		return err
@@ -660,11 +653,6 @@ OuterLoop:
 
 // Close - closes opened S3 object.
 func (s3Select *S3Select) Close() error {
-	for _, closer := range s3Select.openReaderCloser {
-		if closer != nil {
-			closer.Close()
-		}
-	}
 	if s3Select.recordReader == nil {
 		return nil
 	}
@@ -689,6 +677,18 @@ func NewS3Select(r io.Reader) (*S3Select, error) {
 type limitedReadCloser struct {
 	io.LimitedReader
 	io.Closer
+	// for io.Closer
+	sync.Once
+}
+
+func (l *limitedReadCloser) Close() error {
+	var err error
+	l.Once.Do(func() {
+		if l.Closer != nil {
+			err = l.Closer.Close()
+		}
+	})
+	return err
 }
 
 func newLimitedReadCloser(r io.ReadCloser, n int64) *limitedReadCloser {
