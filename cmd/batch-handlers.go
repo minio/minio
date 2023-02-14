@@ -671,9 +671,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, result)
 				success := true
 				if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
+					if miniogo.ToErrorResponse(err).Code == "PreconditionFailed" {
+						// pre-condition failed means we already have the object copied over.
+						return
+					}
+					// object must be deleted concurrently, allow these failures but do not count them
 					if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
-						// object must be deleted concurrently, allow
-						// these failures but do not count them
 						return
 					}
 					stopFn(err)
