@@ -753,6 +753,9 @@ func serverMain(ctx *cli.Context) {
 	})
 	logger.FatalIf(err, "Unable to initialize MinIO client")
 
+	// Add User-Agent to differentiate the requests.
+	globalMinioClient.SetAppInfo("minio-perf-test", ReleaseTag)
+
 	if serverDebugLog {
 		logger.Info("== DEBUG Mode enabled ==")
 		logger.Info("Currently set environment settings:")

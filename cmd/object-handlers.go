@@ -937,11 +937,16 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	cred := getReqAccessCred(r, globalSite.Region)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
-	return miniogo.NewCore(host, &miniogo.Options{
+	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
+	if err != nil {
+		return nil, err
+	}
+	core.SetAppInfo("minio-federated", ReleaseTag)
+	return core, nil
 }
 
 // Check if the destination bucket is on a remote site, this code only gets executed

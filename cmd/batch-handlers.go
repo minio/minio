@@ -633,9 +633,16 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if err != nil {
 		return err
 	}
+	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_REPLICATION_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
+		return err
+	}
+
+	wk, err := workers.New(workerSize)
+	if err != nil {
+		// invalid worker size.
 		return err
 	}
 
@@ -643,12 +650,6 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	retry := false
 	for attempts := 1; attempts <= retryAttempts; attempts++ {
 		attempts := attempts
-
-		wk, err := workers.New(workerSize)
-		if err != nil {
-			// invalid worker size.
-			return err
-		}
 
 		ctx, cancel := context.WithCancel(ctx)
 
@@ -737,7 +738,7 @@ func (e batchReplicationJobError) Error() string {
 }
 
 // Validate validates the job definition input
-func (r *BatchJobReplicateV1) Validate(ctx context.Context, o ObjectLayer) error {
+func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest, o ObjectLayer) error {
 	if r == nil {
 		return nil
 	}
@@ -813,6 +814,7 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, o ObjectLayer) error
 	if err != nil {
 		return err
 	}
+	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
 
 	vcfg, err := c.GetBucketVersioning(ctx, r.Target.Bucket)
 	if err != nil {
@@ -851,7 +853,7 @@ func (j BatchJobRequest) Type() madmin.BatchJobType {
 // persisting the job request
 func (j BatchJobRequest) Validate(ctx context.Context, o ObjectLayer) error {
 	if j.Replicate != nil {
-		return j.Replicate.Validate(ctx, o)
+		return j.Replicate.Validate(ctx, j, o)
 	}
 	return errInvalidArgument
 }

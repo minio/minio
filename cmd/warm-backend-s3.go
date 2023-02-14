@@ -128,10 +128,9 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
-	core, err := minio.NewCore(u.Host, opts)
-	if err != nil {
-		return nil, err
-	}
+	client.SetAppInfo("s3-tier-target", ReleaseTag)
+
+	core := &minio.Core{Client: client}
 	return &warmBackendS3{
 		client:       client,
 		core:         core,
