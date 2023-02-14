@@ -678,7 +678,7 @@ type limitedReadCloser struct {
 	io.LimitedReader
 	io.Closer
 	// for io.Closer
-	sync.Once
+	once sync.Once
 }
 
 func (l *limitedReadCloser) Close() error {
