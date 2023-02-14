@@ -453,6 +453,8 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	if err != nil {
 		return nil, err
 	}
+	api.SetAppInfo("minio-replication-target", ReleaseTag+" "+tcfg.Arn)
+
 	hcDuration := defaultHealthCheckDuration
 	if tcfg.HealthCheckDuration >= 1 { // require minimum health check duration of 1 sec.
 		hcDuration = tcfg.HealthCheckDuration
@@ -479,7 +481,10 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	}
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
-		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL().String() == tgt.URL().String() && tgt.Credentials.AccessKey == target.Credentials.AccessKey {
+		if tgt.Type == target.Type &&
+			tgt.TargetBucket == target.TargetBucket &&
+			target.URL().String() == tgt.URL().String() &&
+			tgt.Credentials.AccessKey == target.Credentials.AccessKey {
 			return tgt.Arn, true
 		}
 	}
