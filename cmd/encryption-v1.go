@@ -34,7 +34,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/fips"

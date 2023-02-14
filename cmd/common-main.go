@@ -51,7 +51,7 @@ import (
 	consoleCerts "github.com/minio/console/pkg/certs"
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -795,6 +795,15 @@ func handleKMSConfig() {
 		GlobalKMS = KMS
 	}
 	if env.IsSet(config.EnvKESEndpoint) {
+		if env.IsSet(config.EnvKESAPIKey) {
+			if env.IsSet(config.EnvKESClientKey) {
+				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKESAPIKey, config.EnvKESClientKey))
+			}
+			if env.IsSet(config.EnvKESClientCert) {
+				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKESAPIKey, config.EnvKESClientCert))
+			}
+		}
+
 		var endpoints []string
 		for _, endpoint := range strings.Split(env.Get(config.EnvKESEndpoint, ""), ",") {
 			if strings.TrimSpace(endpoint) == "" {
@@ -817,62 +826,77 @@ func handleKMSConfig() {
 			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(config.EnvKESServerCA, globalCertsCADir.Get())))
 		}
 
-		loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
-			// Manually load the certificate and private key into memory.
-			// We need to check whether the private key is encrypted, and
-			// if so, decrypt it using the user-provided password.
-			certBytes, err := os.ReadFile(certFile)
+		var kmsConf kms.Config
+		if env.IsSet(config.EnvKESAPIKey) {
+			key, err := kes.ParseAPIKey(env.Get(config.EnvKESAPIKey, ""))
 			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
+				logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(config.EnvKESAPIKey, "")))
 			}
-			keyBytes, err := os.ReadFile(keyFile)
-			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("Unable to load KES client private key as specified by the shell environment: %v", err)
+			kmsConf = kms.Config{
+				Endpoints:    endpoints,
+				Enclave:      env.Get(config.EnvKESEnclave, ""),
+				DefaultKeyID: env.Get(config.EnvKESKeyName, ""),
+				APIKey:       key,
+				RootCAs:      rootCAs,
 			}
-			privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
-			if len(rest) != 0 {
-				return tls.Certificate{}, errors.New("Unable to load KES client private key as specified by the shell environment: private key contains additional data")
-			}
-			if x509.IsEncryptedPEMBlock(privateKeyPEM) {
-				keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
+		} else {
+			loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
+				// Manually load the certificate and private key into memory.
+				// We need to check whether the private key is encrypted, and
+				// if so, decrypt it using the user-provided password.
+				certBytes, err := os.ReadFile(certFile)
 				if err != nil {
-					return tls.Certificate{}, fmt.Errorf("Unable to decrypt KES client private key as specified by the shell environment: %v", err)
+					return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
 				}
-				keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
+				keyBytes, err := os.ReadFile(keyFile)
+				if err != nil {
+					return tls.Certificate{}, fmt.Errorf("Unable to load KES client private key as specified by the shell environment: %v", err)
+				}
+				privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
+				if len(rest) != 0 {
+					return tls.Certificate{}, errors.New("Unable to load KES client private key as specified by the shell environment: private key contains additional data")
+				}
+				if x509.IsEncryptedPEMBlock(privateKeyPEM) {
+					keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
+					if err != nil {
+						return tls.Certificate{}, fmt.Errorf("Unable to decrypt KES client private key as specified by the shell environment: %v", err)
+					}
+					keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
+				}
+				certificate, err := tls.X509KeyPair(certBytes, keyBytes)
+				if err != nil {
+					return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
+				}
+				return certificate, nil
 			}
-			certificate, err := tls.X509KeyPair(certBytes, keyBytes)
+
+			reloadCertEvents := make(chan tls.Certificate, 1)
+			certificate, err := certs.NewCertificate(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""), loadX509KeyPair)
 			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
+				logger.Fatal(err, "Failed to load KES client certificate")
 			}
-			return certificate, nil
+			certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
+			certificate.Notify(reloadCertEvents)
+
+			kmsConf = kms.Config{
+				Endpoints:        endpoints,
+				Enclave:          env.Get(config.EnvKESEnclave, ""),
+				DefaultKeyID:     env.Get(config.EnvKESKeyName, ""),
+				Certificate:      certificate,
+				ReloadCertEvents: reloadCertEvents,
+				RootCAs:          rootCAs,
+			}
 		}
 
-		reloadCertEvents := make(chan tls.Certificate, 1)
-		certificate, err := certs.NewCertificate(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""), loadX509KeyPair)
-		if err != nil {
-			logger.Fatal(err, "Failed to load KES client certificate")
-		}
-		certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
-		certificate.Notify(reloadCertEvents)
-
-		defaultKeyID := env.Get(config.EnvKESKeyName, "")
-		KMS, err := kms.NewWithConfig(kms.Config{
-			Endpoints:        endpoints,
-			Enclave:          env.Get(config.EnvKESEnclave, ""),
-			DefaultKeyID:     defaultKeyID,
-			Certificate:      certificate,
-			ReloadCertEvents: reloadCertEvents,
-			RootCAs:          rootCAs,
-		})
+		KMS, err := kms.NewWithConfig(kmsConf)
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
-
 		// We check that the default key ID exists or try to create it otherwise.
 		// This implicitly checks that we can communicate to KES. We don't treat
 		// a policy error as failure condition since MinIO may not have the permission
 		// to create keys - just to generate/decrypt data encryption keys.
-		if err = KMS.CreateKey(context.Background(), defaultKeyID); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
+		if err = KMS.CreateKey(context.Background(), env.Get(config.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
 		GlobalKMS = KMS

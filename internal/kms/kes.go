@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/pkg/certs"
 )
 
@@ -52,6 +52,11 @@ type Config struct {
 	// a cryptographic operation.
 	DefaultKeyID string
 
+	// APIKey is an credential provided by env. var.
+	// to authenticate to a KES server. Either an
+	// API key or a client certificate must be specified.
+	APIKey kes.APIKey
+
 	// Certificate is the client TLS certificate
 	// to authenticate to KMS via mTLS.
 	Certificate *certs.Certificate
@@ -74,12 +79,26 @@ func NewWithConfig(config Config) (KMS, error) {
 	endpoints := make([]string, len(config.Endpoints)) // Copy => avoid being affect by any changes to the original slice
 	copy(endpoints, config.Endpoints)
 
-	client := kes.NewClientWithConfig("", &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		Certificates:       []tls.Certificate{config.Certificate.Get()},
-		RootCAs:            config.RootCAs,
-		ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-	})
+	var client *kes.Client
+	if config.APIKey != nil {
+		cert, err := kes.GenerateCertificate(config.APIKey)
+		if err != nil {
+			return nil, err
+		}
+		client = kes.NewClientWithConfig("", &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			Certificates:       []tls.Certificate{cert},
+			RootCAs:            config.RootCAs,
+			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+		})
+	} else {
+		client = kes.NewClientWithConfig("", &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			Certificates:       []tls.Certificate{config.Certificate.Get()},
+			RootCAs:            config.RootCAs,
+			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+		})
+	}
 	client.Endpoints = endpoints
 
 	var bulkAvailable bool
@@ -101,6 +120,9 @@ func NewWithConfig(config Config) (KMS, error) {
 		bulkAvailable: bulkAvailable,
 	}
 	go func() {
+		if config.Certificate == nil || config.ReloadCertEvents == nil {
+			return
+		}
 		for {
 			var prevCertificate tls.Certificate
 			certificate, ok := <-config.ReloadCertEvents

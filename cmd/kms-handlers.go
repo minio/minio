@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"

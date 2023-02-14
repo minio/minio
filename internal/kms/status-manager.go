@@ -20,7 +20,7 @@ package kms
 import (
 	"context"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 )
 
 // StatusManager is the generic interface that handles KMS status operations
