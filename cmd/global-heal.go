@@ -214,11 +214,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		disks, _ := er.getOnlineDisksWithHealing()
 		if len(disks) == 0 {
-			// all disks are healing in this set, this is allowed
-			// so we simply proceed to next bucket, marking the bucket
-			// as done as there are no objects to heal.
-			tracker.bucketDone(bucket)
-			logger.LogIf(ctx, tracker.update(ctx))
+			logger.LogIf(ctx, fmt.Errorf("no enough online disks found to heal bucket `%s`", bucket))
 			continue
 		}
 
