@@ -384,7 +384,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	if len(tracker.QueuedBuckets) > 0 {
-		return fmt.Errorf("not all buckets are healed: %v", tracker.QueuedBuckets)
+		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
 	}
 
 	if serverDebugLog {

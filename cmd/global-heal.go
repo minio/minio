@@ -214,7 +214,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		disks, _ := er.getOnlineDisksWithHealing()
 		if len(disks) == 0 {
-			logger.LogIf(ctx, fmt.Errorf("no enough online disks found to heal bucket `%s`", bucket))
+			logger.LogIf(ctx, fmt.Errorf("no online disks found to heal the bucket `%s`", bucket))
 			continue
 		}
 
