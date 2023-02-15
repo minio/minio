@@ -171,7 +171,7 @@ func (t *transitionState) queueTransitionTask(oi ObjectInfo, sc string) {
 	select {
 	case <-GlobalContext.Done():
 		t.once.Do(func() {
-			close(t.transitionCh)
+			t.UpdateWorkers(0)
 		})
 	case t.transitionCh <- transitionTask{objInfo: oi, tier: sc}:
 	default:
