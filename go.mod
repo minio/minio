@@ -38,7 +38,7 @@ require (
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.4.0
-	github.com/klauspost/reedsolomon v1.11.6
+	github.com/klauspost/reedsolomon v1.11.7
 	github.com/lib/pq v1.10.7
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.50
