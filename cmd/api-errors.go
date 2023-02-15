@@ -2186,7 +2186,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrTransitionStorageClassNotFoundError
 	case InvalidObjectState:
 		apiErr = ErrInvalidObjectState
-
+	case PreConditionFailed:
+		apiErr = ErrPreconditionFailed
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
