@@ -3033,7 +3033,9 @@ func isBktQuotaCfgReplicated(total int, quotaCfgs []*madmin.BucketQuota) bool {
 		}
 		numquotaCfgs++
 	}
-
+	if numquotaCfgs == 0 {
+		return true
+	}
 	if numquotaCfgs > 0 && numquotaCfgs != total {
 		return false
 	}
