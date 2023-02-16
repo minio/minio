@@ -172,7 +172,11 @@ var _ KMS = (*kesClient)(nil) // compiler check
 // Stat returns the current KES status containing a
 // list of KES endpoints and the default key ID.
 func (c *kesClient) Stat(ctx context.Context) (Status, error) {
-	if _, err := c.client.Version(ctx); err != nil {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	st, err := c.client.Status(ctx)
+	if err != nil {
 		return Status{}, err
 	}
 	endpoints := make([]string, len(c.client.Endpoints))
@@ -181,6 +185,7 @@ func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 		Name:       "KES",
 		Endpoints:  endpoints,
 		DefaultKey: c.defaultKeyID,
+		Details:    st,
 	}, nil
 }
 
