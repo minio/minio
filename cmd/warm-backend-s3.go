@@ -105,7 +105,7 @@ func (s3 *warmBackendS3) InUse(ctx context.Context) (bool, error) {
 	return len(result.CommonPrefixes) > 0 || len(result.Contents) > 0, nil
 }
 
-func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
+func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 	u, err := url.Parse(conf.Endpoint)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.SetAppInfo("s3-tier-target", ReleaseTag)
+	client.SetAppInfo(fmt.Sprintf("s3-tier-%s", tier), ReleaseTag)
 
 	core := &minio.Core{Client: client}
 	return &warmBackendS3{
