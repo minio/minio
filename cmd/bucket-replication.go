@@ -415,7 +415,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, rcfg.RoleArn))
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, dobj.TargetArn))
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -938,7 +938,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			Host:       "Internal: [Replication]",
 		})
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, cfg.RoleArn))
+		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, ri.TargetArn))
 		return
 	}
 	ctx = lkctx.Context()
