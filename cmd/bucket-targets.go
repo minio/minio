@@ -475,7 +475,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 }
 
 // getRemoteARN gets existing ARN for an endpoint or generates a new one.
-func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget) (arn string, exists bool) {
+func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget, deplID string) (arn string, exists bool) {
 	if target == nil {
 		return
 	}
@@ -491,7 +491,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	if !target.Type.IsValid() {
 		return
 	}
-	return generateARN(target), false
+	return generateARN(target, deplID), false
 }
 
 // getRemoteARNForPeer returns the remote target for a peer site in site replication
@@ -511,10 +511,14 @@ func (sys *BucketTargetSys) getRemoteARNForPeer(bucket string, peer madmin.PeerI
 }
 
 // generate ARN that is unique to this target type
-func generateARN(t *madmin.BucketTarget) string {
+func generateARN(t *madmin.BucketTarget, deplID string) string {
+	uuid := deplID
+	if uuid == "" {
+		uuid = mustGetUUID()
+	}
 	arn := madmin.ARN{
 		Type:   t.Type,
-		ID:     mustGetUUID(),
+		ID:     uuid,
 		Region: t.Region,
 		Bucket: t.TargetBucket,
 	}
