@@ -82,6 +82,11 @@ func (a kmsAPIHandlers) KMSMetricsHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if _, ok := GlobalKMS.(kms.KeyManager); !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
 	metrics, err := GlobalKMS.Metrics(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

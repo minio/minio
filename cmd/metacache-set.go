@@ -376,7 +376,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			entries.o = append(entries.o, entry)
 			return entries.len() < o.Limit
 		})
-		if (err != nil && err.Error() == io.EOF.Error()) || pastPrefix || r.nextEOF() {
+		if (err != nil && errors.Is(err, io.EOF)) || pastPrefix || r.nextEOF() {
 			return entries, io.EOF
 		}
 		return entries, err
@@ -534,7 +534,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				// We stopped within the listing, we are done for now...
 				return entries, nil
 			}
-			if err != nil && err.Error() != io.EOF.Error() {
+			if err != nil && !errors.Is(err, io.EOF) {
 				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
 				case ObjectNotFound:
 					retries++
@@ -940,15 +940,6 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				}
 			}
 			w.CloseWithError(werr)
-
-			if werr != io.EOF && werr != nil &&
-				werr.Error() != errFileNotFound.Error() &&
-				werr.Error() != errVolumeNotFound.Error() &&
-				werr.Error() != errDiskNotFound.Error() &&
-				werr.Error() != errUnformattedDisk.Error() &&
-				!errors.Is(werr, context.Canceled) {
-				logger.LogIf(ctx, werr)
-			}
 		}()
 	}
 
