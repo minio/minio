@@ -152,7 +152,6 @@ type transitionTask struct {
 }
 
 type transitionState struct {
-	once         sync.Once
 	transitionCh chan transitionTask
 
 	ctx        context.Context
@@ -169,10 +168,7 @@ type transitionState struct {
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo, sc string) {
 	select {
-	case <-GlobalContext.Done():
-		t.once.Do(func() {
-			close(t.transitionCh)
-		})
+	case <-t.ctx.Done():
 	case t.transitionCh <- transitionTask{objInfo: oi, tier: sc}:
 	default:
 	}
@@ -214,20 +210,20 @@ func (t *transitionState) ActiveTasks() int {
 }
 
 // worker waits for transition tasks
-func (t *transitionState) worker(ctx context.Context, objectAPI ObjectLayer) {
+func (t *transitionState) worker(objectAPI ObjectLayer) {
 	for {
 		select {
 		case <-t.killCh:
 			return
-		case <-ctx.Done():
+		case <-t.ctx.Done():
 			return
 		case task, ok := <-t.transitionCh:
 			if !ok {
 				return
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
-			if err := transitionObject(ctx, objectAPI, task.objInfo, task.tier); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w",
+			if err := transitionObject(t.ctx, objectAPI, task.objInfo, task.tier); err != nil {
+				logger.LogIf(t.ctx, fmt.Errorf("Transition failed for %s/%s version:%s with %w",
 					task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
 			} else {
 				ts := tierStats{
@@ -278,7 +274,7 @@ func (t *transitionState) UpdateWorkers(n int) {
 
 func (t *transitionState) updateWorkers(n int) {
 	for t.numWorkers < n {
-		go t.worker(t.ctx, t.objAPI)
+		go t.worker(t.objAPI)
 		t.numWorkers++
 	}
 

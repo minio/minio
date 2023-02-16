@@ -108,7 +108,7 @@ func (az *warmBackendAzure) InUse(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
+func newWarmBackendAzure(conf madmin.TierAzure, _ string) (*warmBackendAzure, error) {
 	credential, err := azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
 	if err != nil {
 		if _, ok := err.(base64.CorruptInputError); ok {

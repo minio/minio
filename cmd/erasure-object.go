@@ -483,7 +483,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		if opts.VersionID != "" {
 			fi.VersionID = opts.VersionID
 		}
-
+		fi.SetTierFreeVersionID(mustGetUUID())
 		disks := er.getDisks()
 		g := errgroup.WithNErrs(len(disks))
 		for index := range disks {

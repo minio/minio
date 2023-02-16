@@ -137,13 +137,13 @@ type remoteVersionID string
 func newWarmBackend(ctx context.Context, tier madmin.TierConfig) (d WarmBackend, err error) {
 	switch tier.Type {
 	case madmin.S3:
-		d, err = newWarmBackendS3(*tier.S3)
+		d, err = newWarmBackendS3(*tier.S3, tier.Name)
 	case madmin.Azure:
-		d, err = newWarmBackendAzure(*tier.Azure)
+		d, err = newWarmBackendAzure(*tier.Azure, tier.Name)
 	case madmin.GCS:
-		d, err = newWarmBackendGCS(*tier.GCS)
+		d, err = newWarmBackendGCS(*tier.GCS, tier.Name)
 	case madmin.MinIO:
-		d, err = newWarmBackendMinIO(*tier.MinIO)
+		d, err = newWarmBackendMinIO(*tier.MinIO, tier.Name)
 	default:
 		return nil, errTierTypeUnsupported
 	}
