@@ -185,7 +185,7 @@ func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 		Name:       "KES",
 		Endpoints:  endpoints,
 		DefaultKey: c.defaultKeyID,
-		Detail:     st,
+		Details:    st,
 	}, nil
 }
 

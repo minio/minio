@@ -73,10 +73,10 @@ type Status struct {
 	// a default key.
 	DefaultKey string
 
-	// Detail provides more details about the KMS endpoint status.
-	// including uptime, version and available CPUs. Could be
-	// more in future.
-	Detail kes.State
+	// Details provides more details about the KMS endpoint status.
+	// including uptime, version and available CPUs.
+	// Could be more in future.
+	Details kes.State
 }
 
 // DEK is a data encryption key. It consists of a
