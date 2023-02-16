@@ -225,10 +225,12 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		for _, op := range ops {
 			switch op {
 			case madmin.CredentialsUpdateType:
-				if !globalSiteReplicationSys.isEnabled() {
-					tgt.Credentials = target.Credentials
-					tgt.TargetBucket = target.TargetBucket
+				if globalSiteReplicationSys.isEnabled() {
+					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetDenyEditError, err), r.URL)
+					return
 				}
+				tgt.Credentials = target.Credentials
+				tgt.TargetBucket = target.TargetBucket
 				tgt.Secure = target.Secure
 				tgt.Endpoint = target.Endpoint
 			case madmin.SyncUpdateType:
