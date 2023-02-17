@@ -91,12 +91,15 @@ func (kms secretKey) Stat(context.Context) (Status, error) {
 	}, nil
 }
 
-func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
-	return kes.Metric{}, errors.New("kms: metrics are not supported")
+func (secretKey) Metrics(context.Context) (kes.Metric, error) {
+	return kes.Metric{}, errors.New("kms: metrics not supported")
 }
 
-func (secretKey) CreateKey(context.Context, string) error {
-	return errors.New("kms: creating keys is not supported")
+func (kms secretKey) CreateKey(_ context.Context, keyID string) error {
+	if keyID == kms.keyID {
+		return nil
+	}
+	return fmt.Errorf("kms: creating custom key %q is not supported", keyID)
 }
 
 func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Context) (DEK, error) {

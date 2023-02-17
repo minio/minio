@@ -316,11 +316,11 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 
 	for _, err := range errs {
-		if err == nil || contextCanceled(ctx) {
-			allAtEOF = false
+		if errors.Is(err, io.EOF) {
 			continue
 		}
-		if err.Error() == io.EOF.Error() {
+		if err == nil || contextCanceled(ctx) || errors.Is(err, context.Canceled) {
+			allAtEOF = false
 			continue
 		}
 		logger.LogIf(ctx, err)

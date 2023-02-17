@@ -86,7 +86,11 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 
 	bucketPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyBytes), bucket)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, APIError{
+			Code:           "ErrMalformedXML",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}, r.URL)
 		return
 	}
 
