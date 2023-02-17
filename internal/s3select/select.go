@@ -677,18 +677,19 @@ func NewS3Select(r io.Reader) (*S3Select, error) {
 type limitedReadCloser struct {
 	io.LimitedReader
 	io.Closer
-	// for io.Closer
-	once sync.Once
+	// io.Closer can be closed idempotently multiple times
+	closerOnce sync.Once
+	// Error storing io.Closer.Close()
+	closerErr error
 }
 
 func (l *limitedReadCloser) Close() error {
-	var err error
-	l.once.Do(func() {
+	l.closerOnce.Do(func() {
 		if l.Closer != nil {
-			err = l.Closer.Close()
+			l.closerErr = l.Closer.Close()
 		}
 	})
-	return err
+	return l.closerErr
 }
 
 func newLimitedReadCloser(r io.ReadCloser, n int64) *limitedReadCloser {
