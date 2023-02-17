@@ -58,6 +58,12 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         Proxy,
+			Description: "proxy url endpoint e.g. http(s)://proxy",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
