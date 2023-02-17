@@ -647,6 +647,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	targetUser = createReq.TargetUser
 	if targetUser == "" {
 		targetUser = cred.AccessKey
+		if cred.IsServiceAccount() || cred.IsTemp() {
+			// For temporary credentials or service accounts
+			// without explicit targetUser inherit targetUser
+			// from the parentUser.
+			targetUser = cred.ParentUser
+		}
 	}
 
 	opts := newServiceAccountOpts{
