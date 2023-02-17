@@ -571,7 +571,9 @@ func NewEndpoints(args ...string) (endpoints Endpoints, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("'%s': %s", arg, err.Error())
 		}
-
+		if err := endpoint.UpdateIsLocal(); err != nil {
+			return endpoints, err
+		}
 		// All endpoints have to be same type and scheme if applicable.
 		//nolint:gocritic
 		if i == 0 {
