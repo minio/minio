@@ -719,15 +719,17 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 			if serverDebugLog {
 				logger.Info("Task in the queue: %#v", task)
 			}
-		case <-h.ctx.Done():
-			return nil
 		default:
 			// task queue is full, no more workers, we shall move on and heal later.
 			return nil
 		}
+		// Don't wait for result
+		return nil
 	} else {
-		// respCh must be set for guaranteed result
-		task.respCh = h.respCh
+		// respCh must be set to wait for result.
+		// We make it size 1, so a result can always be written
+		// even if we aren't listening.
+		task.respCh = make(chan healResult, 1)
 		select {
 		case globalBackgroundHealRoutine.tasks <- task:
 			if serverDebugLog {
@@ -740,7 +742,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 
 	// task queued, now wait for the response.
 	select {
-	case res := <-h.respCh:
+	case res := <-task.respCh:
 		if !h.reportProgress {
 			if errors.Is(res.err, errSkipFile) { // this is only sent usually by nopHeal
 				return nil
