@@ -721,19 +721,19 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		}
 		// Don't wait for result
 		return nil
-	} else {
-		// respCh must be set to wait for result.
-		// We make it size 1, so a result can always be written
-		// even if we aren't listening.
-		task.respCh = make(chan healResult, 1)
-		select {
-		case globalBackgroundHealRoutine.tasks <- task:
-			if serverDebugLog {
-				logger.Info("Task in the queue: %#v", task)
-			}
-		case <-h.ctx.Done():
-			return nil
+	}
+
+	// respCh must be set to wait for result.
+	// We make it size 1, so a result can always be written
+	// even if we aren't listening.
+	task.respCh = make(chan healResult, 1)
+	select {
+	case globalBackgroundHealRoutine.tasks <- task:
+		if serverDebugLog {
+			logger.Info("Task in the queue: %#v", task)
 		}
+	case <-h.ctx.Done():
+		return nil
 	}
 
 	// task queued, now wait for the response.
