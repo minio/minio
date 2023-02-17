@@ -672,8 +672,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// It could be a regular user account or the root account.
 		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
 		if !isRegularUser && targetUser != globalActiveCred.AccessKey {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
-				fmt.Errorf("parent user %s does not exist. Cannot create service account", targetUser)), r.URL)
+			apiErr := toAdminAPIErr(ctx, errNoSuchUser)
+			apiErr.Description = fmt.Sprintf("Specified target user %s does not exist", targetUser)
+			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 			return
 		}
 	}
