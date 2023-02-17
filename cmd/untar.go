@@ -203,7 +203,8 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 		}
 
 		name := header.Name
-		if name == slashSeparator {
+		switch path.Clean(name) {
+		case ".", slashSeparator:
 			continue
 		}
 
