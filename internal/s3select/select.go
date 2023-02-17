@@ -698,6 +698,11 @@ type ObjectReadSeekCloser struct {
 	size   int64 // actual object size regardless of compression/encryption
 	offset int64
 	reader io.ReadCloser
+
+	// reader can be closed idempotently multiple times
+	closerOnce sync.Once
+	// Error storing reader.Close()
+	closerErr error
 }
 
 // NewObjectReadSeekCloser creates a new ObjectReadSeekCloser.
@@ -749,12 +754,11 @@ func (rsc *ObjectReadSeekCloser) Read(p []byte) (n int, err error) {
 // object for reading and a subsequent Close call is required to ensure
 // resources are freed.
 func (rsc *ObjectReadSeekCloser) Close() error {
-	if rsc.reader != nil {
-		err := rsc.reader.Close()
-		if err == nil {
+	rsc.closerOnce.Do(func() {
+		if rsc.reader != nil {
+			rsc.closerErr = rsc.reader.Close()
 			rsc.reader = nil
 		}
-		return err
-	}
-	return nil
+	})
+	return rsc.closerErr
 }

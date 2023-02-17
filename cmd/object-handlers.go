@@ -242,7 +242,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		},
 		actualSize,
 	)
-
+	defer objectRSC.Close()
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
@@ -3124,7 +3124,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 				},
 				actualSize,
 			)
-
+			defer objectRSC.Close()
 			if err = rreq.SelectParameters.Open(objectRSC); err != nil {
 				if serr, ok := err.(s3select.SelectError); ok {
 					encodedErrorResponse := encodeResponse(APIErrorResponse{
