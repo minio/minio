@@ -407,9 +407,6 @@ type healSequence struct {
 	// bucket, and object on which heal seq. was initiated
 	bucket, object string
 
-	// A channel of entities with heal result
-	respCh chan healResult
-
 	// Report healing progress
 	reportProgress bool
 
@@ -472,7 +469,6 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 	clientToken := mustGetUUID()
 
 	return &healSequence{
-		respCh:         make(chan healResult),
 		bucket:         bucket,
 		object:         objPrefix,
 		reportProgress: true,
