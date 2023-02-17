@@ -48,7 +48,6 @@ func newBgHealSequence() *healSequence {
 	}
 
 	return &healSequence{
-		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		// run-background heal with reserved bucket
