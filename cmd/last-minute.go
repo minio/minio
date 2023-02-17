@@ -90,7 +90,7 @@ func (a *AccElem) add(dur time.Duration) {
 	a.N++
 }
 
-// Add a duration to a single element.
+// Add a duration with size to a single element.
 func (a *AccElem) addSize(dur time.Duration, sz int64) {
 	if dur < 0 {
 		dur = 0
@@ -146,7 +146,7 @@ func (l lastMinuteLatency) merge(o lastMinuteLatency) (merged lastMinuteLatency)
 	return merged
 }
 
-// Add  a new duration data
+// Add a new duration data
 func (l *lastMinuteLatency) add(t time.Duration) {
 	sec := time.Now().Unix()
 	l.forwardTo(sec)
@@ -155,7 +155,7 @@ func (l *lastMinuteLatency) add(t time.Duration) {
 	l.LastSec = sec
 }
 
-// Add  a new duration data
+// Add a new duration data by size
 func (l *lastMinuteLatency) addSize(t time.Duration, sz int64) {
 	sec := time.Now().Unix()
 	l.forwardTo(sec)

@@ -106,7 +106,7 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 }
 
 type lockedLastMinuteLatency struct {
-	sync.Mutex
+	sync.RWMutex
 	lastMinuteLatency
 }
 
@@ -125,8 +125,8 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 
 // total returns the total call count and latency for the last minute.
 func (e *lockedLastMinuteLatency) total() AccElem {
-	e.Lock()
-	defer e.Unlock()
+	e.RLock()
+	defer e.RUnlock()
 	return e.lastMinuteLatency.getTotal()
 }
 
