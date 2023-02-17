@@ -523,6 +523,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}()
 
 			tmp := newMetacacheReader(pr)
+			defer tmp.Close()
 			e, err := tmp.filter(o)
 			pr.CloseWithError(err)
 			entries.o = append(entries.o, e.o...)
@@ -892,6 +893,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	}
 	askDisks := len(disks)
 	readers := make([]*metacacheReader, askDisks)
+	defer func() {
+		for _, r := range readers {
+			r.Close()
+		}
+	}()
 	for i := range disks {
 		r, w := io.Pipe()
 		// Make sure we close the pipe so blocked writes doesn't stay around.
