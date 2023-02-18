@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -75,6 +76,10 @@ func (w WebhookArgs) Validate() error {
 
 // WebhookTarget - Webhook target.
 type WebhookTarget struct {
+	activeRequests int64
+	totalRequests  int64
+	failedRequests int64
+
 	lazyInit lazyInit
 
 	id         event.TargetID
@@ -138,13 +143,27 @@ func (target *WebhookTarget) isActive() (bool, error) {
 // current calls in progress, successfully completed functions
 // failed functions.
 func (target *WebhookTarget) Stat() event.TargetStat {
-	// TODO
-	return event.TargetStat{}
+	return event.TargetStat{
+		ID:             target.id,
+		ActiveRequests: atomic.LoadInt64(&target.activeRequests),
+		TotalRequests:  atomic.LoadInt64(&target.totalRequests),
+		FailedRequests: atomic.LoadInt64(&target.failedRequests),
+	}
 }
 
 // Send - sends an event to the webhook.
-func (target *WebhookTarget) Send(eventData event.Event) (*http.Response, error) {
-	if err := target.init(); err != nil {
+func (target *WebhookTarget) Send(eventData event.Event) (resp *http.Response, err error) {
+	atomic.AddInt64(&target.activeRequests, 1)
+	defer atomic.AddInt64(&target.activeRequests, -1)
+
+	atomic.AddInt64(&target.totalRequests, 1)
+	defer func() {
+		if err != nil {
+			atomic.AddInt64(&target.failedRequests, 1)
+		}
+	}()
+
+	if err = target.init(); err != nil {
 		return nil, err
 	}
 
@@ -172,12 +191,7 @@ func (target *WebhookTarget) Send(eventData event.Event) (*http.Response, error)
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := target.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
+	return target.httpClient.Do(req)
 }
 
 // Close - does nothing and available for interface compatibility.

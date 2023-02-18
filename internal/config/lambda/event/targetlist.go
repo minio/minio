@@ -35,16 +35,15 @@ type Target interface {
 
 // TargetStats is a collection of stats for multiple targets.
 type TargetStats struct {
-	// CurrentSendCalls is the number of concurrent async Send calls to all targets
-	CurrentSendCalls int64
-
 	TargetStats map[string]TargetStat
 }
 
 // TargetStat is the stats of a single target.
 type TargetStat struct {
-	ID           TargetID
-	CurrentQueue int // Populated if target has a store.
+	ID             TargetID
+	ActiveRequests int64
+	TotalRequests  int64
+	FailedRequests int64
 }
 
 // TargetList - holds list of targets indexed by target ID.
