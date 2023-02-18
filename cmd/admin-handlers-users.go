@@ -2034,9 +2034,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case allUsersFile:
 			userIdentities := make(map[string]UserIdentity)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadUsers(ctx, regUser, userIdentities)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2064,9 +2062,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case allGroupsFile:
 			groups := make(map[string]GroupInfo)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadGroups(ctx, groups)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2083,9 +2079,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case allSvcAcctsFile:
 			serviceAccounts := make(map[string]UserIdentity)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadUsers(ctx, svcUser, serviceAccounts)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2134,9 +2128,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case userPolicyMappingsFile:
 			userPolicyMap := make(map[string]MappedPolicy)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2153,9 +2145,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case groupPolicyMappingsFile:
 			groupPolicyMap := make(map[string]MappedPolicy)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2172,9 +2162,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case stsUserPolicyMappingsFile:
 			userPolicyMap := make(map[string]MappedPolicy)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -2190,9 +2178,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		case stsGroupPolicyMappingsFile:
 			groupPolicyMap := make(map[string]MappedPolicy)
-			globalIAMSys.store.rlock()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
-			globalIAMSys.store.runlock()
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return

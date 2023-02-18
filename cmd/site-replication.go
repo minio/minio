@@ -194,7 +194,6 @@ type SiteReplicationSys struct {
 	state srState
 
 	iamMetaCache srIAMCache
-	iamInfoLk    sync.RWMutex
 }
 
 type srState srStateV1
@@ -1696,9 +1695,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	// may not have any local users.
 	{
 		userAccounts := make(map[string]UserIdentity)
-		globalIAMSys.store.rlock()
 		err := globalIAMSys.store.loadUsers(ctx, regUser, userAccounts)
-		globalIAMSys.store.runlock()
 		if err != nil {
 			return errSRBackendIssue(err)
 		}
@@ -1725,10 +1722,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	// DNs here
 	{
 		groups := make(map[string]GroupInfo)
-
-		globalIAMSys.store.rlock()
 		err := globalIAMSys.store.loadGroups(ctx, groups)
-		globalIAMSys.store.runlock()
 		if err != nil {
 			return errSRBackendIssue(err)
 		}
@@ -1755,9 +1749,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	{
 		// Replicate policy mappings on local to all peers.
 		groupPolicyMap := make(map[string]MappedPolicy)
-		globalIAMSys.store.rlock()
 		errG := globalIAMSys.store.loadMappedPolicies(ctx, unknownIAMUserType, true, groupPolicyMap)
-		globalIAMSys.store.runlock()
 		if errG != nil {
 			return errSRBackendIssue(errG)
 		}
@@ -1783,9 +1775,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	// valid claims.
 	{
 		serviceAccounts := make(map[string]UserIdentity)
-		globalIAMSys.store.rlock()
 		err := globalIAMSys.store.loadUsers(ctx, svcUser, serviceAccounts)
-		globalIAMSys.store.runlock()
 		if err != nil {
 			return errSRBackendIssue(err)
 		}
@@ -1841,9 +1831,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	{
 		// Replicate policy mappings on local to all peers.
 		userPolicyMap := make(map[string]MappedPolicy)
-		globalIAMSys.store.rlock()
 		errU := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
-		globalIAMSys.store.runlock()
 		if errU != nil {
 			return errSRBackendIssue(errU)
 		}
@@ -1869,9 +1857,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 	{
 		// Replicate policy mappings on local to all peers.
 		stsPolicyMap := make(map[string]MappedPolicy)
-		globalIAMSys.store.rlock()
 		errU := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, stsPolicyMap)
-		globalIAMSys.store.runlock()
 		if errU != nil {
 			return errSRBackendIssue(errU)
 		}
@@ -3252,8 +3238,6 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 	if opts.Users && opts.Groups && opts.Policies && !opts.Buckets {
 		// serialize SiteReplicationMetaInfo calls - if data in cache is within
 		// healing interval, avoid fetching IAM data again from disk.
-		c.iamInfoLk.Lock()
-		defer c.iamInfoLk.Unlock()
 		if metaInfo, ok := c.getSRCachedIAMInfo(); ok {
 			return metaInfo, nil
 		}
@@ -3289,21 +3273,15 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				userPolicyMap[opts.EntityValue] = mp
 			}
 		} else {
-			globalIAMSys.store.rlock()
 			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
-			globalIAMSys.store.runlock()
 			if stsErr != nil {
 				return info, errSRBackendIssue(stsErr)
 			}
-			globalIAMSys.store.rlock()
 			usrErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
-			globalIAMSys.store.runlock()
 			if usrErr != nil {
 				return info, errSRBackendIssue(usrErr)
 			}
-			globalIAMSys.store.rlock()
 			svcErr := globalIAMSys.store.loadMappedPolicies(ctx, svcUser, false, userPolicyMap)
-			globalIAMSys.store.runlock()
 			if svcErr != nil {
 				return info, errSRBackendIssue(svcErr)
 			}
@@ -3324,23 +3302,17 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		} else {
 			userAccounts := make(map[string]UserIdentity)
-			globalIAMSys.store.rlock()
 			uerr := globalIAMSys.store.loadUsers(ctx, regUser, userAccounts)
-			globalIAMSys.store.runlock()
 			if uerr != nil {
 				return info, errSRBackendIssue(uerr)
 			}
 
-			globalIAMSys.store.rlock()
 			serr := globalIAMSys.store.loadUsers(ctx, svcUser, userAccounts)
-			globalIAMSys.store.runlock()
 			if serr != nil {
 				return info, errSRBackendIssue(serr)
 			}
 
-			globalIAMSys.store.rlock()
 			terr := globalIAMSys.store.loadUsers(ctx, stsUser, userAccounts)
-			globalIAMSys.store.runlock()
 			if terr != nil {
 				return info, errSRBackendIssue(terr)
 			}
@@ -3372,15 +3344,11 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				groupPolicyMap[opts.EntityValue] = mp
 			}
 		} else {
-			globalIAMSys.store.rlock()
 			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
-			globalIAMSys.store.runlock()
 			if stsErr != nil {
 				return info, errSRBackendIssue(stsErr)
 			}
-			globalIAMSys.store.rlock()
 			userErr := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
-			globalIAMSys.store.runlock()
 			if userErr != nil {
 				return info, errSRBackendIssue(userErr)
 			}
