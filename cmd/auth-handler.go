@@ -154,6 +154,10 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		return cred, owner, s3Err
 	}
 
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = region
+
 	return cred, owner, ErrNone
 }
 
