@@ -105,6 +105,11 @@ var ServerFlags = []cli.Flag{
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
 	},
+	cli.StringFlag{
+		Name:   "vrf-device",
+		Usage:  "bind to a specific vrf device name",
+		EnvVar: "MINIO_VRF_DEVICE",
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -247,7 +252,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
+	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort, ctx.String("vrf-device")), "Unable to start the server")
 
 	globalIsErasure = (setupType == ErasureSetupType)
 	globalIsDistErasure = (setupType == DistErasureSetupType)
@@ -584,6 +589,8 @@ func serverMain(ctx *cli.Context) {
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate
 	}
+
+	xhttp.SetVRFDeviceName(ctx.String("vrf-device"))
 
 	httpServer := xhttp.NewServer(getServerListenAddrs()).
 		UseHandler(setCriticalErrorHandler(corsHandler(handler))).

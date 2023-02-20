@@ -221,7 +221,7 @@ func TestCheckPortAvailability(t *testing.T) {
 			continue
 		}
 
-		err := checkPortAvailability(testCase.host, testCase.port)
+		err := checkPortAvailability(testCase.host, testCase.port, "")
 		switch {
 		case testCase.expectedErr == nil:
 			if err != nil {

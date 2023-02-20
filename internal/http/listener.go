@@ -25,6 +25,8 @@ import (
 	"syscall"
 )
 
+var vrfDeviceName string
+
 type acceptResult struct {
 	conn net.Conn
 	err  error
@@ -37,6 +39,11 @@ type httpListener struct {
 	acceptCh     chan acceptResult  // channel where all TCP listeners write accepted connection.
 	ctx          context.Context
 	ctxCanceler  context.CancelFunc
+}
+
+// SetVRFDeviceName - Defines a Linux VRF to be used by all connections for this package.
+func SetVRFDeviceName(vrf string) {
+	vrfDeviceName = vrf
 }
 
 // start - starts separate goroutine for each TCP listener.  A valid new connection is passed to httpListener.acceptCh.

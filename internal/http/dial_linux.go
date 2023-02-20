@@ -23,6 +23,7 @@ package http
 import (
 	"context"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 
@@ -69,6 +70,15 @@ func setTCPParameters(network, address string, c syscall.RawConn) error {
 		//    https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
 		// This is a sensitive configuration, it is better to set it to high values, > 60 secs
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, (15+5*15)*1000)
+
+		// Create socket on specific vrf device.
+		// To catch all kinds of special cases this filters specifically for loopback networks.
+		if vrfDeviceName != "" {
+			if !strings.HasPrefix(address, "127.") &&
+				!strings.HasPrefix(address, "[::1") {
+				_ = syscall.SetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, vrfDeviceName)
+			}
+		}
 	})
 	return nil
 }
