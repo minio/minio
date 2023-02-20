@@ -132,9 +132,10 @@ func (bce badConfigErr) Unwrap() error {
 }
 
 type setConfigResult struct {
-	Cfg     config.Config
-	SubSys  string
-	Dynamic bool
+	Cfg                     config.Config
+	SubSys                  string
+	Dynamic                 bool
+	LoggerWebhookCfgUpdated bool
 }
 
 // SetConfigKVHandler - PUT /minio/admin/v3/set-config-kv
@@ -175,6 +176,11 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	if result.Dynamic {
 		applyDynamic(ctx, objectAPI, result.Cfg, result.SubSys, r, w)
+		// If logger webhook config updated (proxy due to callhome), explicitly dynamically
+		// apply the config
+		if result.LoggerWebhookCfgUpdated {
+			applyDynamic(ctx, objectAPI, result.Cfg, "logger_webhook", r, w)
+		}
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -199,6 +205,18 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 	if verr := validateConfig(result.Cfg, result.SubSys); verr != nil {
 		err = badConfigErr{Err: verr}
 		return
+	}
+
+	// Check if callhome getting enabled, if so set the subnet proxy value to logger_webhook's subnet proxy
+	// Do this only if logger_wenhook's subnet proxy is not yet set
+	if result.SubSys == "callhome" && result.Cfg["callhome"]["_"].Get("enable") == "on" {
+		loggerWebhookSubnetProxy := result.Cfg["logger_webhook"]["subnet"].Get("proxy")
+		subnetProxy := result.Cfg["subnet"]["_"].Get("proxy")
+		if loggerWebhookSubnetProxy == "" && subnetProxy != "" {
+			obj := result.Cfg["logger_webhook"]["subnet"]
+			obj.Set("proxy", subnetProxy)
+			result.LoggerWebhookCfgUpdated = true
+		}
 	}
 
 	// Update the actual server config on disk.
