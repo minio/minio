@@ -29,8 +29,8 @@ import (
 	"testing"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/logger/target/types"
+	"github.com/minio/pkg/logger/message/log"
 )
 
 type testLoggerI interface {
