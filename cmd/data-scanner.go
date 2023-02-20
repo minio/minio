@@ -1203,7 +1203,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		EventName:  eventName,
 		BucketName: obj.Bucket,
 		Object:     obj,
-		Host:       "Internal: [ILM-EXPIRY]",
+		Host:       "Internal: [ILM-Expiry]",
 	})
 
 	return true
