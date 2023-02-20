@@ -154,7 +154,10 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		return cred, owner, s3Err
 	}
 
-	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Cred = auth.Credentials{
+		AccessKey:  cred.AccessKey,
+		ParentUser: cred.ParentUser,
+	}
 	logger.GetReqInfo(ctx).Owner = owner
 	logger.GetReqInfo(ctx).Region = region
 
@@ -346,7 +349,10 @@ func authenticateRequest(ctx context.Context, r *http.Request, action policy.Act
 		return s3Err
 	}
 
-	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Cred = auth.Credentials{
+		AccessKey:  cred.AccessKey,
+		ParentUser: cred.ParentUser,
+	}
 	logger.GetReqInfo(ctx).Owner = owner
 
 	// region is valid only for CreateBucketAction.
@@ -709,7 +715,10 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return s3Err
 	}
 
-	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Cred = auth.Credentials{
+		AccessKey:  cred.AccessKey,
+		ParentUser: cred.ParentUser,
+	}
 	logger.GetReqInfo(ctx).Owner = owner
 	logger.GetReqInfo(ctx).Region = region
 
