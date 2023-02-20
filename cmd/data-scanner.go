@@ -857,11 +857,14 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			stop := globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			f.newCache.deleteRecursive(thisHash)
 			f.newCache.replaceHashed(thisHash, folder.parent, *flat)
-			stop(map[string]string{
-				"objects":  fmt.Sprint(flat.Objects),
-				"versions": fmt.Sprint(flat.Versions),
-				"size":     fmt.Sprint(flat.Size),
-			})
+			total := map[string]string{
+				"objects": fmt.Sprint(flat.Objects),
+				"size":    fmt.Sprint(flat.Size),
+			}
+			if flat.Versions > 0 {
+				total["versions"] = fmt.Sprint(flat.Versions)
+			}
+			stop(total)
 		}
 
 	}

@@ -519,10 +519,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
-		res["versions"] = fmt.Sprint(len(fivs.Versions))
-		if len(fivs.FreeVersions) > 0 {
-			res["free-versions"] = fmt.Sprint(len(fivs.FreeVersions))
-		}
 
 		sizeS := sizeSummary{}
 		var noTiers bool
@@ -569,6 +565,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		// apply tier sweep action on free versions
+		if len(fivs.FreeVersions) > 0 {
+			res["free-versions"] = fmt.Sprint(len(fivs.FreeVersions))
+		}
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
@@ -578,9 +577,15 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		// These are rather expensive. Skip if nobody listens.
 		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
-			for name, tier := range sizeS.tiers {
-				res["size-"+name] = fmt.Sprint(tier.TotalSize)
-				res["versions-"+name] = fmt.Sprint(tier.NumVersions)
+			if sizeS.versions > 0 {
+				res["versions"] = fmt.Sprint()
+			}
+			res["size"] = fmt.Sprint(sizeS.totalSize)
+			if len(sizeS.tiers) > 0 {
+				for name, tier := range sizeS.tiers {
+					res["size-"+name] = fmt.Sprint(tier.TotalSize)
+					res["versions-"+name] = fmt.Sprint(tier.NumVersions)
+				}
 			}
 			if sizeS.failedCount > 0 {
 				res["repl-failed"] = fmt.Sprintf("%d versions, %d bytes", sizeS.failedCount, sizeS.failedSize)
