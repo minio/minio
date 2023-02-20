@@ -555,7 +555,7 @@ func storageTrace(s storageMetric, startTime time.Time, duration time.Duration, 
 	}
 }
 
-func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, path string) madmin.TraceInfo {
+func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, path string, custom map[string]string) madmin.TraceInfo {
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceScanner,
 		Time:      startTime,
@@ -563,6 +563,7 @@ func scannerTrace(s scannerMetric, startTime time.Time, duration time.Duration, 
 		FuncName:  "scanner." + s.String(),
 		Duration:  duration,
 		Path:      path,
+		Custom:    custom,
 	}
 }
 

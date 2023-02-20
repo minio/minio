@@ -66,7 +66,7 @@ func (fi FileInfo) DataShardFixed() bool {
 	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
 }
 
-// Heals a bucket if it doesn't exist on one of the disks, additionally
+// HealBucket heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
 func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (
@@ -1062,7 +1062,12 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 		Path:      pathJoin(bucket, decodeDirObject(object)),
 	}
 	if opts != nil {
-		tr.Message = fmt.Sprintf("dry:%v, rm:%v, recreate:%v mode:%v", opts.DryRun, opts.Remove, opts.Recreate, opts.ScanMode)
+		tr.Custom = map[string]string{
+			"dry":      fmt.Sprint(opts.DryRun),
+			"remove":   fmt.Sprint(opts.Remove),
+			"recreate": fmt.Sprint(opts.Recreate),
+			"mode":     fmt.Sprint(opts.ScanMode),
+		}
 	}
 	if err != nil {
 		tr.Error = err.Error()

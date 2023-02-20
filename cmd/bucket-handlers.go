@@ -1142,6 +1142,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+		defer sendEvent(eventArgs{
+			EventName:    event.ObjectManyVersions,
+			BucketName:   objInfo.Bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		})
+	}
 
 	if redirectURL != nil { // success_action_redirect is valid and set.
 		v := redirectURL.Query()
