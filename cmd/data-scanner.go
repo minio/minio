@@ -62,7 +62,7 @@ const (
 	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
 
 	dataScannerExcessiveVersionsThreshold = 1000  // Issue a warning when a single object has more versions than this
-	dataScannerExcessiveFoldersThreshold  = 20000 // Issue a warning when a folder has more subfolders than this (this is per *set*)
+	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
 )
 
 var (
