@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -26,8 +25,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
@@ -216,43 +213,6 @@ func isHostIP(ipAddress string) bool {
 		host = host[:i]
 	}
 	return net.ParseIP(host) != nil
-}
-
-// checkPortAvailability - check if given host and port is already in use.
-// Note: The check method tries to listen on given port and closes it.
-// It is possible to have a disconnected client in this tiny window of time.
-func checkPortAvailability(host, port, vrf string) (err error) {
-	if vrf == "" {
-		l, err := net.Listen("tcp", net.JoinHostPort(host, port))
-		if err != nil {
-			return err
-		}
-		// As we are able to listen on this network, the port is not in use.
-		// Close the listener and continue check other networks.
-		return l.Close()
-	}
-
-	// In case of VRF use: try to open in correct vrf to validate port availability.
-	lc := &net.ListenConfig{
-		Control: func(network, address string, c syscall.RawConn) error {
-			c.Control(func(fdPtr uintptr) {
-				_ = syscall.SetsockoptString(int(fdPtr), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, vrf)
-			})
-
-			return nil
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	l, err := lc.Listen(ctx, "tcp", net.JoinHostPort(host, port))
-	if err != nil {
-		return err
-	}
-	// As we are able to listen on this network, the port is not in use.
-	// Close the listener and continue check other networks.
-	return l.Close()
 }
 
 // extractHostPort - extracts host/port from many address formats

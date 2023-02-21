@@ -107,7 +107,7 @@ var ServerFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "vrf-device",
-		Usage:  "bind to a specific vrf device name",
+		Usage:  "bind to a specific vrf device name (Linux only)",
 		EnvVar: "MINIO_VRF_DEVICE",
 	},
 }
