@@ -1216,7 +1216,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
-	defer NSUpdated(bucket, object)
 
 	if !opts.Speedtest && versionsDisparity {
 		listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)

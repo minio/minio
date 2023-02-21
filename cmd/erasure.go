@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
-	"github.com/minio/pkg/console"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -351,7 +350,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 
 // nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
+func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -377,7 +376,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 		},
 		Cache: make(map[string]dataUsageEntry, len(oldCache.Cache)),
 	}
-	bloom := bf.bytes()
 
 	// Put all buckets into channel.
 	bucketCh := make(chan BucketInfo, len(buckets))
@@ -473,7 +471,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				if cache.Info.Name == "" {
 					cache.Info.Name = bucket.Name
 				}
-				cache.Info.BloomFilter = bloom
 				cache.Info.SkipHealing = healing
 				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
@@ -496,16 +493,12 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 							Parent: dataUsageRoot,
 							Entry:  update,
 						}
-						if intDataUpdateTracker.debug {
-							console.Debugln("z:", er.poolIndex, "s:", er.setIndex, "bucket", name, "got update", update)
-						}
 					}
 				}(cache.Info.Name)
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error
 				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode)
-				cache.Info.BloomFilter = nil
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
 						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
