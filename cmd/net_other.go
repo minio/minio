@@ -1,5 +1,6 @@
 //go:build !linux
 // +build !linux
+
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack

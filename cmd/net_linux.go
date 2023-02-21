@@ -1,5 +1,6 @@
-//go:build (linux && !appengine)
+//go:build linux && !appengine
 // +build linux,!appengine
+
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
