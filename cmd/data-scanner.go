@@ -29,6 +29,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +60,9 @@ const (
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
 	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+
+	dataScannerExcessiveVersionsThreshold = 1000  // Issue a warning when a single object has more versions than this
+	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
 )
 
 var (
@@ -207,7 +211,11 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			logger.LogIf(ctx, err)
 			err = objAPI.NSScanner(ctx, bf, results, uint32(cycleInfo.current), scanMode)
 			logger.LogIf(ctx, err)
-			stopFn()
+			res := map[string]string{"cycle": fmt.Sprint(cycleInfo.current)}
+			if err != nil {
+				res["error"] = err.Error()
+			}
+			stopFn(res)
 			if err == nil {
 				// Store new cycle...
 				cycleInfo.next++
@@ -566,6 +574,19 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders ||
 			len(existingFolders)+len(newFolders) >= dataScannerForceCompactAtFolders
 
+		if len(existingFolders)+len(newFolders) > dataScannerExcessiveFoldersThreshold {
+			// Notify object accessed via a GET request.
+			sendEvent(eventArgs{
+				EventName:  event.PrefixManyFolders,
+				BucketName: f.root,
+				Object: ObjectInfo{
+					Name: strings.TrimSuffix(folder.name, "/") + "/",
+					Size: int64(len(existingFolders) + len(newFolders)),
+				},
+				UserAgent: "scanner",
+				Host:      globalMinioHost,
+			})
+		}
 		if !into.Compacted && shouldCompact {
 			into.Compacted = true
 			newFolders = append(newFolders, existingFolders...)
@@ -632,7 +653,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			f.updateCurrentPath(folder.name)
 			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name)
 			scanFolder(folder)
-			stopFn()
+			stopFn(map[string]string{"type": "new"})
+
 			// Add new folders if this is new and we don't have existing.
 			if !into.Compacted {
 				parent := f.updateCache.find(thisHash.Key())
@@ -661,9 +683,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				}
 			}
 			f.updateCurrentPath(folder.name)
-			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name, "EXISTING")
+			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name)
 			scanFolder(folder)
-			stopFn()
+			stopFn(map[string]string{"type": "existing"})
 		}
 
 		// Scan for healing
@@ -803,7 +825,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: 1}
 				stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, this.name, "HEALED")
 				scanFolder(this)
-				stopFn()
+				stopFn(map[string]string{"type": "healed"})
 			}
 		}
 		break
@@ -817,9 +839,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		flat.Compacted = true
 		var compact bool
 		if flat.Objects < dataScannerCompactLeastObject {
-			if flat.Objects > 1 {
-				globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
-			}
 			compact = true
 		} else {
 			// Compact if we only have objects as children...
@@ -832,13 +851,20 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-			if compact {
-				globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
-			}
+
 		}
 		if compact {
+			stop := globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			f.newCache.deleteRecursive(thisHash)
 			f.newCache.replaceHashed(thisHash, folder.parent, *flat)
+			total := map[string]string{
+				"objects": fmt.Sprint(flat.Objects),
+				"size":    fmt.Sprint(flat.Size),
+			}
+			if flat.Versions > 0 {
+				total["versions"] = fmt.Sprint(flat.Versions)
+			}
+			stop(total)
 		}
 
 	}
@@ -1082,8 +1108,27 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			}
 		}
 	}
+	fivs, err := i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
+	if err != nil {
+		return fivs, err
+	}
 
-	return i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
+	// Check if we have many versions after applyNewerNoncurrentVersionLimit.
+	if len(fivs) > dataScannerExcessiveVersionsThreshold {
+		// Notify object accessed via a GET request.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectManyVersions,
+			BucketName: i.bucket,
+			Object: ObjectInfo{
+				Name: i.objectPath(),
+			},
+			UserAgent:    "scanner",
+			Host:         globalMinioHost,
+			RespElements: map[string]string{"x-minio-versions": strconv.Itoa(len(fivs))},
+		})
+	}
+
+	return fivs, nil
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.

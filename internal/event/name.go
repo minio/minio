@@ -57,6 +57,8 @@ const (
 	ObjectRestoreCompleted
 	ObjectTransitionFailed
 	ObjectTransitionComplete
+	ObjectManyVersions
+	PrefixManyFolders
 
 	objectSingleTypesEnd
 	// Start Compound types that require expansion:
@@ -67,6 +69,7 @@ const (
 	ObjectReplicationAll
 	ObjectRestoreAll
 	ObjectTransitionAll
+	ObjectScannerAll
 	Everything
 )
 
@@ -112,6 +115,11 @@ func (name Name) Expand() []Name {
 		return []Name{
 			ObjectTransitionFailed,
 			ObjectTransitionComplete,
+		}
+	case ObjectScannerAll:
+		return []Name{
+			ObjectManyVersions,
+			PrefixManyFolders,
 		}
 	case Everything:
 		res := make([]Name, objectSingleTypesEnd-1)
@@ -202,6 +210,10 @@ func (name Name) String() string {
 		return "s3:ObjectTransition:Failed"
 	case ObjectTransitionComplete:
 		return "s3:ObjectTransition:Complete"
+	case ObjectManyVersions:
+		return "s3:Scanner:ManyVersions"
+	case PrefixManyFolders:
+		return "s3:Scanner:BigPrefix"
 	}
 
 	return ""
@@ -314,6 +326,10 @@ func ParseName(s string) (Name, error) {
 		return ObjectTransitionComplete, nil
 	case "s3:ObjectTransition:*":
 		return ObjectTransitionAll, nil
+	case "s3:Scanner:ManyVersions":
+		return ObjectManyVersions, nil
+	case "s3:Scanner:BigPrefix":
+		return PrefixManyFolders, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}
