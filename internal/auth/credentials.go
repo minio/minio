@@ -66,12 +66,12 @@ var AnonymousCredentials = Credentials{}
 
 // IsAccessKeyValid - validate access key for right length.
 func IsAccessKeyValid(accessKey string) bool {
-	return len(accessKey) >= accessKeyMinLen
+	return len(accessKey) >= accessKeyMinLen && len(accessKey) <= accessKeyMaxLen
 }
 
 // IsSecretKeyValid - validate secret key for right length.
 func IsSecretKeyValid(secretKey string) bool {
-	return len(secretKey) >= secretKeyMinLen
+	return len(secretKey) >= secretKeyMinLen && len(secretKey) <= secretKeyMaxLen
 }
 
 // Default access and secret keys.
