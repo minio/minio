@@ -563,7 +563,7 @@ func loadEnvVarsFromFiles() {
 				"Unable to validate credentials inherited from the secret file(s)")
 		}
 		if accessKey != "" {
-			os.Setenv(config.EnvRootUser, accessKey)
+			os.Setenv(config.EnvAccessKey, accessKey)
 		}
 	}
 
@@ -574,7 +574,7 @@ func loadEnvVarsFromFiles() {
 				"Unable to validate credentials inherited from the secret file(s)")
 		}
 		if secretKey != "" {
-			os.Setenv(config.EnvRootPassword, secretKey)
+			os.Setenv(config.EnvSecretKey, secretKey)
 		}
 	}
 
