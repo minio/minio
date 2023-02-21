@@ -374,7 +374,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
-				Host: "Internal: [ILM-EXPIRY]",
+				Host: "Internal: [ILM-Expiry]",
 			})
 		}
 	}
