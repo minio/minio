@@ -53,9 +53,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
 )
