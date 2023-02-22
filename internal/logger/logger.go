@@ -32,7 +32,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/pkg/logger/message/log"
 )
 
 // HighwayHash key for logging in anonymous mode

@@ -28,6 +28,7 @@ import (
 
 	"github.com/minio/kes-go"
 	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -187,6 +188,26 @@ func (c *kesClient) Stat(ctx context.Context) (Status, error) {
 		DefaultKey: c.defaultKeyID,
 		Details:    st,
 	}, nil
+}
+
+// IsLocal returns true if the KMS is a local implementation
+func (c *kesClient) IsLocal() bool {
+	return env.IsSet(EnvKMSSecretKey)
+}
+
+// List returns an array of local KMS Names
+func (c *kesClient) List() []kes.KeyInfo {
+	var kmsSecret []kes.KeyInfo
+	envKMSSecretKey := env.Get(EnvKMSSecretKey, "")
+	values := strings.SplitN(envKMSSecretKey, ":", 2)
+	if len(values) == 2 {
+		kmsSecret = []kes.KeyInfo{
+			{
+				Name: values[0],
+			},
+		}
+	}
+	return kmsSecret
 }
 
 // Metrics retrieves server metrics in the Prometheus exposition format.

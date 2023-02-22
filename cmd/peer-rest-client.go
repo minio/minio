@@ -34,8 +34,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 	"github.com/tinylib/msgp/msgp"
 )

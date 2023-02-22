@@ -600,13 +600,13 @@ func loadEnvVarsFromFiles() {
 		}
 	}
 
-	if env.IsSet(config.EnvKMSSecretKeyFile) {
-		kmsSecret, err := readFromSecret(env.Get(config.EnvKMSSecretKeyFile, ""))
+	if env.IsSet(kms.EnvKMSSecretKeyFile) {
+		kmsSecret, err := readFromSecret(env.Get(kms.EnvKMSSecretKeyFile, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to read the KMS secret key inherited from secret file")
 		}
 		if kmsSecret != "" {
-			os.Setenv(config.EnvKMSSecretKey, kmsSecret)
+			os.Setenv(kms.EnvKMSSecretKey, kmsSecret)
 		}
 	}
 
@@ -783,29 +783,29 @@ func handleCommonEnvVars() {
 // It depends on KMS env variables and global cli flags.
 func handleKMSConfig() {
 	switch {
-	case env.IsSet(config.EnvKMSSecretKey) && env.IsSet(config.EnvKESEndpoint):
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKMSSecretKey, config.EnvKESEndpoint))
+	case env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint):
+		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
 	}
 
-	if env.IsSet(config.EnvKMSSecretKey) {
-		KMS, err := kms.Parse(env.Get(config.EnvKMSSecretKey, ""))
+	if env.IsSet(kms.EnvKMSSecretKey) {
+		KMS, err := kms.Parse(env.Get(kms.EnvKMSSecretKey, ""))
 		if err != nil {
 			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
 		}
 		GlobalKMS = KMS
 	}
-	if env.IsSet(config.EnvKESEndpoint) {
-		if env.IsSet(config.EnvKESAPIKey) {
-			if env.IsSet(config.EnvKESClientKey) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKESAPIKey, config.EnvKESClientKey))
+	if env.IsSet(kms.EnvKESEndpoint) {
+		if env.IsSet(kms.EnvKESAPIKey) {
+			if env.IsSet(kms.EnvKESClientKey) {
+				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
 			}
-			if env.IsSet(config.EnvKESClientCert) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", config.EnvKESAPIKey, config.EnvKESClientCert))
+			if env.IsSet(kms.EnvKESClientCert) {
+				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
 			}
 		}
 
 		var endpoints []string
-		for _, endpoint := range strings.Split(env.Get(config.EnvKESEndpoint, ""), ",") {
+		for _, endpoint := range strings.Split(env.Get(kms.EnvKESEndpoint, ""), ",") {
 			if strings.TrimSpace(endpoint) == "" {
 				continue
 			}
@@ -821,21 +821,21 @@ func handleKMSConfig() {
 				endpoints = append(endpoints, strings.Join(lbls, ""))
 			}
 		}
-		rootCAs, err := certs.GetRootCAs(env.Get(config.EnvKESServerCA, globalCertsCADir.Get()))
+		rootCAs, err := certs.GetRootCAs(env.Get(kms.EnvKESServerCA, globalCertsCADir.Get()))
 		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(config.EnvKESServerCA, globalCertsCADir.Get())))
+			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(kms.EnvKESServerCA, globalCertsCADir.Get())))
 		}
 
 		var kmsConf kms.Config
-		if env.IsSet(config.EnvKESAPIKey) {
-			key, err := kes.ParseAPIKey(env.Get(config.EnvKESAPIKey, ""))
+		if env.IsSet(kms.EnvKESAPIKey) {
+			key, err := kes.ParseAPIKey(env.Get(kms.EnvKESAPIKey, ""))
 			if err != nil {
-				logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(config.EnvKESAPIKey, "")))
+				logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(kms.EnvKESAPIKey, "")))
 			}
 			kmsConf = kms.Config{
 				Endpoints:    endpoints,
-				Enclave:      env.Get(config.EnvKESEnclave, ""),
-				DefaultKeyID: env.Get(config.EnvKESKeyName, ""),
+				Enclave:      env.Get(kms.EnvKESEnclave, ""),
+				DefaultKeyID: env.Get(kms.EnvKESKeyName, ""),
 				APIKey:       key,
 				RootCAs:      rootCAs,
 			}
@@ -857,7 +857,7 @@ func handleKMSConfig() {
 					return tls.Certificate{}, errors.New("Unable to load KES client private key as specified by the shell environment: private key contains additional data")
 				}
 				if x509.IsEncryptedPEMBlock(privateKeyPEM) {
-					keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(config.EnvKESClientPassword, "")))
+					keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(kms.EnvKESClientPassword, "")))
 					if err != nil {
 						return tls.Certificate{}, fmt.Errorf("Unable to decrypt KES client private key as specified by the shell environment: %v", err)
 					}
@@ -871,7 +871,7 @@ func handleKMSConfig() {
 			}
 
 			reloadCertEvents := make(chan tls.Certificate, 1)
-			certificate, err := certs.NewCertificate(env.Get(config.EnvKESClientCert, ""), env.Get(config.EnvKESClientKey, ""), loadX509KeyPair)
+			certificate, err := certs.NewCertificate(env.Get(kms.EnvKESClientCert, ""), env.Get(kms.EnvKESClientKey, ""), loadX509KeyPair)
 			if err != nil {
 				logger.Fatal(err, "Failed to load KES client certificate")
 			}
@@ -880,8 +880,8 @@ func handleKMSConfig() {
 
 			kmsConf = kms.Config{
 				Endpoints:        endpoints,
-				Enclave:          env.Get(config.EnvKESEnclave, ""),
-				DefaultKeyID:     env.Get(config.EnvKESKeyName, ""),
+				Enclave:          env.Get(kms.EnvKESEnclave, ""),
+				DefaultKeyID:     env.Get(kms.EnvKESKeyName, ""),
 				Certificate:      certificate,
 				ReloadCertEvents: reloadCertEvents,
 				RootCAs:          rootCAs,
@@ -896,7 +896,7 @@ func handleKMSConfig() {
 		// This implicitly checks that we can communicate to KES. We don't treat
 		// a policy error as failure condition since MinIO may not have the permission
 		// to create keys - just to generate/decrypt data encryption keys.
-		if err = KMS.CreateKey(context.Background(), env.Get(config.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
+		if err = KMS.CreateKey(context.Background(), env.Get(kms.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
 		GlobalKMS = KMS

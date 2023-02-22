@@ -32,6 +32,12 @@ type KMS interface {
 	// Stat returns the current KMS status.
 	Stat(cxt context.Context) (Status, error)
 
+	// IsLocal returns true if the KMS is a local implementation
+	IsLocal() bool
+
+	// List returns an array of local KMS Names
+	List() []kes.KeyInfo
+
 	// Metrics returns a KMS metric snapshot.
 	Metrics(ctx context.Context) (kes.Metric, error)
 
