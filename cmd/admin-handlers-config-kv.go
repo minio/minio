@@ -209,10 +209,10 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 	}
 
 	// Check if subnet proxy being set and if so set the same value to proxy of subnet
-	// target of logger webhook configuartion
+	// target of logger webhook configuration
 	if result.SubSys == config.SubnetSubSys {
 		loggerWebhookSubnetProxy := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys].Get(logger.Proxy)
-		subnetProxy := result.Cfg[config.SubnetSubSys]["_"].Get(logger.Proxy)
+		subnetProxy := result.Cfg[config.SubnetSubSys][config.Default].Get(logger.Proxy)
 		if loggerWebhookSubnetProxy != subnetProxy {
 			obj := result.Cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
 			obj.Set(logger.Proxy, subnetProxy)
