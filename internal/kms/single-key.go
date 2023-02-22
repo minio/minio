@@ -91,8 +91,23 @@ func (kms secretKey) Stat(context.Context) (Status, error) {
 	}, nil
 }
 
-func (secretKey) Metrics(context.Context) (kes.Metric, error) {
-	return kes.Metric{}, errors.New("kms: metrics not supported")
+// IsLocal returns true if the KMS is a local implementation
+func (kms secretKey) IsLocal() bool {
+	return true
+}
+
+// List returns an array of local KMS Names
+func (kms secretKey) List() []kes.KeyInfo {
+	kmsSecret := []kes.KeyInfo{
+		{
+			Name: kms.keyID,
+		},
+	}
+	return kmsSecret
+}
+
+func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
+	return kes.Metric{}, errors.New("kms: metrics are not supported")
 }
 
 func (kms secretKey) CreateKey(_ context.Context, keyID string) error {

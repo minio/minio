@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -220,6 +220,7 @@ const (
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
 	ErrKMSKeyNotFoundException
+	ErrKMSDefaultKeyAlreadyConfigured
 
 	ErrNoAccessKey
 	ErrInvalidToken
@@ -1172,6 +1173,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid keyId",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrKMSDefaultKeyAlreadyConfigured: {
+		Code:           "KMS.DefaultKeyAlreadyConfiguredException",
+		Description:    "A default encryption already exists and cannot be changed on KMS",
+		HTTPStatusCode: http.StatusConflict,
+	},
 	ErrNoAccessKey: {
 		Code:           "AccessDenied",
 		Description:    "No AWSAccessKey was presented",
@@ -2047,6 +2053,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case errKMSKeyNotFound:
 		apiErr = ErrKMSKeyNotFoundException
+	case errKMSDefaultKeyAlreadyConfigured:
+		apiErr = ErrKMSDefaultKeyAlreadyConfigured
 
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
