@@ -875,7 +875,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-		w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -893,7 +893,7 @@ func writeErrorResponseString(ctx context.Context, w http.ResponseWriter, err AP
 // useful for admin APIs.
 func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
