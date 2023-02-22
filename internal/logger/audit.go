@@ -24,10 +24,12 @@ import (
 	"strconv"
 	"time"
 
+	internalAudit "github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/pkg/logger/message/audit"
+
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/minio/madmin-go/v2"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger/message/audit"
 )
 
 const contextAuditKey = contextKeyType("audit-entry")
@@ -49,7 +51,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 			return r
 		}
 		r = &audit.Entry{
-			Version:      audit.Version,
+			Version:      internalAudit.Version,
 			DeploymentID: xhttp.GlobalDeploymentID,
 			Time:         time.Now().UTC(),
 		}
@@ -74,7 +76,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		reqInfo.RLock()
 		defer reqInfo.RUnlock()
 
-		entry = audit.ToEntry(w, r, reqClaims, xhttp.GlobalDeploymentID)
+		entry = internalAudit.ToEntry(w, r, reqClaims, xhttp.GlobalDeploymentID)
 		// indicates all requests for this API call are inbound
 		entry.Trigger = "incoming"
 

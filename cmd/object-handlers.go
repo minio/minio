@@ -1918,7 +1918,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
-	sendEvent(eventArgs{
+	evt := eventArgs{
 		EventName:    event.ObjectCreatedPut,
 		BucketName:   bucket,
 		Object:       objInfo,
@@ -1926,7 +1926,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
-	})
+	}
+	sendEvent(evt)
+	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+		evt.EventName = event.ObjectManyVersions
+		sendEvent(evt)
+	}
 
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {

@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/color"
-	"github.com/minio/minio/internal/logger/message/log"
 	c "github.com/minio/pkg/console"
+	"github.com/minio/pkg/logger/message/log"
 )
 
 // ConsoleLoggerTgt is a stringified value to represent console logging

@@ -53,9 +53,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
 )
@@ -1013,7 +1013,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if hr.errBody == "" {
 						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
 							r.URL.Path, w.Header().Get(xhttp.AmzRequestID),
-							globalDeploymentID))
+							w.Header().Get(xhttp.AmzRequestHostID)))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
@@ -1217,6 +1217,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	storageClass := strings.TrimSpace(r.Form.Get(peerRESTStorageClass))
 	customBucket := strings.TrimSpace(r.Form.Get(peerRESTBucket))
 	autotune := r.Form.Get("autotune") == "true"
+	noClear := r.Form.Get("noclear") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1258,14 +1259,16 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		if !bucketExists {
+		if !noClear && !bucketExists {
 			defer deleteObjectPerfBucket(objectAPI)
 		}
 	}
 
-	defer objectAPI.DeleteObject(ctx, customBucket, speedTest+SlashSeparator, ObjectOptions{
-		DeletePrefix: true,
-	})
+	if !noClear {
+		defer objectAPI.DeleteObject(ctx, customBucket, speedTest+SlashSeparator, ObjectOptions{
+			DeletePrefix: true,
+		})
+	}
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
@@ -2299,7 +2302,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	errResp := func(err error) {
 		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
-			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+			w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 		encodedErrorResponse := encodeResponse(errorResponse)
 		healthInfo.Error = string(encodedErrorResponse)
 		logger.LogIf(ctx, enc.Encode(healthInfo))

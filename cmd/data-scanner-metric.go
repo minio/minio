@@ -69,9 +69,9 @@ const (
 
 // log scanner action.
 // Use for s > scannerMetricStartTrace
-func (p *scannerMetrics) log(s scannerMetric, paths ...string) func() {
+func (p *scannerMetrics) log(s scannerMetric, paths ...string) func(custom map[string]string) {
 	startTime := time.Now()
-	return func() {
+	return func(custom map[string]string) {
 		duration := time.Since(startTime)
 
 		atomic.AddUint64(&p.operations[s], 1)
@@ -80,7 +80,7 @@ func (p *scannerMetrics) log(s scannerMetric, paths ...string) func() {
 		}
 
 		if s > scannerMetricStartTrace && globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
-			globalTrace.Publish(scannerTrace(s, startTime, duration, strings.Join(paths, " ")))
+			globalTrace.Publish(scannerTrace(s, startTime, duration, strings.Join(paths, " "), custom))
 		}
 	}
 }

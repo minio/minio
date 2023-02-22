@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -48,10 +48,11 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
-	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
-	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
-	errKMSKeyNotFound       = errors.New("Invalid KMS keyId")
+	errEncryptedObject                = errors.New("The object was stored using a form of SSE")
+	errInvalidSSEParameters           = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
+	errKMSNotConfigured               = errors.New("KMS not configured for a server side encrypted objects")
+	errKMSKeyNotFound                 = errors.New("Unknown KMS key ID")
+	errKMSDefaultKeyAlreadyConfigured = errors.New("A default encryption already exists on KMS")
 	// Additional MinIO errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 	// error returned when invalid encryption parameters are specified

@@ -492,11 +492,15 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 		stopFn := globalScannerMetrics.log(scannerMetricScanObject, s.diskPath, pathJoin(item.bucket, item.objectPath()))
-		defer stopFn()
+		res := make(map[string]string, 8)
+		defer func() {
+			stopFn(res)
+		}()
 
 		doneSz := globalScannerMetrics.timeSize(scannerMetricReadMetadata)
 		buf, err := s.readMetadata(ctx, item.Path)
 		doneSz(len(buf))
+		res["metasize"] = fmt.Sprint(len(buf))
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -515,6 +519,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			return sizeSummary{}, errSkipFile
 		}
+
 		sizeS := sizeSummary{}
 		var noTiers bool
 		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
@@ -560,12 +565,45 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		// apply tier sweep action on free versions
+		if len(fivs.FreeVersions) > 0 {
+			res["free-versions"] = fmt.Sprint(len(fivs.FreeVersions))
+		}
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
 			item.applyTierObjSweep(ctx, objAPI, oi)
 			done()
 		}
+
+		// These are rather expensive. Skip if nobody listens.
+		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
+			if sizeS.versions > 0 {
+				res["versions"] = fmt.Sprint()
+			}
+			res["size"] = fmt.Sprint(sizeS.totalSize)
+			if len(sizeS.tiers) > 0 {
+				for name, tier := range sizeS.tiers {
+					res["size-"+name] = fmt.Sprint(tier.TotalSize)
+					res["versions-"+name] = fmt.Sprint(tier.NumVersions)
+				}
+			}
+			if sizeS.failedCount > 0 {
+				res["repl-failed"] = fmt.Sprintf("%d versions, %d bytes", sizeS.failedCount, sizeS.failedSize)
+			}
+			if sizeS.pendingCount > 0 {
+				res["repl-pending"] = fmt.Sprintf("%d versions, %d bytes", sizeS.pendingCount, sizeS.pendingSize)
+			}
+			for tgt, st := range sizeS.replTargetStats {
+				res["repl-size-"+tgt] = fmt.Sprint(st.replicatedSize)
+				if st.failedCount > 0 {
+					res["repl-failed-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.failedCount, st.failedSize)
+				}
+				if st.pendingCount > 0 {
+					res["repl-pending-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.pendingCount, st.pendingSize)
+				}
+			}
+		}
+
 		return sizeS, nil
 	}, scanMode)
 	if err != nil {

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -51,6 +52,7 @@ type Config struct {
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
 	QueueSize  int               `json:"queueSize"`
+	Proxy      string            `json:"string"`
 	Transport  http.RoundTripper `json:"-"`
 
 	// Custom logger
@@ -125,6 +127,15 @@ func (h *Target) Init() error {
 
 	if h.config.AuthToken != "" {
 		req.Header.Set("Authorization", h.config.AuthToken)
+	}
+
+	// If proxy available, set the same
+	if h.config.Proxy != "" {
+		proxyURL, _ := url.Parse(h.config.Proxy)
+		transport := h.config.Transport
+		ctransport := transport.(*http.Transport).Clone()
+		ctransport.Proxy = http.ProxyURL(proxyURL)
+		h.config.Transport = ctransport
 	}
 
 	client := http.Client{Transport: h.config.Transport}

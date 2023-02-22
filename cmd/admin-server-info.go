@@ -28,6 +28,7 @@ import (
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -118,7 +119,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		config.EnvRootUser:          {},
 		config.EnvRootPassword:      {},
 		config.EnvMinIOSubnetAPIKey: {},
-		config.EnvKMSSecretKey:      {},
+		kms.EnvKMSSecretKey:         {},
 	}
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, "MINIO") && !strings.HasPrefix(v, "_MINIO") {
