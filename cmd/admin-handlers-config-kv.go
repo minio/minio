@@ -29,6 +29,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/cache"
+	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/etcd"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
@@ -209,12 +210,13 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 
 	// Check if callhome getting enabled, if so set the subnet proxy value to logger_webhook's subnet proxy
 	// Do this only if logger_wenhook's subnet proxy is not yet set
-	if result.SubSys == "callhome" && result.Cfg["callhome"]["_"].Get("enable") == "on" {
-		loggerWebhookSubnetProxy := result.Cfg["logger_webhook"]["subnet"].Get("proxy")
-		subnetProxy := result.Cfg["subnet"]["_"].Get("proxy")
+	callhomeCfg := result.Cfg[config.CallhomeSubSys]["_"]
+	if result.SubSys == config.CallhomeSubSys && callhomeCfg.Get(callhome.Enable) == "on" {
+		loggerWebhookSubnetProxy := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys].Get(logger.Proxy)
+		subnetProxy := result.Cfg[config.SubnetSubSys]["_"].Get(logger.Proxy)
 		if loggerWebhookSubnetProxy == "" && subnetProxy != "" {
-			obj := result.Cfg["logger_webhook"]["subnet"]
-			obj.Set("proxy", subnetProxy)
+			obj := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys]
+			obj.Set(logger.Proxy, subnetProxy)
 			result.LoggerWebhookCfgUpdated = true
 		}
 	}
