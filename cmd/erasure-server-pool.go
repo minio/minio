@@ -56,9 +56,6 @@ type erasureServerPools struct {
 
 	serverPools []*erasureSets
 
-	// Shut down async operations
-	shutdown context.CancelFunc
-
 	// Active decommission canceler
 	decommissionCancelers []context.CancelFunc
 
@@ -166,7 +163,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	}
 
 	globalLocalDrives = localDrives
-	ctx, z.shutdown = context.WithCancel(ctx)
 	return z, nil
 }
 
@@ -523,8 +519,6 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 }
 
 func (z *erasureServerPools) Shutdown(ctx context.Context) error {
-	defer z.shutdown()
-
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	for index := range z.serverPools {

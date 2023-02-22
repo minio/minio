@@ -1553,8 +1553,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-
 	storageDisks := er.getDisks()
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
