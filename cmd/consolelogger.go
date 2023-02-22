@@ -25,10 +25,10 @@ import (
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/logger/target/console"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/pubsub"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 )
 

@@ -62,6 +62,7 @@ import (
 	"github.com/minio/mux"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	pkgAudit "github.com/minio/pkg/logger/message/audit"
 	xnet "github.com/minio/pkg/net"
 	"golang.org/x/oauth2"
 )
@@ -1061,7 +1062,7 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = opts.Bucket
-	entry.API.Objects = []audit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
+	entry.API.Objects = []pkgAudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
 	entry.Tags = opts.Tags
 	// Merge tag information if found - this is currently needed for tags

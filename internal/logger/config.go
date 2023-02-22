@@ -43,6 +43,7 @@ const (
 	ClientCert = "client_cert"
 	ClientKey  = "client_key"
 	QueueSize  = "queue_size"
+	Proxy      = "proxy"
 
 	KafkaBrokers       = "brokers"
 	KafkaTopic         = "topic"
@@ -62,6 +63,7 @@ const (
 	EnvLoggerWebhookAuthToken  = "MINIO_LOGGER_WEBHOOK_AUTH_TOKEN"
 	EnvLoggerWebhookClientCert = "MINIO_LOGGER_WEBHOOK_CLIENT_CERT"
 	EnvLoggerWebhookClientKey  = "MINIO_LOGGER_WEBHOOK_CLIENT_KEY"
+	EnvLoggerWebhookProxy      = "MINIO_LOGGER_WEBHOOK_PROXY"
 	EnvLoggerWebhookQueueSize  = "MINIO_LOGGER_WEBHOOK_QUEUE_SIZE"
 
 	EnvAuditWebhookEnable     = "MINIO_AUDIT_WEBHOOK_ENABLE"
@@ -107,6 +109,10 @@ var (
 		},
 		config.KV{
 			Key:   ClientKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   Proxy,
 			Value: "",
 		},
 		config.KV{
@@ -441,6 +447,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
+		proxyEnv := EnvLoggerWebhookProxy
 		queueSizeEnv := EnvAuditWebhookQueueSize
 		if target != config.Default {
 			queueSizeEnv = EnvAuditWebhookQueueSize + config.Default + target
@@ -458,6 +465,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			AuthToken:  env.Get(authTokenEnv, ""),
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
+			Proxy:      env.Get(proxyEnv, ""),
 			QueueSize:  queueSize,
 			Name:       target,
 		}
@@ -501,6 +509,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			AuthToken:  kv.Get(AuthToken),
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
+			Proxy:      kv.Get(Proxy),
 			QueueSize:  queueSize,
 			Name:       starget,
 		}
