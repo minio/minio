@@ -158,7 +158,7 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 			if err != nil {
 				return err
 			}
-			bucketInfos[idx] = bucketInfo
+			bucketInfos[idx+1] = bucketInfo
 			return nil
 		}, idx)
 	}
