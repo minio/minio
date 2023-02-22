@@ -32,6 +32,8 @@ import (
 
 const (
 	respBodyLimit = 1 << 20 // 1 MiB
+
+	LoggerWebhookName = "subnet"
 )
 
 // Upload given file content (payload) to specified URL

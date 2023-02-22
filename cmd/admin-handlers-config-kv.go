@@ -29,13 +29,13 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/cache"
-	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/etcd"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/config/subnet"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -180,7 +180,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		// If logger webhook config updated (proxy due to callhome), explicitly dynamically
 		// apply the config
 		if result.LoggerWebhookCfgUpdated {
-			applyDynamic(ctx, objectAPI, result.Cfg, "logger_webhook", r, w)
+			applyDynamic(ctx, objectAPI, result.Cfg, config.LoggerWebhookSubSys, r, w)
 		}
 	}
 
@@ -208,14 +208,13 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 		return
 	}
 
-	// Check if callhome getting enabled, if so set the subnet proxy value to logger_webhook's subnet proxy
-	// Do this only if logger_wenhook's subnet proxy is not yet set
-	callhomeCfg := result.Cfg[config.CallhomeSubSys]["_"]
-	if result.SubSys == config.CallhomeSubSys && callhomeCfg.Get(callhome.Enable) == "on" {
+	// Check if subnet proxy being set and if so set the same value to proxy of subnet
+	// target of logger webhook configuartion
+	if result.SubSys == config.SubnetSubSys {
 		loggerWebhookSubnetProxy := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys].Get(logger.Proxy)
 		subnetProxy := result.Cfg[config.SubnetSubSys]["_"].Get(logger.Proxy)
-		if loggerWebhookSubnetProxy == "" && subnetProxy != "" {
-			obj := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys]
+		if loggerWebhookSubnetProxy != subnetProxy {
+			obj := result.Cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
 			obj.Set(logger.Proxy, subnetProxy)
 			result.LoggerWebhookCfgUpdated = true
 		}
