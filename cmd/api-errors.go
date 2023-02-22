@@ -2006,11 +2006,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		return ErrClientDisconnected
 	}
 
-	// Unwrap any inner errors to ensure proper API error conversion.
-	if innerErr := errors.Unwrap(err); innerErr != nil {
-		err = innerErr
-	}
-
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
@@ -2044,6 +2039,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidSecretKey
 	case errInvalidStorageClass:
 		apiErr = ErrInvalidStorageClass
+	case errErasureReadQuorum:
+		apiErr = ErrSlowDown
+	case errErasureWriteQuorum:
+		apiErr = ErrSlowDown
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters

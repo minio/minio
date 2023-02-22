@@ -194,7 +194,7 @@ func (target *WebhookTarget) Send(eventData event.Event) (resp *http.Response, e
 	return target.httpClient.Do(req)
 }
 
-// Close - does nothing and available for interface compatibility.
+// Close the target. Will cancel all active requests.
 func (target *WebhookTarget) Close() error {
 	target.cancel()
 	return nil

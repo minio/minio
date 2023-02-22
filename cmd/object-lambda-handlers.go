@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/klauspost/compress/gzhttp"
 	"github.com/lithammer/shortuuid/v4"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -103,156 +104,95 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 	return eventData, nil
 }
 
+var statusTextToCode = map[string]int{
+	"Continue":                        http.StatusContinue,
+	"Switching Protocols":             http.StatusSwitchingProtocols,
+	"Processing":                      http.StatusProcessing,
+	"Early Hints":                     http.StatusEarlyHints,
+	"OK":                              http.StatusOK,
+	"Created":                         http.StatusCreated,
+	"Accepted":                        http.StatusAccepted,
+	"Non-Authoritative Information":   http.StatusNonAuthoritativeInfo,
+	"No Content":                      http.StatusNoContent,
+	"Reset Content":                   http.StatusResetContent,
+	"Partial Content":                 http.StatusPartialContent,
+	"Multi-Status":                    http.StatusMultiStatus,
+	"Already Reported":                http.StatusAlreadyReported,
+	"IM Used":                         http.StatusIMUsed,
+	"Multiple Choices":                http.StatusMultipleChoices,
+	"Moved Permanently":               http.StatusMovedPermanently,
+	"Found":                           http.StatusFound,
+	"See Other":                       http.StatusSeeOther,
+	"Not Modified":                    http.StatusNotModified,
+	"Use Proxy":                       http.StatusUseProxy,
+	"Temporary Redirect":              http.StatusTemporaryRedirect,
+	"Permanent Redirect":              http.StatusPermanentRedirect,
+	"Bad Request":                     http.StatusBadRequest,
+	"Unauthorized":                    http.StatusUnauthorized,
+	"Payment Required":                http.StatusPaymentRequired,
+	"Forbidden":                       http.StatusForbidden,
+	"Not Found":                       http.StatusNotFound,
+	"Method Not Allowed":              http.StatusMethodNotAllowed,
+	"Not Acceptable":                  http.StatusNotAcceptable,
+	"Proxy Authentication Required":   http.StatusProxyAuthRequired,
+	"Request Timeout":                 http.StatusRequestTimeout,
+	"Conflict":                        http.StatusConflict,
+	"Gone":                            http.StatusGone,
+	"Length Required":                 http.StatusLengthRequired,
+	"Precondition Failed":             http.StatusPreconditionFailed,
+	"Request Entity Too Large":        http.StatusRequestEntityTooLarge,
+	"Request URI Too Long":            http.StatusRequestURITooLong,
+	"Unsupported Media Type":          http.StatusUnsupportedMediaType,
+	"Requested Range Not Satisfiable": http.StatusRequestedRangeNotSatisfiable,
+	"Expectation Failed":              http.StatusExpectationFailed,
+	"I'm a teapot":                    http.StatusTeapot,
+	"Misdirected Request":             http.StatusMisdirectedRequest,
+	"Unprocessable Entity":            http.StatusUnprocessableEntity,
+	"Locked":                          http.StatusLocked,
+	"Failed Dependency":               http.StatusFailedDependency,
+	"Too Early":                       http.StatusTooEarly,
+	"Upgrade Required":                http.StatusUpgradeRequired,
+	"Precondition Required":           http.StatusPreconditionRequired,
+	"Too Many Requests":               http.StatusTooManyRequests,
+	"Request Header Fields Too Large": http.StatusRequestHeaderFieldsTooLarge,
+	"Unavailable For Legal Reasons":   http.StatusUnavailableForLegalReasons,
+	"Internal Server Error":           http.StatusInternalServerError,
+	"Not Implemented":                 http.StatusNotImplemented,
+	"Bad Gateway":                     http.StatusBadGateway,
+	"Service Unavailable":             http.StatusServiceUnavailable,
+	"Gateway Timeout":                 http.StatusGatewayTimeout,
+	"HTTP Version Not Supported":      http.StatusHTTPVersionNotSupported,
+	"Variant Also Negotiates":         http.StatusVariantAlsoNegotiates,
+	"Insufficient Storage":            http.StatusInsufficientStorage,
+	"Loop Detected":                   http.StatusLoopDetected,
+	"Not Extended":                    http.StatusNotExtended,
+	"Network Authentication Required": http.StatusNetworkAuthenticationRequired,
+}
+
 // StatusCode returns a HTTP Status code for the HTTP text. It returns -1
 // if the text is unknown.
 func StatusCode(text string) int {
-	switch text {
-	case "Continue":
-		return http.StatusContinue
-	case "Switching Protocols":
-		return http.StatusSwitchingProtocols
-	case "Processing":
-		return http.StatusProcessing
-	case "Early Hints":
-		return http.StatusEarlyHints
-	case "OK":
-		return http.StatusOK
-	case "Created":
-		return http.StatusCreated
-	case "Accepted":
-		return http.StatusAccepted
-	case "Non-Authoritative Information":
-		return http.StatusNonAuthoritativeInfo
-	case "No Content":
-		return http.StatusNoContent
-	case "Reset Content":
-		return http.StatusResetContent
-	case "Partial Content":
-		return http.StatusPartialContent
-	case "Multi-Status":
-		return http.StatusMultiStatus
-	case "Already Reported":
-		return http.StatusAlreadyReported
-	case "IM Used":
-		return http.StatusIMUsed
-	case "Multiple Choices":
-		return http.StatusMultipleChoices
-	case "Moved Permanently":
-		return http.StatusMovedPermanently
-	case "Found":
-		return http.StatusFound
-	case "See Other":
-		return http.StatusSeeOther
-	case "Not Modified":
-		return http.StatusNotModified
-	case "Use Proxy":
-		return http.StatusUseProxy
-	case "Temporary Redirect":
-		return http.StatusTemporaryRedirect
-	case "Permanent Redirect":
-		return http.StatusPermanentRedirect
-	case "Bad Request":
-		return http.StatusBadRequest
-	case "Unauthorized":
-		return http.StatusUnauthorized
-	case "Payment Required":
-		return http.StatusPaymentRequired
-	case "Forbidden":
-		return http.StatusForbidden
-	case "Not Found":
-		return http.StatusNotFound
-	case "Method Not Allowed":
-		return http.StatusMethodNotAllowed
-	case "Not Acceptable":
-		return http.StatusNotAcceptable
-	case "Proxy Authentication Required":
-		return http.StatusProxyAuthRequired
-	case "Request Timeout":
-		return http.StatusRequestTimeout
-	case "Conflict":
-		return http.StatusConflict
-	case "Gone":
-		return http.StatusGone
-	case "Length Required":
-		return http.StatusLengthRequired
-	case "Precondition Failed":
-		return http.StatusPreconditionFailed
-	case "Request Entity Too Large":
-		return http.StatusRequestEntityTooLarge
-	case "Request URI Too Long":
-		return http.StatusRequestURITooLong
-	case "Unsupported Media Type":
-		return http.StatusUnsupportedMediaType
-	case "Requested Range Not Satisfiable":
-		return http.StatusRequestedRangeNotSatisfiable
-	case "Expectation Failed":
-		return http.StatusExpectationFailed
-	case "I'm a teapot":
-		return http.StatusTeapot
-	case "Misdirected Request":
-		return http.StatusMisdirectedRequest
-	case "Unprocessable Entity":
-		return http.StatusUnprocessableEntity
-	case "Locked":
-		return http.StatusLocked
-	case "Failed Dependency":
-		return http.StatusFailedDependency
-	case "Too Early":
-		return http.StatusTooEarly
-	case "Upgrade Required":
-		return http.StatusUpgradeRequired
-	case "Precondition Required":
-		return http.StatusPreconditionRequired
-	case "Too Many Requests":
-		return http.StatusTooManyRequests
-	case "Request Header Fields Too Large":
-		return http.StatusRequestHeaderFieldsTooLarge
-	case "Unavailable For Legal Reasons":
-		return http.StatusUnavailableForLegalReasons
-	case "Internal Server Error":
-		return http.StatusInternalServerError
-	case "Not Implemented":
-		return http.StatusNotImplemented
-	case "Bad Gateway":
-		return http.StatusBadGateway
-	case "Service Unavailable":
-		return http.StatusServiceUnavailable
-	case "Gateway Timeout":
-		return http.StatusGatewayTimeout
-	case "HTTP Version Not Supported":
-		return http.StatusHTTPVersionNotSupported
-	case "Variant Also Negotiates":
-		return http.StatusVariantAlsoNegotiates
-	case "Insufficient Storage":
-		return http.StatusInsufficientStorage
-	case "Loop Detected":
-		return http.StatusLoopDetected
-	case "Not Extended":
-		return http.StatusNotExtended
-	case "Network Authentication Required":
-		return http.StatusNetworkAuthenticationRequired
-	default:
-		return -1
+	if code, ok := statusTextToCode[text]; ok {
+		return code
 	}
+	return -1
 }
 
 func fwdHeadersToS3(h http.Header, w http.ResponseWriter) {
+	const trim = "x-amz-fwd-header-"
 	for k, v := range h {
-		if !strings.HasPrefix(strings.ToLower(k), "x-amz-fwd-header-") {
-			continue
+		if strings.HasPrefix(strings.ToLower(k), trim) {
+			w.Header()[k[len(trim):]] = v
 		}
-		nk := strings.TrimPrefix(k, "x-amz-fwd-header-")
-		nk = strings.TrimPrefix(nk, "X-Amz-Fwd-Header-")
-		w.Header()[nk] = v
 	}
 }
 
-func fwdStatusToAPIError(h http.Header) *APIError {
-	if status := h.Get(xhttp.AmzFwdStatus); status != "" && StatusCode(status) > -1 {
+func fwdStatusToAPIError(resp *http.Response) *APIError {
+	if status := resp.Header.Get(xhttp.AmzFwdStatus); status != "" && StatusCode(status) > -1 {
 		apiErr := &APIError{
 			HTTPStatusCode: StatusCode(status),
-			Description:    h.Get(xhttp.AmzFwdErrorMessage),
-			Code:           h.Get(xhttp.AmzFwdErrorCode),
+			Description:    resp.Header.Get(xhttp.AmzFwdErrorMessage),
+			Code:           resp.Header.Get(xhttp.AmzFwdErrorCode),
 		}
 		if apiErr.HTTPStatusCode == http.StatusOK {
 			return nil
@@ -329,9 +269,22 @@ func (api objectAPIHandlers) GetObjectLambdaHandler(w http.ResponseWriter, r *ht
 	// Set all the relevant lambda forward headers if found.
 	fwdHeadersToS3(resp.Header, w)
 
-	if apiErr := fwdStatusToAPIError(resp.Header); apiErr != nil {
+	if apiErr := fwdStatusToAPIError(resp); apiErr != nil {
 		writeErrorResponse(ctx, w, *apiErr, r.URL)
 		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		writeErrorResponse(ctx, w, APIError{
+			Code:           "LambdaFunctionError",
+			HTTPStatusCode: resp.StatusCode,
+			Description:    "unexpected failure reported from lambda function",
+		}, r.URL)
+		return
+	}
+
+	if !globalAPIConfig.shouldGzipObjects() {
+		w.Header().Set(gzhttp.HeaderNoCompression, "true")
 	}
 
 	io.Copy(w, resp.Body)
