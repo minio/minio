@@ -188,6 +188,14 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	// This is a special call attempted first to check for SOS-API calls.
+	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
+	if err == nil {
+		return gr, nil
+	}
+	// reset any error to 'nil'
+	err = nil
+
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
 	defer func() {
