@@ -1013,7 +1013,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if hr.errBody == "" {
 						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
 							r.URL.Path, w.Header().Get(xhttp.AmzRequestID),
-							globalDeploymentID))
+							w.Header().Get(xhttp.AmzRequestHostID)))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
@@ -2302,7 +2302,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	errResp := func(err error) {
 		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
-			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+			w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 		encodedErrorResponse := encodeResponse(errorResponse)
 		healthInfo.Error = string(encodedErrorResponse)
 		logger.LogIf(ctx, enc.Encode(healthInfo))

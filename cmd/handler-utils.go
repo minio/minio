@@ -242,7 +242,7 @@ func extractRespElements(w http.ResponseWriter) map[string]string {
 	}
 	return map[string]string{
 		"requestId":      w.Header().Get(xhttp.AmzRequestID),
-		"nodeId":         w.Header().Get(xhttp.AmzRequestNodeID),
+		"nodeId":         w.Header().Get(xhttp.AmzRequestHostID),
 		"content-length": w.Header().Get(xhttp.ContentLength),
 		// Add more fields here.
 	}
