@@ -1385,6 +1385,7 @@ func getIAMNodeMetrics() *MetricsGroup {
 			sinceLastSyncMillis = (uint64(time.Now().UnixNano()) - lastSyncTime) / uint64(time.Millisecond)
 		}
 
+		pluginAuthNMetrics := globalAuthNPlugin.Metrics()
 		metrics = []Metric{
 			{
 				Description: MetricDescription{
@@ -1426,7 +1427,68 @@ func getIAMNodeMetrics() *MetricsGroup {
 				},
 				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshFailures)),
 			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_last_succ_seconds",
+					Help:      "When plugin authentication is configured, returns time (in seconds) since the last successful request to the service",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.LastReachableSecs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_last_fail_seconds",
+					Help:      "When plugin authentication is configured, returns time (in seconds) since the last failed request to the service",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.LastUnreachableSecs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_total_requests_minute",
+					Help:      "When plugin authentication is configured, returns total requests count in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: float64(pluginAuthNMetrics.TotalRequests),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_failed_requests_minute",
+					Help:      "When plugin authentication is configured, returns failed requests count in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: float64(pluginAuthNMetrics.FailedRequests),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_succ_avg_rtt_ms_minute",
+					Help:      "When plugin authentication is configured, returns average round-trip-time of successful requests in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.AvgSuccRTTMs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_succ_max_rtt_ms_minute",
+					Help:      "When plugin authentication is configured, returns maximum round-trip-time of successful requests in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.MaxSuccRTTMs,
+			},
 		}
+
 		return metrics
 	})
 	return mg
