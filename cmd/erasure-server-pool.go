@@ -157,11 +157,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		break
 	}
 
-	drives := make([]string, 0, len(localDrives))
-	for _, localDrive := range localDrives {
-		drives = append(drives, localDrive.Endpoint().Path)
-	}
-
 	globalLocalDrives = localDrives
 	return z, nil
 }
