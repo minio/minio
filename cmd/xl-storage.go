@@ -590,7 +590,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 		return sizeS, nil
 	}, scanMode)
-
 	if err != nil {
 		return dataUsageInfo, err
 	}
