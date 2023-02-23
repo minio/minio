@@ -803,6 +803,8 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	for {
 		select {
 		case <-ctx.Done():
+			globalProfilerMu.Lock()
+			defer globalProfilerMu.Unlock()
 			for k, v := range globalProfiler {
 				v.Stop()
 				delete(globalProfiler, k)
