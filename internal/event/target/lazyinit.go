@@ -41,10 +41,11 @@ func (l *lazyInit) doSlow(f func() error) error {
 	l.m.Lock()
 	defer l.m.Unlock()
 	if atomic.LoadUint32(&l.done) == 0 {
-		if f() == nil {
-			// Mark as done only when f() is successful
-			atomic.StoreUint32(&l.done, 1)
+		if err := f(); err != nil {
+			return err
 		}
+		// Mark as done only when f() is successful
+		atomic.StoreUint32(&l.done, 1)
 	}
 	return nil
 }
