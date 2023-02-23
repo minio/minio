@@ -639,7 +639,7 @@ func handleCommonEnvVars() {
 			if !((u.Scheme == "http" || u.Scheme == "https") &&
 				u.Opaque == "" &&
 				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
-				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
+				err := fmt.Errorf("URL contains unexpected resources, expected URL to be one of http(s)://console.example.com or as a subpath via API endpoint http(s)://minio.example.com/minio format: %v", u)
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
 			}
 			globalBrowserRedirectURL = u
