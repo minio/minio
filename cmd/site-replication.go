@@ -605,7 +605,7 @@ func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSetti
 		LDAPGroupSearchBase:    globalIAMSys.LDAPConfig.LDAP.GroupSearchBaseDistName,
 		LDAPGroupSearchFilter:  globalIAMSys.LDAPConfig.LDAP.GroupSearchFilter,
 	}
-	s.OpenID = globalOpenIDConfig.GetSettings()
+	s.OpenID = globalIAMSys.OpenIDConfig.GetSettings()
 	if s.OpenID.Enabled {
 		s.OpenID.Region = globalSite.Region
 	}
