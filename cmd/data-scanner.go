@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -34,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -162,7 +160,6 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 
 	// Load current bloom cycle
 	var cycleInfo currentScannerCycle
-	cycleInfo.next = intDataUpdateTracker.current() + 1
 
 	buf, _ := readConfig(ctx, objAPI, dataUsageBloomNamePath)
 	if len(buf) == 8 {
@@ -207,9 +204,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			bf, err := globalNotificationSys.updateBloomFilter(ctx, cycleInfo.current)
-			logger.LogIf(ctx, err)
-			err = objAPI.NSScanner(ctx, bf, results, uint32(cycleInfo.current), scanMode)
+			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
 			logger.LogIf(ctx, err)
 			res := map[string]string{"cycle": fmt.Sprint(cycleInfo.current)}
 			if err != nil {
@@ -248,10 +243,8 @@ type folderScanner struct {
 	oldCache    dataUsageCache
 	newCache    dataUsageCache
 	updateCache dataUsageCache
-	withFilter  *bloomFilter
 
 	dataUsageScannerDebug bool
-	healFolderInclude     uint32 // Include a clean folder one in n cycles.
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
@@ -310,8 +303,6 @@ type folderScanner struct {
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
 func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
-	logPrefix := color.Green("data-usage: ")
-
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
@@ -325,8 +316,7 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 		oldCache:              cache,
 		newCache:              dataUsageCache{Info: cache.Info},
 		updateCache:           dataUsageCache{Info: cache.Info},
-		dataUsageScannerDebug: intDataUpdateTracker.debug,
-		healFolderInclude:     0,
+		dataUsageScannerDebug: false,
 		healObjectSelect:      0,
 		scanMode:              scanMode,
 		updates:               cache.Info.updates,
@@ -349,18 +339,8 @@ func scanDataFolder(ctx context.Context, poolIdx, setIdx int, basePath string, c
 
 	// Enable healing in XL mode.
 	if globalIsErasure && !cache.Info.SkipHealing {
-		// Include a clean folder one in n cycles.
-		s.healFolderInclude = healFolderIncludeProb
 		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 		s.healObjectSelect = healObjectSelectProb
-	}
-	if len(cache.Info.BloomFilter) > 0 {
-		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
-		_, err := s.withFilter.ReadFrom(bytes.NewReader(cache.Info.BloomFilter))
-		if err != nil {
-			logger.LogIf(ctx, err, logPrefix+"Error reading bloom filter")
-			s.withFilter = nil
-		}
 	}
 
 	done := ctx.Done()
@@ -418,14 +398,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			return ctx.Err()
 		default:
 		}
-		existing, ok := f.oldCache.Cache[thisHash.Key()]
 		var abandonedChildren dataUsageHashMap
 		if !into.Compacted {
 			abandonedChildren = f.oldCache.findChildrenCopy(thisHash)
 		}
 
 		// If there are lifecycle rules for the prefix, remove the filter.
-		filter := f.withFilter
 		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 		var activeLifeCycle *lifecycle.Lifecycle
 		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix) {
@@ -433,33 +411,13 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				console.Debugf(scannerLogPrefix+" Prefix %q has active rules\n", prefix)
 			}
 			activeLifeCycle = f.oldCache.Info.lifeCycle
-			filter = nil
 		}
 		// If there are replication rules for the prefix, remove the filter.
 		var replicationCfg replicationConfig
 		if !f.oldCache.Info.replication.Empty() && f.oldCache.Info.replication.Config.HasActiveRules(prefix, true) {
 			replicationCfg = f.oldCache.Info.replication
-			filter = nil
 		}
 		// Check if we can skip it due to bloom filter...
-		if filter != nil && ok && existing.Compacted {
-			// If folder isn't in filter and we have data, skip it completely.
-			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
-				if f.healObjectSelect == 0 || !thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healFolderInclude/folder.objectHealProbDiv) {
-					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
-					f.updateCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
-					if f.dataUsageScannerDebug {
-						console.Debugf(scannerLogPrefix+" Skipping non-updated folder: %v\n", folder.name)
-					}
-					return nil
-				}
-				if f.dataUsageScannerDebug {
-					console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
-				}
-				// If probability was already scannerHealFolderInclude, keep it.
-				folder.objectHealProbDiv = f.healFolderInclude
-			}
-		}
 		scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
 
 		var existingFolders, newFolders []cachedFolder
@@ -673,13 +631,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// and the entry itself is compacted.
 			if !into.Compacted && f.oldCache.isCompacted(h) {
 				if !h.mod(f.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-					if f.healObjectSelect == 0 || !h.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healFolderInclude/folder.objectHealProbDiv) {
-						// Transfer and add as child...
-						f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
-						into.addChild(h)
-						continue
-					}
-					folder.objectHealProbDiv = f.healFolderInclude
+					// Transfer and add as child...
+					f.newCache.copyWithChildren(&f.oldCache, h, folder.parent)
+					into.addChild(h)
+					continue
 				}
 			}
 			f.updateCurrentPath(folder.name)

@@ -276,7 +276,6 @@ type dataUsageCacheInfo struct {
 	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool
-	BloomFilter []byte `msg:"BloomFilter,omitempty"`
 
 	// Active lifecycle, if any on the bucket
 	lifeCycle *lifecycle.Lifecycle `msg:"-"`
@@ -649,10 +648,7 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 // StringAll returns a detailed string representation of all entries in the cache.
 func (d *dataUsageCache) StringAll() string {
 	// Remove bloom filter from print.
-	bf := d.Info.BloomFilter
-	d.Info.BloomFilter = nil
 	s := fmt.Sprintf("info:%+v\n", d.Info)
-	d.Info.BloomFilter = bf
 	for k, v := range d.Cache {
 		s += fmt.Sprintf("\t%v: %+v\n", k, v)
 	}

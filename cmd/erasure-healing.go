@@ -72,10 +72,6 @@ func (fi FileInfo) DataShardFixed() bool {
 func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	result madmin.HealResultItem, err error,
 ) {
-	if !opts.DryRun {
-		defer NSUpdated(bucket, slashSeparator)
-	}
-
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
@@ -754,7 +750,6 @@ func (er *erasureObjects) healObjectDir(ctx context.Context, bucket, object stri
 				}(index, disk)
 			}
 			wg.Wait()
-			NSUpdated(bucket, object)
 		}
 	}
 

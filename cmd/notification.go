@@ -18,9 +18,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v2"
@@ -382,75 +379,6 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		}, idx, *client.host)
 	}
 	return ng.Wait()
-}
-
-// updateBloomFilter will cycle all servers to the current index and
-// return a merged bloom filter if a complete one can be retrieved.
-func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
-	req := bloomFilterRequest{
-		Current: current,
-		Oldest:  current - dataUsageUpdateDirCycles,
-	}
-	if current < dataUsageUpdateDirCycles {
-		req.Oldest = 0
-	}
-
-	// Load initial state from local...
-	var bf *bloomFilter
-	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req)
-	logger.LogIf(ctx, err)
-	if err == nil && bfr.Complete {
-		nbf := intDataUpdateTracker.newBloomFilter()
-		bf = &nbf
-		_, err = bf.ReadFrom(bytes.NewReader(bfr.Filter))
-		logger.LogIf(ctx, err)
-	}
-
-	var mu sync.Mutex
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		g.Go(func() error {
-			serverBF, err := client.cycleServerBloomFilter(ctx, req)
-			if false && intDataUpdateTracker.debug {
-				b, _ := json.MarshalIndent(serverBF, "", "  ")
-				logger.Info("Drive %v, Bloom filter: %v", client.host.Name, string(b))
-			}
-			// Keep lock while checking result.
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil || !serverBF.Complete || bf == nil {
-				logger.LogOnceIf(ctx, err, client.host.String(), client.cycleServerBloomFilter)
-				bf = nil
-				return nil
-			}
-
-			var tmp bloom.BloomFilter
-			_, err = tmp.ReadFrom(bytes.NewReader(serverBF.Filter))
-			if err != nil {
-				logger.LogIf(ctx, err)
-				bf = nil
-				return nil
-			}
-			if bf.BloomFilter == nil {
-				bf.BloomFilter = &tmp
-			} else {
-				err = bf.Merge(&tmp)
-				if err != nil {
-					logger.LogIf(ctx, err)
-					bf = nil
-					return nil
-				}
-			}
-			return nil
-		}, idx)
-	}
-	g.Wait()
-	return bf, nil
 }
 
 var errPeerNotReachable = errors.New("peer is not reachable")
