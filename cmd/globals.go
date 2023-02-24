@@ -42,7 +42,6 @@ import (
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
-	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
@@ -201,7 +200,6 @@ var (
 
 	globalStorageClass storageclass.Config
 
-	globalLDAPConfig   xldap.Config
 	globalOpenIDConfig openid.Config
 	globalSTSTLSConfig xtls.Config
 

@@ -741,9 +741,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
-		if globalLDAPConfig.Enabled() {
+		if globalIAMSys.LDAPConfig.Enabled() {
 			opts.claims[ldapUserN] = targetUser // simple username
-			targetUser, targetGroups, err = globalLDAPConfig.LookupUserDN(targetUser)
+			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
@@ -2455,9 +2455,9 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 
 				// In case of LDAP we need to resolve the targetUser to a DN and
 				// query their groups:
-				if globalLDAPConfig.Enabled() {
+				if globalIAMSys.LDAPConfig.Enabled() {
 					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
-					targetUser, _, err := globalLDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
+					targetUser, _, err := globalIAMSys.LDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
 					if err != nil {
 						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
 						return

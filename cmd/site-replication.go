@@ -599,11 +599,11 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSettings {
 	s := madmin.IDPSettings{}
 	s.LDAP = madmin.LDAPSettings{
-		IsLDAPEnabled:          globalLDAPConfig.Enabled(),
-		LDAPUserDNSearchBase:   globalLDAPConfig.LDAP.UserDNSearchBaseDistName,
-		LDAPUserDNSearchFilter: globalLDAPConfig.LDAP.UserDNSearchFilter,
-		LDAPGroupSearchBase:    globalLDAPConfig.LDAP.GroupSearchBaseDistName,
-		LDAPGroupSearchFilter:  globalLDAPConfig.LDAP.GroupSearchFilter,
+		IsLDAPEnabled:          globalIAMSys.LDAPConfig.Enabled(),
+		LDAPUserDNSearchBase:   globalIAMSys.LDAPConfig.LDAP.UserDNSearchBaseDistName,
+		LDAPUserDNSearchFilter: globalIAMSys.LDAPConfig.LDAP.UserDNSearchFilter,
+		LDAPGroupSearchBase:    globalIAMSys.LDAPConfig.LDAP.GroupSearchBaseDistName,
+		LDAPGroupSearchFilter:  globalIAMSys.LDAPConfig.LDAP.GroupSearchFilter,
 	}
 	s.OpenID = globalOpenIDConfig.GetSettings()
 	if s.OpenID.Enabled {
@@ -1328,7 +1328,7 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 	switch {
 	case isLDAPSTS:
 		// Need to lookup the groups from LDAP.
-		_, ldapGroups, err := globalLDAPConfig.LookupUserDN(ldapUser)
+		_, ldapGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ldapUser)
 		if err != nil {
 			return fmt.Errorf("unable to query LDAP server for %s: %w", ldapUser, err)
 		}
