@@ -43,7 +43,6 @@ import (
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
-	xtls "github.com/minio/minio/internal/config/identity/tls"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/config/subnet"
@@ -198,8 +197,6 @@ var (
 	globalAPIConfig = apiConfig{listQuorum: "strict"}
 
 	globalStorageClass storageclass.Config
-
-	globalSTSTLSConfig xtls.Config
 
 	globalAuthNPlugin *idplugin.AuthNPlugin
 
