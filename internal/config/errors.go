@@ -225,19 +225,19 @@ Examples:
 		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/minio' to provide sufficient permissions`,
 	)
 
-	ErrSSLUnexpectedError = newErrFn(
-		"Invalid TLS certificate",
-		"Please check the content of your certificate data",
-		`Only PEM (x.509) format is accepted as valid public & private certificates`,
+	ErrTLSReadError = newErrFn(
+		"Cannot read the TLS certificate",
+		"Please check if the certificate has the proper owner and read permissions",
+		"",
 	)
 
-	ErrSSLUnexpectedData = newErrFn(
+	ErrTLSUnexpectedData = newErrFn(
 		"Invalid TLS certificate",
 		"Please check your certificate",
 		"",
 	)
 
-	ErrSSLNoPassword = newErrFn(
+	ErrTLSNoPassword = newErrFn(
 		"Missing TLS password",
 		"Please set the password to environment variable `MINIO_CERT_PASSWD` so that the private key can be decrypted",
 		"",
@@ -255,7 +255,7 @@ Examples:
 		"",
 	)
 
-	ErrSSLWrongPassword = newErrFn(
+	ErrTLSWrongPassword = newErrFn(
 		"Unable to decrypt the private key using the provided password",
 		"Please set the correct password in environment variable `MINIO_CERT_PASSWD`",
 		"",

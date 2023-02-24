@@ -41,11 +41,9 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
-	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
 	"github.com/zeebo/xxh3"
 )
 
@@ -448,9 +446,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		lc, err = globalLifecycleSys.Get(cache.Info.Name)
 		if err == nil && lc.HasActiveRules("") {
 			cache.Info.lifeCycle = lc
-			if intDataUpdateTracker.debug {
-				console.Debugln(color.Green("scannerDisk:") + " lifecycle: Active rules found")
-			}
 		}
 	}
 
@@ -463,10 +458,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 					Config:  rcfg,
 					remotes: tgts,
 				}
-				if intDataUpdateTracker.debug {
-					console.Debugln(color.Green("scannerDisk:") + " replication: Active rules found")
-				}
-
 			}
 		}
 	}
@@ -502,9 +493,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		doneSz(len(buf))
 		res["metasize"] = fmt.Sprint(len(buf))
 		if err != nil {
-			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
-			}
+			res["err"] = err.Error()
 			return sizeSummary{}, errSkipFile
 		}
 		defer metaDataPoolPut(buf)
@@ -514,9 +503,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
-			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("scannerBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
-			}
+			res["err"] = err.Error()
 			return sizeSummary{}, errSkipFile
 		}
 
@@ -531,9 +518,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		done()
 
 		if err != nil {
-			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("scannerBucket:")+" applying version actions failed: %v: %w\n", item.Path, err)
-			}
+			res["err"] = err.Error()
 			return sizeSummary{}, errSkipFile
 		}
 
@@ -603,7 +588,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				}
 			}
 		}
-
 		return sizeS, nil
 	}, scanMode)
 	if err != nil {
