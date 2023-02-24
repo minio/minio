@@ -88,6 +88,10 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Check if subnet proxy being deleted and if so the value of proxy of subnet
+	// target of logger webhook configuration also should be deleted
+	loggerWebhookProxyDeleted := setLoggerWebhookSubnetProxy(subSys, cfg)
+
 	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -102,6 +106,10 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	dynamic := config.SubSystemsDynamic.Contains(subSys)
 	if dynamic {
 		applyDynamic(ctx, objectAPI, cfg, subSys, r, w)
+		if subSys == config.SubnetSubSys && loggerWebhookProxyDeleted {
+			// Logger webhook proxy deleted, apply the dynamic changes
+			applyDynamic(ctx, objectAPI, cfg, config.LoggerWebhookSubSys, r, w)
+		}
 	}
 }
 
@@ -210,15 +218,7 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 
 	// Check if subnet proxy being set and if so set the same value to proxy of subnet
 	// target of logger webhook configuration
-	if result.SubSys == config.SubnetSubSys {
-		loggerWebhookSubnetProxy := result.Cfg[config.LoggerWebhookSubSys][config.SubnetSubSys].Get(logger.Proxy)
-		subnetProxy := result.Cfg[config.SubnetSubSys][config.Default].Get(logger.Proxy)
-		if loggerWebhookSubnetProxy != subnetProxy {
-			obj := result.Cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
-			obj.Set(logger.Proxy, subnetProxy)
-			result.LoggerWebhookCfgUpdated = true
-		}
-	}
+	result.LoggerWebhookCfgUpdated = setLoggerWebhookSubnetProxy(result.SubSys, result.Cfg)
 
 	// Update the actual server config on disk.
 	if err = saveServerConfig(ctx, objectAPI, result.Cfg); err != nil {
@@ -536,4 +536,19 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeSuccessResponseJSON(w, econfigData)
+}
+
+// setLoggerWebhookSubnetProxy - Sets the logger webhook's subnet proxy value to
+// one being set for subnet proxy
+func setLoggerWebhookSubnetProxy(subSys string, cfg config.Config) bool {
+	if subSys == config.SubnetSubSys {
+		subnetWebhookCfg := cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
+		loggerWebhookSubnetProxy := subnetWebhookCfg.Get(logger.Proxy)
+		subnetProxy := cfg[config.SubnetSubSys][config.Default].Get(logger.Proxy)
+		if loggerWebhookSubnetProxy != subnetProxy {
+			subnetWebhookCfg.Set(logger.Proxy, subnetProxy)
+			return true
+		}
+	}
+	return false
 }
