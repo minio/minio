@@ -2001,8 +2001,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminGroupNotEmpty
 	case errNoSuchJob:
 		apiErr = ErrAdminNoSuchJob
-	case errNoSuchPolicy:
-		apiErr = ErrAdminNoSuchPolicy
 	case errNoPolicyToAttachOrDetach:
 		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
@@ -2054,7 +2052,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSKeyNotFoundException
 	case errKMSDefaultKeyAlreadyConfigured:
 		apiErr = ErrKMSDefaultKeyAlreadyConfigured
-
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
@@ -2069,6 +2066,11 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockInvalidHeaders
 	case objectlock.ErrMalformedXML:
 		apiErr = ErrMalformedXML
+	default:
+		switch {
+		case errors.Is(err, errNoSuchPolicy):
+			apiErr = ErrAdminNoSuchPolicy
+		}
 	}
 
 	// Compression errors
