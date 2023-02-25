@@ -165,7 +165,6 @@ const (
 	ErrMalformedDate
 	ErrMalformedPresignedDate
 	ErrMalformedCredentialDate
-	ErrMalformedCredentialRegion
 	ErrMalformedExpires
 	ErrNegativeExpires
 	ErrAuthHeaderEmpty
@@ -244,8 +243,6 @@ const (
 	// Add new extended error codes here.
 
 	// MinIO extended errors.
-	ErrReadQuorum
-	ErrWriteQuorum
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
@@ -412,6 +409,8 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
+
+	apiErrCodeEnd // This is used only for the testing code
 )
 
 type errorCodeMap map[APIErrorCode]APIError

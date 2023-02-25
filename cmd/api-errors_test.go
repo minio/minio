@@ -80,3 +80,19 @@ func TestAPIErrCode(t *testing.T) {
 		}
 	}
 }
+
+// Check if an API error is properly defined
+func TestAPIErrCodeDefinition(t *testing.T) {
+	for errAPI := ErrNone + 1; errAPI < apiErrCodeEnd; errAPI++ {
+		errCode, ok := errorCodes[errAPI]
+		if !ok {
+			t.Fatal(errAPI, "error code is not defined in the API error code table")
+		}
+		if errCode.Code == "" {
+			t.Fatal(errAPI, "error code has an empty XML code")
+		}
+		if errCode.HTTPStatusCode == 0 {
+			t.Fatal(errAPI, "error code has a zero HTTP status code")
+		}
+	}
+}
