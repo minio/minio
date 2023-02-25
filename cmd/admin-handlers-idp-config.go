@@ -180,7 +180,7 @@ func handleCreateUpdateValidation(s config.Config, subSys, cfgTarget string, isU
 	case madmin.IdentityOpenIDSubSys:
 		cfgInfos, _ = globalOpenIDConfig.GetConfigInfo(s, cfgTarget)
 	case madmin.IdentityLDAPSubSys:
-		cfgInfos, _ = globalLDAPConfig.GetConfigInfo(s, cfgTarget)
+		cfgInfos, _ = globalIAMSys.LDAPConfig.GetConfigInfo(s, cfgTarget)
 	}
 
 	if len(cfgInfos) > 0 && !isUpdate {
@@ -243,7 +243,7 @@ func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http
 		cfgList, err = globalOpenIDConfig.GetConfigList(cfg)
 	case madmin.LDAPIDPCfg:
 		cfg := globalServerConfig.Clone()
-		cfgList, err = globalLDAPConfig.GetConfigList(cfg)
+		cfgList, err = globalIAMSys.LDAPConfig.GetConfigList(cfg)
 
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -298,7 +298,7 @@ func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.
 	case madmin.OpenidIDPCfg:
 		cfgInfos, err = globalOpenIDConfig.GetConfigInfo(cfg, cfgName)
 	case madmin.LDAPIDPCfg:
-		cfgInfos, err = globalLDAPConfig.GetConfigInfo(cfg, cfgName)
+		cfgInfos, err = globalIAMSys.LDAPConfig.GetConfigInfo(cfg, cfgName)
 	}
 	if err != nil {
 		if errors.Is(err, openid.ErrProviderConfigNotFound) || errors.Is(err, cfgldap.ErrProviderConfigNotFound) {
@@ -380,7 +380,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		}
 	case madmin.LDAPIDPCfg:
 		subSys = config.IdentityLDAPSubSys
-		cfgInfos, err := globalLDAPConfig.GetConfigInfo(cfgCopy, cfgName)
+		cfgInfos, err := globalIAMSys.LDAPConfig.GetConfigInfo(cfgCopy, cfgName)
 		if err != nil {
 			if errors.Is(err, openid.ErrProviderConfigNotFound) {
 				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)

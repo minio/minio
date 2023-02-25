@@ -1819,8 +1819,8 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	kmsStat := fetchKMSStatus()
 
 	ldap := madmin.LDAP{}
-	if globalLDAPConfig.Enabled() {
-		ldapConn, err := globalLDAPConfig.LDAP.Connect()
+	if globalIAMSys.LDAPConfig.Enabled() {
+		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
 		//nolint:gocritic
 		if err != nil {
 			ldap.Status = string(madmin.ItemOffline)
