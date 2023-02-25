@@ -449,7 +449,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 					err := healFreshDisk(ctx, z, disk)
 					if err != nil {
 						globalBackgroundHealState.setDiskHealingStatus(disk, false)
-						printEndpointError(disk, err, false)
 						return
 					}
 					// Only upon success pop the healed disk.
