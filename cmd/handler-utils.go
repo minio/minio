@@ -58,6 +58,10 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	if location == "" {
 		location = globalSite.Region
 	}
+	if !isValidLocation(location) {
+		return location, ErrInvalidRegion
+	}
+
 	return location, ErrNone
 }
 
