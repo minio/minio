@@ -56,9 +56,6 @@ type erasureServerPools struct {
 
 	serverPools []*erasureSets
 
-	// Shut down async operations
-	shutdown context.CancelFunc
-
 	// Active decommission canceler
 	decommissionCancelers []context.CancelFunc
 
@@ -160,14 +157,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		break
 	}
 
-	drives := make([]string, 0, len(localDrives))
-	for _, localDrive := range localDrives {
-		drives = append(drives, localDrive.Endpoint().Path)
-	}
-
 	globalLocalDrives = localDrives
-	ctx, z.shutdown = context.WithCancel(ctx)
-	go intDataUpdateTracker.start(ctx, drives...)
 	return z, nil
 }
 
@@ -524,8 +514,6 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 }
 
 func (z *erasureServerPools) Shutdown(ctx context.Context) error {
-	defer z.shutdown()
-
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	for index := range z.serverPools {
@@ -594,7 +582,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) StorageInfo {
 	return globalNotificationSys.StorageInfo(z)
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
 	// Updates must be closed before we return.
 	defer close(updates)
 
@@ -639,7 +627,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.nsScanner(ctx, allBuckets, bf, wantCycle, updates, healScanMode)
+				err := erObj.nsScanner(ctx, allBuckets, wantCycle, updates, healScanMode)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()
@@ -712,8 +700,6 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, upd
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
 func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
-	defer NSUpdated(bucket, slashSeparator)
-
 	// Verify if bucket is valid.
 	if !isMinioMetaBucketName(bucket) {
 		if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
@@ -1637,7 +1623,6 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	defer NSUpdated(bucket, slashSeparator)
 	if !opts.NoLock {
 		// Lock the bucket name before creating.
 		lk := z.NewNSLock(minioMetaTmpBucket, bucket+".lck")

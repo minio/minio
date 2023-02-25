@@ -72,8 +72,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 
-	defer NSUpdated(dstBucket, dstObject)
-
 	if !dstOpts.NoLock {
 		lk := er.NewNSLock(dstBucket, dstObject)
 		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -187,6 +185,14 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	auditObjectErasureSet(ctx, object, &er)
+
+	// This is a special call attempted first to check for SOS-API calls.
+	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
+	if err == nil {
+		return gr, nil
+	}
+	// reset any error to 'nil'
+	err = nil
 
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
@@ -475,7 +481,6 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		if opts.VersionID != "" {
 			err = errFileVersionNotFound
 		}
-		defer NSUpdated(bucket, object)
 
 		fi := FileInfo{
 			VersionID: m.VersionID,
@@ -1263,8 +1268,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	defer NSUpdated(bucket, object)
-
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
@@ -1467,8 +1470,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		} else {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName)
 		}
-
-		defer NSUpdated(bucket, objects[objIndex].ObjectName)
 	}
 
 	// Check failed deletes across multiple objects
@@ -1559,9 +1560,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			Object: object,
 		}
 	}
-
-	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	defer NSUpdated(bucket, object)
 
 	storageDisks := er.getDisks()
 	versionFound := true
@@ -1932,7 +1930,6 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	if fi.TransitionStatus == lifecycle.TransitionComplete {
 		return nil
 	}
-	defer NSUpdated(bucket, object)
 
 	if fi.XLV1 {
 		if _, err = er.HealObject(ctx, bucket, object, "", madmin.HealOpts{NoLock: true}); err != nil {
