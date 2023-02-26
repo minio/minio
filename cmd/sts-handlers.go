@@ -361,7 +361,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate JWT; check clientID in claims matches the one associated with the roleArn
-	if err := globalOpenIDConfig.Validate(r.Context(), roleArn, token, accessToken, r.Form.Get(stsDurationSeconds), claims); err != nil {
+	if err := globalIAMSys.OpenIDConfig.Validate(r.Context(), roleArn, token, accessToken, r.Form.Get(stsDurationSeconds), claims); err != nil {
 		switch err {
 		case openid.ErrTokenExpired:
 			switch action {
