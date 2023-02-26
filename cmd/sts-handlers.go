@@ -361,7 +361,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Validate JWT; check clientID in claims matches the one associated with the roleArn
-	if err := globalOpenIDConfig.Validate(r.Context(), roleArn, token, accessToken, r.Form.Get(stsDurationSeconds), claims); err != nil {
+	if err := globalIAMSys.OpenIDConfig.Validate(r.Context(), roleArn, token, accessToken, r.Form.Get(stsDurationSeconds), claims); err != nil {
 		switch err {
 		case openid.ErrTokenExpired:
 			switch action {
@@ -598,7 +598,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	ldapUserDN, groupDistNames, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
+	ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server error: %w", err)
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
@@ -614,7 +614,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	expiryDur, err := globalLDAPConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
+	expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return

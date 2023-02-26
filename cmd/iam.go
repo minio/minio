@@ -87,8 +87,8 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
-	ldapConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
-	openIDConfig       openid.Config // only valid if OpenID is configured
+	LDAPConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
+	OpenIDConfig       openid.Config // only valid if OpenID is configured
 
 	usersSysType UsersSysType
 
@@ -163,7 +163,7 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if sys.ldapConfig.Enabled() {
+	if sys.LDAPConfig.Enabled() {
 		sys.SetUsersSysType(LDAPUsersSysType)
 	}
 
@@ -213,15 +213,14 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
-	var err error
-	globalOpenIDConfig, err = openid.LookupConfig(s,
+	openidConfig, err := openid.LookupConfig(s,
 		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
 
 	// Initialize if LDAP is enabled
-	globalLDAPConfig, err = xldap.Lookup(s, globalRootCAs)
+	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
@@ -257,8 +256,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.Lock()
 	defer sys.Unlock()
 
-	sys.ldapConfig = globalLDAPConfig.Clone()
-	sys.openIDConfig = globalOpenIDConfig.Clone()
+	sys.LDAPConfig = ldapConfig
+	sys.OpenIDConfig = openidConfig
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
@@ -322,7 +321,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Set up polling for expired accounts and credentials purging.
 	switch {
-	case sys.openIDConfig.ProviderEnabled():
+	case sys.OpenIDConfig.ProviderEnabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
@@ -337,7 +336,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case sys.ldapConfig.Enabled():
+	case sys.LDAPConfig.Enabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
@@ -363,7 +362,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.rolesMap = make(map[arn.ARN]string)
 
 	// From OpenID
-	if riMap := globalOpenIDConfig.GetRoleInfo(); riMap != nil {
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
 		sys.validateAndAddRolePolicyMappings(ctx, riMap)
 	}
 
@@ -800,7 +799,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListLDAPPolicyMappings(q, sys.ldapConfig.IsLDAPUserDN, sys.ldapConfig.IsLDAPGroupDN)
+		pe := sys.store.ListLDAPPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -1280,7 +1279,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 			continue
 		}
 		roleArn = roleArns[0]
-		u, err := sys.openIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
+		u, err := sys.OpenIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
@@ -1302,14 +1301,14 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
 	for parentUser := range parentUsers {
-		if !sys.ldapConfig.IsLDAPUserDN(parentUser) {
+		if !sys.LDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
 		allDistNames = append(allDistNames, parentUser)
 	}
 
-	expiredUsers, err := sys.ldapConfig.GetNonEligibleUserDistNames(allDistNames)
+	expiredUsers, err := sys.LDAPConfig.GetNonEligibleUserDistNames(allDistNames)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1331,7 +1330,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// DN to ldap username mapping for each LDAP user
 	parentUserToLDAPUsernameMap := make(map[string]string)
 	for _, cred := range allCreds {
-		if !sys.ldapConfig.IsLDAPUserDN(cred.ParentUser) {
+		if !sys.LDAPConfig.IsLDAPUserDN(cred.ParentUser) {
 			continue
 		}
 		// Check if this is the first time we are
@@ -1379,7 +1378,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 2. Query LDAP server for groups of the LDAP users collected.
-	updatedGroups, err := sys.ldapConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
+	updatedGroups, err := sys.LDAPConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1566,7 +1565,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	var dn string
 	var isGroup bool
 	if r.User != "" {
-		dn, err = globalLDAPConfig.DoesUsernameExist(r.User)
+		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return updatedAt, nil, err
@@ -1576,7 +1575,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		isGroup = false
 	} else {
-		if exists, err := globalLDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+		if exists, err := sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
 			logger.LogIf(ctx, err)
 			return updatedAt, nil, err
 		} else if !exists {

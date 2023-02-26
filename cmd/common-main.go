@@ -205,7 +205,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// Enable if LDAP is enabled.
-	if globalLDAPConfig.Enabled() {
+	if globalIAMSys.LDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
@@ -215,8 +215,9 @@ func minioConfigToConsoleFeatures() {
 }
 
 func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
-	m := make(map[string]consoleoauth2.ProviderConfig, len(globalOpenIDConfig.ProviderCfgs))
-	for name, cfg := range globalOpenIDConfig.ProviderCfgs {
+	pcfgs := globalIAMSys.OpenIDConfig.ProviderCfgs
+	m := make(map[string]consoleoauth2.ProviderConfig, len(pcfgs))
+	for name, cfg := range pcfgs {
 		callback := getConsoleEndpoints()[0] + "/oauth_callback"
 		if cfg.RedirectURI != "" {
 			callback = cfg.RedirectURI

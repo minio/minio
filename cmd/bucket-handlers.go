@@ -755,16 +755,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Parse incoming location constraint.
-	location, s3Error := parseLocationConstraint(r)
+	_, s3Error = parseLocationConstraint(r)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
-	// Validate if location sent by the client is valid, reject
-	// requests which do not follow valid region requirements.
-	if !isValidLocation(location) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRegion), r.URL)
 		return
 	}
 
