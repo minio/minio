@@ -493,15 +493,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.Fatal(errors.New("no KMS configured"), "MINIO_KMS_AUTO_ENCRYPTION requires a valid KMS configuration")
 	}
 
-	globalSTSTLSConfig, err = xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err))
-	}
-
-	if globalSTSTLSConfig.InsecureSkipVerify {
-		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
-	}
-
 	transport := NewHTTPTransport()
 
 	bootstrapTrace("lookup the event notification targets")
