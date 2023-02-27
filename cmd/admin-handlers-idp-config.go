@@ -178,7 +178,7 @@ func handleCreateUpdateValidation(s config.Config, subSys, cfgTarget string, isU
 	var cfgInfos []madmin.IDPCfgInfo
 	switch subSys {
 	case madmin.IdentityOpenIDSubSys:
-		cfgInfos, _ = globalOpenIDConfig.GetConfigInfo(s, cfgTarget)
+		cfgInfos, _ = globalIAMSys.OpenIDConfig.GetConfigInfo(s, cfgTarget)
 	case madmin.IdentityLDAPSubSys:
 		cfgInfos, _ = globalIAMSys.LDAPConfig.GetConfigInfo(s, cfgTarget)
 	}
@@ -240,7 +240,7 @@ func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http
 	switch idpCfgType {
 	case madmin.OpenidIDPCfg:
 		cfg := globalServerConfig.Clone()
-		cfgList, err = globalOpenIDConfig.GetConfigList(cfg)
+		cfgList, err = globalIAMSys.OpenIDConfig.GetConfigList(cfg)
 	case madmin.LDAPIDPCfg:
 		cfg := globalServerConfig.Clone()
 		cfgList, err = globalIAMSys.LDAPConfig.GetConfigList(cfg)
@@ -296,7 +296,7 @@ func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.
 	var err error
 	switch idpCfgType {
 	case madmin.OpenidIDPCfg:
-		cfgInfos, err = globalOpenIDConfig.GetConfigInfo(cfg, cfgName)
+		cfgInfos, err = globalIAMSys.OpenIDConfig.GetConfigInfo(cfg, cfgName)
 	case madmin.LDAPIDPCfg:
 		cfgInfos, err = globalIAMSys.LDAPConfig.GetConfigInfo(cfg, cfgName)
 	}
@@ -355,7 +355,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 	switch idpCfgType {
 	case madmin.OpenidIDPCfg:
 		subSys = config.IdentityOpenIDSubSys
-		cfgInfos, err := globalOpenIDConfig.GetConfigInfo(cfgCopy, cfgName)
+		cfgInfos, err := globalIAMSys.OpenIDConfig.GetConfigInfo(cfgCopy, cfgName)
 		if err != nil {
 			if errors.Is(err, openid.ErrProviderConfigNotFound) {
 				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
