@@ -19,14 +19,15 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	"net/netip"
+	"strings"
+
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/logger"
-	"net/http"
-	"net/netip"
-	"strings"
 )
 
 const (
@@ -38,8 +39,8 @@ const (
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
 type adminAPIHandlers struct{}
 
-// adminApiHostHandler - allow access to the  Admin APIs only from local interface by default.
-func adminApiHostHandler(next http.Handler) http.Handler {
+// adminAPIHostHandler - allow access to the  Admin APIs only from local interface by default.
+func adminAPIHostHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clientIP := strings.Split(r.RemoteAddr, ":")[0]
 		addr, err := netip.ParseAddr(clientIP)
@@ -306,8 +307,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		}
 	}
 
-	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanFSOnlyLocalAdminApi {
-		adminRouter.Use(adminApiHostHandler)
+	if globalIsGateway && globalGatewayName == PANFSBackendGateway && globalPanFSOnlyLocalAdminAPI {
+		adminRouter.Use(adminAPIHostHandler)
 	}
 
 	// If none of the routes match add default error handler routes

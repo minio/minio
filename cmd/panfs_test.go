@@ -201,44 +201,38 @@ func TestPANFSPutObject(t *testing.T) {
 // TestPANFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
 func TestPANFSDeleteObject(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-
-	obj, err := initPanFSObjects(disk)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs := obj.(*PANFSObjects)
-	bucketName := "bucket"
-	objectName := "object"
 
 	obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{})
 	obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 
 	// Test with invalid bucket name
-	if _, err := fs.DeleteObject(GlobalContext, "fo", objectName, ObjectOptions{}); !isSameType(err, BucketNameInvalid{}) {
+	if _, err := obj.DeleteObject(GlobalContext, "fo", objectName, ObjectOptions{}); !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with bucket does not exist
-	if _, err := fs.DeleteObject(GlobalContext, "foobucket", "fooobject", ObjectOptions{}); !isSameType(err, BucketNotFound{}) {
+	if _, err := obj.DeleteObject(GlobalContext, "foobucket", "fooobject", ObjectOptions{}); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with invalid object name
-	if _, err := fs.DeleteObject(GlobalContext, bucketName, "\\", ObjectOptions{}); !(isSameType(err, ObjectNotFound{}) || isSameType(err, ObjectNameInvalid{})) {
+	if _, err := obj.DeleteObject(GlobalContext, bucketName, "\\", ObjectOptions{}); !(isSameType(err, ObjectNotFound{}) || isSameType(err, ObjectNameInvalid{})) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with object does not exist.
-	if _, err := fs.DeleteObject(GlobalContext, bucketName, "foooobject", ObjectOptions{}); !isSameType(err, ObjectNotFound{}) {
+	if _, err := obj.DeleteObject(GlobalContext, bucketName, "foooobject", ObjectOptions{}); !isSameType(err, ObjectNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with valid condition
-	if _, err := fs.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
+	if _, err := obj.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	// Delete object should err disk not found.
 	os.RemoveAll(disk)
-	if _, err := fs.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
+	if _, err := obj.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}

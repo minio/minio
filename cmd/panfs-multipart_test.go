@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +30,25 @@ import (
 
 	"github.com/minio/minio/internal/config/api"
 )
+
+// initPanFSWithBucket initializes the panfs backend and creates a bucket for testing
+// Fail test when object init or bucket creation will fail
+func initPanFSWithBucket(bucket string, t *testing.T) (obj ObjectLayer, disk string) {
+	disk = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+
+	obj, err := initPanFSObjects(disk)
+	obj = obj.(*PANFSObjects)
+	if err != nil {
+		t.Fatalf("Cannot init PANFS backend: \"%v\"", err)
+	}
+	if bucket != "" {
+		err = obj.MakeBucketWithLocation(GlobalContext, bucket, MakeBucketOptions{PanFSBucketPath: disk})
+		if err != nil {
+			t.Fatalf("Cannot create bucket \"%v\"", err)
+		}
+	}
+	return
+}
 
 // Tests cleanup multipart uploads for filesystem backend.
 func TestPANFSCleanupMultipartUploadsInRoutine(t *testing.T) {
@@ -89,23 +109,15 @@ func TestPANFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 
 // TestNewPANFMultipartUploadFaultyDisk - test NewMultipartUpload with faulty disks
 func TestNewPANFMultipartUploadFaultyDisk(t *testing.T) {
-	t.Skip()
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-	obj := initFSObjects(disk, t)
-
-	fs := obj.(*PANFSObjects)
-	bucketName := "bucket"
-	objectName := "object"
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	// Test with disk removed.
 	os.RemoveAll(disk)
-	if _, err := fs.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}}); err != nil {
+	if _, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
@@ -115,18 +127,12 @@ func TestNewPANFMultipartUploadFaultyDisk(t *testing.T) {
 // TestPANFSPutObjectPartFaultyDisk - test PutObjectPart with faulty disks
 func TestPANFSPutObjectPartFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-	obj := initFSObjects(disk, t)
-
-	bucketName := "bucket"
-	objectName := "object"
 	data := []byte("12345")
 	dataLen := int64(len(data))
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	res, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
@@ -136,9 +142,8 @@ func TestPANFSPutObjectPartFaultyDisk(t *testing.T) {
 	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
-	newDisk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	obj, newDisk := initPanFSWithBucket("", t)
 	defer os.RemoveAll(newDisk)
-	obj = initFSObjects(newDisk, t)
 	if _, err = obj.PutObjectPart(GlobalContext, bucketName, objectName, res.UploadID, 1, mustGetPutObjReader(t, bytes.NewReader(data), dataLen, md5Hex, sha256sum), ObjectOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
@@ -149,17 +154,11 @@ func TestPANFSPutObjectPartFaultyDisk(t *testing.T) {
 // TestPANFSCompleteMultipartUploadFaultyDisk - test CompleteMultipartUpload with faulty disks
 func TestPANFSCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-	obj := initFSObjects(disk, t)
-
-	bucketName := "bucket"
-	objectName := "object"
 	data := []byte("12345")
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	res, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
@@ -169,9 +168,8 @@ func TestPANFSCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	md5Hex := getMD5Hash(data)
 
 	parts := []CompletePart{{PartNumber: 1, ETag: md5Hex}}
-	newDisk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	obj, newDisk := initPanFSWithBucket("", t)
 	defer os.RemoveAll(newDisk)
-	obj = initFSObjects(newDisk, t)
 	if _, err := obj.CompleteMultipartUpload(GlobalContext, bucketName, objectName, res.UploadID, parts, ObjectOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
@@ -182,17 +180,12 @@ func TestPANFSCompleteMultipartUploadFaultyDisk(t *testing.T) {
 // TestPANFSCompleteMultipartUpload - test CompleteMultipartUpload
 func TestPANFSCompleteMultipartUpload(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
+
 	defer os.RemoveAll(disk)
-	obj := initFSObjects(disk, t)
-
-	bucketName := "bucket"
-	objectName := "object"
 	data := []byte("12345")
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	res, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
@@ -219,17 +212,11 @@ func TestPANFSAbortMultipartUpload(t *testing.T) {
 	}
 
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-	obj := initFSObjects(disk, t)
-
-	bucketName := "bucket"
-	objectName := "object"
 	data := []byte("12345")
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	res, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
@@ -250,29 +237,87 @@ func TestPANFSAbortMultipartUpload(t *testing.T) {
 // TestPANFSListMultipartUploadsFaultyDisk - test ListMultipartUploads with faulty disks
 func TestPANFSListMultipartUploadsFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
 	defer os.RemoveAll(disk)
-
-	obj := initFSObjects(disk, t)
-
-	bucketName := "bucket"
-	objectName := "object"
-
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{}); err != nil {
-		t.Fatal("Cannot create bucket, err: ", err)
-	}
 
 	_, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	newDisk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer os.RemoveAll(newDisk)
-	obj = initFSObjects(newDisk, t)
+	obj, disk = initPanFSWithBucket("", t)
+	defer os.RemoveAll(disk)
 	if _, err := obj.ListMultipartUploads(GlobalContext, bucketName, objectName, "", "", "", 1000); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
+	}
+}
+
+func TestPANFSNewMultipartUpload(t *testing.T) {
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	obj, disk := initPanFSWithBucket(bucketName, t)
+	defer os.RemoveAll(disk)
+
+	// Create new multipart upload using not existing bucket
+	nonExistentBucket := "non-existent-bucket"
+	_, err := obj.NewMultipartUpload(GlobalContext, nonExistentBucket, "test-object", ObjectOptions{})
+	if !errors.Is(err, BucketNotFound{Bucket: nonExistentBucket}) {
+		t.Fatalf("Expected error \"%v\" but found \"%v\"", BucketNotFound{Bucket: nonExistentBucket}, err)
+	}
+
+	// Create new multipart upload using valid bucket and object
+	_, err = obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Unexpected error \"%v\"", err)
+	}
+}
+
+func TestPANFSPutObjectPart(t *testing.T) {
+	bucketName := getRandomBucketName()
+	objectName := getRandomObjectName()
+	contentBytes := []byte("content")
+	sha256 := getSHA256Hash(contentBytes)
+	partNumber := 1
+	obj, disk := initPanFSWithBucket(bucketName, t)
+	defer os.RemoveAll(disk)
+
+	nonExistendUploadID := "nonExistentUploadID"
+	nonExistentBucket := "nonExistentBucket"
+
+	uploadID, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Unexpected error \"%v\"", err)
+	}
+
+	reader := mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256)
+
+	// Put object part with not existing bucket
+	_, err = obj.PutObjectPart(GlobalContext, nonExistentBucket, objectName, uploadID.UploadID, partNumber, reader, ObjectOptions{})
+	if !errors.Is(err, BucketNotFound{Bucket: nonExistentBucket}) {
+		t.Fatalf("Expected error \"%v\" but found \"%v\"\"", BucketNotFound{Bucket: nonExistentBucket}, err)
+	}
+
+	// Put object part with an uninitialized upload id
+	_, err = obj.PutObjectPart(GlobalContext, bucketName, objectName, nonExistendUploadID, partNumber, reader, ObjectOptions{})
+	expectedErr := InvalidUploadID{Bucket: bucketName, Object: objectName, UploadID: nonExistendUploadID}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("Expected error \"%v\" but found \"%v\"\"", expectedErr, err)
+	}
+
+	// Put object part with valid arguments
+	pi, err := obj.PutObjectPart(GlobalContext, bucketName, objectName, uploadID.UploadID, partNumber, reader, ObjectOptions{})
+	if err != nil {
+		t.Fatalf("Unexpected error \"%v\"", err)
+	}
+	if pi.PartNumber != partNumber {
+		t.Fatalf("Expectied part number %v but found %v", partNumber, pi.PartNumber)
+	}
+	expectedSize := int64(len(contentBytes))
+	if pi.Size != expectedSize {
+		t.Fatalf("Expectied size %v but found %v", expectedSize, pi.Size)
 	}
 }

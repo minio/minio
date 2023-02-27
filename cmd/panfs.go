@@ -53,9 +53,12 @@ import (
 var PANdefaultEtag = "00000000000000000000000000000000-2"
 
 const (
-	panfsMetaDir   = ".s3"
-	objMetadataDir = "metadata"
-	tmpDir         = "tmp"
+	panfsMetaDir        = ".s3"
+	objMetadataDir      = "metadata"
+	tmpDir              = "tmp"
+	panfsS3MultipartDir = panfsMetaDir + SlashSeparator + mpartMetaPrefix
+	panfsS3TmpDir       = panfsMetaDir + SlashSeparator + tmpDir
+	panfsS3MetadataDir  = panfsMetaDir + SlashSeparator + objMetadataDir
 )
 
 // PANFSObjects - Implements panfs object layer.
@@ -106,22 +109,12 @@ func initMetaVolumePANFS(fsPath, fsUUID string) error {
 	if err := os.MkdirAll(metaBucketPath, 0o777); err != nil {
 		return err
 	}
-
 	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
 	if err := os.MkdirAll(metaTmpPath, 0o777); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(pathJoin(metaTmpPath, bgAppendsDirName), 0o777); err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(pathJoin(fsPath, dataUsageBucket), 0o777); err != nil {
-		return err
-	}
-
-	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	return os.MkdirAll(metaMultipartPath, 0o777)
+	return os.MkdirAll(pathJoin(fsPath, dataUsageBucket), 0o777)
 }
 
 // NewPANFSObjectLayer - initialize new panfs object layer.
@@ -219,6 +212,7 @@ func (fs *PANFSObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []er
 }
 
 // StorageInfo - returns underlying storage statistics.
+// TODO: update in data usage story
 func (fs *PANFSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	di, err := getDiskInfo(fs.fsPath)
 	if err != nil {
@@ -521,6 +515,11 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 
 	// Create dir for temporary uploads
 	if err := mkdirAll(pathJoin(bucketMetaDir, tmpDir), 0o777); err != nil {
+		return toObjectErr(err, bucket)
+	}
+
+	// Create dir for multipart uploads
+	if err := mkdirAll(pathJoin(bucketMetaDir, mpartMetaPrefix), 0o777); err != nil {
 		return toObjectErr(err, bucket)
 	}
 
@@ -1156,7 +1155,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
-		bucketMetaDir := pathJoin(bucketDir, panfsMetaDir, objMetadataDir)
+		bucketMetaDir := pathJoin(bucketDir, panfsS3MetadataDir)
 		fsMetaPath := pathJoin(bucketMetaDir, object, fs.metaJSONFile)
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		var freshFile bool
@@ -1176,6 +1175,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 			//
 			// We should preserve the `fs.json` of any
 			// existing object
+			// TODO: Update fsRemoveMeta method. Should be used bucketPath
 			if retErr != nil && freshFile {
 				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
 				fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir) // TODO: check this delete
@@ -1296,8 +1296,8 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 	var bucketPanfsDir string
 	// DeleteObject operation at the moment handles the configuration objects. Configuration agent will handle such
 	// kind of operations (e.g. user/policy/group ops) and then panfs backend only will be responsible for object
-	//(real data) operations. At the moment we need to check whether the target bucket is the minio system bucket which
-	//stores all config files.
+	// (real data) operations. At the moment we need to check whether the target bucket is the minio system bucket which
+	// stores all config files.
 	// TODO: remove this if..else block when config agent will be here
 	if bucket != minioMetaBucket {
 		bucketPanfsDir, err = fs.getBucketPanFSPathFromMeta(ctx, bucket)
