@@ -501,7 +501,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			case config.IdentityLDAPSubSys:
 				off = !xldap.Enabled(item.Config)
 			case config.IdentityTLSSubSys:
-				off = !globalSTSTLSConfig.Enabled
+				off = !globalIAMSys.STSTLSConfig.Enabled
 			case config.IdentityPluginSubSys:
 				off = !idplugin.Enabled(item.Config)
 			}

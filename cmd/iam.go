@@ -42,6 +42,7 @@ import (
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/policy/opa"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	xhttp "github.com/minio/minio/internal/http"
@@ -87,8 +88,10 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
-	LDAPConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
-	OpenIDConfig       openid.Config // only valid if OpenID is configured
+
+	LDAPConfig   xldap.Config  // only valid if usersSysType is LDAPUsers
+	OpenIDConfig openid.Config // only valid if OpenID is configured
+	STSTLSConfig xtls.Config   // only valid if STS TLS is configured
 
 	usersSysType UsersSysType
 
@@ -225,6 +228,15 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
 
+	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err))
+	}
+
+	if stsTLSConfig.InsecureSkipVerify {
+		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
+	}
+
 	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
 		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
@@ -258,6 +270,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	sys.LDAPConfig = ldapConfig
 	sys.OpenIDConfig = openidConfig
+	sys.STSTLSConfig = stsTLSConfig
+
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
