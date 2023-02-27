@@ -71,7 +71,7 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 
 	// The continuation-token cannot be empty.
 	if val, ok := values["continuation-token"]; ok {
-		if len(val[0]) == 0 {
+		if len(val) == 0 {
 			errCode = ErrIncorrectContinuationToken
 			return
 		}
