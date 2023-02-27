@@ -269,7 +269,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}()
 
 		// Note: updates from healEntry to tracker must be sent on results channel.
-		healEntry := func(entry metaCacheEntry) {
+		healEntry := func(bucket string, entry metaCacheEntry) {
 			if entry.name == "" && len(entry.metadata) == 0 {
 				// ignore entries that don't have metadata.
 				return
@@ -278,6 +278,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				// ignore healing entry.name's with `/` suffix.
 				return
 			}
+
 			// We might land at .metacache, .trash, .multipart
 			// no need to heal them skip, only when bucket
 			// is '.minio.sys'
@@ -302,6 +303,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					versionID: "",
 				}, madmin.HealItemObject)
 				if err != nil {
+					if isErrObjectNotFound(err) {
+						// queueing happens across namespace, ignore
+						// objects that are not found.
+						return
+					}
 					result = healEntryFailure(0)
 					logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
@@ -317,12 +323,19 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				return
 			}
 
+			var versionNotFound int
 			for _, version := range fivs.Versions {
 				if err := bgSeq.queueHealTask(healSource{
 					bucket:    bucket,
 					object:    version.Name,
 					versionID: version.VersionID,
 				}, madmin.HealItemObject); err != nil {
+					if isErrObjectNotFound(err) {
+						// queueing happens across namespace, ignore
+						// objects that are not found.
+						versionNotFound++
+						continue
+					}
 					// If not deleted, assume they failed.
 					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
@@ -341,6 +354,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				case results <- result:
 				}
 			}
+			// All versions resulted in 'ObjectNotFound'
+			if versionNotFound == len(fivs.Versions) {
+				return
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -351,22 +368,25 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			waitForLowHTTPReq()
 		}
 
+		actualBucket, prefix := path2BucketObject(bucket)
+
 		// How to resolve partial results.
 		resolver := metadataResolutionParams{
 			dirQuorum: 1,
 			objQuorum: 1,
-			bucket:    bucket,
+			bucket:    actualBucket,
 		}
 
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
-			bucket:         bucket,
+			bucket:         actualBucket,
+			path:           prefix,
 			recursive:      true,
 			forwardTo:      forwardTo,
 			minDisks:       1,
 			reportNotFound: false,
 			agreed: func(entry metaCacheEntry) {
-				healEntry(entry)
+				healEntry(actualBucket, entry)
 			},
 			partial: func(entries metaCacheEntries, _ []error) {
 				entry, ok := entries.resolve(&resolver)
@@ -375,7 +395,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// proceed to heal nonetheless.
 					entry, _ = entries.firstFound()
 				}
-				healEntry(*entry)
+				healEntry(actualBucket, *entry)
 			},
 			finished: nil,
 		})
