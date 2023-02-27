@@ -20,6 +20,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
@@ -193,6 +194,9 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+	if len(corsAllowOrigin) == 0 {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	}
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
@@ -203,14 +207,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	switch listQuorum {
 	case "strict", "optimal", "reduced", "disk":
 	default:
-		return cfg, errors.New("invalid value for list strict quorum")
+		return cfg, fmt.Errorf("invalid value %v for list_quorum", listQuorum)
 	}
 
 	replicationPriority := env.Get(EnvAPIReplicationPriority, kvs.GetWithDefault(apiReplicationPriority, DefaultKVS))
 	switch replicationPriority {
 	case "slow", "fast", "auto":
 	default:
-		return cfg, errors.New("invalid value for replication priority")
+		return cfg, fmt.Errorf("invalid value %v for replication_priority", replicationPriority)
 	}
 
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
@@ -242,7 +246,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
-
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
 
 	return Config{
