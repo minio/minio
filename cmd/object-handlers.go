@@ -700,10 +700,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	if err != nil && !proxy.Proxy {
 		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-			switch {
-			case !objInfo.VersionPurgeStatus.Empty():
+			if !objInfo.VersionPurgeStatus.Empty() {
 				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
-			case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
+			}
+			if !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker {
 				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
 			}
 			// Versioning enabled quite possibly object is deleted might be delete-marker
