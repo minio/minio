@@ -243,7 +243,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
 	}
 
-	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
+	setGlobalAuthNPlugin(idplugin.New(GlobalContext, authNPluginCfg))
 
 	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
 	if err != nil {
