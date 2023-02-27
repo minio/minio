@@ -299,7 +299,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	defer disk.Close()
 	poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
 	if poolIdx < 0 {
-		return fmt.Errorf("unexpected pool index (%d) found in %s", poolIdx, disk.Endpoint())
+		return fmt.Errorf("unexpected pool index (%d) found for %s", poolIdx, disk.Endpoint())
 	}
 
 	// Calculate the set index where the current endpoint belongs
@@ -310,14 +310,15 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		return err
 	}
 	if setIdx < 0 {
-		return fmt.Errorf("unexpected set index (%d) found in %s", setIdx, disk.Endpoint())
+		return fmt.Errorf("unexpected set index (%d) found for  %s", setIdx, disk.Endpoint())
 	}
 
 	// Prevent parallel erasure set healing
 	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-drive-healing/%d/%d", poolIdx, setIdx))
 	lkctx, err := locker.GetLock(ctx, newDiskHealingTimeout)
 	if err != nil {
-		return err
+		return fmt.Errorf("Healing of drive '%v' on %s pool, belonging to %s erasure set already in progress: %w",
+			disk, humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1), err)
 	}
 	ctx = lkctx.Context()
 	defer locker.Unlock(lkctx)
@@ -325,19 +326,20 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	// Load healing tracker in this disk
 	tracker, err := loadHealingTracker(ctx, disk)
 	if err != nil {
-		// A healing track can be not found when another disk in the same
-		// erasure set and same healing-id successfully finished healing.
-		if err == errFileNotFound {
+		// A healing tracker may be deleted if another disk in the
+		// same erasure set with same healing-id successfully finished
+		// healing.
+		if errors.Is(err, errFileNotFound) {
 			return nil
 		}
-		logger.LogIf(ctx, fmt.Errorf("Unable to load a healing tracker on '%s': %w", disk, err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to load healing tracker on '%s': %w, re-initializing..", disk, err))
 		tracker = newHealingTracker(disk, mustGetUUID())
 	}
 
-	logger.Info(fmt.Sprintf("Proceeding to heal '%s' - 'mc admin heal alias/ --verbose' to check the status.", endpoint))
+	logger.Info(fmt.Sprintf("Healing drive '%s' - 'mc admin heal alias/ --verbose' to check the current status.", endpoint))
 
 	buckets, _ := z.ListBuckets(ctx, BucketOptions{})
-	// Buckets data are dispersed in multiple zones/sets, make
+	// Buckets data are dispersed in multiple pools/sets, make
 	// sure to heal all bucket metadata configuration.
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
@@ -355,7 +357,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	})
 
 	if serverDebugLog {
-		logger.Info("Healing drive '%v' on %s pool", disk, humanize.Ordinal(poolIdx+1))
+		logger.Info("Healing drive '%v' on %s pool, belonging to %s erasure set", disk, humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1))
 	}
 
 	// Load bucket totals
@@ -378,9 +380,9 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	if tracker.ItemsFailed > 0 {
-		logger.Info("Healing drive '%s' failed (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
+		logger.Info("Healing of drive '%s' failed (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
 	} else {
-		logger.Info("Healing drive '%s' complete (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
+		logger.Info("Healing of drive '%s' complete (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
 	}
 
 	if len(tracker.QueuedBuckets) > 0 {
@@ -392,7 +394,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		logger.Info("\n")
 	}
 
-	if tracker.HealID == "" { // HealID is empty only before Feb 2023
+	if tracker.HealID == "" { // HealID was empty only before Feb 2023
 		logger.LogIf(ctx, tracker.delete(ctx))
 		return nil
 	}
@@ -401,7 +403,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	for _, disk := range z.serverPools[poolIdx].sets[setIdx].getDisks() {
 		t, err := loadHealingTracker(ctx, disk)
 		if err != nil {
-			if err != errFileNotFound {
+			if !errors.Is(err, errFileNotFound) {
 				logger.LogIf(ctx, err)
 			}
 			continue
@@ -446,8 +448,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 			for _, disk := range healDisks {
 				go func(disk Endpoint) {
 					globalBackgroundHealState.setDiskHealingStatus(disk, true)
-					err := healFreshDisk(ctx, z, disk)
-					if err != nil {
+					if err := healFreshDisk(ctx, z, disk); err != nil {
 						globalBackgroundHealState.setDiskHealingStatus(disk, false)
 						printEndpointError(disk, err, false)
 						return
