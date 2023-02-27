@@ -245,6 +245,13 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
 	}
+	if u.Credentials.SessionToken != "" {
+		jwtClaims, err := extractJWTClaims(u)
+		if err != nil {
+			return err
+		}
+		u.Credentials.Claims = jwtClaims.Map()
+	}
 	m[user] = u
 	return nil
 }

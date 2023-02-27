@@ -933,6 +933,7 @@ type newServiceAccountOpts struct {
 	accessKey     string
 	secretKey     string
 	comment       string
+	expiration    *time.Time
 
 	claims map[string]interface{}
 }
@@ -1005,6 +1006,14 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.Status = string(auth.AccountOn)
 	cred.Comment = opts.comment
 
+	if opts.expiration != nil {
+		expirationInUTC := opts.expiration.UTC()
+		if err := validateSvcExpirationInUTC(expirationInUTC); err != nil {
+			return auth.Credentials{}, time.Time{}, err
+		}
+		cred.Expiration = expirationInUTC
+	}
+
 	updatedAt, err := sys.store.AddServiceAccount(ctx, cred)
 	if err != nil {
 		return auth.Credentials{}, time.Time{}, err
@@ -1019,6 +1028,7 @@ type updateServiceAccountOpts struct {
 	secretKey     string
 	status        string
 	comment       string
+	expiration    *time.Time
 }
 
 // UpdateServiceAccount - edit a service account
@@ -1158,12 +1168,9 @@ func (sys *IAMSys) getAccountWithClaims(ctx context.Context, accessKey string) (
 		return UserIdentity{}, nil, errNoSuchAccount
 	}
 
-	jwtClaims, err := auth.ExtractClaims(acc.Credentials.SessionToken, acc.Credentials.SecretKey)
+	jwtClaims, err := extractJWTClaims(acc)
 	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(acc.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return UserIdentity{}, nil, err
-		}
+		return UserIdentity{}, nil, err
 	}
 
 	return acc, jwtClaims, nil
@@ -1184,13 +1191,11 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 		return nil, errNoSuchServiceAccount
 	}
 
-	jwtClaims, err := auth.ExtractClaims(sa.Credentials.SessionToken, sa.Credentials.SecretKey)
+	jwtClaims, err := extractJWTClaims(sa)
 	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(sa.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
+
 	return jwtClaims.Map(), nil
 }
 
