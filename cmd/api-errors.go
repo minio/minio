@@ -1520,7 +1520,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBusy: {
-		Code:           "Busy",
+		Code:           "ServerBusy",
 		Description:    "The service is unavailable. Please retry.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},

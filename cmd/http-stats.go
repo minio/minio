@@ -255,6 +255,10 @@ type HTTPStats struct {
 	totalS3Canceled         HTTPAPIStats
 }
 
+func (st *HTTPStats) loadRequestsInQueue() int32 {
+	return atomic.LoadInt32(&st.s3RequestsInQueue)
+}
+
 func (st *HTTPStats) addRequestsInQueue(i int32) {
 	atomic.AddInt32(&st.s3RequestsInQueue, i)
 }

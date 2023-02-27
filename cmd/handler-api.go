@@ -227,6 +227,13 @@ func (t *apiConfig) getClusterDeadline() time.Duration {
 	return t.clusterDeadline
 }
 
+func (t *apiConfig) getRequestsPoolCapacity() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return cap(t.requestsPool)
+}
+
 func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
