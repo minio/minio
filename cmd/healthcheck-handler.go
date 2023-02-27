@@ -106,6 +106,17 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
 
+	if int(globalHTTPStats.loadRequestsInQueue()) > globalAPIConfig.getRequestsPoolCapacity() {
+		apiErr := getAPIError(ErrBusy)
+		switch r.Method {
+		case http.MethodHead:
+			writeResponse(w, apiErr.HTTPStatusCode, nil, mimeNone)
+		case http.MethodGet:
+			writeErrorResponse(r.Context(), w, apiErr, r.URL)
+		}
+		return
+	}
+
 	// Verify if KMS is reachable if its configured
 	if GlobalKMS != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)

@@ -686,7 +686,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	claims := make(map[string]interface{})
 	defer logger.AuditLog(ctx, w, r, claims)
 
-	if !globalSTSTLSConfig.Enabled {
+	if !globalIAMSys.STSTLSConfig.Enabled {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCertificate' is disabled"))
 		return
 	}
@@ -727,7 +727,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	certificate := r.TLS.PeerCertificates[0]
-	if !globalSTSTLSConfig.InsecureSkipVerify { // Verify whether the client certificate has been issued by a trusted CA.
+	if !globalIAMSys.STSTLSConfig.InsecureSkipVerify { // Verify whether the client certificate has been issued by a trusted CA.
 		_, err := certificate.Verify(x509.VerifyOptions{
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageClientAuth,
@@ -776,7 +776,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		return
 	}
 
-	expiry, err := globalSTSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
+	expiry, err := globalIAMSys.STSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, err)
 		return
