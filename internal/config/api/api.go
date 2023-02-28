@@ -32,6 +32,7 @@ import (
 
 // API sub-system constants
 const (
+	apiMinioDomain                 = "minio_domain"
 	apiRequestsMax                 = "requests_max"
 	apiRequestsDeadline            = "requests_deadline"
 	apiClusterDeadline             = "cluster_deadline"
@@ -47,6 +48,7 @@ const (
 	apiGzipObjects                 = "gzip_objects"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
+	EnvAPIMinioDomain             = "MINIO_API_MINIO_DOMAIN"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
@@ -78,6 +80,10 @@ const (
 // DefaultKVS - default storage class config
 var (
 	DefaultKVS = config.KVS{
+		config.KV{
+			Key:   apiMinioDomain,
+			Value: "",
+		},
 		config.KV{
 			Key:   apiRequestsMax,
 			Value: "0",
@@ -135,6 +141,7 @@ var (
 
 // Config storage class configuration
 type Config struct {
+	MinioDomain                 int           `json:"minio_domain"`
 	RequestsMax                 int           `json:"requests_max"`
 	RequestsDeadline            time.Duration `json:"requests_deadline"`
 	ClusterDeadline             time.Duration `json:"cluster_deadline"`
