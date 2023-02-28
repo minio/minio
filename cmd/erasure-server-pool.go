@@ -689,9 +689,11 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 	case updateCloser <- ch:
 		<-ch
 	case <-ctx.Done():
+		mu.Lock()
 		if firstErr == nil {
 			firstErr = ctx.Err()
 		}
+		defer mu.Unlock()
 	}
 	return firstErr
 }
