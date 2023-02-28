@@ -412,9 +412,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 
 		for {
 			select {
-			case <-ctx.Done():
-				// Return without saving.
-				return
 			case <-t.C:
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
