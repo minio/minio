@@ -253,7 +253,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 		return nil, ErrNoAccessKey
 	}
 
-	if token == "" && cred.IsTemp() {
+	if token == "" && cred.IsTemp() && !cred.IsServiceAccount() {
 		// Temporary credentials should always have x-amz-security-token
 		return nil, ErrInvalidToken
 	}
@@ -263,7 +263,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 		return nil, ErrInvalidToken
 	}
 
-	if cred.IsTemp() && subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+	if !cred.IsServiceAccount() && cred.IsTemp() && subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
 		// validate token for temporary credentials only.
 		return nil, ErrInvalidToken
 	}

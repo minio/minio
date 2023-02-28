@@ -103,7 +103,7 @@ func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, 
 }
 
 // Add adds tier to config if it passes all validations.
-func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) error {
+func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig, ignoreInUse bool) error {
 	config.Lock()
 	defer config.Unlock()
 
@@ -122,13 +122,16 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig) er
 	if err != nil {
 		return err
 	}
-	// Check if warmbackend is in use by other MinIO tenants
-	inUse, err := d.InUse(ctx)
-	if err != nil {
-		return err
-	}
-	if inUse {
-		return errTierBackendInUse
+
+	if !ignoreInUse {
+		// Check if warmbackend is in use by other MinIO tenants
+		inUse, err := d.InUse(ctx)
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return errTierBackendInUse
+		}
 	}
 
 	config.Tiers[tierName] = tier

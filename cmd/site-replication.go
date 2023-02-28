@@ -1219,6 +1219,7 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			sessionPolicy: sp,
 			claims:        change.Create.Claims,
 			comment:       change.Create.Comment,
+			expiration:    change.Create.Expiration,
 		}
 		_, _, err = globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
 		if err != nil {
@@ -1245,6 +1246,7 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			status:        change.Update.Status,
 			comment:       change.Update.Comment,
 			sessionPolicy: sp,
+			expiration:    change.Update.Expiration,
 		}
 
 		_, err = globalIAMSys.UpdateServiceAccount(ctx, change.Update.AccessKey, opts)
@@ -1848,6 +1850,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        acc.Credentials.Status,
 						Comment:       acc.Credentials.Comment,
+						Expiration:    &acc.Credentials.Expiration,
 					},
 				},
 				UpdatedAt: acc.UpdatedAt,
@@ -4716,6 +4719,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        creds.Status,
 						Comment:       creds.Comment,
+						Expiration:    &creds.Expiration,
 					},
 				},
 				UpdatedAt: lastUpdate,
