@@ -609,7 +609,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		if errors.Is(reducedErr, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
 			_, derr := er.deleteIfDangling(ctx, bucket, object, metaArr, errs, nil, opts)
 			if derr != nil {
-				err = derr
+				reducedErr = derr
 			}
 		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
