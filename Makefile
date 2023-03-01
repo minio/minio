@@ -9,7 +9,8 @@ VERSION ?= $(shell git describe --tags)
 TAG ?= "minio/minio:$(VERSION)"
 
 GOLANGCI_VERSION = v1.51.2
-GOLANGCI = .bin/golangci/$(GOLANGCI_VERSION)/golangci-lint
+GOLANGCI_DIR = .bin/golangci/$(GOLANGCI_VERSION)
+GOLANGCI = $(GOLANGCI_DIR)/golangci-lint
 
 all: build
 
@@ -22,7 +23,7 @@ help: ## print this help
 
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
-	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(dir $(GOLANGCI)) $(GOLANGCI_VERSION)
+	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR) $(GOLANGCI_VERSION)
 	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.7
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
