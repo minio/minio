@@ -243,7 +243,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 					rc.Close()
 					<-asyncWriters
 					wg.Done()
-					//lint:ignore SA6002 we are fine with the tiny alloc
+					//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 					poolBuf128k.Put(b)
 				}()
 				if err := putObject(&rc, fi, name); err != nil {

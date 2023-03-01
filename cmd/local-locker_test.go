@@ -419,7 +419,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 					}
 					start = time.Now()
 					for _, lock := range toUnLock {
-						ok, err := l.RUnlock(nil, lock)
+						ok, err := l.RUnlock(context.TODO(), lock)
 						if err != nil || !ok {
 							t.Fatal(err)
 						}

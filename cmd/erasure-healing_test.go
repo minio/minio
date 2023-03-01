@@ -1621,10 +1621,10 @@ func TestHealLastDataShard(t *testing.T) {
 			}
 
 			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
-			defer firstGr.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer firstGr.Close()
 
 			firstHealedH := sha256.New()
 			_, err = io.Copy(firstHealedH, firstGr)
@@ -1651,10 +1651,10 @@ func TestHealLastDataShard(t *testing.T) {
 			}
 
 			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
-			defer secondGr.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer secondGr.Close()
 
 			secondHealedH := sha256.New()
 			_, err = io.Copy(secondHealedH, secondGr)

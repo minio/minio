@@ -678,7 +678,7 @@ func metaDataPoolGet() []byte {
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
-		//lint:ignore SA6002 we are fine with the tiny alloc
+		//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
