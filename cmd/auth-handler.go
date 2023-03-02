@@ -160,7 +160,7 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 			ParentUser: cred.ParentUser,
 		}
 		ri.Owner = owner
-		ri.Region = region
+		ri.Region = globalSite.Region
 	}
 
 	return cred, owner, ErrNone
@@ -357,6 +357,7 @@ func authenticateRequest(ctx context.Context, r *http.Request, action policy.Act
 			ParentUser: cred.ParentUser,
 		}
 		ri.Owner = owner
+		ri.Region = globalSite.Region
 	}
 
 	// region is valid only for CreateBucketAction.
