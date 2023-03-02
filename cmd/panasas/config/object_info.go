@@ -11,8 +11,8 @@ type ObjectInfo struct {
 	ID         string            `json:"id"`
 	Metadata   map[string]string `json:"metadata"`
 	Namespace  NamespaceInfo     `json:"namespace"`
-	ChangedAt  time.Time         `json:"mod-time"`
-	ByteLength int64             `json:"size"`
+	ChangedAt  time.Time         `json:"timestamp"`
+	ByteLength int64
 }
 
 // Name - return name of the object
