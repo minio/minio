@@ -154,14 +154,9 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		return cred, owner, s3Err
 	}
 
-	if ri := logger.GetReqInfo(ctx); ri != nil {
-		ri.Cred = auth.Credentials{
-			AccessKey:  cred.AccessKey,
-			ParentUser: cred.ParentUser,
-		}
-		ri.Owner = owner
-		ri.Region = globalSite.Region
-	}
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = globalSite.Region
 
 	return cred, owner, ErrNone
 }
@@ -351,14 +346,9 @@ func authenticateRequest(ctx context.Context, r *http.Request, action policy.Act
 		return s3Err
 	}
 
-	if ri := logger.GetReqInfo(ctx); ri != nil {
-		ri.Cred = auth.Credentials{
-			AccessKey:  cred.AccessKey,
-			ParentUser: cred.ParentUser,
-		}
-		ri.Owner = owner
-		ri.Region = globalSite.Region
-	}
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = globalSite.Region
 
 	// region is valid only for CreateBucketAction.
 	var region string
@@ -720,14 +710,9 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return s3Err
 	}
 
-	if ri := logger.GetReqInfo(ctx); ri != nil {
-		ri.Cred = auth.Credentials{
-			AccessKey:  cred.AccessKey,
-			ParentUser: cred.ParentUser,
-		}
-		ri.Owner = owner
-		ri.Region = region
-	}
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = region
 
 	// Do not check for PutObjectRetentionAction permission,
 	// if mode and retain until date are not set.
