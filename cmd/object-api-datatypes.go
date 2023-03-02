@@ -54,12 +54,13 @@ type objectHistogramInterval struct {
 
 const (
 	// dataUsageBucketLen must be length of ObjectsHistogramIntervals
-	dataUsageBucketLen = 7
+	dataUsageBucketLen  = 7
+	dataUsageVersionLen = 5
 )
 
 // ObjectsHistogramIntervals is the list of all intervals
 // of object sizes to be included in objects histogram.
-var ObjectsHistogramIntervals = []objectHistogramInterval{
+var ObjectsHistogramIntervals = [dataUsageBucketLen]objectHistogramInterval{
 	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
 	{"BETWEEN_1024_B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
 	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
@@ -67,6 +68,16 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
 	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
 	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
+}
+
+// ObjectsVersionCountIntervals is the list of all intervals
+// of object version count to be included in objects histogram.
+var ObjectsVersionCountIntervals = [dataUsageVersionLen]objectHistogramInterval{
+	{"BETWEEN_0_AND_10", 0, 9},
+	{"BETWEEN_10_TO_100", 10, 99},
+	{"BETWEEN_100_TO_1000", 100, 999},
+	{"BETWEEN_1000_TO_10000", 1000, 9999},
+	{"GREATER_THAN_10000", 10000, math.MaxInt64},
 }
 
 // BucketInfo - represents bucket metadata.
