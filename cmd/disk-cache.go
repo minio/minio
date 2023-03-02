@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	xnet "github.com/minio/pkg/net"
 	"io"
 	"net/http"
 	"strconv"
@@ -448,7 +449,10 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 			return cachedObjInfo, nil
 		}
 		c.cacheStats.incMiss()
-		return ObjectInfo{}, BackendDown{}
+		if xnet.IsNetworkOrHostDown(err, false) {
+			return ObjectInfo{}, BackendDown{Err: err.Error()}
+		}
+		return ObjectInfo{}, err
 	}
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
