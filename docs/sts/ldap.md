@@ -159,12 +159,40 @@ mc admin policy add myminio mypolicy mypolicy.json
 To associate the policy with an LDAP user or group, use the full DN of the user or group:
 
 ```sh
+mc admin idp ldap policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+```
+
+```sh
+mc admin idp ldap policy attach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+```
+
+To remove a policy association, use the similar `detach` command:
+
+```sh
+mc admin idp ldap policy detach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+```
+
+```sh
+mc admin idp ldap policy detach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+```
+
+
+Note that the commands above attempt to validate if the given entity (user or group) exist in the LDAP directory and return an error if they are not found.
+
+<details><summary> View **DEPRECATED** older policy association commands</summary>
+
+Please **do not use** these as they may be removed or their behavior may change.
+
+```sh
 mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
+
 
 ```sh
 mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
+
+</details>
 
 **Note that by default no policy is set on a user**. Thus even if they successfully authenticate with AD/LDAP credentials, they have no access to object storage as the default access policy is to deny all access.
 
