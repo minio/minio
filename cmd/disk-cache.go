@@ -20,7 +20,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	xnet "github.com/minio/pkg/net"
 	"io"
 	"net/http"
 	"strconv"
@@ -36,6 +35,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/pkg/wildcard"
 )
 
