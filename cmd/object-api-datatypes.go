@@ -55,7 +55,7 @@ type objectHistogramInterval struct {
 const (
 	// dataUsageBucketLen must be length of ObjectsHistogramIntervals
 	dataUsageBucketLen  = 7
-	dataUsageVersionLen = 5
+	dataUsageVersionLen = 7
 )
 
 // ObjectsHistogramIntervals is the list of all intervals
@@ -73,10 +73,12 @@ var ObjectsHistogramIntervals = [dataUsageBucketLen]objectHistogramInterval{
 // ObjectsVersionCountIntervals is the list of all intervals
 // of object version count to be included in objects histogram.
 var ObjectsVersionCountIntervals = [dataUsageVersionLen]objectHistogramInterval{
-	{"BETWEEN_0_AND_10", 0, 9},
-	{"BETWEEN_10_TO_100", 10, 99},
-	{"BETWEEN_100_TO_1000", 100, 999},
-	{"BETWEEN_1000_TO_10000", 1000, 9999},
+	{"UNVERSIONED", 0, 0},
+	{"SINGLE_VERSION", 1, 1},
+	{"BETWEEN_2_AND_10", 2, 9},
+	{"BETWEEN_10_AND_100", 10, 99},
+	{"BETWEEN_100_AND_1000", 100, 999},
+	{"BETWEEN_1000_AND_10000", 1000, 9999},
 	{"GREATER_THAN_10000", 10000, math.MaxInt64},
 }
 
