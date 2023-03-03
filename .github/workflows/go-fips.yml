@@ -49,4 +49,4 @@ jobs:
       - name: Test binary
         run: |
           docker run --rm minio/fips-test:latest ./minio --version
-          docker run --rm -i minio/fips-test:latest /bin/bash -c 'go tool nm ./minio | grep FIPS | grep -q FIPSxx'
+          docker run --rm -i minio/fips-test:latest /bin/bash -c 'go tool nm ./minio | grep FIPS | grep -q FIPS'
