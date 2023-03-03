@@ -666,8 +666,6 @@ github.com/klauspost/cpuid/v2 v2.2.4 h1:acbojRNwl3o09bUq+yDCtZFc1aiwaAAxtcn8YkZX
 github.com/klauspost/cpuid/v2 v2.2.4/go.mod h1:RVVoqg1df56z8g3pUjL/3lE5UfnlrJX8tyFgg4nqhuY=
 github.com/klauspost/filepathx v1.1.1 h1:201zvAsL1PhZvmXTP+QLer3AavWrO3U1NILWpniHK4w=
 github.com/klauspost/filepathx v1.1.1/go.mod h1:XWxdp8rEw4gupPBrxrV5Q57dL/71xj0OgV1gKt2zTfU=
-github.com/klauspost/madmin-go/v2 v2.0.0-20230302133040-69739f0b6464 h1:Z7uWhu7IEyOgf0Ckw8i7+8Q4p0GRCFVzw7XrUDJ9l3o=
-github.com/klauspost/madmin-go/v2 v2.0.0-20230302133040-69739f0b6464/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
 github.com/klauspost/pgzip v1.2.5 h1:qnWYvvKqedOF2ulHpMG72XQol4ILEJ8k2wwRl/Km8oE=
 github.com/klauspost/pgzip v1.2.5/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/klauspost/readahead v1.4.0 h1:w4hQ3BpdLjBnRQkZyNi+nwdHU7eGP9buTexWK9lU7gY=
@@ -772,6 +770,8 @@ github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLT
 github.com/minio/kes-go v0.1.0 h1:h201DyOYP5sTqajkxFGxmXz/kPbT8HQNX1uh3Yx2PFc=
 github.com/minio/kes-go v0.1.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
 github.com/minio/madmin-go v1.6.6/go.mod h1:ATvkBOLiP3av4D++2v1UEHC/QzsGtgXD5kYvvRYzdKs=
+github.com/minio/madmin-go/v2 v2.0.16-0.20230302223330-683c505848dc h1:o5QY2XRWb0RIi3/J4NY3dx1eHfWWj3RTpQ1TlLfNjD8=
+github.com/minio/madmin-go/v2 v2.0.16-0.20230302223330-683c505848dc/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
 github.com/minio/mc v0.0.0-20230221173238-1843bab50013 h1:+4Zrme5jLaQ7o8O3CMMZbOtK9iz0CGOj8tFDm0frMC0=
 github.com/minio/mc v0.0.0-20230221173238-1843bab50013/go.mod h1:Yuxzld65ajOb1I89IfxInz0wqSIgHv+8NTiuoX+O+o8=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
