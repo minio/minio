@@ -154,6 +154,10 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		return cred, owner, s3Err
 	}
 
+	logger.GetReqInfo(ctx).Cred = cred
+	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = globalSite.Region
+
 	return cred, owner, ErrNone
 }
 
@@ -344,6 +348,7 @@ func authenticateRequest(ctx context.Context, r *http.Request, action policy.Act
 
 	logger.GetReqInfo(ctx).Cred = cred
 	logger.GetReqInfo(ctx).Owner = owner
+	logger.GetReqInfo(ctx).Region = globalSite.Region
 
 	// region is valid only for CreateBucketAction.
 	var region string
