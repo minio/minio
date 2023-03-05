@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/pkg/wildcard"
 )
 
@@ -447,7 +448,10 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 			return cachedObjInfo, nil
 		}
 		c.cacheStats.incMiss()
-		return ObjectInfo{}, BackendDown{}
+		if xnet.IsNetworkOrHostDown(err, false) {
+			return ObjectInfo{}, BackendDown{Err: err.Error()}
+		}
+		return ObjectInfo{}, err
 	}
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
