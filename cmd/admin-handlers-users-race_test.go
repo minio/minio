@@ -27,12 +27,12 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/minio/madmin-go/v2"
 	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio/internal/sync/errgroup"
 )
 
 func runAllIAMConcurrencyTests(suite *TestSuiteIAM, c *check) {
@@ -129,18 +129,21 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
 		secretKeys[i] = secretKey
 	}
 
-	wg := sync.WaitGroup{}
+	g := errgroup.Group{}
 	for i := 0; i < userCount; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			uClient := s.getUserClient(c, accessKeys[i], secretKeys[i], "")
-			err := s.adm.RemoveUser(ctx, accessKeys[i])
-			if err != nil {
-				c.Fatalf("unable to remove user: %v", err)
+		g.Go(func(i int) func() error {
+			return func() error {
+				uClient := s.getUserClient(c, accessKeys[i], secretKeys[i], "")
+				err := s.adm.RemoveUser(ctx, accessKeys[i])
+				if err != nil {
+					return err
+				}
+				c.mustNotListObjects(ctx, uClient, bucket)
+				return nil
 			}
-			c.mustNotListObjects(ctx, uClient, bucket)
-		}(i)
+		}(i), i)
 	}
-	wg.Wait()
+	if errs := g.Wait(); len(errs) > 0 {
+		c.Fatalf("unable to remove users: %v", errs)
+	}
 }
