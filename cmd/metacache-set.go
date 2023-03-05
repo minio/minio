@@ -34,6 +34,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -95,6 +96,10 @@ type listPathOptions struct {
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
 
+	// Versioning config is used for if the path
+	// has versioning enabled.
+	Versioning *versioning.Versioning
+
 	// Lifecycle performs filtering based on lifecycle.
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
@@ -119,12 +124,14 @@ func init() {
 
 func (o *listPathOptions) setBucketMeta(ctx context.Context) {
 	lc, _ := globalLifecycleSys.Get(o.Bucket)
+	vc, _ := globalBucketVersioningSys.Get(o.Bucket)
 
 	// Check if bucket is object locked.
 	rcfg, _ := globalBucketObjectLockSys.Get(o.Bucket)
 	replCfg, _, _ := globalBucketMetadataSys.GetReplicationConfig(ctx, o.Bucket)
 	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, o.Bucket)
 	o.Lifecycle = lc
+	o.Versioning = vc
 	o.Replication = replicationConfig{
 		Config:  replCfg,
 		remotes: tgts,

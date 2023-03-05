@@ -32,7 +32,6 @@ import (
 
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v2"
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -463,17 +462,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			event := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
-			switch action := event.Action; action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
-				// Skip this entry.
-				return true
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
-				// Skip this entry.
+
+			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			if evt.Action.Delete() {
+				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
 				return true
 			}
+
 			return false
 		}
 

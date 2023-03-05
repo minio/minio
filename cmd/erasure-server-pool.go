@@ -37,7 +37,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
@@ -1305,11 +1304,12 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		if err == nil {
 			if opts.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
-				switch evt.Action {
-				case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-					fallthrough
-				case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-					return loi, nil
+				if evt.Action.Delete() {
+					globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+					if !evt.Action.DeleteRestored() {
+						// Skip entry if ILM action was DeleteVersionAction or DeleteAction
+						return loi, nil
+					}
 				}
 			}
 			loi.Objects = append(loi.Objects, objInfo)
