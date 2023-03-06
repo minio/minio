@@ -2322,8 +2322,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				continue
 			}
 			metricType := prometheus.GaugeValue
-			switch metric.Description.Type {
-			case counterMetric:
+			if metric.Description.Type == counterMetric {
 				metricType = prometheus.CounterValue
 			}
 			toPost := prometheus.MustNewConstMetric(
@@ -2431,8 +2430,7 @@ func (c *minioNodeCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		metricType := prometheus.GaugeValue
-		switch metric.Description.Type {
-		case counterMetric:
+		if metric.Description.Type == counterMetric {
 			metricType = prometheus.CounterValue
 		}
 		ch <- prometheus.MustNewConstMetric(

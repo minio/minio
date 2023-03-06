@@ -424,8 +424,7 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
 	if globalSite.Region != "" {
-		switch errCode {
-		case ErrAuthorizationHeaderMalformed:
+		if errCode == ErrAuthorizationHeaderMalformed {
 			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
 			return apiErr
 		}
@@ -2067,15 +2066,13 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case objectlock.ErrMalformedXML:
 		apiErr = ErrMalformedXML
 	default:
-		switch {
-		case errors.Is(err, errNoSuchPolicy):
+		if errors.Is(err, errNoSuchPolicy) {
 			apiErr = ErrAdminNoSuchPolicy
 		}
 	}
 
 	// Compression errors
-	switch err {
-	case errInvalidDecompressedSize:
+	if err == errInvalidDecompressedSize {
 		apiErr = ErrInvalidDecompressedSize
 	}
 
@@ -2281,8 +2278,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 	}
 
 	if apiErr.Code == "NotImplemented" {
-		switch e := err.(type) {
-		case NotImplemented:
+		if e, ok := err.(NotImplemented); ok {
 			desc := e.Error()
 			if desc == "" {
 				desc = apiErr.Description

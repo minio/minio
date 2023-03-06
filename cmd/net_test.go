@@ -138,13 +138,14 @@ func TestGetHostIP(t *testing.T) {
 
 	for _, testCase := range testCases {
 		ipList, err := getHostIP(testCase.host)
-		if testCase.expectedErr == nil {
+		switch {
+		case testCase.expectedErr == nil:
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
-		} else if err == nil {
+		case err == nil:
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
+		case testCase.expectedErr.Error() != err.Error():
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 
@@ -221,13 +222,14 @@ func TestCheckPortAvailability(t *testing.T) {
 		}
 
 		err := checkPortAvailability(testCase.host, testCase.port)
-		if testCase.expectedErr == nil {
+		switch {
+		case testCase.expectedErr == nil:
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
-		} else if err == nil {
+		case err == nil:
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
+		case testCase.expectedErr.Error() != err.Error():
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 	}
@@ -252,13 +254,14 @@ func TestCheckLocalServerAddr(t *testing.T) {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			err := CheckLocalServerAddr(testCase.serverAddr)
-			if testCase.expectedErr == nil {
+			switch {
+			case testCase.expectedErr == nil:
 				if err != nil {
 					t.Errorf("error: expected = <nil>, got = %v", err)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Errorf("error: expected = %v, got = <nil>", testCase.expectedErr)
-			} else if testCase.expectedErr.Error() != err.Error() {
+			case testCase.expectedErr.Error() != err.Error():
 				t.Errorf("error: expected = %v, got = %v", testCase.expectedErr, err)
 			}
 		})

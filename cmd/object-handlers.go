@@ -2368,8 +2368,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	objInfo, err := deleteObject(ctx, bucket, object, opts)
 	if err != nil {
-		switch err.(type) {
-		case BucketNotFound:
+		if _, ok := err.(BucketNotFound); ok {
 			// When bucket doesn't exist specially handle it.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return

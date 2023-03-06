@@ -51,8 +51,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	var empty bytes.Reader
 	rv, err := w.Put(ctx, probeObject, &empty, 0)
 	if err != nil {
-		switch err.(type) {
-		case BackendDown:
+		if _, ok := err.(BackendDown); ok {
 			return err
 		}
 		return tierPermErr{
@@ -64,8 +63,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	r, err := w.Get(ctx, probeObject, rv, WarmBackendGetOpts{})
 	xhttp.DrainBody(r)
 	if err != nil {
-		switch err.(type) {
-		case BackendDown:
+		if _, ok := err.(BackendDown); ok {
 			return err
 		}
 		switch {
@@ -81,8 +79,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 		}
 	}
 	if err = w.Remove(ctx, probeObject, rv); err != nil {
-		switch err.(type) {
-		case BackendDown:
+		if _, ok := err.(BackendDown); ok {
 			return err
 		}
 		return tierPermErr{
