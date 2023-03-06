@@ -266,6 +266,7 @@ const (
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
+	ErrAdminGroupDisabled
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminPolicyChangeAlreadyApplied
@@ -1259,6 +1260,11 @@ var errorCodes = errorCodeMap{
 	ErrAdminGroupNotEmpty: {
 		Code:           "XMinioAdminGroupNotEmpty",
 		Description:    "The specified group is not empty - cannot remove it.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminGroupDisabled: {
+		Code:           "XMinioAdminGroupDisabled",
+		Description:    "The specified group is disabled.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminNoSuchPolicy: {
