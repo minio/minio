@@ -1,12 +1,12 @@
 linters-settings:
   gofumpt:
-    lang-version: '1.19'
+    lang-version: '1.20'
 
   misspell:
     locale: US
 
   staticcheck:
-    go: '1.19'
+    go: '1.20'
     checks: ['all', '-ST1005', '-ST1000', '-SA4000', '-SA9004', '-SA1019', '-SA1008', '-U1000', '-ST1016']
 
 linters:
@@ -33,9 +33,3 @@ issues:
   exclude:
     - should have a package comment
     - error strings should not be capitalized or end with punctuation or a newline
-    # todo fix these when we get enough time.
-    - 'singleCaseSwitch: should rewrite switch statement to if statement'
-    - 'unlambda: replace'
-    - 'captLocal:'
-    - 'ifElseChain:'
-    - 'elseif:'

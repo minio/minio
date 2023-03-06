@@ -910,13 +910,14 @@ func isObjectDirDangling(errs []error) (ok bool) {
 	var foundNotEmpty int
 	var otherFound int
 	for _, readErr := range errs {
-		if readErr == nil {
+		switch {
+		case readErr == nil:
 			found++
-		} else if readErr == errFileNotFound || readErr == errVolumeNotFound {
+		case readErr == errFileNotFound || readErr == errVolumeNotFound:
 			notFound++
-		} else if readErr == errVolumeNotEmpty {
+		case readErr == errVolumeNotEmpty:
 			foundNotEmpty++
-		} else {
+		default:
 			otherFound++
 		}
 	}
@@ -938,11 +939,12 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 			diskNotFoundCount int
 		)
 		for _, readErr := range cerrs {
-			if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
+			switch {
+			case errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound):
 				notFoundCount++
-			} else if errors.Is(readErr, errFileCorrupt) {
+			case errors.Is(readErr, errFileCorrupt):
 				corruptedCount++
-			} else if errors.Is(readErr, errDiskNotFound) {
+			case errors.Is(readErr, errDiskNotFound):
 				diskNotFoundCount++
 			}
 		}

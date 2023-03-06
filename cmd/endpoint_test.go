@@ -62,13 +62,14 @@ func TestNewEndpoint(t *testing.T) {
 				err = endpoint.UpdateIsLocal()
 			}
 
-			if test.expectedErr == nil {
+			switch {
+			case test.expectedErr == nil:
 				if err != nil {
 					t.Errorf("error: expected = <nil>, got = %v", err)
 				}
-			} else if err == nil {
+			case err == nil:
 				t.Errorf("error: expected = %v, got = <nil>", test.expectedErr)
-			} else if test.expectedErr.Error() != err.Error() {
+			case test.expectedErr.Error() != err.Error():
 				t.Errorf("error: expected = %v, got = %v", test.expectedErr, err)
 			}
 
@@ -115,13 +116,14 @@ func TestNewEndpoints(t *testing.T) {
 
 	for _, testCase := range testCases {
 		_, err := NewEndpoints(testCase.args...)
-		if testCase.expectedErr == nil {
+		switch {
+		case testCase.expectedErr == nil:
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
-		} else if err == nil {
+		case err == nil:
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
+		case testCase.expectedErr.Error() != err.Error():
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 	}

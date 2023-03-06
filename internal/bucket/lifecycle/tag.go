@@ -51,8 +51,7 @@ func (tag *Tag) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error)
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			var s string
 			if err = d.DecodeElement(&s, &se); err != nil {
 				return err

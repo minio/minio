@@ -107,9 +107,8 @@ func ErrorToErr(err error) Err {
 	if errors.Is(err, syscall.EADDRINUSE) {
 		return ErrPortAlreadyInUse(err).Msg("Specified port is already in use")
 	} else if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
-		switch err.(type) {
-		case *net.OpError:
-			return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
+		if netErr, ok := err.(*net.OpError); ok {
+			return ErrPortAccess(netErr).Msg("Insufficient permissions to use specified port")
 		}
 	}
 

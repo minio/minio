@@ -323,8 +323,7 @@ func (b *BucketMetadata) getAllLegacyConfigs(ctx context.Context, objectAPI Obje
 
 		configData, err := readConfig(ctx, objectAPI, configFile)
 		if err != nil {
-			switch err.(type) {
-			case ObjectExistsAsDirectory:
+			if _, ok := err.(ObjectExistsAsDirectory); ok {
 				// in FS mode it possible that we have actual
 				// files in this folder with `.minio.sys/buckets/bucket/configFile`
 				continue

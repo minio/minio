@@ -94,14 +94,8 @@ func s3URLEncode(s string) string {
 }
 
 // s3EncodeName encodes string in response when encodingType is specified in AWS S3 requests.
-func s3EncodeName(name string, encodingType string) (result string) {
-	// Quick path to exit
-	if encodingType == "" {
-		return name
-	}
-	encodingType = strings.ToLower(encodingType)
-	switch encodingType {
-	case "url":
+func s3EncodeName(name, encodingType string) string {
+	if strings.ToLower(encodingType) == "url" {
 		return s3URLEncode(name)
 	}
 	return name

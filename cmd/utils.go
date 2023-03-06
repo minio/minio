@@ -159,8 +159,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = PartTooSmall{}
 	}
 
-	switch minioErr.StatusCode {
-	case http.StatusMethodNotAllowed:
+	if minioErr.StatusCode == http.StatusMethodNotAllowed {
 		err = toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 	return err
@@ -908,15 +907,16 @@ func lcp(strs []string, pre bool) string {
 
 // Returns the mode in which MinIO is running
 func getMinioMode() string {
-	mode := globalMinioModeFS
-	if globalIsDistErasure {
-		mode = globalMinioModeDistErasure
-	} else if globalIsErasure {
-		mode = globalMinioModeErasure
-	} else if globalIsErasureSD {
-		mode = globalMinioModeErasureSD
+	switch {
+	case globalIsDistErasure:
+		return globalMinioModeDistErasure
+	case globalIsErasure:
+		return globalMinioModeErasure
+	case globalIsErasureSD:
+		return globalMinioModeErasureSD
+	default:
+		return globalMinioModeFS
 	}
-	return mode
 }
 
 func iamPolicyClaimNameOpenID() string {

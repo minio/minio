@@ -987,8 +987,7 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	gopts.NoLock = true
 	pinfo, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, gopts)
 	if err != nil {
-		switch err.(type) {
-		case InsufficientReadQuorum:
+		if _, ok := err.(InsufficientReadQuorum); ok {
 			return objInfo, InsufficientWriteQuorum{}
 		}
 		return objInfo, err
@@ -1454,8 +1453,7 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		if err == nil {
 			return pi, nil
 		}
-		switch err.(type) {
-		case InvalidUploadID:
+		if _, ok := err.(InvalidUploadID); ok {
 			// Look for information on the next pool
 			continue
 		}
@@ -1486,8 +1484,7 @@ func (z *erasureServerPools) GetMultipartInfo(ctx context.Context, bucket, objec
 		if err == nil {
 			return mi, nil
 		}
-		switch err.(type) {
-		case InvalidUploadID:
+		if _, ok := err.(InvalidUploadID); ok {
 			// upload id not found, continue to the next pool.
 			continue
 		}
@@ -1518,8 +1515,7 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		if err == nil {
 			return result, nil
 		}
-		switch err.(type) {
-		case InvalidUploadID:
+		if _, ok := err.(InvalidUploadID); ok {
 			continue
 		}
 		return ListPartsInfo{}, err
@@ -1549,8 +1545,7 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		if err == nil {
 			return nil
 		}
-		switch err.(type) {
-		case InvalidUploadID:
+		if _, ok := err.(InvalidUploadID); ok {
 			// upload id not found move to next pool
 			continue
 		}
@@ -1581,8 +1576,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		if err == nil {
 			return objInfo, nil
 		}
-		switch err.(type) {
-		case InvalidUploadID:
+		if _, ok := err.(InvalidUploadID); ok {
 			// upload id not found move to next pool
 			continue
 		}
@@ -1639,8 +1633,7 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	err := z.s3Peer.DeleteBucket(ctx, bucket, opts)
 	if err == nil || errors.Is(err, errVolumeNotFound) {
 		// If site replication is configured, hold on to deleted bucket state until sites sync
-		switch opts.SRDeleteOp {
-		case MarkDelete:
+		if opts.SRDeleteOp == MarkDelete {
 			z.s3Peer.MakeBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), MakeBucketOptions{})
 		}
 	}
@@ -1744,8 +1737,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 	for _, pool := range z.serverPools {
 		result, err := pool.HealBucket(ctx, bucket, opts)
 		if err != nil {
-			switch err.(type) {
-			case BucketNotFound:
+			if _, ok := err.(BucketNotFound); ok {
 				continue
 			}
 			return result, err

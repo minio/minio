@@ -90,8 +90,8 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 
 	opts.VersionID = object.VersionID
 	if gerr != nil { // error from GetObjectInfo
-		switch gerr.(type) {
-		case MethodNotAllowed: // This happens usually for a delete marker
+		if _, ok := gerr.(MethodNotAllowed); ok {
+			// This happens usually for a delete marker
 			if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 				// Delete marker should be present and valid.
 				return ErrNone
@@ -192,8 +192,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 				days, objRetention.RetainUntilDate.Time,
 				objRetention.Mode, byPassSet, r, cred,
 				owner)
-			switch apiErr {
-			case ErrAccessDenied:
+			if apiErr == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -210,8 +209,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 					return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 				}
 			}
-			switch govPerm {
-			case ErrAccessDenied:
+			if govPerm == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -224,8 +222,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 			apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 				days, objRetention.RetainUntilDate.Time, objRetention.Mode,
 				false, r, cred, owner)
-			switch apiErr {
-			case ErrAccessDenied:
+			if apiErr == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -236,8 +233,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 	apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 		days, objRetention.RetainUntilDate.Time,
 		objRetention.Mode, byPassSet, r, cred, owner)
-	switch apiErr {
-	case ErrAccessDenied:
+	if apiErr == ErrAccessDenied {
 		return errAuthentication
 	}
 	return nil

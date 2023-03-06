@@ -28,9 +28,7 @@ import (
 // valueBuilders contains one constructor for each value type.
 // Values should match if type is the same.
 var valueBuilders = []func() *Value{
-	func() *Value {
-		return FromNull()
-	},
+	FromNull,
 	func() *Value {
 		return FromBool(true)
 	},
@@ -58,9 +56,7 @@ var valueBuilders = []func() *Value{
 // altValueBuilders contains one constructor for each value type.
 // Values are zero values and should NOT match the values in valueBuilders, except Null type.
 var altValueBuilders = []func() *Value{
-	func() *Value {
-		return FromNull()
-	},
+	FromNull,
 	func() *Value {
 		return FromBool(false)
 	},

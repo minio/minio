@@ -172,9 +172,8 @@ func (l *Config) DoesGroupDNExist(groupDN string) (bool, error) {
 		// some base DNs are subtrees of other base DNs - we should validate
 		// and error out in such cases.
 		return false, fmt.Errorf("found multiple DNs for the given group DN")
-	} else {
-		return false, nil
 	}
+	return false, nil
 }
 
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
