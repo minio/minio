@@ -133,7 +133,7 @@ func osIsNotExist(err error) bool {
 }
 
 func osIsPermission(err error) bool {
-	return errors.Is(err, os.ErrPermission)
+	return errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.EROFS)
 }
 
 func osIsExist(err error) bool {
