@@ -1578,7 +1578,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		return 0, convertAccessError(err)
+		return 0, convertAccessError(err, errFileAccessDenied)
 	}
 
 	// Validate effective path length before reading.
@@ -1984,7 +1984,7 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		return convertAccessError(err)
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	filePath := pathJoin(volumeDir, path)
@@ -2115,15 +2115,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		switch {
-		case osIsNotExist(err):
-			return errVolumeNotFound
-		case osIsPermission(err):
-			return errVolumeAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		}
-		return err
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	// Following code is needed so that we retain SlashSeparator suffix if any in
@@ -2575,15 +2567,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		switch {
-		case osIsNotExist(err):
-			return errVolumeNotFound
-		case isSysErrIO(err):
-			return errFaultyDisk
-		case osIsPermission(err):
-			return errVolumeAccessDenied
-		}
-		return err
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	erasure := fi.Erasure
@@ -2681,7 +2665,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		return stat, convertAccessError(err)
+		return stat, convertAccessError(err, errVolumeAccessDenied)
 	}
 	files := []string{pathJoin(volumeDir, path)}
 	if glob {
@@ -2811,14 +2795,14 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	return nil
 }
 
-func convertAccessError(err error) error {
+func convertAccessError(err, permErr error) error {
 	switch {
 	case osIsNotExist(err):
 		return errVolumeNotFound
 	case isSysErrIO(err):
 		return errFaultyDisk
 	case osIsPermission(err):
-		return errVolumeAccessDenied
+		return permErr
 	default:
 		return err
 	}
