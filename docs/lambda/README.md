@@ -1,6 +1,6 @@
 # Object Lambda
 
-MinIO's Object Lambda implementation allows for transforming your data to serve unique data format requirements for each applications. For example, a dataset created by an ecommerce application might include personally identifiable information (PII). When the same data is processed for analytics, PII should be redacted. However, if the same dataset is used for a marketing campaign, you might need to enrich the data with additional details, such as information from the customer loyalty database.
+MinIO's Object Lambda implementation allows for transforming your data to serve unique data format requirements for each application. For example, a dataset created by an ecommerce application might include personally identifiable information (PII). When the same data is processed for analytics, PII should be redacted. However, if the same dataset is used for a marketing campaign, you might need to enrich the data with additional details, such as information from the customer loyalty database.
 
 MinIO's Object Lambda, enables application developers to process data retrieved from MinIO before returning it to an application. You can register a Lambda Function target on MinIO, once successfully registered it can be used to transform the data for application GET requests on demand.
 
@@ -97,7 +97,22 @@ Object Lambda ARNs: arn:minio:s3-object-lambda::function:webhook
 
 ```
 
-### Create a bucket and upload some data
+### Lambda Target with Auth Token
+
+If your lambda target expects an authorization token then you can enable it per function target as follows
+
+```
+MINIO_LAMBDA_WEBHOOK_ENABLE_function=on MINIO_LAMBDA_WEBHOOK_ENDPOINT_function=http://localhost:5000 MINIO_LAMBDA_WEBHOOK_AUTH_TOKEN="mytoken" minio server /data &
+```
+
+### Lambda Target with mTLS authentication
+
+If your lambda target expects mTLS client you can enable it per function target as follows
+```
+MINIO_LAMBDA_WEBHOOK_ENABLE_function=on MINIO_LAMBDA_WEBHOOK_ENDPOINT_function=http://localhost:5000 MINIO_LAMBDA_WEBHOOK_CLIENT_CERT=client.crt MINIO_LAMBDA_WEBHOOK_CLIENT_KEY=client.key minio server /data &
+```
+
+## Create a bucket and upload some data
 
 Create a bucket named `functionbucket`
 ```

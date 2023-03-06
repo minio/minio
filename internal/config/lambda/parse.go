@@ -67,8 +67,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 		return nil, err
 	}
 
-	switch subSys {
-	case config.LambdaWebhookSubSys:
+	if subSys == config.LambdaWebhookSubSys {
 		webhookTargets, err := GetLambdaWebhook(cfg[config.LambdaWebhookSubSys], transport)
 		if err != nil {
 			return nil, err

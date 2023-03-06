@@ -149,7 +149,12 @@ func (list *TargetList) List(region string) []ARN {
 func (list *TargetList) TargetMap() map[TargetID]Target {
 	list.RLock()
 	defer list.RUnlock()
-	return list.targets
+
+	ntargets := make(map[TargetID]Target, len(list.targets))
+	for k, v := range list.targets {
+		ntargets[k] = v
+	}
+	return ntargets
 }
 
 // Send - sends events to targets identified by target IDs.

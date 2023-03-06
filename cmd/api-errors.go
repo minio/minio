@@ -1971,7 +1971,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrLambdaARNInvalid: {
 		Code:           "LambdaARNInvalid",
-		Description:    "The specified lambda ARN invalid",
+		Description:    "The specified lambda ARN is invalid",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrLambdaARNNotFound: {
@@ -2298,14 +2298,11 @@ func toAPIError(ctx context.Context, err error) APIError {
 	apiErr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
 	switch apiErr.Code {
 	case "NotImplemented":
-		switch e := err.(type) {
-		case NotImplemented:
-			desc := fmt.Sprintf("%s (%v)", apiErr.Description, e)
-			apiErr = APIError{
-				Code:           apiErr.Code,
-				Description:    desc,
-				HTTPStatusCode: apiErr.HTTPStatusCode,
-			}
+		desc := fmt.Sprintf("%s (%v)", apiErr.Description, err)
+		apiErr = APIError{
+			Code:           apiErr.Code,
+			Description:    desc,
+			HTTPStatusCode: apiErr.HTTPStatusCode,
 		}
 	case "XMinioBackendDown":
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
