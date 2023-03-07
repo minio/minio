@@ -1377,7 +1377,7 @@ func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTie
 	merged := globalTransitionState.getDailyAllTierStats()
 	for i, stat := range lastDayStats {
 		if errs[i] != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]))
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]), sys.peerClients[i].host.String())
 			continue
 		}
 		merged.merge(stat)
