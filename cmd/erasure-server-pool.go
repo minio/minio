@@ -421,6 +421,7 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 		return mtime1.After(mtime2)
 	})
 
+	defPool := PoolObjInfo{Index: -1}
 	for _, pinfo := range poolObjInfos {
 		// skip all objects from suspended pools if asked by the
 		// caller.
@@ -435,14 +436,13 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
 			return pinfo, pinfo.Err
 		}
-
+		defPool = pinfo
 		if isErrObjectNotFound(pinfo.Err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
 			if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
 				return pinfo, nil
 			}
-
 			// objInfo is not valid, truly the object doesn't
 			// exist proceed to next pool.
 			continue
@@ -450,7 +450,12 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 
 		return pinfo, nil
 	}
-
+	if opts.ReplicationRequest && opts.DeleteMarker && defPool.Index >= 0 {
+		// If the request is a delete marker replication request, return a default pool
+		// in cases where the object does not exist.
+		// This is to ensure that the delete marker is replicated to the destination.
+		return defPool, nil
+	}
 	return PoolObjInfo{}, toObjectErr(errFileNotFound, bucket, object)
 }
 
