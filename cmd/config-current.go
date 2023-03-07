@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/lambda"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
@@ -72,6 +73,9 @@ func initHelp() {
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
+		kvs[k] = v
+	}
+	for k, v := range lambda.DefaultLambdaKVS {
 		kvs[k] = v
 	}
 	if globalIsErasure {
@@ -197,6 +201,11 @@ func initHelp() {
 			MultipleTargets: true,
 		},
 		config.HelpKV{
+			Key:             config.LambdaWebhookSubSys,
+			Description:     "manage remote lambda functions",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
 			Key:         config.EtcdSubSys,
 			Description: "persist IAM assets externally to etcd",
 		},
@@ -246,6 +255,7 @@ func initHelp() {
 		config.NotifyRedisSubSys:    notify.HelpRedis,
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
+		config.LambdaWebhookSubSys:  lambda.HelpWebhook,
 		config.SubnetSubSys:         subnet.HelpSubnet,
 		config.CallhomeSubSys:       callhome.HelpCallhome,
 	}
@@ -387,6 +397,13 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	}
+
+	if config.LambdaSubSystems.Contains(subSys) {
+		if err := lambda.TestSubSysLambdaTargets(GlobalContext, s, subSys, NewHTTPTransport()); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -423,6 +440,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
 	if err == nil && dnsURL != "" {
+		bootstrapTrace("initialize remote bucket DNS store")
 		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
@@ -437,6 +455,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	if etcdCfg.Enabled {
+		bootstrapTrace("initialize etcd store")
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
@@ -495,10 +514,16 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	transport := NewHTTPTransport()
 
-	bootstrapTrace("lookup the event notification targets")
-	globalConfigTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
+	bootstrapTrace("initialize the event notification targets")
+	globalNotifyTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
+	}
+
+	bootstrapTrace("initialize the lambda targets")
+	globalLambdaTargetList, err = lambda.FetchEnabledTargets(GlobalContext, s, transport)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
 	}
 
 	bootstrapTrace("applying the dynamic configuration")

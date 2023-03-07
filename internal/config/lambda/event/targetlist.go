@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,50 +19,35 @@ package event
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
-const (
-	// The maximum allowed number of concurrent Send() calls to all configured notifications targets
-	maxConcurrentTargetSendCalls = 20000
-)
-
-// Target - event target interface
+// Target - lambda target interface
 type Target interface {
 	ID() TargetID
 	IsActive() (bool, error)
-	Save(Event) error
-	Send(string) error
+	Send(Event) (*http.Response, error)
+	Stat() TargetStat
 	Close() error
-	Store() TargetStore
-}
-
-// TargetStore is a shallow version of a target.Store
-type TargetStore interface {
-	Len() int
 }
 
 // TargetStats is a collection of stats for multiple targets.
 type TargetStats struct {
-	// CurrentSendCalls is the number of concurrent async Send calls to all targets
-	CurrentSendCalls int64
-
 	TargetStats map[string]TargetStat
 }
 
 // TargetStat is the stats of a single target.
 type TargetStat struct {
-	ID           TargetID
-	CurrentQueue int // Populated if target has a store.
+	ID             TargetID
+	ActiveRequests int64
+	TotalRequests  int64
+	FailedRequests int64
 }
 
 // TargetList - holds list of targets indexed by target ID.
 type TargetList struct {
-	// The number of concurrent async Send calls to all targets
-	currentSendCalls int64
-
 	sync.RWMutex
 	targets map[TargetID]Target
 }
@@ -82,13 +67,21 @@ func (list *TargetList) Add(targets ...Target) error {
 	return nil
 }
 
-// Exists - checks whether target by target ID exists or not.
-func (list *TargetList) Exists(id TargetID) bool {
+// Lookup - checks whether target by target ID exists is valid or not.
+func (list *TargetList) Lookup(arnStr string) (Target, error) {
 	list.RLock()
 	defer list.RUnlock()
 
-	_, found := list.targets[id]
-	return found
+	arn, err := ParseARN(arnStr)
+	if err != nil {
+		return nil, err
+	}
+
+	id, found := list.targets[arn.TargetID]
+	if !found {
+		return nil, &ErrARNNotFound{}
+	}
+	return id, nil
 }
 
 // TargetIDResult returns result of Remove/Send operation, sets err if
@@ -123,7 +116,7 @@ func (list *TargetList) Targets() []Target {
 	list.RLock()
 	defer list.RUnlock()
 
-	targets := []Target{}
+	targets := make([]Target, 0, len(list.targets))
 	for _, tgt := range list.targets {
 		targets = append(targets, tgt)
 	}
@@ -131,14 +124,22 @@ func (list *TargetList) Targets() []Target {
 	return targets
 }
 
-// List - returns available target IDs.
-func (list *TargetList) List() []TargetID {
+// Empty returns true if targetList is empty.
+func (list *TargetList) Empty() bool {
 	list.RLock()
 	defer list.RUnlock()
 
-	keys := []TargetID{}
+	return len(list.targets) == 0
+}
+
+// List - returns available target IDs.
+func (list *TargetList) List(region string) []ARN {
+	list.RLock()
+	defer list.RUnlock()
+
+	keys := make([]ARN, 0, len(list.targets))
 	for k := range list.targets {
-		keys = append(keys, k)
+		keys = append(keys, k.ToARN(region))
 	}
 
 	return keys
@@ -157,39 +158,14 @@ func (list *TargetList) TargetMap() map[TargetID]Target {
 }
 
 // Send - sends events to targets identified by target IDs.
-func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult) {
-	if atomic.LoadInt64(&list.currentSendCalls) > maxConcurrentTargetSendCalls {
-		err := fmt.Errorf("concurrent target notifications exceeded %d", maxConcurrentTargetSendCalls)
-		for id := range targetIDset {
-			resCh <- TargetIDResult{ID: id, Err: err}
-		}
-		return
+func (list *TargetList) Send(event Event, id TargetID) (*http.Response, error) {
+	list.RLock()
+	target, ok := list.targets[id]
+	list.RUnlock()
+	if ok {
+		return target.Send(event)
 	}
-
-	go func() {
-		var wg sync.WaitGroup
-		for id := range targetIDset {
-			list.RLock()
-			target, ok := list.targets[id]
-			list.RUnlock()
-			if ok {
-				wg.Add(1)
-				go func(id TargetID, target Target) {
-					atomic.AddInt64(&list.currentSendCalls, 1)
-					defer atomic.AddInt64(&list.currentSendCalls, -1)
-					defer wg.Done()
-					tgtRes := TargetIDResult{ID: id}
-					if err := target.Save(event); err != nil {
-						tgtRes.Err = err
-					}
-					resCh <- tgtRes
-				}(id, target)
-			} else {
-				resCh <- TargetIDResult{ID: id}
-			}
-		}
-		wg.Wait()
-	}()
+	return nil, ErrARNNotFound{}
 }
 
 // Stats returns stats for targets.
@@ -198,16 +174,11 @@ func (list *TargetList) Stats() TargetStats {
 	if list == nil {
 		return t
 	}
-	t.CurrentSendCalls = atomic.LoadInt64(&list.currentSendCalls)
 	list.RLock()
 	defer list.RUnlock()
 	t.TargetStats = make(map[string]TargetStat, len(list.targets))
 	for id, target := range list.targets {
-		ts := TargetStat{ID: id}
-		if st := target.Store(); st != nil {
-			ts.CurrentQueue = st.Len()
-		}
-		t.TargetStats[strings.ReplaceAll(id.String(), ":", "_")] = ts
+		t.TargetStats[strings.ReplaceAll(id.String(), ":", "_")] = target.Stat()
 	}
 	return t
 }

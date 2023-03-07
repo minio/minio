@@ -137,6 +137,11 @@ const (
 	// Add new constants here (similar to above) if you add new fields to config.
 )
 
+// Lambda config constants.
+const (
+	LambdaWebhookSubSys = madmin.LambdaWebhookSubSys
+)
+
 // NotifySubSystems - all notification sub-systems
 var NotifySubSystems = set.CreateStringSet(
 	NotifyKafkaSubSys,
@@ -149,6 +154,11 @@ var NotifySubSystems = set.CreateStringSet(
 	NotifyPostgresSubSys,
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
+)
+
+// LambdaSubSystems - all lambda sub-systesm
+var LambdaSubSystems = set.CreateStringSet(
+	LambdaWebhookSubSys,
 )
 
 // LoggerSubSystems - all sub-systems related to logger

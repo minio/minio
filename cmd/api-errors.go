@@ -42,6 +42,7 @@ import (
 
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/versioning"
+	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/pkg/bucket/policy"
@@ -410,6 +411,10 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
+
+	// Lambda functions
+	ErrLambdaARNInvalid
+	ErrLambdaARNNotFound
 
 	apiErrCodeEnd // This is used only for the testing code
 )
@@ -1964,6 +1969,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrLambdaARNInvalid: {
+		Code:           "LambdaARNInvalid",
+		Description:    "The specified lambda ARN is invalid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLambdaARNNotFound: {
+		Code:           "LambdaARNNotFound",
+		Description:    "The specified lambda ARN does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrPolicyAlreadyAttached: {
 		Code:           "XMinioPolicyAlreadyAttached",
 		Description:    "The specified policy is already attached.",
@@ -1987,15 +2002,15 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 
 	// Only return ErrClientDisconnected if the provided context is actually canceled.
 	// This way downstream context.Canceled will still report ErrOperationTimedOut
-	if contextCanceled(ctx) {
-		if ctx.Err() == context.Canceled {
-			return ErrClientDisconnected
-		}
+	if contextCanceled(ctx) && errors.Is(ctx.Err(), context.Canceled) {
+		return ErrClientDisconnected
 	}
 
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
+	case errNoSuchPolicy:
+		apiErr = ErrAdminNoSuchPolicy
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
 	case errNoSuchServiceAccount:
@@ -2024,6 +2039,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidSecretKey
 	case errInvalidStorageClass:
 		apiErr = ErrInvalidStorageClass
+	case errErasureReadQuorum:
+		apiErr = ErrSlowDown
+	case errErasureWriteQuorum:
+		apiErr = ErrSlowDown
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters
@@ -2071,10 +2090,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockInvalidHeaders
 	case objectlock.ErrMalformedXML:
 		apiErr = ErrMalformedXML
-	default:
-		if errors.Is(err, errNoSuchPolicy) {
-			apiErr = ErrAdminNoSuchPolicy
-		}
 	}
 
 	// Compression errors
@@ -2089,7 +2104,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 
 	// etcd specific errors, a key is always a bucket for us return
 	// ErrNoSuchBucket in such a case.
-	if err == dns.ErrNoEntriesFound {
+	if errors.Is(err, dns.ErrNoEntriesFound) {
 		return ErrNoSuchBucket
 	}
 
@@ -2214,6 +2229,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrARNNotification
 	case *event.ErrARNNotFound:
 		apiErr = ErrARNNotification
+	case *levent.ErrInvalidARN:
+		apiErr = ErrLambdaARNInvalid
+	case *levent.ErrARNNotFound:
+		apiErr = ErrLambdaARNNotFound
 	case *event.ErrUnknownRegion:
 		apiErr = ErrRegionNotification
 	case *event.ErrInvalidFilterName:
@@ -2277,33 +2296,17 @@ func toAPIError(ctx context.Context, err error) APIError {
 	}
 
 	apiErr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
-	e, ok := err.(dns.ErrInvalidBucketName)
-	if ok {
-		code := toAPIErrorCode(ctx, e)
-		apiErr = errorCodes.ToAPIErrWithErr(code, e)
-	}
-
-	if apiErr.Code == "NotImplemented" {
-		if e, ok := err.(NotImplemented); ok {
-			desc := e.Error()
-			if desc == "" {
-				desc = apiErr.Description
-			}
-			apiErr = APIError{
-				Code:           apiErr.Code,
-				Description:    desc,
-				HTTPStatusCode: apiErr.HTTPStatusCode,
-			}
-			return apiErr
+	switch apiErr.Code {
+	case "NotImplemented":
+		desc := fmt.Sprintf("%s (%v)", apiErr.Description, err)
+		apiErr = APIError{
+			Code:           apiErr.Code,
+			Description:    desc,
+			HTTPStatusCode: apiErr.HTTPStatusCode,
 		}
-	}
-
-	if apiErr.Code == "XMinioBackendDown" {
+	case "XMinioBackendDown":
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
-		return apiErr
-	}
-
-	if apiErr.Code == "InternalError" {
+	case "InternalError":
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
 		// their internal error types.
@@ -2318,22 +2321,20 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case *xml.SyntaxError:
 			apiErr = APIError{
-				Code: "MalformedXML",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
-					e.Error()),
+				Code:           "MalformedXML",
+				Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, e),
 				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
 			}
 		case url.EscapeError:
 			apiErr = APIError{
-				Code: "XMinioInvalidObjectName",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
-					e.Error()),
+				Code:           "XMinioInvalidObjectName",
+				Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description, e),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case versioning.Error:
 			apiErr = APIError{
 				Code:           "IllegalVersioningConfigurationException",
-				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e.Error()),
+				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case lifecycle.Error:
@@ -2399,19 +2400,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			// Add more other SDK related errors here if any in future.
 		default:
 			//nolint:gocritic
-			if errors.Is(err, errMalformedEncoding) {
-				apiErr = APIError{
-					Code:           "BadRequest",
-					Description:    err.Error(),
-					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else if errors.Is(err, errChunkTooBig) {
-				apiErr = APIError{
-					Code:           "BadRequest",
-					Description:    err.Error(),
-					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else if errors.Is(err, strconv.ErrRange) {
+			if errors.Is(err, errMalformedEncoding) || errors.Is(err, errChunkTooBig) || errors.Is(err, strconv.ErrRange) {
 				apiErr = APIError{
 					Code:           "BadRequest",
 					Description:    err.Error(),

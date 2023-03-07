@@ -49,6 +49,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	etcd "go.etcd.io/etcd/client/v3"
 
+	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
@@ -174,7 +175,8 @@ var (
 	globalMinioConsoleHost = ""
 
 	// Holds the possible host endpoint.
-	globalMinioEndpoint = ""
+	globalMinioEndpoint    = ""
+	globalMinioEndpointURL *xnet.URL
 
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
@@ -182,7 +184,8 @@ var (
 	globalNotificationSys *NotificationSys
 
 	globalEventNotifier    *EventNotifier
-	globalConfigTargetList *event.TargetList
+	globalNotifyTargetList *event.TargetList
+	globalLambdaTargetList *levent.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
 	globalBucketMonitor     *bandwidth.Monitor
