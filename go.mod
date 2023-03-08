@@ -42,7 +42,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.51
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.24.0
+	github.com/minio/console v0.25.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
