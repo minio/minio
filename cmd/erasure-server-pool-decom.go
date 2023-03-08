@@ -738,7 +738,9 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			if evt.Action.Delete() {
 				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
-				return true
+				if !evt.Action.DeleteRestored() {
+					return true
+				}
 			}
 
 			return false
