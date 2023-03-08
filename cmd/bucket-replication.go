@@ -586,11 +586,13 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				return
 			}
 		}
-		// mark delete marker replication as failed if target cluster not ready to receive
-		// this request yet (object version not replicated yet)
-		if err != nil && !toi.ReplicationReady {
-			rinfo.ReplicationStatus = replication.Failed
-			return
+		if !isErrObjectNotFound(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+			// mark delete marker replication as failed if target cluster not ready to receive
+			// this request yet (object version not replicated yet)
+			if err != nil && !toi.ReplicationReady {
+				rinfo.ReplicationStatus = replication.Failed
+				return
+			}
 		}
 	}
 
