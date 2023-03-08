@@ -657,6 +657,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				if toAPIError(ctx, err).Code == "NoSuchKey" {
 					s3Error = ErrNoSuchKey
 				}
+			} else {
+				s3Error = ErrAccessDenied
 			}
 		}
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
