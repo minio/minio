@@ -1477,9 +1477,9 @@ func getListenNotificationURL(endPoint, bucketName string, prefixes, suffixes, e
 }
 
 // getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
-func getRandomDisks(N int) ([]string, error) {
+func getRandomDisks(n int) ([]string, error) {
 	var erasureDisks []string
-	for i := 0; i < N; i++ {
+	for i := 0; i < n; i++ {
 		path, err := os.MkdirTemp(globalTestTmpDir, "minio-")
 		if err != nil {
 			// Remove directories created so far.

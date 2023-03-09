@@ -149,8 +149,7 @@ func (h *Target) Init() error {
 	xhttp.DrainBody(resp.Body)
 
 	if !acceptedResponseStatusCode(resp.StatusCode) {
-		switch resp.StatusCode {
-		case http.StatusForbidden:
+		if resp.StatusCode == http.StatusForbidden {
 			return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
 				h.config.Endpoint, resp.Status)
 		}

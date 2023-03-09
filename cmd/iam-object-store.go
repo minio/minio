@@ -349,7 +349,9 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 // Assumes cache is locked by caller.
 func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
 	bootstrapTrace("loading all IAM items")
-
+	if iamOS.objAPI == nil {
+		return errServerNotInitialized
+	}
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
 		return err

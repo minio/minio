@@ -1566,8 +1566,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
-		switch gerr.(type) {
-		case InsufficientReadQuorum:
+		if _, ok := gerr.(InsufficientReadQuorum); ok {
 			return objInfo, InsufficientWriteQuorum{}
 		}
 		// For delete marker replication, versionID being replicated will not exist on disk

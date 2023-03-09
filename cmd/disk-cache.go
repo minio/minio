@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/sync/errgroup"
+	xnet "github.com/minio/pkg/net"
 	"github.com/minio/pkg/wildcard"
 )
 
@@ -448,7 +448,10 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 			return cachedObjInfo, nil
 		}
 		c.cacheStats.incMiss()
-		return ObjectInfo{}, BackendDown{}
+		if xnet.IsNetworkOrHostDown(err, false) {
+			return ObjectInfo{}, BackendDown{Err: err.Error()}
+		}
+		return ObjectInfo{}, err
 	}
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
@@ -893,8 +896,16 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 				cacheDiskStats[i].UsageSize = info.Used
 				cacheDiskStats[i].TotalCapacity = info.Total
 				cacheDiskStats[i].Dir = dcache.stats.Dir
-				atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&dcache.stats.UsageState))
-				atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&dcache.stats.UsagePercent))
+				if info.Total != 0 {
+					// UsageState
+					gcTriggerPct := dcache.quotaPct * dcache.highWatermark / 100
+					usedPercent := float64(info.Used) * 100 / float64(info.Total)
+					if usedPercent >= float64(gcTriggerPct) {
+						cacheDiskStats[i].UsageState = 1
+					}
+					// UsagePercent
+					cacheDiskStats[i].UsagePercent = uint64(usedPercent)
+				}
 			}
 		}
 		return cacheDiskStats

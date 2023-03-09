@@ -686,8 +686,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			continue
 		}
 		bucket, fileName := slc[0], slc[1]
-		switch fileName {
-		case objectLockConfig:
+		if fileName == objectLockConfig {
 			reader, err := file.Open()
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
@@ -756,8 +755,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			continue
 		}
 		bucket, fileName := slc[0], slc[1]
-		switch fileName {
-		case bucketVersioningConfig:
+		if fileName == bucketVersioningConfig {
 			reader, err := file.Open()
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)

@@ -496,8 +496,7 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 			oi.VersionPurgeStatusInternal = fmt.Sprintf("%s=%s;", rcfg.Config.RoleArn, oi.VersionPurgeStatus)
 		}
 		for k, v := range oi.UserDefined {
-			switch {
-			case strings.EqualFold(k, ReservedMetadataPrefixLower+ReplicationReset):
+			if strings.EqualFold(k, ReservedMetadataPrefixLower+ReplicationReset) {
 				delete(oi.UserDefined, k)
 				oi.UserDefined[targetResetHeader(rcfg.Config.RoleArn)] = v
 			}
