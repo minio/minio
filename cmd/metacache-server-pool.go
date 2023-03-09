@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -341,7 +340,6 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
 	defer close(out)
 
-	vcfg, _ := globalBucketVersioningSys.Get(o.Bucket)
 	for {
 		var obj metaCacheEntry
 		var ok bool
@@ -354,37 +352,61 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			}
 		}
 
-		fi, err := obj.fileInfo(o.Bucket)
+		var skip bool
+
+		versioned := o.Versioning != nil && o.Versioning.Versioned(obj.name)
+
+		// skip latest object from listing only for regular
+		// listObjects calls, versioned based listing cannot
+		// filter out between versions 'obj' cannot be truncated
+		// in such a manner, so look for skipping an object only
+		// for regular ListObjects() call only.
+		if !o.Versioned {
+			fi, err := obj.fileInfo(o.Bucket)
+			if err != nil {
+				continue
+			}
+
+			objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
+			if o.Lifecycle != nil {
+				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo).Action
+				skip = act.Delete()
+				if act.DeleteRestored() {
+					// do not skip DeleteRestored* actions
+					skip = false
+				}
+			}
+		}
+
+		// Skip entry only if needed via ILM, skipping is never true for versioned listing.
+		if !skip {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- obj:
+			}
+		}
+
+		fiv, err := obj.fileInfoVersions(o.Bucket)
 		if err != nil {
 			continue
 		}
 
-		versioned := vcfg != nil && vcfg.Versioned(obj.name)
+		// Expire all versions if needed, if not attempt to queue for replication.
+		for _, version := range fiv.Versions {
+			objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
 
-		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
-		if o.Lifecycle != nil {
-			evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-				// Skip this entry.
-				continue
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-				// Skip this entry.
-				continue
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case out <- obj:
-			if fiv, err := obj.fileInfoVersions(o.Bucket); err == nil {
-				for _, version := range fiv.Versions {
-					objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
-					queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
+			if o.Lifecycle != nil {
+				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
+				if evt.Action.Delete() {
+					globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+					if !evt.Action.DeleteRestored() {
+						continue
+					} // queue version for replication upon expired restored copies if needed.
 				}
 			}
+
+			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
 		}
 	}
 }

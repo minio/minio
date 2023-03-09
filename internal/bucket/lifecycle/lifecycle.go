@@ -70,6 +70,24 @@ const (
 	ActionCount
 )
 
+// DeleteRestored - Returns true if action demands delete on restored objects
+func (a Action) DeleteRestored() bool {
+	return a == DeleteRestoredAction || a == DeleteRestoredVersionAction
+}
+
+// DeleteVersioned - Returns true if action demands delete on a versioned object
+func (a Action) DeleteVersioned() bool {
+	return a == DeleteVersionAction || a == DeleteRestoredVersionAction
+}
+
+// Delete - Returns true if action demands delete on all objects (including restored)
+func (a Action) Delete() bool {
+	if a.DeleteRestored() {
+		return true
+	}
+	return a == DeleteVersionAction || a == DeleteAction
+}
+
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
 	XMLName xml.Name `xml:"LifecycleConfiguration"`

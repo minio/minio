@@ -32,7 +32,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v2"
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
@@ -735,17 +734,15 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
+
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-				// Skip this entry.
-				return true
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-				// Skip this entry.
-				return true
+			if evt.Action.Delete() {
+				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+				if !evt.Action.DeleteRestored() {
+					return true
+				}
 			}
+
 			return false
 		}
 
