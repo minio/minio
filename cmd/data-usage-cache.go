@@ -858,7 +858,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	// Caches are read+written without locks,
 	retries := 0
 	for retries < 5 {
-		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, noLock, ObjectOptions{})
+		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, noLock, ObjectOptions{NoLock: true})
 		if err != nil {
 			switch err.(type) {
 			case ObjectNotFound, BucketNotFound:
