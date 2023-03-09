@@ -170,7 +170,7 @@ func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout
 		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
-		cancel()
+		defer cancel()
 		if err := newCtx.Err(); err == context.Canceled {
 			return LockContext{ctx: ctx, cancel: func() {}}, err
 		}
@@ -199,7 +199,7 @@ func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeou
 		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
-		cancel()
+		defer cancel()
 		if err := newCtx.Err(); err == context.Canceled {
 			return LockContext{ctx: ctx, cancel: func() {}}, err
 		}
