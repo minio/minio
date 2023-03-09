@@ -937,8 +937,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			}
 
 			if g.Status == statusDisabled {
-				// TODO: return an error?
-				return updatedAt, nil, nil
+				return updatedAt, nil, errGroupDisabled
 			}
 		}
 		mp = cache.iamGroupPolicyMap[name]

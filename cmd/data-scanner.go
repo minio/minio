@@ -1273,8 +1273,7 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 		sizeS.replTargetStats[arn] = tgtSizeS
 	}
 
-	switch oi.ReplicationStatus {
-	case replication.Replica:
+	if oi.ReplicationStatus == replication.Replica {
 		sizeS.replicaSize += oi.Size
 	}
 }

@@ -204,11 +204,12 @@ func (h *metrics) accumRequestRTT(reqStartTime time.Time, rttMs float64, isSucce
 		h.updateLastFullMinute(reqTimeMinute)
 	}
 	var entry *serviceRTTMinuteStats
-	if reqTimeMinute.Equal(h.currentMinute.statsTime) {
+	switch {
+	case reqTimeMinute.Equal(h.currentMinute.statsTime):
 		entry = &h.currentMinute
-	} else if reqTimeMinute.Equal(h.lastFullMinute.statsTime) {
+	case reqTimeMinute.Equal(h.lastFullMinute.statsTime):
 		entry = &h.lastFullMinute
-	} else {
+	default:
 		// This request is too old, it should never happen, ignore it as we
 		// cannot return an error.
 		return

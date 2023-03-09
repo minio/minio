@@ -870,8 +870,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	var fdMu sync.Mutex
 	fds := opts.fallbackDisks
 	fallback := func(err error) StorageAPI {
-		switch err.(type) {
-		case StorageErr:
+		if _, ok := err.(StorageErr); ok {
 			// Attempt to grab a fallback disk
 			fdMu.Lock()
 			defer fdMu.Unlock()

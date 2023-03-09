@@ -101,7 +101,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		return errServerNotInitialized
 	}
 
-	if err := evnot.targetList.Add(globalConfigTargetList.Targets()...); err != nil {
+	if err := evnot.targetList.Add(globalNotifyTargetList.Targets()...); err != nil {
 		return err
 	}
 

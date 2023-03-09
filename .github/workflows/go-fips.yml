@@ -20,21 +20,28 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go-version: [1.19.x]
+        go-version: [1.20.x]
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
       - name: Setup dockerfile for build test
         run: |
-          echo "FROM golang:1.19.4" >> Dockerfile.fips.test
-          echo "COPY . /minio" >> Dockerfile.fips.test
-          echo "WORKDIR /minio" >> Dockerfile.fips.test
-          echo "ENV GOEXPERIMENT=boringcrypto" >> Dockerfile.fips.test
-          echo "RUN make" >> Dockerfile.fips.test
+          GO_VERSION=$(go version | cut -d ' ' -f 3 | sed 's/go//')
+          echo Detected go version $GO_VERSION
+          cat > Dockerfile.fips.test <<EOF
+          FROM golang:${GO_VERSION}
+          COPY . /minio
+          WORKDIR /minio
+          ENV GOEXPERIMENT=boringcrypto
+          RUN make
+          EOF
 
       - name: Build
         uses: docker/build-push-action@v3
@@ -49,4 +56,4 @@ jobs:
       - name: Test binary
         run: |
           docker run --rm minio/fips-test:latest ./minio --version
-          docker run --rm -i minio/fips-test:latest /bin/bash -c 'go tool nm ./minio' | grep -q FIPS
+          docker run --rm -i minio/fips-test:latest /bin/bash -c 'go tool nm ./minio | grep FIPS | grep -q FIPS'

@@ -136,6 +136,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 		}
 	}
 	printEventNotifiers()
+	printLambdaTargets()
 
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
@@ -150,6 +151,18 @@ func printServerCommonMsg(apiEndpoints []string) {
 // Prints startup message for Object API access, prints link to our SDK documentation.
 func printObjectAPIMsg() {
 	logger.Info(color.Blue("\nDocumentation: ") + "https://min.io/docs/minio/linux/index.html")
+}
+
+func printLambdaTargets() {
+	if globalLambdaTargetList == nil || globalLambdaTargetList.Empty() {
+		return
+	}
+
+	arnMsg := color.Blue("Object Lambda ARNs: ")
+	for _, arn := range globalLambdaTargetList.List(globalSite.Region) {
+		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
+	}
+	logger.Info(arnMsg + "\n")
 }
 
 // Prints bucket notification configurations.
@@ -168,7 +181,7 @@ func printEventNotifiers() {
 		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
 	}
 
-	logger.Info(arnMsg)
+	logger.Info(arnMsg + "\n")
 }
 
 // Prints startup message for command line access. Prints link to our documentation

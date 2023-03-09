@@ -678,7 +678,7 @@ func metaDataPoolGet() []byte {
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
-		//lint:ignore SA6002 we are fine with the tiny alloc
+		//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
@@ -1887,11 +1887,12 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 					continue
 				}
 				if i == 0 || ver.header.sortsBefore(latest.header) {
-					if i == 0 || latestCount == 0 {
+					switch {
+					case i == 0 || latestCount == 0:
 						latestCount = 1
-					} else if !strict && ver.header.matchesNotStrict(latest.header) {
+					case !strict && ver.header.matchesNotStrict(latest.header):
 						latestCount++
-					} else {
+					default:
 						latestCount = 1
 					}
 					latest = ver

@@ -66,7 +66,7 @@ func (r *PReader) Read(dst sql.Record) (sql.Record, error) {
 			r.err = io.EOF
 			return nil, r.err
 		}
-		//lint:ignore SA6002 Using pointer would allocate more since we would have to copy slice header before taking a pointer.
+		//nolint:staticcheck // SA6002 Using pointer would allocate more since we would have to copy slice header before taking a pointer.
 		r.kvDstPool.Put(r.current)
 		r.current = <-item.dst
 		r.err = item.err
@@ -204,7 +204,7 @@ func (r *PReader) startReaders() {
 					all = append(all, kvs)
 				}
 				// We don't need the input any more.
-				//lint:ignore SA6002 Using pointer would allocate more since we would have to copy slice header before taking a pointer.
+				//nolint:staticcheck // SA6002 Using pointer would allocate more since we would have to copy slice header before taking a pointer.
 				r.bufferPool.Put(in.input)
 				in.input = nil
 				in.err = d.Err()

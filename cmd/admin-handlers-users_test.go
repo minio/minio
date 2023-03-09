@@ -825,7 +825,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	if set.CreateStringSet(groups...).Contains(group) {
 		c.Fatalf("created group still present!")
 	}
-	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	_, err = s.adm.GetGroupDescription(ctx, group)
 	if err == nil {
 		c.Fatalf("group appears to exist")
 	}

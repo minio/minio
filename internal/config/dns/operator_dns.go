@@ -104,8 +104,7 @@ func (c *OperatorDNS) Put(bucket string) error {
 		var errorStringBuilder strings.Builder
 		io.Copy(&errorStringBuilder, io.LimitReader(resp.Body, resp.ContentLength))
 		errorString := errorStringBuilder.String()
-		switch resp.StatusCode {
-		case http.StatusConflict:
+		if resp.StatusCode == http.StatusConflict {
 			return ErrBucketConflict(Error{bucket, errors.New(errorString)})
 		}
 		return newError(bucket, fmt.Errorf("service create for bucket %s, failed with status %s, error %s", bucket, resp.Status, errorString))

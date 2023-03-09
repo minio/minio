@@ -66,8 +66,7 @@ func (j xlMetaV2DeleteMarker) FreeVersion() bool {
 
 // FreeVersion returns true if j represents a free-version, false otherwise.
 func (j xlMetaV2Version) FreeVersion() bool {
-	switch j.Type {
-	case DeleteType:
+	if j.Type == DeleteType {
 		return j.DeleteMarker.FreeVersion()
 	}
 	return false
