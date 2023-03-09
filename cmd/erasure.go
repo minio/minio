@@ -449,6 +449,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 	// Start one scanner per disk
 	var wg sync.WaitGroup
 	wg.Add(len(disks))
+
 	for i := range disks {
 		go func(i int) {
 			defer wg.Done()
@@ -518,7 +519,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				if r := cache.root(); r != nil {
 					root = cache.flatten(*r)
 				}
-				t := time.Now()
 				select {
 				case <-ctx.Done():
 					return
@@ -528,9 +528,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 					Entry:  root,
 				}:
 				}
-				// We want to avoid synchronizing up all writes in case
-				// the results are piled up.
-				time.Sleep(time.Duration(float64(time.Since(t)) * rand.Float64()))
+
 				// Save cache
 				logger.LogIf(ctx, cache.save(ctx, er, cacheName))
 			}
