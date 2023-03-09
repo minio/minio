@@ -320,14 +320,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 		return n, cr.err
 	}
 	b, err = cr.reader.ReadByte()
-	if err == io.EOF {
-		err = io.ErrUnexpectedEOF
-	}
-	if err != nil {
-		cr.err = err
-		return n, cr.err
-	}
-	if b != '\r' {
+	if b != '\r' || err != nil {
 		cr.err = errMalformedEncoding
 		return n, cr.err
 	}
