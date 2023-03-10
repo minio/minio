@@ -48,7 +48,7 @@ type dataUsageHash string
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
 
-// sizeHistogram is a size histogram.
+// versionsHistogram is a histogram of number of versions in an object.
 type versionsHistogram [dataUsageVersionLen]uint64
 
 type dataUsageEntry struct {
