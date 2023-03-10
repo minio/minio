@@ -621,6 +621,13 @@ func (e InvalidPart) Error() string {
 		e.PartNumber, e.ExpETag, e.GotETag)
 }
 
+// PanFSS3InvalidName bucket does not exist
+type PanFSS3InvalidName GenericError
+
+func (e PanFSS3InvalidName) Error() string {
+	return "Invalid symbols in object/bucket name."
+}
+
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
 	PartSize   int64

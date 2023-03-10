@@ -507,6 +507,11 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 		return NotImplemented{}
 	}
 
+	// Do not allow to create bucket with .s3 name
+	if err := dotS3PrefixCheck(bucket); err != nil {
+		return err
+	}
+
 	// Verify if bucket is valid.
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return BucketNameInvalid{Bucket: bucket}
@@ -518,7 +523,6 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
-	// TODO: The following two mkdir statements will be replaced by the single one ## Dmitri Z.
 	// fsMkdir is fs-v1 specific method. Maybe it makes sense to create panfs-helpers.go...
 	if err = fsMkdir(ctx, bucketDir); err != nil {
 		return toObjectErr(err, bucket)
@@ -702,8 +706,13 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
+// TODO: there is no need to delete user data when deleting bucket.
 func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	defer NSUpdated(bucket, slashSeparator)
+
+	if err := dotS3PrefixCheck(bucket); err != nil {
+		return err
+	}
 
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
@@ -712,7 +721,7 @@ func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts De
 
 	if !opts.Force {
 		// Attempt to delete regular bucket.
-		if err = fsRemoveDir(ctx, bucketDir); err != nil {
+		if err = removePanFSBucketDir(ctx, bucketDir); err != nil {
 			return toObjectErr(err, bucket)
 		}
 	} else {
@@ -761,6 +770,10 @@ func (fs *PANFSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, ds
 			Object:    srcObject,
 			VersionID: srcOpts.VersionID,
 		}
+	}
+
+	if err = dotS3PrefixCheck(srcBucket, dstBucket, srcObject, dstObject); err != nil {
+		return oi, err
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
@@ -845,6 +858,11 @@ func (fs *PANFSObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 			VersionID: opts.VersionID,
 		}
 	}
+
+	if err = dotS3PrefixCheck(bucket, object); err != nil {
+		return
+	}
+
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -1121,7 +1139,7 @@ func (fs *PANFSObjects) getObjectInfoWithLock(ctx context.Context, bucket, objec
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (fs *PANFSObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
+func (fs *PANFSObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, err error) {
 	if opts.VersionID != "" && opts.VersionID != nullVersionID {
 		return oi, VersionNotFound{
 			Bucket:    bucket,
@@ -1130,7 +1148,11 @@ func (fs *PANFSObjects) GetObjectInfo(ctx context.Context, bucket, object string
 		}
 	}
 
-	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
+	if err = dotS3PrefixCheck(bucket, object); err != nil {
+		return oi, err
+	}
+
+	oi, err = fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		lk := fs.NewNSLock(bucket, object)
 		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -1158,6 +1180,10 @@ func (fs *PANFSObjects) GetObjectInfo(ctx context.Context, bucket, object string
 func (fs *PANFSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if opts.Versioned {
 		return objInfo, NotImplemented{}
+	}
+
+	if err := dotS3PrefixCheck(bucket, object); err != nil {
+		return objInfo, err
 	}
 
 	if err := checkPutObjectArgs(ctx, bucket, object, fs); err != nil {
@@ -1358,6 +1384,10 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 			Object:    object,
 			VersionID: opts.VersionID,
 		}
+	}
+
+	if err = dotS3PrefixCheck(bucket, object); err != nil {
+		return objInfo, err
 	}
 
 	defer NSUpdated(bucket, object)
@@ -1572,6 +1602,11 @@ func (fs *PANFSObjects) ListObjects(ctx context.Context, bucket, prefix, marker,
 	// Therefore, it cannot set a NextMarker.
 	// In that case we retry the operation, but we add a
 	// max limit, so we never end up in an infinite loop.
+
+	if err = dotS3PrefixCheck(bucket, prefix); err != nil {
+		return loi, err
+	}
+
 	tries := 50
 	for {
 		loi, err = listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,

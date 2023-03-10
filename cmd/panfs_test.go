@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -196,6 +197,12 @@ func TestPANFSPutObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// With invalid object name .s3
+	_, err = fs.PutObject(GlobalContext, bucketName, ".s3", mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
+	if err == nil {
+		t.Fatalf("Expected error type ObjectNameInvalid, got %#v", err)
+	}
 }
 
 // TestPANFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
@@ -357,3 +364,37 @@ func TestPANFSHealObjects(t *testing.T) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
 }
+
+// TestCheckForS3Prefix
+func TestDotS3PrefixCheck(t *testing.T) {
+	testCases := []struct {
+		input         []string
+		shouldPass    bool
+		expectedError error
+	}{
+		{[]string{"valid", ""}, true, nil},
+		{[]string{}, true, nil},
+		{[]string{"file", ".s3file"}, true, nil},
+		{[]string{"file", ".s3/file"}, false, PanFSS3InvalidName{}},
+		{[]string{"file", ".s3/file", ".s3/nextfile"}, false, PanFSS3InvalidName{}},
+	}
+
+	for _, tc := range testCases {
+		err := dotS3PrefixCheck(tc.input...)
+		if err != nil && !tc.shouldPass {
+			if !errors.Is(err, tc.expectedError) {
+				t.Fatalf("Expected error %v, got %v. Input args: %v", tc.expectedError, err, tc.input)
+			}
+		}
+
+		if err == nil && !tc.shouldPass {
+			t.Fatalf("Expecting an error %v. Input args: %v", tc.expectedError, tc.input)
+		}
+
+		if err != nil && tc.shouldPass {
+			t.Fatalf("Unexpected error %v. Input args: %v", err, tc.input)
+		}
+	}
+}
+
+// TODO: add test cases for .s3 put/delete/copy operation - negative

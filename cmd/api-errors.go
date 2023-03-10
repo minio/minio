@@ -399,7 +399,8 @@ const (
 	ErrInvalidChecksum
 
 	// PanFS Gateway specific errors
-	ErrPanFSBucketPahtNotFound
+	ErrPanFSBucketPathNotFound
+	ErrPanFSInvalidSymbolsFound
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1902,9 +1903,14 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrPanFSBucketPahtNotFound: {
+	ErrPanFSBucketPathNotFound: {
 		Code:           "InvalidArgument",
 		Description:    "Invalid path provided",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPanFSInvalidSymbolsFound: {
+		Code:           "InvalidArgument",
+		Description:    "It is not allowed to use .s3 in object or bucket name",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
@@ -2131,6 +2137,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrTransitionStorageClassNotFoundError
 	case InvalidObjectState:
 		apiErr = ErrInvalidObjectState
+	case PanFSS3InvalidName:
+		apiErr = ErrPanFSInvalidSymbolsFound
 
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded

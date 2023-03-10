@@ -754,7 +754,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	if globalIsGateway && globalGatewayName == PANFSBackendGateway {
 		if panfsPath := r.Header.Get(xhttp.PanFSBucketPath); len(panfsPath) > 0 {
 			if _, err := os.Stat(panfsPath); os.IsNotExist(err) {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPanFSBucketPahtNotFound), r.URL)
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPanFSBucketPathNotFound), r.URL)
 				return
 			}
 			panfsBucketPath = panfsPath
