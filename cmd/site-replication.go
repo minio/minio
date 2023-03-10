@@ -4728,10 +4728,19 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 		if creds.IsTemp() && !creds.IsExpired() {
+			var parentPolicy string
 			u, err := globalIAMSys.GetUserInfo(ctx, creds.ParentUser)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
-				continue
+				// Parent may be "virtual" (for ldap, oidc, client tls auth,
+				// custom auth plugin), so in such cases we apply no parent
+				// policy. The session token will contain info about policy to
+				// be applied.
+				if !errors.Is(err, errNoSuchUser) {
+					logger.LogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+					continue
+				}
+			} else {
+				parentPolicy = u.PolicyName
 			}
 			// Call hook for site replication.
 			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
@@ -4741,7 +4750,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 					SecretKey:           creds.SecretKey,
 					SessionToken:        creds.SessionToken,
 					ParentUser:          creds.ParentUser,
-					ParentPolicyMapping: u.PolicyName,
+					ParentPolicyMapping: parentPolicy,
 				},
 				UpdatedAt: lastUpdate,
 			}); err != nil {
