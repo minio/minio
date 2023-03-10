@@ -816,15 +816,16 @@ func (m *metaCacheEntriesSorted) merge(other metaCacheEntriesSorted, limit int) 
 	a := m.entries()
 	b := other.entries()
 	for len(a) > 0 && len(b) > 0 {
-		if a[0].name == b[0].name && bytes.Equal(a[0].metadata, b[0].metadata) {
+		switch {
+		case a[0].name == b[0].name && bytes.Equal(a[0].metadata, b[0].metadata):
 			// Same, discard one.
 			merged = append(merged, a[0])
 			a = a[1:]
 			b = b[1:]
-		} else if a[0].name < b[0].name {
+		case a[0].name < b[0].name:
 			merged = append(merged, a[0])
 			a = a[1:]
-		} else {
+		default:
 			merged = append(merged, b[0])
 			b = b[1:]
 		}

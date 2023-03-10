@@ -170,9 +170,8 @@ func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout
 		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
-		cancel()
-		switch err := newCtx.Err(); err {
-		case context.Canceled:
+		defer cancel()
+		if err := newCtx.Err(); err == context.Canceled {
 			return LockContext{ctx: ctx, cancel: func() {}}, err
 		}
 		return LockContext{ctx: ctx, cancel: func() {}}, OperationTimedOut{}
@@ -200,9 +199,8 @@ func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeou
 		RetryInterval: timeout.RetryInterval(),
 	}) {
 		timeout.LogFailure()
-		cancel()
-		switch err := newCtx.Err(); err {
-		case context.Canceled:
+		defer cancel()
+		if err := newCtx.Err(); err == context.Canceled {
 			return LockContext{ctx: ctx, cancel: func() {}}, err
 		}
 		return LockContext{ctx: ctx, cancel: func() {}}, OperationTimedOut{}
@@ -257,8 +255,7 @@ func (li *localLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeou
 					li.ns.unlock(li.volume, li.paths[si], readLock)
 				}
 			}
-			switch err := ctx.Err(); err {
-			case context.Canceled:
+			if err := ctx.Err(); err == context.Canceled {
 				return LockContext{}, err
 			}
 			return LockContext{}, OperationTimedOut{}
@@ -294,8 +291,7 @@ func (li *localLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeo
 					li.ns.unlock(li.volume, li.paths[si], readLock)
 				}
 			}
-			switch err := ctx.Err(); err {
-			case context.Canceled:
+			if err := ctx.Err(); err == context.Canceled {
 				return LockContext{}, err
 			}
 			return LockContext{}, OperationTimedOut{}

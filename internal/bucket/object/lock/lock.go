@@ -514,8 +514,7 @@ func (l *ObjectLegalHold) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			switch se.Name.Local {
 			case "Status":
 				var st LegalHoldStatus

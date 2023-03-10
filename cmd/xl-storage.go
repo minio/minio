@@ -1285,11 +1285,9 @@ func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
 
 	// Renaming xl.json to xl.meta should be fully synced to disk.
 	defer func() {
-		if err == nil {
-			if s.globalSync {
-				// Sync to disk only upon success.
-				globalSync()
-			}
+		if err == nil && s.globalSync {
+			// Sync to disk only upon success.
+			globalSync()
 		}
 	}()
 
@@ -1462,25 +1460,26 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		f, err = OpenFile(filePath, readMode, 0o666)
 	}
 	if err != nil {
-		if osIsNotExist(err) {
+		switch {
+		case osIsNotExist(err):
 			// Check if the object doesn't exist because its bucket
 			// is missing in order to return the correct error.
 			if err = Access(volumeDir); err != nil && osIsNotExist(err) {
 				return nil, dmTime, errVolumeNotFound
 			}
 			return nil, dmTime, errFileNotFound
-		} else if osIsPermission(err) {
+		case osIsPermission(err):
 			return nil, dmTime, errFileAccessDenied
-		} else if isSysErrNotDir(err) || isSysErrIsDir(err) {
+		case isSysErrNotDir(err) || isSysErrIsDir(err):
 			return nil, dmTime, errFileNotFound
-		} else if isSysErrHandleInvalid(err) {
+		case isSysErrHandleInvalid(err):
 			// This case is special and needs to be handled for windows.
 			return nil, dmTime, errFileNotFound
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return nil, dmTime, errFaultyDisk
-		} else if isSysErrTooManyFiles(err) {
+		case isSysErrTooManyFiles(err):
 			return nil, dmTime, errTooManyOpenFiles
-		} else if isSysErrInvalidArg(err) {
+		case isSysErrInvalidArg(err):
 			st, _ := Lstat(filePath)
 			if st != nil && st.IsDir() {
 				// Linux returns InvalidArg for directory O_DIRECT
@@ -1577,14 +1576,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return 0, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return 0, errFaultyDisk
-		} else if osIsPermission(err) {
-			return 0, errFileAccessDenied
-		}
-		return 0, err
+		return 0, convertAccessError(err, errFileAccessDenied)
 	}
 
 	// Validate effective path length before reading.
@@ -1898,14 +1890,15 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	defer w.Close()
 
 	var bufp *[]byte
-	if fileSize > 0 && fileSize >= largestFileThreshold {
+	switch {
+	case fileSize > 0 && fileSize >= largestFileThreshold:
 		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
-	} else if fileSize <= smallFileThreshold {
+	case fileSize <= smallFileThreshold:
 		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
 		defer xioutil.ODirectPoolSmall.Put(bufp)
-	} else {
+	default:
 		bufp = xioutil.ODirectPoolLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolLarge.Put(bufp)
 	}
@@ -1989,14 +1982,7 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if osIsPermission(err) {
-			return errVolumeAccessDenied
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	filePath := pathJoin(volumeDir, path)
@@ -2127,14 +2113,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if osIsPermission(err) {
-			return errVolumeAccessDenied
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	// Following code is needed so that we retain SlashSeparator suffix if any in
@@ -2159,17 +2138,22 @@ func skipAccessChecks(volume string) (ok bool) {
 // RenameData - rename source path to destination path atomically, metadata and data directory.
 func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (sign uint64, err error) {
 	defer func() {
-		if err != nil && !contextCanceled(ctx) && !errors.Is(err, errFileNotFound) {
+		ignoredErrs := []error{
+			errFileNotFound,
+			errVolumeNotFound,
+			errFileVersionNotFound,
+			errDiskNotFound,
+			errUnformattedDisk,
+		}
+		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.
 			logger.LogIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				srcVolume, srcPath,
 				dstVolume, dstPath,
 				err))
 		}
-		if err == nil {
-			if s.globalSync {
-				globalSync()
-			}
+		if err == nil && s.globalSync {
+			globalSync()
 		}
 	}()
 
@@ -2586,14 +2570,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
-		} else if osIsPermission(err) {
-			return errVolumeAccessDenied
-		}
-		return err
+		return convertAccessError(err, errVolumeAccessDenied)
 	}
 
 	erasure := fi.Erasure
@@ -2691,14 +2668,7 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 
 	// Stat a volume entry.
 	if err = Access(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return stat, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return stat, errFaultyDisk
-		} else if osIsPermission(err) {
-			return stat, errVolumeAccessDenied
-		}
-		return stat, err
+		return stat, convertAccessError(err, errVolumeAccessDenied)
 	}
 	files := []string{pathJoin(volumeDir, path)}
 	if glob {
@@ -2826,4 +2796,17 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 		}
 	}
 	return nil
+}
+
+func convertAccessError(err, permErr error) error {
+	switch {
+	case osIsNotExist(err):
+		return errVolumeNotFound
+	case isSysErrIO(err):
+		return errFaultyDisk
+	case osIsPermission(err):
+		return permErr
+	default:
+		return err
+	}
 }

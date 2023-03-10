@@ -131,6 +131,7 @@ const (
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
 	notifySubsystem           MetricSubsystem = "notify"
+	lambdaSubsystem           MetricSubsystem = "lambda"
 	auditSubsystem            MetricSubsystem = "audit"
 )
 
@@ -1667,8 +1668,8 @@ func getNotificationMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		stats := globalConfigTargetList.Stats()
-		metrics := make([]Metric, 0, 1+len(stats.TargetStats))
+		nstats := globalNotifyTargetList.Stats()
+		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
 		metrics = append(metrics, Metric{
 			Description: MetricDescription{
 				Namespace: minioNamespace,
@@ -1677,9 +1678,9 @@ func getNotificationMetrics() *MetricsGroup {
 				Help:      "Number of concurrent async Send calls active to all targets",
 				Type:      gaugeMetric,
 			},
-			Value: float64(stats.CurrentSendCalls),
+			Value: float64(nstats.CurrentSendCalls),
 		})
-		for _, st := range stats.TargetStats {
+		for _, st := range nstats.TargetStats {
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: minioNamespace,
@@ -1692,6 +1693,43 @@ func getNotificationMetrics() *MetricsGroup {
 				Value:          float64(st.CurrentQueue),
 			})
 		}
+
+		lstats := globalLambdaTargetList.Stats()
+		for _, st := range lstats.TargetStats {
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "active_requests",
+					Help:      "Number of in progress requests",
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.ActiveRequests),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "total_requests",
+					Help:      "Total number of requests sent since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.TotalRequests),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "failed_requests",
+					Help:      "Total number of requests that failed to send since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.FailedRequests),
+			})
+		}
+
 		// Audit and system:
 		audit := logger.CurrentStats()
 		for id, st := range audit {
@@ -2339,8 +2377,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				continue
 			}
 			metricType := prometheus.GaugeValue
-			switch metric.Description.Type {
-			case counterMetric:
+			if metric.Description.Type == counterMetric {
 				metricType = prometheus.CounterValue
 			}
 			toPost := prometheus.MustNewConstMetric(
@@ -2448,8 +2485,7 @@ func (c *minioNodeCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		metricType := prometheus.GaugeValue
-		switch metric.Description.Type {
-		case counterMetric:
+		if metric.Description.Type == counterMetric {
 			metricType = prometheus.CounterValue
 		}
 		ch <- prometheus.MustNewConstMetric(

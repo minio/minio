@@ -661,6 +661,7 @@ func handleCommonEnvVars() {
 		}
 		u.Path = "" // remove any path component such as `/`
 		globalMinioEndpoint = u.String()
+		globalMinioEndpointURL = u
 	}
 
 	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
@@ -783,8 +784,7 @@ func handleCommonEnvVars() {
 // Initialize KMS global variable after valiadating and loading the configuration.
 // It depends on KMS env variables and global cli flags.
 func handleKMSConfig() {
-	switch {
-	case env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint):
+	if env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint) {
 		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
 	}
 

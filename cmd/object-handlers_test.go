@@ -1197,17 +1197,18 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Put Object end point.
 		var req *http.Request
-		if testCase.fault == chunkDateMismatch {
+		switch {
+		case testCase.fault == chunkDateMismatch:
 			req, err = newTestStreamingSignedBadChunkDateRequest(http.MethodPut,
 				getPutObjectURL("", testCase.bucketName, testCase.objectName),
 				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
 				testCase.accessKey, testCase.secretKey)
-		} else if testCase.contentEncoding == "" {
+		case testCase.contentEncoding == "":
 			req, err = newTestStreamingSignedRequest(http.MethodPut,
 				getPutObjectURL("", testCase.bucketName, testCase.objectName),
 				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
 				testCase.accessKey, testCase.secretKey)
-		} else if testCase.contentEncoding != "" {
+		case testCase.contentEncoding != "":
 			req, err = newTestStreamingSignedCustomEncodingRequest(http.MethodPut,
 				getPutObjectURL("", testCase.bucketName, testCase.objectName),
 				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
@@ -2045,12 +2046,13 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		var req *http.Request
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		if !testCase.invalidPartNumber || !testCase.maximumPartNumber {
+		switch {
+		case !testCase.invalidPartNumber || !testCase.maximumPartNumber:
 			// construct HTTP request for copy object.
 			req, err = newTestSignedRequestV4(http.MethodPut, getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
-		} else if testCase.invalidPartNumber {
+		case testCase.invalidPartNumber:
 			req, err = newTestSignedRequestV4(http.MethodPut, getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "abc"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
-		} else if testCase.maximumPartNumber {
+		case testCase.maximumPartNumber:
 			req, err = newTestSignedRequestV4(http.MethodPut, getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "99999"), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		}
 		if err != nil {
@@ -3545,11 +3547,9 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 				t.Errorf("Test %d %s expected to fail with error %s, but received %s", i+1, instanceType,
 					test.expectedErr.Code, errXML.Code)
 			}
-		} else {
-			if rec.Code != http.StatusOK {
-				t.Errorf("Test %d %s expected to succeed, but failed with HTTP status code %d",
-					i+1, instanceType, rec.Code)
-			}
+		} else if rec.Code != http.StatusOK {
+			t.Errorf("Test %d %s expected to succeed, but failed with HTTP status code %d",
+				i+1, instanceType, rec.Code)
 		}
 	}
 }
@@ -4119,10 +4119,8 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 							reqType, test.expectedErr.Code, errXML.Code)
 					}
 					// in case error is not expected response status should be 200OK.
-				} else {
-					if rec.Code != http.StatusOK {
-						t.Errorf("%s, Expected to succeed with response HTTP status 200OK, but failed with HTTP status code %d.", reqType, rec.Code)
-					}
+				} else if rec.Code != http.StatusOK {
+					t.Errorf("%s, Expected to succeed with response HTTP status 200OK, but failed with HTTP status code %d.", reqType, rec.Code)
 				}
 			}
 		})

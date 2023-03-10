@@ -110,7 +110,7 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 //
 // DecryptETags uses a KMS bulk decryption API, if available, which
 // is more efficient than decrypting ETags sequentually.
-func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error {
+func DecryptETags(ctx context.Context, k kms.KMS, objects []ObjectInfo) error {
 	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
 		metadata = make([]map[string]string, 0, BatchSize)
@@ -170,7 +170,7 @@ func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error 
 		// For all SSE-S3 single-part objects we have to
 		// fetch their decryption keys. We do this using
 		// a Bulk-Decryption API call, if available.
-		keys, err := crypto.S3.UnsealObjectKeys(ctx, KMS, metadata, buckets, names)
+		keys, err := crypto.S3.UnsealObjectKeys(ctx, k, metadata, buckets, names)
 		if err != nil {
 			return err
 		}

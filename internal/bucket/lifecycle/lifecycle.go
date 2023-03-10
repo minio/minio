@@ -70,6 +70,24 @@ const (
 	ActionCount
 )
 
+// DeleteRestored - Returns true if action demands delete on restored objects
+func (a Action) DeleteRestored() bool {
+	return a == DeleteRestoredAction || a == DeleteRestoredVersionAction
+}
+
+// DeleteVersioned - Returns true if action demands delete on a versioned object
+func (a Action) DeleteVersioned() bool {
+	return a == DeleteVersionAction || a == DeleteRestoredVersionAction
+}
+
+// Delete - Returns true if action demands delete on all objects (including restored)
+func (a Action) Delete() bool {
+	if a.DeleteRestored() {
+		return true
+	}
+	return a == DeleteVersionAction || a == DeleteAction
+}
+
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
 	XMLName xml.Name `xml:"LifecycleConfiguration"`
@@ -104,8 +122,7 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			switch se.Name.Local {
 			case "Rule":
 				var r Rule

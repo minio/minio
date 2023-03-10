@@ -32,7 +32,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.15
+	github.com/klauspost/compress v1.16.0
 	github.com/klauspost/cpuid/v2 v2.2.4
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.5
@@ -40,9 +40,9 @@ require (
 	github.com/klauspost/reedsolomon v1.11.7
 	github.com/lib/pq v1.10.7
 	github.com/lithammer/shortuuid/v4 v4.0.0
-	github.com/miekg/dns v1.1.50
+	github.com/miekg/dns v1.1.51
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.23.1
+	github.com/minio/console v0.25.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
@@ -54,12 +54,12 @@ require (
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.4
-	github.com/minio/sio v0.3.0
+	github.com/minio/sio v0.3.1
 	github.com/minio/xxml v0.0.3
 	github.com/minio/zipindex v0.3.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats-server/v2 v2.7.4
-	github.com/nats-io/nats.go v1.23.0
+	github.com/nats-io/nats.go v1.24.0
 	github.com/nats-io/stan.go v0.10.4
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.1.0
@@ -68,13 +68,13 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/client_model v0.3.0
-	github.com/prometheus/common v0.40.0
+	github.com/prometheus/common v0.41.0
 	github.com/prometheus/procfs v0.9.0
 	github.com/rabbitmq/amqp091-go v1.7.0
 	github.com/rs/cors v1.8.3
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil/v3 v3.23.1
+	github.com/shirou/gopsutil/v3 v3.23.2
 	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.8
 	github.com/valyala/bytebufferpool v1.0.0
@@ -88,7 +88,7 @@ require (
 	golang.org/x/oauth2 v0.5.0
 	golang.org/x/sys v0.5.0
 	golang.org/x/time v0.3.0
-	google.golang.org/api v0.110.0
+	google.golang.org/api v0.111.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -101,9 +101,9 @@ require (
 	cloud.google.com/go/iam v0.12.0 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
-	github.com/apache/thrift v0.18.0 // indirect
-	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
-	github.com/aymanbagabas/go-osc52 v1.2.1 // indirect
+	github.com/apache/thrift v0.18.1 // indirect
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/aymanbagabas/go-osc52 v1.2.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/charmbracelet/bubbles v0.15.0 // indirect
 	github.com/charmbracelet/bubbletea v0.23.2 // indirect
@@ -138,7 +138,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
+	github.com/google/pprof v0.0.0-20230228050547-1710fef4ab10 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
@@ -150,9 +150,9 @@ require (
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
-	github.com/jcmturner/gokrb5/v8 v8.4.3 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.4.4 // indirect
+	github.com/jedib0t/go-pretty/v6 v6.4.6 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/juju/ratelimit v1.0.2 // indirect
@@ -173,7 +173,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20230221173238-1843bab50013 // indirect
+	github.com/minio/mc v0.0.0-20230228001259-5fbe8c26bab5 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -198,10 +198,9 @@ require (
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/prom2json v1.3.2 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
-	github.com/rivo/tview v0.0.0-20230208211350-7dfff1ce7854 // indirect
+	github.com/rivo/tview v0.0.0-20230226195229-47e7db7885b4 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
-	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/rs/xid v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -223,7 +222,7 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230221151758-ace64dc21148 // indirect
+	google.golang.org/genproto v0.0.0-20230301171018-9ab4bdc49ad5 // indirect
 	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect

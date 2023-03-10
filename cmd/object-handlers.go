@@ -472,22 +472,18 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	if !proxy.Proxy { // apply lifecycle rules only for local requests
-		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
-			var success bool
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				// Restored object delete would be still allowed to proceed as success
-				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-			}
-			if success {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-				return
+			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
+			if act.Delete() {
+				// apply whatever the expiry rule is.
+				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
+				if !act.DeleteRestored() {
+					// If the ILM action is not on restored object return error.
+					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+					return
+				}
 			}
 		}
 
@@ -729,22 +725,18 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if !proxy.Proxy { // apply lifecycle rules only locally not for proxied requests
-		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
-			var success bool
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				// Restored object delete would be still allowed to proceed as success
-				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-			}
-			if success {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-				return
+			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
+			if act.Delete() {
+				// apply whatever the expiry rule is.
+				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
+				if !act.DeleteRestored() {
+					// If the ILM action is not on restored object return error.
+					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+					return
+				}
 			}
 		}
 		QueueReplicationHeal(ctx, bucket, objInfo)
@@ -2368,8 +2360,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	objInfo, err := deleteObject(ctx, bucket, object, opts)
 	if err != nil {
-		switch err.(type) {
-		case BucketNotFound:
+		if _, ok := err.(BucketNotFound); ok {
 			// When bucket doesn't exist specially handle it.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return

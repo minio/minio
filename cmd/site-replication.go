@@ -1327,8 +1327,7 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 
 	// Extract the username and lookup DN and groups in LDAP.
 	ldapUser, isLDAPSTS := claims.Lookup(ldapUserN)
-	switch {
-	case isLDAPSTS:
+	if isLDAPSTS {
 		// Need to lookup the groups from LDAP.
 		_, ldapGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ldapUser)
 		if err != nil {
