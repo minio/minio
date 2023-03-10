@@ -48,6 +48,9 @@ type dataUsageHash string
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
 
+// versionsHistogram is a histogram of number of versions in an object.
+type versionsHistogram [dataUsageVersionLen]uint64
+
 type dataUsageEntry struct {
 	Children dataUsageHashMap `msg:"ch"`
 	// These fields do no include any children.
@@ -55,6 +58,7 @@ type dataUsageEntry struct {
 	Objects          uint64               `msg:"os"`
 	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
 	ObjSizes         sizeHistogram        `msg:"szs"`
+	ObjVersions      versionsHistogram    `msg:"vh"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
 	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
 	Compacted        bool                 `msg:"c"`
@@ -292,6 +296,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
 	e.Versions += summary.versions
 	e.ObjSizes.add(summary.totalSize)
+	e.ObjVersions.add(summary.versions)
 
 	if e.ReplicationStats == nil {
 		e.ReplicationStats = &replicationAllStats{
@@ -350,6 +355,10 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
+	}
+
+	for i, v := range other.ObjVersions[:] {
+		e.ObjVersions[i] += v
 	}
 
 	if other.AllTierStats != nil {
@@ -695,7 +704,7 @@ func (d *dataUsageCache) flatten(root dataUsageEntry) dataUsageEntry {
 func (h *sizeHistogram) add(size int64) {
 	// Fetch the histogram interval corresponding
 	// to the passed object size.
-	for i, interval := range ObjectsHistogramIntervals {
+	for i, interval := range ObjectsHistogramIntervals[:] {
 		if size >= interval.start && size <= interval.end {
 			h[i]++
 			break
@@ -708,6 +717,27 @@ func (h *sizeHistogram) toMap() map[string]uint64 {
 	res := make(map[string]uint64, dataUsageBucketLen)
 	for i, count := range h {
 		res[ObjectsHistogramIntervals[i].name] = count
+	}
+	return res
+}
+
+// add a version count to the histogram.
+func (h *versionsHistogram) add(versions uint64) {
+	// Fetch the histogram interval corresponding
+	// to the passed object size.
+	for i, interval := range ObjectsVersionCountIntervals[:] {
+		if versions >= uint64(interval.start) && versions <= uint64(interval.end) {
+			h[i]++
+			break
+		}
+	}
+}
+
+// toMap returns the map to a map[string]uint64.
+func (h *versionsHistogram) toMap() map[string]uint64 {
+	res := make(map[string]uint64, dataUsageVersionLen)
+	for i, count := range h {
+		res[ObjectsVersionCountIntervals[i].name] = count
 	}
 	return res
 }
@@ -742,10 +772,11 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		flat := d.flatten(*e)
 		bui := BucketUsageInfo{
-			Size:                 uint64(flat.Size),
-			VersionsCount:        flat.Versions,
-			ObjectsCount:         flat.Objects,
-			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+			Size:                    uint64(flat.Size),
+			VersionsCount:           flat.Versions,
+			ObjectsCount:            flat.Objects,
+			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
+			ObjectVersionsHistogram: flat.ObjVersions.toMap(),
 		}
 		if flat.ReplicationStats != nil {
 			bui.ReplicaSize = flat.ReplicationStats.ReplicaSize

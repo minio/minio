@@ -58,11 +58,12 @@ type BucketUsageInfo struct {
 	// Total number of objects that failed replication
 	ReplicationFailedCountV1 uint64 `json:"objectsFailedReplicationCount"`
 
-	ObjectsCount         uint64                           `json:"objectsCount"`
-	ObjectSizesHistogram map[string]uint64                `json:"objectsSizesHistogram"`
-	VersionsCount        uint64                           `json:"versionsCount"`
-	ReplicaSize          uint64                           `json:"objectReplicaTotalSize"`
-	ReplicationInfo      map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+	ObjectsCount            uint64                           `json:"objectsCount"`
+	ObjectSizesHistogram    map[string]uint64                `json:"objectsSizesHistogram"`
+	ObjectVersionsHistogram map[string]uint64                `json:"objectsVersionsHistogram"`
+	VersionsCount           uint64                           `json:"versionsCount"`
+	ReplicaSize             uint64                           `json:"objectReplicaTotalSize"`
+	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API

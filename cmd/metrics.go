@@ -441,6 +441,18 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				k,
 			)
 		}
+		for k, v := range usageInfo.ObjectVersionsHistogram {
+			ch <- prometheus.MustNewConstMetric(
+				prometheus.NewDesc(
+					prometheus.BuildFQName(bucketNamespace, "objects", "histogram"),
+					"Total number of versions of objects in a bucket",
+					[]string{"bucket", "object_versions"}, nil),
+				prometheus.GaugeValue,
+				float64(v),
+				bucket,
+				k,
+			)
+		}
 	}
 }
 

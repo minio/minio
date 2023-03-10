@@ -1540,6 +1540,24 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "vh":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "ObjVersions")
+				return
+			}
+			if zb0003 != uint32(dataUsageVersionLen) {
+				err = msgp.ArrayError{Wanted: uint32(dataUsageVersionLen), Got: zb0003}
+				return
+			}
+			for za0002 := range z.ObjVersions {
+				z.ObjVersions[za0002], err = dc.ReadUint64()
+				if err != nil {
+					err = msgp.WrapError(err, "ObjVersions", za0002)
+					return
+				}
+			}
 		case "rs":
 			if dc.IsNil() {
 				err = dc.ReadNil()
@@ -1596,16 +1614,16 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(8)
-	var zb0001Mask uint8 /* 8 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.ReplicationStats == nil {
 		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0001Mask |= 0x40
 	}
 	if z.AllTierStats == nil {
 		zb0001Len--
-		zb0001Mask |= 0x40
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -1672,7 +1690,24 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	// write "vh"
+	err = en.Append(0xa2, 0x76, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(dataUsageVersionLen))
+	if err != nil {
+		err = msgp.WrapError(err, "ObjVersions")
+		return
+	}
+	for za0002 := range z.ObjVersions {
+		err = en.WriteUint64(z.ObjVersions[za0002])
+		if err != nil {
+			err = msgp.WrapError(err, "ObjVersions", za0002)
+			return
+		}
+	}
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// write "rs"
 		err = en.Append(0xa2, 0x72, 0x73)
 		if err != nil {
@@ -1691,7 +1726,7 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// write "ats"
 		err = en.Append(0xa3, 0x61, 0x74, 0x73)
 		if err != nil {
@@ -1727,16 +1762,16 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(8)
-	var zb0001Mask uint8 /* 8 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.ReplicationStats == nil {
 		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0001Mask |= 0x40
 	}
 	if z.AllTierStats == nil {
 		zb0001Len--
-		zb0001Mask |= 0x40
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -1765,7 +1800,13 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0001 := range z.ObjSizes {
 		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	// string "vh"
+	o = append(o, 0xa2, 0x76, 0x68)
+	o = msgp.AppendArrayHeader(o, uint32(dataUsageVersionLen))
+	for za0002 := range z.ObjVersions {
+		o = msgp.AppendUint64(o, z.ObjVersions[za0002])
+	}
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "rs"
 		o = append(o, 0xa2, 0x72, 0x73)
 		if z.ReplicationStats == nil {
@@ -1778,7 +1819,7 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// string "ats"
 		o = append(o, 0xa3, 0x61, 0x74, 0x73)
 		if z.AllTierStats == nil {
@@ -1857,6 +1898,24 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "vh":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ObjVersions")
+				return
+			}
+			if zb0003 != uint32(dataUsageVersionLen) {
+				err = msgp.ArrayError{Wanted: uint32(dataUsageVersionLen), Got: zb0003}
+				return
+			}
+			for za0002 := range z.ObjVersions {
+				z.ObjVersions[za0002], bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ObjVersions", za0002)
+					return
+				}
+			}
 		case "rs":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
@@ -1911,7 +1970,7 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntry) Msgsize() (s int) {
-	s = 1 + 3 + z.Children.Msgsize() + 3 + msgp.Int64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + 3
+	s = 1 + 3 + z.Children.Msgsize() + 3 + msgp.Int64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + 3 + msgp.ArrayHeaderSize + (dataUsageVersionLen * (msgp.Uint64Size)) + 3
 	if z.ReplicationStats == nil {
 		s += msgp.NilSize
 	} else {
@@ -3702,5 +3761,83 @@ func (z *tierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z tierStats) Msgsize() (s int) {
 	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize + 3 + msgp.IntSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *versionsHistogram) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != uint32(dataUsageVersionLen) {
+		err = msgp.ArrayError{Wanted: uint32(dataUsageVersionLen), Got: zb0001}
+		return
+	}
+	for za0001 := range z {
+		z[za0001], err = dc.ReadUint64()
+		if err != nil {
+			err = msgp.WrapError(err, za0001)
+			return
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *versionsHistogram) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteArrayHeader(uint32(dataUsageVersionLen))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for za0001 := range z {
+		err = en.WriteUint64(z[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, za0001)
+			return
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *versionsHistogram) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendArrayHeader(o, uint32(dataUsageVersionLen))
+	for za0001 := range z {
+		o = msgp.AppendUint64(o, z[za0001])
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *versionsHistogram) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != uint32(dataUsageVersionLen) {
+		err = msgp.ArrayError{Wanted: uint32(dataUsageVersionLen), Got: zb0001}
+		return
+	}
+	for za0001 := range z {
+		z[za0001], bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, za0001)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *versionsHistogram) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (dataUsageVersionLen * (msgp.Uint64Size))
 	return
 }

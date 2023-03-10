@@ -183,8 +183,9 @@ const (
 	usageInfo   MetricName = "usage_info"
 	versionInfo MetricName = "version_info"
 
-	sizeDistribution = "size_distribution"
-	ttfbDistribution = "ttfb_seconds_distribution"
+	sizeDistribution    = "size_distribution"
+	versionDistribution = "version_distribution"
+	ttfbDistribution    = "ttfb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
@@ -560,6 +561,16 @@ func getBucketObjectDistributionMD() MetricDescription {
 		Namespace: bucketMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      sizeDistribution,
+		Help:      "Distribution of object sizes in the bucket, includes label for the bucket name",
+		Type:      histogramMetric,
+	}
+}
+
+func getBucketObjectVersionsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: objectsSubsystem,
+		Name:      versionDistribution,
 		Help:      "Distribution of object sizes in the bucket, includes label for the bucket name",
 		Type:      histogramMetric,
 	}
@@ -1996,6 +2007,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:          getBucketObjectDistributionMD(),
 				Histogram:            usage.ObjectSizesHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectVersionsMD(),
+				Histogram:            usage.ObjectVersionsHistogram,
 				HistogramBucketLabel: "range",
 				VariableLabels:       map[string]string{"bucket": bucket},
 			})
