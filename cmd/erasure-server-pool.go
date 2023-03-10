@@ -2346,3 +2346,27 @@ func (z *erasureServerPools) CheckAbandonedParts(ctx context.Context, bucket, ob
 	}
 	return nil
 }
+
+// DecomTieredObject - moves tiered object to another pool during decommissioning.
+func (z *erasureServerPools) DecomTieredObject(ctx context.Context, bucket, object string, fi FileInfo, opts ObjectOptions) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return fmt.Errorf("error decommissioning %s/%s", bucket, object)
+	}
+	if !opts.NoLock {
+		ns := z.NewNSLock(bucket, object)
+		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer ns.Unlock(lkctx)
+		opts.NoLock = true
+	}
+	idx, err := z.getPoolIdxNoLock(ctx, bucket, object, fi.Size)
+	if err != nil {
+		return err
+	}
+
+	return z.serverPools[idx].DecomTieredObject(ctx, bucket, object, fi, opts)
+}

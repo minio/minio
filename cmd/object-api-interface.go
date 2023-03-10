@@ -254,6 +254,7 @@ type ObjectLayer interface {
 
 	// Metadata operations
 	PutObjectMetadata(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
+	DecomTieredObject(context.Context, string, string, FileInfo, ObjectOptions) error
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
