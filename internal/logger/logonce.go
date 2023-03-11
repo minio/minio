@@ -27,9 +27,14 @@ import (
 // LogOnce provides the function type for logger.LogOnceIf() function
 type LogOnce func(ctx context.Context, err error, id string, errKind ...interface{})
 
+type onceErr struct {
+	Err   error
+	Count int
+}
+
 // Holds a map of recently logged errors.
 type logOnceType struct {
-	IDMap map[string]error
+	IDMap map[string]onceErr
 	sync.Mutex
 }
 
@@ -41,12 +46,17 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string
 	nerr := unwrapErrs(err)
 	l.Lock()
 	shouldLog := true
-	prevErr, ok := l.IDMap[id]
+	prev, ok := l.IDMap[id]
 	if !ok {
-		l.IDMap[id] = nerr
-	} else {
+		l.IDMap[id] = onceErr{
+			Err:   nerr,
+			Count: 1,
+		}
+	} else if prev.Err.Error() == nerr.Error() {
 		// if errors are equal do not log.
-		shouldLog = prevErr.Error() != nerr.Error()
+		prev.Count++
+		l.IDMap[id] = prev
+		shouldLog = false
 	}
 	l.Unlock()
 
@@ -88,37 +98,41 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKi
 	}
 
 	nerr := unwrapErrs(err)
-
 	l.Lock()
 	shouldLog := true
-	prevErr, ok := l.IDMap[id]
+	prev, ok := l.IDMap[id]
 	if !ok {
-		l.IDMap[id] = nerr
-	} else {
+		l.IDMap[id] = onceErr{
+			Err:   nerr,
+			Count: 1,
+		}
+	} else if prev.Err.Error() == nerr.Error() {
 		// if errors are equal do not log.
-		shouldLog = prevErr.Error() != nerr.Error()
+		prev.Count++
+		l.IDMap[id] = prev
+		shouldLog = false
 	}
 	l.Unlock()
 
 	if shouldLog {
-		LogIf(ctx, err, errKind...)
+		logIf(ctx, err, errKind...)
 	}
 }
 
 // Cleanup the map every 30 minutes so that the log message is printed again for the user to notice.
 func (l *logOnceType) cleanupRoutine() {
 	for {
-		l.Lock()
-		l.IDMap = make(map[string]error)
-		l.Unlock()
+		time.Sleep(time.Hour)
 
-		time.Sleep(30 * time.Minute)
+		l.Lock()
+		l.IDMap = make(map[string]onceErr)
+		l.Unlock()
 	}
 }
 
 // Returns logOnceType
 func newLogOnceType() *logOnceType {
-	l := &logOnceType{IDMap: make(map[string]error)}
+	l := &logOnceType{IDMap: make(map[string]onceErr)}
 	go l.cleanupRoutine()
 	return l
 }

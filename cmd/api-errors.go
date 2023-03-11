@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -2311,6 +2312,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// any underlying errors if possible depending on
 		// their internal error types.
 		switch e := err.(type) {
+		case kms.Error:
+			apiErr = APIError{
+				Description:    e.Err.Error(),
+				Code:           e.APICode,
+				HTTPStatusCode: e.HTTPStatusCode,
+			}
 		case batchReplicationJobError:
 			apiErr = APIError(e)
 		case InvalidArgument:

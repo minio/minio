@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -107,14 +108,22 @@ func (kms secretKey) List() []kes.KeyInfo {
 }
 
 func (secretKey) Metrics(ctx context.Context) (kes.Metric, error) {
-	return kes.Metric{}, errors.New("kms: metrics are not supported")
+	return kes.Metric{}, Error{
+		HTTPStatusCode: http.StatusNotImplemented,
+		APICode:        "KMS.NotImplemented",
+		Err:            errors.New("metrics are not supported"),
+	}
 }
 
 func (kms secretKey) CreateKey(_ context.Context, keyID string) error {
 	if keyID == kms.keyID {
 		return nil
 	}
-	return fmt.Errorf("kms: creating custom key %q is not supported", keyID)
+	return Error{
+		HTTPStatusCode: http.StatusNotImplemented,
+		APICode:        "KMS.NotImplemented",
+		Err:            fmt.Errorf("creating custom key %q is not supported", keyID),
+	}
 }
 
 func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Context) (DEK, error) {
@@ -122,7 +131,11 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 		keyID = kms.keyID
 	}
 	if keyID != kms.keyID {
-		return DEK{}, fmt.Errorf("kms: key %q does not exist", keyID)
+		return DEK{}, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.NotFoundException",
+			Err:            fmt.Errorf("key %q does not exist", keyID),
+		}
 	}
 	iv, err := sioutil.Random(16)
 	if err != nil {
@@ -163,7 +176,11 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 			return DEK{}, err
 		}
 	default:
-		return DEK{}, errors.New("invalid algorithm: " + algorithm)
+		return DEK{}, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            errors.New("invalid algorithm: " + algorithm),
+		}
 	}
 
 	nonce, err := sioutil.Random(aead.NonceSize())
@@ -197,17 +214,29 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 
 func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context) ([]byte, error) {
 	if keyID != kms.keyID {
-		return nil, fmt.Errorf("kms: key %q does not exist", keyID)
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.NotFoundException",
+			Err:            fmt.Errorf("key %q does not exist", keyID),
+		}
 	}
 
 	var encryptedKey encryptedKey
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(ciphertext, &encryptedKey); err != nil {
-		return nil, err
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            err,
+		}
 	}
 
 	if n := len(encryptedKey.IV); n != 16 {
-		return nil, fmt.Errorf("kms: invalid iv size")
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            fmt.Errorf("invalid iv size: %d", n),
+		}
 	}
 
 	var aead cipher.AEAD
@@ -235,17 +264,29 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("kms: invalid algorithm: %q", encryptedKey.Algorithm)
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            fmt.Errorf("invalid algorithm: %q", encryptedKey.Algorithm),
+		}
 	}
 
 	if n := len(encryptedKey.Nonce); n != aead.NonceSize() {
-		return nil, fmt.Errorf("kms: invalid nonce size %d", n)
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            fmt.Errorf("invalid nonce size %d", n),
+		}
 	}
 
 	associatedData, _ := context.MarshalText()
 	plaintext, err := aead.Open(nil, encryptedKey.Nonce, encryptedKey.Bytes, associatedData)
 	if err != nil {
-		return nil, fmt.Errorf("kms: encrypted key is not authentic")
+		return nil, Error{
+			HTTPStatusCode: http.StatusBadRequest,
+			APICode:        "KMS.InternalException",
+			Err:            fmt.Errorf("encrypted key is not authentic"),
+		}
 	}
 	return plaintext, nil
 }
