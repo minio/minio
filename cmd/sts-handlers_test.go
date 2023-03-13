@@ -764,7 +764,7 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	if err != nil {
 		c.Fatalf("list users should not fail: %v", err)
 	}
-	if len(usersList) != 1 {
+	if len(usersList) != 2 {
 		c.Fatalf("expected user listing output: %v", usersList)
 	}
 	uinfo := usersList[userDN]

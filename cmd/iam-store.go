@@ -297,7 +297,7 @@ type iamCache struct {
 }
 
 func newIamCache() *iamCache {
-	return &iamCache{
+	cache := &iamCache{
 		iamPolicyDocsMap:        map[string]PolicyDoc{},
 		iamUsersMap:             map[string]UserIdentity{},
 		iamGroupsMap:            map[string]GroupInfo{},
@@ -305,6 +305,14 @@ func newIamCache() *iamCache {
 		iamUserPolicyMap:        map[string]MappedPolicy{},
 		iamGroupPolicyMap:       map[string]MappedPolicy{},
 	}
+
+	cache.iamUsersMap[globalActiveCred.AccessKey] = newUserIdentity(auth.Credentials{
+		AccessKey: globalActiveCred.AccessKey,
+		SecretKey: globalActiveCred.SecretKey,
+		Status:    auth.AccountOn,
+	})
+
+	return cache
 }
 
 // buildUserGroupMemberships - builds the memberships map. IMPORTANT:
@@ -665,6 +673,9 @@ func (store *IAMStoreSys) AddUsersToGroup(ctx context.Context, group string, mem
 
 	// Validate that all members exist.
 	for _, member := range members {
+		if member == globalActiveCred.AccessKey {
+			return updatedAt, errIAMActionNotAllowed
+		}
 		u, ok := cache.iamUsersMap[member]
 		if !ok {
 			return updatedAt, errNoSuchUser
@@ -752,6 +763,9 @@ func (store *IAMStoreSys) RemoveUsersFromGroup(ctx context.Context, group string
 
 	// Validate that all members exist.
 	for _, member := range members {
+		if member == globalActiveCred.AccessKey {
+			return updatedAt, errIAMActionNotAllowed
+		}
 		u, ok := cache.iamUsersMap[member]
 		if !ok {
 			return updatedAt, errNoSuchUser
@@ -922,6 +936,10 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		return updatedAt, nil, errInvalidArgument
 	}
 
+	if name == globalActiveCred.AccessKey {
+		return updatedAt, nil, errIAMActionNotAllowed
+	}
+
 	cache := store.lock()
 	defer store.unlock()
 
@@ -991,6 +1009,10 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, userType IAMUserType, isGroup bool) (updatedAt time.Time, err error) {
 	if name == "" {
 		return updatedAt, errInvalidArgument
+	}
+
+	if name == globalActiveCred.AccessKey {
+		return updatedAt, errIAMActionNotAllowed
 	}
 
 	cache := store.lock()
@@ -2338,9 +2360,9 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 	cache.updatedAt = time.Now()
 
 	ui, ok := cache.iamUsersMap[accessKey]
-
-	// It is not possible to update an STS account.
-	if ok && ui.Credentials.IsTemp() {
+	// It is not possible to update an STS account or Service Account
+	// in this call. Service Accounts must be updated via AddServiceAccount()
+	if ok && (ui.Credentials.IsTemp() || ui.Credentials.IsServiceAccount()) {
 		return updatedAt, errIAMActionNotAllowed
 	}
 

@@ -27,9 +27,11 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -140,36 +142,40 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 
 // check if the access key is valid and recognized, additionally
 // also returns if the access key is owner/admin.
-func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, APIErrorCode) {
-	cred := globalActiveCred
-	if cred.AccessKey != accessKey {
-		if !globalIAMSys.Initialized() {
-			// Check if server has initialized, then only proceed
-			// to check for IAM users otherwise its okay for clients
-			// to retry with 503 errors when server is coming up.
-			return auth.Credentials{}, false, ErrServerNotInitialized
+func checkKeyValid(r *http.Request, accessKey string) (cred auth.Credentials, owner bool, apiErr APIErrorCode) {
+	owner = accessKey == globalActiveCred.AccessKey
+	if !globalIAMSys.Initialized() {
+		forceEnableRoot := owner && env.Get("_MINIO_ROOT_FORCE_ENABLE", config.EnableOff) == config.EnableOn
+
+		// force enabled root, only used for debugging purposes.
+		if forceEnableRoot && owner {
+			return globalActiveCred, owner, ErrNone
 		}
 
-		// Check if the access key is part of users credentials.
-		u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
-		if !ok {
-			// Credentials will be invalid but and disabled
-			// return a different error in such a scenario.
-			if u.Credentials.Status == auth.AccountOff {
-				return cred, false, ErrAccessKeyDisabled
-			}
-			return cred, false, ErrInvalidAccessKeyID
-		}
-		cred = u.Credentials
+		// Check if server has initialized, then only proceed
+		// to check for IAM users otherwise its okay for clients
+		// to retry with 503 errors when server is coming up.
+		return auth.Credentials{}, false, ErrServerNotInitialized
 	}
 
+	// Check if the access key is part of users credentials.
+	u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
+	if !ok {
+		// Credentials will be invalid but and disabled
+		// return a different error in such a scenario.
+		if u.Credentials.Status == auth.AccountOff {
+			return cred, false, ErrAccessKeyDisabled
+		}
+		return cred, false, ErrInvalidAccessKeyID
+	}
+
+	cred = u.Credentials
 	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return cred, false, s3Err
 	}
 	cred.Claims = claims
 
-	owner := cred.AccessKey == globalActiveCred.AccessKey
 	return cred, owner, ErrNone
 }
 
