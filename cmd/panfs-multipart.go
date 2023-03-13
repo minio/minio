@@ -76,7 +76,7 @@ func (fs *PANFSObjects) decodePartFile(name string) (partNumber int, etag string
 func (fs *PANFSObjects) backgroundAppend(ctx context.Context, bucket, object, uploadID string) {
 	fs.appendFileMapMu.Lock()
 	logger.GetReqInfo(ctx).AppendTags("uploadID", uploadID)
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return
@@ -144,8 +144,12 @@ func (fs *PANFSObjects) ListMultipartUploads(ctx context.Context, bucket, object
 	if err := checkListMultipartArgs(ctx, bucket, object, keyMarker, uploadIDMarker, delimiter, fs); err != nil {
 		return result, toObjectErr(err)
 	}
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return result, toObjectErr(err)
+	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
 		return result, toObjectErr(err, bucket)
 	}
 
@@ -156,11 +160,6 @@ func (fs *PANFSObjects) ListMultipartUploads(ctx context.Context, bucket, object
 	result.NextKeyMarker = object
 	result.UploadIDMarker = uploadIDMarker
 
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		return result, toObjectErr(err)
-	}
 	uploadIDs, err := readDir(fs.getMultipartSHADir(bucketPath, bucket, object))
 	if err != nil {
 		if err == errFileNotFound {
@@ -236,15 +235,14 @@ func (fs *PANFSObjects) NewMultipartUpload(ctx context.Context, bucket, object s
 	if err := dotS3PrefixCheck(bucket, object); err != nil {
 		return nil, err
 	}
-
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return nil, toObjectErr(err, bucket)
-	}
-
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return nil, toObjectErr(err)
+	}
+
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
+		return nil, toObjectErr(err, bucket)
 	}
 
 	uploadID := mustGetUUID()
@@ -328,7 +326,13 @@ func (fs *PANFSObjects) PutObjectPart(ctx context.Context, bucket, object, uploa
 		return pi, toObjectErr(err, bucket)
 	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		logger.LogIf(ctx, err, logger.Application)
+		return pi, toObjectErr(err)
+	}
+
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
 		return pi, toObjectErr(err, bucket)
 	}
 
@@ -338,11 +342,6 @@ func (fs *PANFSObjects) PutObjectPart(ctx context.Context, bucket, object, uploa
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		return pi, toObjectErr(err)
-	}
 	uploadIDDir := fs.getUploadIDDir(bucketPath, bucket, object, uploadID)
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
@@ -415,15 +414,15 @@ func (fs *PANFSObjects) GetMultipartInfo(ctx context.Context, bucket, object, up
 		return minfo, toObjectErr(err)
 	}
 
-	// Check if bucket exists
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return minfo, toObjectErr(err, bucket)
-	}
-
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return minfo, toObjectErr(err)
+	}
+
+	// Check if bucket exists
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
+		return minfo, toObjectErr(err, bucket)
 	}
 
 	uploadIDDir := fs.getUploadIDDir(bucketPath, bucket, object, uploadID)
@@ -467,15 +466,15 @@ func (fs *PANFSObjects) ListObjectParts(ctx context.Context, bucket, object, upl
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
 
-	// Check if bucket exists
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return result, toObjectErr(err, bucket)
-	}
-
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return result, toObjectErr(err)
+	}
+
+	// Check if bucket exists
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
+		return result, toObjectErr(err, bucket)
 	}
 
 	uploadIDDir := fs.getUploadIDDir(bucketPath, bucket, object, uploadID)
@@ -598,16 +597,16 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 		return oi, toObjectErr(err)
 	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return oi, toObjectErr(err, bucket)
-	}
-	defer NSUpdated(bucket, object)
-
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return oi, toObjectErr(err)
 	}
+
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
+		return oi, toObjectErr(err, bucket)
+	}
+	defer NSUpdated(bucket, object)
 
 	uploadIDDir := fs.getUploadIDDir(bucketPath, bucket, object, uploadID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
@@ -820,8 +819,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	// TODO: move to relative position when config agent will be here
-	err = fsRenameFile(ctx, appendFilePath, pathJoin(fs.fsPath, bucket, object))
+	err = fsRenameFile(ctx, appendFilePath, pathJoin(bucketPath, object))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)
@@ -838,7 +836,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 		fsRemoveDir(ctx, fs.getMultipartSHADir(bucketPath, bucket, object))
 	}
 
-	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	fi, err := fsStatFile(ctx, pathJoin(bucketPath, object))
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -863,7 +861,13 @@ func (fs *PANFSObjects) AbortMultipartUpload(ctx context.Context, bucket, object
 		return err
 	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
+	bucketPath, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		logger.LogIf(ctx, err, logger.Application)
+		return toObjectErr(err) // Or just err?
+	}
+
+	if _, err := fsStatVolume(ctx, bucketPath); err != nil {
 		return toObjectErr(err, bucket)
 	}
 
@@ -875,12 +879,6 @@ func (fs *PANFSObjects) AbortMultipartUpload(ctx context.Context, bucket, object
 	}
 	delete(fs.appendFileMap, uploadID)
 	fs.appendFileMapMu.Unlock()
-
-	bucketPath, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		return toObjectErr(err) // Or just err?
-	}
 
 	uploadIDDir := fs.getUploadIDDir(bucketPath, bucket, object, uploadID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
@@ -911,19 +909,19 @@ func (fs *PANFSObjects) AbortMultipartUpload(ctx context.Context, bucket, object
 func (fs *PANFSObjects) getAllUploadIDs(ctx context.Context) (result map[string]string) {
 	result = make(map[string]string)
 
-	entries, err := readDir(pathJoin(fs.fsPath, minioMetaMultipartBucket))
+	entries, err := fs.ListBuckets(ctx, BucketOptions{})
 	if err != nil {
 		return
 	}
 	for _, entry := range entries {
-		uploadIDs, err := readDir(pathJoin(fs.fsPath, minioMetaMultipartBucket, entry))
+		uploadIDs, err := readDir(pathJoin(entry.PanFSPath, panfsS3MultipartDir))
 		if err != nil {
 			continue
 		}
 		// Remove the trailing slash separator
 		for i := range uploadIDs {
 			uploadID := strings.TrimSuffix(uploadIDs[i], SlashSeparator)
-			result[uploadID] = pathJoin(fs.fsPath, minioMetaMultipartBucket, entry, uploadID)
+			result[uploadID] = pathJoin(entry.PanFSPath, panfsS3MultipartDir, uploadID)
 		}
 	}
 	return

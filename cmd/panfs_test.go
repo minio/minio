@@ -102,46 +102,23 @@ func TestPANFSGetBucketInfo(t *testing.T) {
 
 	err = obj.MakeBucketWithLocation(GlobalContext, "a", MakeBucketOptions{})
 	if !isSameType(err, BucketNameInvalid{}) {
-		t.Fatal("BucketNameInvalid error not returned")
+		t.Fatalf("Expecting error %v, got %s\"", BucketNameInvalid{}, err)
 	}
 
-	// Test default panfs bucket path
-	defaultPanfsBucket := "defaultpanfspath"
-	err = obj.MakeBucketWithLocation(GlobalContext, defaultPanfsBucket, MakeBucketOptions{})
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, MakeBucketOptions{
+		PanFSBucketPath: disk,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	info, err := fs.GetBucketInfo(GlobalContext, defaultPanfsBucket, BucketOptions{})
+	info, err := fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.PanFSPath != globalPanFSDefaultBucketPath {
-		t.Fatalf("wrong bucket panfs path, expected: %s, found: %s", globalPanFSDefaultBucketPath, info.PanFSPath)
+	if info.PanFSPath != disk {
+		t.Fatalf("wrong bucket panfs path, expected: %s, found: %s", disk, info.PanFSPath)
 	}
-
-	// Test custom bucket panfs path
-	panfsBucketPath := filepath.Join(disk, "customPath")
-	opts := MakeBucketOptions{
-		PanFSBucketPath: panfsBucketPath,
-	}
-	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Test with valid parameters
-	info, err = fs.GetBucketInfo(GlobalContext, bucketName, BucketOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Name != bucketName {
-		t.Fatalf("wrong bucket name, expected: %s, found: %s", bucketName, info.Name)
-	}
-	if info.PanFSPath != panfsBucketPath {
-		t.Fatalf("wrong bucket panfs path, expected: %s, found: %s", panfsBucketPath, info.PanFSPath)
-	}
-
 	// Test with non-existent bucket
 	_, err = fs.GetBucketInfo(GlobalContext, "a", BucketOptions{})
 	if !isSameType(err, BucketNotFound{}) {

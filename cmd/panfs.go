@@ -435,18 +435,7 @@ func (fs *PANFSObjects) scanBucket(ctx context.Context, bucket string, cache dat
 
 // Bucket operations
 
-// getBucketDir - will convert incoming bucket names to
-// corresponding valid bucket names on the backend in a platform
-// compatible way for all operating systems.
-func (fs *PANFSObjects) getBucketDir(ctx context.Context, bucket string) (string, error) {
-	if bucket == "" || bucket == "." || bucket == ".." {
-		return "", errVolumeNotFound
-	}
-	bucketDir := pathJoin(fs.fsPath, bucket)
-	return bucketDir, nil
-}
-
-// loadBucketMetadata loads bucket metadata from the disk. TODO: this function should use the configuration agent
+// loadBucketMetadata loads bucket metadata from the disk.
 // Returns an error when the bucket metadata file not found
 func (fs *PANFSObjects) loadBucketMetadata(ctx context.Context, bucket string) (BucketMetadata, error) {
 	b := newBucketMetadata(bucket)
@@ -467,30 +456,24 @@ func (fs *PANFSObjects) loadBucketMetadata(ctx context.Context, bucket string) (
 	return b, nil
 }
 
-// TO_REFACTOR: Let's use cache for bucket metadata path
-func (fs *PANFSObjects) getBucketPanFSPathFromMeta(ctx context.Context, bucket string) (path string, err error) {
-	meta, err := fs.loadBucketMetadata(ctx, bucket)
-	if err != nil {
-		return
+// getBucketPanFSPath returns path to the bucket.
+func (fs *PANFSObjects) getBucketPanFSPath(ctx context.Context, bucket string) (path string, err error) {
+	if bucket != minioMetaBucket {
+		// Trim trailing slash if exists
+		bucket = strings.Trim(bucket, slashSeparator)
+		meta, err := fs.loadBucketMetadata(ctx, bucket)
+		if err != nil {
+			return "", err
+		}
+		path = pathJoin(meta.PanFSPath, bucket)
+	} else {
+		path = pathJoin(fs.fsPath, bucket)
 	}
-	path = pathJoin(meta.PanFSPath, bucket)
-	return
+	return path, nil
 }
 
 func (fs *PANFSObjects) statPanFSBucketDir(ctx context.Context, bucket string) (os.FileInfo, error) {
-	bucketDir, err := fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	if err != nil {
-		return nil, err
-	}
-	st, err := fsStatVolume(ctx, bucketDir)
-	if err != nil {
-		return nil, err
-	}
-	return st, nil
-}
-
-func (fs *PANFSObjects) statBucketDir(ctx context.Context, bucket string) (os.FileInfo, error) {
-	bucketDir, err := fs.getBucketDir(ctx, bucket)
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -519,29 +502,17 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 
 	defer NSUpdated(bucket, slashSeparator)
 
-	bucketDir, err := fs.getBucketDir(ctx, bucket)
-	if err != nil {
-		return toObjectErr(err, bucket)
-	}
-	// fsMkdir is fs-v1 specific method. Maybe it makes sense to create panfs-helpers.go...
-	if err = fsMkdir(ctx, bucketDir); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
 	bucketMetaDir := pathJoin(opts.PanFSBucketPath, bucket, panfsMetaDir)
-	// Create dir for object metadata
-	if err := mkdirAll(pathJoin(bucketMetaDir, objMetadataDir), 0o777); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
-	// Create dir for temporary uploads
-	if err := mkdirAll(pathJoin(bucketMetaDir, tmpDir), 0o777); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
-	// Create dir for multipart uploads
-	if err := mkdirAll(pathJoin(bucketMetaDir, mpartMetaPrefix), 0o777); err != nil {
-		return toObjectErr(err, bucket)
+	for _, dir := range []string{
+		pathJoin(opts.PanFSBucketPath, bucket),
+		bucketMetaDir,
+		pathJoin(bucketMetaDir, objMetadataDir),
+		pathJoin(bucketMetaDir, tmpDir),
+		pathJoin(bucketMetaDir, mpartMetaPrefix),
+	} {
+		if err := fsMkdir(ctx, dir); err != nil {
+			return toObjectErr(err, bucket)
+		}
 	}
 
 	meta := newBucketMetadata(bucket)
@@ -552,11 +523,7 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 	}
 
 	if fs.configAgent != nil {
-		err = fs.configAgent.PutObject(
-			pathJoin(panfsBucketListPrefix, bucket),
-			nil,
-		)
-		if err != nil {
+		if err := fs.configAgent.PutObject(pathJoin(panfsBucketListPrefix, bucket), nil); err != nil {
 			return err
 		}
 	}
@@ -611,13 +578,7 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	// There are several calls of GetBucketInfo with `.minio.sys` bucket at the initialization time.
 	// See: listIAMConfigItems.go:listIAMConfigItems
 	var st os.FileInfo
-	var err error
-	if bucket != minioMetaBucket {
-		st, err = fs.statPanFSBucketDir(ctx, bucket)
-	} else {
-		st, err = fs.statBucketDir(ctx, bucket)
-	}
-
+	st, err := fs.statPanFSBucketDir(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
 	}
@@ -659,7 +620,8 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 			}
 		}
 	} else {
-		entries, err = readDirWithOpts(fs.fsPath, readDirOpts{count: -1, followDirSymlink: true})
+		// Read bucket list from folder where theirs metadata are stored
+		entries, err = readDirWithOpts(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix), readDirOpts{count: -1, followDirSymlink: true})
 	}
 
 	if err != nil {
@@ -674,7 +636,12 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 			continue
 		}
 		var fi os.FileInfo
-		fi, err = fsStatVolume(ctx, pathJoin(fs.fsPath, entry))
+
+		bucketDir, err := fs.getBucketPanFSPath(ctx, entry)
+		if err != nil {
+			continue
+		}
+		fi, err = fsStatVolume(ctx, bucketDir)
 		// There seems like no practical reason to check for errors
 		// at this point, if there are indeed errors we can simply
 		// just ignore such buckets and list only those which
@@ -714,17 +681,19 @@ func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts De
 		return err
 	}
 
-	bucketDir, err := fs.getBucketDir(ctx, bucket)
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
 
+	// TODO: delete bucket operation should preserve user objects on the realm
 	if !opts.Force {
 		// Attempt to delete regular bucket.
 		if err = removePanFSBucketDir(ctx, bucketDir); err != nil {
 			return toObjectErr(err, bucket)
 		}
 	} else {
+		// Still using here .minio.sys as temp dir for delete bucket
 		tmpBucketPath := pathJoin(fs.fsPath, minioMetaTmpBucket, bucket+"."+mustGetUUID())
 		if err = Rename(bucketDir, tmpBucketPath); err != nil {
 			return toObjectErr(err, bucket)
@@ -733,12 +702,6 @@ func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts De
 		go func() {
 			fsRemoveAll(ctx, tmpBucketPath) // ignore returned error if any.
 		}()
-	}
-
-	// Cleanup all the bucket metadata.
-	minioMetadataBucketDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket)
-	if err = fsRemoveAll(ctx, minioMetadataBucketDir); err != nil {
-		return toObjectErr(err, bucket)
 	}
 
 	// Delete all bucket metadata.
@@ -789,12 +752,16 @@ func (fs *PANFSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, ds
 		defer objectDWLock.Unlock(lkctx.Cancel)
 	}
 
-	if _, err := fs.statBucketDir(ctx, srcBucket); err != nil {
+	if _, err := fs.statPanFSBucketDir(ctx, srcBucket); err != nil {
 		return oi, toObjectErr(err, srcBucket)
 	}
 
 	if cpSrcDstSame && srcInfo.metadataOnly {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
+		bucketDir, err := fs.getBucketPanFSPath(ctx, srcBucket)
+		if err != nil {
+			return oi, err
+		}
+		fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
 			wlk, err = fs.rwPool.Create(fsMetaPath)
@@ -819,7 +786,7 @@ func (fs *PANFSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, ds
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
-		fsObjectPath := pathJoin(fs.fsPath, srcBucket, srcObject)
+		fsObjectPath := pathJoin(bucketDir, srcObject)
 
 		// Update object modtime
 		err = fsTouch(ctx, fsObjectPath)
@@ -867,10 +834,6 @@ func (fs *PANFSObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 		return nil, err
 	}
 
-	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
-		return nil, toObjectErr(err, bucket)
-	}
-
 	nsUnlocker := func() {}
 
 	if lockType != noLock {
@@ -906,10 +869,15 @@ func (fs *PANFSObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 		// objReader.Close() is called by the caller.
 		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
 	}
+
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return nil, err
+	}
 	// Take a rwPool lock for NFS gateway type deployment
 	rwPoolUnlocker := func() {}
 	if bucket != minioMetaBucket && lockType != noLock {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+		fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 		_, err = fs.rwPool.Open(fsMetaPath)
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(ctx, err)
@@ -939,7 +907,7 @@ func (fs *PANFSObjects) GetObjectNInfo(ctx context.Context, bucket, object strin
 		}
 	} else {
 		// Read the object, doesn't exist returns an s3 compatible error.
-		fsObjPath := pathJoin(fs.fsPath, bucket, object)
+		fsObjPath := pathJoin(bucketDir, object)
 		readCloser, size, err = fsOpenFile(ctx, fsObjPath, off)
 	}
 
@@ -995,8 +963,13 @@ func (fs *PANFSObjects) defaultFsJSON(object string) panfsMeta {
 
 func (fs *PANFSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := panfsMeta{}
+
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return oi, err
+	}
 	if HasSuffix(object, SlashSeparator) {
-		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
+		fi, err := fsStatDir(ctx, pathJoin(bucketDir, object))
 		if err != nil {
 			return oi, err
 		}
@@ -1005,14 +978,14 @@ func (fs *PANFSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, objec
 
 	if !globalCLIContext.StrictS3Compat {
 		// Stat the file to get file size.
-		fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		fi, err := fsStatFile(ctx, pathJoin(bucketDir, object))
 		if err != nil {
 			return oi, err
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
 
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+	fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
 
@@ -1048,7 +1021,7 @@ func (fs *PANFSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, objec
 	if fs.isConfigAgentObject(bucket, object) {
 		fi, err = fs.configAgent.GetObjectInfo(pathJoin(panfsObjectsPrefix, bucket, object))
 	} else {
-		fi, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		fi, err = fsStatFile(ctx, pathJoin(bucketDir, object))
 	}
 	if err != nil {
 		return oi, err
@@ -1059,20 +1032,23 @@ func (fs *PANFSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, objec
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *PANFSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
-	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucket, object) {
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return oi, err
+	}
+	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucketDir, object) {
 		return oi, errFileNotFound
 	}
 
 	fsMeta := panfsMeta{}
 	if HasSuffix(object, SlashSeparator) {
-		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
+		fi, err := fsStatDir(ctx, pathJoin(bucketDir, object))
 		if err != nil {
 			return oi, err
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
 	}
-
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+	fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
 
@@ -1103,7 +1079,7 @@ func (fs *PANFSObjects) getObjectInfo(ctx context.Context, bucket, object string
 	if fs.isConfigAgentObject(bucket, object) {
 		fi, err = fs.configAgent.GetObjectInfo(pathJoin(panfsObjectsPrefix, bucket, object))
 	} else {
-		fi, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		fi, err = fsStatFile(ctx, pathJoin(bucketDir, object))
 	}
 	if err != nil {
 		return oi, err
@@ -1127,11 +1103,12 @@ func (fs *PANFSObjects) getObjectInfoWithLock(ctx context.Context, bucket, objec
 		return oi, err
 	}
 
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
 		return oi, err
 	}
 
-	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucket, object) {
+	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucketDir, object) {
 		return oi, errFileNotFound
 	}
 
@@ -1160,7 +1137,11 @@ func (fs *PANFSObjects) GetObjectInfo(ctx context.Context, bucket, object string
 			return oi, toObjectErr(err, bucket, object)
 		}
 
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+		bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+		if err != nil {
+			return oi, err
+		}
+		fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 		err = fs.createFsJSON(object, fsMetaPath)
 		lk.Unlock(lkctx.Cancel)
 		if err != nil {
@@ -1218,19 +1199,13 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 	meta := cloneMSS(opts.UserDefined)
 	var err error
 
-	// This is new location of object metadata. NOTE: target bucket (at least at the moment)
-	var bucketDir string
-	if bucket == minioMetaBucket {
-		bucketDir, err = fs.getBucketDir(ctx, bucket)
-	} else {
-		bucketDir, err = fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	}
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
 	// Validate if bucket name is valid and exists.
-	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
+	if _, err = fsStatVolume(ctx, bucketDir); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
@@ -1240,13 +1215,13 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
-	if isObjectDir(object, data.Size()) {
-		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0o777); err != nil {
+	if isObjectDir(pathJoin(bucketDir, object), data.Size()) {
+		if err = mkdirAll(pathJoin(bucketDir, object), 0o777); err != nil {
 			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		var fi os.FileInfo
-		if fi, err = fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object)); err != nil {
+		if fi, err = fsStatDir(ctx, pathJoin(bucketDir, object)); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
@@ -1280,9 +1255,8 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 			//
 			// We should preserve the `fs.json` of any
 			// existing object
-			// TODO: Update fsRemoveMeta method. Should be used bucketPath
 			if retErr != nil && freshFile {
-				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+				tmpDir := pathJoin(bucketDir, panfsS3TmpDir, fs.fsUUID)
 				fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir) // TODO: check this delete
 			}
 		}()
@@ -1302,7 +1276,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 			return ObjectInfo{}, retErr
 		}
 	} else {
-		fsTmpObjPath := pathJoin(bucketDir, panfsMetaDir, tmpDir, fs.fsUUID, tempObj)
+		fsTmpObjPath := pathJoin(bucketDir, panfsS3TmpDir, fs.fsUUID, tempObj)
 		bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
 		// Delete the temporary object in the case of a
@@ -1322,7 +1296,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 		}
 
 		// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-		fsNSObjPath = pathJoin(fs.fsPath, bucket, object)
+		fsNSObjPath = pathJoin(bucketDir, object)
 		if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -1405,27 +1379,21 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 		return objInfo, err
 	}
 
-	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return objInfo, err
+	}
+
+	if _, err = fsStatVolume(ctx, bucketDir); err != nil {
 		return objInfo, toObjectErr(err, bucket)
 	}
 
 	var rwlk *lock.LockedFile
 
-	var bucketPanfsDir string
-	// DeleteObject operation at the moment handles the configuration objects. Configuration agent will handle such
-	// kind of operations (e.g. user/policy/group ops) and then panfs backend only will be responsible for object
-	// (real data) operations. At the moment we need to check whether the target bucket is the minio system bucket which
-	// stores all config files.
-	// TODO: remove this if..else block when config agent will be here
-	if bucket != minioMetaBucket {
-		bucketPanfsDir, err = fs.getBucketPanFSPathFromMeta(ctx, bucket)
-	} else {
-		bucketPanfsDir, err = fs.getBucketDir(ctx, bucket)
-	}
 	if err != nil {
 		return objInfo, toObjectErr(err, bucket)
 	}
-	fsMetaPath := pathJoin(bucketPanfsDir, panfsMetaDir, objMetadataDir, object, fs.metaJSONFile)
+	fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 	if bucket != minioMetaBucket {
 		rwlk, err = fs.rwPool.Write(fsMetaPath)
 		if err != nil && err != errFileNotFound {
@@ -1440,7 +1408,7 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 		noLock := ""
 		err = fs.configAgent.DeleteObject(objectName, noLock)
 	} else {
-		err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object))
+		err = fsDeleteFile(ctx, pathJoin(bucketDir), pathJoin(bucketDir, object))
 	}
 
 	// Close fsMetaPath before returning due to error or fsMetaPath
@@ -1455,7 +1423,7 @@ func (fs *PANFSObjects) DeleteObject(ctx context.Context, bucket, object string,
 
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
-		err = fsDeleteFile(ctx, pathJoin(bucketPanfsDir, panfsMetaDir, objMetadataDir), fsMetaPath)
+		err = fsDeleteFile(ctx, pathJoin(bucketDir, panfsS3MetadataDir), fsMetaPath)
 		if err != nil && err != errFileNotFound {
 			return objInfo, toObjectErr(err, bucket, object)
 		}
@@ -1528,7 +1496,12 @@ func (fs *PANFSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 		var err error
-		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
+
+		bucketDir, err := fs.getBucketPanFSPath(context.Background(), bucket)
+		if err != nil {
+			return false, nil, false
+		}
+		entries, err = readDir(pathJoin(bucketDir, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(GlobalContext, err)
 			return false, nil, false
@@ -1572,16 +1545,11 @@ func (fs *PANFSObjects) filterOutPanFSS3Dir(entries []string) (filtered []string
 
 // isObjectDir returns true if the specified bucket & prefix exists
 // and the prefix represents an empty directory. An S3 empty directory
-// is also an empty directory in the FS backend.
+// is also an empty directory in the PanFS backend.
 func (fs *PANFSObjects) isObjectDir(bucket, prefix string) bool {
 	if fs.configAgent != nil {
 		entries, err := fs.configAgent.GetObjectsList(pathJoin(panfsObjectsPrefix, bucket, prefix, slashSeparator))
-		if err != nil {
-			return false
-		}
-		if len(entries) > 0 {
-			return false
-		}
+		return err != nil && len(entries) == 0
 	}
 	entries, err := readDirN(pathJoin(fs.fsPath, bucket, prefix), 1)
 	if err != nil {
@@ -1647,8 +1615,11 @@ func (fs *PANFSObjects) PutObjectTags(ctx context.Context, bucket, object string
 			VersionID: opts.VersionID,
 		}
 	}
-
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+	bucketDir, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	fsMetaPath := pathJoin(bucketDir, panfsS3MetadataDir, object, fs.metaJSONFile)
 	fsMeta := panfsMeta{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
 	if err != nil {
@@ -1680,7 +1651,7 @@ func (fs *PANFSObjects) PutObjectTags(ctx context.Context, bucket, object string
 	}
 
 	// Stat the file to get file size.
-	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	fi, err := fsStatFile(ctx, pathJoin(bucketDir, object))
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -1810,7 +1781,11 @@ func (fs *PANFSObjects) RestoreTransitionedObject(ctx context.Context, bucket, o
 // Errors are ignored, only errors from the callback are returned.
 // For now only direct file paths are supported.
 func (fs *PANFSObjects) GetRawData(ctx context.Context, volume, file string, fn func(r io.Reader, host string, disk string, filename string, size int64, modtime time.Time, isDir bool) error) error {
-	f, err := os.Open(filepath.Join(fs.fsPath, volume, file))
+	bucketDir, err := fs.getBucketPanFSPath(ctx, volume)
+	if err != nil {
+		return nil
+	}
+	f, err := os.Open(filepath.Join(bucketDir, file))
 	if err != nil {
 		return nil
 	}
