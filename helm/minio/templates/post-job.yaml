@@ -50,6 +50,8 @@ spec:
         fsGroup: {{ .Values.postJob.securityContext.fsGroup }}
       {{- end }}
       volumes:
+        - name: minio-config-dir
+          emptyDir: {}
         - name: minio-configuration
           projected:
             sources:
@@ -105,6 +107,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: minio-config-dir
+              mountPath: {{ .Values.configPathmc }}
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -135,6 +139,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: minio-config-dir
+              mountPath: {{ .Values.configPathmc }}
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -165,6 +171,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: minio-config-dir
+              mountPath: {{ .Values.configPathmc }}
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -195,6 +203,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: minio-config-dir
+              mountPath: {{ .Values.configPathmc }}
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -225,6 +235,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: minio-config-dir
+              mountPath: {{ .Values.configPathmc }}
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
