@@ -271,6 +271,9 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {
+	globalLocalDrivesMu.RLock()
+	globalLocalDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
 	for _, disk := range globalLocalDrives {
 		_, err := disk.GetDiskID()
 		if errors.Is(err, errUnformattedDisk) {
