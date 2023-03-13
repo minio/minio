@@ -156,7 +156,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		break
 	}
 
+	globalLocalDrivesMu.Lock()
 	globalLocalDrives = localDrives
+	defer globalLocalDrivesMu.Unlock()
 	return z, nil
 }
 
