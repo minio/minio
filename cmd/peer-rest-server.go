@@ -928,6 +928,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
@@ -977,6 +978,21 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, err)
 		return
 	}
+
+	// Publish bootstrap events that have already occurred before client could subscribe.
+	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) && !globalBootstrapTracer.Empty() {
+		go func() {
+			bsEvents := globalBootstrapTracer.Events()
+			for _, bsEvent := range bsEvents {
+				select {
+				case <-r.Context().Done():
+				default:
+					globalTrace.Publish(bsEvent)
+				}
+			}
+		}()
+	}
+
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
