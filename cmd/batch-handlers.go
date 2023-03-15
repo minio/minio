@@ -1212,30 +1212,55 @@ func batchReplicationTrace(d batchReplicationMetric, job string, startTime time.
 	}
 }
 
-func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics) {
-	metrics = &madmin.BatchJobMetrics{CollectedAt: time.Now(), Jobs: make(map[string]madmin.JobMetric)}
+func (m *batchJobMetrics) report(jobID string) *madmin.BatchJobMetrics {
 	m.RLock()
 	defer m.RUnlock()
-	for id, job := range m.metrics {
-		if jobID != "" && id == jobID {
-			metrics.Jobs[id] = madmin.JobMetric{
-				JobID:         job.JobID,
-				JobType:       job.JobType,
-				StartTime:     job.StartTime,
-				LastUpdate:    job.LastUpdate,
-				RetryAttempts: job.RetryAttempts,
-				Complete:      job.Complete,
-				Failed:        job.Failed,
-				Replicate: &madmin.ReplicateInfo{
-					Bucket:           job.Bucket,
-					Object:           job.Object,
-					Objects:          job.Objects,
-					ObjectsFailed:    job.ObjectsFailed,
-					BytesTransferred: job.BytesTransferred,
-					BytesFailed:      job.BytesFailed,
+	if jobID != "" {
+		job, ok := m.metrics[jobID]
+		if !ok {
+			return nil
+		}
+		return &madmin.BatchJobMetrics{
+			CollectedAt: time.Now(),
+			Jobs: map[string]madmin.JobMetric{
+				jobID: {
+					JobID:         job.JobID,
+					JobType:       job.JobType,
+					StartTime:     job.StartTime,
+					LastUpdate:    job.LastUpdate,
+					RetryAttempts: job.RetryAttempts,
+					Complete:      job.Complete,
+					Failed:        job.Failed,
+					Replicate: &madmin.ReplicateInfo{
+						Bucket:           job.Bucket,
+						Object:           job.Object,
+						Objects:          job.Objects,
+						ObjectsFailed:    job.ObjectsFailed,
+						BytesTransferred: job.BytesTransferred,
+						BytesFailed:      job.BytesFailed,
+					},
 				},
-			}
-			break
+			},
+		}
+	}
+	metrics := &madmin.BatchJobMetrics{CollectedAt: time.Now(), Jobs: make(map[string]madmin.JobMetric)}
+	for id, job := range m.metrics {
+		metrics.Jobs[id] = madmin.JobMetric{
+			JobID:         job.JobID,
+			JobType:       job.JobType,
+			StartTime:     job.StartTime,
+			LastUpdate:    job.LastUpdate,
+			RetryAttempts: job.RetryAttempts,
+			Complete:      job.Complete,
+			Failed:        job.Failed,
+			Replicate: &madmin.ReplicateInfo{
+				Bucket:           job.Bucket,
+				Object:           job.Object,
+				Objects:          job.Objects,
+				ObjectsFailed:    job.ObjectsFailed,
+				BytesTransferred: job.BytesTransferred,
+				BytesFailed:      job.BytesFailed,
+			},
 		}
 	}
 	return metrics
