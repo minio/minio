@@ -796,8 +796,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 				// Make sure to add Location information here only for bucket
-				w.Header().Set(xhttp.Location,
-					getObjectLocation(r, globalDomainNames, bucket, ""))
+				w.Header().Set(xhttp.Location, pathJoin(SlashSeparator, bucket))
 
 				writeSuccessResponseHeadersOnly(w)
 
@@ -848,9 +847,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	logger.LogIf(ctx, globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts))
 
 	// Make sure to add Location information here only for bucket
-	if cp := pathClean(r.URL.Path); cp != "" {
-		w.Header().Set(xhttp.Location, cp) // Clean any trailing slashes.
-	}
+	w.Header().Set(xhttp.Location, pathJoin(SlashSeparator, bucket))
 
 	writeSuccessResponseHeadersOnly(w)
 
@@ -1123,7 +1120,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
-	w.Header().Set(xhttp.Location, getObjectLocation(r, globalDomainNames, bucket, object))
+	if obj := getObjectLocation(r, globalDomainNames, bucket, object); obj != "" {
+		w.Header().Set(xhttp.Location, obj)
+	}
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{
