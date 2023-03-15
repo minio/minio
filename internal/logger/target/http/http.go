@@ -258,7 +258,11 @@ func New(config Config) *Target {
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}) error {
 	if !h.online {
-		return nil
+		// Try to initialize the target and see if it has come online, post last restart of MinIO
+		if err := h.Init(); err != nil {
+			// Return nil as target is still offline
+			return nil
+		}
 	}
 
 	select {
