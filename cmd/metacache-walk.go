@@ -323,13 +323,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 			case isSysErrNotDir(err):
 				// skip
-			default:
-				// It is totally possible that xl.meta was overwritten
-				// while being concurrently listed at the same time in
-				// such scenarios the 'xl.meta' might get truncated
-				if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-					logger.LogIf(ctx, err)
-				}
 			}
 		}
 
