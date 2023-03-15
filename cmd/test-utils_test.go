@@ -224,19 +224,6 @@ func prepareErasure16(ctx context.Context) (ObjectLayer, []string, error) {
 	return prepareErasure(ctx, 16)
 }
 
-// Initialize FS objects.
-func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	newTestConfig(globalMinioDefaultRegion, obj)
-
-	initAllSubsystems(GlobalContext)
-	return obj
-}
-
 // TestErrHandler - Go testing.T satisfy this interface.
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be

@@ -31,9 +31,14 @@ func toObjectErr(err error, params ...string) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
+
+	// Unwarp the error first
+	err = unwrapAll(err)
+
+	if err == context.Canceled {
 		return context.Canceled
 	}
+
 	switch err.Error() {
 	case errVolumeNotFound.Error():
 		apiErr := BucketNotFound{}
