@@ -1217,25 +1217,24 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 	m.RLock()
 	defer m.RUnlock()
 	for id, job := range m.metrics {
-		match := jobID != "" && id == jobID
-		metrics.Jobs[id] = madmin.JobMetric{
-			JobID:         job.JobID,
-			JobType:       job.JobType,
-			StartTime:     job.StartTime,
-			LastUpdate:    job.LastUpdate,
-			RetryAttempts: job.RetryAttempts,
-			Complete:      job.Complete,
-			Failed:        job.Failed,
-			Replicate: &madmin.ReplicateInfo{
-				Bucket:           job.Bucket,
-				Object:           job.Object,
-				Objects:          job.Objects,
-				ObjectsFailed:    job.ObjectsFailed,
-				BytesTransferred: job.BytesTransferred,
-				BytesFailed:      job.BytesFailed,
-			},
-		}
-		if match {
+		if jobID != "" && id == jobID {
+			metrics.Jobs[id] = madmin.JobMetric{
+				JobID:         job.JobID,
+				JobType:       job.JobType,
+				StartTime:     job.StartTime,
+				LastUpdate:    job.LastUpdate,
+				RetryAttempts: job.RetryAttempts,
+				Complete:      job.Complete,
+				Failed:        job.Failed,
+				Replicate: &madmin.ReplicateInfo{
+					Bucket:           job.Bucket,
+					Object:           job.Object,
+					Objects:          job.Objects,
+					ObjectsFailed:    job.ObjectsFailed,
+					BytesTransferred: job.BytesTransferred,
+					BytesFailed:      job.BytesFailed,
+				},
+			}
 			break
 		}
 	}
