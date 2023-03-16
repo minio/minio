@@ -21,17 +21,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/target/types"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -59,31 +58,30 @@ type Config struct {
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
+const (
+	offline = iota
+	online
+	closed
+)
+
 // Target implements logger.Target and sends the json
 // format of a log entry to the configured http endpoint.
 // An internal buffer of logs is maintained but when the
 // buffer is full, new logs are just ignored and an error
 // is returned to the caller.
 type Target struct {
+	connected int32
+
 	totalMessages  int64
 	failedMessages int64
 
-	// Worker control
-	workers       int64
-	workerStartMu sync.Mutex
-	lastStarted   time.Time
-
-	wg     sync.WaitGroup
 	doneCh chan struct{}
 
 	// Channel of log entries
 	logCh chan interface{}
 
-	// online targets count
-	online int64
-
 	config Config
-	client *http.Client
+	client http.Client
 }
 
 // Endpoint returns the backend endpoint
@@ -97,7 +95,7 @@ func (h *Target) String() string {
 
 // IsOnline returns true if the initialization was successful
 func (h *Target) IsOnline() bool {
-	return h.online > 0
+	return atomic.LoadInt32(&h.connected) == online
 }
 
 // Stats returns the target statistics.
@@ -138,12 +136,11 @@ func (h *Target) Init() error {
 		h.config.Transport = ctransport
 	}
 
-	client := http.Client{Transport: h.config.Transport}
-	resp, err := client.Do(req)
+	h.client = http.Client{Transport: h.config.Transport}
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return err
 	}
-	h.client = &client
 
 	// Drain any response.
 	xhttp.DrainBody(resp.Body)
@@ -157,10 +154,11 @@ func (h *Target) Init() error {
 			h.config.Endpoint, resp.Status)
 	}
 
-	h.lastStarted = time.Now()
-	atomic.AddInt64(&h.online, 1)
-	atomic.AddInt64(&h.workers, 1)
-	go h.startHTTPLogger()
+	atomic.AddInt32(&h.connected, online)
+	for i := 0; i < maxWorkers; i++ {
+		// Start all workers.
+		go h.startHTTPLogger()
+	}
 	return nil
 }
 
@@ -201,9 +199,8 @@ func (h *Target) logEntry(entry interface{}) {
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		if strings.Contains(err.Error(), "connect: connection refused") {
-			atomic.AddInt64(&h.online, -1)
-			atomic.AddInt64(&h.workers, -1)
+		if xnet.IsNetworkOrHostDown(err, true) {
+			atomic.StoreInt32(&h.connected, offline)
 		}
 		atomic.AddInt64(&h.failedMessages, 1)
 		h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
@@ -227,23 +224,15 @@ func (h *Target) logEntry(entry interface{}) {
 func (h *Target) startHTTPLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
-	h.wg.Add(1)
-	go func() {
-		defer func() {
-			h.wg.Done()
-			atomic.AddInt64(&h.workers, -1)
-		}()
-
-		for {
-			select {
-			case entry := <-h.logCh:
-				atomic.AddInt64(&h.totalMessages, 1)
-				h.logEntry(entry)
-			case <-h.doneCh:
-				return
-			}
+	for {
+		select {
+		case entry := <-h.logCh:
+			atomic.AddInt64(&h.totalMessages, 1)
+			h.logEntry(entry)
+		case <-h.doneCh:
+			return
 		}
-	}()
+	}
 }
 
 // New initializes a new logger target which
@@ -253,7 +242,6 @@ func New(config Config) *Target {
 		logCh:  make(chan interface{}, config.QueueSize),
 		doneCh: make(chan struct{}),
 		config: config,
-		online: 0,
 	}
 
 	return h
@@ -261,51 +249,23 @@ func New(config Config) *Target {
 
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}) error {
-	if h.online <= 0 {
-		// Try to initialize the target and see if it has come online, post last restart of MinIO
-		h.workerStartMu.Lock()
-		defer h.workerStartMu.Unlock()
-		if err := h.Init(); err != nil {
-			// Return nil as target is still offline
-			return nil
-		}
-	}
-
 	select {
 	case <-h.doneCh:
 		return nil
-	default:
-	}
-
-	select {
-	case <-h.doneCh:
 	case h.logCh <- entry:
 	default:
-		nWorkers := atomic.LoadInt64(&h.workers)
-		if nWorkers < maxWorkers {
-			// Only have one try to start at the same time.
-			h.workerStartMu.Lock()
-			defer h.workerStartMu.Unlock()
-			// Start one max every second.
-			if time.Since(h.lastStarted) > time.Second {
-				if atomic.CompareAndSwapInt64(&h.workers, nWorkers, nWorkers+1) {
-					// Start another logger.
-					h.lastStarted = time.Now()
-					go h.startHTTPLogger()
-				}
-			}
-			// Block to send
-			select {
-			case <-h.doneCh:
-			case h.logCh <- entry:
-			}
-			return nil
-		}
 		// log channel is full, do not wait and return
 		// an error immediately to the caller
 		atomic.AddInt64(&h.totalMessages, 1)
 		atomic.AddInt64(&h.failedMessages, 1)
-		return errors.New("log buffer full")
+
+		// if target is offline and we are not able to send messages - dropped events must log an error.
+		if atomic.LoadInt32(&h.connected) == offline {
+			return fmt.Errorf("log buffer is full: %v, remote target is offline: %s", len(h.logCh), h.config.Endpoint)
+		}
+
+		// target is online but we are unable to send messages fast enough.
+		return fmt.Errorf("log buffer is full: %v, remote target is not accepting requests fast enough", len(h.logCh))
 	}
 
 	return nil
@@ -315,7 +275,8 @@ func (h *Target) Send(entry interface{}) error {
 func (h *Target) Cancel() {
 	close(h.doneCh)
 	close(h.logCh)
-	h.wg.Wait()
+
+	atomic.StoreInt32(&h.connected, closed)
 }
 
 // Type - returns type of the target
