@@ -259,6 +259,8 @@ func New(config Config) *Target {
 func (h *Target) Send(entry interface{}) error {
 	if !h.online {
 		// Try to initialize the target and see if it has come online, post last restart of MinIO
+		h.workerStartMu.Lock()
+		defer h.workerStartMu.Unlock()
 		if err := h.Init(); err != nil {
 			// Return nil as target is still offline
 			return nil
