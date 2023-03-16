@@ -281,6 +281,7 @@ const (
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
 	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPNonDefaultConfigName
 	ErrAdminConfigLDAPValidation
 	ErrAdminConfigIDPCfgNameAlreadyExists
 	ErrAdminConfigIDPCfgNameDoesNotExist
@@ -1331,6 +1332,11 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigInvalidIDPType: {
 		Code:           "XMinioAdminConfigInvalidIDPType",
 		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigLDAPNonDefaultConfigName: {
+		Code:           "XMinioAdminConfigLDAPNonDefaultConfigName",
+		Description:    "Only a single LDAP configuration is supported - config name must be empty or `_`",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigLDAPValidation: {

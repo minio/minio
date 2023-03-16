@@ -86,7 +86,7 @@ func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.Resp
 		if idpCfgType == madmin.LDAPIDPCfg && cfgName != madmin.Default {
 			// LDAP does not support multiple configurations. So cfgName must be
 			// empty or `madmin.Default`.
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigLDAPNonDefaultConfigName), r.URL)
 			return
 		}
 	}
