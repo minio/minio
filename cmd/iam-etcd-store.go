@@ -248,6 +248,13 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 	if u.Credentials.SessionToken != "" {
 		jwtClaims, err := extractJWTClaims(u)
 		if err != nil {
+			if u.Credentials.IsTemp() {
+				// We should delete such that the client can re-request
+				// for the expiring credentials.
+				deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
+				deleteKeyEtcd(ctx, ies.client, getMappedPolicyPath(user, userType, false))
+				return nil
+			}
 			return err
 		}
 		u.Credentials.Claims = jwtClaims.Map()

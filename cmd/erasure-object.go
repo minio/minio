@@ -972,17 +972,14 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 
 	fivs, err := entry.fileInfoVersions(bucket)
 	if err != nil {
-		go healObject(bucket, entry.name, "", madmin.HealNormalScan)
+		go healObject(bucket, entry.name, "", madmin.HealDeepScan)
 		return err
 	}
 
-	if len(fivs.Versions) > 2 {
-		return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
-			bucket, entry.name, len(fivs.Versions))
-	}
-
-	for _, version := range fivs.Versions {
-		go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+	if len(fivs.Versions) <= 2 {
+		for _, version := range fivs.Versions {
+			go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+		}
 	}
 
 	return nil
