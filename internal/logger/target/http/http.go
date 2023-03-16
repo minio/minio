@@ -30,7 +30,6 @@ import (
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/target/types"
-	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -109,6 +108,13 @@ func (h *Target) Stats() types.TargetStats {
 
 // Init validate and initialize the http target
 func (h *Target) Init() error {
+	atomic.AddInt32(&h.connected, online) // start with the target being online.
+
+	for i := 0; i < maxWorkers; i++ {
+		// Start all workers.
+		go h.startHTTPLogger()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*webhookCallTimeout)
 	defer cancel()
 
@@ -139,6 +145,7 @@ func (h *Target) Init() error {
 	h.client = http.Client{Transport: h.config.Transport}
 	resp, err := h.client.Do(req)
 	if err != nil {
+		atomic.AddInt32(&h.connected, offline)
 		return err
 	}
 
@@ -154,11 +161,6 @@ func (h *Target) Init() error {
 			h.config.Endpoint, resp.Status)
 	}
 
-	atomic.AddInt32(&h.connected, online)
-	for i := 0; i < maxWorkers; i++ {
-		// Start all workers.
-		go h.startHTTPLogger()
-	}
 	return nil
 }
 
@@ -199,9 +201,7 @@ func (h *Target) logEntry(entry interface{}) {
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, true) {
-			atomic.StoreInt32(&h.connected, offline)
-		}
+		atomic.StoreInt32(&h.connected, offline)
 		atomic.AddInt64(&h.failedMessages, 1)
 		h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
 		return
