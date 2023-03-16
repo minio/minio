@@ -1215,6 +1215,12 @@ func (s *erasureSets) PutObjectMetadata(ctx context.Context, bucket, object stri
 	return er.PutObjectMetadata(ctx, bucket, object, opts)
 }
 
+// DecomTieredObject - moves tiered object to another pool during decommissioning.
+func (s *erasureSets) DecomTieredObject(ctx context.Context, bucket, object string, fi FileInfo, opts ObjectOptions) error {
+	er := s.getHashedSet(object)
+	return er.DecomTieredObject(ctx, bucket, object, fi, opts)
+}
+
 // PutObjectTags - replace or add tags to an existing object
 func (s *erasureSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	er := s.getHashedSet(object)

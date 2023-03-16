@@ -736,14 +736,16 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
-			if evt.Action.Delete() {
+			switch {
+			case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
+				applyExpiryOnTransitionedObject(ctx, z, objInfo, evt.Action.DeleteRestored())
+				return false
+			case evt.Action.Delete():
 				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
-				if !evt.Action.DeleteRestored() {
-					return true
-				}
+				return true
+			default:
+				return false
 			}
-
-			return false
 		}
 
 		decommissionEntry := func(entry metaCacheEntry) {
@@ -767,12 +769,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 			var decommissionedCount int
 			for _, version := range fivs.Versions {
-				// TODO: Skip transitioned objects for now.
-				if version.IsRemote() {
-					logger.LogIf(ctx, fmt.Errorf("found %s/%s transitioned object, transitioned object won't be decommissioned", bi.Name, version.Name))
-					continue
-				}
-
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bi.Name, version.Name, version) {
 					logger.LogIf(ctx, fmt.Errorf("found %s/%s (%s) expired object based on ILM rules, skipping and scheduled for deletion", bi.Name, version.Name, version.VersionID))
@@ -821,6 +817,22 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				var failure, ignore bool
 				// gr.Close() is ensured by decommissionObject().
 				for try := 0; try < 3; try++ {
+					if version.IsRemote() {
+						stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
+						if err := z.DecomTieredObject(ctx, bi.Name, version.Name, version, ObjectOptions{
+							VersionID:   version.VersionID,
+							MTime:       version.ModTime,
+							UserDefined: version.Metadata,
+						}); err != nil {
+							stopFn(err)
+							failure = true
+							logger.LogIf(ctx, err)
+							continue
+						}
+						stopFn(nil)
+						failure = false
+						break
+					}
 					gr, err := set.GetObjectNInfo(ctx,
 						bi.Name,
 						encodeDirObject(version.Name),
@@ -1266,17 +1278,6 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, indices ...i
 
 	for _, bucket := range decomBuckets {
 		z.HealBucket(ctx, bucket.Name, madmin.HealOpts{})
-	}
-
-	// TODO: Support decommissioning transition tiers.
-	for _, bucket := range decomBuckets {
-		if lc, err := globalLifecycleSys.Get(bucket.Name); err == nil {
-			if lc.HasTransition() {
-				return decomError{
-					Err: fmt.Sprintf("Bucket is part of transitioned tier %s: decommission is not allowed in Tier'd setups", bucket.Name),
-				}
-			}
-		}
 	}
 
 	// Create .minio.sys/conifg, .minio.sys/buckets paths if missing,
