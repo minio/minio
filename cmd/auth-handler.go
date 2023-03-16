@@ -207,7 +207,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 	// that clients cannot decode the token using the temp
 	// secret keys and generate an entirely new claim by essentially
 	// hijacking the policies. We need to make sure that this is
-	// based an admin credential such that token cannot be decoded
+	// based on admin credential such that token cannot be decoded
 	// on the client side and is treated like an opaque value.
 	claims, err := auth.ExtractClaims(token, secret)
 	if err != nil {

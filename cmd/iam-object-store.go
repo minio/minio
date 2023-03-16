@@ -187,7 +187,15 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 	if u.Credentials.SessionToken != "" {
 		jwtClaims, err := extractJWTClaims(u)
 		if err != nil {
+			if u.Credentials.IsTemp() {
+				// We should delete such that the client can re-request
+				// for the expiring credentials.
+				iamOS.deleteIAMConfig(ctx, getUserIdentityPath(user, userType))
+				iamOS.deleteIAMConfig(ctx, getMappedPolicyPath(user, userType, false))
+				return nil
+			}
 			return err
+
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}
