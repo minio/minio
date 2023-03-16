@@ -51,7 +51,7 @@ const backendEncryptedFile = "backend-encrypted"
 var backendEncryptedMigrationComplete = []byte("encrypted")
 
 func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, error) {
-	bootstrapTrace(bsEtcdCheckEncrypted)
+	bootstrapTrace("check if etcd backend is encrypted")
 	data, err := readKeyEtcd(ctx, client, backendEncryptedFile)
 	if err != nil && err != errConfigNotFound {
 		return false, err
@@ -60,7 +60,7 @@ func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, 
 }
 
 func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
-	bootstrapTrace(bsConfigCheckEncrypted)
+	bootstrapTrace("check if the config backend is encrypted")
 	data, err := readConfig(GlobalContext, objAPI, backendEncryptedFile)
 	if err != nil && err != errConfigNotFound {
 		return false, err
@@ -80,7 +80,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		return nil
 	}
 
-	bootstrapTrace(bsEtcdConfigEncrypt)
+	bootstrapTrace("encrypt etcd config")
 
 	if GlobalKMS != nil {
 		stat, err := GlobalKMS.Stat(ctx)
@@ -151,7 +151,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 }
 
 func migrateConfigPrefixToEncrypted(objAPI ObjectLayer) error {
-	bootstrapTrace(bsConfigMigrateToEncrypted)
+	bootstrapTrace("migrating config prefix to encrypted")
 	if GlobalKMS != nil {
 		stat, err := GlobalKMS.Stat(context.Background())
 		if err != nil {
