@@ -18,11 +18,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio/internal/pubsub"
 )
 
 const bootstrapMsgsLimit = 4 << 10
@@ -102,4 +104,17 @@ func (bs *bootstrapTracer) Events() []madmin.TraceInfo {
 		})
 	}
 	return traceInfo
+}
+
+func (bs *bootstrapTracer) Publish(ctx context.Context, trace *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]) {
+	if bs.Empty() {
+		return
+	}
+	for _, bsEvent := range bs.Events() {
+		select {
+		case <-ctx.Done():
+		default:
+			trace.Publish(bsEvent)
+		}
+	}
 }
