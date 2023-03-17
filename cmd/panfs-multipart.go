@@ -170,7 +170,7 @@ func (fs *PANFSObjects) ListMultipartUploads(ctx context.Context, bucket, object
 		return result, toObjectErr(err)
 	}
 
-	// S3 spec says uploadIDs should be sorted based on initiated time. ModTime of fs.json
+	// S3 spec says uploadIDs should be sorted based on initiated time. ModTime of panfs.json
 	// is the creation time of the uploadID, hence we will use that.
 	var uploads []MultipartInfo
 	for _, uploadID := range uploadIDs {
@@ -261,7 +261,7 @@ func (fs *PANFSObjects) NewMultipartUpload(ctx context.Context, bucket, object s
 		return nil, err
 	}
 
-	// Initialize fs.json values.
+	// Initialize panfs.json values.
 	fsMeta := newPANFSMeta()
 	fsMeta.Meta = opts.UserDefined
 
@@ -763,7 +763,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 	defer destLock.Unlock(lkctx.Cancel)
 
 	bucketMetaDir := pathJoin(bucketPath, panfsS3MetadataDir)
-	fsMetaPath := pathJoin(bucketMetaDir, object, fs.metaJSONFile)
+	fsMetaPath := pathJoin(bucketMetaDir, object)
 	metaFile, err := fs.rwPool.Write(fsMetaPath)
 	var freshFile bool
 	if err != nil {
@@ -783,7 +783,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 		// Remove meta file when CompleteMultipart encounters
 		// any error and it is a fresh file.
 		//
-		// We should preserve the `fs.json` of any
+		// We should preserve the `panfs.json` of any
 		// existing object
 		if e != nil && freshFile {
 			tmpDir := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID)
