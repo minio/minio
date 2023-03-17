@@ -237,6 +237,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/describe-job").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.DescribeBatchJob)))
+		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/cancel-job").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.CancelBatchJob)))
 
 		// Bucket migration operations
 		// ExportBucketMetaHandler
