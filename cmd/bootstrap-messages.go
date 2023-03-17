@@ -72,37 +72,33 @@ func (bs *bootstrapTracer) Record(msg string) {
 		source: source,
 	}
 	bs.lastUpdate = now
-	bs.idx++
-	if bs.idx >= bootstrapMsgsLimit {
-		bs.idx = 0 // circular buffer
-	}
+	bs.idx = (bs.idx + 1) % bootstrapMsgsLimit
 	bs.mu.Unlock()
 }
 
 func (bs *bootstrapTracer) Events() []madmin.TraceInfo {
-	var info [bootstrapMsgsLimit]bootstrapInfo
-	var idx int
+	traceInfo := make([]madmin.TraceInfo, 0, bootstrapMsgsLimit)
+	
+	// Add all messages in order
+	addAll := func(info []bootstrapInfo) {
+		for _, msg := range info {
+			if msg.ts.IsZero() {
+				continue // skip empty events
+			}
+			traceInfo = append(traceInfo, madmin.TraceInfo{
+				TraceType: madmin.TraceBootstrap,
+				Time:      msg.ts,
+				NodeName:  globalLocalNodeName,
+				FuncName:  "BOOTSTRAP",
+				Message:   fmt.Sprintf("%s %s", msg.source, msg.msg),
+			})
+		}
+	}
 
 	bs.mu.RLock()
-	idx = bs.idx
-	tail := bootstrapMsgsLimit - idx
-	copy(info[tail:], bs.info[:idx])
-	copy(info[:tail], bs.info[idx:])
+	addAll(bs.info[bs.idx:])
+	addAll(bs.info[:bs.idx])
 	bs.mu.RUnlock()
-
-	traceInfo := make([]madmin.TraceInfo, 0, bootstrapMsgsLimit)
-	for i := 0; i < bootstrapMsgsLimit; i++ {
-		if info[i].ts.IsZero() {
-			continue // skip empty events
-		}
-		traceInfo = append(traceInfo, madmin.TraceInfo{
-			TraceType: madmin.TraceBootstrap,
-			Time:      info[i].ts,
-			NodeName:  globalLocalNodeName,
-			FuncName:  "BOOTSTRAP",
-			Message:   fmt.Sprintf("%s %s", info[i].source, info[i].msg),
-		})
-	}
 	return traceInfo
 }
 
