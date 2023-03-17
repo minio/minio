@@ -16,12 +16,23 @@ type bootstrapInfo struct {
 	source string
 }
 type bootstrapTracer struct {
-	mu   sync.RWMutex
-	idx  int
-	info [bootstrapMsgsLimit]bootstrapInfo
+	mu         sync.RWMutex
+	idx        int
+	info       [bootstrapMsgsLimit]bootstrapInfo
+	lastUpdate time.Time
 }
 
-var globalBootstrapTracer = bootstrapTracer{}
+var globalBootstrapTracer = &bootstrapTracer{}
+
+func (bs *bootstrapTracer) DropEvents() {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	if time.Now().UTC().Sub(bs.lastUpdate) > 24*time.Hour {
+		bs.info = [4096]bootstrapInfo{}
+		bs.idx = 0
+	}
+}
 
 func (bs *bootstrapTracer) Empty() bool {
 	var empty bool
@@ -35,11 +46,13 @@ func (bs *bootstrapTracer) Empty() bool {
 func (bs *bootstrapTracer) Record(msg string) {
 	source := getSource(2)
 	bs.mu.Lock()
+	now := time.Now().UTC()
 	bs.info[bs.idx] = bootstrapInfo{
 		msg:    msg,
-		ts:     time.Now().UTC(),
+		ts:     now,
 		source: source,
 	}
+	bs.lastUpdate = now
 	bs.idx++
 	if bs.idx >= bootstrapMsgsLimit {
 		bs.idx = 0 // circular buffer
