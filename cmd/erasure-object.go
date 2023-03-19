@@ -658,6 +658,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		return fi, nil, nil, err
 	}
 
+	if !fi.Deleted && len(fi.Erasure.Distribution) != len(onlineDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			fi.Erasure.Distribution, onlineDisks, bucket, object, opts.VersionID)
+		logger.LogIf(ctx, err)
+		return fi, nil, nil, toObjectErr(err, bucket, object, opts.VersionID)
+	}
+
 	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	// if one of the disk is offline, return right here no need
