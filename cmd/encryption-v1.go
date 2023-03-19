@@ -670,7 +670,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	// Limit the reader, so the decryptor doesnt receive bytes
+	// Limit the reader, so the decryptor doesn't receive bytes
 	// from the next part (different DARE stream)
 	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
 	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
