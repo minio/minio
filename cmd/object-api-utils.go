@@ -174,10 +174,7 @@ func IsValidObjectPrefix(object string) bool {
 	// work with file systems, we will reject here
 	// to return object name invalid rather than
 	// a cryptic error from the file system.
-	if strings.ContainsRune(object, 0) {
-		return false
-	}
-	return true
+	return !strings.ContainsRune(object, 0)
 }
 
 // checkObjectNameForLengthAndSlash -check for the validity of object name length and prefis as slash
@@ -199,7 +196,7 @@ func checkObjectNameForLengthAndSlash(bucket, object string) error {
 	if runtime.GOOS == globalWindowsOSName {
 		// Explicitly disallowed characters on windows.
 		// Avoids most problematic names.
-		if strings.ContainsAny(object, `:*?"|<>`) {
+		if strings.ContainsAny(object, `\:*?"|<>`) {
 			return ObjectNameInvalid{
 				Bucket: bucket,
 				Object: object,
