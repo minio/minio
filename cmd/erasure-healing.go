@@ -505,8 +505,34 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	migrateDataDir := mustGetUUID()
 
 	// Reorder so that we have data disks first and parity disks next.
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(availableDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from available disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, availableDisks, bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(outDatedDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from outdated disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, outDatedDisks, bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
+
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(partsMetadata) {
+		err := fmt.Errorf("unexpected file distribution (%v) from metadata entries (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, len(partsMetadata), bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 
 	copyPartsMetadata := make([]FileInfo, len(partsMetadata))

@@ -1222,7 +1222,6 @@ func (j *BatchJobPool) canceler(jobID string, cancel bool) error {
 	if canceler, ok := j.jobCancelers[jobID]; ok {
 		if cancel {
 			canceler()
-
 		}
 	}
 	delete(j.jobCancelers, jobID)
