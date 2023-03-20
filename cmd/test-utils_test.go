@@ -1885,21 +1885,29 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
+
+	initAllSubsystems(ctx)
 	objLayer, fsDirs, err := prepareErasure16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
-	defer objLayer.Shutdown(ctx)
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
-		t.Fatal("Unexpected error", err)
-	}
+	setObjectLayer(objLayer)
+	initConfigSubsystem(ctx, objLayer)
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	// Executing the object layer tests for Erasure.
 	objTest(objLayer, ErasureTestStr, fsDirs, t)
-	defer removeRoots(fsDirs)
+
+	objLayer.Shutdown(context.Background())
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
+	setObjectLayer(newObjectLayerFn())
+	cancel()
+	removeRoots(fsDirs)
 }
 
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
