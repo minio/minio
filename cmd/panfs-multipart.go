@@ -85,7 +85,7 @@ func (fs *PANFSObjects) backgroundAppend(ctx context.Context, bucket, object, up
 	file := fs.appendFileMap[uploadID]
 	if file == nil {
 		file = &panfsAppendFile{
-			filePath: pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, bgAppendsDirName, fmt.Sprintf("%s.%s", uploadID, mustGetUUID())),
+			filePath: pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, bgAppendsDirName, fmt.Sprintf("%s.%s", uploadID, mustGetUUID())),
 		}
 		fs.appendFileMap[uploadID] = file
 	}
@@ -255,7 +255,7 @@ func (fs *PANFSObjects) NewMultipartUpload(ctx context.Context, bucket, object s
 	}
 
 	// Creates dir for background append procedure
-	err = mkdirAll(pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, bgAppendsDirName), 0o755)
+	err = mkdirAll(pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, bgAppendsDirName), 0o755)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
@@ -353,7 +353,7 @@ func (fs *PANFSObjects) PutObjectPart(ctx context.Context, bucket, object, uploa
 		return pi, toObjectErr(err, bucket, object)
 	}
 
-	tmpPartPath := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
+	tmpPartPath := pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
 	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, data.Size())
 
 	// Delete temporary part in case of failure. If
@@ -698,7 +698,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 	}
 
 	appendFallback := true // In case background-append did not append the required parts.
-	appendFilePath := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, bgAppendsDirName, fmt.Sprintf("%s.%s", uploadID, mustGetUUID()))
+	appendFilePath := pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, bgAppendsDirName, fmt.Sprintf("%s.%s", uploadID, mustGetUUID()))
 
 	// Most of the times appendFile would already be fully appended by now. We call fs.backgroundAppend()
 	// to take care of the following corner case:
@@ -786,7 +786,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 		// We should preserve the `panfs.json` of any
 		// existing object
 		if e != nil && freshFile {
-			tmpDir := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID)
+			tmpDir := pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial)
 			fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir)
 		}
 	}()
@@ -827,7 +827,7 @@ func (fs *PANFSObjects) CompleteMultipartUpload(ctx context.Context, bucket stri
 
 	// Purge multipart folders
 	{
-		fsTmpObjPath := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, mustGetUUID())
+		fsTmpObjPath := pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, mustGetUUID())
 		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
 		Rename(uploadIDDir, fsTmpObjPath)
@@ -891,7 +891,7 @@ func (fs *PANFSObjects) AbortMultipartUpload(ctx context.Context, bucket, object
 	}
 
 	// Purge multipart folders
-	fsTmpObjPath := pathJoin(bucketPath, panfsS3TmpDir, fs.fsUUID, mustGetUUID())
+	fsTmpObjPath := pathJoin(bucketPath, panfsS3TmpDir, fs.nodeDataSerial, mustGetUUID())
 	defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
 	Rename(uploadIDDir, fsTmpObjPath)
@@ -953,7 +953,7 @@ func (fs *PANFSObjects) cleanupStaleUploads(ctx context.Context) {
 			fs.appendFileMapMu.Unlock()
 
 			// Remove background appends file from the disk
-			bgAppendsDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, bgAppendsDirName)
+			bgAppendsDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.nodeDataSerial, bgAppendsDirName)
 			entries, err := readDir(bgAppendsDir)
 			if err != nil {
 				break

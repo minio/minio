@@ -30,10 +30,13 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
@@ -80,7 +83,7 @@ type PANFSObjects struct {
 	metaJSONFile string
 	// Unique value to be used for all
 	// temporary transactions.
-	fsUUID string
+	nodeDataSerial string
 
 	// This value shouldn't be touched, once initialized.
 	fsFormatRlk *lock.RLockedFile // Is a read lock on `format.json`.
@@ -99,6 +102,9 @@ type PANFSObjects struct {
 	// To manage the appendRoutine go-routines
 	nsMutex *nsLockMap
 
+	tmpDirsCount     uint64
+	currentTmpFolder uint64
+
 	configAgent *panconfig.Client
 }
 
@@ -110,7 +116,7 @@ type panfsAppendFile struct {
 }
 
 // Initializes meta volume on all the fs path.
-func initMetaVolumePANFS(fsPath, fsUUID string) error {
+func initMetaVolumePANFS(fsPath, nodeDataSerial string) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made less expensive
 	// optimizing all other calls. Create minio meta volume,
@@ -120,7 +126,7 @@ func initMetaVolumePANFS(fsPath, fsUUID string) error {
 	if err := os.MkdirAll(metaBucketPath, 0o777); err != nil {
 		return err
 	}
-	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
+	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, nodeDataSerial)
 	if err := os.MkdirAll(metaTmpPath, 0o777); err != nil {
 		return err
 	}
@@ -153,10 +159,13 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 
 	// Assign a new UUID for FS minio mode. Each server instance
 	// gets its own UUID for temporary file transaction.
-	fsUUID := mustGetUUID()
+	nodeDataSerial := env.Get(config.EnvPanUUID, mustGetUUID())
+	if _, err := uuid.Parse(nodeDataSerial); err != nil {
+		return nil, fmt.Errorf("can't parse uuid provided via env variable \"%s\". Value:\"%s\" Error: %w", config.EnvPanUUID, nodeDataSerial, err)
+	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err = initMetaVolumePANFS(fsPath, fsUUID); err != nil {
+	if err = initMetaVolumePANFS(fsPath, nodeDataSerial); err != nil {
 		return nil, err
 	}
 
@@ -171,11 +180,16 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		panfsConfigAgentNamespace,
 	)
 
+	tmpDirsCount, err := strconv.ParseUint(env.Get(config.EnvPanTmpDirsCount, "10"), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("can't parse count of tmp directories. Error: %w", err)
+	}
+
 	// Initialize fs objects.
 	fs := &PANFSObjects{
-		fsPath:       fsPath,
-		metaJSONFile: panfsMetaJSONFile,
-		fsUUID:       fsUUID,
+		fsPath:         fsPath,
+		metaJSONFile:   panfsMetaJSONFile,
+		nodeDataSerial: nodeDataSerial,
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
@@ -184,6 +198,7 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		appendFileMap: make(map[string]*panfsAppendFile),
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
 		configAgent:   panasasConfigClient,
+		tmpDirsCount:  tmpDirsCount,
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -215,7 +230,7 @@ func (fs *PANFSObjects) Shutdown(ctx context.Context) error {
 	fs.fsFormatRlk.Close()
 
 	// Cleanup and delete tmp uuid.
-	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
+	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.nodeDataSerial))
 }
 
 // BackendInfo - returns backend information
@@ -1244,6 +1259,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 		return ObjectInfo{}, errInvalidArgument
 	}
 
+	tempDir := fs.getTempDir(bucketDir)
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		objectMetaPath := fs.getObjectMetadataPath(bucketDir, object)
@@ -1284,7 +1300,7 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 			return ObjectInfo{}, retErr
 		}
 	} else {
-		fsTmpObjPath := pathJoin(bucketDir, panfsS3TmpDir, fs.fsUUID, tempObj)
+		fsTmpObjPath := pathJoin(tempDir, tempObj)
 		bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
 		// Delete the temporary object in the case of a
@@ -1802,7 +1818,7 @@ func (fs *PANFSObjects) GetRawData(ctx context.Context, volume, file string, fn 
 	if err != nil || st.IsDir() {
 		return nil
 	}
-	return fn(f, "fs", fs.fsUUID, file, st.Size(), st.ModTime(), st.IsDir())
+	return fn(f, "fs", fs.nodeDataSerial, file, st.Size(), st.ModTime(), st.IsDir())
 }
 
 // isConfigAgentObject - return true if the requested object should be
@@ -1834,4 +1850,8 @@ func (fs *PANFSObjects) isConfigAgentObject(bucket, object string) bool {
 	}
 
 	return true
+}
+
+func (fs *PANFSObjects) getTempDir(bucketDir string) string {
+	return pathJoin(bucketDir, panfsS3TmpDir, fs.nodeDataSerial, strconv.FormatUint(atomic.AddUint64(&fs.currentTmpFolder, 1)%fs.tmpDirsCount, 10))
 }
