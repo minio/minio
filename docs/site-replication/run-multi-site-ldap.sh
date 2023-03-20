@@ -64,12 +64,12 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
 ./mc admin replicate add minio1 minio2 minio3
 
-./mc admin policy set minio1 consoleAdmin user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 sleep 5
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 ./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-./mc admin policy add minio1 rw ./docs/site-replication/rw.json
+./mc admin policy create minio1 rw ./docs/site-replication/rw.json
 
 sleep 5
 ./mc admin policy info minio2 rw >/dev/null 2>&1

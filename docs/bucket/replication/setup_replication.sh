@@ -38,11 +38,11 @@ cat > repladmin-policy-source.json <<EOF
     ]
    }
 EOF
-mc admin policy add source repladmin-policy ./repladmin-policy-source.json
+mc admin policy create source repladmin-policy ./repladmin-policy-source.json
 cat ./repladmin-policy-source.json
 
 #assign this replication policy to repladmin
-mc admin policy set source repladmin-policy user=repladmin
+mc admin policy attach source repladmin-policy --user=repladmin
 
 ### on dest alias
 # Create a replication user : repluser on dest alias
@@ -90,11 +90,11 @@ cat > replpolicy.json <<EOF
  ]
 }
 EOF
-mc admin policy add dest replpolicy ./replpolicy.json
+mc admin policy create dest replpolicy ./replpolicy.json
 cat ./replpolicy.json
 
 # assign this replication policy to repluser
-mc admin policy set dest replpolicy user=repluser
+mc admin policy attach dest replpolicy --user=repluser
 
 # configure replication config to remote bucket at http://localhost:9000
 mc replicate add source/bucket --priority 1 --remote-bucket http://repluser:repluser123@localhost:9000/bucket \

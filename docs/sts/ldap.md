@@ -153,7 +153,7 @@ In the configuration variables, `%s` is substituted with the _username_ from the
 Access policies may be associated by their name with a group or user directly. Access policies are first defined on the MinIO server using IAM policy JSON syntax. To define a new policy, you can use the [AWS policy generator](https://awspolicygen.s3.amazonaws.com/policygen.html). Copy the policy into a text file `mypolicy.json` and issue the command like so:
 
 ```sh
-mc admin policy add myminio mypolicy mypolicy.json
+mc admin policy create myminio mypolicy mypolicy.json
 ```
 
 To associate the policy with an LDAP user or group, use the full DN of the user or group:
@@ -163,7 +163,7 @@ mc admin idp ldap policy attach myminio mypolicy --user='uid=james,cn=accounts,d
 ```
 
 ```sh
-mc admin idp ldap policy attach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc admin idp ldap policy attach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 To remove a policy association, use the similar `detach` command:
@@ -173,7 +173,7 @@ mc admin idp ldap policy detach myminio mypolicy --user='uid=james,cn=accounts,d
 ```
 
 ```sh
-mc admin idp ldap policy detach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc admin idp ldap policy detach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 
@@ -184,12 +184,12 @@ Note that the commands above attempt to validate if the given entity (user or gr
 Please **do not use** these as they may be removed or their behavior may change.
 
 ```sh
-mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+mc admin policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
 
 
 ```sh
-mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc admin policy attach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 </details>
