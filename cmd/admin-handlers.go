@@ -1526,6 +1526,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publish bootstrap events that have already occurred before client could subscribe.
+	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) {
+		go globalBootstrapTracer.Publish(ctx, globalTrace)
+	}
+
 	for _, peer := range peers {
 		if peer == nil {
 			continue

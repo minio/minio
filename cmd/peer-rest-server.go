@@ -977,6 +977,12 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, err)
 		return
 	}
+
+	// Publish bootstrap events that have already occurred before client could subscribe.
+	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) {
+		go globalBootstrapTracer.Publish(r.Context(), globalTrace)
+	}
+
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 
