@@ -50,7 +50,7 @@ require (
 	github.com/minio/madmin-go/v2 v2.0.17
 	github.com/minio/minio-go/v7 v7.0.50
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg v1.6.5
+	github.com/minio/pkg v1.6.6-0.20230330040824-5db111e5f63c
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.5
