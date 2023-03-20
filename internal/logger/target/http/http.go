@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -222,38 +223,56 @@ func (h *Target) logEntry(entry interface{}) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		h.config.Endpoint, bytes.NewReader(logJSON))
-	if err != nil {
-		h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
-		atomic.AddInt64(&h.failedMessages, 1)
-		return
-	}
-	req.Header.Set(xhttp.ContentType, "application/json")
-	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
-	req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
+	tries := 0
+	for {
+		if tries > 0 {
+			if tries >= 10 || atomic.LoadInt32(&h.status) == statusClosed {
+				// Don't retry when closing...
+				return
+			}
+			// sleep = (tries+2) ^ 2 milliseconds.
+			sleep := time.Duration(math.Pow(float64(tries+2), 2)) * time.Millisecond
+			if sleep > time.Second {
+				sleep = time.Second
+			}
+			time.Sleep(sleep)
+		}
+		tries++
+		ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			h.config.Endpoint, bytes.NewReader(logJSON))
+		if err != nil {
+			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+			atomic.AddInt64(&h.failedMessages, 1)
+			continue
+		}
+		req.Header.Set(xhttp.ContentType, "application/json")
+		req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
+		req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
 
-	// Set user-agent to indicate MinIO release
-	// version to the configured log endpoint
-	req.Header.Set("User-Agent", h.config.UserAgent)
+		// Set user-agent to indicate MinIO release
+		// version to the configured log endpoint
+		req.Header.Set("User-Agent", h.config.UserAgent)
 
-	if h.config.AuthToken != "" {
-		req.Header.Set("Authorization", h.config.AuthToken)
-	}
+		if h.config.AuthToken != "" {
+			req.Header.Set("Authorization", h.config.AuthToken)
+		}
 
-	resp, err := h.client.Do(req)
-	if err != nil {
-		atomic.AddInt64(&h.failedMessages, 1)
-		h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
-		return
-	}
+		resp, err := h.client.Do(req)
+		if err != nil {
+			atomic.AddInt64(&h.failedMessages, 1)
+			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+			continue
+		}
 
-	// Drain any response.
-	xhttp.DrainBody(resp.Body)
+		// Drain any response.
+		xhttp.DrainBody(resp.Body)
 
-	if !acceptedResponseStatusCode(resp.StatusCode) {
+		if acceptedResponseStatusCode(resp.StatusCode) {
+			return
+		}
+		// Log failure, retry
 		atomic.AddInt64(&h.failedMessages, 1)
 		switch resp.StatusCode {
 		case http.StatusForbidden:
