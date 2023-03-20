@@ -78,7 +78,7 @@ func (bs *bootstrapTracer) Record(msg string) {
 
 func (bs *bootstrapTracer) Events() []madmin.TraceInfo {
 	traceInfo := make([]madmin.TraceInfo, 0, bootstrapMsgsLimit)
-	
+
 	// Add all messages in order
 	addAll := func(info []bootstrapInfo) {
 		for _, msg := range info {
