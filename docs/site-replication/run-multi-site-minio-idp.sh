@@ -61,14 +61,14 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 ## add foobar-g group with foobar
 ./mc admin group add minio2 foobar-g foobar
 
-./mc admin policy set minio1 consoleAdmin user=foobar
+./mc admin policy attach minio1 consoleAdmin --user=foobar
 sleep 5
 
 ./mc admin user info minio2 foobar
 
 ./mc admin group info minio1 foobar-g
 
-./mc admin policy add minio1 rw ./docs/site-replication/rw.json
+./mc admin policy create minio1 rw ./docs/site-replication/rw.json
 
 sleep 5
 ./mc admin policy info minio2 rw >/dev/null 2>&1
@@ -299,7 +299,7 @@ if [ $? -ne 0 ]; then
     echo "adding user failed, exiting.."
     exit_1;
 fi
-./mc admin policy set minio1 consoleAdmin user=foobarx
+./mc admin policy attach minio1 consoleAdmin --user=foobarx
 if [ $? -ne 0 ]; then
     echo "adding policy mapping failed, exiting.."
     exit_1;
@@ -307,7 +307,7 @@ fi
 sleep 10
 
 # unset policy for foobarx in minio2
-./mc admin policy unset minio2 consoleAdmin user=foobarx
+./mc admin policy detach minio2 consoleAdmin --user=foobarx
 if [ $? -ne 0 ]; then
     echo "unset policy mapping failed, exiting.."
     exit_1;
@@ -318,10 +318,10 @@ fi
 
 sleep 10
 
-# Test whether policy unset replicated to minio1
+# Test whether policy detach replicated to minio1
 policy=$(./mc admin user info minio1 foobarx --json | jq -r .policyName)
 if [ "${policy}" != "null" ]; then
-    echo "expected policy unset to have replicated, exiting..."
+    echo "expected policy detach to have replicated, exiting..."
     exit_1;
 fi
 

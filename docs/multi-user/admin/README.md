@@ -50,7 +50,7 @@ EOF
 Create new canned policy by name `userManager` using `userManager.json` policy file.
 
 ```
-mc admin policy add myminio userManager adminManageUser.json
+mc admin policy attach myminio userManager adminManageUser.json
 ```
 
 Create a new admin user `admin1` on MinIO use `mc admin user`.
@@ -62,7 +62,7 @@ mc admin user add myminio admin1 admin123
 Once the user is successfully created you can now apply the `userManage` policy for this user.
 
 ```
-mc admin policy set myminio userManager user=admin1
+mc admin policy attach myminio userManager --user=admin1
 ```
 
 This admin user will then be allowed to perform create/delete user operations via `mc admin user`
@@ -73,8 +73,8 @@ This admin user will then be allowed to perform create/delete user operations vi
 mc alias set myminio-admin1 http://localhost:9000 admin1 admin123 --api s3v4
 
 mc admin user add myminio-admin1 user1 user123
-mc admin policy add myminio-admin1 user1policy ~/user1policy.json
-mc admin policy set myminio-admin1 user1policy user=user1
+mc admin policy attach myminio-admin1 user1policy ~/user1policy.json
+mc admin policy attach myminio-admin1 user1policy --user=user1
 ```
 
 ### 4. List of permissions defined for admin operations
