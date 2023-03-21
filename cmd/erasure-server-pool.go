@@ -2077,9 +2077,14 @@ func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx 
 	return -1, -1, -1, fmt.Errorf("DriveID(%s) %w", id, errDiskNotFound)
 }
 
+const (
+	vmware = "VMWare"
+)
+
 // HealthOptions takes input options to return sepcific information
 type HealthOptions struct {
 	Maintenance bool
+	DeploymentType string
 }
 
 // HealthResult returns the current state of the system, also
@@ -2165,7 +2170,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 
 	var aggHealStateResult madmin.BgHealState
-	if opts.Maintenance {
+	// Check if disks are healing on in-case of VMware vsphere deployments.
+	if opts.Maintenance && opts.DeploymentType == vmware {
 		// check if local disks are being healed, if they are being healed
 		// we need to tell healthy status as 'false' so that this server
 		// is not taken down for maintenance
