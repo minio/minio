@@ -167,7 +167,7 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 
 	quorum := (len(sys.allPeerClients) / 2)
 	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return BucketInfo{}, err
+		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 
 	for i, err := range errs {
@@ -266,12 +266,9 @@ func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts Dele
 	errs := g.Wait()
 	errs = append(errs, deleteBucketLocal(ctx, bucket, opts))
 
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	quorum := (len(sys.allPeerClients) / 2) + 1
+	err := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum)
+	return toObjectErr(err, bucket)
 }
 
 // DeleteBucket deletes bucket on a peer

@@ -24,11 +24,11 @@ sleep 2
 ./mc admin user add myminio/ minio123 minio123
 ./mc admin user add myminio/ minio12345 minio12345
 
-./mc admin policy add myminio/ rw ./docs/distributed/rw.json
-./mc admin policy add myminio/ lake ./docs/distributed/rw.json
+./mc admin policy create myminio/ rw ./docs/distributed/rw.json
+./mc admin policy create myminio/ lake ./docs/distributed/rw.json
 
-./mc admin policy set myminio/ rw user=minio123
-./mc admin policy set myminio/ lake,rw user=minio12345
+./mc admin policy attach myminio/ rw --user=minio123
+./mc admin policy attach myminio/ lake,rw --user=minio12345
 
 ./mc mb -l myminio/versioned
 

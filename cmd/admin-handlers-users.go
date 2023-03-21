@@ -1956,7 +1956,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			UserOrGroup: userOrGroup,
 			UserType:    int(userType),
 			IsGroup:     isGroup,
-			Policy:      strings.Join(policiesToDetach, ","),
+			Policy:      newPolicies,
 		},
 		UpdatedAt: updatedAt,
 	}))
