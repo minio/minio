@@ -539,10 +539,10 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 		}
 		for k, v := range peerLock.Locks {
 			for _, lockReqInfo := range v {
-				if val, ok := entryMap[lockReqInfo.Name]; ok {
+				if val, ok := entryMap[lockReqInfo.UID]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
+					entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
 				}
 			}
 		}
