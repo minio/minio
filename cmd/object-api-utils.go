@@ -1083,7 +1083,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	}
 
 	if nDisks < len(di)/2 {
-		return false, fmt.Errorf("no enough online disks to calculate the available space")
+		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", (len(di)/2)+1, nDisks)
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.
