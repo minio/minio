@@ -1061,7 +1061,7 @@ func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 }
 
 // hasSpaceFor returns whether the disks in `di` have space for and object of a given size.
-func hasSpaceFor(di []*DiskInfo, size int64) bool {
+func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	// We multiply the size by 2 to account for erasure coding.
 	size *= 2
 	if size < 0 {
@@ -1082,8 +1082,8 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 		available += disk.Total - disk.Used
 	}
 
-	if nDisks == 0 {
-		return false
+	if nDisks < len(di)/2 {
+		return false, fmt.Errorf("no enough online disks to calculate the available space")
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.
@@ -1093,13 +1093,13 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 			continue
 		}
 		if int64(disk.Free) <= perDisk {
-			return false
+			return false, nil
 		}
 	}
 
 	// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
 	if available < uint64(size) {
-		return false
+		return false, nil
 	}
 
 	// How much will be left after adding the file.
@@ -1107,5 +1107,5 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 
 	// wantLeft is how much space there at least must be left.
 	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
-	return available > wantLeft
+	return available > wantLeft, nil
 }

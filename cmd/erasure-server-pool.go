@@ -347,9 +347,11 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 
 	for i, zinfo := range storageInfos {
 		var available uint64
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(zinfo, size) {
-			serverPools[i] = poolAvailableSpace{Index: i}
-			continue
+		if !isMinioMetaBucketName(bucket) {
+			if avail, err := hasSpaceFor(zinfo, size); err != nil && !avail {
+				serverPools[i] = poolAvailableSpace{Index: i}
+				continue
+			}
 		}
 		var maxUsedPct int
 		for _, disk := range zinfo {
@@ -934,8 +936,15 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size()) {
-			return ObjectInfo{}, toObjectErr(errDiskFull)
+		if !isMinioMetaBucketName(bucket) {
+			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
+			}
+			if !avail {
+				return ObjectInfo{}, toObjectErr(errDiskFull)
+			}
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
@@ -1399,8 +1408,15 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1) {
-			return nil, toObjectErr(errDiskFull)
+		if !isMinioMetaBucketName(bucket) {
+			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return nil, toObjectErr(errErasureWriteQuorum)
+			}
+			if !avail {
+				return nil, toObjectErr(errDiskFull)
+			}
 		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
