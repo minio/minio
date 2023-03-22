@@ -185,7 +185,7 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.1 // indirect
 	github.com/nats-io/jwt/v2 v2.2.1-0.20220113022732-58e87895b296 // indirect
-	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
+	github.com/nats-io/nats-streaming-server v0.24.3 // indirect
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/navidys/tvxwidgets v0.3.0 // indirect
