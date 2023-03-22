@@ -774,8 +774,8 @@ github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLT
 github.com/minio/kes-go v0.1.0 h1:h201DyOYP5sTqajkxFGxmXz/kPbT8HQNX1uh3Yx2PFc=
 github.com/minio/kes-go v0.1.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
 github.com/minio/madmin-go v1.6.6/go.mod h1:ATvkBOLiP3av4D++2v1UEHC/QzsGtgXD5kYvvRYzdKs=
-github.com/minio/madmin-go/v2 v2.0.16 h1:Sj3y17LR+YcWIta9eYZAxSDBtVC1s/tzBkB76v+ynF8=
-github.com/minio/madmin-go/v2 v2.0.16/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
+github.com/minio/madmin-go/v2 v2.0.17 h1:oLg51zMuSl9K8Ng3eO5a/ELTfVEmaS8X5nzQaLwfLO0=
+github.com/minio/madmin-go/v2 v2.0.17/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
 github.com/minio/mc v0.0.0-20230318234318-e290a426a131 h1:kgsp58vk1DvNhHK798ep2+yXh3sh34fhjqwG2mZ5ObU=
 github.com/minio/mc v0.0.0-20230318234318-e290a426a131/go.mod h1:5DTP70Lenpg2TUGOY7I6CWuYcdKGwadNtGhniCSnvlw=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
@@ -898,6 +898,8 @@ github.com/pkg/xattr v0.4.9/go.mod h1:di8WF84zAKk8jzR1UBTEWh9AUlIZZ7M/JNt8e9B6kt
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/poornas/madmin-go/v2 v2.0.0-20230322192724-66f8756c816f h1:l0vXMhCfsn8kXtI0GbbUO5Aahg1tVVRaJk3n8OOA5SA=
+github.com/poornas/madmin-go/v2 v2.0.0-20230322192724-66f8756c816f/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/posener/complete v1.2.3 h1:NP0eAhjcjImqslEwo/1hq7gpajME0fTLTezBKDqfXqo=
 github.com/posener/complete v1.2.3/go.mod h1:WZIdtGGp+qx0sLrYKtIRAruyNpv6hFCicSgv7Sy7s/s=
