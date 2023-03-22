@@ -582,6 +582,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		AccountStatus: stsAccount.Status,
 		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
+		Expiration:    &stsAccount.Expiration,
 	}
 
 	data, err := json.Marshal(infoResp)
