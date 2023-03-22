@@ -48,7 +48,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	opts := HealthOptions{
-		Maintenance: r.Form.Get("maintenance") == "true",
+		Maintenance:    r.Form.Get("maintenance") == "true",
 		DeploymentType: r.Form.Get("deployment-type"),
 	}
 	result := objLayer.Health(ctx, opts)

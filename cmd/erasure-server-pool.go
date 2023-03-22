@@ -2083,7 +2083,7 @@ const (
 
 // HealthOptions takes input options to return sepcific information
 type HealthOptions struct {
-	Maintenance bool
+	Maintenance    bool
 	DeploymentType string
 }
 
