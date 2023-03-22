@@ -346,6 +346,10 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	g.Wait()
 
 	for i, zinfo := range storageInfos {
+		if zinfo == nil {
+			serverPools[i] = poolAvailableSpace{Index: i}
+			continue
+		}
 		var available uint64
 		if !isMinioMetaBucketName(bucket) {
 			if avail, err := hasSpaceFor(zinfo, size); err != nil && !avail {
