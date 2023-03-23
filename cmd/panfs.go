@@ -1570,12 +1570,12 @@ func (fs *PANFSObjects) filterOutPanFSS3Dir(entries []string) (filtered []string
 // isObjectDir returns true if the specified bucket & prefix exists
 // and the prefix represents an empty directory. An S3 empty directory
 // is also an empty directory in the PanFS backend.
-func (fs *PANFSObjects) isObjectDir(bucket, prefix string) bool {
+func (fs *PANFSObjects) isObjectDir(bucketDir, prefix string) bool {
 	if fs.configAgent != nil {
-		entries, err := fs.configAgent.GetObjectsList(pathJoin(panfsObjectsPrefix, bucket, prefix, slashSeparator))
+		entries, err := fs.configAgent.GetObjectsList(pathJoin(panfsObjectsPrefix, bucketDir, prefix, slashSeparator))
 		return err != nil && len(entries) == 0
 	}
-	entries, err := readDirN(pathJoin(fs.fsPath, bucket, prefix), 1)
+	entries, err := readDirN(pathJoin(bucketDir, prefix), 1)
 	if err != nil {
 		return false
 	}
