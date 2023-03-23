@@ -168,7 +168,7 @@ func sendHealthInfo(ctx context.Context, healthInfo madmin.HealthInfo) error {
 	}
 
 	filename := fmt.Sprintf("health_%s.json.gz", UTCNow().Format("20060102150405"))
-	url += "?filename=" + filename + "&src=callhome"
+	url += "?filename=" + filename
 
 	_, err := globalSubnetConfig.Upload(url, filename, createHealthJSONGzip(ctx, healthInfo))
 	return err
