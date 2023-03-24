@@ -628,6 +628,15 @@ func (e PanFSS3InvalidName) Error() string {
 	return "Invalid symbols in object/bucket name."
 }
 
+// PanFSInvalidBucketPath bucket does not exist
+type PanFSInvalidBucketPath struct {
+	BucketPath string
+}
+
+func (e PanFSInvalidBucketPath) Error() string {
+	return fmt.Sprintf("Bucket path (%s) validation failed.", e.BucketPath)
+}
+
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
 	PartSize   int64

@@ -490,7 +490,7 @@ func (fs *PANFSObjects) getBucketPanFSPath(ctx context.Context, bucket string) (
 		if err != nil {
 			return "", err
 		}
-		path = pathJoin(meta.PanFSPath, bucket)
+		path = meta.PanFSPath
 	} else {
 		path = pathJoin(fs.fsPath, bucket)
 	}
@@ -525,24 +525,47 @@ func (fs *PANFSObjects) MakeBucketWithLocation(ctx context.Context, bucket strin
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	defer NSUpdated(bucket, slashSeparator)
+	// Do not create bucket if it already exists
+	_, err := fs.getBucketPanFSPath(ctx, bucket)
+	if err != nil && !isErrBucketNotFound(err) {
+		return toObjectErr(err, bucket)
+	} else if err == nil {
+		return toObjectErr(errVolumeExists, bucket)
+	}
 
-	// TODO: if bucket is not minio.sys do not create .s3
-	bucketMetaDir := pathJoin(opts.PanFSBucketPath, bucket, panfsMetaDir)
-	for _, dir := range []string{
-		pathJoin(opts.PanFSBucketPath, bucket),
+	defer NSUpdated(bucket, slashSeparator)
+	var dirs []string
+	var bucketPanFSPath string
+	var bucketMetaDir string
+
+	if retainSlash(opts.PanFSBucketPath) != retainSlash(globalPanFSDefaultBucketPath) {
+		// Mapping to an existing folder
+		bucketPanFSPath = opts.PanFSBucketPath
+		bucketMetaDir = pathJoin(opts.PanFSBucketPath, panfsMetaDir)
+	} else {
+		// Panfs path is the default path - create bucket directory inside
+		bucketPanFSPath = pathJoin(opts.PanFSBucketPath, bucket)
+		bucketMetaDir = pathJoin(opts.PanFSBucketPath, bucket, panfsMetaDir)
+		dirs = append(dirs, pathJoin(opts.PanFSBucketPath, bucket))
+	}
+
+	if err := fs.checkBucketPanFSPathNesting(ctx, bucketPanFSPath); err != nil {
+		return toObjectErr(err, bucket)
+	}
+	dirs = append(dirs,
 		bucketMetaDir,
 		pathJoin(bucketMetaDir, objMetadataDir),
 		pathJoin(bucketMetaDir, tmpDir),
-		pathJoin(bucketMetaDir, mpartMetaPrefix),
-	} {
+		pathJoin(bucketMetaDir, mpartMetaPrefix))
+	for _, dir := range dirs {
 		if err := fsMkdir(ctx, dir); err != nil {
-			return toObjectErr(err, bucket)
+			return toObjectErr(err)
 		}
 	}
 
 	meta := newBucketMetadata(bucket)
-	meta.PanFSPath = opts.PanFSBucketPath
+	// Save panfs path with trailing slash
+	meta.PanFSPath = retainSlash(bucketPanFSPath)
 
 	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
@@ -622,16 +645,9 @@ func (fs *PANFSObjects) GetBucketInfo(ctx context.Context, bucket string, opts B
 	return
 }
 
-// ListBuckets - list all s3 compatible buckets (directories) at fsPath.
-func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
-	if err := checkPathLength(fs.fsPath); err != nil {
-		logger.LogIf(ctx, err)
-		return nil, err
-	}
-
+func (fs *PANFSObjects) listBuckets(ctx context.Context) ([]BucketInfo, error) {
 	var entries []string
 	var err error
-
 	if fs.configAgent != nil {
 		// We need "buckets/" here, not "buckets" to list all the
 		// objects included in the "buckets" directory but ignore a
@@ -652,7 +668,7 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
-		return nil, toObjectErr(errDiskNotFound)
+		return nil, errDiskNotFound
 	}
 
 	bucketInfos := make([]BucketInfo, 0, len(entries))
@@ -661,31 +677,36 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 		if isReservedOrInvalidBucket(entry, false) {
 			continue
 		}
-		var fi os.FileInfo
+		meta, err := fs.loadBucketMetadata(ctx, entry)
+		if err != nil {
+			continue
+		}
 
-		bucketDir, err := fs.getBucketPanFSPath(ctx, entry)
+		var fi os.FileInfo
+		fi, err = fsStatVolume(ctx, meta.PanFSPath)
 		if err != nil {
 			continue
-		}
-		fi, err = fsStatVolume(ctx, bucketDir)
-		// There seems like no practical reason to check for errors
-		// at this point, if there are indeed errors we can simply
-		// just ignore such buckets and list only those which
-		// return proper Stat information instead.
-		if err != nil {
-			// Ignore any errors returned here.
-			continue
-		}
-		created := fi.ModTime()
-		meta, err := globalBucketMetadataSys.Get(fi.Name())
-		if err == nil {
-			created = meta.Created
 		}
 
 		bucketInfos = append(bucketInfos, BucketInfo{
-			Name:    fi.Name(),
-			Created: created,
+			Name:      meta.Name,
+			Created:   fi.ModTime(),
+			PanFSPath: meta.PanFSPath,
 		})
+	}
+	return bucketInfos, nil
+}
+
+// ListBuckets - list all s3 compatible buckets (directories) at fsPath.
+func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
+	if err := checkPathLength(fs.fsPath); err != nil {
+		logger.LogIf(ctx, err)
+		return nil, err
+	}
+
+	bucketInfos, err := fs.listBuckets(ctx)
+	if err != nil {
+		return nil, toObjectErr(err)
 	}
 
 	// Sort bucket infos by bucket name.
@@ -693,7 +714,6 @@ func (fs *PANFSObjects) ListBuckets(ctx context.Context, opts BucketOptions) ([]
 		return bucketInfos[i].Name < bucketInfos[j].Name
 	})
 
-	// Succes.
 	return bucketInfos, nil
 }
 
@@ -712,23 +732,13 @@ func (fs *PANFSObjects) DeleteBucket(ctx context.Context, bucket string, opts De
 		return toObjectErr(err, bucket)
 	}
 
-	// TODO: delete bucket operation should preserve user objects on the realm
-	if !opts.Force {
-		// Attempt to delete regular bucket.
-		if err = removePanFSBucketDir(ctx, bucketDir); err != nil {
-			return toObjectErr(err, bucket)
-		}
-	} else {
-		// Still using here .minio.sys as temp dir for delete bucket
-		tmpBucketPath := pathJoin(fs.fsPath, minioMetaTmpBucket, bucket+"."+mustGetUUID())
-		if err = Rename(bucketDir, tmpBucketPath); err != nil {
-			return toObjectErr(err, bucket)
-		}
-
-		go func() {
-			fsRemoveAll(ctx, tmpBucketPath) // ignore returned error if any.
-		}()
+	// only remove .s3 directory
+	deletePath := path.Join(fs.fsPath, minioMetaTmpBucket, bucket+"."+mustGetUUID())
+	if err = Rename(path.Join(bucketDir, panfsMetaDir), deletePath); err != nil {
+		return toObjectErr(err, bucket)
 	}
+
+	fsRemoveAll(ctx, deletePath)
 
 	// Delete all bucket metadata.
 	deleteBucketMetadata(ctx, fs, bucket)
@@ -1854,4 +1864,24 @@ func (fs *PANFSObjects) isConfigAgentObject(bucket, object string) bool {
 
 func (fs *PANFSObjects) getTempDir(bucketDir string) string {
 	return pathJoin(bucketDir, panfsS3TmpDir, fs.nodeDataSerial, strconv.FormatUint(atomic.AddUint64(&fs.currentTmpFolder, 1)%fs.tmpDirsCount, 10))
+}
+
+// checkBucketPanFSPathNesting checks whether new bucket path is intersecting with any of existing bucket paths. This
+// function returns an error when new bucket path is on the top of any existing bucket path as well.
+// Example. Existing bucket paths: /a/b/c /a/b/d /a/b1/b2/c3/d4
+// /a/b/c/d /a/b/d/e /a/b1/b2/c3/d4/e5/f	INVALID
+// /a/b/c1 /a/b/f 							OK
+// /a/b  /a/b1/c3							INVALID
+func (fs *PANFSObjects) checkBucketPanFSPathNesting(ctx context.Context, path string) error {
+	bucketInfos, err := fs.listBuckets(ctx)
+	if err != nil {
+		return toObjectErr(err)
+	}
+
+	for _, info := range bucketInfos {
+		if strings.HasPrefix(path, info.PanFSPath) || strings.HasPrefix(info.PanFSPath, path) {
+			return PanFSInvalidBucketPath{BucketPath: path}
+		}
+	}
+	return nil
 }
