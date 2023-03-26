@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -281,6 +282,7 @@ const (
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
 	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPNonDefaultConfigName
 	ErrAdminConfigLDAPValidation
 	ErrAdminConfigIDPCfgNameAlreadyExists
 	ErrAdminConfigIDPCfgNameDoesNotExist
@@ -1333,6 +1335,11 @@ var errorCodes = errorCodeMap{
 		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminConfigLDAPNonDefaultConfigName: {
+		Code:           "XMinioAdminConfigLDAPNonDefaultConfigName",
+		Description:    "Only a single LDAP configuration is supported - config name must be empty or `_`",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminConfigLDAPValidation: {
 		Code:           "XMinioAdminConfigLDAPValidation",
 		Description:    "LDAP Configuration validation failed",
@@ -2311,6 +2318,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// any underlying errors if possible depending on
 		// their internal error types.
 		switch e := err.(type) {
+		case kms.Error:
+			apiErr = APIError{
+				Description:    e.Err.Error(),
+				Code:           e.APICode,
+				HTTPStatusCode: e.HTTPStatusCode,
+			}
 		case batchReplicationJobError:
 			apiErr = APIError(e)
 		case InvalidArgument:

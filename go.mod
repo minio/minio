@@ -3,7 +3,7 @@ module github.com/minio/minio
 go 1.19
 
 require (
-	cloud.google.com/go/storage v1.29.0
+	cloud.google.com/go/storage v1.30.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Shopify/sarama v1.38.1
 	github.com/alecthomas/participle v0.7.1
@@ -47,10 +47,10 @@ require (
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.0.16
+	github.com/minio/madmin-go/v2 v2.0.17
 	github.com/minio/minio-go/v7 v7.0.49
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg v1.6.4
+	github.com/minio/pkg v1.6.5-0.20230318001333-39b6e90c1c88
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.5
@@ -88,7 +88,7 @@ require (
 	golang.org/x/oauth2 v0.6.0
 	golang.org/x/sys v0.6.0
 	golang.org/x/time v0.3.0
-	google.golang.org/api v0.112.0
+	google.golang.org/api v0.114.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -129,10 +129,10 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/runtime v0.25.0 // indirect
 	github.com/go-openapi/spec v0.20.8 // indirect
-	github.com/go-openapi/strfmt v0.21.3 // indirect
+	github.com/go-openapi/strfmt v0.21.5 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-openapi/validate v0.22.1 // indirect
-	github.com/goccy/go-json v0.10.1 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -173,20 +173,20 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20230313130716-d276bd73957e // indirect
+	github.com/minio/mc v0.0.0-20230318234318-e290a426a131 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.7.0 // indirect
-	github.com/muesli/ansi v0.0.0-20230307104941-78d3738a59f2 // indirect
+	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.1 // indirect
 	github.com/nats-io/jwt/v2 v2.2.1-0.20220113022732-58e87895b296 // indirect
-	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
-	github.com/nats-io/nkeys v0.3.0 // indirect
+	github.com/nats-io/nats-streaming-server v0.24.3 // indirect
+	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/navidys/tvxwidgets v0.3.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
@@ -211,7 +211,7 @@ require (
 	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7 // indirect
-	go.mongodb.org/mongo-driver v1.11.2 // indirect
+	go.mongodb.org/mongo-driver v1.11.3 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/mod v0.9.0 // indirect
@@ -224,7 +224,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
 	google.golang.org/grpc v1.53.0 // indirect
-	google.golang.org/protobuf v1.29.1 // indirect
+	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect

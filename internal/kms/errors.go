@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,28 +15,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package disk
+package kms
 
-import (
-	"os"
-
-	"github.com/ncw/directio"
-	"golang.org/x/sys/unix"
-)
-
-// OpenFileDirectIO - bypass kernel cache.
-func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, error) {
-	return directio.OpenFile(filePath, flag, perm)
+// Error encapsulates S3 API error response fields.
+type Error struct {
+	Err            error
+	APICode        string
+	HTTPStatusCode int
 }
 
-// DisableDirectIO - disables directio mode.
-func DisableDirectIO(f *os.File) error {
-	fd := f.Fd()
-	_, err := unix.FcntlInt(fd, unix.F_NOCACHE, 0)
-	return err
-}
-
-// AlignedBlock - pass through to directio implementation.
-func AlignedBlock(blockSize int) []byte {
-	return directio.AlignedBlock(blockSize)
+func (e Error) Error() string {
+	return e.Err.Error()
 }

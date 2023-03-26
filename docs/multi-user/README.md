@@ -41,7 +41,7 @@ EOF
 Create new canned policy by name `getonly` using `getonly.json` policy file.
 
 ```
-mc admin policy add myminio getonly getonly.json
+mc admin policy create myminio getonly getonly.json
 ```
 
 Create a new user `newuser` on MinIO use `mc admin user`.
@@ -53,7 +53,7 @@ mc admin user add myminio newuser newuser123
 Once the user is successfully created you can now apply the `getonly` policy for this user.
 
 ```
-mc admin policy set myminio getonly user=newuser
+mc admin policy attach myminio getonly --user=newuser
 ```
 
 ### 3. Create a new group
@@ -65,7 +65,7 @@ mc admin group add myminio newgroup newuser
 Once the group is successfully created you can now apply the `getonly` policy for this group.
 
 ```
-mc admin policy set myminio getonly group=newgroup
+mc admin policy attach myminio getonly --group=newgroup
 ```
 
 ### 4. Disable user
@@ -107,13 +107,13 @@ mc admin group remove myminio newgroup
 Change the policy for user `newuser` to `putonly` canned policy.
 
 ```
-mc admin policy set myminio putonly user=newuser
+mc admin policy attach myminio putonly --user=newuser
 ```
 
 Change the policy for group `newgroup` to `putonly` canned policy.
 
 ```
-mc admin policy set myminio putonly group=newgroup
+mc admin policy attach myminio putonly --group=newgroup
 ```
 
 ### 7. List all users or groups

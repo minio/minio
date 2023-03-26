@@ -359,6 +359,7 @@ type Object struct {
 
 	// UserMetadata user-defined metadata
 	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
+	UserTags     string    `xml:"UserTags,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -626,6 +627,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		}
 		content.Owner = owner
 		if metadata {
+			content.UserTags = object.UserTags
 			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
 			case crypto.S3:
