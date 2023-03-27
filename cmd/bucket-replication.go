@@ -1424,7 +1424,12 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err != nil {
 			return err
 		}
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, "", "", opts.ServerSideEncryption)
+
+		popts := minio.PutObjectPartOptions{
+			SSE: opts.ServerSideEncryption,
+		}
+
+		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
 		if err != nil {
 			return err
 		}
