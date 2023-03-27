@@ -131,6 +131,9 @@ func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
 	}
 
 	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].Type == "internal" && infos[j].Type == "internal" {
+			return infos[i].Name < infos[j].Name
+		}
 		if infos[i].Type == "internal" {
 			return true
 		}
