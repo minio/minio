@@ -232,7 +232,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {
-		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
@@ -353,7 +353,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {
-		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
