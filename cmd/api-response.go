@@ -362,7 +362,7 @@ type Object struct {
 	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
 
 	// x-amz-tagging values in their k/v values.
-	UserTags map[string]string `json:"userTags"`
+	UserTags *tags.Tags `json:"userTags,omitempty" xml:"Tagging,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -632,7 +632,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		if metadata {
 			userTags, err := tags.ParseObjectTags(object.UserTags)
 			if err == nil {
-				content.UserTags = userTags.ToMap()
+				content.UserTags = userTags
 			}
 			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
