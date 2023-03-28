@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
@@ -359,7 +360,9 @@ type Object struct {
 
 	// UserMetadata user-defined metadata
 	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
-	UserTags     string    `xml:"UserTags,omitempty"`
+
+	// x-amz-tagging values in their k/v values.
+	UserTags map[string]string `json:"userTags"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -627,7 +630,10 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		}
 		content.Owner = owner
 		if metadata {
-			content.UserTags = object.UserTags
+			userTags, err := tags.ParseObjectTags(object.UserTags)
+			if err == nil {
+				content.UserTags = userTags.ToMap()
+			}
 			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
 			case crypto.S3:
