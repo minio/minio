@@ -33,9 +33,7 @@ MinIO uses the following disclosure process:
    If the report is rejected the response explains why.
 3. Code is audited to find any potential similar problems.
 4. Fixes are prepared for the latest release.
-5. On the date that the fixes are applied a security advisory will be published on <https://blog.min.io>.
-   Please inform us in your report email whether MinIO should mention your contribution w.r.t. fixing
-   the security issue. By default MinIO will **not** publish this information to protect your privacy.
+5. MinIO will release CVEs using Github's standard notification system and also actively notify all [SUBNET](https://min.io/pricing) customers promptly after the release. MinIO may also release a blog post discussing one or more CVEs. Please inform us in your report email whether MinIO should mention your contribution with regard to fixing the security issue. By default MinIO will **not** publish this information to protect your privacy.
 
 This process can take some time, especially when coordination is required with maintainers of other projects.
 Every effort will be made to handle the bug in as timely a manner as possible, however it's important that we
