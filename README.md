@@ -39,7 +39,9 @@ Production Deployments:
 - [Azure Kubernetes Service](https://min.io/docs/minio/kubernetes/aks/index.html?ref=github-minio)
 - [SUSE Rancher](https://min.io/product/multicloud-suse-rancher?ref=github-minio)
 
-**NOTE** MinIO strongly recommends using the [MinIO Kubernetes Operator](https://min.io/docs/minio/kubernetes/upstream/index.html?ref=github-minio) for deploying MinIO Tenants onto Kubernetes infrastructure, regardless of the Kubernetes "flavor" (upstream, OpenShift, Rancher, Cloud Hosted, etc.).
+| **NOTE** | 
+| -------- |
+| MinIO strongly recommends using the [MinIO Kubernetes Operator](https://min.io/docs/minio/kubernetes/upstream/index.html?ref=github-minio) for deploying MinIO Tenants onto Kubernetes infrastructure, regardless of the Kubernetes "flavor" (upstream, OpenShift, Rancher, Cloud Hosted, etc.).|
 
 Local Development and Evaluation:
 
@@ -117,7 +119,7 @@ For example:
 
 - Red Hat Enterprise Linux 9.0 or later
 - Ubuntu 20.04 LTS or later
-- 
+
 
 # Upgrades
 
@@ -133,13 +135,9 @@ MinIO **does not** support "rolling upgrade" strategies operating on a single no
 Upgrade and restart all nodes in parallel as per our guidelines.
 MinIO restarts typically complete within seconds, and S3 SDK retry functionality enables minimal disruption to client applications.
 
-|***IMPORTANT***|
+|**IMPORTANT**|
 |---------------|
-| Always test upgrades in a lower environment (DEV, QA, UAT) before applying to production. 
-  Performing blind upgrades in production environments carries significant risk.
-
-  Always read the MinIO release notes before performing any upgrade.
-  MinIO does not require following tightly to the latest release, and you can selectively upgrade when specific features, fixes, or security patches relevant to your deployment become available. |
+| Always test upgrades in a lower environment (DEV, QA, UAT) before applying to production. Always read the MinIO release notes before performing any upgrade. Performing blind upgrades in production environments carries significant risk. <br> <br> MinIO does not require following tightly to the latest release, and you can selectively upgrade when specific features, fixes, or security patches relevant to your deployment become available. |
 
 For Kubernetes environments using the [MinIO Operator](https://min.io/docs/minio/kubernetes/upstream/operations/installation.html), you should update managed Tenants through the [Operator](https://min.io/docs/minio/kubernetes/upstream/operations/install-deploy-manage/upgrade-minio-tenant.html)
 
