@@ -39,7 +39,7 @@ Production Deployments:
 - [Azure Kubernetes Service](https://min.io/docs/minio/kubernetes/aks/index.html?ref=github-minio)
 - [SUSE Rancher](https://min.io/product/multicloud-suse-rancher?ref=github-minio)
 
-**NOTE** MinIO strongly recommends using the [MinIO Kubernetes Operator](https://min.io/docs/minio/kubernetes/upstream/index.html?ref=github-minio) for
+**NOTE** MinIO strongly recommends using the [MinIO Kubernetes Operator](https://min.io/docs/minio/kubernetes/upstream/index.html?ref=github-minio) for deploying MinIO Tenants onto Kubernetes infrastructure, regardless of the Kubernetes "flavor" (upstream, OpenShift, Rancher, Cloud Hosted, etc.).
 
 Local Development and Evaluation:
 
