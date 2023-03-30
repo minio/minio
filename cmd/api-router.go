@@ -393,6 +393,9 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("listobjectsv2", maxClients(gz(httpTraceAll(api.ListObjectsV2Handler))))).Queries("list-type", "2")
 		// ListObjectVersions
 		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsMHandler))))).Queries("versions", "", "metadata", "true")
+		// ListObjectVersions
+		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsHandler))))).Queries("versions", "")
 		// GetBucketPolicyStatus
 		router.Methods(http.MethodGet).HandlerFunc(
