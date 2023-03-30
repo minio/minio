@@ -1658,14 +1658,14 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	}
 
 	err := z.s3Peer.DeleteBucket(ctx, bucket, opts)
-	if err == nil || errors.Is(err, errVolumeNotFound) {
+	if err == nil || isErrBucketNotFound(err) {
 		// If site replication is configured, hold on to deleted bucket state until sites sync
 		if opts.SRDeleteOp == MarkDelete {
 			z.s3Peer.MakeBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), MakeBucketOptions{})
 		}
 	}
 
-	if err != nil && !errors.Is(err, errVolumeNotFound) {
+	if err != nil && !isErrBucketNotFound(err) {
 		if !opts.NoRecreate {
 			z.s3Peer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 		}
