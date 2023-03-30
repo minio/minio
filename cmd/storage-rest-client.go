@@ -731,6 +731,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		return stat, err
 	}
 	rd := msgpNewReader(respReader)
+	defer readMsgpReaderPool.Put(rd)
 	for {
 		var st StatInfo
 		err = st.DecodeMsg(rd)
