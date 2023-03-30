@@ -1,8 +1,0 @@
-{
-    "name": "s3-zip-example",
-    "version": "1.0.0",
-    "main": "main.js",
-    "dependencies": {
-        "aws-sdk": "^2.924.0"
-    }
-}
