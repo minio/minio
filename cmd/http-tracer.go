@@ -39,7 +39,7 @@ var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
 // redact LDAP password if part of string
 func redactLDAPPwd(s string) string {
 	parts := ldapPwdRegex.FindStringSubmatch(s)
-	if len(parts) > 4 {
+	if len(parts) > 3 {
 		return parts[1] + "LDAPPassword=*REDACTED*" + parts[3]
 	}
 	return s
