@@ -106,6 +106,11 @@ type PANFSObjects struct {
 	currentTmpFolder uint64
 
 	configAgent *panconfig.Client
+
+	defaultDirMode os.FileMode
+	defaultObjMode os.FileMode
+	defaultOwner   int
+	defaultGroup   int
 }
 
 // Represents the background append file.
@@ -185,6 +190,23 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		return nil, fmt.Errorf("can't parse count of tmp directories. Error: %w", err)
 	}
 
+	defaultDirMode, err := strconv.ParseUint(env.Get(config.EnvPanDefaultDirMode, strconv.Itoa(0o777)), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("can't parse default dir mode Error: %w", err)
+	}
+	defaultObjMode, err := strconv.ParseUint(env.Get(config.EnvPanDefaultObjMode, strconv.Itoa(0o777)), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("can't parse default obj mode Error: %w", err)
+	}
+	defaultOwner, err := strconv.Atoi(env.Get(config.EnvPanDefaultOwner, "0"))
+	if err != nil {
+		return nil, fmt.Errorf("can't parse default obj mode Error: %w", err)
+	}
+	defaultGroup, err := strconv.Atoi(env.Get(config.EnvPanDefaultGroup, "0"))
+	if err != nil {
+		return nil, fmt.Errorf("can't parse default obj mode Error: %w", err)
+	}
+
 	// Initialize fs objects.
 	fs := &PANFSObjects{
 		fsPath:         fsPath,
@@ -199,6 +221,11 @@ func NewPANFSObjectLayer(ctx context.Context, fsPath string) (ObjectLayer, error
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
 		configAgent:   panasasConfigClient,
 		tmpDirsCount:  tmpDirsCount,
+
+		defaultDirMode: os.FileMode(defaultDirMode),
+		defaultObjMode: os.FileMode(defaultObjMode),
+		defaultOwner:   defaultOwner,
+		defaultGroup:   defaultGroup,
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -1331,7 +1358,8 @@ func (fs *PANFSObjects) putObject(ctx context.Context, bucket string, object str
 
 		// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 		fsNSObjPath = pathJoin(bucketDir, object)
-		if err = panfsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
+		if err = panfsPublishFile(fsTmpObjPath, fsNSObjPath, fs.defaultObjMode, fs.defaultDirMode, fs.defaultOwner, fs.defaultGroup); err != nil {
+			logger.LogIf(ctx, err)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}

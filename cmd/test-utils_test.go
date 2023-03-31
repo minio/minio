@@ -45,6 +45,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -250,7 +251,15 @@ func initPanFSObjects(fs string) (obj ObjectLayer, err error) {
 
 // Initialize FS objects.
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
+	usr, err := user.Current()
+	if err != nil {
+		t.Fatalf("Cannot find user: " + err.Error())
+	}
+
+	os.Setenv(config.EnvPanDefaultOwner, usr.Uid)
+	os.Setenv(config.EnvPanDefaultGroup, usr.Gid)
+
+	obj, _, err = initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
 	if err != nil {
 		t.Fatal(err)
 	}

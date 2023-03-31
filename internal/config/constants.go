@@ -85,4 +85,8 @@ const (
 	EnvPanasasConfigAgentURL = "MINIO_PANFS_CONFIG_AGENT_URL"
 	EnvPanTmpDirsCount       = "MINIO_PANFS_TMP_DIRS_COUNT"
 	EnvPanUUID               = "MINIO_PANFS_DATASERIAL"
+	EnvPanDefaultDirMode     = "MINIO_PANFS_DEFAULT_DIR_MODE"
+	EnvPanDefaultObjMode     = "MINIO_PANFS_DEFAULT_OBJ_MODE"
+	EnvPanDefaultOwner       = "MINIO_PANFS_DEFAULT_OWNER"
+	EnvPanDefaultGroup       = "MINIO_PANFS_DEFAULT_GROUP"
 )
