@@ -12,7 +12,7 @@ docker system prune -f
 docker volume prune -f
 
 ## change working directory
-cd .github/workflows
+cd .github/workflows/mint
 
 docker-compose -f minio-${MODE}.yaml up -d
 sleep 5m
@@ -47,5 +47,5 @@ docker system prune -f
 docker volume prune -f
 
 ## change working directory
-cd ../../
+cd ../../../
 
