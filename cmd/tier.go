@@ -264,10 +264,10 @@ func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err erro
 	// Lookup in-memory drivercache
 	d, ok := config.drivercache[tierName]
 	if ok {
-		config.Unlock()
+		config.RUnlock()
 		return d, nil
 	}
-	config.Unlock()
+	config.RUnlock()
 
 	config.Lock()
 	defer config.Unlock()
