@@ -170,6 +170,7 @@ func (sm *siteResyncMetrics) save(ctx context.Context) {
 		case <-sTimer.C:
 			if globalSiteReplicationSys.isEnabled() {
 				sm.Lock()
+				wg := sync.WaitGroup{}
 				for dID, rs := range sm.peerResyncMap {
 					st, ok := sm.resyncStatus[rs.resyncID]
 					if ok {
@@ -179,9 +180,14 @@ func (sm *siteResyncMetrics) save(ctx context.Context) {
 						}
 						rs.LastSaved = UTCNow()
 						sm.peerResyncMap[dID] = rs
-						go saveSiteResyncMetadata(ctx, st, newObjectLayerFn())
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							saveSiteResyncMetadata(ctx, st, newObjectLayerFn())
+						}()
 					}
 				}
+				wg.Wait()
 				sm.Unlock()
 			}
 			sTimer.Reset(siteResyncSaveInterval)
