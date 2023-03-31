@@ -1004,7 +1004,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			},
 		}
 
-		_, _ = objectAPI.PutObjectMetadata(ctx, bucket, object, popts);
+		_, _ = objectAPI.PutObjectMetadata(ctx, bucket, object, popts)
 		opType := replication.MetadataReplicationType
 		if rinfos.Action() == replicateAll {
 			opType = replication.ObjectReplicationType

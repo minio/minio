@@ -555,7 +555,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		if globalLocalNodeName != "" {
 			w.Header().Set(xhttp.AmzRequestHostID, globalLocalNodeNameHex)
 		}
-		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
+		h.ServeHTTP(w, r)
 	})
 }
 
