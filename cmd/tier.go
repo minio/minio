@@ -260,16 +260,21 @@ func (config *TierConfigMgr) Bytes() ([]byte, error) {
 
 // getDriver returns a warmBackend interface object initialized with remote tier config matching tierName
 func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err error) {
+	config.RLock()
+	// Lookup in-memory drivercache
+	d, ok := config.drivercache[tierName]
+	if ok {
+		config.Unlock()
+		return d, nil
+	}
+	config.Unlock()
+
 	config.Lock()
 	defer config.Unlock()
-
-	var ok bool
-	// Lookup in-memory drivercache
 	d, ok = config.drivercache[tierName]
 	if ok {
 		return d, nil
 	}
-
 	// Initialize driver from tier config matching tierName
 	t, ok := config.Tiers[tierName]
 	if !ok {
