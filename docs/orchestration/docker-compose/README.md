@@ -39,7 +39,7 @@ or
 docker stack deploy --compose-file docker-compose.yaml minio
 ```
 
-Distributed instances are now accessible on the host at ports 9000, proceed to access the Web browser at <http://127.0.0.1:9000/>. Here 4 MinIO server instances are reverse proxied through Nginx load balancing.
+Distributed instances are now accessible on the host using the Minio CLI on port 9000 and the Minio Web Console on port 9001. Proceed to access the Web browser at <http://127.0.0.1:9001/>. Here 4 MinIO server instances are reverse proxied through Nginx load balancing.
 
 ### Notes
 
