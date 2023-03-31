@@ -1478,8 +1478,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	// Check failed deletes across multiple objects
 	for i, dobj := range dobjects {
-		// This object errored, no need to attempt a heal.
-		if errs[i] != nil {
+		// This object errored, we should attempt a heal just in case.
+		if errs[i] != nil && !isErrVersionNotFound(errs[i]) && !isErrObjectNotFound(errs[i]) {
+			// all other direct versionId references we should
+			// ensure no dangling file is left over.
+			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID, -1)
 			continue
 		}
 
@@ -1648,6 +1651,18 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 	fvID := mustGetUUID()
 
+	defer func() {
+		// attempt a heal before returning if there are offline disks
+		// for both del marker and permanent delete situations.
+		for _, disk := range storageDisks {
+			if disk != nil && disk.IsOnline() {
+				continue
+			}
+			er.addPartial(bucket, object, opts.VersionID, -1)
+			break
+		}
+	}()
+
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		if !deleteMarker {
 			// versioning suspended means we add `null` version as
@@ -1693,14 +1708,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	dfi.SetTierFreeVersionID(fvID)
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
-	}
-
-	for _, disk := range storageDisks {
-		if disk != nil && disk.IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, opts.VersionID, -1)
-		break
 	}
 
 	return dfi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
