@@ -355,11 +355,11 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := xhttp.NewResponseRecorder(w)
+		f.ServeHTTP(w, r)
 
-		f.ServeHTTP(statsWriter, r)
-
-		globalHTTPStats.updateStats(api, r, statsWriter)
+		if sw, ok := w.(*xhttp.ResponseRecorder); ok {
+			globalHTTPStats.updateStats(api, r, sw)
+		}
 	}
 }
 
