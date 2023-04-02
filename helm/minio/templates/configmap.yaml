@@ -10,24 +10,24 @@ metadata:
     heritage: {{ .Release.Service }}
 data:
   initialize: |-
-{{ include (print $.Template.BasePath "/_helper_create_bucket.txt") . | indent 4 }}
+    {{- include (print $.Template.BasePath "/_helper_create_bucket.txt") . | nindent 4 }}
   add-user: |-
-{{ include (print $.Template.BasePath "/_helper_create_user.txt") . | indent 4 }}
+    {{- include (print $.Template.BasePath "/_helper_create_user.txt") . | nindent 4 }}
   add-policy: |-
-{{ include (print $.Template.BasePath "/_helper_create_policy.txt") . | indent 4 }}
-{{- range $idx, $policy := .Values.policies }}
+    {{- include (print $.Template.BasePath "/_helper_create_policy.txt") . | nindent 4 }}
+  {{- range $idx, $policy := .Values.policies }}
   # Policy: {{ $policy.name }}
   policy_{{ $idx }}.json: |-
-{{ include (print $.Template.BasePath "/_helper_policy.tpl") . | indent 4 }}
-{{ end }}
-{{- range $idx, $svc := .Values.svcaccts }}
-{{- if $svc.policy }}
+    {{- include (print $.Template.BasePath "/_helper_policy.tpl") . | nindent 4 }}
+  {{ end }}
+  {{- range $idx, $svc := .Values.svcaccts }}
+  {{- if $svc.policy }}
   # SVC: {{ $svc.accessKey }}
   svc_policy_{{ $idx }}.json: |-
-{{ include (print $.Template.BasePath "/_helper_policy.tpl") .policy | indent 4 }}
-{{- end }}
-{{ end }}
+    {{- include (print $.Template.BasePath "/_helper_policy.tpl") .policy | nindent 4 }}
+  {{- end }}
+  {{- end }}
   add-svcacct: |-
-{{ include (print $.Template.BasePath "/_helper_create_svcacct.txt") . | indent 4 }}
+    {{- include (print $.Template.BasePath "/_helper_create_svcacct.txt") . | nindent 4 }}
   custom-command: |-
-{{ include (print $.Template.BasePath "/_helper_custom_command.txt") . | indent 4 }}
+    {{- include (print $.Template.BasePath "/_helper_custom_command.txt") . | nindent 4 }}

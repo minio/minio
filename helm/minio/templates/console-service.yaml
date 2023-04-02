@@ -1,7 +1,4 @@
-{{ $scheme := "http" }}
-{{- if .Values.tls.enabled }}
-{{ $scheme = "https" }}
-{{ end }}
+{{ $scheme := .Values.tls.enabled | ternary "https" "http" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,37 +9,36 @@ metadata:
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- if .Values.consoleService.annotations }}
-  annotations:
-{{ toYaml .Values.consoleService.annotations | indent 4 }}
-{{- end }}
+  {{- if .Values.consoleService.annotations }}
+  annotations: {{- toYaml .Values.consoleService.annotations | nindent 4 }}
+  {{- end }}
 spec:
-{{- if (or (eq .Values.consoleService.type "ClusterIP" "") (empty .Values.consoleService.type)) }}
+  {{- if (or (eq .Values.consoleService.type "ClusterIP" "") (empty .Values.consoleService.type)) }}
   type: ClusterIP
   {{- if not (empty .Values.consoleService.clusterIP) }}
   clusterIP: {{ .Values.consoleService.clusterIP }}
-  {{end}}
-{{- else if eq .Values.consoleService.type "LoadBalancer" }}
+  {{- end }}
+  {{- else if eq .Values.consoleService.type "LoadBalancer" }}
   type: {{ .Values.consoleService.type }}
   loadBalancerIP: {{ default "" .Values.consoleService.loadBalancerIP }}
-{{- else }}
+  {{- else }}
   type: {{ .Values.consoleService.type }}
-{{- end }}
+  {{- end }}
   ports:
     - name: {{ $scheme }}
       port: {{ .Values.consoleService.port }}
       protocol: TCP
-{{- if (and (eq .Values.consoleService.type "NodePort") ( .Values.consoleService.nodePort)) }}
+      {{- if (and (eq .Values.consoleService.type "NodePort") ( .Values.consoleService.nodePort)) }}
       nodePort: {{ .Values.consoleService.nodePort }}
-{{- else }}
+      {{- else }}
       targetPort: {{ .Values.minioConsolePort }}
-{{- end}}
-{{- if .Values.consoleService.externalIPs }}
+      {{- end }}
+  {{- if .Values.consoleService.externalIPs }}
   externalIPs:
-{{- range $i , $ip := .Values.consoleService.externalIPs }}
-  - {{ $ip }}
-{{- end }}
-{{- end }}
+    {{- range $i , $ip := .Values.consoleService.externalIPs }}
+    - {{ $ip }}
+    {{- end }}
+  {{- end }}
   selector:
     app: {{ template "minio.name" . }}
     release: {{ .Release.Name }}
