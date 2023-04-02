@@ -51,6 +51,24 @@ func setTCPParameters(network, address string, c syscall.RawConn) error {
 		// Enable TCP quick ACK, John Nagle says
 		// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
+
+		// The time (in seconds) the connection needs to remain idle before
+		// TCP starts sending keepalive probes
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 15)
+
+		// Number of probes.
+		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
+
+		// Wait time after successful probe in seconds.
+		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 15 secs)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 15)
+
+		// Set tcp user timeout in addition to the keep-alive - tcp-keepalive is not enough to close a socket
+		// with dead end because tcp-keepalive is not fired when there is data in the socket buffer.
+		//    https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+		// This is a sensitive configuration, it is better to set it to high values, > 60 secs
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, (15+5*15)*1000)
 	})
 	return nil
 }

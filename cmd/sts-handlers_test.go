@@ -627,6 +627,11 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	if !gotBuckets.Equals(shouldHaveBuckets) {
 		c.Fatalf("root user should have access to all buckets")
 	}
+
+	// This must fail.
+	if err := userAdmClient.AddUser(ctx, globalActiveCred.AccessKey, globalActiveCred.SecretKey); err == nil {
+		c.Fatal("AddUser() for root credential must fail via root STS creds")
+	}
 }
 
 // SetUpLDAP - expects to setup an LDAP test server using the test LDAP

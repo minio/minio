@@ -39,7 +39,7 @@ var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
 // redact LDAP password if part of string
 func redactLDAPPwd(s string) string {
 	parts := ldapPwdRegex.FindStringSubmatch(s)
-	if len(parts) > 0 {
+	if len(parts) > 3 {
 		return parts[1] + "LDAPPassword=*REDACTED*" + parts[3]
 	}
 	return s
@@ -67,8 +67,12 @@ func getOpName(name string) (op string) {
 // otherwise, generate a trace event with request information but no response.
 func httpTracer(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Setup a http request response recorder - this is needed for
+		// http stats requests and audit if enabled.
+		respRecorder := xhttp.NewResponseRecorder(w)
+
 		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
-			h.ServeHTTP(w, r)
+			h.ServeHTTP(respRecorder, r)
 			return
 		}
 
@@ -80,9 +84,8 @@ func httpTracer(h http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc)
 		r = r.WithContext(ctx)
 
-		// Setup a http request and response body recorder
+		// Setup a http request body recorder
 		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
-		respRecorder := xhttp.NewResponseRecorder(w)
 
 		tc.RequestRecorder = reqRecorder
 		tc.ResponseRecorder = respRecorder

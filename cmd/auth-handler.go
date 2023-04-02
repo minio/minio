@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -74,8 +75,11 @@ func isRequestPresignedSignatureV2(r *http.Request) bool {
 
 // Verify if request has AWS Post policy Signature Version '4'.
 func isRequestPostPolicySignatureV4(r *http.Request) bool {
-	return strings.Contains(r.Header.Get(xhttp.ContentType), "multipart/form-data") &&
-		r.Method == http.MethodPost
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get(xhttp.ContentType))
+	if err != nil {
+		return false
+	}
+	return mediaType == "multipart/form-data" && r.Method == http.MethodPost
 }
 
 // Verify if the request has AWS Streaming Signature Version '4'. This is only valid for 'PUT' operation.
@@ -207,7 +211,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 	// that clients cannot decode the token using the temp
 	// secret keys and generate an entirely new claim by essentially
 	// hijacking the policies. We need to make sure that this is
-	// based an admin credential such that token cannot be decoded
+	// based on admin credential such that token cannot be decoded
 	// on the client side and is treated like an opaque value.
 	claims, err := auth.ExtractClaims(token, secret)
 	if err != nil {

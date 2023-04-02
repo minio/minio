@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -349,7 +350,7 @@ func hasBadHost(host string) error {
 // Check if the incoming path has bad path components,
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
-	path = strings.TrimSpace(path)
+	path = filepath.ToSlash(strings.TrimSpace(path)) // For windows '\' must be converted to '/'
 	for _, p := range strings.Split(path, SlashSeparator) {
 		switch strings.TrimSpace(p) {
 		case dotdotComponent:
@@ -554,7 +555,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		if globalLocalNodeName != "" {
 			w.Header().Set(xhttp.AmzRequestHostID, globalLocalNodeNameHex)
 		}
-		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
+		h.ServeHTTP(w, r)
 	})
 }
 

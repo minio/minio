@@ -393,6 +393,9 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("listobjectsv2", maxClients(gz(httpTraceAll(api.ListObjectsV2Handler))))).Queries("list-type", "2")
 		// ListObjectVersions
 		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsMHandler))))).Queries("versions", "", "metadata", "true")
+		// ListObjectVersions
+		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsHandler))))).Queries("versions", "")
 		// GetBucketPolicyStatus
 		router.Methods(http.MethodGet).HandlerFunc(
@@ -434,8 +437,9 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodHead).HandlerFunc(
 			collectAPIStats("headbucket", maxClients(gz(httpTraceAll(api.HeadBucketHandler)))))
 		// PostPolicy
-		router.Methods(http.MethodPost).HeadersRegexp(xhttp.ContentType, "multipart/form-data*").HandlerFunc(
-			collectAPIStats("postpolicybucket", maxClients(gz(httpTraceHdrs(api.PostPolicyBucketHandler)))))
+		router.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, _ *mux.RouteMatch) bool {
+			return isRequestPostPolicySignatureV4(r)
+		}).HandlerFunc(collectAPIStats("postpolicybucket", maxClients(gz(httpTraceHdrs(api.PostPolicyBucketHandler)))))
 		// DeleteMultipleObjects
 		router.Methods(http.MethodPost).HandlerFunc(
 			collectAPIStats("deletemultipleobjects", maxClients(gz(httpTraceAll(api.DeleteMultipleObjectsHandler))))).Queries("delete", "")

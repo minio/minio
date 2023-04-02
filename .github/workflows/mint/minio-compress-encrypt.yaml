@@ -1,0 +1,79 @@
+version: '3.7'
+
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  image: minio/minio:${JOB_NAME}
+  command: server --console-address ":9001" http://minio{1...4}/cdata{1...2}
+  expose:
+    - "9000"
+    - "9001"
+  environment:
+    MINIO_CI_CD: "on"
+    MINIO_ROOT_USER: "minio"
+    MINIO_ROOT_PASSWORD: "minio123"
+    MINIO_COMPRESS: "true"
+    MINIO_COMPRESS_MIMETYPES: "*"
+    MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    interval: 30s
+    timeout: 20s
+    retries: 3
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - cdata1-1:/cdata1
+      - cdata1-2:/cdata2
+
+  minio2:
+    <<: *minio-common
+    hostname: minio2
+    volumes:
+      - cdata2-1:/cdata1
+      - cdata2-2:/cdata2
+
+  minio3:
+    <<: *minio-common
+    hostname: minio3
+    volumes:
+      - cdata3-1:/cdata1
+      - cdata3-2:/cdata2
+
+  minio4:
+    <<: *minio-common
+    hostname: minio4
+    volumes:
+      - cdata4-1:/cdata1
+      - cdata4-2:/cdata2
+
+  nginx:
+    image: nginx:1.19.2-alpine
+    hostname: nginx
+    volumes:
+      - ./nginx-4-node.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  cdata1-1:
+  cdata1-2:
+  cdata2-1:
+  cdata2-2:
+  cdata3-1:
+  cdata3-2:
+  cdata4-1:
+  cdata4-2:

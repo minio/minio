@@ -59,10 +59,18 @@ func validateListObjectsArgs(prefix, marker, delimiter, encodingType string, max
 	return ErrNone
 }
 
-// ListObjectVersions - GET Bucket Object versions
+func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
+	api.listObjectVersionsHandler(w, r, false)
+}
+
+func (api objectAPIHandlers) ListObjectVersionsMHandler(w http.ResponseWriter, r *http.Request) {
+	api.listObjectVersionsHandler(w, r, true)
+}
+
+// ListObjectVersionsHandler - GET Bucket Object versions
 // You can use the versions subresource to list metadata about all
 // of the versions of objects in a bucket.
-func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
+func (api objectAPIHandlers) listObjectVersionsHandler(w http.ResponseWriter, r *http.Request, metadata bool) {
 	ctx := newContext(r, w, "ListObjectVersions")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
@@ -111,8 +119,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
-	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo)
+	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo, metadata)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))

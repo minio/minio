@@ -359,6 +359,7 @@ type Object struct {
 
 	// UserMetadata user-defined metadata
 	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
+	UserTags     string    `xml:"UserTags,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -492,7 +493,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 }
 
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
-func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
+func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata bool) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
 
 	owner := Owner{
@@ -516,6 +517,30 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 			content.StorageClass = object.StorageClass
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
+		}
+		if metadata {
+			content.UserTags = object.UserTags
+			content.UserMetadata = &Metadata{}
+			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
+			case crypto.S3:
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+			case crypto.S3KMS:
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			case crypto.SSEC:
+				content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
+			}
+			for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
+				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+					// Do not need to send any internal metadata
+					// values to client.
+					continue
+				}
+				// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
+					continue
+				}
+				content.UserMetadata.Set(k, v)
+			}
 		}
 		content.Owner = owner
 		content.VersionID = object.VersionID
@@ -626,6 +651,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		}
 		content.Owner = owner
 		if metadata {
+			content.UserTags = object.UserTags
 			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
 			case crypto.S3:

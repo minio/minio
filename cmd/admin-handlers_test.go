@@ -21,10 +21,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -377,6 +379,149 @@ func TestExtractHealInitParams(t *testing.T) {
 			} else if err == ErrNone && isErrCase {
 				t.Errorf("Got no error but expected one: %v %v", pIdx, vIdx)
 			}
+		}
+	}
+}
+
+type byResourceUID struct{ madmin.LockEntries }
+
+func (b byResourceUID) Less(i, j int) bool {
+	toUniqLock := func(entry madmin.LockEntry) string {
+		return fmt.Sprintf("%s/%s", entry.Resource, entry.ID)
+	}
+	return toUniqLock(b.LockEntries[i]) < toUniqLock(b.LockEntries[j])
+}
+
+func TestTopLockEntries(t *testing.T) {
+	locksHeld := make(map[string][]lockRequesterInfo)
+	var owners []string
+	for i := 0; i < 4; i++ {
+		owners = append(owners, fmt.Sprintf("node-%d", i))
+	}
+
+	// Simulate DeleteObjects of 10 objects in a single request. i.e same lock
+	// request UID, but 10 different resource names associated with it.
+	var lris []lockRequesterInfo
+	uuid := mustGetUUID()
+	for i := 0; i < 10; i++ {
+		resource := fmt.Sprintf("bucket/delete-object-%d", i)
+		lri := lockRequesterInfo{
+			Name:   resource,
+			Writer: true,
+			UID:    uuid,
+			Owner:  owners[i%len(owners)],
+			Group:  true,
+			Quorum: 3,
+		}
+		lris = append(lris, lri)
+		locksHeld[resource] = []lockRequesterInfo{lri}
+	}
+
+	// Add a few concurrent read locks to the mix
+	for i := 0; i < 50; i++ {
+		resource := fmt.Sprintf("bucket/get-object-%d", i)
+		lri := lockRequesterInfo{
+			Name:   resource,
+			UID:    mustGetUUID(),
+			Owner:  owners[i%len(owners)],
+			Quorum: 2,
+		}
+		lris = append(lris, lri)
+		locksHeld[resource] = append(locksHeld[resource], lri)
+		// concurrent read lock, same resource different uid
+		lri.UID = mustGetUUID()
+		lris = append(lris, lri)
+		locksHeld[resource] = append(locksHeld[resource], lri)
+	}
+
+	var peerLocks []*PeerLocks
+	for _, owner := range owners {
+		peerLocks = append(peerLocks, &PeerLocks{
+			Addr:  owner,
+			Locks: locksHeld,
+		})
+	}
+	var exp madmin.LockEntries
+	for _, lri := range lris {
+		lockType := func(lri lockRequesterInfo) string {
+			if lri.Writer {
+				return "WRITE"
+			}
+			return "READ"
+		}
+		exp = append(exp, madmin.LockEntry{
+			Resource:   lri.Name,
+			Type:       lockType(lri),
+			ServerList: owners,
+			Owner:      lri.Owner,
+			ID:         lri.UID,
+			Quorum:     lri.Quorum,
+		})
+	}
+
+	testCases := []struct {
+		peerLocks []*PeerLocks
+		expected  madmin.LockEntries
+	}{
+		{
+			peerLocks: peerLocks,
+			expected:  exp,
+		},
+	}
+
+	// printEntries := func(entries madmin.LockEntries) {
+	// 	for i, entry := range entries {
+	// 		fmt.Printf("%d: %s %s %s %s %v %d\n", i, entry.Resource, entry.ID, entry.Owner, entry.Type, entry.ServerList, entry.Elapsed)
+	// 	}
+	// }
+
+	check := func(exp, got madmin.LockEntries) (int, bool) {
+		if len(exp) != len(got) {
+			return 0, false
+		}
+		sort.Sort(byResourceUID{exp})
+		sort.Sort(byResourceUID{got})
+		// printEntries(exp)
+		// printEntries(got)
+		for i, e := range exp {
+			if !e.Timestamp.Equal(got[i].Timestamp) {
+				return i, false
+			}
+			// Skip checking elapsed since it's time sensitive.
+			// if e.Elapsed != got[i].Elapsed {
+			// 	return false
+			// }
+			if e.Resource != got[i].Resource {
+				return i, false
+			}
+			if e.Type != got[i].Type {
+				return i, false
+			}
+			if e.Source != got[i].Source {
+				return i, false
+			}
+			if e.Owner != got[i].Owner {
+				return i, false
+			}
+			if e.ID != got[i].ID {
+				return i, false
+			}
+			if len(e.ServerList) != len(got[i].ServerList) {
+				return i, false
+			}
+			for j := range e.ServerList {
+				if e.ServerList[j] != got[i].ServerList[j] {
+					return i, false
+				}
+			}
+		}
+		return 0, true
+	}
+
+	for i, tc := range testCases {
+		got := topLockEntries(tc.peerLocks, false)
+		if idx, ok := check(tc.expected, got); !ok {
+			t.Fatalf("%d: mismatch at %d \n expected %#v but got %#v", i, idx, tc.expected[idx], got[idx])
 		}
 	}
 }

@@ -204,7 +204,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 	}
 
 	if ssParity > 0 && rrsParity > 0 {
-		if ssParity > 0 && ssParity < rrsParity {
+		if ssParity < rrsParity {
 			return fmt.Errorf("Standard storage class parity drives %d should be greater than or equal to Reduced redundancy storage class parity drives %d", ssParity, rrsParity)
 		}
 	}

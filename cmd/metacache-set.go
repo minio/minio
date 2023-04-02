@@ -397,6 +397,11 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	retries := 0
 	rpc := globalNotificationSys.restClientFromHash(pathJoin(o.Bucket, o.Prefix))
 
+	const (
+		retryDelay    = 50 * time.Millisecond
+		retryDelay250 = 250 * time.Millisecond
+	)
+
 	for {
 		if contextCanceled(ctx) {
 			return entries, ctx.Err()
@@ -411,7 +416,6 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			retries = 1
 		}
 
-		const retryDelay = 250 * time.Millisecond
 		// All operations are performed without locks, so we must be careful and allow for failures.
 		// Read metadata associated with the object from a disk.
 		if retries > 0 {
@@ -425,7 +429,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				_, err := disk.ReadVersion(ctx, minioMetaBucket,
 					o.objectPath(0), "", false)
 				if err != nil {
-					time.Sleep(retryDelay)
+					time.Sleep(retryDelay250)
 					retries++
 					continue
 				}
@@ -440,11 +444,19 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
 			case ObjectNotFound:
 				retries++
-				time.Sleep(retryDelay)
+				if retries == 1 {
+					time.Sleep(retryDelay)
+				} else {
+					time.Sleep(retryDelay250)
+				}
 				continue
 			case InsufficientReadQuorum:
 				retries++
-				time.Sleep(retryDelay)
+				if retries == 1 {
+					time.Sleep(retryDelay)
+				} else {
+					time.Sleep(retryDelay250)
+				}
 				continue
 			default:
 				return entries, fmt.Errorf("reading first part metadata: %w", err)
@@ -463,7 +475,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				retries = -1
 			}
 			retries++
-			time.Sleep(retryDelay)
+			time.Sleep(retryDelay250)
 			continue
 		case errors.Is(err, io.EOF):
 			return entries, io.EOF
@@ -497,7 +509,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						_, err := disk.ReadVersion(ctx, minioMetaBucket,
 							o.objectPath(partN), "", false)
 						if err != nil {
-							time.Sleep(retryDelay)
+							time.Sleep(retryDelay250)
 							retries++
 							continue
 						}
@@ -508,7 +520,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				// Load partN metadata...
 				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{}, true)
 				if err != nil {
-					time.Sleep(retryDelay)
+					time.Sleep(retryDelay250)
 					retries++
 					continue
 				}
@@ -530,9 +542,9 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}()
 
 			tmp := newMetacacheReader(pr)
-			defer tmp.Close()
 			e, err := tmp.filter(o)
 			pr.CloseWithError(err)
+			tmp.Close()
 			entries.o = append(entries.o, e.o...)
 			if o.Limit > 0 && entries.len() > o.Limit {
 				entries.truncate(o.Limit)
@@ -546,11 +558,11 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
 				case ObjectNotFound:
 					retries++
-					time.Sleep(retryDelay)
+					time.Sleep(retryDelay250)
 					continue
 				case InsufficientReadQuorum:
 					retries++
-					time.Sleep(retryDelay)
+					time.Sleep(retryDelay250)
 					continue
 				default:
 					logger.LogIf(ctx, err)

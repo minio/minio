@@ -431,7 +431,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Not allowed to add a user with same access key as root credential
-	if owner && accessKey == cred.AccessKey {
+	if accessKey == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
 	}
@@ -582,6 +582,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		AccountStatus: stsAccount.Status,
 		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
+		Expiration:    &stsAccount.Expiration,
 	}
 
 	data, err := json.Marshal(infoResp)
@@ -1956,7 +1957,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			UserOrGroup: userOrGroup,
 			UserType:    int(userType),
 			IsGroup:     isGroup,
-			Policy:      strings.Join(policiesToDetach, ","),
+			Policy:      newPolicies,
 		},
 		UpdatedAt: updatedAt,
 	}))
@@ -2297,7 +2298,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 			for accessKey, ureq := range userAccts {
 				// Not allowed to add a user with same access key as root credential
-				if owner && accessKey == cred.AccessKey {
+				if accessKey == globalActiveCred.AccessKey {
 					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAddUserInvalidArgument, err, allUsersFile, accessKey), r.URL)
 					return
 				}

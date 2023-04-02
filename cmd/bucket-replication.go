@@ -508,7 +508,6 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
 	})
 	if err != nil && !isErrVersionNotFound(err) { // VersionNotFound would be reported by pool that object version is missing on.
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, dobj.ObjectName, versionID, err))
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -1005,10 +1004,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			},
 		}
 
-		if _, err = objectAPI.PutObjectMetadata(ctx, bucket, object, popts); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w",
-				bucket, objInfo.Name, objInfo.VersionID, err))
-		}
+		_, _ = objectAPI.PutObjectMetadata(ctx, bucket, object, popts)
 		opType := replication.MetadataReplicationType
 		if rinfos.Action() == replicateAll {
 			opType = replication.ObjectReplicationType
@@ -1424,7 +1420,12 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err != nil {
 			return err
 		}
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, "", "", opts.ServerSideEncryption)
+
+		popts := minio.PutObjectPartOptions{
+			SSE: opts.ServerSideEncryption,
+		}
+
+		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
 		if err != nil {
 			return err
 		}

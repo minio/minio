@@ -19,18 +19,74 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
 
 	"github.com/klauspost/compress/s2"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/pkg/trie"
 )
+
+// Wrapper
+func TestPathTraversalExploit(t *testing.T) {
+	if runtime.GOOS != globalWindowsOSName {
+		t.Skip()
+	}
+	defer DetectTestLeak(t)()
+	ExecExtendedObjectLayerAPITest(t, testPathTraversalExploit, []string{"PutObject"})
+}
+
+// testPathTraversal exploit test, exploits path traversal on windows
+// with following object names "\\../.minio.sys/config/iam/${username}/identity.json"
+// #16852
+func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T,
+) {
+	if err := newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("Initializing config.json failed")
+	}
+
+	objectName := `\../.minio.sys/config/hello.txt`
+
+	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+	rec := httptest.NewRecorder()
+	// construct HTTP request for Get Object end point.
+	req, err := newTestSignedRequestV4(http.MethodPut, getPutObjectURL("", bucketName, objectName),
+		int64(5), bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey, map[string]string{})
+	if err != nil {
+		t.Fatalf("failed to create HTTP request for Put Object: <ERROR> %v", err)
+	}
+
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Call the ServeHTTP to execute the handler.
+	apiRouter.ServeHTTP(rec, req)
+
+	ctx, cancel := context.WithCancel(GlobalContext)
+	defer cancel()
+
+	// Now check if we actually wrote to backend (regardless of the response
+	// returned by the server).
+	z := obj.(*erasureServerPools)
+	xl := z.serverPools[0].sets[0]
+	erasureDisks := xl.getDisks()
+	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName, "", false)
+	for i := range parts {
+		if errs[i] == nil {
+			if parts[i].Name == objectName {
+				t.Errorf("path traversal allowed to allow writing to minioMetaBucket: %s", instanceType)
+			}
+		}
+	}
+}
 
 // Tests validate bucket name.
 func TestIsValidBucketName(t *testing.T) {

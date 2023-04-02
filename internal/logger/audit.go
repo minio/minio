@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/minio/internal/http/stats"
 	internalAudit "github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/pkg/logger/message/audit"
 
@@ -96,20 +97,27 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		)
 
 		var st *xhttp.ResponseRecorder
-		switch v := w.(type) {
-		case *xhttp.ResponseRecorder:
-			st = v
-		case *gzhttp.GzipResponseWriter:
-			// the writer may be obscured by gzip response writer
-			if rw, ok := v.ResponseWriter.(*xhttp.ResponseRecorder); ok {
-				st = rw
-			}
-		case *gzhttp.NoGzipResponseWriter:
-			// the writer may be obscured by no-gzip response writer
-			if rw, ok := v.ResponseWriter.(*xhttp.ResponseRecorder); ok {
-				st = rw
+
+		for {
+			switch v := w.(type) {
+			case *gzhttp.GzipResponseWriter:
+				// the writer may be obscured by gzip response writer
+				w = v.ResponseWriter
+			case *gzhttp.NoGzipResponseWriter:
+				// the writer may be obscured by no-gzip response writer
+				w = v.ResponseWriter
+			case *stats.OutgoingTrafficMeter:
+				// the writer may be obscured by http stats response writer
+				w = v.ResponseWriter
+			case *xhttp.ResponseRecorder:
+				st = v
+				goto exit
+			default:
+				goto exit
 			}
 		}
+	exit:
+
 		if st != nil {
 			statusCode = st.StatusCode
 			timeToResponse = time.Now().UTC().Sub(st.StartTime)
@@ -137,10 +145,12 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.OutputBytes = outputBytes
 		entry.API.HeaderBytes = headerBytes
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
+		entry.API.TimeToResponseInNS = strconv.FormatInt(timeToResponse.Nanoseconds(), 10)
 		entry.Tags = reqInfo.GetTagsMap()
 		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
 		if timeToFirstByte != 0 {
 			entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
+			entry.API.TimeToFirstByteInNS = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10)
 		}
 	} else {
 		auditEntry := GetAuditEntry(ctx)

@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,6 +40,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
+	"github.com/minio/minio/internal/workers"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -116,26 +120,49 @@ var globalExpiryState *expiryState
 
 func newExpiryState() *expiryState {
 	return &expiryState{
-		byDaysCh:            make(chan expiryTask, 10000),
-		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 10000),
+		byDaysCh:            make(chan expiryTask, 100000),
+		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 100000),
 	}
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
+
+	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", strconv.Itoa((runtime.GOMAXPROCS(0)+1)/2)))
+
+	ewk, err := workers.New(workerSize)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	nwk, err := workers.New(workerSize)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
 	go func() {
 		for t := range globalExpiryState.byDaysCh {
-			if t.objInfo.TransitionedObject.Status != "" {
-				applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.restoredObject)
-			} else {
-				applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
-			}
+			ewk.Take()
+			go func(t expiryTask) {
+				defer ewk.Give()
+				if t.objInfo.TransitionedObject.Status != "" {
+					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.restoredObject)
+				} else {
+					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
+				}
+			}(t)
 		}
+		ewk.Wait()
 	}()
 	go func() {
 		for t := range globalExpiryState.byNewerNoncurrentCh {
-			deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
+			nwk.Take()
+			go func(t newerNoncurrentTask) {
+				defer nwk.Give()
+				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
+			}(t)
 		}
+		nwk.Wait()
 	}()
 }
 

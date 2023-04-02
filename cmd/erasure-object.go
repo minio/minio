@@ -658,6 +658,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		return fi, nil, nil, err
 	}
 
+	if !fi.Deleted && len(fi.Erasure.Distribution) != len(onlineDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			fi.Erasure.Distribution, onlineDisks, bucket, object, opts.VersionID)
+		logger.LogIf(ctx, err)
+		return fi, nil, nil, toObjectErr(err, bucket, object, opts.VersionID)
+	}
+
 	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	// if one of the disk is offline, return right here no need
@@ -972,17 +979,14 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 
 	fivs, err := entry.fileInfoVersions(bucket)
 	if err != nil {
-		go healObject(bucket, entry.name, "", madmin.HealNormalScan)
+		go healObject(bucket, entry.name, "", madmin.HealDeepScan)
 		return err
 	}
 
-	if len(fivs.Versions) > 2 {
-		return fmt.Errorf("bucket(%s)/object(%s) object with %d versions needs healing, allowing lazy healing via scanner instead here for versions greater than 2",
-			bucket, entry.name, len(fivs.Versions))
-	}
-
-	for _, version := range fivs.Versions {
-		go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+	if len(fivs.Versions) <= 2 {
+		for _, version := range fivs.Versions {
+			go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+		}
 	}
 
 	return nil
@@ -1474,8 +1478,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	// Check failed deletes across multiple objects
 	for i, dobj := range dobjects {
-		// This object errored, no need to attempt a heal.
-		if errs[i] != nil {
+		// This object errored, we should attempt a heal just in case.
+		if errs[i] != nil && !isErrVersionNotFound(errs[i]) && !isErrObjectNotFound(errs[i]) {
+			// all other direct versionId references we should
+			// ensure no dangling file is left over.
+			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID, -1)
 			continue
 		}
 
@@ -1644,6 +1651,18 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 	fvID := mustGetUUID()
 
+	defer func() {
+		// attempt a heal before returning if there are offline disks
+		// for both del marker and permanent delete situations.
+		for _, disk := range storageDisks {
+			if disk != nil && disk.IsOnline() {
+				continue
+			}
+			er.addPartial(bucket, object, opts.VersionID, -1)
+			break
+		}
+	}()
+
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		if !deleteMarker {
 			// versioning suspended means we add `null` version as
@@ -1689,14 +1708,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	dfi.SetTierFreeVersionID(fvID)
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
-	}
-
-	for _, disk := range storageDisks {
-		if disk != nil && disk.IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, opts.VersionID, -1)
-		break
 	}
 
 	return dfi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
@@ -2091,4 +2102,47 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 		MTime: oi.ModTime,
 	})
 	return setRestoreHeaderFn(oi, err)
+}
+
+// DecomTieredObject - moves tiered object to another pool during decommissioning.
+func (er erasureObjects) DecomTieredObject(ctx context.Context, bucket, object string, fi FileInfo, opts ObjectOptions) error {
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
+	}
+	// overlay Erasure info for this set of disks
+	storageDisks := er.getDisks()
+	// Get parity and data drive count based on storage class metadata
+	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	if parityDrives < 0 {
+		parityDrives = er.defaultParityCount
+	}
+	dataDrives := len(storageDisks) - parityDrives
+
+	// we now know the number of blocks this object needs for data and parity.
+	// writeQuorum is dataBlocks + 1
+	writeQuorum := dataDrives
+	if dataDrives == parityDrives {
+		writeQuorum++
+	}
+
+	// Initialize parts metadata
+	partsMetadata := make([]FileInfo, len(storageDisks))
+
+	fi2 := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
+	fi.Erasure = fi2.Erasure
+	// Initialize erasure metadata.
+	for index := range partsMetadata {
+		partsMetadata[index] = fi
+		partsMetadata[index].Erasure.Index = index + 1
+	}
+
+	// Order disks according to erasure distribution
+	var onlineDisks []StorageAPI
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(storageDisks, partsMetadata, fi)
+
+	if _, err := writeUniqueFileInfo(ctx, onlineDisks, bucket, object, partsMetadata, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	return nil
 }
