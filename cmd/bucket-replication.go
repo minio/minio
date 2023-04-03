@@ -2232,7 +2232,7 @@ func (s *replicationResyncer) PersistToDisk(ctx context.Context, objectAPI Objec
 }
 
 const (
-	resyncWorkerCnt        = 50 // limit of number of bucket resyncs is progress at any given time
+	resyncWorkerCnt        = 10 // limit of number of bucket resyncs is progress at any given time
 	resyncParallelRoutines = 10 // number of parallel resync ops per bucket
 )
 
