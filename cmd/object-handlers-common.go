@@ -371,6 +371,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 			auditLogLifecycle(
 				ctx,
 				ObjectInfo{
+					Bucket: bucket,
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
