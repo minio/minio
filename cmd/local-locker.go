@@ -232,7 +232,7 @@ func (l *localLocker) stats() lockStats {
 		if entry.Writer {
 			st.Writes++
 		} else {
-			st.Reads++
+			st.Reads += len(v)
 		}
 	}
 	return st
