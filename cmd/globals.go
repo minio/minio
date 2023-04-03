@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/console/restapi"
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
@@ -54,7 +53,6 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
-	xnet "github.com/minio/pkg/net"
 )
 
 // minio configuration related constants.
@@ -161,13 +159,6 @@ var (
 
 	// Allow Admin API endpoints only from localhost. Only for PanFS gateway mode
 	globalPanFSOnlyLocalAdminAPI = true
-
-	// This flag is set to 'true' by default
-	globalBrowserEnabled = true
-
-	// Custom browser redirect URL, not set by default
-	// and it is automatically deduced.
-	globalBrowserRedirectURL *xnet.URL
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
@@ -357,8 +348,6 @@ var (
 	globalTierConfigMgr *TierConfigMgr
 
 	globalTierJournal *tierJournal
-
-	globalConsoleSrv *restapi.Server
 
 	// handles service freeze or un-freeze S3 API calls.
 	globalServiceFreeze atomic.Value

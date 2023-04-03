@@ -32,25 +32,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	fcolor "github.com/fatih/color"
-	"github.com/go-openapi/loads"
 	"github.com/inconshreveable/mousetrap"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
-	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
-	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/console/restapi"
-	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes"
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio-go/v7"
@@ -183,13 +176,6 @@ func minioConfigToConsoleFeatures() {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
-	// pass the console subpath configuration
-	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
-		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
-		if subPath != SlashSeparator {
-			os.Setenv("CONSOLE_SUBPATH", subPath)
-		}
-	}
 	// Enable if prometheus URL is set.
 	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
@@ -216,94 +202,6 @@ func minioConfigToConsoleFeatures() {
 	if globalSubnetConfig.ProxyURL != nil {
 		os.Setenv("CONSOLE_SUBNET_PROXY", globalSubnetConfig.ProxyURL.String())
 	}
-}
-
-func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
-	m := make(map[string]consoleoauth2.ProviderConfig, len(globalOpenIDConfig.ProviderCfgs))
-	for name, cfg := range globalOpenIDConfig.ProviderCfgs {
-		callback := getConsoleEndpoints()[0] + "/oauth_callback"
-		if cfg.RedirectURI != "" {
-			callback = cfg.RedirectURI
-		}
-		m[name] = consoleoauth2.ProviderConfig{
-			URL:                     cfg.URL.String(),
-			DisplayName:             cfg.DisplayName,
-			ClientID:                cfg.ClientID,
-			ClientSecret:            cfg.ClientSecret,
-			HMACSalt:                globalDeploymentID,
-			HMACPassphrase:          cfg.ClientID,
-			Scopes:                  strings.Join(cfg.DiscoveryDoc.ScopesSupported, ","),
-			Userinfo:                cfg.ClaimUserinfo,
-			RedirectCallbackDynamic: cfg.RedirectURIDynamic,
-			RedirectCallback:        callback,
-			RoleArn:                 cfg.GetRoleArn(),
-		}
-	}
-	return m
-}
-
-func initConsoleServer() (*restapi.Server, error) {
-	// unset all console_ environment variables.
-	for _, cenv := range env.List(consolePrefix) {
-		os.Unsetenv(cenv)
-	}
-
-	// enable all console environment variables
-	minioConfigToConsoleFeatures()
-
-	// set certs dir to minio directory
-	consoleCerts.GlobalCertsDir = &consoleCerts.ConfigDir{
-		Path: globalCertsDir.Get(),
-	}
-	consoleCerts.GlobalCertsCADir = &consoleCerts.ConfigDir{
-		Path: globalCertsCADir.Get(),
-	}
-
-	swaggerSpec, err := loads.Embedded(restapi.SwaggerJSON, restapi.FlatSwaggerJSON)
-	if err != nil {
-		return nil, err
-	}
-
-	api := operations.NewConsoleAPI(swaggerSpec)
-
-	if !serverDebugLog {
-		// Disable console logging if server debug log is not enabled
-		noLog := func(string, ...interface{}) {}
-
-		restapi.LogInfo = noLog
-		restapi.LogError = noLog
-		api.Logger = noLog
-	}
-
-	// Pass in console application config. This needs to happen before the
-	// ConfigureAPI() call.
-	restapi.GlobalMinIOConfig = restapi.MinIOConfig{
-		OpenIDProviders: buildOpenIDConsoleConfig(),
-	}
-
-	server := restapi.NewServer(api)
-	// register all APIs
-	server.ConfigureAPI()
-
-	restapi.GlobalRootCAs, restapi.GlobalPublicCerts, restapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
-
-	consolePort, _ := strconv.Atoi(globalMinioConsolePort)
-
-	server.Host = globalMinioConsoleHost
-	server.Port = consolePort
-	restapi.Port = globalMinioConsolePort
-	restapi.Hostname = globalMinioConsoleHost
-
-	if globalIsTLS {
-		// If TLS certificates are provided enforce the HTTPS.
-		server.EnabledListeners = []string{"https"}
-		server.TLSPort = consolePort
-		// Need to store tls-port, tls-host un config variables so secure.middleware can read from there
-		restapi.TLSPort = globalMinioConsolePort
-		restapi.Hostname = globalMinioConsoleHost
-	}
-
-	return server, nil
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -644,26 +542,6 @@ func handleCommonEnvVars() {
 	loadEnvVarsFromFiles()
 
 	var err error
-	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
-	if err != nil {
-		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
-	}
-	if globalBrowserEnabled {
-		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
-			u, err := xnet.ParseHTTPURL(redirectURL)
-			if err != nil {
-				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
-			}
-			// Look for if URL has invalid values and return error.
-			if !((u.Scheme == "http" || u.Scheme == "https") &&
-				u.Opaque == "" &&
-				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
-				err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
-				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
-			}
-			globalBrowserRedirectURL = u
-		}
-	}
 
 	if serverURL := env.Get(config.EnvMinIOServerURL, ""); serverURL != "" {
 		u, err := xnet.ParseHTTPURL(serverURL)

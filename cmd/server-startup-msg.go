@@ -141,15 +141,6 @@ func printServerCommonMsg(apiEndpoints []string) {
 		}
 	}
 	printEventNotifiers()
-
-	if globalBrowserEnabled {
-		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
-		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
-		if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
-			logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
-		}
-	}
 }
 
 // Prints startup message for Object API access, prints link to our SDK documentation.

@@ -24,7 +24,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzhttp"
-	"github.com/minio/console/restapi"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/wildcard"
@@ -40,18 +39,6 @@ func newHTTPServerFn() *xhttp.Server {
 func setHTTPServer(h *xhttp.Server) {
 	globalObjLayerMutex.Lock()
 	globalHTTPServer = h
-	globalObjLayerMutex.Unlock()
-}
-
-func newConsoleServerFn() *restapi.Server {
-	globalObjLayerMutex.RLock()
-	defer globalObjLayerMutex.RUnlock()
-	return globalConsoleSrv
-}
-
-func setConsoleSrv(srv *restapi.Server) {
-	globalObjLayerMutex.Lock()
-	globalConsoleSrv = srv
 	globalObjLayerMutex.Unlock()
 }
 

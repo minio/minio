@@ -49,8 +49,6 @@ var globalHandlers = []mux.MiddlewareFunc{
 	//
 	// Validates all incoming requests to have a valid date header.
 	setAuthHandler,
-	// Redirect some pre-defined browser request paths to a static location prefix.
-	setBrowserRedirectHandler,
 	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 	setCrossDomainPolicy,
 	// Limits all body and header sizes to a maximum fixed limit

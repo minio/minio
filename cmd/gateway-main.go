@@ -359,19 +359,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
 
-	if globalBrowserEnabled {
-		srv, err := initConsoleServer()
-		if err != nil {
-			logger.FatalIf(err, "Unable to initialize console service")
-		}
-
-		setConsoleSrv(srv)
-
-		go func() {
-			logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
-		}()
-	}
-
 	if serverDebugLog {
 		logger.Info("== DEBUG Mode enabled ==")
 		logger.Info("Currently set environment settings:")

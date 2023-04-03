@@ -19,9 +19,7 @@ package cmd
 
 import (
 	"fmt"
-	"net"
 	"net/http"
-	"path"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -138,70 +136,6 @@ const (
 
 	loginPathPrefix = SlashSeparator + "login"
 )
-
-func guessIsBrowserReq(r *http.Request) bool {
-	aType := getRequestAuthType(r)
-	return strings.Contains(r.Header.Get("User-Agent"), "Mozilla") &&
-		globalBrowserEnabled && aType == authTypeAnonymous
-}
-
-func setBrowserRedirectHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		read := r.Method == http.MethodGet || r.Method == http.MethodHead
-		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) && read {
-			// Fetch the redirect location if any.
-			if u := getRedirectLocation(r); u != nil {
-				// Employ a temporary re-direct.
-				http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
-				return
-			}
-		}
-		h.ServeHTTP(w, r)
-	})
-}
-
-var redirectPrefixes = map[string]struct{}{
-	"favicon-16x16.png": {},
-	"favicon-32x32.png": {},
-	"favicon-96x96.png": {},
-	"index.html":        {},
-	minioReservedBucket: {},
-}
-
-// Fetch redirect location if urlPath satisfies certain
-// criteria. Some special names are considered to be
-// redirectable, this is purely internal function and
-// serves only limited purpose on redirect-handler for
-// browser requests.
-func getRedirectLocation(r *http.Request) *xnet.URL {
-	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
-	if err != nil {
-		return nil
-	}
-	bucket, _ := path2BucketObject(resource)
-	_, redirect := redirectPrefixes[path.Clean(bucket)]
-	if redirect || resource == slashSeparator {
-		if globalBrowserRedirectURL != nil {
-			return globalBrowserRedirectURL
-		}
-		xhost, err := xnet.ParseHost(r.Host)
-		if err != nil {
-			return nil
-		}
-		return &xnet.URL{
-			Host: net.JoinHostPort(xhost.Name, globalMinioConsolePort),
-			Scheme: func() string {
-				scheme := "http"
-				if r.TLS != nil {
-					scheme = "https"
-				}
-				return scheme
-			}(),
-		}
-	}
-	return nil
-}
 
 // guessIsHealthCheckReq - returns true if incoming request looks
 // like healthcheck request
@@ -434,7 +368,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 		// For all other requests reject access to reserved buckets
 		bucketName, _ := request2BucketObjectName(r)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) && !isKMSReq(r) {
+			if !guessIsRPCReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) && !isKMSReq(r) {
 				if ok {
 					tc.funcName = "handler.ValidRequest"
 					tc.responseRecorder.LogErrBody = true
