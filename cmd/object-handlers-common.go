@@ -367,6 +367,15 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				continue
 			}
 			dobj := deletedObjs[i]
+			// Send audit for the lifecycle delete operation
+			auditLogLifecycle(
+				ctx,
+				ObjectInfo{
+					Name:      dobj.ObjectName,
+					VersionID: dobj.VersionID,
+				},
+				ILMExpiry)
+
 			sendEvent(eventArgs{
 				EventName:  event.ObjectRemovedDelete,
 				BucketName: bucket,
