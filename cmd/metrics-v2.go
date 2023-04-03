@@ -1677,7 +1677,7 @@ func getDistLockMetrics() *MetricsGroup {
 
 		st := globalLockServer.stats()
 
-		var metrics []Metric
+		metrics := make([]Metric, 0, 3)
 		metrics = append(metrics, Metric{
 			Description: MetricDescription{
 				Namespace: minioNamespace,
