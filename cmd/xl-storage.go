@@ -1715,6 +1715,8 @@ func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err e
 			return nil, errIsNotRegular
 		case osIsPermission(err):
 			return nil, errFileAccessDenied
+		case isSysErrNotDir(err):
+			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
 		case isSysErrTooManyFiles(err):
