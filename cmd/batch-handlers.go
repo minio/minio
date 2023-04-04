@@ -1116,16 +1116,18 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	if r.Source.Bucket == "" {
 		return errInvalidArgument
 	}
+	var isRemoteToLocal bool
 	localBkt := r.Source.Bucket
 	if r.Source.Endpoint != "" {
 		localBkt = r.Target.Bucket
+		isRemoteToLocal = true
 	}
 	info, err := o.GetBucketInfo(ctx, localBkt, BucketOptions{})
 	if err != nil {
 		if isErrBucketNotFound(err) {
 			return batchReplicationJobError{
 				Code:           "NoSuchSourceBucket",
-				Description:    "The specified source bucket does not exist",
+				Description:    fmt.Sprintf("The specified bucket %s does not exist", localBkt),
 				HTTPStatusCode: http.StatusNotFound,
 			}
 		}
@@ -1222,8 +1224,8 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		}
 		return err
 	}
-
-	if info.Versioning && !vcfg.Enabled() {
+	// If source has versioning enabled, target must have versioning enabled
+	if (info.Versioning && !vcfg.Enabled() && !isRemoteToLocal) || (!info.Versioning && vcfg.Enabled() && isRemoteToLocal) {
 		return batchReplicationJobError{
 			Code: "InvalidBucketState",
 			Description: fmt.Sprintf("The source '%s' has versioning enabled, target '%s' must have versioning enabled",
