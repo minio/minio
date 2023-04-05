@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/internal/config/api"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 )
 
 type apiConfig struct {
@@ -272,6 +273,10 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 
 		globalHTTPStats.addRequestsInQueue(1)
 
+		if tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
+			tc.FuncName = "s3.MaxClients"
+		}
+
 		deadlineTimer := time.NewTimer(deadline)
 		defer deadlineTimer.Stop()
 
@@ -288,6 +293,10 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():
+			// When the client disconnects before getting the S3 handler
+			// status code response, set the status code to 499 so this request
+			// will be properly audited and traced.
+			w.WriteHeader(499)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		}
