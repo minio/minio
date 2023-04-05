@@ -23,6 +23,7 @@ package cmd
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -120,35 +121,30 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 
 // Return N entries at the directory dirPath.
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := Open(dirPath)
+	// Ensure we don't pick up files as directories.
+	globAll := filepath.Clean(dirPath) + `\*`
+	globAllP, err := syscall.UTF16PtrFromString(globAll)
 	if err != nil {
-		return nil, osErrToFileErr(err)
+		return nil, errInvalidArgument
 	}
-	defer f.Close()
-
-	// Check if file or dir. This is the quickest way.
-	// Do not remove this check, on windows syscall.FindNextFile
-	// would throw an exception if Fd() points to a file
-	// instead of a directory, we need to quickly fail
-	// in such situations - this workadound is expected.
-	if _, err = f.Seek(0, io.SeekStart); err == nil {
+	data := &syscall.Win32finddata{}
+	handle, err := syscall.FindFirstFile(globAllP, data)
+	if err != nil {
+		// Fails on file not found and when not a directory.
 		return nil, errFileNotFound
 	}
-
-	data := &syscall.Win32finddata{}
-	handle := syscall.Handle(f.Fd())
+	defer syscall.CloseHandle(handle)
 
 	count := opts.count
-	for count != 0 {
-		e := syscall.FindNextFile(handle, data)
-		if e != nil {
-			if e == syscall.ERROR_NO_MORE_FILES {
+	for ; count != 0; err = syscall.FindNextFile(handle, data) {
+		if err != nil {
+			if err == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
 				return nil, osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
-					Err:  e,
+					Err:  err,
 				})
 			}
 		}
