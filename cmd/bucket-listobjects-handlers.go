@@ -88,7 +88,12 @@ func (api objectAPIHandlers) listObjectVersionsHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
-
+	var checkObjMeta metaCheckFn
+	if metadata {
+		checkObjMeta = func(name string, action policy.Action) (s3Err APIErrorCode) {
+			return checkRequestAuthType(ctx, r, action, bucket, name)
+		}
+	}
 	urlValues := r.Form
 
 	// Extract all the listBucketVersions query params to their native values.
@@ -119,7 +124,7 @@ func (api objectAPIHandlers) listObjectVersionsHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo, metadata)
+	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo, checkObjMeta)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))
@@ -150,6 +155,9 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
+	}
+	checkObjMeta := func(name string, action policy.Action) (s3Err APIErrorCode) {
+		return checkRequestAuthType(ctx, r, action, bucket, name)
 	}
 
 	urlValues := r.Form
@@ -189,7 +197,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 
 	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
-		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, true)
+		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, checkObjMeta)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))
@@ -264,7 +272,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
-		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
+		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, nil)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))
