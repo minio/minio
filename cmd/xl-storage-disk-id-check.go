@@ -175,10 +175,12 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 
 func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	if contextCanceled(ctx) {
+		close(updates)
 		return dataUsageCache{}, ctx.Err()
 	}
 
 	if err := p.checkDiskStale(); err != nil {
+		close(updates)
 		return dataUsageCache{}, err
 	}
 	return p.storage.NSScanner(ctx, cache, updates, scanMode)
