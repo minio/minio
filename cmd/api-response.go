@@ -509,7 +509,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 		if object.Name == "" {
 			continue
 		}
-		// Cache checks for the sme object
+		// Cache checks for the same object
 		if metadata != nil && lastObjMetaName != object.Name {
 			tagErr = metadata(object.Name, policy.GetObjectTaggingAction)
 			metaErr = metadata(object.Name, policy.GetObjectAction)
