@@ -173,7 +173,7 @@ func main() {
 
 Use the Presigned URL via `curl` to receive the transformed object.
 ```
-~ curl -v $(go run presigned.go)
+curl -v $(go run presigned.go)
 ...
 ...
 > GET /functionbucket/testobject?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20230205%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20230205T173023Z&X-Amz-Expires=1000&X-Amz-SignedHeaders=host&lambdaArn=arn%3Aminio%3As3-object-lambda%3A%3Atoupper%3Awebhook&X-Amz-Signature=d7e343f0da9d4fa2bc822c12ad2f54300ff16796a1edaa6d31f1313c8e94d5b2 HTTP/1.1
