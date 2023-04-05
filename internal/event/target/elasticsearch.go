@@ -36,6 +36,7 @@ import (
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 	"github.com/pkg/errors"
 )
@@ -157,7 +158,7 @@ type ElasticsearchTarget struct {
 	id         event.TargetID
 	args       ElasticsearchArgs
 	client     esClient
-	store      Store
+	store      store.Store[event.Event]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -165,6 +166,11 @@ type ElasticsearchTarget struct {
 // ID - returns target ID.
 func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *ElasticsearchTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -212,7 +218,7 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 
 	err = target.send(eventData)
 	if xnet.IsNetworkOrHostDown(err, false) {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 	return err
 }
@@ -284,7 +290,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 
 	if err := target.send(eventData); err != nil {
 		if xnet.IsNetworkOrHostDown(err, false) {
-			return errNotConnected
+			return store.ErrNotConnected
 		}
 		return err
 	}
@@ -348,7 +354,7 @@ func (target *ElasticsearchTarget) initElasticsearch() error {
 
 	err := target.checkAndInitClient(ctx)
 	if err != nil {
-		if err != errNotConnected {
+		if err != store.ErrNotConnected {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 		return err
@@ -359,11 +365,11 @@ func (target *ElasticsearchTarget) initElasticsearch() error {
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
 func NewElasticsearchTarget(id string, args ElasticsearchArgs, loggerOnce logger.LogOnce) (*ElasticsearchTarget, error) {
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of Elasticsearch `%s`: %w", id, err)
 		}
 	}
@@ -371,13 +377,13 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, loggerOnce logger
 	target := &ElasticsearchTarget{
 		id:         event.TargetID{ID: id, Name: "elasticsearch"},
 		args:       args,
-		store:      store,
+		store:      queueStore,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil
@@ -415,7 +421,7 @@ func (c *esClientV7) getServerSupportStatus(ctx context.Context) (ESSupportStatu
 		c.Info.WithContext(ctx),
 	)
 	if err != nil {
-		return ESSUnknown, "", errNotConnected
+		return ESSUnknown, "", store.ErrNotConnected
 	}
 
 	defer resp.Body.Close()
@@ -485,7 +491,7 @@ func (c *esClientV7) ping(ctx context.Context, _ ElasticsearchArgs) (bool, error
 		c.Ping.WithContext(ctx),
 	)
 	if err != nil {
-		return false, errNotConnected
+		return false, store.ErrNotConnected
 	}
 	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()

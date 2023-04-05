@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 
 	"github.com/Shopify/sarama"
@@ -129,7 +130,7 @@ type KafkaTarget struct {
 	args       KafkaArgs
 	producer   sarama.SyncProducer
 	config     *sarama.Config
-	store      Store
+	store      store.Store[event.Event]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -137,6 +138,11 @@ type KafkaTarget struct {
 // ID - returns target ID.
 func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *KafkaTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -154,7 +160,7 @@ func (target *KafkaTarget) IsActive() (bool, error) {
 
 func (target *KafkaTarget) isActive() (bool, error) {
 	if !target.args.pingBrokers() {
-		return false, errNotConnected
+		return false, store.ErrNotConnected
 	}
 	return true, nil
 }
@@ -178,7 +184,7 @@ func (target *KafkaTarget) Save(eventData event.Event) error {
 // send - sends an event to the kafka.
 func (target *KafkaTarget) send(eventData event.Event) error {
 	if target.producer == nil {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
@@ -224,7 +230,7 @@ func (target *KafkaTarget) Send(eventKey string) error {
 			if err != sarama.ErrOutOfBrokers {
 				return err
 			}
-			return errNotConnected
+			return store.ErrNotConnected
 		}
 	}
 
@@ -242,7 +248,7 @@ func (target *KafkaTarget) Send(eventKey string) error {
 	if err != nil {
 		// Sarama opens the ciruit breaker after 3 consecutive connection failures.
 		if err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open" {
-			return errNotConnected
+			return store.ErrNotConnected
 		}
 		return err
 	}
@@ -330,7 +336,7 @@ func (target *KafkaTarget) initKafka() error {
 		return err
 	}
 	if !yes {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 
 	return nil
@@ -338,11 +344,11 @@ func (target *KafkaTarget) initKafka() error {
 
 // NewKafkaTarget - creates new Kafka target with auth credentials.
 func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*KafkaTarget, error) {
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of Kafka `%s`: %w", id, err)
 		}
 	}
@@ -350,13 +356,13 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	target := &KafkaTarget{
 		id:         event.TargetID{ID: id, Name: "kafka"},
 		args:       args,
-		store:      store,
+		store:      queueStore,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil
