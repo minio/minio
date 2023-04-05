@@ -1672,32 +1672,7 @@ func (s *xlStorage) openFileDirect(path string, mode int) (f *os.File, err error
 }
 
 func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err error) {
-	// Create top level directories if they don't exist.
-	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
-		return nil, osErrToFileErr(err)
-	}
-
-	w, err := OpenFile(filePath, mode|writeMode, 0o666)
-	if err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		switch {
-		case isSysErrIsDir(err):
-			return nil, errIsNotRegular
-		case osIsPermission(err):
-			return nil, errFileAccessDenied
-		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
-		case isSysErrIO(err):
-			return nil, errFaultyDisk
-		case isSysErrTooManyFiles(err):
-			return nil, errTooManyOpenFiles
-		default:
-			return nil, err
-		}
-	}
-
-	return w, nil
+	return s.openFileNoSync(filePath, mode|writeMode)
 }
 
 func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err error) {
