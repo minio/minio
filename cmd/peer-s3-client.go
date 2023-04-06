@@ -171,7 +171,9 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 	}
 
 	for i, err := range errs {
-		if err == nil {
+		// bucketInfos:[local,remote...]
+		// errs:[nil,remote...]
+		if err == nil && i != 0 {
 			bucketInfo = bucketInfos[i]
 			break
 		}
