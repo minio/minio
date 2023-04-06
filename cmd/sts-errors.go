@@ -27,19 +27,9 @@ import (
 )
 
 // writeSTSErrorRespone writes error headers
-func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, isErrCodeSTS bool, errCode STSErrorCode, errCtxt error) {
-	var err STSError
-	if isErrCodeSTS {
-		err = stsErrCodes.ToSTSErr(errCode)
-	}
-	if err.Code == "InternalError" || !isErrCodeSTS {
-		aerr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, errCtxt))
-		if aerr.Code != "InternalError" {
-			err.Code = aerr.Code
-			err.Description = aerr.Description
-			err.HTTPStatusCode = aerr.HTTPStatusCode
-		}
-	}
+func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, errCtxt error) {
+	err := stsErrCodes.ToSTSErr(errCode)
+
 	// Generate error response.
 	stsErrorResponse := STSErrorResponse{}
 	stsErrorResponse.Error.Code = err.Code
