@@ -1997,7 +1997,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		EventName:  eventName,
 		BucketName: bucket,
 		Object:     objInfo,
-		Host:       "Internal: [ILM-Transition]",
+		UserAgent:  "Internal: [ILM-Transition]",
+		Host:       globalLocalNodeName,
 	})
 	auditLogLifecycle(ctx, objInfo, ILMTransition)
 	return err
