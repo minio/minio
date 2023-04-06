@@ -1672,10 +1672,10 @@ func (s *xlStorage) openFileDirect(path string, mode int) (f *os.File, err error
 }
 
 func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err error) {
-	return s.openFileNoSync(filePath, mode|writeMode)
+	return s.openFile(filePath, mode|writeMode)
 }
 
-func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err error) {
+func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
@@ -1926,7 +1926,7 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 		}
 		w, err = s.openFileSync(filePath, flags)
 	} else {
-		w, err = s.openFileNoSync(filePath, flags)
+		w, err = s.openFile(filePath, flags)
 	}
 	if err != nil {
 		return err
