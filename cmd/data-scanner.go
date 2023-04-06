@@ -957,6 +957,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 // applyTierObjSweep removes remote object pending deletion and the free-version
 // tracking this information.
 func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi ObjectInfo) {
+	traceFn := globalLifecycleSys.trace(oi)
 	if !oi.TransitionedObject.FreeVersion {
 		// nothing to be done
 		return
@@ -982,7 +983,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 		InclFreeVersions: true,
 	})
 	if err == nil {
-		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete)
+		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, traceFn)
 	}
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
@@ -1177,6 +1178,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 }
 
 func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, applyOnVersion bool) bool {
+	traceFn := globalLifecycleSys.trace(obj)
 	opts := ObjectOptions{
 		Expiration: ExpirationOptions{Expire: true},
 	}
@@ -1200,7 +1202,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	}
 
 	// Send audit for the lifecycle delete operation
-	auditLogLifecycle(ctx, obj, ILMExpiry)
+	auditLogLifecycle(ctx, obj, ILMExpiry, traceFn)
 
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
@@ -1443,7 +1445,7 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, traceFn func(event string)) {
 	var apiName string
 	switch event {
 	case ILMExpiry:
@@ -1460,4 +1462,5 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string) {
 		Object:    oi.Name,
 		VersionID: oi.VersionID,
 	})
+	traceFn(event)
 }
