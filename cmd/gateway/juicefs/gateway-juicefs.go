@@ -651,17 +651,20 @@ func (n *JfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 		etag, _ = n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
 	}
 	size := fi.Size()
+	var contentType string
 	if fi.IsDir() {
 		size = 0
+		contentType = "application/octet-stream"
 	}
 	return minio.ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		ModTime: fi.ModTime(),
-		Size:    size,
-		IsDir:   fi.IsDir(),
-		AccTime: fi.ModTime(),
-		ETag:    string(etag),
+		Bucket:      bucket,
+		Name:        object,
+		ModTime:     fi.ModTime(),
+		Size:        size,
+		IsDir:       fi.IsDir(),
+		AccTime:     fi.ModTime(),
+		ETag:        string(etag),
+		ContentType: contentType,
 	}, nil
 }
 
