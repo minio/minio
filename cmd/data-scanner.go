@@ -1086,8 +1086,8 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			Object: ObjectInfo{
 				Name: i.objectPath(),
 			},
-			UserAgent:    "scanner",
-			Host:         globalMinioHost,
+			UserAgent:    "Internal: [Scanner]",
+			Host:         globalLocalNodeName,
 			RespElements: map[string]string{"x-minio-versions": strconv.Itoa(len(fivs))},
 		})
 	}
@@ -1212,7 +1212,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		EventName:  eventName,
 		BucketName: obj.Bucket,
 		Object:     obj,
-		Host:       "Internal: [ILM-Expiry]",
+		UserAgent:  "Internal: [ILM-Expiry]",
+		Host:       globalLocalNodeName,
 	})
 
 	return true
