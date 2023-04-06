@@ -52,27 +52,32 @@ func NewForwarder(f *Forwarder) *Forwarder {
 }
 
 type bufPool struct {
+	sz   int
 	pool sync.Pool
 }
 
 func (b *bufPool) Put(buf []byte) {
+	if cap(buf) < b.sz || cap(buf) > b.sz*2 {
+		// Buffer too small or will likely leak memory after being expanded.
+		// Drop it.
+		return
+	}
 	b.pool.Put(&buf)
 }
 
 func (b *bufPool) Get() []byte {
 	bufp := b.pool.Get().(*[]byte)
-	return *bufp
+	return (*bufp)[:b.sz]
 }
 
 func newBufPool(sz int) httputil.BufferPool {
-	return &bufPool{pool: sync.Pool{
+	return &bufPool{sz: sz, pool: sync.Pool{
 		New: func() interface{} {
 			buf := make([]byte, sz)
-			return buf
+			return &buf
 		},
 	}}
 }
-
 // ServeHTTP forwards HTTP traffic using the configured transport
 func (f *Forwarder) ServeHTTP(w http.ResponseWriter, inReq *http.Request) {
 	outReq := new(http.Request)
