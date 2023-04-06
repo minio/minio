@@ -125,10 +125,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 	data := &syscall.Win32finddata{}
 	handle, err := syscall.FindFirstFile(globAllP, data)
 	if err != nil {
-		if err = syscallErrToFileErr(dirPath, err); err == errFileNotFound {
-			return nil, nil
-		}
-		return nil, err
+		return nil, syscallErrToFileErr(dirPath, err)
 	}
 
 	defer syscall.CloseHandle(handle)
