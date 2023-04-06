@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/bucket/policy"
 	xxml "github.com/minio/xxml"
 )
 
@@ -493,7 +494,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 }
 
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
-func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata bool) ListVersionsResponse {
+func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata metaCheckFn) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
 
 	owner := Owner{
@@ -501,10 +502,18 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 		DisplayName: "minio",
 	}
 	data := ListVersionsResponse{}
+	var lastObjMetaName string
+	var tagErr, metaErr APIErrorCode = -1, -1
 
 	for _, object := range resp.Objects {
 		if object.Name == "" {
 			continue
+		}
+		// Cache checks for the same object
+		if metadata != nil && lastObjMetaName != object.Name {
+			tagErr = metadata(object.Name, policy.GetObjectTaggingAction)
+			metaErr = metadata(object.Name, policy.GetObjectAction)
+			lastObjMetaName = object.Name
 		}
 		content := ObjectVersion{}
 		content.Key = s3EncodeName(object.Name, encodingType)
@@ -518,8 +527,10 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
-		if metadata {
+		if tagErr == ErrNone {
 			content.UserTags = object.UserTags
+		}
+		if metaErr == ErrNone {
 			content.UserMetadata = &Metadata{}
 			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
 			case crypto.S3:
@@ -625,7 +636,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata metaCheckFn) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
 	owner := Owner{
 		ID:          globalMinioDefaultOwnerID,
@@ -650,28 +661,32 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
 		content.Owner = owner
-		if metadata {
-			content.UserTags = object.UserTags
-			content.UserMetadata = &Metadata{}
-			switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
-			case crypto.S3:
-				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			case crypto.S3KMS:
-				content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-			case crypto.SSEC:
-				content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
+		if metadata != nil {
+			if metadata(object.Name, policy.GetObjectTaggingAction) == ErrNone {
+				content.UserTags = object.UserTags
 			}
-			for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
-				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
-					// Do not need to send any internal metadata
-					// values to client.
-					continue
+			if metadata(object.Name, policy.GetObjectAction) == ErrNone {
+				content.UserMetadata = &Metadata{}
+				switch kind, _ := crypto.IsEncrypted(object.UserDefined); kind {
+				case crypto.S3:
+					content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+				case crypto.S3KMS:
+					content.UserMetadata.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+				case crypto.SSEC:
+					content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
 				}
-				// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
-					continue
+				for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
+					if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+						// Do not need to send any internal metadata
+						// values to client.
+						continue
+					}
+					// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+					if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
+						continue
+					}
+					content.UserMetadata.Set(k, v)
 				}
-				content.UserMetadata.Set(k, v)
 			}
 		}
 		contents = append(contents, content)
@@ -698,6 +713,8 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.KeyCount = len(data.Contents) + len(data.CommonPrefixes)
 	return data
 }
+
+type metaCheckFn = func(name string, action policy.Action) (s3Err APIErrorCode)
 
 // generates CopyObjectResponse from etag and lastModified time.
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {

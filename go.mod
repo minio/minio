@@ -42,7 +42,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.52
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.26.0
+	github.com/minio/console v0.26.2
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
@@ -74,7 +74,6 @@ require (
 	github.com/rs/cors v1.8.3
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.2
 	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.8
