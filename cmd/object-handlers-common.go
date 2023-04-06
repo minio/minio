@@ -371,7 +371,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 			auditLogLifecycle(
 				ctx,
 				ObjectInfo{
-					Bucket: bucket,
+					Bucket:    bucket,
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
@@ -384,7 +384,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
-				Host: "Internal: [ILM-Expiry]",
+				UserAgent: "Internal: [ILM-Expiry]",
+				Host:      globalLocalNodeName,
 			})
 		}
 	}
