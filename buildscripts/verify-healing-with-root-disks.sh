@@ -45,16 +45,18 @@ function start_minio() {
 
 # Prepare fake disks with losetup
 function prepare_block_devices() {
-        mkdir -p ${WORK_DIR}/disks/ ${WORK_DIR}/mnt/
-        for i in 1 2 3 4; do
-                dd if=/dev/zero of=${WORK_DIR}/disks/img.$i bs=1M count=2048
-                mkfs.ext4 -F ${WORK_DIR}/disks/img.$i
-                sudo mknod /dev/minio-loopdisk$i b 7 $[256-$i]
-                sudo losetup /dev/minio-loopdisk$i ${WORK_DIR}/disks/img.$i
-                mkdir -p ${WORK_DIR}/mnt/disk$i/
-                sudo mount /dev/minio-loopdisk$i ${WORK_DIR}/mnt/disk$i/
-                sudo chown "$(id -u):$(id -g)" /dev/minio-loopdisk$i ${WORK_DIR}/mnt/disk$i/
-        done
+    set -e
+    mkdir -p ${WORK_DIR}/disks/ ${WORK_DIR}/mnt/
+    sudo modprobe loop
+    for i in 1 2 3 4; do
+        dd if=/dev/zero of=${WORK_DIR}/disks/img.${i} bs=1M count=2000
+        device=$(sudo losetup --find --show ${WORK_DIR}/disks/img.${i})
+        sudo mkfs.ext4 -F ${device}
+        mkdir -p ${WORK_DIR}/mnt/disk${i}/
+        sudo mount ${device} ${WORK_DIR}/mnt/disk${i}/
+        sudo chown "$(id -u):$(id -g)" ${device} ${WORK_DIR}/mnt/disk${i}/
+    done
+    set +e
 }
 
 # Start a distributed MinIO setup, unmount one disk and check if it is formatted
