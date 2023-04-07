@@ -112,6 +112,7 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
 			return
 		}
@@ -122,6 +123,7 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
 			return
@@ -389,6 +391,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (%s)", invalidReq.Description, err)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -403,6 +406,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
@@ -416,6 +420,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 						tc.ResponseRecorder.LogErrBody = true
 					}
 
+					defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 					return
@@ -428,6 +433,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (request has multiple authentication types, please use one)", invalidReq.Description)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -442,6 +448,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.FuncName = "handler.ValidRequest"
 					tc.ResponseRecorder.LogErrBody = true
 				}
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
 			}
@@ -454,6 +461,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.ResponseRecorder.LogErrBody = false
 				}
 
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {
 				if ok {
@@ -461,6 +469,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.ResponseRecorder.LogErrBody = true
 				}
 
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
 			}
 			return
@@ -511,6 +520,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 		}
 		sr, err := globalDNSConfig.Get(bucket)
 		if err != nil {
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			if err == dns.ErrNoEntriesFound {
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL)
 			} else {
@@ -593,6 +603,7 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+
 		bucket, object := request2BucketObjectName(r)
 		uploadID := r.Form.Get(xhttp.UploadID)
 
@@ -609,6 +620,7 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 			}
 			// forward request to peer handling this upload
 			if globalBucketTargetSys.isOffline(remote.EndpointURL) {
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrReplicationRemoteConnectionError), r.URL)
 				return
 			}

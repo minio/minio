@@ -144,7 +144,8 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 	case formatS2:
 		r = s2.NewReader(bf)
 	case formatZstd:
-		dec, err := zstd.NewReader(bf)
+		// Limit to 16 MiB per stream.
+		dec, err := zstd.NewReader(bf, zstd.WithDecoderMaxWindow(16<<20))
 		if err != nil {
 			return err
 		}
