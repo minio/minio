@@ -296,6 +296,8 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 
 const xMinIOHealing = "x-minio-healing"
 
+// SetHealing marks object (version) as being healed.
+// Note: this is to be used only from healObject
 func (fi *FileInfo) SetHealing() {
 	if fi.Metadata == nil {
 		fi.Metadata = make(map[string]string)
@@ -303,6 +305,8 @@ func (fi *FileInfo) SetHealing() {
 	fi.Metadata[xMinIOHealing] = "true"
 }
 
+// Healing returns true if object is being healed (i.e fi is being passed down
+// from healObject)
 func (fi FileInfo) Healing() bool {
 	if _, ok := fi.Metadata[xMinIOHealing]; ok {
 		return true
