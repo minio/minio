@@ -169,7 +169,7 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
 		return BucketInfo{}, toObjectErr(err, bucket)
 	}
-	
+
 	return bucketInfo, nil
 }
 
