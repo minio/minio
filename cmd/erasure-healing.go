@@ -294,6 +294,22 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 	return false
 }
 
+const xMinIOHealing = "x-minio-healing"
+
+func (fi *FileInfo) SetHealing() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[xMinIOHealing] = "true"
+}
+
+func (fi FileInfo) Healing() bool {
+	if _, ok := fi.Metadata[xMinIOHealing]; ok {
+		return true
+	}
+	return false
+}
+
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (er *erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	dryRun := opts.DryRun
@@ -664,6 +680,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		partsMetadata[i].Erasure.Index = i + 1
 
 		// Attempt a rename now from healed data to final location.
+		partsMetadata[i].SetHealing()
 		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
 			logger.LogIf(ctx, err)
 			return result, err
