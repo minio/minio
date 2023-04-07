@@ -78,6 +78,7 @@ func newBufPool(sz int) httputil.BufferPool {
 		},
 	}}
 }
+
 // ServeHTTP forwards HTTP traffic using the configured transport
 func (f *Forwarder) ServeHTTP(w http.ResponseWriter, inReq *http.Request) {
 	outReq := new(http.Request)

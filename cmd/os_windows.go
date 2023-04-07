@@ -48,8 +48,10 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 	data := &syscall.Win32finddata{}
 	handle, err := syscall.FindFirstFile(globAllP, data)
 	if err != nil {
-		// Fails on file not found and when not a directory.
-		return errFileNotFound
+		if err = syscallErrToFileErr(dirPath, err); err == errFileNotFound {
+			return nil
+		}
+		return err
 	}
 	defer syscall.CloseHandle(handle)
 
@@ -123,9 +125,9 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 	data := &syscall.Win32finddata{}
 	handle, err := syscall.FindFirstFile(globAllP, data)
 	if err != nil {
-		// Fails on file not found and when not a directory.
-		return nil, errFileNotFound
+		return nil, syscallErrToFileErr(dirPath, err)
 	}
+
 	defer syscall.CloseHandle(handle)
 
 	count := opts.count
@@ -180,4 +182,22 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 func globalSync() {
 	// no-op on windows
+}
+
+func syscallErrToFileErr(dirPath string, err error) error {
+	switch err {
+	case nil:
+		return nil
+	case syscall.ERROR_FILE_NOT_FOUND:
+		return errFileNotFound
+	case syscall.ERROR_ACCESS_DENIED:
+		return errFileAccessDenied
+	default:
+		// Fails on file not found and when not a directory.
+		return osErrToFileErr(&os.PathError{
+			Op:   "FindNextFile",
+			Path: dirPath,
+			Err:  err,
+		})
+	}
 }
