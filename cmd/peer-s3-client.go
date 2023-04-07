@@ -170,13 +170,6 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 
-	for i, err := range errs {
-		if err == nil {
-			bucketInfo = bucketInfos[i]
-			break
-		}
-	}
-
 	return bucketInfo, nil
 }
 

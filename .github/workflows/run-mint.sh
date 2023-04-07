@@ -40,11 +40,11 @@ docker run --rm --net=host \
 	 s3select     \
 	 versioning
 
-docker-compose -f minio-${MODE}.yaml down
+docker-compose -f minio-${MODE}.yaml down || true
 sleep 10s
 
-docker system prune -f
-docker volume prune -f
+docker system prune -f || true
+docker volume prune -f || true
 
 ## change working directory
 cd ../../../

@@ -62,8 +62,8 @@ func (bs *bootstrapTracer) Empty() bool {
 	return empty
 }
 
-func (bs *bootstrapTracer) Record(msg string) {
-	source := getSource(2)
+func (bs *bootstrapTracer) Record(msg string, skip int) {
+	source := getSource(skip + 1)
 	bs.mu.Lock()
 	now := time.Now().UTC()
 	bs.info[bs.idx] = bootstrapInfo{

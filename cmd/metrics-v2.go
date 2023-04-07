@@ -77,7 +77,7 @@ func init() {
 		return allMetrics
 	}()
 
-	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
+	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(),
 		getLocalDriveStorageMetrics(),
 		getCacheMetrics(),
@@ -86,7 +86,10 @@ func init() {
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
 		getNotificationMetrics(),
-	})
+		getDistLockMetrics(),
+	}
+
+	nodeCollector = newMinioCollectorNode(nodeGroups)
 	clusterCollector = newMinioClusterCollector(allMetricsGroups)
 }
 
@@ -1659,6 +1662,53 @@ func getCacheMetrics() *MetricsGroup {
 			})
 		}
 		return
+	})
+	return mg
+}
+
+func getDistLockMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		if !globalIsDistErasure {
+			return []Metric{}
+		}
+
+		st := globalLockServer.stats()
+
+		metrics := make([]Metric, 0, 3)
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "total",
+				Help:      "Number of current locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Total),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "write_total",
+				Help:      "Number of current WRITE locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Writes),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "read_total",
+				Help:      "Number of current READ locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Reads),
+		})
+		return metrics
 	})
 	return mg
 }

@@ -388,7 +388,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 				VersionID:    versionID,
 				DeleteMarker: dobj.DeleteMarker,
 			},
-			Host:      "Internal: [Replication]",
+			UserAgent: "Internal: [Replication]",
+			Host:      globalLocalNodeName,
 			EventName: event.ObjectReplicationNotTracked,
 		})
 		return
@@ -404,7 +405,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 				VersionID:    versionID,
 				DeleteMarker: dobj.DeleteMarker,
 			},
-			Host:      "Internal: [Replication]",
+			UserAgent: "Internal: [Replication]",
+			Host:      globalLocalNodeName,
 			EventName: event.ObjectReplicationNotTracked,
 		})
 		return
@@ -425,7 +427,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 				VersionID:    versionID,
 				DeleteMarker: dobj.DeleteMarker,
 			},
-			Host:      "Internal: [Replication]",
+			UserAgent: "Internal: [Replication]",
+			Host:      globalLocalNodeName,
 			EventName: event.ObjectReplicationNotTracked,
 		})
 		return
@@ -450,7 +453,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 					VersionID:    versionID,
 					DeleteMarker: dobj.DeleteMarker,
 				},
-				Host:      "Internal: [Replication]",
+				UserAgent: "Internal: [Replication]",
+				Host:      globalLocalNodeName,
 				EventName: event.ObjectReplicationNotTracked,
 			})
 			continue
@@ -517,14 +521,16 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 				VersionID:    versionID,
 				DeleteMarker: dobj.DeleteMarker,
 			},
-			Host:      "Internal: [Replication]",
+			UserAgent: "Internal: [Replication]",
+			Host:      globalLocalNodeName,
 			EventName: eventName,
 		})
 	} else {
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object:     dobjInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 			EventName:  eventName,
 		})
 	}
@@ -561,7 +567,8 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				VersionID:    dobj.VersionID,
 				DeleteMarker: dobj.DeleteMarker,
 			},
-			Host:      "Internal: [Replication]",
+			UserAgent: "Internal: [Replication]",
+			Host:      globalLocalNodeName,
 			EventName: event.ObjectReplicationNotTracked,
 		})
 		if dobj.VersionID == "" {
@@ -921,7 +928,8 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -939,7 +947,8 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, ri.TargetArn))
@@ -959,7 +968,8 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
 				Object:     objInfo,
-				Host:       "Internal: [Replication]",
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
 			})
 			continue
 		}
@@ -1021,7 +1031,8 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		EventName:  eventName,
 		BucketName: bucket,
 		Object:     objInfo,
-		Host:       "Internal: [Replication]",
+		UserAgent:  "Internal: [Replication]",
+		Host:       globalLocalNodeName,
 	})
 
 	// re-queue failures once more - keep a retry count to avoid flooding the queue if
@@ -1066,7 +1077,8 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -1085,7 +1097,8 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
 				Object:     objInfo,
-				Host:       "Internal: [Replication]",
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
 			})
 			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		}
@@ -1102,7 +1115,8 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -1113,7 +1127,8 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return rinfo
 	}
@@ -1138,7 +1153,8 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -1209,7 +1225,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -1228,7 +1245,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
 				Object:     objInfo,
-				Host:       "Internal: [Replication]",
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
 			})
 			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		}
@@ -1252,7 +1270,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return
 	}
@@ -1263,7 +1282,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
 			Object:     objInfo,
-			Host:       "Internal: [Replication]",
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
 		})
 		return rinfo
 	}
@@ -1293,7 +1313,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 					EventName:  event.ObjectReplicationNotTracked,
 					BucketName: bucket,
 					Object:     objInfo,
-					Host:       "Internal: [Replication]",
+					UserAgent:  "Internal: [Replication]",
+					Host:       globalLocalNodeName,
 				})
 			}
 			// object with same VersionID already exists, replication kicked off by
@@ -1341,7 +1362,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
 				Object:     objInfo,
-				Host:       "Internal: [Replication]",
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
 			})
 			return
 		}

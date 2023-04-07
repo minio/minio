@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -94,7 +95,7 @@ type NSQTarget struct {
 	id         event.TargetID
 	args       NSQArgs
 	producer   *nsq.Producer
-	store      Store
+	store      store.Store[event.Event]
 	config     *nsq.Config
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
@@ -103,6 +104,11 @@ type NSQTarget struct {
 // ID - returns target ID.
 func (target *NSQTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *NSQTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -129,8 +135,8 @@ func (target *NSQTarget) isActive() (bool, error) {
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(err) {
-			return false, errNotConnected
+		if xnet.IsConnRefusedErr(err) {
+			return false, store.ErrNotConnected
 		}
 		return false, err
 	}
@@ -234,7 +240,7 @@ func (target *NSQTarget) initNSQ() error {
 	err = target.producer.Ping()
 	if err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+		if !(xnet.IsConnRefusedErr(err) || xnet.IsConnResetErr(err)) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 		target.producer.Stop()
@@ -246,7 +252,7 @@ func (target *NSQTarget) initNSQ() error {
 		return err
 	}
 	if !yes {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 
 	return nil
@@ -254,11 +260,11 @@ func (target *NSQTarget) initNSQ() error {
 
 // NewNSQTarget - creates new NSQ target.
 func NewNSQTarget(id string, args NSQArgs, loggerOnce logger.LogOnce) (*NSQTarget, error) {
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nsq-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of NSQ `%s`: %w", id, err)
 		}
 	}
@@ -267,12 +273,12 @@ func NewNSQTarget(id string, args NSQArgs, loggerOnce logger.LogOnce) (*NSQTarge
 		id:         event.TargetID{ID: id, Name: "nsq"},
 		args:       args,
 		loggerOnce: loggerOnce,
-		store:      store,
+		store:      queueStore,
 		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil
