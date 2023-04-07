@@ -514,7 +514,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
-		fivs.Versions, err = item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions)
 		done()
 
 		if err != nil {
@@ -524,8 +524,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
 
-		for _, version := range fivs.Versions {
-			oi := version.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
