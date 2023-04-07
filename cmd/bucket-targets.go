@@ -208,7 +208,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 	clnt, err := sys.getRemoteTargetClient(tgt)
 	if err != nil {
-		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket, Err: err}
 	}
 	// validate if target credentials are ok
 	exists, err := clnt.BucketExists(ctx, tgt.TargetBucket)
