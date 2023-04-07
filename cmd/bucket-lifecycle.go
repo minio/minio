@@ -401,7 +401,8 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 			EventName:  eventName,
 			BucketName: oi.Bucket,
 			Object:     objInfo,
-			Host:       "Internal: [ILM-Expiry]",
+			UserAgent:  "Internal: [ILM-Expiry]",
+			Host:       globalLocalNodeName,
 		})
 
 	case expireRestoredObj:

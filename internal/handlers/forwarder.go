@@ -24,6 +24,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -50,6 +51,33 @@ func NewForwarder(f *Forwarder) *Forwarder {
 	return f
 }
 
+type bufPool struct {
+	sz   int
+	pool sync.Pool
+}
+
+func (b *bufPool) Put(buf []byte) {
+	if cap(buf) < b.sz || cap(buf) > b.sz*2 {
+		// Buffer too small or will likely leak memory after being expanded.
+		// Drop it.
+		return
+	}
+	b.pool.Put(&buf)
+}
+
+func (b *bufPool) Get() []byte {
+	bufp := b.pool.Get().(*[]byte)
+	return (*bufp)[:b.sz]
+}
+
+func newBufPool(sz int) httputil.BufferPool {
+	return &bufPool{sz: sz, pool: sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, sz)
+			return &buf
+		},
+	}}
+}
 // ServeHTTP forwards HTTP traffic using the configured transport
 func (f *Forwarder) ServeHTTP(w http.ResponseWriter, inReq *http.Request) {
 	outReq := new(http.Request)
@@ -59,6 +87,7 @@ func (f *Forwarder) ServeHTTP(w http.ResponseWriter, inReq *http.Request) {
 		Director: func(req *http.Request) {
 			f.modifyRequest(req, inReq.URL)
 		},
+		BufferPool:    newBufPool(128 << 10),
 		Transport:     f.RoundTripper,
 		FlushInterval: defaultFlushInterval,
 		ErrorHandler:  f.customErrHandler,

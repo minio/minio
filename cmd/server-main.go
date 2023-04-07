@@ -352,7 +352,7 @@ func configRetriableErrors(err error) bool {
 }
 
 func bootstrapTrace(msg string) {
-	globalBootstrapTracer.Record(msg)
+	globalBootstrapTracer.Record(msg, 2)
 
 	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
 		return
