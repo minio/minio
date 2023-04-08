@@ -294,7 +294,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 	return false
 }
 
-const xMinIOHealing = "x-minio-healing"
+const xMinIOHealing = ReservedMetadataPrefix + "healing"
 
 // SetHealing marks object (version) as being healed.
 // Note: this is to be used only from healObject
