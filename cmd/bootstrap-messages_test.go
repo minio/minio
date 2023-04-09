@@ -28,7 +28,7 @@ func TestBootstrap(t *testing.T) {
 	// Bootstrap events exceed bootstrap messages limit
 	bsTracer := &bootstrapTracer{}
 	for i := 0; i < bootstrapMsgsLimit+10; i++ {
-		bsTracer.Record(fmt.Sprintf("msg-%d", i))
+		bsTracer.Record(fmt.Sprintf("msg-%d", i), 1)
 	}
 
 	traceInfos := bsTracer.Events()
@@ -45,7 +45,7 @@ func TestBootstrap(t *testing.T) {
 
 	// Fewer than 4K bootstrap events
 	for i := 0; i < 10; i++ {
-		bsTracer.Record(fmt.Sprintf("msg-%d", i))
+		bsTracer.Record(fmt.Sprintf("msg-%d", i), 1)
 	}
 	events := bsTracer.Events()
 	if len(events) != 10 {
