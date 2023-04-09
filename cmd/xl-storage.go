@@ -2357,7 +2357,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	// suspended or disabled on this bucket. RenameData will replace
 	// the 'null' version. We add a free-version to track its tiered
 	// content for asynchronous deletion.
-	if fi.VersionID == "" && !fi.IsRestoreObjReq() {
+	//
+	// Note: RestoreObject and HealObject requests don't end up replacing the
+	// null version and therefore don't require the free-version to track
+	// anything
+	if fi.VersionID == "" && !fi.IsRestoreObjReq() && !fi.Healing() {
 		// Note: Restore object request reuses PutObject/Multipart
 		// upload to copy back its data from the remote tier. This
 		// doesn't replace the existing version, so we don't need to add
