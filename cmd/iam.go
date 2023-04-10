@@ -286,21 +286,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
-		if etcdClient != nil {
-			// ****  WARNING ****
-			// Migrating to encrypted backend on etcd should happen before initialization of
-			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
-				if errors.Is(err, errEtcdUnreachable) {
-					logger.Info("Connection to etcd timed out. Retrying..")
-					continue
-				}
-				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
-				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
-				return
-			}
-		}
-
 		// Migrate IAM configuration, if necessary.
 		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {

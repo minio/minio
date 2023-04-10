@@ -382,16 +382,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
 
-	// ****  WARNING ****
-	// Migrating to encrypted backend should happen before initialization of any
-	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	lockTimeout := newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
-		timeout: 5 * time.Second,
-		minimum: 3 * time.Second,
-	})
 
 	for {
 		select {
@@ -401,56 +392,22 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		default:
 		}
 
-		bootstrapTrace("trying to acquire transaction.lock")
-
-		// Make sure to hold lock for entire migration to avoid
-		// such that only one server should migrate the entire config
-		// at a given time, this big transaction lock ensures this
-		// appropriately. This is also true for rotation of encrypted
-		// content.
-		txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-
-		// let one of the server acquire the lock, if not let them timeout.
-		// which shall be retried again by this loop.
-		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
-		if err != nil {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
-			waitDuration := time.Duration(r.Float64() * 5 * float64(time.Second))
-			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping for %v before retry", err, waitDuration))
-
-			// Sleep 0 -> 5 seconds, provider a higher range such that sleeps()
-			// and retries for lock are more spread out, needed orchestrated
-			// systems take 30s minimum to respond to DNS resolvers.
-			//
-			// Do not change this value.
-			time.Sleep(waitDuration)
-			continue
-		}
-
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
 		if globalIsDistErasure {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+			logger.Info("Waiting for all MinIO sub-systems to be initialize...")
 		}
 
-		// Migrate all backend configs to encrypted backend configs, optionally
-		// handles rotating keys for encryption, if there is any retriable failure
-		// that shall be retried if there is an error.
-		if err = handleEncryptedConfigBackend(newObject); err == nil {
-			// Upon success migrating the config, initialize all sub-systems
-			// if all sub-systems initialized successfully return right away
-			if err = initConfigSubsystem(lkctx.Context(), newObject); err == nil {
-				txnLk.Unlock(lkctx)
-				// All successful return.
-				if globalIsDistErasure {
-					// These messages only meant primarily for distributed setup, so only log during distributed setup.
-					logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
-				}
-				return nil
+		// Upon success migrating the config, initialize all sub-systems
+		// if all sub-systems initialized successfully return right away
+		err := initConfigSubsystem(ctx, newObject)
+		if err == nil {
+			// All successful return.
+			if globalIsDistErasure {
+				// These messages only meant primarily for distributed setup, so only log during distributed setup.
+				logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
 			}
+			return nil
 		}
-
-		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
-		txnLk.Unlock(lkctx)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
