@@ -1010,3 +1010,51 @@ func Test_mergeXLV2Versions2(t *testing.T) {
 		})
 	}
 }
+
+func TestXMinIOHealingSkip(t *testing.T) {
+	xl := xlMetaV2{}
+	failOnErr := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("Test failed with %v", err)
+		}
+	}
+
+	fi := FileInfo{
+		Volume:    "volume",
+		Name:      "object-name",
+		VersionID: "756100c6-b393-4981-928a-d49bbc164741",
+		IsLatest:  true,
+		Deleted:   false,
+		ModTime:   time.Now(),
+		Size:      1 << 10,
+		Mode:      0,
+		Erasure: ErasureInfo{
+			Algorithm:    ReedSolomon.String(),
+			DataBlocks:   4,
+			ParityBlocks: 2,
+			BlockSize:    10000,
+			Index:        1,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8},
+			Checksums: []ChecksumInfo{{
+				PartNumber: 1,
+				Algorithm:  HighwayHash256S,
+				Hash:       nil,
+			}},
+		},
+		NumVersions: 1,
+	}
+
+	fi.SetHealing()
+	failOnErr(xl.AddVersion(fi))
+
+	var err error
+	fi, err = xl.ToFileInfo(fi.Volume, fi.Name, fi.VersionID, false)
+	if err != nil {
+		t.Fatalf("xl.ToFileInfo failed with %v", err)
+	}
+
+	if fi.Healing() {
+		t.Fatal("Expected fi.Healing to be false")
+	}
+}

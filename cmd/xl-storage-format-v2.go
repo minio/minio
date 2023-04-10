@@ -1583,8 +1583,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
 				// Skip tierFVID, tierFVMarker keys; it's used
 				// only for creating free-version.
+				// Skip xMinIOHealing, it's used only in RenameData
 				switch k {
-				case tierFVIDKey, tierFVMarkerKey:
+				case tierFVIDKey, tierFVMarkerKey, xMinIOHealing:
 					continue
 				}
 

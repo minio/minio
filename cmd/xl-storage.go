@@ -1671,35 +1671,10 @@ func (s *xlStorage) openFileDirect(path string, mode int) (f *os.File, err error
 }
 
 func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err error) {
-	// Create top level directories if they don't exist.
-	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
-		return nil, osErrToFileErr(err)
-	}
-
-	w, err := OpenFile(filePath, mode|writeMode, 0o666)
-	if err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		switch {
-		case isSysErrIsDir(err):
-			return nil, errIsNotRegular
-		case osIsPermission(err):
-			return nil, errFileAccessDenied
-		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
-		case isSysErrIO(err):
-			return nil, errFaultyDisk
-		case isSysErrTooManyFiles(err):
-			return nil, errTooManyOpenFiles
-		default:
-			return nil, err
-		}
-	}
-
-	return w, nil
+	return s.openFile(filePath, mode|writeMode)
 }
 
-func (s *xlStorage) openFileNoSync(filePath string, mode int) (f *os.File, err error) {
+func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
@@ -1950,7 +1925,7 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 		}
 		w, err = s.openFileSync(filePath, flags)
 	} else {
-		w, err = s.openFileNoSync(filePath, flags)
+		w, err = s.openFile(filePath, flags)
 	}
 	if err != nil {
 		return err
@@ -2357,7 +2332,11 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	// suspended or disabled on this bucket. RenameData will replace
 	// the 'null' version. We add a free-version to track its tiered
 	// content for asynchronous deletion.
-	if fi.VersionID == "" && !fi.IsRestoreObjReq() {
+	//
+	// Note: RestoreObject and HealObject requests don't end up replacing the
+	// null version and therefore don't require the free-version to track
+	// anything
+	if fi.VersionID == "" && !fi.IsRestoreObjReq() && !fi.Healing() {
 		// Note: Restore object request reuses PutObject/Multipart
 		// upload to copy back its data from the remote tier. This
 		// doesn't replace the existing version, so we don't need to add
