@@ -86,8 +86,6 @@ chmod +x minio
 ./minio server /data
 ```
 
-Replace ``/data`` with the path to the drive or directory in which you want MinIO to store data.
-
 The following table lists supported architectures. Replace the `wget` URL with the architecture for your Linux host.
 
 | Architecture                   | URL                                                        |

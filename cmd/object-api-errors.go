@@ -674,6 +674,12 @@ func isErrBucketNotFound(err error) bool {
 	return errors.As(err, &bkNotFound)
 }
 
+// isErrReadQuorum check if the error type is InsufficentReadQuorum
+func isErrReadQuorum(err error) bool {
+	var rquorum InsufficientReadQuorum
+	return errors.As(err, &rquorum)
+}
+
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	var objNotFound ObjectNotFound

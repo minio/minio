@@ -998,7 +998,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	if opts.CheckPrecondFn != nil {
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err != nil && !isErrVersionNotFound(err) {
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			return objInfo, err
 		}
 		if opts.CheckPrecondFn(obj) {
@@ -1997,7 +1997,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		EventName:  eventName,
 		BucketName: bucket,
 		Object:     objInfo,
-		Host:       "Internal: [ILM-Transition]",
+		UserAgent:  "Internal: [ILM-Transition]",
+		Host:       globalLocalNodeName,
 	})
 	auditLogLifecycle(ctx, objInfo, ILMTransition)
 	return err
