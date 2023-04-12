@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -357,8 +358,42 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		f.ServeHTTP(w, r)
 
-		if sw, ok := w.(*xhttp.ResponseRecorder); ok {
-			globalHTTPStats.updateStats(api, r, sw)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
+		if !ok {
+			return
+		}
+
+		if tc != nil {
+			if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
+				strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+				strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
+				strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
+				globalConnStats.incInputBytes(int64(tc.RequestRecorder.Size()))
+				globalConnStats.incOutputBytes(int64(tc.ResponseRecorder.Size()))
+				return
+			}
+
+			if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+				globalConnStats.incAdminInputBytes(int64(tc.RequestRecorder.Size()))
+				globalConnStats.incAdminOutputBytes(int64(tc.ResponseRecorder.Size()))
+				return
+			}
+
+			globalHTTPStats.updateStats(api, tc.ResponseRecorder)
+			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
+			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
+
+			resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+			if err != nil {
+				logger.LogIf(r.Context(), fmt.Errorf("Unable to get the actual resource in the incoming request: %v", err))
+				return
+			}
+
+			bucket, _ := path2BucketObject(resource)
+			if bucket != "" && bucket != minioReservedBucket {
+				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
+				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
+			}
 		}
 	}
 }

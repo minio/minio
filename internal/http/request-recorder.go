@@ -56,8 +56,8 @@ func (r *RequestRecorder) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-// BodySize returns the body size if the currently read object
-func (r *RequestRecorder) BodySize() int {
+// Size returns the body size if the currently read object
+func (r *RequestRecorder) Size() int {
 	return r.bytesRead
 }
 
