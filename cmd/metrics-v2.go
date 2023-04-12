@@ -2008,7 +2008,7 @@ func getBucketUsageMetrics() *MetricsGroup {
 
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageVersionsTotalMD(),
-				Value:          float64(usage.VersionssCount),
+				Value:          float64(usage.VersionsCount),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 
