@@ -71,40 +71,33 @@ func httpTracer(h http.Handler) http.Handler {
 		// http stats requests and audit if enabled.
 		respRecorder := xhttp.NewResponseRecorder(w)
 
-		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
-			h.ServeHTTP(respRecorder, r)
-			return
-		}
+		// Setup a http request body recorder
+		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
+		r.Body = reqRecorder
 
 		// Create tracing data structure and associate it to the request context
 		tc := mcontext.TraceCtxt{
-			AmzReqID: r.Header.Get(xhttp.AmzRequestID),
+			AmzReqID:         r.Header.Get(xhttp.AmzRequestID),
+			RequestRecorder:  reqRecorder,
+			ResponseRecorder: respRecorder,
 		}
 
-		ctx := context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc)
-		r = r.WithContext(ctx)
-
-		// Setup a http request body recorder
-		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
-
-		tc.RequestRecorder = reqRecorder
-		tc.ResponseRecorder = respRecorder
-
-		// Execute call.
-		r.Body = reqRecorder
+		r = r.WithContext(context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc))
 
 		reqStartTime := time.Now().UTC()
 		h.ServeHTTP(respRecorder, r)
 		reqEndTime := time.Now().UTC()
 
+		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
+			// no subscribers nothing to trace.
+			return
+		}
+
 		tt := madmin.TraceInternal
 		if strings.HasPrefix(tc.FuncName, "s3.") {
 			tt = madmin.TraceS3
 		}
-		// No need to continue if no subscribers for actual type...
-		if globalTrace.NumSubscribers(tt) == 0 {
-			return
-		}
+
 		// Calculate input body size with headers
 		reqHeaders := r.Header.Clone()
 		reqHeaders.Set("Host", r.Host)
@@ -113,7 +106,7 @@ func httpTracer(h http.Handler) http.Handler {
 		} else {
 			reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
 		}
-		inputBytes := reqRecorder.BodySize()
+		inputBytes := reqRecorder.Size()
 		for k, v := range reqHeaders {
 			inputBytes += len(k) + len(v)
 		}
