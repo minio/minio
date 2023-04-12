@@ -3,7 +3,6 @@ kind: NetworkPolicy
 apiVersion: {{ template "minio.networkPolicy.apiVersion" . }}
 metadata:
   name: {{ template "minio.fullname" . }}
-  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}
     chart: {{ template "minio.chart" . }}
