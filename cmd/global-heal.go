@@ -81,12 +81,6 @@ func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.Bg
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 	}
 
-	if globalMRFState.initialized() {
-		status.MRF = map[string]madmin.MRFStatus{
-			globalLocalNodeName: globalMRFState.getCurrentMRFRoundInfo(),
-		}
-	}
-
 	healDisksMap := map[string]struct{}{}
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
@@ -426,15 +420,25 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	return retErr
 }
 
-// healObject sends the given object/version to the background healing workers
-// and only returns when healing of the object is done.
-func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
+func healBucket(bucket string, scan madmin.HealScanMode) error {
 	// Get background heal sequence to send elements to heal
 	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	globalHealStateLK.Unlock()
 	if ok {
-		bgSeq.queueHealTask(healSource{
+		return bgSeq.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket)
+	}
+	return nil
+}
+
+// healObject sends the given object/version to the background healing workers
+func healObject(bucket, object, versionID string, scan madmin.HealScanMode) error {
+	// Get background heal sequence to send elements to heal
+	globalHealStateLK.Lock()
+	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+	globalHealStateLK.Unlock()
+	if ok {
+		return bgSeq.queueHealTask(healSource{
 			bucket:    bucket,
 			object:    object,
 			versionID: versionID,
@@ -445,4 +449,5 @@ func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 			},
 		}, madmin.HealItemObject)
 	}
+	return nil
 }

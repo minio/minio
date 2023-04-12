@@ -190,7 +190,6 @@ func (s *erasureSets) connectDisks() {
 
 	var wg sync.WaitGroup
 	diskMap := s.getDiskMap()
-	setsJustConnected := make([]bool, s.setCount)
 	for _, endpoint := range s.endpoints.Endpoints {
 		cdisk := diskMap[endpoint]
 		if cdisk != nil && cdisk.IsOnline() {
@@ -203,8 +202,6 @@ func (s *erasureSets) connectDisks() {
 			// putting it back into the s.erasureDisks by re-placing the disk again.
 			_, setIndex, _ := cdisk.GetDiskLoc()
 			if setIndex != -1 {
-				// Recently disconnected disks must go to MRF
-				setsJustConnected[setIndex] = cdisk.LastConn().After(s.lastConnectDisksOpTime)
 				continue
 			}
 		}
@@ -260,21 +257,11 @@ func (s *erasureSets) connectDisks() {
 				s.erasureDisks[setIndex][diskIndex] = disk
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			setsJustConnected[setIndex] = true // disk just went online we treat it is as MRF event
 			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
 
 	wg.Wait()
-
-	go func() {
-		for setIndex, justConnected := range setsJustConnected {
-			if !justConnected {
-				continue
-			}
-			globalMRFState.newSetReconnected(s.poolIndex, setIndex)
-		}
-	}()
 }
 
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
