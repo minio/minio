@@ -1953,6 +1953,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 			return toObjectErr(err, bucket, object)
 		}
 	}
+	traceFn := globalLifecycleSys.trace(fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended))
 
 	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
@@ -2000,7 +2001,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		UserAgent:  "Internal: [ILM-Transition]",
 		Host:       globalLocalNodeName,
 	})
-	auditLogLifecycle(ctx, objInfo, ILMTransition)
+	auditLogLifecycle(ctx, objInfo, ILMTransition, traceFn)
 	return err
 }
 
