@@ -155,6 +155,7 @@ const (
 	waitingTotal   MetricName = "waiting_total"
 	incomingTotal  MetricName = "incoming_total"
 	objectTotal    MetricName = "object_total"
+	versionTotal   MetricName = "version_total"
 	offlineTotal   MetricName = "offline_total"
 	onlineTotal    MetricName = "online_total"
 	openTotal      MetricName = "open_total"
@@ -505,6 +506,16 @@ func getBucketUsageObjectsTotalMD() MetricDescription {
 		Subsystem: usageSubsystem,
 		Name:      objectTotal,
 		Help:      "Total number of objects",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageVersionsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      versionTotal,
+		Help:      "Total number of versions",
 		Type:      gaugeMetric,
 	}
 }
@@ -1992,6 +2003,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageObjectsTotalMD(),
 				Value:          float64(usage.ObjectsCount),
+				VariableLabels: map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
+				Description:    getBucketUsageVersionsTotalMD(),
+				Value:          float64(usage.VersionsCount),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 
