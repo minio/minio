@@ -2750,7 +2750,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "minio_cluster_disk_free_inodes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_disk_free_inodes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
