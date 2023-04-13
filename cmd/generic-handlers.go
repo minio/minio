@@ -36,7 +36,6 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/http/stats"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 )
@@ -136,9 +135,8 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 // Reserved bucket.
 const (
-	minioReservedBucket              = "minio"
-	minioReservedBucketPath          = SlashSeparator + minioReservedBucket
-	minioReservedBucketPathWithSlash = SlashSeparator + minioReservedBucket + SlashSeparator
+	minioReservedBucket     = "minio"
+	minioReservedBucketPath = SlashSeparator + minioReservedBucket
 
 	loginPathPrefix = SlashSeparator + "login"
 )
@@ -278,60 +276,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	}
 	// Date header missing.
 	return time.Time{}, ErrMissingDateHeader
-}
-
-// splitStr splits a string into n parts, empty strings are added
-// if we are not able to reach n elements
-func splitStr(path, sep string, n int) []string {
-	splits := strings.SplitN(path, sep, n)
-	// Add empty strings if we found elements less than nr
-	for i := n - len(splits); i > 0; i-- {
-		splits = append(splits, "")
-	}
-	return splits
-}
-
-func url2Bucket(p string) (bucket string) {
-	tokens := splitStr(p, SlashSeparator, 3)
-	return tokens[1]
-}
-
-// setHttpStatsHandler sets a http Stats handler to gather HTTP statistics
-func setHTTPStatsHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Meters s3 connection stats.
-		meteredRequest := &stats.IncomingTrafficMeter{ReadCloser: r.Body}
-		meteredResponse := &stats.OutgoingTrafficMeter{ResponseWriter: w}
-
-		// Execute the request
-		r.Body = meteredRequest
-		h.ServeHTTP(meteredResponse, r)
-
-		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
-			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
-			strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
-			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
-			globalConnStats.incInputBytes(meteredRequest.BytesRead())
-			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-			globalConnStats.incAdminInputBytes(meteredRequest.BytesRead())
-			globalConnStats.incAdminOutputBytes(meteredResponse.BytesWritten())
-			return
-		}
-
-		globalConnStats.incS3InputBytes(meteredRequest.BytesRead())
-		globalConnStats.incS3OutputBytes(meteredResponse.BytesWritten())
-
-		if r.URL != nil {
-			bucket := url2Bucket(r.URL.Path)
-			if bucket != "" && bucket != minioReservedBucket {
-				globalBucketConnStats.incS3InputBytes(bucket, meteredRequest.BytesRead())
-				globalBucketConnStats.incS3OutputBytes(bucket, meteredResponse.BytesWritten())
-			}
-		}
-	})
 }
 
 // Bad path components to be rejected by the path validity handler.

@@ -24,11 +24,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/minio/minio/internal/http/stats"
 	internalAudit "github.com/minio/minio/internal/logger/message/audit"
+	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/logger/message/audit"
 
-	"github.com/klauspost/compress/gzhttp"
 	"github.com/minio/madmin-go/v2"
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -96,34 +95,13 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			headerBytes     int64
 		)
 
-		var st *xhttp.ResponseRecorder
-
-		for {
-			switch v := w.(type) {
-			case *gzhttp.GzipResponseWriter:
-				// the writer may be obscured by gzip response writer
-				w = v.ResponseWriter
-			case *gzhttp.NoGzipResponseWriter:
-				// the writer may be obscured by no-gzip response writer
-				w = v.ResponseWriter
-			case *stats.OutgoingTrafficMeter:
-				// the writer may be obscured by http stats response writer
-				w = v.ResponseWriter
-			case *xhttp.ResponseRecorder:
-				st = v
-				goto exit
-			default:
-				goto exit
-			}
-		}
-	exit:
-
-		if st != nil {
-			statusCode = st.StatusCode
-			timeToResponse = time.Now().UTC().Sub(st.StartTime)
-			timeToFirstByte = st.TimeToFirstByte
-			outputBytes = int64(st.Size())
-			headerBytes = int64(st.HeaderSize())
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
+		if ok {
+			statusCode = tc.ResponseRecorder.StatusCode
+			outputBytes = int64(tc.ResponseRecorder.Size())
+			headerBytes = int64(tc.ResponseRecorder.HeaderSize())
+			timeToResponse = time.Now().UTC().Sub(tc.ResponseRecorder.StartTime)
+			timeToFirstByte = tc.ResponseRecorder.TimeToFirstByte
 		}
 
 		entry.AccessKey = reqInfo.Cred.AccessKey
@@ -147,7 +125,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.API.TimeToResponseInNS = strconv.FormatInt(timeToResponse.Nanoseconds(), 10)
 		entry.Tags = reqInfo.GetTagsMap()
-		// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
+		// ignore cases for ttfb when its zero.
 		if timeToFirstByte != 0 {
 			entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
 			entry.API.TimeToFirstByteInNS = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10)
