@@ -198,6 +198,7 @@ func ReadCheckSums(b []byte) map[string]string {
 			break
 		}
 		cs := base64.StdEncoding.EncodeToString(b[:length])
+		b = b[length:]
 		if typ.Is(ChecksumMultipart) {
 			t, n := binary.Uvarint(b)
 			if n < 0 {
@@ -207,7 +208,6 @@ func ReadCheckSums(b []byte) map[string]string {
 			b = b[n:]
 		}
 		res[typ.String()] = cs
-		b = b[length:]
 	}
 	if len(res) == 0 {
 		res = nil
