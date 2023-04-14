@@ -444,8 +444,9 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 	return evalDisks(disks, mErrs), err
 }
 
-func commonParity(parities []int) int {
+func commonParity(parities []int, defaultParityCount int) int {
 	N := len(parities)
+
 	occMap := make(map[int]int)
 	for _, p := range parities {
 		occMap[p]++
@@ -457,10 +458,18 @@ func commonParity(parities []int) int {
 			// Ignore non defined parity
 			continue
 		}
-		if occ < N-parity {
-			// Ignore since we don't have enough shards for read quorum (i.e Erasure.DataBlocks)
+
+		readQuorum := N - parity
+		if defaultParityCount > 0 && parity == 0 {
+			// In this case, parity == 0 implies that this object version is a
+			// delete marker
+			readQuorum = N/2 + 1
+		}
+		if occ < readQuorum {
+			// Ignore this parity since we don't have enough shards for read quorum
 			continue
 		}
+
 		if occ > maxOcc {
 			maxOcc = occ
 			commonParity = parity
@@ -514,8 +523,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	}
 
 	parities := listObjectParities(partsMetaData, errs)
-	parityBlocks := commonParity(parities)
-
+	parityBlocks := commonParity(parities, defaultParityCount)
 	if parityBlocks < 0 {
 		return -1, -1, errErasureReadQuorum
 	}

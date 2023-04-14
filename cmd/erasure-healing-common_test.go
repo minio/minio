@@ -737,24 +737,51 @@ func TestCommonParities(t *testing.T) {
 		Idx:         0,
 	}
 
-	var metaArr []FileInfo
-	for i := 0; i < 12; i++ {
-		fi := fi1
-		if i%2 == 0 {
-			fi = fi2
-		}
-		metaArr = append(metaArr, fi)
+	fiDel := FileInfo{
+		Volume:           "mybucket",
+		Name:             "myobject",
+		VersionID:        "",
+		IsLatest:         true,
+		Deleted:          true,
+		ModTime:          time.Date(2023, time.March, 15, 19, 57, 30, 492530160, time.UTC),
+		Mode:             0x0,
+		WrittenByVersion: 0x63c77756,
+		NumVersions:      1,
+		Idx:              0,
 	}
 
-	parities := listObjectParities(metaArr, make([]error, len(metaArr)))
-	parity := commonParity(parities)
-	var match int
-	for _, fi := range metaArr {
-		if fi.Erasure.ParityBlocks == parity {
-			match++
-		}
+	tests := []struct {
+		fi1, fi2 FileInfo
+	}{
+		{
+			fi1: fi1,
+			fi2: fi2,
+		},
+		{
+			fi1: fi1,
+			fi2: fiDel,
+		},
 	}
-	if match < len(metaArr)-parity {
-		t.Fatalf("Expected %d drives with parity=%d, but got %d", len(metaArr)-parity, parity, match)
+	for idx, test := range tests {
+		var metaArr []FileInfo
+		for i := 0; i < 12; i++ {
+			fi := test.fi1
+			if i%2 == 0 {
+				fi = test.fi2
+			}
+			metaArr = append(metaArr, fi)
+		}
+
+		parities := listObjectParities(metaArr, make([]error, len(metaArr)))
+		parity := commonParity(parities, 5)
+		var match int
+		for _, fi := range metaArr {
+			if fi.Erasure.ParityBlocks == parity {
+				match++
+			}
+		}
+		if match < len(metaArr)-parity {
+			t.Fatalf("Test %d: Expected %d drives with parity=%d, but got %d", idx, len(metaArr)-parity, parity, match)
+		}
 	}
 }
