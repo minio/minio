@@ -445,19 +445,23 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 }
 
 func commonParity(parities []int) int {
+	N := len(parities)
 	occMap := make(map[int]int)
 	for _, p := range parities {
 		occMap[p]++
 	}
 
 	var maxOcc, commonParity int
-
 	for parity, occ := range occMap {
 		if parity == -1 {
 			// Ignore non defined parity
 			continue
 		}
-		if occ >= maxOcc {
+		if occ < N-parity {
+			// Ignore since we don't have enough shards for read quorum (i.e Erasure.DataBlocks)
+			continue
+		}
+		if occ > maxOcc {
 			maxOcc = occ
 			commonParity = parity
 		}

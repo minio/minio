@@ -655,3 +655,106 @@ func TestDisksWithAllParts(t *testing.T) {
 		}
 	}
 }
+
+func TestCommonParities(t *testing.T) {
+	// This test uses two FileInfo values that represent the same object but
+	// have different parities. They occur in equal number of drives, but only
+	// one has read quorum. commonParity should pick the parity corresponding to
+	// the FileInfo which has read quorum.
+	fi1 := FileInfo{
+		Volume:         "mybucket",
+		Name:           "myobject",
+		VersionID:      "",
+		IsLatest:       true,
+		Deleted:        false,
+		ExpireRestored: false,
+		DataDir:        "4a01d9dd-0c5e-4103-88f8-b307c57d212e",
+		XLV1:           false,
+		ModTime:        time.Date(2023, time.March, 15, 11, 18, 4, 989906961, time.UTC),
+		Size:           329289, Mode: 0x0, WrittenByVersion: 0x63c77756,
+		Metadata: map[string]string{
+			"content-type": "application/octet-stream", "etag": "f205307ef9f50594c4b86d9c246bee86", "x-minio-internal-erasure-upgraded": "5->6", "x-minio-internal-inline-data": "true",
+		},
+		Parts: []ObjectPartInfo{
+			{
+				ETag:       "",
+				Number:     1,
+				Size:       329289,
+				ActualSize: 329289,
+				ModTime:    time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC),
+				Index:      []uint8(nil),
+				Checksums:  map[string]string(nil),
+			},
+		},
+		Erasure: ErasureInfo{
+			Algorithm:    "ReedSolomon",
+			DataBlocks:   6,
+			ParityBlocks: 6,
+			BlockSize:    1048576,
+			Index:        1,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			Checksums:    []ChecksumInfo{{PartNumber: 1, Algorithm: 0x3, Hash: []uint8{}}},
+		},
+		NumVersions: 1,
+		Idx:         0,
+	}
+
+	fi2 := FileInfo{
+		Volume:           "mybucket",
+		Name:             "myobject",
+		VersionID:        "",
+		IsLatest:         true,
+		Deleted:          false,
+		DataDir:          "6f5c106d-9d28-4c85-a7f4-eac56225876b",
+		ModTime:          time.Date(2023, time.March, 15, 19, 57, 30, 492530160, time.UTC),
+		Size:             329289,
+		Mode:             0x0,
+		WrittenByVersion: 0x63c77756,
+		Metadata:         map[string]string{"content-type": "application/octet-stream", "etag": "f205307ef9f50594c4b86d9c246bee86", "x-minio-internal-inline-data": "true"},
+		Parts: []ObjectPartInfo{
+			{
+				ETag:       "",
+				Number:     1,
+				Size:       329289,
+				ActualSize: 329289,
+				ModTime:    time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC),
+				Index:      []uint8(nil),
+				Checksums:  map[string]string(nil),
+			},
+		},
+		Erasure: ErasureInfo{
+			Algorithm:    "ReedSolomon",
+			DataBlocks:   7,
+			ParityBlocks: 5,
+			BlockSize:    1048576,
+			Index:        2,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+			Checksums: []ChecksumInfo{
+				{PartNumber: 1, Algorithm: 0x3, Hash: []uint8{}},
+			},
+		},
+		NumVersions: 1,
+		Idx:         0,
+	}
+
+	var metaArr []FileInfo
+	for i := 0; i < 12; i++ {
+		fi := fi1
+		if i%2 == 0 {
+			fi = fi2
+		}
+		metaArr = append(metaArr, fi)
+	}
+
+	parities := listObjectParities(metaArr, make([]error, len(metaArr)))
+	parity := commonParity(parities)
+	var match int
+	for _, fi := range metaArr {
+		if fi.Erasure.ParityBlocks == parity {
+			match++
+		}
+	}
+	if match < len(metaArr)-parity {
+		t.Fatalf("Expected %d drives with parity=%d, but got %d", len(metaArr)-parity, parity, match)
+	}
+}
