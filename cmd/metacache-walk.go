@@ -126,6 +126,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 	scanDir = func(current string) error {
 		// Skip forward, if requested...
+		var sb strings.Builder
 		forward := ""
 		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
 			forward = strings.TrimPrefix(opts.ForwardTo, current)
@@ -198,7 +199,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
 				s.walkReadMu.Lock()
-				meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, current, entry))
+				meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, current, entry))
 				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
@@ -212,7 +213,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
-				meta.name = pathJoin(current, meta.name)
+				meta.name = pathJoinBuf(&sb, current, meta.name)
 				meta.name = decodeDirObject(meta.name)
 
 				objReturned(meta.metadata)
@@ -223,7 +224,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
 				s.walkReadMu.Lock()
-				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, current, entry))
+				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, current, entry))
 				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
@@ -234,7 +235,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
-				meta.name = pathJoin(current, meta.name)
+				meta.name = pathJoinBuf(&sb, current, meta.name)
 				objReturned(meta.metadata)
 
 				out <- meta
@@ -267,7 +268,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if contextCanceled(ctx) {
 				return ctx.Err()
 			}
-			meta := metaCacheEntry{name: pathJoin(current, entry)}
+			meta := metaCacheEntry{name: pathJoinBuf(&sb, current, entry)}
 
 			// If directory entry on stack before this, pop it now.
 			for len(dirStack) > 0 && dirStack[len(dirStack)-1] < meta.name {
@@ -291,7 +292,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			}
 
 			s.walkReadMu.Lock()
-			meta.metadata, err = s.readMetadata(ctx, pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+			meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFile))
 			s.walkReadMu.Unlock()
 			diskHealthCheckOK(ctx, err)
 			switch {
@@ -304,7 +305,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 				out <- meta
 			case osIsNotExist(err), isSysErrIsDir(err):
-				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
+				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFileV1))
 				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
@@ -317,7 +318,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// NOT an object, append to stack (with slash)
 				// If dirObject, but no metadata (which is unexpected) we skip it.
 				if !isDirObj {
-					if !isDirEmpty(pathJoin(volumeDir, meta.name+slashSeparator)) {
+					if !isDirEmpty(pathJoinBuf(&sb, volumeDir, meta.name+slashSeparator)) {
 						dirStack = append(dirStack, meta.name+slashSeparator)
 					}
 				}
