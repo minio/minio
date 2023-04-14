@@ -33,6 +33,7 @@ import (
 	"github.com/dustin/go-humanize"
 	uuid2 "github.com/google/uuid"
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio/internal/config/storageclass"
 )
 
 // Tests isObjectDangling function
@@ -563,6 +564,17 @@ func TestHealingDanglingObject(t *testing.T) {
 	resetGlobalHealState()
 	defer resetGlobalHealState()
 
+	// Set globalStoragClass.STANDARD to EC:4 for this test
+	saveSC := globalStorageClass
+	defer func() {
+		globalStorageClass = saveSC
+	}()
+	globalStorageClass = storageclass.Config{
+		Standard: storageclass.StorageClass{
+			Parity: 4,
+		},
+	}
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -576,6 +588,8 @@ func TestHealingDanglingObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	setObjectLayer(objLayer)
 
 	bucket := getRandomBucketName()
 	object := getRandomObjectName()
