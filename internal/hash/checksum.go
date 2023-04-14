@@ -22,6 +22,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"hash"
 	"hash/crc32"
 	"net/http"
@@ -53,6 +54,8 @@ const (
 	ChecksumCRC32C
 	// ChecksumInvalid indicates an invalid checksum.
 	ChecksumInvalid
+	// ChecksumMultipart indicates the checksum is from a multipart upload.
+	ChecksumMultipart
 
 	// ChecksumNone indicates no checksum.
 	ChecksumNone ChecksumType = 0
@@ -194,7 +197,16 @@ func ReadCheckSums(b []byte) map[string]string {
 		if length == 0 || len(b) < length {
 			break
 		}
-		res[typ.String()] = base64.StdEncoding.EncodeToString(b[:length])
+		cs := base64.StdEncoding.EncodeToString(b[:length])
+		if typ.Is(ChecksumMultipart) {
+			t, n := binary.Uvarint(b)
+			if n < 0 {
+				break
+			}
+			cs += fmt.Sprintf("%s-%d", cs, t)
+			b = b[n:]
+		}
+		res[typ.String()] = cs
 		b = b[length:]
 	}
 	if len(res) == 0 {
@@ -225,8 +237,9 @@ func NewChecksumString(alg, value string) *Checksum {
 }
 
 // AppendTo will append the checksum to b.
+// 'parts' is used when checksum has ChecksumMultipart set.
 // ReadCheckSums reads the values back.
-func (c *Checksum) AppendTo(b []byte) []byte {
+func (c *Checksum) AppendTo(b []byte, parts int) []byte {
 	if c == nil {
 		return nil
 	}
@@ -238,6 +251,13 @@ func (c *Checksum) AppendTo(b []byte) []byte {
 	}
 	b = append(b, tmp[:n]...)
 	b = append(b, crc...)
+	if c.Type.Is(ChecksumMultipart) {
+		if parts < 0 {
+			parts = 0
+		}
+		n := binary.PutUvarint(tmp[:], uint64(parts))
+		b = append(b, tmp[:n]...)
+	}
 	return b
 }
 
