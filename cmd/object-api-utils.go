@@ -240,7 +240,7 @@ func pathJoin(elem ...string) string {
 
 // pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
 // Provide a string builder to reduce allocation.
-func pathJoinBuf(dst *strings.Builder, elem ...string) string {
+func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
 	trailingSlash := len(elem) > 0 && HasSuffix(elem[len(elem)-1], SlashSeparator)
 	dst.Reset()
 	added := 0
@@ -253,21 +253,25 @@ func pathJoinBuf(dst *strings.Builder, elem ...string) string {
 			added += len(e)
 		}
 	}
-	s := dst.String()
-	if pathNeedsClean(s) {
-		s = path.Clean(s)
+
+	if pathNeedsClean(dst.Bytes()) {
+		s := path.Clean(dst.String())
+		if trailingSlash {
+			return s + SlashSeparator
+		}
+		return s
 	}
 	if trailingSlash {
-		return s + SlashSeparator
+		dst.WriteRune('/')
 	}
-	return s
+	return dst.String()
 }
 
 // pathNeedsClean returns whether path.Clean may change the path.
 // Will detect all cases that will be cleaned,
 // but may produce false positives on non-trivial paths.
-func pathNeedsClean(path string) bool {
-	if path == "" {
+func pathNeedsClean(path []byte) bool {
+	if len(path) == 0 {
 		return true
 	}
 
@@ -281,6 +285,9 @@ func pathNeedsClean(path string) bool {
 
 	for r < n {
 		switch {
+		case path[r] > 127:
+			// Non ascii.
+			return true
 		case path[r] == '/':
 			// multiple / elements
 			return true

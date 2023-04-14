@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -126,7 +127,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 	scanDir = func(current string) error {
 		// Skip forward, if requested...
-		var sb strings.Builder
+		var sb bytes.Buffer
 		forward := ""
 		if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, current) {
 			forward = strings.TrimPrefix(opts.ForwardTo, current)
@@ -161,6 +162,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			return nil
 		}
 		dirObjects := make(map[string]struct{})
+
+		// Avoid a bunch of cleanup when joining.
+		current = strings.Trim(current, SlashSeparator)
 		for i, entry := range entries {
 			if opts.Limit > 0 && objsReturned >= opts.Limit {
 				return nil
@@ -318,7 +322,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// NOT an object, append to stack (with slash)
 				// If dirObject, but no metadata (which is unexpected) we skip it.
 				if !isDirObj {
-					if !isDirEmpty(pathJoinBuf(&sb, volumeDir, meta.name+slashSeparator)) {
+					if !isDirEmpty(pathJoinBuf(&sb, volumeDir, meta.name)) {
 						dirStack = append(dirStack, meta.name+slashSeparator)
 					}
 				}

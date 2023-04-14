@@ -798,7 +798,7 @@ func Test_pathNeedsClean(t *testing.T) {
 	}
 	for _, test := range cleantests {
 		want := test.path != test.result
-		got := pathNeedsClean(test.path)
+		got := pathNeedsClean([]byte(test.path))
 		if !got {
 			t.Logf("no clean: %q", test.path)
 		}
