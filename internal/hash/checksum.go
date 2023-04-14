@@ -204,7 +204,7 @@ func ReadCheckSums(b []byte) map[string]string {
 			if n < 0 {
 				break
 			}
-			cs += fmt.Sprintf("%s-%d", cs, t)
+			cs = fmt.Sprintf("%s-%d", cs, t)
 			b = b[n:]
 		}
 		res[typ.String()] = cs
