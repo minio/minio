@@ -46,8 +46,9 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 		secure = globalMinioEndpointURL.Scheme == "https"
 	}
 
-	duration := time.Since(cred.Expiration)
-	if cred.Expiration.IsZero() {
+	duration := time.Until(cred.Expiration)
+	if cred.Expiration.IsZero() || duration > time.Hour {
+		// Always limit to 1 hour.
 		duration = time.Hour
 	}
 

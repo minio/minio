@@ -339,7 +339,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// If not deleted, assume they failed.
 					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
-						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
+						if !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
+						}
 					} else {
 						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
