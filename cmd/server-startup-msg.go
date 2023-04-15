@@ -127,16 +127,14 @@ func printServerCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logger.Info(color.Blue("API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
+	logger.Info(color.Blue("S3-API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
 	if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
 		logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s \n", cred.SecretKey)))
 		if region != "" {
 			logger.Info(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
 		}
 	}
-	printEventNotifiers()
-	printLambdaTargets()
 
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
@@ -146,6 +144,9 @@ func printServerCommonMsg(apiEndpoints []string) {
 			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 		}
 	}
+
+	printEventNotifiers()
+	printLambdaTargets()
 }
 
 // Prints startup message for Object API access, prints link to our SDK documentation.

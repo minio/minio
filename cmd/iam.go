@@ -1451,6 +1451,11 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
+	if !ok {
+		if accessKey == globalActiveCred.AccessKey {
+			return newUserIdentity(globalActiveCred), true
+		}
+	}
 	return u, ok && u.Credentials.IsValid()
 }
 
