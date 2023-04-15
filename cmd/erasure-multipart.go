@@ -1137,8 +1137,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 	if checksumType.IsSet() {
+		checksumType |= hash.ChecksumMultipart
 		cs := hash.NewChecksumFromData(checksumType, checksumCombined)
-		fi.Checksum = cs.AppendTo(nil)
+		fi.Checksum = cs.AppendTo(nil, len(fi.Parts))
 		if opts.EncryptFn != nil {
 			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 		}
