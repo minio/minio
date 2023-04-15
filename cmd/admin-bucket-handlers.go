@@ -85,11 +85,6 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if quotaConfig.Type == "fifo" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-		return
-	}
-
 	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1029,11 +1024,6 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			quotaConfig, err := parseBucketQuota(bucket, data)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			if quotaConfig.Type == "fifo" {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore"))
 				continue
 			}
 

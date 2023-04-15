@@ -58,8 +58,6 @@ var globalHandlers = []mux.MiddlewareFunc{
 	setCrossDomainPolicy,
 	// Limits all body and header sizes to a maximum fixed limit
 	setRequestLimitHandler,
-	// Network statistics
-	setHTTPStatsHandler,
 	// Validate all the incoming requests.
 	setRequestValidityHandler,
 	// set x-amz-request-id header.

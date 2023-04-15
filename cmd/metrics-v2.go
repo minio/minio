@@ -77,7 +77,7 @@ func init() {
 		return allMetrics
 	}()
 
-	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
+	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(),
 		getLocalDriveStorageMetrics(),
 		getCacheMetrics(),
@@ -86,7 +86,10 @@ func init() {
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
 		getNotificationMetrics(),
-	})
+		getDistLockMetrics(),
+	}
+
+	nodeCollector = newMinioCollectorNode(nodeGroups)
 	clusterCollector = newMinioClusterCollector(allMetricsGroups)
 }
 
@@ -152,6 +155,7 @@ const (
 	waitingTotal   MetricName = "waiting_total"
 	incomingTotal  MetricName = "incoming_total"
 	objectTotal    MetricName = "object_total"
+	versionTotal   MetricName = "version_total"
 	offlineTotal   MetricName = "offline_total"
 	onlineTotal    MetricName = "online_total"
 	openTotal      MetricName = "open_total"
@@ -502,6 +506,16 @@ func getBucketUsageObjectsTotalMD() MetricDescription {
 		Subsystem: usageSubsystem,
 		Name:      objectTotal,
 		Help:      "Total number of objects",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageVersionsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      versionTotal,
+		Help:      "Total number of versions",
 		Type:      gaugeMetric,
 	}
 }
@@ -1663,6 +1677,53 @@ func getCacheMetrics() *MetricsGroup {
 	return mg
 }
 
+func getDistLockMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		if !globalIsDistErasure {
+			return []Metric{}
+		}
+
+		st := globalLockServer.stats()
+
+		metrics := make([]Metric, 0, 3)
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "total",
+				Help:      "Number of current locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Total),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "write_total",
+				Help:      "Number of current WRITE locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Writes),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "read_total",
+				Help:      "Number of current READ locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Reads),
+		})
+		return metrics
+	})
+	return mg
+}
+
 func getNotificationMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
@@ -1942,6 +2003,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageObjectsTotalMD(),
 				Value:          float64(usage.ObjectsCount),
+				VariableLabels: map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
+				Description:    getBucketUsageVersionsTotalMD(),
+				Value:          float64(usage.VersionsCount),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 

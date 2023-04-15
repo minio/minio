@@ -367,6 +367,18 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				continue
 			}
 			dobj := deletedObjs[i]
+			oi := ObjectInfo{
+				Bucket:    bucket,
+				Name:      dobj.ObjectName,
+				VersionID: dobj.VersionID,
+			}
+			traceFn := globalLifecycleSys.trace(oi)
+			// Send audit for the lifecycle delete operation
+			auditLogLifecycle(
+				ctx,
+				oi,
+				ILMExpiry, traceFn)
+
 			sendEvent(eventArgs{
 				EventName:  event.ObjectRemovedDelete,
 				BucketName: bucket,
@@ -374,7 +386,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
-				Host: "Internal: [ILM-Expiry]",
+				UserAgent: "Internal: [ILM-Expiry]",
+				Host:      globalLocalNodeName,
 			})
 		}
 	}

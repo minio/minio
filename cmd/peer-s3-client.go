@@ -137,16 +137,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (resu
 func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (binfo BucketInfo, err error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
-	bucketInfos := make([]BucketInfo, len(sys.peerClients)+1)
-
-	bucketInfo, err := getBucketInfoLocal(ctx, bucket, opts)
-	if err != nil {
-		return BucketInfo{}, err
-	}
-
-	errs := []error{nil}
-	bucketInfos[0] = bucketInfo
-
+	bucketInfos := make([]BucketInfo, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		idx := idx
 		client := client
@@ -158,12 +149,16 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 			if err != nil {
 				return err
 			}
-			bucketInfos[idx+1] = bucketInfo
+			bucketInfos[idx] = bucketInfo
 			return nil
 		}, idx)
 	}
 
-	errs = append(errs, g.Wait()...)
+	errs := g.Wait()
+
+	bucketInfo, err := getBucketInfoLocal(ctx, bucket, opts)
+	errs = append(errs, err)
+	bucketInfos = append(bucketInfos, bucketInfo)
 
 	quorum := (len(sys.allPeerClients) / 2)
 	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
@@ -172,12 +167,11 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 
 	for i, err := range errs {
 		if err == nil {
-			bucketInfo = bucketInfos[i]
-			break
+			return bucketInfos[i], nil
 		}
 	}
 
-	return bucketInfo, nil
+	return BucketInfo{}, toObjectErr(errVolumeNotFound, bucket)
 }
 
 func (client *peerS3Client) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {

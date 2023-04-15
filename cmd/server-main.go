@@ -105,6 +105,14 @@ var ServerFlags = []cli.Flag{
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
 	},
+	cli.StringSliceFlag{
+		Name:  "ftp",
+		Usage: "enable and configure an FTP(Secure) server",
+	},
+	cli.StringSliceFlag{
+		Name:  "sftp",
+		Usage: "enable and configure an SFTP server",
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -145,22 +153,23 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 EXAMPLES:
-  1. Start minio server on "/home/shared" directory.
+  1. Start MinIO server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
   2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
      {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
 
-  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  3. Start distributed MinIO server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  4. Start distributed MinIO server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
+
+  5. Start distributed MinIO server, with FTP and SFTP servers on all interfaces via port 8021, 8022 respectively
+     {{.Prompt}} {{.HelpName}} http://node{1...4}.example.com/mnt/export{1...4} \
+           --ftp="address=:8021" --ftp="passive-port-range=30000-40000" \
+           --sftp="address=:8022" --sftp="ssh-private-key=${HOME}/.ssh/id_rsa"
 `,
 }
 
@@ -352,7 +361,7 @@ func configRetriableErrors(err error) bool {
 }
 
 func bootstrapTrace(msg string) {
-	globalBootstrapTracer.Record(msg)
+	globalBootstrapTracer.Record(msg, 2)
 
 	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
 		return
@@ -666,6 +675,16 @@ func serverMain(ctx *cli.Context) {
 			go func() {
 				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 			}()
+		}
+
+		// if we see FTP args, start FTP if possible
+		if len(ctx.StringSlice("ftp")) > 0 {
+			go startFTPServer(ctx)
+		}
+
+		// If we see SFTP args, start SFTP if possible
+		if len(ctx.StringSlice("sftp")) > 0 {
+			go startSFTPServer(ctx)
 		}
 	}()
 

@@ -21,8 +21,8 @@
 package cmd
 
 import (
-	"io"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -39,38 +39,34 @@ func osMkdirAll(dirPath string, perm os.FileMode) error {
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
 func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
-	f, err := Open(dirPath)
+	// Ensure we don't pick up files as directories.
+	globAll := filepath.Clean(dirPath) + `\*`
+	globAllP, err := syscall.UTF16PtrFromString(globAll)
 	if err != nil {
-		if osErrToFileErr(err) == errFileNotFound {
+		return errInvalidArgument
+	}
+	data := &syscall.Win32finddata{}
+	handle, err := syscall.FindFirstFile(globAllP, data)
+	if err != nil {
+		if err = syscallErrToFileErr(dirPath, err); err == errFileNotFound {
 			return nil
 		}
-		return osErrToFileErr(err)
+		return err
 	}
-	defer f.Close()
+	defer syscall.CloseHandle(handle)
 
-	// Check if file or dir. This is the quickest way.
-	// Do not remove this check, on windows syscall.FindNextFile
-	// would throw an exception if Fd() points to a file
-	// instead of a directory, we need to quickly fail
-	// in such situations - this workadound is expected.
-	if _, err = f.Seek(0, io.SeekStart); err == nil {
-		return errFileNotFound
-	}
-
-	data := &syscall.Win32finddata{}
-	for {
-		e := syscall.FindNextFile(syscall.Handle(f.Fd()), data)
-		if e != nil {
-			if e == syscall.ERROR_NO_MORE_FILES {
+	for ; ; err = syscall.FindNextFile(handle, data) {
+		if err != nil {
+			if err == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
-				if isSysErrPathNotFound(e) {
+				if isSysErrPathNotFound(err) {
 					return nil
 				}
 				err = osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
-					Err:  e,
+					Err:  err,
 				})
 				if err == errFileNotFound {
 					return nil
@@ -109,7 +105,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 			typ = os.ModeDir
 		}
 
-		if e = filter(name, typ); e == errDoneForNow {
+		if err = filter(name, typ); err == errDoneForNow {
 			// filtering requested to return by caller.
 			return nil
 		}
@@ -120,35 +116,30 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 
 // Return N entries at the directory dirPath.
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := Open(dirPath)
+	// Ensure we don't pick up files as directories.
+	globAll := filepath.Clean(dirPath) + `\*`
+	globAllP, err := syscall.UTF16PtrFromString(globAll)
 	if err != nil {
-		return nil, osErrToFileErr(err)
+		return nil, errInvalidArgument
 	}
-	defer f.Close()
-
-	// Check if file or dir. This is the quickest way.
-	// Do not remove this check, on windows syscall.FindNextFile
-	// would throw an exception if Fd() points to a file
-	// instead of a directory, we need to quickly fail
-	// in such situations - this workadound is expected.
-	if _, err = f.Seek(0, io.SeekStart); err == nil {
-		return nil, errFileNotFound
-	}
-
 	data := &syscall.Win32finddata{}
-	handle := syscall.Handle(f.Fd())
+	handle, err := syscall.FindFirstFile(globAllP, data)
+	if err != nil {
+		return nil, syscallErrToFileErr(dirPath, err)
+	}
+
+	defer syscall.CloseHandle(handle)
 
 	count := opts.count
-	for count != 0 {
-		e := syscall.FindNextFile(handle, data)
-		if e != nil {
-			if e == syscall.ERROR_NO_MORE_FILES {
+	for ; count != 0; err = syscall.FindNextFile(handle, data) {
+		if err != nil {
+			if err == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
 				return nil, osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
-					Err:  e,
+					Err:  err,
 				})
 			}
 		}
@@ -191,4 +182,22 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 func globalSync() {
 	// no-op on windows
+}
+
+func syscallErrToFileErr(dirPath string, err error) error {
+	switch err {
+	case nil:
+		return nil
+	case syscall.ERROR_FILE_NOT_FOUND:
+		return errFileNotFound
+	case syscall.ERROR_ACCESS_DENIED:
+		return errFileAccessDenied
+	default:
+		// Fails on file not found and when not a directory.
+		return osErrToFileErr(&os.PathError{
+			Op:   "FindNextFile",
+			Path: dirPath,
+			Err:  err,
+		})
+	}
 }
