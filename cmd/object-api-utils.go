@@ -242,7 +242,7 @@ func pathJoin(elem ...string) string {
 // pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
 // Provide a string builder to reduce allocation.
 func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
-	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], '/')
+	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar)
 	dst.Reset()
 	added := 0
 	for _, e := range elem {
