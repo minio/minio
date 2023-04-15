@@ -208,6 +208,8 @@ func checkObjectNameForLengthAndSlash(bucket, object string) error {
 
 // SlashSeparator - slash separator.
 const SlashSeparator = "/"
+
+// SlashSeparatorChar - slash separator.
 const SlashSeparatorChar = '/'
 
 // retainSlash - retains slash from a path.
