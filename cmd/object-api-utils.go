@@ -208,6 +208,7 @@ func checkObjectNameForLengthAndSlash(bucket, object string) error {
 
 // SlashSeparator - slash separator.
 const SlashSeparator = "/"
+const SlashSeparatorChar = '/'
 
 // retainSlash - retains slash from a path.
 func retainSlash(s string) string {
@@ -231,7 +232,7 @@ func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if HasSuffix(elem[len(elem)-1], SlashSeparator) {
+		if hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar) {
 			trailingSlash = SlashSeparator
 		}
 	}
@@ -241,13 +242,13 @@ func pathJoin(elem ...string) string {
 // pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
 // Provide a string builder to reduce allocation.
 func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
-	trailingSlash := len(elem) > 0 && HasSuffix(elem[len(elem)-1], SlashSeparator)
+	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], '/')
 	dst.Reset()
 	added := 0
 	for _, e := range elem {
 		if added > 0 || e != "" {
 			if added > 0 {
-				dst.WriteRune('/')
+				dst.WriteRune(SlashSeparatorChar)
 			}
 			dst.WriteString(e)
 			added += len(e)
@@ -262,9 +263,14 @@ func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
 		return s
 	}
 	if trailingSlash {
-		dst.WriteRune('/')
+		dst.WriteRune(SlashSeparatorChar)
 	}
 	return dst.String()
+}
+
+// hasSuffixByte returns true if the last byte of s is 'suffix'
+func hasSuffixByte(s string, suffix byte) bool {
+	return len(s) > 0 && s[len(s)-1] == suffix
 }
 
 // pathNeedsClean returns whether path.Clean may change the path.

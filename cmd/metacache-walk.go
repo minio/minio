@@ -181,7 +181,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				entries[i] = ""
 				continue
 			}
-			if strings.HasSuffix(entry, slashSeparator) {
+			if hasSuffixByte(entry, SlashSeparatorChar) {
 				if strings.HasSuffix(entry, globalDirSuffixWithSlash) {
 					// Add without extension so it is sorted correctly.
 					entry = strings.TrimSuffix(entry, globalDirSuffixWithSlash) + slashSeparator
