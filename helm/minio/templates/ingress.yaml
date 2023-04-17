@@ -11,47 +11,45 @@ metadata:
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- with .Values.ingress.labels }}
-{{ toYaml . | indent 4 }}
-{{- end }}
-
-{{- with .Values.ingress.annotations }}
-  annotations:
-{{ toYaml . | indent 4 }}
-{{- end }}
+    {{- with .Values.ingress.labels }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-{{- if .Values.ingress.ingressClassName }}
+  {{- if .Values.ingress.ingressClassName }}
   ingressClassName: {{ .Values.ingress.ingressClassName }}
-{{- end }}
-{{- if .Values.ingress.tls }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
   tls:
-  {{- range .Values.ingress.tls }}
+    {{- range .Values.ingress.tls }}
     - hosts:
       {{- range .hosts }}
         - {{ . | quote }}
       {{- end }}
       secretName: {{ .secretName }}
+    {{- end }}
   {{- end }}
-{{- end }}
   rules:
-  {{- range .Values.ingress.hosts }}
+    {{- range .Values.ingress.hosts }}
     - http:
         paths:
           - path: {{ $ingressPath }}
-          {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+            {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
             pathType: Prefix
             backend:
               service:
                 name: {{ $fullName }}
                 port: 
                   number: {{ $servicePort }}
-          {{- else }}
+            {{- else }}
             backend:
               serviceName: {{ $fullName }}
               servicePort: {{ $servicePort }}
-          {{- end }}
+            {{- end }}
       {{- if . }}
       host: {{ . | quote }}
       {{- end }}
-  {{- end }}
+    {{- end }}
 {{- end }}

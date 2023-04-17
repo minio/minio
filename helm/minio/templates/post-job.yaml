@@ -24,23 +24,19 @@ spec:
           {{- toYaml .Values.podLabels | nindent 8 }}
         {{- end }}
       {{- if .Values.postJob.podAnnotations }}
-      annotations:
-        {{- toYaml .Values.postJob.podAnnotations | nindent 8 }}
+      annotations: {{- toYaml .Values.postJob.podAnnotations | nindent 8 }}
       {{- end }}
     spec:
       restartPolicy: OnFailure
-      {{- include "minio.imagePullSecrets" . | nindent 6 }}
+      {{- include "minio.imagePullSecrets" . | indent 6 }}
       {{- if .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml .Values.postJob.nodeSelector | nindent 8 }}
+      nodeSelector: {{- toYaml .Values.postJob.nodeSelector | nindent 8 }}
       {{- end }}
       {{- with .Values.postJob.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
+      affinity: {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.postJob.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
+      tolerations: {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if .Values.postJob.securityContext.enabled }}
       securityContext:
@@ -81,7 +77,7 @@ spec:
             items:
               - key: {{ .Values.tls.publicCrt }}
                 path: CAs/public.crt
-        {{ end }}
+        {{- end }}
       containers:
         {{- if .Values.buckets }}
         - name: minio-make-bucket
@@ -109,9 +105,8 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
-            {{ end }}
-          resources:
-            {{- toYaml .Values.makeBucketJob.resources | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.makeBucketJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.users }}
         - name: minio-make-user
@@ -139,9 +134,8 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
-            {{ end }}
-          resources:
-            {{- toYaml .Values.makeUserJob.resources | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.makeUserJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.policies }}
         - name: minio-make-policy
@@ -169,9 +163,8 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
-            {{ end }}
-          resources:
-            {{- toYaml .Values.makePolicyJob.resources | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.makePolicyJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.customCommands }}
         - name: minio-custom-command
@@ -199,9 +192,8 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
-            {{ end }}
-          resources:
-            {{- toYaml .Values.customCommandJob.resources | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.customCommandJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.svcaccts }}
         - name: minio-make-svcacct
@@ -229,8 +221,7 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
-            {{ end }}
-          resources:
-            {{- toYaml .Values.makeServiceAccountJob.resources | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.makeServiceAccountJob.resources | nindent 12 }}
         {{- end }}
 {{- end }}

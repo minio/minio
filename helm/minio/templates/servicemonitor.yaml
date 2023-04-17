@@ -1,4 +1,4 @@
-{{- if and .Values.metrics.serviceMonitor.enabled .Values.metrics.serviceMonitor.includeNode}}
+{{- if and .Values.metrics.serviceMonitor.enabled .Values.metrics.serviceMonitor.includeNode }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -12,12 +12,11 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
     {{- if .Values.metrics.serviceMonitor.additionalLabels }}
-{{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
+      {{- toYaml .Values.metrics.serviceMonitor.additionalLabels | nindent 4 }}
     {{- end }}
-{{- if .Values.metrics.serviceMonitor.annotations }}
-  annotations:
-{{ toYaml .Values.metrics.serviceMonitor.annotations | trimSuffix "\n" | indent 4 }}
-{{- end }}
+  {{- if .Values.metrics.serviceMonitor.annotations }}
+  annotations: {{- toYaml .Values.metrics.serviceMonitor.annotations | nindent 4 }}
+  {{- end }}
 spec:
   endpoints:
     {{- if .Values.tls.enabled }}
@@ -29,7 +28,7 @@ spec:
             name: {{ .Values.tls.certSecret }}
             key: {{ .Values.tls.publicCrt }}
         serverName: {{ template "minio.fullname" . }}
-    {{ else }}
+    {{- else }}
     - port: http
       scheme: http
     {{- end }}
@@ -41,7 +40,7 @@ spec:
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
       {{- end }}
       {{- if .Values.metrics.serviceMonitor.relabelConfigs }}
-{{ toYaml .Values.metrics.serviceMonitor.relabelConfigs | indent 6 }}
+        {{- toYaml .Values.metrics.serviceMonitor.relabelConfigs | nindent 6 }}
       {{- end }}
       {{- if not .Values.metrics.serviceMonitor.public }}
       bearerTokenSecret:
@@ -72,7 +71,7 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
     {{- if .Values.metrics.serviceMonitor.additionalLabels }}
-{{ toYaml .Values.metrics.serviceMonitor.additionalLabels | indent 4 }}
+      {{- toYaml .Values.metrics.serviceMonitor.additionalLabels | nindent 4 }}
     {{- end }}
 spec:
   jobName: {{ template "minio.fullname" . }}
@@ -89,11 +88,11 @@ spec:
     path: /minio/v2/metrics/cluster
     {{- if .Values.tls.enabled }}
     scheme: https
-    {{ else }}
+    {{- else }}
     scheme: http
     {{- end }}
   {{- if .Values.metrics.serviceMonitor.relabelConfigsCluster }}
-{{ toYaml .Values.metrics.serviceMonitor.relabelConfigsCluster | indent 2 }}
+    {{- toYaml .Values.metrics.serviceMonitor.relabelConfigsCluster | nindent 2 }}
   {{- end }}
   targets:
     staticConfig:
