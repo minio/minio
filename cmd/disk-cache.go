@@ -80,7 +80,7 @@ type CacheStorageInfo struct {
 // CacheObjectLayer implements primitives for cache object API layer.
 type CacheObjectLayer interface {
 	// Object operations.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
@@ -117,7 +117,7 @@ type cacheObjects struct {
 	// Cache stats
 	cacheStats *CacheStats
 
-	InnerGetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
+	InnerGetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error)
 	InnerGetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	InnerDeleteObjectFn            func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	InnerPutObjectFn               func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -231,16 +231,16 @@ func (c *cacheObjects) incCacheStats(size int64) {
 	c.cacheStats.incBytesServed(size)
 }
 
-func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if c.isCacheExclude(bucket, object) || c.skipCache() {
-		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 	}
 	var cc *cacheControl
 	var cacheObjSize int64
 	// fetch diskCache if object is currently cached or nearest available cache drive
 	dcache, err := c.getCacheToLoc(ctx, bucket, object)
 	if err != nil {
-		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 	}
 
 	cacheReader, numCacheHits, cacheErr := dcache.Get(ctx, bucket, object, rs, h, opts)
@@ -269,7 +269,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		if cc != nil && cc.noStore {
 			cacheReader.Close()
 			c.cacheStats.incMiss()
-			bReader, err := c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+			bReader, err := c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
 			bReader.ObjInfo.CacheStatus = CacheMiss
 			return bReader, err
@@ -304,7 +304,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			cacheReader.Close()
 		}
 		c.cacheStats.incMiss()
-		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 	}
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
@@ -314,7 +314,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			cacheReader.Close()
 		}
 		c.cacheStats.incMiss()
-		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 	}
 	if cacheErr == nil {
 		// if ETag matches for stale cache entry, serve from cache
@@ -332,7 +332,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
 
-	bkReader, bkErr := c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	bkReader, bkErr := c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
 
 	if bkErr != nil {
 		return bkReader, bkErr
@@ -359,7 +359,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			// if range caching is disabled, download entire object.
 			rs = nil
 			// fill cache in the background for range GET requests
-			bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, rs, h, lockType, opts)
+			bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, rs, h, opts)
 			if bErr != nil {
 				return
 			}
@@ -713,7 +713,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 		if err == nil {
 			go func() {
 				// fill cache in the background
-				bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+				bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, ObjectOptions{})
 				if bErr != nil {
 					return
 				}
@@ -857,8 +857,8 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		InnerGetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},
-		InnerGetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+		InnerGetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
+			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 		},
 		InnerDeleteObjectFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().DeleteObject(ctx, bucket, object, opts)
@@ -1143,7 +1143,7 @@ func (c *cacheObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 			End:            startOffset + length,
 		}
 		// fill cache in the background
-		bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, srcBucket, srcObject, rs, http.Header{}, readLock, ObjectOptions{})
+		bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, srcBucket, srcObject, rs, http.Header{}, ObjectOptions{})
 		if bErr != nil {
 			return
 		}
@@ -1176,7 +1176,7 @@ func (c *cacheObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 			_, err := dcache.CompleteMultipartUpload(bgContext(ctx), bucket, object, uploadID, uploadedParts, oi, opts)
 			if err != nil {
 				// fill cache in the background
-				bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+				bReader, bErr := c.InnerGetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, ObjectOptions{})
 				if bErr != nil {
 					return
 				}

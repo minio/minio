@@ -1634,7 +1634,7 @@ func TestHealLastDataShard(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{NoLock: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1664,7 +1664,7 @@ func TestHealLastDataShard(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{NoLock: true})
 			if err != nil {
 				t.Fatal(err)
 			}
