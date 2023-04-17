@@ -2084,11 +2084,24 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	// Extract request metadata
+	metadata, err := extractMetadata(ctx, r)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	metadata[xhttp.AmzStorageClass] = sc
+
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-		metadata := map[string]string{
-			xhttp.AmzStorageClass: sc,
+
+		// Copy metadata and make space for a bit more
+		metaCopy := make(map[string]string, len(metadata)+5)
+		for k, v := range metadata {
+			metaCopy[k] = v
 		}
+		// Shadow now...
+		metadata := metaCopy
 
 		actualSize := size
 		var idxCb func() []byte
