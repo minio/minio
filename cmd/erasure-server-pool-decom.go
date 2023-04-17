@@ -838,10 +838,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						encodeDirObject(version.Name),
 						nil,
 						http.Header{},
-						noLock, // all mutations are blocked reads are safe without locks.
 						ObjectOptions{
 							VersionID:    version.VersionID,
 							NoDecryption: true,
+							NoLock:       true,
 						})
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.

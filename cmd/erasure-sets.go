@@ -756,9 +756,9 @@ func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBucke
 // --- Object Operations ---
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	set := s.getHashedSet(object)
-	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	return set.GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 }
 
 // PutObject - writes an object to hashedSet based on the object name.

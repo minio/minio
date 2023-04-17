@@ -234,6 +234,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.Checksum = fi.Checksum
+	objInfo.Inlined = fi.InlineData()
 	// Success.
 	return objInfo
 }
