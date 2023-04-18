@@ -43,6 +43,7 @@ const (
 	ClientCert = "client_cert"
 	ClientKey  = "client_key"
 	QueueSize  = "queue_size"
+	QueueDir   = "queue_dir"
 	Proxy      = "proxy"
 
 	KafkaBrokers       = "brokers"
@@ -57,6 +58,8 @@ const (
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
 	KafkaVersion       = "version"
+	KafkaQueueDir      = "queue_dir"
+	KafkaQueueSize     = "queue_size"
 
 	EnvLoggerWebhookEnable     = "MINIO_LOGGER_WEBHOOK_ENABLE"
 	EnvLoggerWebhookEndpoint   = "MINIO_LOGGER_WEBHOOK_ENDPOINT"
@@ -65,6 +68,7 @@ const (
 	EnvLoggerWebhookClientKey  = "MINIO_LOGGER_WEBHOOK_CLIENT_KEY"
 	EnvLoggerWebhookProxy      = "MINIO_LOGGER_WEBHOOK_PROXY"
 	EnvLoggerWebhookQueueSize  = "MINIO_LOGGER_WEBHOOK_QUEUE_SIZE"
+	EnvLoggerWebhookQueueDir   = "MINIO_LOGGER_WEBHOOK_QUEUE_DIR"
 
 	EnvAuditWebhookEnable     = "MINIO_AUDIT_WEBHOOK_ENABLE"
 	EnvAuditWebhookEndpoint   = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
@@ -72,6 +76,7 @@ const (
 	EnvAuditWebhookClientCert = "MINIO_AUDIT_WEBHOOK_CLIENT_CERT"
 	EnvAuditWebhookClientKey  = "MINIO_AUDIT_WEBHOOK_CLIENT_KEY"
 	EnvAuditWebhookQueueSize  = "MINIO_AUDIT_WEBHOOK_QUEUE_SIZE"
+	EnvAuditWebhookQueueDir   = "MINIO_AUDIT_WEBHOOK_QUEUE_DIR"
 
 	EnvKafkaEnable        = "MINIO_AUDIT_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_AUDIT_KAFKA_BROKERS"
@@ -86,6 +91,11 @@ const (
 	EnvKafkaClientTLSCert = "MINIO_AUDIT_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_AUDIT_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_AUDIT_KAFKA_VERSION"
+	EnvKafkaQueueDir      = "MINIO_AUDIT_KAFKA_QUEUE_DIR"
+	EnvKafkaQueueSize     = "MINIO_AUDIT_KAFKA_QUEUE_SIZE"
+
+	loggerTargetNamePrefix = "logger-"
+	auditTargetNamePrefix  = "audit-"
 )
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
@@ -119,6 +129,10 @@ var (
 			Key:   QueueSize,
 			Value: "100000",
 		},
+		config.KV{
+			Key:   QueueDir,
+			Value: "",
+		},
 	}
 
 	DefaultAuditWebhookKVS = config.KVS{
@@ -145,6 +159,10 @@ var (
 		config.KV{
 			Key:   QueueSize,
 			Value: "100000",
+		},
+		config.KV{
+			Key:   QueueDir,
+			Value: "",
 		},
 	}
 
@@ -199,6 +217,14 @@ var (
 		},
 		config.KV{
 			Key:   KafkaVersion,
+			Value: "",
+		},
+		config.KV{
+			Key:   QueueSize,
+			Value: "100000",
+		},
+		config.KV{
+			Key:   QueueDir,
 			Value: "",
 		},
 	}
@@ -395,6 +421,25 @@ func lookupAuditKafkaConfig(scfg config.Config, cfg Config) (Config, error) {
 		kafkaArgs.SASL.Password = env.Get(saslPasswordEnv, kv.Get(KafkaSASLPassword))
 		kafkaArgs.SASL.Mechanism = env.Get(saslMechanismEnv, kv.Get(KafkaSASLMechanism))
 
+		queueDirEnv := EnvKafkaQueueDir
+		if k != config.Default {
+			queueDirEnv = queueDirEnv + config.Default + k
+		}
+		kafkaArgs.QueueDir = env.Get(queueDirEnv, kv.Get(KafkaQueueDir))
+
+		queueSizeEnv := EnvKafkaQueueSize
+		if k != config.Default {
+			queueSizeEnv = queueSizeEnv + config.Default + k
+		}
+		queueSize, err := strconv.Atoi(env.Get(queueSizeEnv, kv.Get(KafkaQueueSize)))
+		if err != nil {
+			return cfg, err
+		}
+		if queueSize <= 0 {
+			return cfg, errors.New("invalid queue_size value")
+		}
+		kafkaArgs.QueueSize = queueSize
+
 		cfg.AuditKafka[k] = kafkaArgs
 	}
 
@@ -448,9 +493,9 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			return cfg, err
 		}
 		proxyEnv := EnvLoggerWebhookProxy
-		queueSizeEnv := EnvAuditWebhookQueueSize
+		queueSizeEnv := EnvLoggerWebhookQueueSize
 		if target != config.Default {
-			queueSizeEnv = EnvAuditWebhookQueueSize + config.Default + target
+			queueSizeEnv = EnvLoggerWebhookQueueSize + config.Default + target
 		}
 		queueSize, err := strconv.Atoi(env.Get(queueSizeEnv, "100000"))
 		if err != nil {
@@ -458,6 +503,10 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		}
 		if queueSize <= 0 {
 			return cfg, errors.New("invalid queue_size value")
+		}
+		queueDirEnv := EnvLoggerWebhookQueueDir
+		if target != config.Default {
+			queueDirEnv = EnvLoggerWebhookQueueDir + config.Default + target
 		}
 		cfg.HTTP[target] = http.Config{
 			Enabled:    true,
@@ -467,7 +516,8 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientKey:  env.Get(clientKeyEnv, ""),
 			Proxy:      env.Get(proxyEnv, ""),
 			QueueSize:  queueSize,
-			Name:       target,
+			QueueDir:   env.Get(queueDirEnv, ""),
+			Name:       loggerTargetNamePrefix + target,
 		}
 	}
 
@@ -511,7 +561,8 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientKey:  kv.Get(ClientKey),
 			Proxy:      kv.Get(Proxy),
 			QueueSize:  queueSize,
-			Name:       starget,
+			QueueDir:   kv.Get(QueueDir),
+			Name:       loggerTargetNamePrefix + starget,
 		}
 	}
 
@@ -574,6 +625,10 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if queueSize <= 0 {
 			return cfg, errors.New("invalid queue_size value")
 		}
+		queueDirEnv := EnvAuditWebhookQueueDir
+		if target != config.Default {
+			queueDirEnv = EnvAuditWebhookQueueDir + config.Default + target
+		}
 		cfg.AuditWebhook[target] = http.Config{
 			Enabled:    true,
 			Endpoint:   env.Get(endpointEnv, ""),
@@ -581,7 +636,8 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: env.Get(clientCertEnv, ""),
 			ClientKey:  env.Get(clientKeyEnv, ""),
 			QueueSize:  queueSize,
-			Name:       target,
+			QueueDir:   env.Get(queueDirEnv, ""),
+			Name:       auditTargetNamePrefix + target,
 		}
 	}
 
@@ -617,7 +673,6 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if queueSize <= 0 {
 			return cfg, errors.New("invalid queue_size value")
 		}
-
 		cfg.AuditWebhook[starget] = http.Config{
 			Enabled:    true,
 			Endpoint:   kv.Get(Endpoint),
@@ -625,7 +680,8 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: kv.Get(ClientCert),
 			ClientKey:  kv.Get(ClientKey),
 			QueueSize:  queueSize,
-			Name:       starget,
+			QueueDir:   kv.Get(QueueDir),
+			Name:       auditTargetNamePrefix + starget,
 		}
 	}
 

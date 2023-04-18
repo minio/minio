@@ -34,6 +34,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
@@ -138,7 +139,7 @@ func (p PostgreSQLArgs) Validate() error {
 
 // PostgreSQLTarget - PostgreSQL target.
 type PostgreSQLTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       PostgreSQLArgs
@@ -249,8 +250,8 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to PostgreSQL.
-func (target *PostgreSQLTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to PostgreSQL.
+func (target *PostgreSQLTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -345,7 +346,7 @@ func (target *PostgreSQLTarget) executeStmts() error {
 }
 
 func (target *PostgreSQLTarget) init() error {
-	return target.lazyInit.Do(target.initPostgreSQL)
+	return target.initOnce.Do(target.initPostgreSQL)
 }
 
 func (target *PostgreSQLTarget) initPostgreSQL() error {

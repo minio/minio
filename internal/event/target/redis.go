@@ -31,6 +31,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
@@ -118,7 +119,7 @@ func (r RedisArgs) validateFormat(c redis.Conn) error {
 
 // RedisTarget - Redis target.
 type RedisTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       RedisArgs
@@ -221,8 +222,8 @@ func (target *RedisTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to redis.
-func (target *RedisTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to redis.
+func (target *RedisTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -276,7 +277,7 @@ func (target *RedisTarget) Close() error {
 }
 
 func (target *RedisTarget) init() error {
-	return target.lazyInit.Do(target.initRedis)
+	return target.initOnce.Do(target.initRedis)
 }
 
 func (target *RedisTarget) initRedis() error {

@@ -495,7 +495,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddSystemTarget(globalConsoleSys)
+	logger.AddSystemTarget(GlobalContext, globalConsoleSys)
 
 	// Perform any self-tests
 	bitrotSelfTest()

@@ -31,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 	"github.com/nats-io/nats.go"
@@ -216,7 +217,7 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 
 // NATSTarget - NATS target.
 type NATSTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       NATSArgs
@@ -333,8 +334,8 @@ func (target *NATSTarget) send(eventData event.Event) error {
 	return err
 }
 
-// Send - sends event to Nats.
-func (target *NATSTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to Nats.
+func (target *NATSTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -380,7 +381,7 @@ func (target *NATSTarget) Close() (err error) {
 }
 
 func (target *NATSTarget) init() error {
-	return target.lazyInit.Do(target.initNATS)
+	return target.initOnce.Do(target.initNATS)
 }
 
 func (target *NATSTarget) initNATS() error {

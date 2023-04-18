@@ -34,7 +34,7 @@ type Target interface {
 	ID() TargetID
 	IsActive() (bool, error)
 	Save(Event) error
-	Send(string) error
+	SendFromStore(string) error
 	Close() error
 	Store() TargetStore
 }
