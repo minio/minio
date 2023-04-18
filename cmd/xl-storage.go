@@ -365,10 +365,10 @@ func (s *xlStorage) Healing() *healingTracker {
 	if err != nil {
 		return nil
 	}
-	var h healingTracker
+	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
 	logger.LogIf(GlobalContext, err)
-	return &h
+	return h
 }
 
 // checkODirectDiskSupport asks the disk to write some data

@@ -380,7 +380,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	disk.SetDiskID(diskID)
 	if healID != "" {
 		ctx := context.Background()
-		ht := newHealingTracker(disk, healID)
+		ht := initHealingTracker(disk, healID)
 		return ht.save(ctx)
 	}
 	return nil
