@@ -187,16 +187,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 		var forwardTo string
 		// If we resume to the same bucket, forward to last known item.
-		if tracker.Bucket != "" {
-			if tracker.Bucket == bucket {
-				forwardTo = tracker.Object
+		if b := tracker.getBucket(); b != "" {
+			if b == bucket {
+				forwardTo = tracker.getObject()
 			} else {
 				// Reset to where last bucket ended if resuming.
 				tracker.resume()
 			}
 		}
-		tracker.Object = ""
-		tracker.Bucket = bucket
+		tracker.setObject("")
+		tracker.setBucket(bucket)
 		// Heal current bucket again in case if it is failed
 		// in the  being of erasure set healing
 		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
@@ -208,7 +208,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		if serverDebugLog {
 			console.Debugf(color.Green("healDrive:")+" healing bucket %s content on %s erasure set\n",
-				bucket, humanize.Ordinal(tracker.SetIndex+1))
+				bucket, humanize.Ordinal(er.setIndex+1))
 		}
 
 		disks, _ := er.getOnlineDisksWithHealing()
@@ -251,20 +251,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		go func() {
 			for res := range results {
 				if res.entryDone {
-					tracker.Object = res.name
-					if time.Since(tracker.LastUpdate) > time.Minute {
+					tracker.setObject(res.name)
+					if time.Since(tracker.getLastUpdate()) > time.Minute {
 						logger.LogIf(ctx, tracker.update(ctx))
 					}
 					continue
 				}
 
-				if res.success {
-					tracker.ItemsHealed++
-					tracker.BytesDone += res.bytes
-				} else {
-					tracker.ItemsFailed++
-					tracker.BytesFailed += res.bytes
-				}
+				tracker.updateProgress(res.success, res.bytes)
 			}
 		}()
 
@@ -420,8 +414,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			logger.LogIf(ctx, tracker.update(ctx))
 		}
 	}
-	tracker.Object = ""
-	tracker.Bucket = ""
+
+	tracker.setObject("")
+	tracker.setBucket("")
 
 	return retErr
 }
