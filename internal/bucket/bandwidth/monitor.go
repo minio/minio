@@ -186,10 +186,14 @@ func (m *Monitor) DeleteBucket(bucket string) {
 // DeleteBucketThrottle deletes monitoring for a bucket's target
 func (m *Monitor) DeleteBucketThrottle(bucket, arn string) {
 	m.tlock.Lock()
-	delete(m.bucketThrottle, bucket)
+	if _, ok := m.bucketThrottle[bucket]; ok {
+		delete(m.bucketThrottle[bucket], arn)
+	}
 	m.tlock.Unlock()
 	m.mlock.Lock()
-	delete(m.activeBuckets, bucket)
+	if _, ok := m.activeBuckets[bucket]; ok {
+		delete(m.activeBuckets[bucket], arn)
+	}
 	m.mlock.Unlock()
 }
 

@@ -694,7 +694,7 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		Versioned:        versioned,
 		VersionSuspended: versionSuspended,
 	}
-	rd, err := api.GetObjectNInfo(ctx, srcBucket, srcObject, nil, http.Header{}, readLock, opts)
+	rd, err := api.GetObjectNInfo(ctx, srcBucket, srcObject, nil, http.Header{}, opts)
 	if err != nil {
 		return err
 	}

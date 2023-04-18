@@ -73,7 +73,9 @@ createUser() {
   # set policy for user
   if [ ! -z $POLICY -a $POLICY != " " ] ; then
       echo "Adding policy '$POLICY' for '$USER'"
+      set +e ; # policy already attach errors out, allow it.
       ${MC} admin policy attach myminio $POLICY --user=$USER
+      set -e
   else
       echo "User '$USER' has no policy attached."
   fi

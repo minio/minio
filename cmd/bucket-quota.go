@@ -82,7 +82,7 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 	if !quotaCfg.IsValid() {
 		if quotaCfg.Type == "fifo" {
 			logger.LogIf(GlobalContext, errors.New("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore. Please clear your quota configs using 'mc admin bucket quota alias/bucket --clear' and use 'mc ilm add' for expiration of objects"))
-			return quotaCfg, nil
+			return quotaCfg, fmt.Errorf("invalid quota type 'fifo'")
 		}
 		return quotaCfg, fmt.Errorf("Invalid quota config %#v", quotaCfg)
 	}
