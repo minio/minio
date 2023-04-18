@@ -112,3 +112,6 @@ var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, plea
 
 // error returned when upload id not found
 var errUploadIDNotFound = errors.New("Specified Upload ID is not found")
+
+// error returned when request.From http.PartNumber is greater than the maximum allowed ID.
+var errInvalidMaxParts = errors.New("Part ID is greater than the maximum allowed ID.")

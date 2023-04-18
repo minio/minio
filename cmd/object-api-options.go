@@ -90,7 +90,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 			return opts, err
 		}
 		if isMaxPartID(partNumber) {
-			return opts, fmt.Errorf("ErrInvalidMaxParts")
+			return opts, errInvalidMaxParts
 		}
 		if partNumber <= 0 {
 			return opts, errInvalidArgument
