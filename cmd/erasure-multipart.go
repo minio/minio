@@ -1227,7 +1227,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, fi.VersionID, fi.Size)
+		er.addPartial(bucket, object, fi.VersionID)
 		break
 	}
 

@@ -225,6 +225,19 @@ func (sys *S3PeerSys) MakeBucket(ctx context.Context, bucket string, opts MakeBu
 
 	quorum := (len(sys.allPeerClients) / 2) + 1
 	err := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum)
+
+	// Perform MRF on missing buckets for temporary errors.
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, errPeerOffline) || errors.Is(err, errDiskNotFound) ||
+			isNetworkError(err) {
+			globalMRFState.addPartialOp(partialOperation{
+				bucket: bucket,
+			})
+		}
+	}
 	return toObjectErr(err, bucket)
 }
 
