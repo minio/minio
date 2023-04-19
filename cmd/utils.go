@@ -857,7 +857,7 @@ func restQueries(keys ...string) []string {
 
 // Suffix returns the longest common suffix of the provided strings
 func lcpSuffix(strs []string) string {
-	return lcp(strs, false)
+	return lcp(strs, true)
 }
 
 func lcp(strs []string, pre bool) string {
