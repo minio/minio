@@ -109,8 +109,8 @@ func toStorageErr(err error) error {
 		return errCorruptedFormat
 	case errUnformattedDisk.Error():
 		return errUnformattedDisk
-	case errInvalidAccessKeyID.Error():
-		return errInvalidAccessKeyID
+	case errInvalidAccessKey.Error():
+		return errInvalidAccessKey
 	case errAuthentication.Error():
 		return errAuthentication
 	case errRPCAPIVersionUnsupported.Error():

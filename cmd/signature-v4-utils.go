@@ -32,6 +32,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -161,7 +162,7 @@ func checkKeyValid(r *http.Request, accessKey string) (cred auth.Credentials, ow
 	// Check if the access key is part of users credentials.
 	u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
 	if !ok {
-		// Credentials will be invalid but and disabled
+		// Credentials will be invalid but for disabled
 		// return a different error in such a scenario.
 		if u.Credentials.Status == auth.AccountOff {
 			return cred, false, ErrAccessKeyDisabled
@@ -175,6 +176,13 @@ func checkKeyValid(r *http.Request, accessKey string) (cred auth.Credentials, ow
 		return cred, false, s3Err
 	}
 	cred.Claims = claims
+
+	// Now check if we have a sessionPolicy, if there is a session policy
+	// then it is not an owner.
+	owner = owner || cred.ParentUser == globalActiveCred.AccessKey
+	if _, ok := claims[iampolicy.SessionPolicyName]; ok {
+		owner = false
+	}
 
 	return cred, owner, ErrNone
 }
