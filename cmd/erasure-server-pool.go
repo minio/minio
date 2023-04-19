@@ -346,10 +346,16 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	g.Wait()
 
 	for i, zinfo := range storageInfos {
-		var available uint64
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(zinfo, size) {
+		if zinfo == nil {
 			serverPools[i] = poolAvailableSpace{Index: i}
 			continue
+		}
+		var available uint64
+		if !isMinioMetaBucketName(bucket) {
+			if avail, err := hasSpaceFor(zinfo, size); err != nil && !avail {
+				serverPools[i] = poolAvailableSpace{Index: i}
+				continue
+			}
 		}
 		var maxUsedPct int
 		for _, disk := range zinfo {
@@ -426,30 +432,37 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 	for _, pinfo := range poolObjInfos {
 		// skip all objects from suspended pools if asked by the
 		// caller.
-		if z.IsSuspended(pinfo.Index) && opts.SkipDecommissioned {
+		if opts.SkipDecommissioned && z.IsSuspended(pinfo.Index) {
 			continue
 		}
 		// Skip object if it's from pools participating in a rebalance operation.
 		if opts.SkipRebalancing && z.IsPoolRebalancing(pinfo.Index) {
 			continue
 		}
-
-		if pinfo.Err != nil && !isErrObjectNotFound(pinfo.Err) {
-			return pinfo, pinfo.Err
+		if pinfo.Err == nil {
+			// found a pool
+			return pinfo, nil
+		}
+		if isErrReadQuorum(pinfo.Err) {
+			// read quorum is returned when the object is visibly
+			// present but its unreadable, we simply ask the writes to
+			// schedule to this pool instead. If there is no quorum
+			// it will fail anyways, however if there is quorum available
+			// with enough disks online but sufficiently inconsistent to
+			// break parity threshold, allow them to be overwritten
+			// or allow new versions to be added.
+			return pinfo, nil
 		}
 		defPool = pinfo
-		if isErrObjectNotFound(pinfo.Err) {
-			// No object exists or its a delete marker,
-			// check objInfo to confirm.
-			if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
-				return pinfo, nil
-			}
-			// objInfo is not valid, truly the object doesn't
-			// exist proceed to next pool.
-			continue
+		if !isErrObjectNotFound(pinfo.Err) {
+			return pinfo, pinfo.Err
 		}
 
-		return pinfo, nil
+		// No object exists or its a delete marker,
+		// check objInfo to confirm.
+		if pinfo.ObjInfo.DeleteMarker && pinfo.ObjInfo.Name != "" {
+			return pinfo, nil
+		}
 	}
 	if opts.ReplicationRequest && opts.DeleteMarker && defPool.Index >= 0 {
 		// If the request is a delete marker replication request, return a default pool
@@ -760,7 +773,7 @@ func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts
 	return nil
 }
 
-func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -768,7 +781,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		return z.serverPools[0].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+		return z.serverPools[0].GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 	}
 
 	var unlockOnDefer bool
@@ -780,24 +793,14 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}()
 
 	// Acquire lock
-	if lockType != noLock {
+	if !opts.NoLock {
 		lock := z.NewNSLock(bucket, object)
-		switch lockType {
-		case writeLock:
-			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx) }
-		case readLock:
-			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx) }
+		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return nil, err
 		}
+		ctx = lkctx.Context()
+		nsUnlocker = func() { lock.RUnlock(lkctx) }
 		unlockOnDefer = true
 	}
 
@@ -825,14 +828,17 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return nil, PreConditionFailed{}
 	}
 
-	lockType = noLock // do not take locks at lower levels for GetObjectNInfo()
-	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	opts.NoLock = true
+	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if unlockOnDefer {
-		unlockOnDefer = false
+		unlockOnDefer = gr.ObjInfo.Inlined
+	}
+
+	if !unlockOnDefer {
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 	return gr, nil
@@ -934,8 +940,15 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size()) {
-			return ObjectInfo{}, toObjectErr(errDiskFull)
+		if !isMinioMetaBucketName(bucket) {
+			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
+			}
+			if !avail {
+				return ObjectInfo{}, toObjectErr(errDiskFull)
+			}
 		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
@@ -1399,8 +1412,15 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) && !hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1) {
-			return nil, toObjectErr(errDiskFull)
+		if !isMinioMetaBucketName(bucket) {
+			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return nil, toObjectErr(errErasureWriteQuorum)
+			}
+			if !avail {
+				return nil, toObjectErr(errDiskFull)
+			}
 		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
@@ -1638,14 +1658,14 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 	}
 
 	err := z.s3Peer.DeleteBucket(ctx, bucket, opts)
-	if err == nil || errors.Is(err, errVolumeNotFound) {
+	if err == nil || isErrBucketNotFound(err) {
 		// If site replication is configured, hold on to deleted bucket state until sites sync
 		if opts.SRDeleteOp == MarkDelete {
 			z.s3Peer.MakeBucket(context.Background(), pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket), MakeBucketOptions{})
 		}
 	}
 
-	if err != nil && !errors.Is(err, errVolumeNotFound) {
+	if err != nil && !isErrBucketNotFound(err) {
 		if !opts.NoRecreate {
 			z.s3Peer.MakeBucket(ctx, bucket, MakeBucketOptions{})
 		}
@@ -2077,9 +2097,14 @@ func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx 
 	return -1, -1, -1, fmt.Errorf("DriveID(%s) %w", id, errDiskNotFound)
 }
 
+const (
+	vmware = "VMWare"
+)
+
 // HealthOptions takes input options to return sepcific information
 type HealthOptions struct {
-	Maintenance bool
+	Maintenance    bool
+	DeploymentType string
 }
 
 // HealthResult returns the current state of the system, also
@@ -2165,7 +2190,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 
 	var aggHealStateResult madmin.BgHealState
-	if opts.Maintenance {
+	// Check if disks are healing on in-case of VMware vsphere deployments.
+	if opts.Maintenance && opts.DeploymentType == vmware {
 		// check if local disks are being healed, if they are being healed
 		// we need to tell healthy status as 'false' so that this server
 		// is not taken down for maintenance

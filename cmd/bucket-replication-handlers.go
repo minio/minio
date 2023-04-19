@@ -277,6 +277,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 				Bucket: bucket,
 				Err:    fmt.Errorf("invalid query parameter older-than %s for %s : %w", durationStr, bucket, err),
 			}), r.URL)
+			return
 		}
 	}
 	resetBeforeDate := UTCNow().AddDate(0, 0, -1*int(days/24))
@@ -347,6 +348,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		default:
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		}
+		return
 	}
 	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {

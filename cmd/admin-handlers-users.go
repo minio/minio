@@ -582,6 +582,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		AccountStatus: stsAccount.Status,
 		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
+		Expiration:    &stsAccount.Expiration,
 	}
 
 	data, err := json.Marshal(infoResp)
@@ -1956,7 +1957,7 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			UserOrGroup: userOrGroup,
 			UserType:    int(userType),
 			IsGroup:     isGroup,
-			Policy:      strings.Join(policiesToDetach, ","),
+			Policy:      newPolicies,
 		},
 		UpdatedAt: updatedAt,
 	}))

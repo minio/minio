@@ -1538,6 +1538,24 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "KeyRotate":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+				z.KeyRotate = nil
+			} else {
+				if z.KeyRotate == nil {
+					z.KeyRotate = new(BatchJobKeyRotateV1)
+				}
+				err = z.KeyRotate.DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1551,9 +1569,9 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "ID"
-	err = en.Append(0x85, 0xa2, 0x49, 0x44)
+	err = en.Append(0x86, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -1609,15 +1627,32 @@ func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "KeyRotate"
+	err = en.Append(0xa9, 0x4b, 0x65, 0x79, 0x52, 0x6f, 0x74, 0x61, 0x74, 0x65)
+	if err != nil {
+		return
+	}
+	if z.KeyRotate == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = z.KeyRotate.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "KeyRotate")
+			return
+		}
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "ID"
-	o = append(o, 0x85, 0xa2, 0x49, 0x44)
+	o = append(o, 0x86, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "User"
 	o = append(o, 0xa4, 0x55, 0x73, 0x65, 0x72)
@@ -1636,6 +1671,17 @@ func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 		o, err = z.Replicate.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Replicate")
+			return
+		}
+	}
+	// string "KeyRotate"
+	o = append(o, 0xa9, 0x4b, 0x65, 0x79, 0x52, 0x6f, 0x74, 0x61, 0x74, 0x65)
+	if z.KeyRotate == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o, err = z.KeyRotate.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "KeyRotate")
 			return
 		}
 	}
@@ -1701,6 +1747,23 @@ func (z *BatchJobRequest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "KeyRotate":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.KeyRotate = nil
+			} else {
+				if z.KeyRotate == nil {
+					z.KeyRotate = new(BatchJobKeyRotateV1)
+				}
+				bts, err = z.KeyRotate.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1720,6 +1783,12 @@ func (z *BatchJobRequest) Msgsize() (s int) {
 		s += msgp.NilSize
 	} else {
 		s += z.Replicate.Msgsize()
+	}
+	s += 10
+	if z.KeyRotate == nil {
+		s += msgp.NilSize
+	} else {
+		s += z.KeyRotate.Msgsize()
 	}
 	return
 }

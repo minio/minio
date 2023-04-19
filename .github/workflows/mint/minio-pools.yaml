@@ -1,0 +1,117 @@
+version: '3.7'
+
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  image: minio/minio:${JOB_NAME}
+  command: server --console-address ":9001" http://minio{1...4}/pdata{1...2} http://minio{5...8}/pdata{1...2}
+  expose:
+    - "9000"
+    - "9001"
+  environment:
+    MINIO_CI_CD: "on"
+    MINIO_ROOT_USER: "minio"
+    MINIO_ROOT_PASSWORD: "minio123"
+    MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    interval: 30s
+    timeout: 20s
+    retries: 3
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - pdata1-1:/pdata1
+      - pdata1-2:/pdata2
+
+  minio2:
+    <<: *minio-common
+    hostname: minio2
+    volumes:
+      - pdata2-1:/pdata1
+      - pdata2-2:/pdata2
+
+  minio3:
+    <<: *minio-common
+    hostname: minio3
+    volumes:
+      - pdata3-1:/pdata1
+      - pdata3-2:/pdata2
+
+  minio4:
+    <<: *minio-common
+    hostname: minio4
+    volumes:
+      - pdata4-1:/pdata1
+      - pdata4-2:/pdata2
+
+  minio5:
+    <<: *minio-common
+    hostname: minio5
+    volumes:
+      - pdata5-1:/pdata1
+      - pdata5-2:/pdata2
+
+  minio6:
+    <<: *minio-common
+    hostname: minio6
+    volumes:
+      - pdata6-1:/pdata1
+      - pdata6-2:/pdata2
+
+  minio7:
+    <<: *minio-common
+    hostname: minio7
+    volumes:
+      - pdata7-1:/pdata1
+      - pdata7-2:/pdata2
+
+  minio8:
+    <<: *minio-common
+    hostname: minio8
+    volumes:
+      - pdata8-1:/pdata1
+      - pdata8-2:/pdata2
+      
+  nginx:
+    image: nginx:1.19.2-alpine
+    hostname: nginx
+    volumes:
+      - ./nginx-8-node.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+      - minio5
+      - minio6
+      - minio7
+      - minio8
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  pdata1-1:
+  pdata1-2:
+  pdata2-1:
+  pdata2-2:
+  pdata3-1:
+  pdata3-2:
+  pdata4-1:
+  pdata4-2:
+  pdata5-1:
+  pdata5-2:
+  pdata6-1:
+  pdata6-2:
+  pdata7-1:
+  pdata7-2:
+  pdata8-1:
+  pdata8-2:

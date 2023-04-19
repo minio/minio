@@ -1193,6 +1193,7 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
 	}
 
 	enc := gob.NewEncoder(w)

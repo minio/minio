@@ -533,16 +533,19 @@ func lriToLockEntry(l lockRequesterInfo, now time.Time, resource, server string)
 func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 	now := time.Now().UTC()
 	entryMap := make(map[string]*madmin.LockEntry)
+	toEntry := func(lri lockRequesterInfo) string {
+		return fmt.Sprintf("%s/%s", lri.Name, lri.UID)
+	}
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
 			continue
 		}
 		for k, v := range peerLock.Locks {
 			for _, lockReqInfo := range v {
-				if val, ok := entryMap[lockReqInfo.Name]; ok {
+				if val, ok := entryMap[toEntry(lockReqInfo)]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
+					entryMap[toEntry(lockReqInfo)] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
 				}
 			}
 		}

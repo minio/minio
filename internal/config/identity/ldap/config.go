@@ -189,7 +189,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 		SRVRecordName: getCfgVal(SRVRecordName),
 	}
 
-	// Parse explicity enable=on/off flag. If not set, defaults to `true`
+	// Parse explicitly enable=on/off flag. If not set, defaults to `true`
 	// because ServerAddr is set.
 	if v := getCfgVal(config.Enable); v != "" {
 		l.LDAP.Enabled, err = config.ParseBool(v)

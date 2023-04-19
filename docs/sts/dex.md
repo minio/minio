@@ -39,7 +39,7 @@ time="2020-07-12T20:45:50Z" level=info msg="listening (http) on 0.0.0.0:5556"
 ```
 
 ```
-~ mc admin policy add admin allaccess.json
+~ mc admin policy create admin allaccess.json
 ```
 
 Contents of `allaccess.json`
@@ -95,7 +95,7 @@ Now you have successfully configured Dex IdP with MinIO.
 export MINIO_IDENTITY_OPENID_CLAIM_NAME=groups
 ```
 
-and add relevant policies on MinIO using `mc admin policy add myminio/ <group_name> group-access.json`
+and add relevant policies on MinIO using `mc admin policy create myminio/ <group_name> group-access.json`
 
 ## Explore Further
 

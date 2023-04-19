@@ -294,6 +294,26 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 	return false
 }
 
+const xMinIOHealing = ReservedMetadataPrefix + "healing"
+
+// SetHealing marks object (version) as being healed.
+// Note: this is to be used only from healObject
+func (fi *FileInfo) SetHealing() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[xMinIOHealing] = "true"
+}
+
+// Healing returns true if object is being healed (i.e fi is being passed down
+// from healObject)
+func (fi FileInfo) Healing() bool {
+	if _, ok := fi.Metadata[xMinIOHealing]; ok {
+		return true
+	}
+	return false
+}
+
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (er *erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	dryRun := opts.DryRun
@@ -505,8 +525,34 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	migrateDataDir := mustGetUUID()
 
 	// Reorder so that we have data disks first and parity disks next.
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(availableDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from available disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, availableDisks, bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(outDatedDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from outdated disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, outDatedDisks, bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
+
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(partsMetadata) {
+		err := fmt.Errorf("unexpected file distribution (%v) from metadata entries (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, len(partsMetadata), bucket, object, versionID)
+		logger.LogIf(ctx, err)
+		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
+			bucket, object, versionID), err
+	}
+
 	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 
 	copyPartsMetadata := make([]FileInfo, len(partsMetadata))
@@ -638,6 +684,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		partsMetadata[i].Erasure.Index = i + 1
 
 		// Attempt a rename now from healed data to final location.
+		partsMetadata[i].SetHealing()
 		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
 			logger.LogIf(ctx, err)
 			return result, err

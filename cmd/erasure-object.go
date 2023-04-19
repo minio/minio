@@ -183,7 +183,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
-func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
 	// This is a special call attempted first to check for SOS-API calls.
@@ -203,25 +203,26 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	}()
 
 	// Acquire lock
-	if lockType != noLock {
+	if !opts.NoLock {
 		lock := er.NewNSLock(bucket, object)
-		switch lockType {
-		case writeLock:
-			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx) }
-		case readLock:
-			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx) }
+		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return nil, err
 		}
+		ctx = lkctx.Context()
+
+		// Release lock when the metadata is verified, and reader
+		// is ready to be read.
+		//
+		// This is possible to be lock free because
+		// - xl.meta for inlined objects has already read the data
+		//   into memory, any mutation on xl.meta subsequently is
+		//   inconsequential to the overall read operation.
+		// - xl.meta metadata is still verified for quorum under lock()
+		//   however writing the response doesn't need to serialize
+		//   concurrent writers
 		unlockOnDefer = true
+		nsUnlocker = func() { lock.RUnlock(lkctx) }
 	}
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
@@ -265,6 +266,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 			ObjInfo: objInfo,
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
+
 	if objInfo.IsRemote() {
 		gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
 		if err != nil {
@@ -278,7 +280,10 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	if err != nil {
 		return nil, err
 	}
-	unlockOnDefer = false
+
+	if unlockOnDefer {
+		unlockOnDefer = fi.InlineData()
+	}
 
 	pr, pw := xioutil.WaitPipe()
 	go func() {
@@ -291,7 +296,11 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		pr.CloseWithError(nil)
 	}
 
-	return fn(pr, h, pipeCloser, nsUnlocker)
+	if !unlockOnDefer {
+		return fn(pr, h, pipeCloser, nsUnlocker)
+	}
+
+	return fn(pr, h, pipeCloser)
 }
 
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
@@ -658,6 +667,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		return fi, nil, nil, err
 	}
 
+	if !fi.Deleted && len(fi.Erasure.Distribution) != len(onlineDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			fi.Erasure.Distribution, onlineDisks, bucket, object, opts.VersionID)
+		logger.LogIf(ctx, err)
+		return fi, nil, nil, toObjectErr(err, bucket, object, opts.VersionID)
+	}
+
 	filterOnlineDisksInplace(fi, metaArr, onlineDisks)
 
 	// if one of the disk is offline, return right here no need
@@ -991,7 +1007,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	if opts.CheckPrecondFn != nil {
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err != nil && !isErrVersionNotFound(err) {
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			return objInfo, err
 		}
 		if opts.CheckPrecondFn(obj) {
@@ -1074,7 +1090,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
-	fi.Checksum = opts.WantChecksum.AppendTo(nil)
+	fi.Checksum = opts.WantChecksum.AppendTo(nil, 0)
 	if opts.EncryptFn != nil {
 		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 	}
@@ -1471,8 +1487,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	// Check failed deletes across multiple objects
 	for i, dobj := range dobjects {
-		// This object errored, no need to attempt a heal.
-		if errs[i] != nil {
+		// This object errored, we should attempt a heal just in case.
+		if errs[i] != nil && !isErrVersionNotFound(errs[i]) && !isErrObjectNotFound(errs[i]) {
+			// all other direct versionId references we should
+			// ensure no dangling file is left over.
+			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID, -1)
 			continue
 		}
 
@@ -1641,6 +1660,18 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 	fvID := mustGetUUID()
 
+	defer func() {
+		// attempt a heal before returning if there are offline disks
+		// for both del marker and permanent delete situations.
+		for _, disk := range storageDisks {
+			if disk != nil && disk.IsOnline() {
+				continue
+			}
+			er.addPartial(bucket, object, opts.VersionID, -1)
+			break
+		}
+	}()
+
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		if !deleteMarker {
 			// versioning suspended means we add `null` version as
@@ -1686,14 +1717,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	dfi.SetTierFreeVersionID(fvID)
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
-	}
-
-	for _, disk := range storageDisks {
-		if disk != nil && disk.IsOnline() {
-			continue
-		}
-		er.addPartial(bucket, object, opts.VersionID, -1)
-		break
 	}
 
 	return dfi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
@@ -1939,6 +1962,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 			return toObjectErr(err, bucket, object)
 		}
 	}
+	traceFn := globalLifecycleSys.trace(fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended))
 
 	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
@@ -1983,9 +2007,10 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		EventName:  eventName,
 		BucketName: bucket,
 		Object:     objInfo,
-		Host:       "Internal: [ILM-Transition]",
+		UserAgent:  "Internal: [ILM-Transition]",
+		Host:       globalLocalNodeName,
 	})
-	auditLogLifecycle(ctx, objInfo, ILMTransition)
+	auditLogLifecycle(ctx, objInfo, ILMTransition, traceFn)
 	return err
 }
 

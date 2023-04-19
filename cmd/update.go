@@ -518,6 +518,11 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 	return binaryFile, nil
 }
 
+const (
+	// Update this whenever the official minisign pubkey is rotated.
+	defaultMinisignPubkey = "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
+)
+
 func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string, reader []byte) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
@@ -538,7 +543,7 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string,
 		}
 	}
 
-	minisignPubkey := env.Get(envMinisignPubKey, "")
+	minisignPubkey := env.Get(envMinisignPubKey, defaultMinisignPubkey)
 	if minisignPubkey != "" {
 		v := selfupdate.NewVerifier()
 		u.Path = path.Dir(u.Path) + slashSeparator + releaseInfo + ".minisig"

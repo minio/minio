@@ -238,7 +238,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Start:          offset,
 				End:            -1,
 			}
-			return getObjectNInfo(ctx, bucket, object, rs, r.Header, noLock, opts)
+			opts.NoLock = true
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 		},
 		actualSize,
 	)
@@ -402,7 +403,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	var proxy proxyResult
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 	if err != nil {
 		var (
 			reader *GetObjectReader
@@ -1098,19 +1099,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
-
-	// FIXME: a possible race exists between a parallel
-	// GetObject v/s CopyObject with metadata updates, ideally
-	// we should be holding write lock here but it is not
-	// possible due to other constraints such as knowing
-	// the type of source content etc.
-	lock := noLock
-	if !cpSrcDstSame {
-		lock = readLock
+	if cpSrcDstSame {
+		getOpts.NoLock = true
 	}
 
 	var rs *HTTPRangeSpec
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -2084,11 +2078,24 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	// Extract request metadata
+	metadata, err := extractMetadata(ctx, r)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	metadata[xhttp.AmzStorageClass] = sc
+
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-		metadata := map[string]string{
-			xhttp.AmzStorageClass: sc,
+
+		// Copy metadata and make space for a bit more
+		metaCopy := make(map[string]string, len(metadata)+5)
+		for k, v := range metadata {
+			metaCopy[k] = v
 		}
+		// Shadow now...
+		metadata := metaCopy
 
 		actualSize := size
 		var idxCb func() []byte

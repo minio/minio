@@ -24,12 +24,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
 	sse "github.com/minio/minio/internal/bucket/encryption"
@@ -38,6 +41,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
+	"github.com/minio/minio/internal/workers"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -64,6 +69,30 @@ func (sys *LifecycleSys) Get(bucketName string) (lc *lifecycle.Lifecycle, err er
 // NewLifecycleSys - creates new lifecycle system.
 func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
+}
+
+func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string) madmin.TraceInfo {
+	return madmin.TraceInfo{
+		TraceType: madmin.TraceILM,
+		Time:      startTime,
+		NodeName:  globalLocalNodeName,
+		FuncName:  event,
+		Duration:  duration,
+		Path:      pathJoin(oi.Bucket, oi.Name),
+		Error:     "",
+		Message:   getSource(4),
+		Custom:    map[string]string{"version-id": oi.VersionID},
+	}
+}
+
+func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string) {
+	startTime := time.Now()
+	return func(event string) {
+		duration := time.Since(startTime)
+		if globalTrace.NumSubscribers(madmin.TraceILM) > 0 {
+			globalTrace.Publish(ilmTrace(startTime, duration, oi, event))
+		}
+	}
 }
 
 type expiryTask struct {
@@ -116,26 +145,49 @@ var globalExpiryState *expiryState
 
 func newExpiryState() *expiryState {
 	return &expiryState{
-		byDaysCh:            make(chan expiryTask, 10000),
-		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 10000),
+		byDaysCh:            make(chan expiryTask, 100000),
+		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 100000),
 	}
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
+
+	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", strconv.Itoa((runtime.GOMAXPROCS(0)+1)/2)))
+
+	ewk, err := workers.New(workerSize)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	nwk, err := workers.New(workerSize)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
 	go func() {
 		for t := range globalExpiryState.byDaysCh {
-			if t.objInfo.TransitionedObject.Status != "" {
-				applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.restoredObject)
-			} else {
-				applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
-			}
+			ewk.Take()
+			go func(t expiryTask) {
+				defer ewk.Give()
+				if t.objInfo.TransitionedObject.Status != "" {
+					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.restoredObject)
+				} else {
+					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.versionExpiry)
+				}
+			}(t)
 		}
+		ewk.Wait()
 	}()
 	go func() {
 		for t := range globalExpiryState.byNewerNoncurrentCh {
-			deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
+			nwk.Take()
+			go func(t newerNoncurrentTask) {
+				defer nwk.Give()
+				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
+			}(t)
 		}
+		nwk.Wait()
 	}()
 }
 
@@ -333,6 +385,7 @@ const (
 // 1. when a restored (via PostRestoreObject API) object expires.
 // 2. when a transitioned object expires (based on an ILM rule).
 func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *ObjectInfo, lcOpts lifecycle.ObjectOpts, action expireAction) error {
+	traceFn := globalLifecycleSys.trace(*oi)
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name)
 	opts.VersionID = lcOpts.VersionID
@@ -358,7 +411,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		}
 
 		// Send audit for the lifecycle delete operation
-		auditLogLifecycle(ctx, *oi, ILMExpiry)
+		defer auditLogLifecycle(ctx, *oi, ILMExpiry, traceFn)
 
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
@@ -374,7 +427,8 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 			EventName:  eventName,
 			BucketName: oi.Bucket,
 			Object:     objInfo,
-			Host:       "Internal: [ILM-Expiry]",
+			UserAgent:  "Internal: [ILM-Expiry]",
+			Host:       globalLocalNodeName,
 		})
 
 	case expireRestoredObj:

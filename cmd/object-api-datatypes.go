@@ -193,6 +193,9 @@ type ObjectInfo struct {
 	// Checksums added on upload.
 	// Encoded, maybe encrypted.
 	Checksum []byte
+
+	// Inlined
+	Inlined bool
 }
 
 // ArchiveInfo returns any saved zip archive meta information.

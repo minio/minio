@@ -2097,6 +2097,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockInvalidHeaders
 	case objectlock.ErrMalformedXML:
 		apiErr = ErrMalformedXML
+	case errInvalidMaxParts:
+		apiErr = ErrInvalidMaxParts
 	}
 
 	// Compression errors

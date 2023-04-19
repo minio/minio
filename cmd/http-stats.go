@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -299,12 +298,7 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *xhttp.ResponseRecorder) {
-	// Ignore non S3 requests
-	if strings.HasSuffix(r.URL.Path, minioReservedBucketPathWithSlash) {
-		return
-	}
-
+func (st *HTTPStats) updateStats(api string, w *xhttp.ResponseRecorder) {
 	st.totalS3Requests.Inc(api)
 
 	// Increment the prometheus http request response histogram with appropriate label
