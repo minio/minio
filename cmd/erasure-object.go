@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v2"
@@ -1299,7 +1300,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				continue
 			}
 
-			er.addPartial(bucket, object, fi.VersionID, fi.Size)
+			er.addPartial(bucket, object, fi.VersionID)
 			break
 		}
 
@@ -1491,7 +1492,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		if errs[i] != nil && !isErrVersionNotFound(errs[i]) && !isErrObjectNotFound(errs[i]) {
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
-			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID, -1)
+			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID)
 			continue
 		}
 
@@ -1504,7 +1505,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
-			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID, -1)
+			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID)
 			break
 		}
 	}
@@ -1667,7 +1668,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			if disk != nil && disk.IsOnline() {
 				continue
 			}
-			er.addPartial(bucket, object, opts.VersionID, -1)
+			er.addPartial(bucket, object, opts.VersionID)
 			break
 		}
 	}()
@@ -1724,14 +1725,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartial(bucket, object, versionID string, size int64) {
+func (er erasureObjects) addPartial(bucket, object, versionID string) {
 	globalMRFState.addPartialOp(partialOperation{
 		bucket:    bucket,
 		object:    object,
 		versionID: versionID,
-		size:      size,
-		setIndex:  er.setIndex,
-		poolIndex: er.poolIndex,
+		queued:    time.Now(),
 	})
 }
 
@@ -1998,7 +1997,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		if disk != nil && disk.IsOnline() {
 			continue
 		}
-		er.addPartial(bucket, object, opts.VersionID, -1)
+		er.addPartial(bucket, object, opts.VersionID)
 		break
 	}
 
