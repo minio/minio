@@ -69,8 +69,8 @@ func GetSourceScheme(r *http.Request) string {
 		// we simply ignore the values and return empty. This is in line
 		// with the approach we took for returning first ip from multiple
 		// params.
-		if match := forRegex.FindStringSubmatch(proto); len(match) > 1 {
-			if match = protoRegex.FindStringSubmatch(match[2]); len(match) > 1 {
+		if match := forRegex.FindStringSubmatch(proto); len(match) > 2 {
+			if match = protoRegex.FindStringSubmatch(match[2]); len(match) > 2 {
 				scheme = strings.ToLower(match[2])
 			}
 		}
