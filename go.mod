@@ -14,6 +14,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coredns/coredns v1.10.1
 	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cosnicolaou/pbzip2 v1.0.1
 	github.com/dchest/siphash v1.2.3
 	github.com/djherbis/atime v1.1.0
@@ -112,7 +113,6 @@ require (
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/containerd/console v1.0.3 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
