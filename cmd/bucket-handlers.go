@@ -1324,14 +1324,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if globalDNSConfig != nil {
-		if err := globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-	}
-
 	deleteBucket := objectAPI.DeleteBucket
 
 	// Attempt to delete bucket.
@@ -1345,13 +1337,16 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 				apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
 			}
 		}
-		if globalDNSConfig != nil {
-			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, please fix it manually", err2))
-			}
-		}
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
+	}
+
+	if globalDNSConfig != nil {
+		if err := globalDNSConfig.Delete(bucket); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually, bucket on MinIO no longer exists", err))
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
