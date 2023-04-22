@@ -890,7 +890,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL)
 		return
 	}
-	if !sort.IsSorted(CompletedParts(complMultipartUpload.Parts)) {
+	if !sort.SliceIsSorted(complMultipartUpload.Parts, func(i, j int) bool {
+		return complMultipartUpload.Parts[i].PartNumber < complMultipartUpload.Parts[j].PartNumber
+	}) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartOrder), r.URL)
 		return
 	}
