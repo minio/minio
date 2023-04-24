@@ -32,7 +32,7 @@ import (
 
 	"github.com/minio/madmin-go/v2"
 	minio "github.com/minio/minio-go/v7"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 func runAllIAMConcurrencyTests(suite *TestSuiteIAM, c *check) {
