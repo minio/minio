@@ -52,7 +52,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 	var latestFileInfo FileInfo
 
 	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
-	modTime := commonTime(modTimes)
+	modTime := commonTime(modTimes, expectedRQuorum)
 
 	if modTime.IsZero() || modTime.Equal(timeSentinel) {
 		return FileInfo{}, errErasureReadQuorum
@@ -82,8 +82,9 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 func TestCommonTime(t *testing.T) {
 	// List of test cases for common modTime.
 	testCases := []struct {
-		times []time.Time
-		time  time.Time
+		times  []time.Time
+		time   time.Time
+		quorum int
 	}{
 		{
 			// 1. Tests common times when slice has varying time elements.
@@ -97,6 +98,7 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 1).UTC(),
 			},
 			time.Unix(0, 3).UTC(),
+			3,
 		},
 		{
 			// 2. Tests common time obtained when all elements are equal.
@@ -110,10 +112,11 @@ func TestCommonTime(t *testing.T) {
 				time.Unix(0, 3).UTC(),
 			},
 			time.Unix(0, 3).UTC(),
+			4,
 		},
 		{
-			// 3. Tests common time obtained when elements have a mixture
-			// of sentinel values.
+			// 3. Tests common time obtained when elements have a mixture of
+			// sentinel values and don't have read quorum on any of the values.
 			[]time.Time{
 				time.Unix(0, 3).UTC(),
 				time.Unix(0, 3).UTC(),
@@ -126,7 +129,8 @@ func TestCommonTime(t *testing.T) {
 				timeSentinel,
 				timeSentinel,
 			},
-			time.Unix(0, 3).UTC(),
+			timeSentinel,
+			5,
 		},
 	}
 
@@ -134,7 +138,7 @@ func TestCommonTime(t *testing.T) {
 	// common modtime. Tests fail if modtime does not match.
 	for i, testCase := range testCases {
 		// Obtain a common mod time from modTimes slice.
-		ctime := commonTime(testCase.times)
+		ctime := commonTime(testCase.times, testCase.quorum)
 		if !testCase.time.Equal(ctime) {
 			t.Errorf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
 		}
@@ -296,7 +300,8 @@ func TestListOnlineDisks(t *testing.T) {
 
 			}
 
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
+			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
@@ -481,7 +486,8 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 				t.Fatalf("Failed to getLatestFileInfo, expected %v, got %v", errErasureReadQuorum, err)
 			}
 
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
+			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
@@ -508,6 +514,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
+	setObjectLayer(obj)
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(disks)
 
@@ -547,7 +554,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to get quorum consistent fileInfo %v", err)
 	}
 
-	erasureDisks, _ = listOnlineDisks(erasureDisks, partsMetadata, errs)
+	erasureDisks, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
 
 	filteredDisks, errs, _ := disksWithAllParts(ctx, erasureDisks, partsMetadata,
 		errs, fi, bucket, object, madmin.HealDeepScan)
