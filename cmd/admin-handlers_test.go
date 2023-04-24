@@ -479,8 +479,8 @@ func TestTopLockEntries(t *testing.T) {
 		if len(exp) != len(got) {
 			return 0, false
 		}
-		sort.Sort(byResourceUID{exp})
-		sort.Sort(byResourceUID{got})
+		sort.Slice(exp, byResourceUID{exp}.Less)
+		sort.Slice(got, byResourceUID{got}.Less)
 		// printEntries(exp)
 		// printEntries(got)
 		for i, e := range exp {

@@ -42,13 +42,6 @@ const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
 
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []ObjectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
-
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 	for i, sum := range e.Checksums {
@@ -308,7 +301,7 @@ func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, act
 	fi.Parts = append(fi.Parts, partInfo)
 
 	// Parts in FileInfo should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(fi.Parts))
+	sort.Slice(fi.Parts, func(i, j int) bool { return fi.Parts[i].Number < fi.Parts[j].Number })
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
