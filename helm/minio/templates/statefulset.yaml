@@ -172,7 +172,7 @@ spec:
             {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
-              value: {{ $val | quote }}
+              value: {{ tpl $val $ | quote }}
             {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
         {{- with .Values.extraContainers }}
