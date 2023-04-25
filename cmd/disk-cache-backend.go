@@ -1153,7 +1153,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 					partLength = length - totalBytesRead
 				}
 				filePath := pathJoin(cacheObjPath, fmt.Sprintf("part.%d", partNumber))
-				err = c.bitrotReadFromCache(ctx, filePath, partOffset, partLength, pw)
+				err := c.bitrotReadFromCache(ctx, filePath, partOffset, partLength, pw)
 				if err != nil {
 					removeAll(cacheObjPath)
 					break
