@@ -155,30 +155,34 @@ func TestListOnlineDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
+	setObjectLayer(obj)
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(disks)
 
 	type tamperKind int
 	const (
-		noTamper    tamperKind = iota
-		deletePart  tamperKind = iota
-		corruptPart tamperKind = iota
+		noTamper tamperKind = iota
+		deletePart
+		corruptPart
 	)
-	threeNanoSecs := time.Unix(0, 3).UTC()
-	fourNanoSecs := time.Unix(0, 4).UTC()
-	modTimesThreeNone := []time.Time{
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		timeSentinel, timeSentinel, timeSentinel, timeSentinel,
-		timeSentinel, timeSentinel, timeSentinel, timeSentinel,
-		timeSentinel,
+
+	timeSentinel := time.Unix(1, 0).UTC()
+	threeNanoSecs := time.Unix(3, 0).UTC()
+	fourNanoSecs := time.Unix(4, 0).UTC()
+	modTimesThreeNone := make([]time.Time, 16)
+	modTimesThreeFour := make([]time.Time, 16)
+	for i := 0; i < 16; i++ {
+		// Have 13 good xl.meta, 12 for default parity count = 4 (EC:4) and one
+		// to be tampered with.
+		if i > 12 {
+			modTimesThreeFour[i] = fourNanoSecs
+			modTimesThreeNone[i] = timeSentinel
+			continue
+		}
+		modTimesThreeFour[i] = threeNanoSecs
+		modTimesThreeNone[i] = threeNanoSecs
 	}
-	modTimesThreeFour := []time.Time{
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		fourNanoSecs, fourNanoSecs, fourNanoSecs, fourNanoSecs,
-		fourNanoSecs, fourNanoSecs, fourNanoSecs, fourNanoSecs,
-	}
+
 	testCases := []struct {
 		modTimes       []time.Time
 		expectedTime   time.Time
@@ -187,10 +191,10 @@ func TestListOnlineDisks(t *testing.T) {
 	}{
 		{
 			modTimes:     modTimesThreeFour,
-			expectedTime: fourNanoSecs,
+			expectedTime: threeNanoSecs,
 			errs: []error{
-				nil, nil, nil, nil, nil, nil, nil, nil, nil,
-				nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil, nil, nil, nil,
 			},
 			_tamperBackend: noTamper,
 		},
@@ -199,13 +203,10 @@ func TestListOnlineDisks(t *testing.T) {
 			expectedTime: threeNanoSecs,
 			errs: []error{
 				// Disks that have a valid xl.meta.
-				nil, nil, nil, nil, nil, nil, nil,
-				// Majority of disks don't have xl.meta.
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errDiskAccessDenied,
-				errDiskNotFound, errFileNotFound,
-				errFileNotFound,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				// Some disks can't access xl.meta.
+				errFileNotFound, errDiskAccessDenied, errDiskNotFound,
 			},
 			_tamperBackend: deletePart,
 		},
@@ -214,13 +215,10 @@ func TestListOnlineDisks(t *testing.T) {
 			expectedTime: threeNanoSecs,
 			errs: []error{
 				// Disks that have a valid xl.meta.
-				nil, nil, nil, nil, nil, nil, nil,
-				// Majority of disks don't have xl.meta.
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errDiskAccessDenied,
-				errDiskNotFound, errFileNotFound,
-				errFileNotFound,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				// Some disks don't have xl.meta.
+				errDiskNotFound, errFileNotFound, errFileNotFound,
 			},
 			_tamperBackend: corruptPart,
 		},
@@ -330,6 +328,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
+	setObjectLayer(obj)
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(disks)
 
@@ -342,19 +341,20 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	timeSentinel := time.Unix(1, 0).UTC()
 	threeNanoSecs := time.Unix(3, 0).UTC()
 	fourNanoSecs := time.Unix(4, 0).UTC()
-	modTimesThreeNone := []time.Time{
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		timeSentinel, timeSentinel, timeSentinel, timeSentinel,
-		timeSentinel, timeSentinel, timeSentinel, timeSentinel,
-		timeSentinel,
+	modTimesThreeNone := make([]time.Time, 16)
+	modTimesThreeFour := make([]time.Time, 16)
+	for i := 0; i < 16; i++ {
+		// Have 13 good xl.meta, 12 for default parity count = 4 (EC:4) and one
+		// to be tampered with.
+		if i > 12 {
+			modTimesThreeFour[i] = fourNanoSecs
+			modTimesThreeNone[i] = timeSentinel
+			continue
+		}
+		modTimesThreeFour[i] = threeNanoSecs
+		modTimesThreeNone[i] = threeNanoSecs
 	}
-	modTimesThreeFour := []time.Time{
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		threeNanoSecs, threeNanoSecs, threeNanoSecs, threeNanoSecs,
-		fourNanoSecs, fourNanoSecs, fourNanoSecs, fourNanoSecs,
-		fourNanoSecs, fourNanoSecs, fourNanoSecs, fourNanoSecs,
-	}
+
 	testCases := []struct {
 		modTimes       []time.Time
 		expectedTime   time.Time
@@ -363,10 +363,10 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	}{
 		{
 			modTimes:     modTimesThreeFour,
-			expectedTime: fourNanoSecs,
+			expectedTime: threeNanoSecs,
 			errs: []error{
-				nil, nil, nil, nil, nil, nil, nil, nil, nil,
-				nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil, nil, nil, nil,
 			},
 			_tamperBackend: noTamper,
 		},
@@ -375,13 +375,10 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			expectedTime: threeNanoSecs,
 			errs: []error{
 				// Disks that have a valid xl.meta.
-				nil, nil, nil, nil, nil, nil, nil,
-				// Majority of disks don't have xl.meta.
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errDiskAccessDenied,
-				errDiskNotFound, errFileNotFound,
-				errFileNotFound,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				// Some disks can't access xl.meta.
+				errFileNotFound, errDiskAccessDenied, errDiskNotFound,
 			},
 			_tamperBackend: deletePart,
 		},
@@ -390,13 +387,10 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			expectedTime: threeNanoSecs,
 			errs: []error{
 				// Disks that have a valid xl.meta.
-				nil, nil, nil, nil, nil, nil, nil,
-				// Majority of disks don't have xl.meta.
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errFileNotFound,
-				errFileNotFound, errDiskAccessDenied,
-				errDiskNotFound, errFileNotFound,
-				errFileNotFound,
+				nil, nil, nil, nil, nil, nil, nil, nil,
+				nil, nil, nil, nil, nil,
+				// Some disks don't have xl.meta.
+				errDiskNotFound, errFileNotFound, errFileNotFound,
 			},
 			_tamperBackend: corruptPart,
 		},
