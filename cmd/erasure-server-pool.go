@@ -1307,7 +1307,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	opts.setBucketMeta(ctx)
 
-	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
+	if len(prefix) > 0 && maxKeys == 1 && marker == "" {
 		// Optimization for certain applications like
 		// - Cohesity
 		// - Actifio, Splunk etc.
