@@ -76,10 +76,14 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 	return time.Unix(0, latest).UTC(), maxima
 }
 
-// commonTime returns a maximally occurring time from a list of time.
-func commonTime(modTimes []time.Time) (modTime time.Time) {
-	modTime, _ = commonTimeAndOccurence(modTimes, 0)
-	return modTime
+// commonTime returns a maximally occurring time from a list of time if it
+// occurs >= quorum, else return timeSentinel
+func commonTime(modTimes []time.Time, quorum int) time.Time {
+	if modTime, count := commonTimeAndOccurence(modTimes, 0); count >= quorum {
+		return modTime
+	}
+
+	return timeSentinel
 }
 
 // Beginning of unix time is treated as sentinel value here.
@@ -157,15 +161,15 @@ func listObjectDiskMtimes(partsMetadata []FileInfo) (diskMTimes []time.Time) {
 // listOnlineDisks - returns
 // - a slice of disks where disk having 'older' xl.meta (or nothing)
 // are set to nil.
-// - latest (in time) of the maximally occurring modTime(s).
-func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
+// - latest (in time) of the maximally occurring modTime(s), which has at least quorum occurrences.
+func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error, quorum int) (onlineDisks []StorageAPI, modTime time.Time) {
 	onlineDisks = make([]StorageAPI, len(disks))
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
 	// Reduce list of UUIDs to a single common value.
-	modTime = commonTime(modTimes)
+	modTime = commonTime(modTimes, quorum)
 
 	// Create a new online disks slice, which have common uuid.
 	for index, t := range modTimes {
