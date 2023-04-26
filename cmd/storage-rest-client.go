@@ -268,7 +268,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 // DiskInfo - fetch disk information for a remote disk.
-func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (client *storageRESTClient) DiskInfo(_ context.Context) (info DiskInfo, err error) {
 	if !client.IsOnline() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
@@ -281,7 +281,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
 			var info DiskInfo
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
 			if err != nil {
