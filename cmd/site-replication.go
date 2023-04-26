@@ -3360,6 +3360,10 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 					continue
 				}
 
+				if v.Credentials.AccessKey == globalActiveCred.AccessKey {
+					// skip root users.
+					continue
+				}
 				if v.Credentials.ParentUser != "" && v.Credentials.ParentUser == globalActiveCred.AccessKey {
 					// skip all root user service accounts.
 					continue

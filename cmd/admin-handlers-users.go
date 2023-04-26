@@ -422,17 +422,19 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemIAMUser,
-		IAMUser: &madmin.SRIAMUser{
-			AccessKey:   accessKey,
-			IsDeleteReq: false,
-			UserReq: &madmin.AddOrUpdateUserReq{
-				Status: madmin.AccountStatus(status),
+	if accessKey != globalActiveCred.AccessKey {
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemIAMUser,
+			IAMUser: &madmin.SRIAMUser{
+				AccessKey:   accessKey,
+				IsDeleteReq: false,
+				UserReq: &madmin.AddOrUpdateUserReq{
+					Status: madmin.AccountStatus(status),
+				},
 			},
-		},
-		UpdatedAt: updatedAt,
-	}))
+			UpdatedAt: updatedAt,
+		}))
+	}
 }
 
 // AddUser - PUT /minio/admin/v3/add-user?accessKey=<access_key>
