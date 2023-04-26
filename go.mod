@@ -50,7 +50,7 @@ require (
 	github.com/minio/madmin-go/v2 v2.0.20
 	github.com/minio/minio-go/v7 v7.0.52
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg v1.6.6-0.20230330040824-5db111e5f63c
+	github.com/minio/pkg v1.7.0
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.4.5
@@ -66,7 +66,7 @@ require (
 	github.com/philhofer/fwd v1.1.2
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.10.1
+	github.com/pkg/sftp v1.13.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0

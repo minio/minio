@@ -25,7 +25,7 @@ import (
 	"io"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // figure out the most commonVersions across disk that satisfies
