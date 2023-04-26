@@ -191,9 +191,6 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
 	}
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
-	if body != nil {
-		req.Header.Set("Expect", "100-continue")
-	}
 
 	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
 		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
