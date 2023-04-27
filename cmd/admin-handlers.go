@@ -1896,6 +1896,8 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 			OfflineDisks:     offlineDisks.Sum(),
 			StandardSCParity: backendInfo.StandardSCParity,
 			RRSCParity:       backendInfo.RRSCParity,
+			TotalSets:        backendInfo.TotalSets,
+			DrivesPerSet:     backendInfo.DrivesPerSet,
 		}
 
 		if poolsInfoEnabled {
