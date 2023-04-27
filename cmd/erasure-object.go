@@ -2004,7 +2004,8 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		UserAgent:  "Internal: [ILM-Transition]",
 		Host:       globalLocalNodeName,
 	})
-	auditLogLifecycle(ctx, objInfo, ILMTransition, traceFn)
+	tags := auditLifecycleTags(opts.LifecycleEvent)
+	auditLogLifecycle(ctx, objInfo, ILMTransition, tags, traceFn)
 	return err
 }
 

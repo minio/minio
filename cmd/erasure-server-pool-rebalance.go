@@ -465,7 +465,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			if evt.Action.Delete() {
-				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+				globalExpiryState.enqueueByDays(objInfo, evt)
 				return true
 			}
 
