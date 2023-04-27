@@ -1156,6 +1156,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 				err := c.bitrotReadFromCache(ctx, filePath, partOffset, partLength, pw)
 				if err != nil {
 					removeAll(cacheObjPath)
+					pw.CloseWithError(err)
 					break
 				}
 				totalBytesRead += partLength
