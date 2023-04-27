@@ -1355,9 +1355,10 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 		return putOpts, err
 	}
 	putOpts.Internal = miniogo.AdvancedPutOptions{
-		SourceVersionID: objInfo.VersionID,
-		SourceMTime:     objInfo.ModTime,
-		SourceETag:      objInfo.ETag,
+		SourceVersionID:    objInfo.VersionID,
+		SourceMTime:        objInfo.ModTime,
+		SourceETag:         objInfo.ETag,
+		ReplicationRequest: true,
 	}
 	return putOpts, nil
 }
