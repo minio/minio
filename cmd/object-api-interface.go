@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/hash"
 
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
@@ -60,6 +61,7 @@ type ObjectOptions struct {
 	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
+	LifecycleEvent    lifecycle.Event
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 

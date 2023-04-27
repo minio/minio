@@ -945,9 +945,9 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	switch lcEvt.Action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		return applyLifecycleAction(lcEvt.Action, oi, ""), 0
+		return applyLifecycleAction(lcEvt, oi), 0
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		return applyLifecycleAction(lcEvt.Action, oi, lcEvt.StorageClass), size
+		return applyLifecycleAction(lcEvt, oi), size
 	default:
 		// No action.
 		return false, size
@@ -983,7 +983,7 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 		InclFreeVersions: true,
 	})
 	if err == nil {
-		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, traceFn)
+		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, nil, traceFn)
 	}
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
@@ -1153,20 +1153,16 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 	return event
 }
 
-func applyTransitionRule(obj ObjectInfo, storageClass string) bool {
+func applyTransitionRule(event lifecycle.Event, obj ObjectInfo) bool {
 	if obj.DeleteMarker {
 		return false
 	}
-	globalTransitionState.queueTransitionTask(obj, storageClass)
+	globalTransitionState.queueTransitionTask(obj, event)
 	return true
 }
 
-func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
-	action := expireObj
-	if restoredObject {
-		action = expireRestoredObj
-	}
-	if err := expireTransitionedObject(ctx, objLayer, &obj, obj.ToLifecycleOpts(), action); err != nil {
+func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event) bool {
+	if err := expireTransitionedObject(ctx, objLayer, &obj, obj.ToLifecycleOpts(), lcEvent); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
@@ -1177,13 +1173,13 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 	return true
 }
 
-func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, applyOnVersion bool) bool {
+func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event) bool {
 	traceFn := globalLifecycleSys.trace(obj)
 	opts := ObjectOptions{
 		Expiration: ExpirationOptions{Expire: true},
 	}
 
-	if applyOnVersion {
+	if lcEvent.Action.DeleteVersioned() {
 		opts.VersionID = obj.VersionID
 	}
 	if opts.VersionID == "" {
@@ -1201,8 +1197,9 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		return false
 	}
 
+	tags := auditLifecycleTags(lcEvent)
 	// Send audit for the lifecycle delete operation
-	auditLogLifecycle(ctx, obj, ILMExpiry, traceFn)
+	auditLogLifecycle(ctx, obj, ILMExpiry, tags, traceFn)
 
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
@@ -1222,20 +1219,19 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 }
 
 // Apply object, object version, restored object or restored object version action on the given object
-func applyExpiryRule(obj ObjectInfo, restoredObject, applyOnVersion bool) bool {
-	globalExpiryState.enqueueByDays(obj, restoredObject, applyOnVersion)
+func applyExpiryRule(event lifecycle.Event, obj ObjectInfo) bool {
+	globalExpiryState.enqueueByDays(obj, event)
 	return true
 }
 
 // Perform actions (removal or transitioning of objects), return true the action is successfully performed
-func applyLifecycleAction(action lifecycle.Action, obj ObjectInfo, storageClass string) (success bool) {
-	switch action {
-	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-		success = applyExpiryRule(obj, false, action == lifecycle.DeleteVersionAction)
-	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		success = applyExpiryRule(obj, true, action == lifecycle.DeleteRestoredVersionAction)
+func applyLifecycleAction(event lifecycle.Event, obj ObjectInfo) (success bool) {
+	switch action := event.Action; action {
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction,
+		lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+		success = applyExpiryRule(event, obj)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		success = applyTransitionRule(obj, storageClass)
+		success = applyTransitionRule(event, obj)
 	}
 	return
 }
@@ -1445,7 +1441,7 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, traceFn func(event string)) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]interface{}, traceFn func(event string)) {
 	var apiName string
 	switch event {
 	case ILMExpiry:
@@ -1461,6 +1457,7 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, traceFn
 		Bucket:    oi.Bucket,
 		Object:    oi.Name,
 		VersionID: oi.VersionID,
+		Tags:      tags,
 	})
 	traceFn(event)
 }

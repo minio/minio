@@ -476,11 +476,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
@@ -729,11 +729,11 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
