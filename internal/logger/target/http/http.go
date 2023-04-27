@@ -204,6 +204,7 @@ func (h *Target) Init() (err error) {
 		h.workerStartMu.Lock()
 		h.lastStarted = time.Now()
 		h.workerStartMu.Unlock()
+		atomic.AddInt64(&h.workers, 1)
 		go h.startHTTPLogger()
 	}
 	return nil
