@@ -99,6 +99,7 @@ func (c *Target) Send(e interface{}, logKind string) error {
 			}
 		}
 		apiString += ")"
+		apiString = strings.Replace(apiString, "(, ", "(", 1)
 	} else {
 		apiString = "INTERNAL"
 	}
