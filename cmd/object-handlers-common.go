@@ -373,11 +373,13 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				VersionID: dobj.VersionID,
 			}
 			traceFn := globalLifecycleSys.trace(oi)
+			tags := make(map[string]interface{}, 1)
+			tags["newer-noncurrent-versions"] = true
 			// Send audit for the lifecycle delete operation
 			auditLogLifecycle(
 				ctx,
 				oi,
-				ILMExpiry, traceFn)
+				ILMExpiry, tags, traceFn)
 
 			sendEvent(eventArgs{
 				EventName:  event.ObjectRemovedDelete,

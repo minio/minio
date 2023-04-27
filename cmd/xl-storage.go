@@ -607,7 +607,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {

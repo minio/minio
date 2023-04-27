@@ -28,7 +28,7 @@ import (
 
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
@@ -386,7 +386,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	// List of disks having latest version of the object xl.meta
 	// (by modtime).
-	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs, readQuorum)
 
 	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.

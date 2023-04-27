@@ -37,8 +37,8 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/mimedb"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -78,24 +78,22 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 		return fi, nil, err
 	}
 
+	quorum := readQuorum
+	if write {
+		quorum = writeQuorum
+	}
 	// List all online disks.
-	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs, quorum)
 
-	var quorum int
 	if write {
 		reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 		if reducedErr == errErasureWriteQuorum {
 			return fi, nil, reducedErr
 		}
-
-		quorum = writeQuorum
 	} else {
 		if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 			return fi, nil, reducedErr
 		}
-
-		// Pick one from the first valid metadata.
-		quorum = readQuorum
 	}
 
 	// Pick one from the first valid metadata.

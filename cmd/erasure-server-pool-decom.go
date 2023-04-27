@@ -738,10 +738,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			switch {
 			case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
-				applyExpiryOnTransitionedObject(ctx, z, objInfo, evt.Action.DeleteRestored())
+				applyExpiryOnTransitionedObject(ctx, z, objInfo, evt)
 				return false
 			case evt.Action.Delete():
-				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+				globalExpiryState.enqueueByDays(objInfo, evt)
 				return true
 			default:
 				return false
