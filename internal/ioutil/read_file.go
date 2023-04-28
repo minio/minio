@@ -66,10 +66,10 @@ func ReadFile(name string) ([]byte, error) {
 		// Don't wrap with un-needed buffer.
 		// Don't use os.ReadFile, since it doesn't pass NO_ATIME when present.
 		f, err := OpenFileDirectIO(name, readMode, 0o666)
-		defer f.Close()
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
 		st, err := f.Stat()
 		if err != nil {
 			return io.ReadAll(f)
