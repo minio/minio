@@ -1124,7 +1124,8 @@ func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn
 }
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.
-func (o *ObjectInfo) decryptChecksums() map[string]string {
+// if part > 0, and we have the checksum for the part that will be returned.
+func (o *ObjectInfo) decryptChecksums(part int) map[string]string {
 	data := o.Checksum
 	if len(data) == 0 {
 		return nil
@@ -1137,5 +1138,5 @@ func (o *ObjectInfo) decryptChecksums() map[string]string {
 		}
 		data = decrypted
 	}
-	return hash.ReadCheckSums(data)
+	return hash.ReadCheckSums(data, part)
 }
