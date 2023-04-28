@@ -2507,12 +2507,13 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				opts := newServiceAccountOpts{
-					accessKey:     user,
-					secretKey:     svcAcctReq.SecretKey,
-					sessionPolicy: sp,
-					claims:        svcAcctReq.Claims,
-					comment:       svcAcctReq.Comment,
-					expiration:    svcAcctReq.Expiration,
+					accessKey:                  user,
+					secretKey:                  svcAcctReq.SecretKey,
+					sessionPolicy:              sp,
+					claims:                     svcAcctReq.Claims,
+					comment:                    svcAcctReq.Comment,
+					expiration:                 svcAcctReq.Expiration,
+					allowSiteReplicatorAccount: false,
 				}
 
 				// In case of LDAP we need to resolve the targetUser to a DN and

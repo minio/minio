@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 export MINIO_CI_CD=1
 killall -9 minio
 
@@ -61,3 +63,57 @@ if [ $? -ne 0 ]; then
 fi
 
 killall -9 minio
+
+rm -rf /tmp/multisitea/
+rm -rf /tmp/multisiteb/
+
+echo "Setup site-replication and then disable root credentials"
+
+minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
+minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+
+minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
+
+sleep 20s
+
+export MC_HOST_sitea=http://minioadmin:minioadmin@127.0.0.1:9001
+export MC_HOST_siteb=http://minioadmin:minioadmin@127.0.0.1:9004
+
+./mc admin replicate add sitea siteb
+
+./mc admin user add sitea foobar foo12345
+
+./mc admin policy attach sitea/ consoleAdmin --user=foobar
+
+./mc admin user info siteb foobar
+
+killall -9 minio
+
+echo "turning off root access, however site replication must continue"
+export MINIO_API_ROOT_ACCESS=off
+
+minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
+minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+
+minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
+      "http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
+
+sleep 20s
+
+export MC_HOST_sitea=http://foobar:foo12345@127.0.0.1:9001
+export MC_HOST_siteb=http://foobar:foo12345@127.0.0.1:9004
+
+./mc admin user add sitea foobar-admin foo12345
+
+sleep 2s
+
+./mc admin user info siteb foobar-admin
