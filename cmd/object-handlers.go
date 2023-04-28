@@ -513,7 +513,9 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil || opts.PartNumber > 0 {
+		// AWS S3 silently drops checksums on range requests.
+		// TODO(klaus): Store and return part checksums
 		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
 	}
 
@@ -800,7 +802,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil || opts.PartNumber > 0 {
+		// AWS S3 silently drops checksums on range requests.
+		// TODO(klaus): Store and return part checksums
 		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
 	}
 
