@@ -914,11 +914,12 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	accessKey     string
-	secretKey     string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy              *iampolicy.Policy
+	accessKey                  string
+	secretKey                  string
+	comment                    string
+	expiration                 *time.Time
+	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
 	claims map[string]interface{}
 }
@@ -953,7 +954,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if parentUser == opts.accessKey {
 		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
 	}
-
+	if siteReplicatorSvcAcc == opts.accessKey && !opts.allowSiteReplicatorAccount {
+		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
+	}
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
