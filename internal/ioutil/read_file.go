@@ -37,9 +37,9 @@ var (
 // ReadFileWithFileInfo reads the named file and returns the contents.
 // A successful call returns err == nil, not err == EOF.
 // Because ReadFile reads the whole file, it does not treat an EOF from Read
-// as an error to be reported, additionall returns os.FileInfo
+// as an error to be reported.
 func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
-	f, err := OsOpen(name)
+	f, err := OsOpenFile(name, readMode, 0o666)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,6 +62,23 @@ func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
 //
 // passes NOATIME flag for reads on Unix systems to avoid atime updates.
 func ReadFile(name string) ([]byte, error) {
+	if !disk.ODirectPlatform {
+		// Don't wrap with un-needed buffer.
+		// Don't use os.ReadFile, since it doesn't pass NO_ATIME when present.
+		f, err := OpenFileDirectIO(name, readMode, 0o666)
+		defer f.Close()
+		if err != nil {
+			return nil, err
+		}
+		st, err := f.Stat()
+		if err != nil {
+			return io.ReadAll(f)
+		}
+		dst := make([]byte, st.Size())
+		_, err = io.ReadFull(f, dst)
+		return dst, err
+	}
+
 	f, err := OpenFileDirectIO(name, readMode, 0o666)
 	if err != nil {
 		// fallback if there is an error to read
@@ -71,6 +88,7 @@ func ReadFile(name string) ([]byte, error) {
 			return nil, err
 		}
 	}
+
 	r := &ODirectReader{
 		File:      f,
 		SmallFile: true,
@@ -82,8 +100,8 @@ func ReadFile(name string) ([]byte, error) {
 		return io.ReadAll(r)
 	}
 
-	// Select bigger blocks when reading at least 50% of a big block.
-	r.SmallFile = st.Size() <= BlockSizeLarge/2
+	// Select bigger blocks when reading would do more than 2 reads.
+	r.SmallFile = st.Size() <= BlockSizeSmall*2
 
 	dst := make([]byte, st.Size())
 	_, err = io.ReadFull(r, dst)
