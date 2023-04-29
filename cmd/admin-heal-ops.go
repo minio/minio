@@ -784,6 +784,11 @@ func (h *healSequence) healDiskMeta(objAPI ObjectLayer) error {
 }
 
 func (h *healSequence) healItems(objAPI ObjectLayer, bucketsOnly bool) error {
+	if h.clientToken == bgHealingUUID {
+		// For background heal do nothing.
+		return nil
+	}
+
 	if err := h.healDiskMeta(objAPI); err != nil {
 		return err
 	}

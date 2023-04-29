@@ -254,6 +254,9 @@ var (
 
 	globalActiveCred auth.Credentials
 
+	// Captures if root credentials are set via ENV.
+	globalCredViaEnv bool
+
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests
