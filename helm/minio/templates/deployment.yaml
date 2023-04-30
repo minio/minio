@@ -18,11 +18,11 @@ metadata:
   {{- end }}
 spec:
   strategy:
-    type: {{ .Values.DeploymentUpdate.type }}
-    {{- if eq .Values.DeploymentUpdate.type "RollingUpdate" }}
+    type: {{ .Values.deploymentUpdate.type }}
+    {{- if eq .Values.deploymentUpdate.type "RollingUpdate" }}
     rollingUpdate:
-      maxSurge: {{ .Values.DeploymentUpdate.maxSurge }}
-      maxUnavailable: {{ .Values.DeploymentUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.deploymentUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.deploymentUpdate.maxUnavailable }}
     {{- end }}
   replicas: 1
   selector:

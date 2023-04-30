@@ -49,7 +49,7 @@ metadata:
   {{- end }}
 spec:
   updateStrategy:
-    type: {{ .Values.StatefulSetUpdate.updateStrategy }}
+    type: {{ .Values.statefulSetUpdate.updateStrategy }}
   podManagementPolicy: "Parallel"
   serviceName: {{ template "minio.fullname" . }}-svc
   replicas: {{ $replicas }}
