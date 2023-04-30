@@ -197,7 +197,7 @@ var (
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig = apiConfig{listQuorum: "strict"}
+	globalAPIConfig = apiConfig{listQuorum: "strict", rootAccess: true}
 
 	globalStorageClass storageclass.Config
 
@@ -253,6 +253,9 @@ var (
 	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
+
+	// Captures if root credentials are set via ENV.
+	globalCredViaEnv bool
 
 	globalPublicCerts []*x509.Certificate
 

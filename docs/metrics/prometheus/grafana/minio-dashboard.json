@@ -2235,6 +2235,107 @@
       }
     },
     {
+      "aliasColors": {
+      },
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "oQpdp674k"
+      },
+      "description": "Total TCP dial timeout/errors",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 10,
+      "fillGradient": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "hiddenSeries": false,
+      "id": 93,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "9.4.7",
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "oQpdp674k"
+          },
+          "editorMode": "code",
+          "expr": "rate(minio_inter_node_traffic_dial_errors{job=\"$scrape_jobs\"}[$__rate_interval])",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Internode TCP errors",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:211",
+          "decimals": 0,
+          "format": "none",
+          "label": "TCP Errors",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:212",
+          "format": "s",
+          "logBase": 1,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,

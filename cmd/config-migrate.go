@@ -2531,6 +2531,12 @@ func readConfigWithoutMigrate(ctx context.Context, objAPI ObjectLayer) (config.C
 		}
 	}
 
+	if !globalCredViaEnv && cfg.Credential.IsValid() {
+		// Preserve older credential if we do not have
+		// root credentials set via environment variable.
+		globalActiveCred = cfg.Credential
+	}
+
 	// Init compression config. For future migration, Compression config needs to be copied over from previous version.
 	switch cfg.Version {
 	case "29":

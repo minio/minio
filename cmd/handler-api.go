@@ -51,6 +51,7 @@ type apiConfig struct {
 	deleteCleanupInterval       time.Duration
 	disableODirect              bool
 	gzipObjects                 bool
+	rootAccess                  bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -152,6 +153,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
 	t.disableODirect = cfg.DisableODirect
 	t.gzipObjects = cfg.GzipObjects
+	t.rootAccess = cfg.RootAccess
 }
 
 func (t *apiConfig) isDisableODirect() bool {
@@ -166,6 +168,13 @@ func (t *apiConfig) shouldGzipObjects() bool {
 	defer t.mu.RUnlock()
 
 	return t.gzipObjects
+}
+
+func (t *apiConfig) permitRootAccess() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.rootAccess
 }
 
 func (t *apiConfig) getListQuorum() string {

@@ -459,8 +459,9 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
 		}
 		svcCred, _, err = globalIAMSys.NewServiceAccount(ctx, sites[selfIdx].AccessKey, nil, newServiceAccountOpts{
-			accessKey: siteReplicatorSvcAcc,
-			secretKey: secretKey,
+			accessKey:                  siteReplicatorSvcAcc,
+			secretKey:                  secretKey,
+			allowSiteReplicatorAccount: true,
 		})
 		if err != nil {
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
@@ -558,8 +559,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	return result, nil
 }
 
-// PeerJoinReq - internal API handler to respond to a peer cluster's request
-// to join.
+// PeerJoinReq - internal API handler to respond to a peer cluster's request to join.
 func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJoinReq) error {
 	var ourName string
 	for d, p := range arg.Peers {
@@ -575,8 +575,9 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 	_, _, err := globalIAMSys.GetServiceAccount(ctx, arg.SvcAcctAccessKey)
 	if err == errNoSuchServiceAccount {
 		_, _, err = globalIAMSys.NewServiceAccount(ctx, arg.SvcAcctParent, nil, newServiceAccountOpts{
-			accessKey: arg.SvcAcctAccessKey,
-			secretKey: arg.SvcAcctSecretKey,
+			accessKey:                  arg.SvcAcctAccessKey,
+			secretKey:                  arg.SvcAcctSecretKey,
+			allowSiteReplicatorAccount: arg.SvcAcctAccessKey == siteReplicatorSvcAcc,
 		})
 	}
 	if err != nil {

@@ -49,6 +49,10 @@ test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue ./...
 
+test-root-disable: install
+	@echo "Running minio root lockdown tests"
+	@env bash $(PWD)/buildscripts/disable-root.sh
+
 test-decom: install
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh
