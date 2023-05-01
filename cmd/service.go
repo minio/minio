@@ -21,6 +21,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"runtime"
 	"syscall"
 )
 
@@ -56,6 +57,19 @@ func initGlobalContext() {
 // deployed binary to be started. It returns the pid of the newly started
 // process when successful.
 func restartProcess() error {
+	if runtime.GOOS == globalWindowsOSName {
+		cmd := exec.Command(os.Args[0], os.Args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		cmd.Env = os.Environ()
+		err := cmd.Run()
+		if err == nil {
+			os.Exit(0)
+		}
+		return err
+	}
+
 	// Use the original binary location. This works with symlinks such that if
 	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])

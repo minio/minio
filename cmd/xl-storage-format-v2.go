@@ -678,7 +678,7 @@ func metaDataPoolGet() []byte {
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
-		//lint:ignore SA6002 we are fine with the tiny alloc
+		//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
@@ -1583,8 +1583,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
 				// Skip tierFVID, tierFVMarker keys; it's used
 				// only for creating free-version.
+				// Skip xMinIOHealing, it's used only in RenameData
 				switch k {
-				case tierFVIDKey, tierFVMarkerKey:
+				case tierFVIDKey, tierFVMarkerKey, xMinIOHealing:
 					continue
 				}
 
@@ -1887,11 +1888,12 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 					continue
 				}
 				if i == 0 || ver.header.sortsBefore(latest.header) {
-					if i == 0 || latestCount == 0 {
+					switch {
+					case i == 0 || latestCount == 0:
 						latestCount = 1
-					} else if !strict && ver.header.matchesNotStrict(latest.header) {
+					case !strict && ver.header.matchesNotStrict(latest.header):
 						latestCount++
-					} else {
+					default:
 						latestCount = 1
 					}
 					latest = ver
@@ -2128,4 +2130,35 @@ func (x xlMetaBuf) IsLatestDeleteMarker() bool {
 		return errDoneForNow
 	})
 	return isDeleteMarker
+}
+
+// AllHidden returns true are no versions that would show up in a listing (ie all free markers)
+// Optionally also return early if top is a delete marker.
+func (x xlMetaBuf) AllHidden(topDeleteMarker bool) bool {
+	vers, headerV, _, buf, err := decodeXLHeaders(x)
+	if err != nil {
+		return false
+	}
+	if vers == 0 {
+		return true
+	}
+	hidden := true
+
+	var xl xlMetaV2VersionHeader
+	_ = decodeVersions(buf, vers, func(idx int, hdr, _ []byte) error {
+		if _, err := xl.unmarshalV(headerV, hdr); err != nil {
+			return errDoneForNow
+		}
+		if topDeleteMarker && idx == 0 && xl.Type == DeleteType {
+			hidden = true
+			return errDoneForNow
+		}
+		if !xl.FreeVersion() {
+			hidden = false
+			return errDoneForNow
+		}
+		// Check next version
+		return nil
+	})
+	return hidden
 }

@@ -121,10 +121,10 @@ var (
 		"MINIO_CACHE_AFTER cannot be used with MINIO_CACHE_COMMIT setting",
 	)
 
-	ErrInvalidCredentialsBackendEncrypted = newErrFn(
-		"Invalid credentials",
-		"Please set correct credentials in the environment for decryption",
-		`Detected encrypted config backend, correct access and secret keys should be specified via environment variables MINIO_ROOT_USER and MINIO_ROOT_PASSWORD to be able to decrypt the MinIO config, user IAM and policies`,
+	ErrInvalidConfigDecryptionKey = newErrFn(
+		"Incorrect encryption key to decrypt internal data",
+		"Please set the correct default KMS key value or the correct root credentials for older MinIO versions.",
+		`Revert MINIO_KMS_KES_KEY_NAME or MINIO_ROOT_USER/MINIO_ROOT_PASSWORD (for older MinIO versions) to be able to decrypt the internal data again.`,
 	)
 
 	ErrInvalidCredentials = newErrFn(
@@ -225,19 +225,19 @@ Examples:
 		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/minio' to provide sufficient permissions`,
 	)
 
-	ErrSSLUnexpectedError = newErrFn(
-		"Invalid TLS certificate",
-		"Please check the content of your certificate data",
-		`Only PEM (x.509) format is accepted as valid public & private certificates`,
+	ErrTLSReadError = newErrFn(
+		"Cannot read the TLS certificate",
+		"Please check if the certificate has the proper owner and read permissions",
+		"",
 	)
 
-	ErrSSLUnexpectedData = newErrFn(
+	ErrTLSUnexpectedData = newErrFn(
 		"Invalid TLS certificate",
 		"Please check your certificate",
 		"",
 	)
 
-	ErrSSLNoPassword = newErrFn(
+	ErrTLSNoPassword = newErrFn(
 		"Missing TLS password",
 		"Please set the password to environment variable `MINIO_CERT_PASSWD` so that the private key can be decrypted",
 		"",
@@ -255,7 +255,7 @@ Examples:
 		"",
 	)
 
-	ErrSSLWrongPassword = newErrFn(
+	ErrTLSWrongPassword = newErrFn(
 		"Unable to decrypt the private key using the provided password",
 		"Please set the correct password in environment variable `MINIO_CERT_PASSWD`",
 		"",

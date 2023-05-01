@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -58,6 +59,10 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	if location == "" {
 		location = globalSite.Region
 	}
+	if !isValidLocation(location) {
+		return location, ErrInvalidRegion
+	}
+
 	return location, ErrNone
 }
 
@@ -242,6 +247,7 @@ func extractRespElements(w http.ResponseWriter) map[string]string {
 	}
 	return map[string]string{
 		"requestId":      w.Header().Get(xhttp.AmzRequestID),
+		"nodeId":         w.Header().Get(xhttp.AmzRequestHostID),
 		"content-length": w.Header().Get(xhttp.ContentLength),
 		// Add more fields here.
 	}
@@ -350,11 +356,45 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := xhttp.NewResponseRecorder(w)
+		f.ServeHTTP(w, r)
 
-		f.ServeHTTP(statsWriter, r)
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
+		if !ok {
+			return
+		}
 
-		globalHTTPStats.updateStats(api, r, statsWriter)
+		if tc != nil {
+			if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
+				strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
+				strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
+				strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
+				globalConnStats.incInputBytes(int64(tc.RequestRecorder.Size()))
+				globalConnStats.incOutputBytes(int64(tc.ResponseRecorder.Size()))
+				return
+			}
+
+			if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+				globalConnStats.incAdminInputBytes(int64(tc.RequestRecorder.Size()))
+				globalConnStats.incAdminOutputBytes(int64(tc.ResponseRecorder.Size()))
+				return
+			}
+
+			globalHTTPStats.updateStats(api, tc.ResponseRecorder)
+			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
+			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
+
+			resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+			if err != nil {
+				logger.LogIf(r.Context(), fmt.Errorf("Unable to get the actual resource in the incoming request: %v", err))
+				return
+			}
+
+			bucket, _ := path2BucketObject(resource)
+			if bucket != "" && bucket != minioReservedBucket {
+				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
+				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
+			}
+		}
 	}
 }
 

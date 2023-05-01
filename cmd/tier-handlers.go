@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v2"
@@ -94,6 +95,11 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	var ignoreInUse bool
+	if forceStr := r.Form.Get("force"); forceStr != "" {
+		ignoreInUse, _ = strconv.ParseBool(forceStr)
+	}
+
 	// Disallow remote tiers with internal storage class names
 	switch cfg.Name {
 	case storageclass.STANDARD, storageclass.RRS:
@@ -107,7 +113,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = globalTierConfigMgr.Add(ctx, cfg)
+	err = globalTierConfigMgr.Add(ctx, cfg, ignoreInUse)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

@@ -101,7 +101,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		return errServerNotInitialized
 	}
 
-	if err := evnot.targetList.Add(globalConfigTargetList.Targets()...); err != nil {
+	if err := evnot.targetList.Add(globalNotifyTargetList.Targets()...); err != nil {
 		return err
 	}
 
@@ -248,6 +248,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 
 	respElements := map[string]string{
 		"x-amz-request-id": args.RespElements["requestId"],
+		"x-amz-id-2":       args.RespElements["nodeId"],
 		"x-minio-origin-endpoint": func() string {
 			if globalMinioEndpoint != "" {
 				return globalMinioEndpoint
@@ -255,17 +256,18 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 			return getAPIEndpoints()[0]
 		}(), // MinIO specific custom elements.
 	}
-	// Add deployment as part of
-	if globalDeploymentID != "" {
-		respElements["x-minio-deployment-id"] = globalDeploymentID
-	}
+
+	// Add deployment as part of response elements.
+	respElements["x-minio-deployment-id"] = globalDeploymentID
 	if args.RespElements["content-length"] != "" {
 		respElements["content-length"] = args.RespElements["content-length"]
 	}
+
 	keyName := args.Object.Name
 	if escape {
 		keyName = url.QueryEscape(args.Object.Name)
 	}
+
 	newEvent := event.Event{
 		EventVersion:      "2.0",
 		EventSource:       "minio:s3",
@@ -312,12 +314,13 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	args.Object.Size, _ = args.Object.GetActualSize()
-
 	// avoid generating a notification for REPLICA creation event.
 	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
 		return
 	}
+
+	args.Object.Size, _ = args.Object.GetActualSize()
+
 	// remove sensitive encryption entries in metadata.
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)

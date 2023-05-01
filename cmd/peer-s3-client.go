@@ -29,8 +29,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
-	"github.com/minio/minio/internal/sync/errgroup"
 	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 var errPeerOffline = errors.New("peer is offline")
@@ -137,16 +137,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (resu
 func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (binfo BucketInfo, err error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
-	bucketInfos := make([]BucketInfo, len(sys.peerClients)+1)
-
-	bucketInfo, err := getBucketInfoLocal(ctx, bucket, opts)
-	if err != nil {
-		return BucketInfo{}, err
-	}
-
-	errs := []error{nil}
-	bucketInfos[0] = bucketInfo
-
+	bucketInfos := make([]BucketInfo, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		idx := idx
 		client := client
@@ -163,21 +154,24 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 		}, idx)
 	}
 
-	errs = append(errs, g.Wait()...)
+	errs := g.Wait()
+
+	bucketInfo, err := getBucketInfoLocal(ctx, bucket, opts)
+	errs = append(errs, err)
+	bucketInfos = append(bucketInfos, bucketInfo)
 
 	quorum := (len(sys.allPeerClients) / 2)
 	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return BucketInfo{}, err
+		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 
 	for i, err := range errs {
 		if err == nil {
-			bucketInfo = bucketInfos[i]
-			break
+			return bucketInfos[i], nil
 		}
 	}
 
-	return bucketInfo, nil
+	return BucketInfo{}, toObjectErr(errVolumeNotFound, bucket)
 }
 
 func (client *peerS3Client) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
@@ -231,6 +225,19 @@ func (sys *S3PeerSys) MakeBucket(ctx context.Context, bucket string, opts MakeBu
 
 	quorum := (len(sys.allPeerClients) / 2) + 1
 	err := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum)
+
+	// Perform MRF on missing buckets for temporary errors.
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, errPeerOffline) || errors.Is(err, errDiskNotFound) ||
+			isNetworkError(err) {
+			globalMRFState.addPartialOp(partialOperation{
+				bucket: bucket,
+			})
+		}
+	}
 	return toObjectErr(err, bucket)
 }
 
@@ -266,12 +273,24 @@ func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts Dele
 	errs := g.Wait()
 	errs = append(errs, deleteBucketLocal(ctx, bucket, opts))
 
+	var errReturn error
 	for _, err := range errs {
-		if err != nil {
-			return err
+		if errReturn == nil && err != nil {
+			// always return first error
+			errReturn = toObjectErr(err, bucket)
+			break
 		}
 	}
-	return nil
+
+	for _, err := range errs {
+		if err == nil && errReturn != nil {
+			// re-create successful deletes, since we are return an error.
+			sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
+			break
+		}
+	}
+
+	return errReturn
 }
 
 // DeleteBucket deletes bucket on a peer

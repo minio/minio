@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v29" // Added LocalStorageInfo peer API
+	peerRESTVersion = "v30" // Removed bloom filter
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"

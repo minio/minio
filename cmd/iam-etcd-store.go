@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -113,26 +112,6 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 		}
 	}
 	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
-}
-
-func decryptData(data []byte, itemPath string) ([]byte, error) {
-	var err error
-	if !utf8.Valid(data) && GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-			minioMetaBucket: path.Join(minioMetaBucket, itemPath),
-		})
-		if err != nil {
-			// This fallback is needed because of a bug, in kms.Context{}
-			// construction during migration.
-			data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-				minioMetaBucket: itemPath,
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return data, nil
 }
 
 func getIAMConfig(item interface{}, data []byte, itemPath string) error {
@@ -244,6 +223,20 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 	}
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
+	}
+	if u.Credentials.SessionToken != "" {
+		jwtClaims, err := extractJWTClaims(u)
+		if err != nil {
+			if u.Credentials.IsTemp() {
+				// We should delete such that the client can re-request
+				// for the expiring credentials.
+				deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
+				deleteKeyEtcd(ctx, ies.client, getMappedPolicyPath(user, userType, false))
+				return nil
+			}
+			return err
+		}
+		u.Credentials.Claims = jwtClaims.Map()
 	}
 	m[user] = u
 	return nil

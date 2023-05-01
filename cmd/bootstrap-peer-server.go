@@ -101,10 +101,14 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 }
 
 var skipEnvs = map[string]struct{}{
-	"MINIO_OPTS":         {},
-	"MINIO_CERT_PASSWD":  {},
-	"MINIO_SERVER_DEBUG": {},
-	"MINIO_DSYNC_TRACE":  {},
+	"MINIO_OPTS":          {},
+	"MINIO_CERT_PASSWD":   {},
+	"MINIO_SERVER_DEBUG":  {},
+	"MINIO_DSYNC_TRACE":   {},
+	"MINIO_ROOT_USER":     {},
+	"MINIO_ROOT_PASSWORD": {},
+	"MINIO_ACCESS_KEY":    {},
+	"MINIO_SECRET_KEY":    {},
 }
 
 func getServerSystemCfg() ServerSystemConfig {
@@ -118,7 +122,7 @@ func getServerSystemCfg() ServerSystemConfig {
 		if _, ok := skipEnvs[envK]; ok {
 			continue
 		}
-		envValues[envK] = env.Get(envK, "")
+		envValues[envK] = logger.HashString(env.Get(envK, ""))
 	}
 	return ServerSystemConfig{
 		MinioEndpoints: globalEndpoints,
@@ -126,11 +130,22 @@ func getServerSystemCfg() ServerSystemConfig {
 	}
 }
 
+func (b *bootstrapRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusForbidden)
+	w.Write([]byte(err.Error()))
+}
+
 // HealthHandler returns success if request is valid
 func (b *bootstrapRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {}
 
 func (b *bootstrapRESTServer) VerifyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "VerifyHandler")
+
+	if err := storageServerRequestValidate(r); err != nil {
+		b.writeErrorResponse(w, err)
+		return
+	}
+
 	cfg := getServerSystemCfg()
 	logger.LogIf(ctx, json.NewEncoder(w).Encode(&cfg))
 }

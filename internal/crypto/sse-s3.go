@@ -71,15 +71,15 @@ func (sses3) IsEncrypted(metadata map[string]string) bool {
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
-	if KMS == nil {
+func (s3 sses3) UnsealObjectKey(k kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	if k == nil {
 		return key, Errorf("KMS not configured")
 	}
 	keyID, kmsKey, sealedKey, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
 	}
-	unsealKey, err := KMS.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
+	unsealKey, err := k.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
 	if err != nil {
 		return key, err
 	}
@@ -92,8 +92,8 @@ func (s3 sses3) UnsealObjectKey(KMS kms.KMS, metadata map[string]string, bucket,
 // keys.
 //
 // The metadata, buckets and objects slices must have the same length.
-func (s3 sses3) UnsealObjectKeys(ctx context.Context, KMS kms.KMS, metadata []map[string]string, buckets, objects []string) ([]ObjectKey, error) {
-	if KMS == nil {
+func (s3 sses3) UnsealObjectKeys(ctx context.Context, k kms.KMS, metadata []map[string]string, buckets, objects []string) ([]ObjectKey, error) {
+	if k == nil {
 		return nil, Errorf("KMS not configured")
 	}
 
@@ -124,7 +124,7 @@ func (s3 sses3) UnsealObjectKeys(ctx context.Context, KMS kms.KMS, metadata []ma
 		for i := range buckets {
 			contexts = append(contexts, kms.Context{buckets[i]: path.Join(buckets[i], objects[i])})
 		}
-		unsealKeys, err := KMS.DecryptAll(ctx, keyIDs[0], kmsKeys, contexts)
+		unsealKeys, err := k.DecryptAll(ctx, keyIDs[0], kmsKeys, contexts)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +139,7 @@ func (s3 sses3) UnsealObjectKeys(ctx context.Context, KMS kms.KMS, metadata []ma
 
 	keys := make([]ObjectKey, 0, len(keyIDs))
 	for i := range keyIDs {
-		key, err := s3.UnsealObjectKey(KMS, metadata[i], buckets[i], objects[i])
+		key, err := s3.UnsealObjectKey(k, metadata[i], buckets[i], objects[i])
 		if err != nil {
 			return nil, err
 		}

@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -172,7 +173,16 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 	}
 	cred.Claims = claims
 
-	owner := cred.AccessKey == globalActiveCred.AccessKey
+	owner := cred.AccessKey == globalActiveCred.AccessKey || (cred.ParentUser == globalActiveCred.AccessKey && cred.AccessKey != siteReplicatorSvcAcc)
+	if owner && !globalAPIConfig.permitRootAccess() {
+		// We disable root access and its service accounts if asked for.
+		return cred, owner, ErrAccessKeyDisabled
+	}
+
+	if _, ok := claims[iampolicy.SessionPolicyName]; ok {
+		owner = false
+	}
+
 	return cred, owner, ErrNone
 }
 

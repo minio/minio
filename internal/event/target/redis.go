@@ -31,6 +31,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -122,7 +123,7 @@ type RedisTarget struct {
 	id         event.TargetID
 	args       RedisArgs
 	pool       *redis.Pool
-	store      Store
+	store      store.Store[event.Event]
 	firstPing  bool
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
@@ -131,6 +132,11 @@ type RedisTarget struct {
 // ID - returns target ID.
 func (target *RedisTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *RedisTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -152,8 +158,8 @@ func (target *RedisTarget) isActive() (bool, error) {
 
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
-		if IsConnRefusedErr(pingErr) {
-			return false, errNotConnected
+		if xnet.IsConnRefusedErr(pingErr) {
+			return false, store.ErrNotConnected
 		}
 		return false, pingErr
 	}
@@ -227,16 +233,16 @@ func (target *RedisTarget) Send(eventKey string) error {
 
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
-		if IsConnRefusedErr(pingErr) {
-			return errNotConnected
+		if xnet.IsConnRefusedErr(pingErr) {
+			return store.ErrNotConnected
 		}
 		return pingErr
 	}
 
 	if !target.firstPing {
 		if err := target.args.validateFormat(conn); err != nil {
-			if IsConnRefusedErr(err) {
-				return errNotConnected
+			if xnet.IsConnRefusedErr(err) {
+				return store.ErrNotConnected
 			}
 			return err
 		}
@@ -254,8 +260,8 @@ func (target *RedisTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if IsConnRefusedErr(err) {
-			return errNotConnected
+		if xnet.IsConnRefusedErr(err) {
+			return store.ErrNotConnected
 		}
 		return err
 	}
@@ -280,7 +286,7 @@ func (target *RedisTarget) initRedis() error {
 
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
-		if !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
+		if !(xnet.IsConnRefusedErr(pingErr) || xnet.IsConnResetErr(pingErr)) {
 			target.loggerOnce(context.Background(), pingErr, target.ID().String())
 		}
 		return pingErr
@@ -298,7 +304,7 @@ func (target *RedisTarget) initRedis() error {
 		return err
 	}
 	if !yes {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 
 	return nil
@@ -306,11 +312,11 @@ func (target *RedisTarget) initRedis() error {
 
 // NewRedisTarget - creates new Redis target.
 func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*RedisTarget, error) {
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of Redis `%s`: %w", id, err)
 		}
 	}
@@ -349,13 +355,13 @@ func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*Redi
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
-		store:      store,
+		store:      queueStore,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil

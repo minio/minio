@@ -2,8 +2,96 @@ apiVersion: v1
 entries:
   minio:
   - apiVersion: v1
+    appVersion: RELEASE.2023-04-13T03-08-07Z
+    created: "2023-04-13T14:39:33.904722194-07:00"
+    description: Multi-Cloud Object Storage
+    digest: 034d68f85799f6693836975797f85a91842cf2d003a6c4ff401bd4ea4c946af6
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - minio
+    - storage
+    - object-storage
+    - s3
+    - cluster
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-5.0.8.tgz
+    version: 5.0.8
+  - apiVersion: v1
+    appVersion: RELEASE.2023-02-10T18-48-39Z
+    created: "2023-04-13T14:39:33.902972411-07:00"
+    description: Multi-Cloud Object Storage
+    digest: 3f935a310e1b5b873052629b66005c160356ca7b2bd394cb07b34dbaf9905e3f
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - minio
+    - storage
+    - object-storage
+    - s3
+    - cluster
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-5.0.7.tgz
+    version: 5.0.7
+  - apiVersion: v1
+    appVersion: RELEASE.2023-02-10T18-48-39Z
+    created: "2023-04-13T14:39:33.899768149-07:00"
+    description: Multi-Cloud Object Storage
+    digest: 82ef858ce483c2d736444792986cb36bd0fb4fc90a80b97fe30d7b2f2034d24a
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - minio
+    - storage
+    - object-storage
+    - s3
+    - cluster
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-5.0.6.tgz
+    version: 5.0.6
+  - apiVersion: v1
+    appVersion: RELEASE.2023-01-31T02-24-19Z
+    created: "2023-04-13T14:39:33.898010335-07:00"
+    description: Multi-Cloud Object Storage
+    digest: fefeea10e4e525e45f82fb80a03900d34605ec432dd92f56d94eaf4fb1b98c41
+    home: https://min.io
+    icon: https://min.io/resources/img/logo/MINIO_wordmark.png
+    keywords:
+    - minio
+    - storage
+    - object-storage
+    - s3
+    - cluster
+    maintainers:
+    - email: dev@minio.io
+      name: MinIO, Inc
+    name: minio
+    sources:
+    - https://github.com/minio/minio
+    urls:
+    - https://charts.min.io/helm-releases/minio-5.0.5.tgz
+    version: 5.0.5
+  - apiVersion: v1
     appVersion: RELEASE.2022-12-12T19-27-27Z
-    created: "2022-12-23T12:29:21.4186518-08:00"
+    created: "2023-04-13T14:39:33.896365088-07:00"
     description: Multi-Cloud Object Storage
     digest: 6b305783c98b0b97ffab079ff4430094fd0ca6e98e82bb8153cb93033a1bf40f
     home: https://min.io
@@ -25,7 +113,7 @@ entries:
     version: 5.0.4
   - apiVersion: v1
     appVersion: RELEASE.2022-12-12T19-27-27Z
-    created: "2022-12-23T12:29:21.417606591-08:00"
+    created: "2023-04-13T14:39:33.894702003-07:00"
     description: Multi-Cloud Object Storage
     digest: bac89157c53b324aece263c294aa49f5c9b64f426b4b06c9bca3d72e77e244f2
     home: https://min.io
@@ -47,7 +135,7 @@ entries:
     version: 5.0.3
   - apiVersion: v1
     appVersion: RELEASE.2022-12-12T19-27-27Z
-    created: "2022-12-23T12:29:21.416526087-08:00"
+    created: "2023-04-13T14:39:33.89270488-07:00"
     description: Multi-Cloud Object Storage
     digest: 935ce4f09366231b11d414d626f887fa6fa6024dd30a42e81e810ca1438d5904
     home: https://min.io
@@ -69,7 +157,7 @@ entries:
     version: 5.0.2
   - apiVersion: v1
     appVersion: RELEASE.2022-11-11T03-44-20Z
-    created: "2022-12-23T12:29:21.415265844-08:00"
+    created: "2023-04-13T14:39:33.89095156-07:00"
     description: Multi-Cloud Object Storage
     digest: 3e952c5d737980b8ccdfb819021eafb4b4e8da226f764a1dc3de1ba63ceb1ffa
     home: https://min.io
@@ -91,7 +179,7 @@ entries:
     version: 5.0.1
   - apiVersion: v1
     appVersion: RELEASE.2022-10-24T18-35-07Z
-    created: "2022-12-23T12:29:21.413853736-08:00"
+    created: "2023-04-13T14:39:33.88770083-07:00"
     description: Multi-Cloud Object Storage
     digest: 6215c800d84fd4c40e4fb4142645fc1c6a039c251776a3cc8c11a24b9e3b59c7
     home: https://min.io
@@ -113,7 +201,7 @@ entries:
     version: 5.0.0
   - apiVersion: v1
     appVersion: RELEASE.2022-10-24T18-35-07Z
-    created: "2022-12-23T12:29:21.412483939-08:00"
+    created: "2023-04-13T14:39:33.885874401-07:00"
     description: Multi-Cloud Object Storage
     digest: 2d3d884490ea1127742f938bc9382844bae713caae08b3308f766f3c9000659a
     home: https://min.io
@@ -135,7 +223,7 @@ entries:
     version: 4.1.0
   - apiVersion: v1
     appVersion: RELEASE.2022-09-17T00-09-45Z
-    created: "2022-12-23T12:29:21.401252032-08:00"
+    created: "2023-04-13T14:39:33.870938962-07:00"
     description: Multi-Cloud Object Storage
     digest: 6f16f2dbfed91ab81a7fae60b6ea32f554365bd27bf5fda55b64a0fa264f4252
     home: https://min.io
@@ -157,7 +245,7 @@ entries:
     version: 4.0.15
   - apiVersion: v1
     appVersion: RELEASE.2022-09-01T23-53-36Z
-    created: "2022-12-23T12:29:21.399487229-08:00"
+    created: "2023-04-13T14:39:33.869292215-07:00"
     description: Multi-Cloud Object Storage
     digest: 35d89d8f49d53ea929466fb88ee26123431326033f1387e6b2d536a629c0a398
     home: https://min.io
@@ -179,7 +267,7 @@ entries:
     version: 4.0.14
   - apiVersion: v1
     appVersion: RELEASE.2022-08-22T23-53-06Z
-    created: "2022-12-23T12:29:21.398294013-08:00"
+    created: "2023-04-13T14:39:33.867593706-07:00"
     description: Multi-Cloud Object Storage
     digest: 5b86937ca88d9f6046141fdc2b1cc54760435ed92d289cd0a115fa7148781d4e
     home: https://min.io
@@ -201,7 +289,7 @@ entries:
     version: 4.0.13
   - apiVersion: v1
     appVersion: RELEASE.2022-08-13T21-54-44Z
-    created: "2022-12-23T12:29:21.397273219-08:00"
+    created: "2023-04-13T14:39:33.86487566-07:00"
     description: Multi-Cloud Object Storage
     digest: 2d9c227c0f46ea8bdef4d760c212156fd4c6623ddc5406779c569fe925527787
     home: https://min.io
@@ -223,7 +311,7 @@ entries:
     version: 4.0.12
   - apiVersion: v1
     appVersion: RELEASE.2022-08-05T23-27-09Z
-    created: "2022-12-23T12:29:21.396274213-08:00"
+    created: "2023-04-13T14:39:33.863292598-07:00"
     description: Multi-Cloud Object Storage
     digest: 6caaffcb636e040cd7e8bc4883a1674a673757f4781c32d53b5ec0f41fea3944
     home: https://min.io
@@ -245,7 +333,7 @@ entries:
     version: 4.0.11
   - apiVersion: v1
     appVersion: RELEASE.2022-08-02T23-59-16Z
-    created: "2022-12-23T12:29:21.39521517-08:00"
+    created: "2023-04-13T14:39:33.861701816-07:00"
     description: Multi-Cloud Object Storage
     digest: 841d87788fb094d6a7d8a91e91821fe1e847bc952e054c781fc93742d112e18a
     home: https://min.io
@@ -267,7 +355,7 @@ entries:
     version: 4.0.10
   - apiVersion: v1
     appVersion: RELEASE.2022-08-02T23-59-16Z
-    created: "2022-12-23T12:29:21.41136632-08:00"
+    created: "2023-04-13T14:39:33.884239166-07:00"
     description: Multi-Cloud Object Storage
     digest: 6f1a78382df3215deac07495a5e7de7009a1153b4cf6cb565630652a69aec4cf
     home: https://min.io
@@ -289,7 +377,7 @@ entries:
     version: 4.0.9
   - apiVersion: v1
     appVersion: RELEASE.2022-07-29T19-40-48Z
-    created: "2022-12-23T12:29:21.410150989-08:00"
+    created: "2023-04-13T14:39:33.882599235-07:00"
     description: Multi-Cloud Object Storage
     digest: d11db37963636922cb778b6bc0ad2ca4724cb391ea7b785995ada52467d7dd83
     home: https://min.io
@@ -311,7 +399,7 @@ entries:
     version: 4.0.8
   - apiVersion: v1
     appVersion: RELEASE.2022-07-26T00-53-03Z
-    created: "2022-12-23T12:29:21.409173885-08:00"
+    created: "2023-04-13T14:39:33.881089691-07:00"
     description: Multi-Cloud Object Storage
     digest: ca775e08c84331bb5029d4d29867d30c16e2c62e897788eb432212a756e91e4e
     home: https://min.io
@@ -333,7 +421,7 @@ entries:
     version: 4.0.7
   - apiVersion: v1
     appVersion: RELEASE.2022-05-08T23-50-31Z
-    created: "2022-12-23T12:29:21.407941799-08:00"
+    created: "2023-04-13T14:39:33.879531106-07:00"
     description: Multi-Cloud Object Storage
     digest: 06542b8f3d149d5908b15de9a8d6f8cf304af0213830be56dc315785d14f9ccd
     home: https://min.io
@@ -355,7 +443,7 @@ entries:
     version: 4.0.6
   - apiVersion: v1
     appVersion: RELEASE.2022-05-08T23-50-31Z
-    created: "2022-12-23T12:29:21.406022732-08:00"
+    created: "2023-04-13T14:39:33.877099765-07:00"
     description: Multi-Cloud Object Storage
     digest: dd2676362f067454a496cdd293609d0c904b08f521625af49f95402a024ba1f5
     home: https://min.io
@@ -377,7 +465,7 @@ entries:
     version: 4.0.5
   - apiVersion: v1
     appVersion: RELEASE.2022-05-08T23-50-31Z
-    created: "2022-12-23T12:29:21.404880199-08:00"
+    created: "2023-04-13T14:39:33.875614067-07:00"
     description: Multi-Cloud Object Storage
     digest: bab9ef192d4eda4c572ad0ce0cf551736c847f582d1837d6833ee10543c23167
     home: https://min.io
@@ -399,7 +487,7 @@ entries:
     version: 4.0.4
   - apiVersion: v1
     appVersion: RELEASE.2022-05-08T23-50-31Z
-    created: "2022-12-23T12:29:21.403882849-08:00"
+    created: "2023-04-13T14:39:33.874105602-07:00"
     description: Multi-Cloud Object Storage
     digest: c770bb9841c76576e4e8573f78b0ec33e0d729504c9667e67ad62d48df5ed64c
     home: https://min.io
@@ -421,7 +509,7 @@ entries:
     version: 4.0.3
   - apiVersion: v1
     appVersion: RELEASE.2022-05-08T23-50-31Z
-    created: "2022-12-23T12:29:21.402591963-08:00"
+    created: "2023-04-13T14:39:33.872532023-07:00"
     description: Multi-Cloud Object Storage
     digest: 95835f4199d963e2a23a2493610b348e6f2ff8b71c1a648c4a3b84af9b7a83eb
     home: https://min.io
@@ -443,7 +531,7 @@ entries:
     version: 4.0.2
   - apiVersion: v1
     appVersion: RELEASE.2022-04-30T22-23-53Z
-    created: "2022-12-23T12:29:21.393855389-08:00"
+    created: "2023-04-13T14:39:33.860146689-07:00"
     description: Multi-Cloud Object Storage
     digest: 55a088c403b056e1f055a97426aa11759c3d6cbad38face170fe6cbbec7d568f
     home: https://min.io
@@ -465,7 +553,7 @@ entries:
     version: 4.0.1
   - apiVersion: v1
     appVersion: RELEASE.2022-04-26T01-20-24Z
-    created: "2022-12-23T12:29:21.392681229-08:00"
+    created: "2023-04-13T14:39:33.85863375-07:00"
     description: Multi-Cloud Object Storage
     digest: f541237e24336ec3f7f45ae0d523fef694e3a2f9ef648c5b11c15734db6ba2b2
     home: https://min.io
@@ -487,7 +575,7 @@ entries:
     version: 4.0.0
   - apiVersion: v1
     appVersion: RELEASE.2022-04-16T04-26-02Z
-    created: "2022-12-23T12:29:21.391627167-08:00"
+    created: "2023-04-13T14:39:33.857146288-07:00"
     description: Multi-Cloud Object Storage
     digest: edc0c3dd6d5246a06b74ba16bb4aff80a6d7225dc9aecf064fd89a8af371b9c1
     home: https://min.io
@@ -509,7 +597,7 @@ entries:
     version: 3.6.6
   - apiVersion: v1
     appVersion: RELEASE.2022-04-12T06-55-35Z
-    created: "2022-12-23T12:29:21.390543918-08:00"
+    created: "2023-04-13T14:39:33.855161049-07:00"
     description: Multi-Cloud Object Storage
     digest: 211e89f6b9eb0b9a3583abaa127be60e1f9717a098e6b2858cb9dc1cc50c1650
     home: https://min.io
@@ -531,7 +619,7 @@ entries:
     version: 3.6.5
   - apiVersion: v1
     appVersion: RELEASE.2022-04-09T15-09-52Z
-    created: "2022-12-23T12:29:21.389496821-08:00"
+    created: "2023-04-13T14:39:33.853131766-07:00"
     description: Multi-Cloud Object Storage
     digest: 534a879d73b370a18b554b93d0930e1c115419619c4ce4ec7dbaae632acacf06
     home: https://min.io
@@ -553,7 +641,7 @@ entries:
     version: 3.6.4
   - apiVersion: v1
     appVersion: RELEASE.2022-03-24T00-43-44Z
-    created: "2022-12-23T12:29:21.38820813-08:00"
+    created: "2023-04-13T14:39:33.851651471-07:00"
     description: Multi-Cloud Object Storage
     digest: 99508b20eb0083a567dcccaf9a6c237e09575ed1d70cd2e8333f89c472d13d75
     home: https://min.io
@@ -575,7 +663,7 @@ entries:
     version: 3.6.3
   - apiVersion: v1
     appVersion: RELEASE.2022-03-17T06-34-49Z
-    created: "2022-12-23T12:29:21.386403134-08:00"
+    created: "2023-04-13T14:39:33.850155733-07:00"
     description: Multi-Cloud Object Storage
     digest: b4cd25611ca322b1d23d23112fdfa6b068fd91eefe0b0663b88ff87ea4282495
     home: https://min.io
@@ -597,7 +685,7 @@ entries:
     version: 3.6.2
   - apiVersion: v1
     appVersion: RELEASE.2022-03-14T18-25-24Z
-    created: "2022-12-23T12:29:21.385436265-08:00"
+    created: "2023-04-13T14:39:33.848658622-07:00"
     description: Multi-Cloud Object Storage
     digest: d75b88162bfe54740a233bcecf87328bba2ae23d170bec3a35c828bc6fdc224c
     home: https://min.io
@@ -619,7 +707,7 @@ entries:
     version: 3.6.1
   - apiVersion: v1
     appVersion: RELEASE.2022-03-11T23-57-45Z
-    created: "2022-12-23T12:29:21.384485315-08:00"
+    created: "2023-04-13T14:39:33.8471424-07:00"
     description: Multi-Cloud Object Storage
     digest: 22e53a1184a21a679bc7d8b94e955777f3506340fc29da5ab0cb6d729bdbde8d
     home: https://min.io
@@ -641,7 +729,7 @@ entries:
     version: 3.6.0
   - apiVersion: v1
     appVersion: RELEASE.2022-03-03T21-21-16Z
-    created: "2022-12-23T12:29:21.383289096-08:00"
+    created: "2023-04-13T14:39:33.845572238-07:00"
     description: Multi-Cloud Object Storage
     digest: 6fda968d3fdfd60470c0055a4e1a3bd8e5aee9ad0af5ba2fb7b7b926fdc9e4a0
     home: https://min.io
@@ -663,7 +751,7 @@ entries:
     version: 3.5.9
   - apiVersion: v1
     appVersion: RELEASE.2022-02-26T02-54-46Z
-    created: "2022-12-23T12:29:21.382312185-08:00"
+    created: "2023-04-13T14:39:33.843283699-07:00"
     description: Multi-Cloud Object Storage
     digest: 8e015369048a3a82bbd53ad36696786f18561c6b25d14eee9e2c93a7336cef46
     home: https://min.io
@@ -685,7 +773,7 @@ entries:
     version: 3.5.8
   - apiVersion: v1
     appVersion: RELEASE.2022-02-18T01-50-10Z
-    created: "2022-12-23T12:29:21.381003379-08:00"
+    created: "2023-04-13T14:39:33.841793213-07:00"
     description: Multi-Cloud Object Storage
     digest: cb3543fe748e5f0d59b3ccf4ab9af8e10b731405ae445d1f5715e30013632373
     home: https://min.io
@@ -707,7 +795,7 @@ entries:
     version: 3.5.7
   - apiVersion: v1
     appVersion: RELEASE.2022-02-18T01-50-10Z
-    created: "2022-12-23T12:29:21.379715526-08:00"
+    created: "2023-04-13T14:39:33.840320255-07:00"
     description: Multi-Cloud Object Storage
     digest: f2e359fa5eefffc59abb3d14a8fa94b11ddeaa99f6cd8dd5f40f4e04121000d6
     home: https://min.io
@@ -729,7 +817,7 @@ entries:
     version: 3.5.6
   - apiVersion: v1
     appVersion: RELEASE.2022-02-16T00-35-27Z
-    created: "2022-12-23T12:29:21.378713676-08:00"
+    created: "2023-04-13T14:39:33.838848475-07:00"
     description: Multi-Cloud Object Storage
     digest: 529d56cca9d83a3d0e5672e63b6e87b5bcbe10a6b45f7a55ba998cceb32f9c81
     home: https://min.io
@@ -751,7 +839,7 @@ entries:
     version: 3.5.5
   - apiVersion: v1
     appVersion: RELEASE.2022-02-12T00-51-25Z
-    created: "2022-12-23T12:29:21.377708229-08:00"
+    created: "2023-04-13T14:39:33.837463455-07:00"
     description: Multi-Cloud Object Storage
     digest: 3d530598f8ece67bec5b7f990d206584893987c713502f9228e4ee24b5535414
     home: https://min.io
@@ -773,7 +861,7 @@ entries:
     version: 3.5.4
   - apiVersion: v1
     appVersion: RELEASE.2022-02-12T00-51-25Z
-    created: "2022-12-23T12:29:21.376839149-08:00"
+    created: "2023-04-13T14:39:33.836037131-07:00"
     description: Multi-Cloud Object Storage
     digest: 53937031348b29615f07fc4869b2d668391d8ba9084630a497abd7a7dea9dfb0
     home: https://min.io
@@ -795,7 +883,7 @@ entries:
     version: 3.5.3
   - apiVersion: v1
     appVersion: RELEASE.2022-02-07T08-17-33Z
-    created: "2022-12-23T12:29:21.37596436-08:00"
+    created: "2023-04-13T14:39:33.834131809-07:00"
     description: Multi-Cloud Object Storage
     digest: 68d643414ff0d565716c5715034fcbf1af262e041915a5c02eb51ec1a65c1ea0
     home: https://min.io
@@ -817,7 +905,7 @@ entries:
     version: 3.5.2
   - apiVersion: v1
     appVersion: RELEASE.2022-02-01T18-00-14Z
-    created: "2022-12-23T12:29:21.37490455-08:00"
+    created: "2023-04-13T14:39:33.832190048-07:00"
     description: Multi-Cloud Object Storage
     digest: a3e855ed0f31233b989fffd775a29d6fbfa0590089010ff16783fd7f142ef6e7
     home: https://min.io
@@ -839,7 +927,7 @@ entries:
     version: 3.5.1
   - apiVersion: v1
     appVersion: RELEASE.2022-02-01T18-00-14Z
-    created: "2022-12-23T12:29:21.373807407-08:00"
+    created: "2023-04-13T14:39:33.829251194-07:00"
     description: Multi-Cloud Object Storage
     digest: b1b0ae3c54b4260a698753e11d7781bb8ddc67b7e3fbf0af82796e4cd4ef92a3
     home: https://min.io
@@ -861,7 +949,7 @@ entries:
     version: 3.5.0
   - apiVersion: v1
     appVersion: RELEASE.2022-01-28T02-28-16Z
-    created: "2022-12-23T12:29:21.372985716-08:00"
+    created: "2023-04-13T14:39:33.827349955-07:00"
     description: Multi-Cloud Object Storage
     digest: fecf25d2d3fb208c6f894fed642a60780a570b7f6d0adddde846af7236dc80aa
     home: https://min.io
@@ -883,7 +971,7 @@ entries:
     version: 3.4.8
   - apiVersion: v1
     appVersion: RELEASE.2022-01-25T19-56-04Z
-    created: "2022-12-23T12:29:21.372144401-08:00"
+    created: "2023-04-13T14:39:33.825179668-07:00"
     description: Multi-Cloud Object Storage
     digest: c78008caa5ce98f64c887630f59d0cbd481cb3f19a7d4e9d3e81bf4e1e45cadc
     home: https://min.io
@@ -905,7 +993,7 @@ entries:
     version: 3.4.7
   - apiVersion: v1
     appVersion: RELEASE.2022-01-08T03-11-54Z
-    created: "2022-12-23T12:29:21.371208237-08:00"
+    created: "2023-04-13T14:39:33.823029641-07:00"
     description: Multi-Cloud Object Storage
     digest: 8f2e2691bf897f74ff094dd370ec56ba9d417e5e8926710c14c2ba346330238d
     home: https://min.io
@@ -927,7 +1015,7 @@ entries:
     version: 3.4.6
   - apiVersion: v1
     appVersion: RELEASE.2022-01-04T07-41-07Z
-    created: "2022-12-23T12:29:21.370408751-08:00"
+    created: "2023-04-13T14:39:33.821363456-07:00"
     description: Multi-Cloud Object Storage
     digest: bacd140f0016fab35f516bde787da6449b3a960c071fad9e4b6563118033ac84
     home: https://min.io
@@ -949,7 +1037,7 @@ entries:
     version: 3.4.5
   - apiVersion: v1
     appVersion: RELEASE.2021-12-29T06-49-06Z
-    created: "2022-12-23T12:29:21.369562339-08:00"
+    created: "2023-04-13T14:39:33.81968069-07:00"
     description: Multi-Cloud Object Storage
     digest: 48a453ea5ffeef25933904caefd9470bfb26224dfc2d1096bd0031467ba53007
     home: https://min.io
@@ -971,7 +1059,7 @@ entries:
     version: 3.4.4
   - apiVersion: v1
     appVersion: RELEASE.2021-12-20T22-07-16Z
-    created: "2022-12-23T12:29:21.368150885-08:00"
+    created: "2023-04-13T14:39:33.817648739-07:00"
     description: Multi-Cloud Object Storage
     digest: 47ef4a930713b98f9438ceca913c6e700f85bb25dba5624b056486254b5f0c60
     home: https://min.io
@@ -993,7 +1081,7 @@ entries:
     version: 3.4.3
   - apiVersion: v1
     appVersion: RELEASE.2021-12-20T22-07-16Z
-    created: "2022-12-23T12:29:21.367153873-08:00"
+    created: "2023-04-13T14:39:33.816178628-07:00"
     description: Multi-Cloud Object Storage
     digest: d6763f7e2ea66810bd55eb225579a9c3b968f9ae1256f45fd469362e55d846ff
     home: https://min.io
@@ -1015,7 +1103,7 @@ entries:
     version: 3.4.2
   - apiVersion: v1
     appVersion: RELEASE.2021-12-10T23-03-39Z
-    created: "2022-12-23T12:29:21.366240434-08:00"
+    created: "2023-04-13T14:39:33.813912605-07:00"
     description: Multi-Cloud Object Storage
     digest: 2fb822c87216ba3fc2ae51a54a0a3e239aa560d86542991504a841cc2a2b9a37
     home: https://min.io
@@ -1037,7 +1125,7 @@ entries:
     version: 3.4.1
   - apiVersion: v1
     appVersion: RELEASE.2021-12-18T04-42-33Z
-    created: "2022-12-23T12:29:21.365325544-08:00"
+    created: "2023-04-13T14:39:33.812658948-07:00"
     description: Multi-Cloud Object Storage
     digest: fa8ba1aeb1a15316c6be8403416a5e6b5e6139b7166592087e7bddc9e6db5453
     home: https://min.io
@@ -1059,7 +1147,7 @@ entries:
     version: 3.4.0
   - apiVersion: v1
     appVersion: RELEASE.2021-12-10T23-03-39Z
-    created: "2022-12-23T12:29:21.364436334-08:00"
+    created: "2023-04-13T14:39:33.811338087-07:00"
     description: Multi-Cloud Object Storage
     digest: b9b0af9ca50b8d00868e1f1b989dca275829d9110af6de91bb9b3a398341e894
     home: https://min.io
@@ -1081,7 +1169,7 @@ entries:
     version: 3.3.4
   - apiVersion: v1
     appVersion: RELEASE.2021-12-10T23-03-39Z
-    created: "2022-12-23T12:29:21.363462063-08:00"
+    created: "2023-04-13T14:39:33.809986868-07:00"
     description: Multi-Cloud Object Storage
     digest: f8b22a5b8fe95a7ddf61b825e17d11c9345fb10e4c126b0d78381608aa300a08
     home: https://min.io
@@ -1103,7 +1191,7 @@ entries:
     version: 3.3.3
   - apiVersion: v1
     appVersion: RELEASE.2021-12-10T23-03-39Z
-    created: "2022-12-23T12:29:21.362382956-08:00"
+    created: "2023-04-13T14:39:33.80878071-07:00"
     description: Multi-Cloud Object Storage
     digest: c48d474f269427abe5ab446f00687d0625b3d1adfc5c73bdb4b21ca9e42853fb
     home: https://min.io
@@ -1125,7 +1213,7 @@ entries:
     version: 3.3.2
   - apiVersion: v1
     appVersion: RELEASE.2021-11-24T23-19-33Z
-    created: "2022-12-23T12:29:21.361122514-08:00"
+    created: "2023-04-13T14:39:33.807416726-07:00"
     description: Multi-Cloud Object Storage
     digest: 7c3da39d9b0090cbf5efedf0cc163a1e2df05becc5152c3add8e837384690bc4
     home: https://min.io
@@ -1147,7 +1235,7 @@ entries:
     version: 3.3.1
   - apiVersion: v1
     appVersion: RELEASE.2021-11-24T23-19-33Z
-    created: "2022-12-23T12:29:21.360314875-08:00"
+    created: "2023-04-13T14:39:33.806163505-07:00"
     description: Multi-Cloud Object Storage
     digest: 50d6590b4cc779c40f81cc13b1586fbe508aa7f3230036c760bfc5f4154fbce4
     home: https://min.io
@@ -1169,7 +1257,7 @@ entries:
     version: 3.3.0
   - apiVersion: v1
     appVersion: RELEASE.2021-10-13T00-23-17Z
-    created: "2022-12-23T12:29:21.359396742-08:00"
+    created: "2023-04-13T14:39:33.804903629-07:00"
     description: Multi-Cloud Object Storage
     digest: 5b797b7208cd904c11a76cd72938c8652160cb5fcd7f09fa41e4e703e6d64054
     home: https://min.io
@@ -1191,7 +1279,7 @@ entries:
     version: 3.2.0
   - apiVersion: v1
     appVersion: RELEASE.2021-10-10T16-53-30Z
-    created: "2022-12-23T12:29:21.35849259-08:00"
+    created: "2023-04-13T14:39:33.802626491-07:00"
     description: Multi-Cloud Object Storage
     digest: e084ac4bb095f071e59f8f08bd092e4ab2404c1ddadacfdce7dbe248f1bafff8
     home: https://min.io
@@ -1213,7 +1301,7 @@ entries:
     version: 3.1.9
   - apiVersion: v1
     appVersion: RELEASE.2021-10-06T23-36-31Z
-    created: "2022-12-23T12:29:21.357748185-08:00"
+    created: "2023-04-13T14:39:33.801365971-07:00"
     description: Multi-Cloud Object Storage
     digest: 2890430a8d9487d1fa5508c26776e4881d0086b2c052aa6bdc65c0e4423b9159
     home: https://min.io
@@ -1235,7 +1323,7 @@ entries:
     version: 3.1.8
   - apiVersion: v1
     appVersion: RELEASE.2021-10-02T16-31-05Z
-    created: "2022-12-23T12:29:21.356931451-08:00"
+    created: "2023-04-13T14:39:33.800136574-07:00"
     description: Multi-Cloud Object Storage
     digest: 01a92196af6c47e3a01e1c68d7cf693a8bc487cba810c2cecff155071e4d6a11
     home: https://min.io
@@ -1257,7 +1345,7 @@ entries:
     version: 3.1.7
   - apiVersion: v1
     appVersion: RELEASE.2021-09-18T18-09-59Z
-    created: "2022-12-23T12:29:21.355551396-08:00"
+    created: "2023-04-13T14:39:33.798923934-07:00"
     description: Multi-Cloud Object Storage
     digest: e779d73f80b75f33b9c9d995ab10fa455c9c57ee575ebc54e06725a64cd04310
     home: https://min.io
@@ -1279,7 +1367,7 @@ entries:
     version: 3.1.6
   - apiVersion: v1
     appVersion: RELEASE.2021-09-18T18-09-59Z
-    created: "2022-12-23T12:29:21.354805361-08:00"
+    created: "2023-04-13T14:39:33.797532313-07:00"
     description: Multi-Cloud Object Storage
     digest: 19de4bbc8a400f0c2a94c5e85fc25c9bfc666e773fb3e368dd621d5a57dd1c2a
     home: https://min.io
@@ -1301,7 +1389,7 @@ entries:
     version: 3.1.5
   - apiVersion: v1
     appVersion: RELEASE.2021-09-18T18-09-59Z
-    created: "2022-12-23T12:29:21.354040894-08:00"
+    created: "2023-04-13T14:39:33.796286874-07:00"
     description: Multi-Cloud Object Storage
     digest: f789d93a171296dd01af0105a5ce067c663597afbb2432faeda293b752b355c0
     home: https://min.io
@@ -1323,7 +1411,7 @@ entries:
     version: 3.1.4
   - apiVersion: v1
     appVersion: RELEASE.2021-09-09T21-37-07Z
-    created: "2022-12-23T12:29:21.353294954-08:00"
+    created: "2023-04-13T14:39:33.794957696-07:00"
     description: Multi-Cloud Object Storage
     digest: e2eb34d31560b012ef6581f0ff6004ea4376c968cbe0daed2d8f3a614a892afb
     home: https://min.io
@@ -1345,7 +1433,7 @@ entries:
     version: 3.1.3
   - apiVersion: v1
     appVersion: RELEASE.2021-09-09T21-37-07Z
-    created: "2022-12-23T12:29:21.352532735-08:00"
+    created: "2023-04-13T14:39:33.793014019-07:00"
     description: Multi-Cloud Object Storage
     digest: 8d7e0cc46b3583abd71b97dc0c071f98321101f90eca17348f1e9e0831be64cd
     home: https://min.io
@@ -1367,7 +1455,7 @@ entries:
     version: 3.1.2
   - apiVersion: v1
     appVersion: RELEASE.2021-09-09T21-37-07Z
-    created: "2022-12-23T12:29:21.351570133-08:00"
+    created: "2023-04-13T14:39:33.790939383-07:00"
     description: Multi-Cloud Object Storage
     digest: 50dcbf366b1b21f4a6fc429d0b884c0c7ff481d0fb95c5e9b3ae157c348dd124
     home: https://min.io
@@ -1389,7 +1477,7 @@ entries:
     version: 3.1.1
   - apiVersion: v1
     appVersion: RELEASE.2021-09-09T21-37-07Z
-    created: "2022-12-23T12:29:21.350631248-08:00"
+    created: "2023-04-13T14:39:33.788074463-07:00"
     description: Multi-Cloud Object Storage
     digest: 6c01af55d2e2e5f716eabf6fef3a92a8464d0674529e9bacab292e5478a73b7a
     home: https://min.io
@@ -1411,7 +1499,7 @@ entries:
     version: 3.1.0
   - apiVersion: v1
     appVersion: RELEASE.2021-09-03T03-56-13Z
-    created: "2022-12-23T12:29:21.349241935-08:00"
+    created: "2023-04-13T14:39:33.786791063-07:00"
     description: Multi-Cloud Object Storage
     digest: 18e10be4d0458bc590ca9abf753227e0c70f60511495387b8d4fb15a4daf932e
     home: https://min.io
@@ -1433,7 +1521,7 @@ entries:
     version: 3.0.2
   - apiVersion: v1
     appVersion: RELEASE.2021-08-31T05-46-54Z
-    created: "2022-12-23T12:29:21.348118931-08:00"
+    created: "2023-04-13T14:39:33.785648827-07:00"
     description: Multi-Cloud Object Storage
     digest: f5b6e7f6272a9e71aef3b75555f6f756a39eef65cb78873f26451dba79b19906
     home: https://min.io
@@ -1455,7 +1543,7 @@ entries:
     version: 3.0.1
   - apiVersion: v1
     appVersion: RELEASE.2021-08-31T05-46-54Z
-    created: "2022-12-23T12:29:21.347418406-08:00"
+    created: "2023-04-13T14:39:33.78451068-07:00"
     description: Multi-Cloud Object Storage
     digest: 6d2ee1336c412affaaf209fdb80215be2a6ebb23ab2443adbaffef9e7df13fab
     home: https://min.io
@@ -1477,7 +1565,7 @@ entries:
     version: 3.0.0
   - apiVersion: v1
     appVersion: RELEASE.2021-08-31T05-46-54Z
-    created: "2022-12-23T12:29:21.346702429-08:00"
+    created: "2023-04-13T14:39:33.783363751-07:00"
     description: Multi-Cloud Object Storage
     digest: 0a004aaf5bb61deed6a5c88256d1695ebe2f9ff1553874a93e4acfd75e8d339b
     home: https://min.io
@@ -1497,7 +1585,7 @@ entries:
     version: 2.0.1
   - apiVersion: v1
     appVersion: RELEASE.2021-08-25T00-41-18Z
-    created: "2022-12-23T12:29:21.346016359-08:00"
+    created: "2023-04-13T14:39:33.782197288-07:00"
     description: Multi-Cloud Object Storage
     digest: fcd944e837ee481307de6aa3d387ea18c234f995a84c15abb211aab4a4054afc
     home: https://min.io
@@ -1517,7 +1605,7 @@ entries:
     version: 2.0.0
   - apiVersion: v1
     appVersion: RELEASE.2021-08-25T00-41-18Z
-    created: "2022-12-23T12:29:21.345298923-08:00"
+    created: "2023-04-13T14:39:33.780959636-07:00"
     description: Multi-Cloud Object Storage
     digest: 7b6c033d43a856479eb493ab8ca05b230f77c3e42e209e8f298fac6af1a9796f
     home: https://min.io
@@ -1537,7 +1625,7 @@ entries:
     version: 1.0.5
   - apiVersion: v1
     appVersion: RELEASE.2021-08-25T00-41-18Z
-    created: "2022-12-23T12:29:21.343779412-08:00"
+    created: "2023-04-13T14:39:33.778433355-07:00"
     description: Multi-Cloud Object Storage
     digest: abd221245ace16c8e0c6c851cf262d1474a5219dcbf25c4b2e7b77142f9c59ed
     home: https://min.io
@@ -1557,7 +1645,7 @@ entries:
     version: 1.0.4
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2022-12-23T12:29:21.342997382-08:00"
+    created: "2023-04-13T14:39:33.776484146-07:00"
     description: Multi-Cloud Object Storage
     digest: 922a333f5413d1042f7aa81929f43767f6ffca9b260c46713f04ce1dda86d57d
     home: https://min.io
@@ -1577,7 +1665,7 @@ entries:
     version: 1.0.3
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2022-12-23T12:29:21.342196612-08:00"
+    created: "2023-04-13T14:39:33.774527099-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: 10e22773506bbfb1c66442937956534cf4057b94f06a977db78b8cd223588388
     home: https://min.io
@@ -1597,7 +1685,7 @@ entries:
     version: 1.0.2
   - apiVersion: v1
     appVersion: RELEASE.2021-08-20T18-32-01Z
-    created: "2022-12-23T12:29:21.34140944-08:00"
+    created: "2023-04-13T14:39:33.772578779-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: ef86ab6df23d6942705da9ef70991b649638c51bc310587d37a425268ba4a06c
     home: https://min.io
@@ -1617,7 +1705,7 @@ entries:
     version: 1.0.1
   - apiVersion: v1
     appVersion: RELEASE.2021-08-17T20-53-08Z
-    created: "2022-12-23T12:29:21.340635384-08:00"
+    created: "2023-04-13T14:39:33.770495939-07:00"
     description: High Performance, Kubernetes Native Object Storage
     digest: 1add7608692cbf39aaf9b1252530e566f7b2f306a14e390b0f49b97a20f2b188
     home: https://min.io
@@ -1635,4 +1723,4 @@ entries:
     urls:
     - https://charts.min.io/helm-releases/minio-1.0.0.tgz
     version: 1.0.0
-generated: "2022-12-23T12:29:21.333601315-08:00"
+generated: "2023-04-13T14:39:33.768251143-07:00"

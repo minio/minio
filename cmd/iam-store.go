@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
+	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -76,7 +77,12 @@ const (
 	iamFormatFile = "format.json"
 
 	iamFormatVersion1 = 1
+
+	minServiceAccountExpiry time.Duration = 15 * time.Minute
+	maxServiceAccountExpiry time.Duration = 365 * 24 * time.Hour
 )
+
+var errInvalidSvcAcctExpiration = errors.New("invalid service account expiration")
 
 type iamFormat struct {
 	Version int `json:"version"`
@@ -392,6 +398,19 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 	}
 
 	return policies, mp.UpdatedAt, nil
+}
+
+func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
+	if u.Credentials.SessionToken != "" {
+		jwtClaims, err := extractJWTClaims(u)
+		if err != nil {
+			return err
+		}
+		u.Credentials.Claims = jwtClaims.Map()
+	}
+	c.iamUsersMap[key] = u
+	c.updatedAt = time.Now()
+	return nil
 }
 
 // IAMStorageAPI defines an interface for the IAM persistence layer
@@ -874,6 +893,25 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 	return
 }
 
+// listGroups - lists groups - fetch groups from cache
+func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	if store.getUsersSysType() == MinIOUsersSysType {
+		for k := range cache.iamGroupsMap {
+			res = append(res, k)
+		}
+	}
+
+	if store.getUsersSysType() == LDAPUsersSysType {
+		for k := range cache.iamGroupPolicyMap {
+			res = append(res, k)
+		}
+	}
+	return
+}
+
 // PolicyDBUpdate - adds or removes given policies to/from the user or group's
 // policy associations.
 func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGroup bool,
@@ -899,8 +937,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			}
 
 			if g.Status == statusDisabled {
-				// TODO: return an error?
-				return updatedAt, nil, nil
+				return updatedAt, nil, errGroupDisabled
 			}
 		}
 		mp = cache.iamGroupPolicyMap[name]
@@ -1228,6 +1265,20 @@ func (store *IAMStoreSys) ListPolicyDocs(ctx context.Context, bucketName string)
 		}
 	}
 
+	return ret, nil
+}
+
+// fetches all policy docs from cache.
+// If bucketName is non-empty, returns policy docs matching the bucket.
+func (store *IAMStoreSys) listPolicyDocs(ctx context.Context, bucketName string) (map[string]PolicyDoc, error) {
+	cache := store.rlock()
+	defer store.runlock()
+	ret := map[string]PolicyDoc{}
+	for k, v := range cache.iamPolicyDocsMap {
+		if bucketName == "" || v.Policy.MatchResource(bucketName) {
+			ret[k] = v
+		}
+	}
 	return ret, nil
 }
 
@@ -1716,14 +1767,15 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 	if userType == regUser {
 		for _, ui := range cache.iamUsersMap {
 			u := ui.Credentials
-			if u.IsServiceAccount() && u.ParentUser == accessKey {
-				_ = store.deleteUserIdentity(ctx, u.AccessKey, svcUser)
-				delete(cache.iamUsersMap, u.AccessKey)
-			}
-			// Delete any associated STS users.
-			if u.IsTemp() && u.ParentUser == accessKey {
-				_ = store.deleteUserIdentity(ctx, u.AccessKey, stsUser)
-				delete(cache.iamUsersMap, u.AccessKey)
+			if u.ParentUser == accessKey {
+				switch {
+				case u.IsServiceAccount():
+					_ = store.deleteUserIdentity(ctx, u.AccessKey, svcUser)
+					delete(cache.iamUsersMap, u.AccessKey)
+				case u.IsTemp():
+					_ = store.deleteUserIdentity(ctx, u.AccessKey, stsUser)
+					delete(cache.iamUsersMap, u.AccessKey)
+				}
 			}
 		}
 	}
@@ -2073,8 +2125,9 @@ func (store *IAMStoreSys) SetUserStatus(ctx context.Context, accessKey string, s
 		return updatedAt, err
 	}
 
-	cache.iamUsersMap[accessKey] = uinfo
-	cache.updatedAt = time.Now()
+	if err := cache.updateUserWithClaims(accessKey, uinfo); err != nil {
+		return updatedAt, err
+	}
 
 	return uinfo.UpdatedAt, nil
 }
@@ -2109,8 +2162,7 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 		return updatedAt, err
 	}
 
-	cache.iamUsersMap[u.Credentials.AccessKey] = u
-	cache.updatedAt = time.Now()
+	cache.updateUserWithClaims(u.Credentials.AccessKey, u)
 
 	return u.UpdatedAt, nil
 }
@@ -2135,6 +2187,14 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 
 	if opts.comment != "" {
 		cr.Comment = opts.comment
+	}
+
+	if opts.expiration != nil {
+		expirationInUTC := opts.expiration.UTC()
+		if err := validateSvcExpirationInUTC(expirationInUTC); err != nil {
+			return updatedAt, err
+		}
+		cr.Expiration = expirationInUTC
 	}
 
 	switch opts.status {
@@ -2196,8 +2256,9 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		return updatedAt, err
 	}
 
-	cache.iamUsersMap[u.Credentials.AccessKey] = u
-	cache.updatedAt = time.Now()
+	if err := cache.updateUserWithClaims(u.Credentials.AccessKey, u); err != nil {
+		return updatedAt, err
+	}
 
 	return u.UpdatedAt, nil
 }
@@ -2298,8 +2359,9 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 	if err := store.saveUserIdentity(ctx, accessKey, regUser, u); err != nil {
 		return updatedAt, err
 	}
-
-	cache.iamUsersMap[accessKey] = u
+	if err := cache.updateUserWithClaims(accessKey, u); err != nil {
+		return updatedAt, err
+	}
 
 	return u.UpdatedAt, nil
 }
@@ -2322,8 +2384,7 @@ func (store *IAMStoreSys) UpdateUserSecretKey(ctx context.Context, accessKey, se
 		return err
 	}
 
-	cache.iamUsersMap[accessKey] = u
-	return nil
+	return cache.updateUserWithClaims(accessKey, u)
 }
 
 // GetSTSAndServiceAccounts - returns all STS and Service account credentials.
@@ -2360,8 +2421,8 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 	if err := store.saveUserIdentity(ctx, cred.AccessKey, userType, ui); err != nil {
 		return err
 	}
-	cache.iamUsersMap[cred.AccessKey] = ui
-	return nil
+
+	return cache.updateUserWithClaims(cred.AccessKey, ui)
 }
 
 // LoadUser - attempts to load user info from storage and updates cache.
@@ -2403,4 +2464,26 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 			store.loadPolicyDoc(ctx, policy, cache.iamPolicyDocsMap)
 		}
 	}
+}
+
+func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {
+	jwtClaims, err := auth.ExtractClaims(u.Credentials.SessionToken, u.Credentials.SecretKey)
+	if err != nil {
+		// Session tokens for STS creds will be generated with root secret
+		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, globalActiveCred.SecretKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return jwtClaims, nil
+}
+
+func validateSvcExpirationInUTC(expirationInUTC time.Time) error {
+	currentTime := time.Now().UTC()
+	minExpiration := currentTime.Add(minServiceAccountExpiry)
+	maxExpiration := currentTime.Add(maxServiceAccountExpiry)
+	if expirationInUTC.Before(minExpiration) || expirationInUTC.After(maxExpiration) {
+		return errInvalidSvcAcctExpiration
+	}
+	return nil
 }

@@ -30,12 +30,7 @@ import (
 var errConfigNotFound = errors.New("config file not found")
 
 func readConfigWithMetadata(ctx context.Context, store objectIO, configFile string, opts ObjectOptions) ([]byte, ObjectInfo, error) {
-	lockType := readLock
-	if opts.NoLock {
-		lockType = noLock // erasureObjects.GetObjectNInfo honors lockType argument but not opts.NoLock.
-	}
-
-	r, err := store.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, lockType, opts)
+	r, err := store.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, opts)
 	if err != nil {
 		if isErrObjectNotFound(err) {
 			return nil, ObjectInfo{}, errConfigNotFound

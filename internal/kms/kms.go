@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 )
 
 // KMS is the generic interface that abstracts over
@@ -31,6 +31,12 @@ import (
 type KMS interface {
 	// Stat returns the current KMS status.
 	Stat(cxt context.Context) (Status, error)
+
+	// IsLocal returns true if the KMS is a local implementation
+	IsLocal() bool
+
+	// List returns an array of local KMS Names
+	List() []kes.KeyInfo
 
 	// Metrics returns a KMS metric snapshot.
 	Metrics(ctx context.Context) (kes.Metric, error)
@@ -72,6 +78,11 @@ type Status struct {
 	// is specified. It is empty if the KMS does not support
 	// a default key.
 	DefaultKey string
+
+	// Details provides more details about the KMS endpoint status.
+	// including uptime, version and available CPUs.
+	// Could be more in future.
+	Details kes.State
 }
 
 // DEK is a data encryption key. It consists of a

@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/internal/config/api"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/mcontext"
 )
 
 type apiConfig struct {
@@ -50,6 +51,7 @@ type apiConfig struct {
 	deleteCleanupInterval       time.Duration
 	disableODirect              bool
 	gzipObjects                 bool
+	rootAccess                  bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -151,6 +153,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
 	t.disableODirect = cfg.DisableODirect
 	t.gzipObjects = cfg.GzipObjects
+	t.rootAccess = cfg.RootAccess
 }
 
 func (t *apiConfig) isDisableODirect() bool {
@@ -165,6 +168,13 @@ func (t *apiConfig) shouldGzipObjects() bool {
 	defer t.mu.RUnlock()
 
 	return t.gzipObjects
+}
+
+func (t *apiConfig) permitRootAccess() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.rootAccess
 }
 
 func (t *apiConfig) getListQuorum() string {
@@ -227,6 +237,13 @@ func (t *apiConfig) getClusterDeadline() time.Duration {
 	return t.clusterDeadline
 }
 
+func (t *apiConfig) getRequestsPoolCapacity() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return cap(t.requestsPool)
+}
+
 func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -265,6 +282,10 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 
 		globalHTTPStats.addRequestsInQueue(1)
 
+		if tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
+			tc.FuncName = "s3.MaxClients"
+		}
+
 		deadlineTimer := time.NewTimer(deadline)
 		defer deadlineTimer.Stop()
 
@@ -281,6 +302,10 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():
+			// When the client disconnects before getting the S3 handler
+			// status code response, set the status code to 499 so this request
+			// will be properly audited and traced.
+			w.WriteHeader(499)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		}

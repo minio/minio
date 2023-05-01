@@ -26,11 +26,13 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/minio/pkg/logger/message/audit"
 
 	"github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
 
-	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/logger/target/types"
 	xnet "github.com/minio/pkg/net"
 )
@@ -147,18 +149,16 @@ type Config struct {
 }
 
 // Check if atleast one broker in cluster is active
-func (k Config) pingBrokers() error {
-	var err error
+func (k Config) pingBrokers() (err error) {
+	d := net.Dialer{Timeout: 60 * time.Second}
+
 	for _, broker := range k.Brokers {
-		_, err1 := net.Dial("tcp", broker.String())
-		if err1 != nil {
-			if err == nil {
-				// Set first error
-				err = err1
-			}
+		_, err = d.Dial("tcp", broker.String())
+		if err != nil {
+			return err
 		}
 	}
-	return err
+	return nil
 }
 
 // Stats returns the target statistics.

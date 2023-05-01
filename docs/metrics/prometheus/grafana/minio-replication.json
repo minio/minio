@@ -438,7 +438,7 @@
         "targets": [
           {
             "exemplar": true,
-            "expr": "max by (range) (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"})",
+            "expr": "max by (range) (sum (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"}) by (range))",
             "format": "time_series",
             "instant": false,
             "interval": "",
@@ -2392,7 +2392,7 @@
         "targets": [
           {
             "exemplar": true,
-            "expr": "minio_cluster_disk_free_inodes{job=\"$scrape_jobs\"}",
+            "expr": "minio_node_disk_free_inodes{job=\"$scrape_jobs\"}",
             "format": "time_series",
             "instant": false,
             "interval": "",
@@ -2834,4 +2834,3 @@
     "uid": "TgmJnqnnk",
     "version": 18
   }
-  

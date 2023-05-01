@@ -55,7 +55,7 @@ createPolicy () {
   else
     echo "Policy '$NAME' already exists."
   fi
-  ${MC} admin policy add myminio $NAME /config/$FILENAME.json
+  ${MC} admin policy create myminio $NAME /config/$FILENAME.json
 
 }
 

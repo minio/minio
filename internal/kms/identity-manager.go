@@ -20,7 +20,7 @@ package kms
 import (
 	"context"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 )
 
 // IdentityManager is the generic interface that handles KMS identity operations

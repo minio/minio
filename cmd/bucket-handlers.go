@@ -39,6 +39,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/auth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -50,9 +51,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (
@@ -359,7 +360,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          cred.Claims,
@@ -371,7 +372,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Groups:          cred.Groups,
 				Action:          iampolicy.GetBucketLocationAction,
 				BucketName:      bucketInfo.Name,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          cred.Claims,
@@ -494,7 +495,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	vc, _ := globalBucketVersioningSys.Get(bucket)
 	oss := make([]*objSweeper, len(deleteObjectsReq.Objects))
 	for index, object := range deleteObjectsReq.Objects {
-		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
+		if apiErrCode := checkRequestAuthTypeWithVID(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName, object.VersionID); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
 				return
@@ -742,7 +743,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
 				Action:          action,
-				ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+				ConditionValues: getConditionValues(r, "", cred),
 				BucketName:      bucket,
 				IsOwner:         owner,
 				Claims:          cred.Claims,
@@ -754,16 +755,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Parse incoming location constraint.
-	location, s3Error := parseLocationConstraint(r)
+	_, s3Error = parseLocationConstraint(r)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
-		return
-	}
-
-	// Validate if location sent by the client is valid, reject
-	// requests which do not follow valid region requirements.
-	if !isValidLocation(location) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRegion), r.URL)
 		return
 	}
 
@@ -802,8 +796,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 				// Make sure to add Location information here only for bucket
-				w.Header().Set(xhttp.Location,
-					getObjectLocation(r, globalDomainNames, bucket, ""))
+				w.Header().Set(xhttp.Location, pathJoin(SlashSeparator, bucket))
 
 				writeSuccessResponseHeadersOnly(w)
 
@@ -851,12 +844,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts)
+	logger.LogIf(ctx, globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts))
 
 	// Make sure to add Location information here only for bucket
-	if cp := pathClean(r.URL.Path); cp != "" {
-		w.Header().Set(xhttp.Location, cp) // Clean any trailing slashes.
-	}
+	w.Header().Set(xhttp.Location, pathJoin(SlashSeparator, bucket))
 
 	writeSuccessResponseHeadersOnly(w)
 
@@ -983,7 +974,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          iampolicy.PutObjectAction,
-		ConditionValues: getConditionValues(r, "", cred.AccessKey, cred.Claims),
+		ConditionValues: getConditionValues(r, "", cred),
 		BucketName:      bucket,
 		ObjectName:      object,
 		IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
@@ -1129,7 +1120,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
-	w.Header().Set(xhttp.Location, getObjectLocation(r, globalDomainNames, bucket, object))
+	if obj := getObjectLocation(r, globalDomainNames, bucket, object); obj != "" {
+		w.Header().Set(xhttp.Location, obj)
+	}
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{
@@ -1141,6 +1134,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+		defer sendEvent(eventArgs{
+			EventName:    event.ObjectManyVersions,
+			BucketName:   objInfo.Bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		})
+	}
 
 	if redirectURL != nil { // success_action_redirect is valid and set.
 		v := redirectURL.Query()
@@ -1200,7 +1204,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	readable := globalPolicySys.IsAllowed(policy.Args{
 		Action:          policy.ListBucketAction,
 		BucketName:      bucket,
-		ConditionValues: getConditionValues(r, "", "", nil),
+		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 		IsOwner:         false,
 	})
 
@@ -1208,7 +1212,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	writable := globalPolicySys.IsAllowed(policy.Args{
 		Action:          policy.PutObjectAction,
 		BucketName:      bucket,
-		ConditionValues: getConditionValues(r, "", "", nil),
+		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 		IsOwner:         false,
 	})
 
@@ -1320,14 +1324,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if globalDNSConfig != nil {
-		if err := globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-	}
-
 	deleteBucket := objectAPI.DeleteBucket
 
 	// Attempt to delete bucket.
@@ -1341,22 +1337,23 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 				apiErr.Description = "The bucket you tried to delete is not empty. You must delete all versions in the bucket."
 			}
 		}
-		if globalDNSConfig != nil {
-			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, please fix it manually", err2))
-			}
-		}
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
+	if globalDNSConfig != nil {
+		if err := globalDNSConfig.Delete(bucket); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually, bucket on MinIO no longer exists", err))
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 	globalReplicationPool.deleteResyncMetadata(ctx, bucket)
+
 	// Call site replication hook.
-	if err := globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	logger.LogIf(ctx, globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete))
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1425,15 +1422,12 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:             madmin.SRBucketMetaTypeObjectLockConfig,
 		Bucket:           bucket,
 		ObjectLockConfig: &cfgStr,
 		UpdatedAt:        updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -1532,15 +1526,12 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		Tags:      &cfgStr,
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -1611,14 +1602,11 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		UpdatedAt: updatedAt,
-	}); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	}))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)

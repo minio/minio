@@ -23,10 +23,9 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"strings"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // figure out the most commonVersions across disk that satisfies
@@ -173,10 +172,8 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 		errFileVersionNotFound,
 		errDiskNotFound,
 		errUnformattedDisk,
-	}
-	if strings.HasPrefix(bucket, minioMetaBucket) {
-		// listing object might be truncated, ignore such errors from logging.
-		ignoredErrs = append(ignoredErrs, io.ErrUnexpectedEOF)
+		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
+		io.EOF,              // some times we would read without locks, ignore these errors
 	}
 	errs := g.Wait()
 	for index, err := range errs {

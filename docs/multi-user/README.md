@@ -23,16 +23,16 @@ cat > getonly.json << EOF
 {
   "Version": "2012-10-17",
   "Statement": [
-    {
-      "Action": [
-        "s3:GetObject"
-      ],
-      "Effect": "Allow",
-      "Resource": [
-        "arn:aws:s3:::my-bucketname/*"
-      ],
-      "Sid": ""
-    }
+	{
+	  "Action": [
+		"s3:GetObject"
+	  ],
+	  "Effect": "Allow",
+	  "Resource": [
+		"arn:aws:s3:::my-bucketname/*"
+	  ],
+	  "Sid": ""
+	}
   ]
 }
 EOF
@@ -41,7 +41,7 @@ EOF
 Create new canned policy by name `getonly` using `getonly.json` policy file.
 
 ```
-mc admin policy add myminio getonly getonly.json
+mc admin policy create myminio getonly getonly.json
 ```
 
 Create a new user `newuser` on MinIO use `mc admin user`.
@@ -53,7 +53,7 @@ mc admin user add myminio newuser newuser123
 Once the user is successfully created you can now apply the `getonly` policy for this user.
 
 ```
-mc admin policy set myminio getonly user=newuser
+mc admin policy attach myminio getonly --user=newuser
 ```
 
 ### 3. Create a new group
@@ -65,7 +65,7 @@ mc admin group add myminio newgroup newuser
 Once the group is successfully created you can now apply the `getonly` policy for this group.
 
 ```
-mc admin policy set myminio getonly group=newgroup
+mc admin policy attach myminio getonly --group=newgroup
 ```
 
 ### 4. Disable user
@@ -107,13 +107,13 @@ mc admin group remove myminio newgroup
 Change the policy for user `newuser` to `putonly` canned policy.
 
 ```
-mc admin policy set myminio putonly user=newuser
+mc admin policy attach myminio putonly --user=newuser
 ```
 
 Change the policy for group `newgroup` to `putonly` canned policy.
 
 ```
-mc admin policy set myminio putonly group=newgroup
+mc admin policy attach myminio putonly --group=newgroup
 ```
 
 ### 7. List all users or groups
@@ -147,52 +147,48 @@ You can use a policy variable in the Resource element, but only in the resource 
 {
   "Version": "2012-10-17",
   "Statement": [
-    {
-      "Action": ["s3:ListBucket"],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket"],
-      "Condition": {"StringLike": {"s3:prefix": ["${aws:username}/*"]}}
-    },
-    {
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket/${aws:username}/*"]
-    }
+	{
+	  "Action": ["s3:ListBucket"],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket"],
+	  "Condition": {"StringLike": {"s3:prefix": ["${aws:username}/*"]}}
+	},
+	{
+	  "Action": [
+		"s3:GetObject",
+		"s3:PutObject"
+	  ],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket/${aws:username}/*"]
+	}
   ]
 }
 ```
 
-If the user is authenticating using an STS credential which was authorized from OpenID connect we allow all `jwt:*` variables specified in the JWT specification, custom `jwt:*` or extensions are not supported.
+If the user is authenticating using an STS credential which was authorized from OpenID connect we allow all `jwt:*` variables specified in the JWT specification, custom `jwt:*` or extensions are not supported. List of policy variables for OpenID based STS.
 
-List of policy variables for OpenID based STS.
-
-```
-"jwt:sub"
-"jwt:iss"
-"jwt:aud"
-"jwt:jti"
-"jwt:upn"
-"jwt:name"
-"jwt:groups"
-"jwt:given_name"
-"jwt:family_name"
-"jwt:middle_name"
-"jwt:nickname"
-"jwt:preferred_username"
-"jwt:profile"
-"jwt:picture"
-"jwt:website"
-"jwt:email"
-"jwt:gender"
-"jwt:birthdate"
-"jwt:phone_number"
-"jwt:address"
-"jwt:scope"
-"jwt:client_id"
-```
+- `jwt:sub`
+- `jwt:iss`
+- `jwt:aud`
+- `jwt:jti`
+- `jwt:upn`
+- `jwt:name`
+- `jwt:groups`
+- `jwt:given_name`
+- `jwt:family_name`
+- `jwt:middle_name`
+- `jwt:nickname`
+- `jwt:preferred_username`
+- `jwt:profile`
+- `jwt:picture`
+- `jwt:website`
+- `jwt:email`
+- `jwt:gender`
+- `jwt:birthdate`
+- `jwt:phone_number`
+- `jwt:address`
+- `jwt:scope`
+- `jwt:client_id`
 
 Following example shows OpenID users with full programmatic access to a OpenID user-specific directory (their own "home directory") in MinIO.
 
@@ -200,70 +196,79 @@ Following example shows OpenID users with full programmatic access to a OpenID u
 {
   "Version": "2012-10-17",
   "Statement": [
-    {
-      "Action": ["s3:ListBucket"],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket"],
-      "Condition": {"StringLike": {"s3:prefix": ["${jwt:preferred_username}/*"]}}
-    },
-    {
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket/${jwt:preferred_username}/*"]
-    }
+	{
+	  "Action": ["s3:ListBucket"],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket"],
+	  "Condition": {"StringLike": {"s3:prefix": ["${jwt:preferred_username}/*"]}}
+	},
+	{
+	  "Action": [
+		"s3:GetObject",
+		"s3:PutObject"
+	  ],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket/${jwt:preferred_username}/*"]
+	}
   ]
 }
 ```
 
-If the user is authenticating using an STS credential which was authorized from AD/LDAP we allow `ldap:*` variables, currently only supports `ldap:username`. Following example shows LDAP users full programmatic access to a LDAP user-specific directory (their own "home directory") in MinIO.
+If the user is authenticating using an STS credential which was authorized from AD/LDAP we allow `ldap:*` variables.
+
+Currently supports
+
+- `ldap:username`
+- `ldap:user`
+- `ldap:groups`
+
+Following example shows LDAP users full programmatic access to a LDAP user-specific directory (their own "home directory") in MinIO.
 
 ```
 {
   "Version": "2012-10-17",
   "Statement": [
-    {
-      "Action": ["s3:ListBucket"],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket"],
-      "Condition": {"StringLike": {"s3:prefix": ["${ldap:username}/*"]}}
-    },
-    {
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Effect": "Allow",
-      "Resource": ["arn:aws:s3:::mybucket/${ldap:username}/*"]
-    }
+	{
+	  "Action": ["s3:ListBucket"],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket"],
+	  "Condition": {"StringLike": {"s3:prefix": ["${ldap:username}/*"]}}
+	},
+	{
+	  "Action": [
+		"s3:GetObject",
+		"s3:PutObject"
+	  ],
+	  "Effect": "Allow",
+	  "Resource": ["arn:aws:s3:::mybucket/${ldap:username}/*"]
+	}
   ]
 }
 ```
 
 #### Common information available in all requests
 
-- *aws:CurrentTime* - This can be used for conditions that check the date and time.
-- *aws:EpochTime* - This is the date in epoch or Unix time, for use with date/time conditions.
-- *aws:PrincipalType* - This value indicates whether the principal is an account (Root credential), user (MinIO user), or assumed role (STS)
-- *aws:SecureTransport* - This is a Boolean value that represents whether the request was sent over TLS.
-- *aws:SourceIp* - This is the requester's IP address, for use with IP address conditions. If running behind Nginx like proxies, MinIO preserve's the source IP.
+- `aws:CurrentTime` - This can be used for conditions that check the date and time.
+- `aws:EpochTime` - This is the date in epoch or Unix time, for use with date/time conditions.
+- `aws:PrincipalType` - This value indicates whether the principal is an account (Root credential), user (MinIO user), or assumed role (STS)
+- `aws:SecureTransport` - This is a Boolean value that represents whether the request was sent over TLS.
+- `aws:SourceIp` - This is the requester's IP address, for use with IP address conditions. If running behind Nginx like proxies, MinIO preserve's the source IP.
 
 ```
 {
   "Version": "2012-10-17",
   "Statement": {
-    "Effect": "Allow",
-    "Action": "s3:ListBucket*",
-    "Resource": "arn:aws:s3:::mybucket",
-    "Condition": {"IpAddress": {"aws:SourceIp": "203.0.113.0/24"}}
+	"Effect": "Allow",
+	"Action": "s3:ListBucket*",
+	"Resource": "arn:aws:s3:::mybucket",
+	"Condition": {"IpAddress": {"aws:SourceIp": "203.0.113.0/24"}}
   }
 }
 ```
 
-- *aws:UserAgent* - This value is a string that contains information about the requester's client application. This string is generated by the client and can be unreliable. You can only use this context key from `mc` or other MinIO SDKs which standardize the User-Agent string.
-- *aws:username* - This is a string containing the friendly name of the current user, this value would point to STS temporary credential in `AssumeRole`ed requests, instead use `jwt:preferred_username` in case of OpenID connect and `ldap:username` in case of AD/LDAP connect. *aws:userid* is an alias to *aws:username* in MinIO.
+- `aws:UserAgent` - This value is a string that contains information about the requester's client application. This string is generated by the client and can be unreliable. You can only use this context key from `mc` or other MinIO SDKs which standardize the User-Agent string.
+- `aws:username` - This is a string containing the friendly name of the current user, this value would point to STS temporary credential in `AssumeRole`ed requests, use `jwt:preferred_username` in case of OpenID connect and `ldap:username` in case of AD/LDAP. *aws:userid* is an alias to *aws:username* in MinIO.
+- `aws:groups` - This is an array containing the group names, this value would point to group mappings for the user, use `jwt:groups` in case of OpenID connect and `ldap:groups` in case of AD/LDAP.
 
 ## Explore Further
 

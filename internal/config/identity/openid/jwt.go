@@ -18,6 +18,7 @@
 package openid
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -140,7 +141,7 @@ const (
 )
 
 // Validate - validates the id_token.
-func (r *Config) Validate(arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
+func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512",
@@ -184,7 +185,7 @@ func (r *Config) Validate(arn arn.ARN, token, accessToken, dsecs string, claims 
 		return err
 	}
 
-	if err = r.updateUserinfoClaims(arn, accessToken, claims); err != nil {
+	if err = r.updateUserinfoClaims(ctx, arn, accessToken, claims); err != nil {
 		return err
 	}
 
@@ -223,7 +224,7 @@ func (r *Config) Validate(arn arn.ARN, token, accessToken, dsecs string, claims 
 	return nil
 }
 
-func (r *Config) updateUserinfoClaims(arn arn.ARN, accessToken string, claims map[string]interface{}) error {
+func (r *Config) updateUserinfoClaims(ctx context.Context, arn arn.ARN, accessToken string, claims map[string]interface{}) error {
 	pCfg, ok := r.arnProviderCfgsMap[arn]
 	// If claim user info is enabled, get claims from userInfo
 	// and overwrite them with the claims from JWT.
@@ -231,7 +232,7 @@ func (r *Config) updateUserinfoClaims(arn arn.ARN, accessToken string, claims ma
 		if accessToken == "" {
 			return errors.New("access_token is mandatory if user_info claim is enabled")
 		}
-		uclaims, err := pCfg.UserInfo(accessToken, r.transport)
+		uclaims, err := pCfg.UserInfo(ctx, accessToken, r.transport)
 		if err != nil {
 			return err
 		}

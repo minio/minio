@@ -213,12 +213,41 @@ func (l *localLocker) RUnlock(_ context.Context, args dsync.LockArgs) (reply boo
 	return reply, nil
 }
 
+type lockStats struct {
+	Total  int
+	Writes int
+	Reads  int
+}
+
+func (l *localLocker) stats() lockStats {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	st := lockStats{Total: len(l.lockMap)}
+	for _, v := range l.lockMap {
+		if len(v) == 0 {
+			continue
+		}
+		entry := v[0]
+		if entry.Writer {
+			st.Writes++
+		} else {
+			st.Reads += len(v)
+		}
+	}
+	return st
+}
+
 func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	lockCopy := make(map[string][]lockRequesterInfo, len(l.lockMap))
 	for k, v := range l.lockMap {
+		if len(v) == 0 {
+			delete(l.lockMap, k)
+			continue
+		}
 		lockCopy[k] = append(make([]lockRequesterInfo, 0, len(v)), v...)
 	}
 	return lockCopy

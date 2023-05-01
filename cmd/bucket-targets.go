@@ -98,7 +98,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 		select {
 		case <-hcTimer.C:
 			sys.hMutex.RLock()
-			var eps []madmin.ServerProperties
+			eps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			for _, ep := range sys.hc {
 				eps = append(eps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
 			}
@@ -106,16 +106,12 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				m := map[string]epHealth{}
+				m := make(map[string]epHealth, len(eps))
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
-					var online bool
-					if result.Error == nil {
-						online = result.Online
-					}
 					m[result.Endpoint.Host] = epHealth{
 						Endpoint: result.Endpoint.Host,
 						Scheme:   result.Endpoint.Scheme,
-						Online:   online,
+						Online:   result.Online,
 					}
 				}
 				cancel()
@@ -212,7 +208,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 	clnt, err := sys.getRemoteTargetClient(tgt)
 	if err != nil {
-		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket, Err: err}
 	}
 	// validate if target credentials are ok
 	exists, err := clnt.BucketExists(ctx, tgt.TargetBucket)
@@ -457,6 +453,8 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	if err != nil {
 		return nil, err
 	}
+	api.SetAppInfo("minio-replication-target", ReleaseTag+" "+tcfg.Arn)
+
 	hcDuration := defaultHealthCheckDuration
 	if tcfg.HealthCheckDuration >= 1 { // require minimum health check duration of 1 sec.
 		hcDuration = tcfg.HealthCheckDuration
@@ -477,20 +475,23 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 }
 
 // getRemoteARN gets existing ARN for an endpoint or generates a new one.
-func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget) (arn string, exists bool) {
+func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget, deplID string) (arn string, exists bool) {
 	if target == nil {
 		return
 	}
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
-		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL().String() == tgt.URL().String() && tgt.Credentials.AccessKey == target.Credentials.AccessKey {
+		if tgt.Type == target.Type &&
+			tgt.TargetBucket == target.TargetBucket &&
+			target.URL().String() == tgt.URL().String() &&
+			tgt.Credentials.AccessKey == target.Credentials.AccessKey {
 			return tgt.Arn, true
 		}
 	}
 	if !target.Type.IsValid() {
 		return
 	}
-	return generateARN(target), false
+	return generateARN(target, deplID), false
 }
 
 // getRemoteARNForPeer returns the remote target for a peer site in site replication
@@ -510,10 +511,14 @@ func (sys *BucketTargetSys) getRemoteARNForPeer(bucket string, peer madmin.PeerI
 }
 
 // generate ARN that is unique to this target type
-func generateARN(t *madmin.BucketTarget) string {
+func generateARN(t *madmin.BucketTarget, deplID string) string {
+	uuid := deplID
+	if uuid == "" {
+		uuid = mustGetUUID()
+	}
 	arn := madmin.ARN{
 		Type:   t.Type,
-		ID:     mustGetUUID(),
+		ID:     uuid,
 		Region: t.Region,
 		Bucket: t.TargetBucket,
 	}

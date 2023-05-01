@@ -73,7 +73,9 @@ createUser() {
   # set policy for user
   if [ ! -z $POLICY -a $POLICY != " " ] ; then
       echo "Adding policy '$POLICY' for '$USER'"
-      ${MC} admin policy set myminio $POLICY user=$USER
+      set +e ; # policy already attach errors out, allow it.
+      ${MC} admin policy attach myminio $POLICY --user=$USER
+      set -e
   else
       echo "User '$USER' has no policy attached."
   fi
@@ -93,7 +95,7 @@ connectToMinio $scheme
 {{- range .Values.users }}
 echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
-cat /config/secrets/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
+cat /config/secrets/{{ tpl .existingSecret $global }}/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 # Add a new line if it doesn't exist
 sed -i '$a\' $MINIO_ACCESSKEY_SECRETKEY_TMP
 createUser {{ .policy }}

@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -35,7 +36,6 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/http/stats"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 )
@@ -111,6 +111,7 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrUnsupportedMetadata), r.URL)
 			return
 		}
@@ -121,6 +122,7 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrMetadataTooLarge), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsHeader, 1)
 			return
@@ -133,9 +135,8 @@ func setRequestLimitHandler(h http.Handler) http.Handler {
 
 // Reserved bucket.
 const (
-	minioReservedBucket              = "minio"
-	minioReservedBucketPath          = SlashSeparator + minioReservedBucket
-	minioReservedBucketPathWithSlash = SlashSeparator + minioReservedBucket + SlashSeparator
+	minioReservedBucket     = "minio"
+	minioReservedBucketPath = SlashSeparator + minioReservedBucket
 
 	loginPathPrefix = SlashSeparator + "login"
 )
@@ -277,60 +278,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
-// splitStr splits a string into n parts, empty strings are added
-// if we are not able to reach n elements
-func splitStr(path, sep string, n int) []string {
-	splits := strings.SplitN(path, sep, n)
-	// Add empty strings if we found elements less than nr
-	for i := n - len(splits); i > 0; i-- {
-		splits = append(splits, "")
-	}
-	return splits
-}
-
-func url2Bucket(p string) (bucket string) {
-	tokens := splitStr(p, SlashSeparator, 3)
-	return tokens[1]
-}
-
-// setHttpStatsHandler sets a http Stats handler to gather HTTP statistics
-func setHTTPStatsHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Meters s3 connection stats.
-		meteredRequest := &stats.IncomingTrafficMeter{ReadCloser: r.Body}
-		meteredResponse := &stats.OutgoingTrafficMeter{ResponseWriter: w}
-
-		// Execute the request
-		r.Body = meteredRequest
-		h.ServeHTTP(meteredResponse, r)
-
-		if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
-			strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
-			strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
-			strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
-			globalConnStats.incInputBytes(meteredRequest.BytesRead())
-			globalConnStats.incOutputBytes(meteredResponse.BytesWritten())
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-			globalConnStats.incAdminInputBytes(meteredRequest.BytesRead())
-			globalConnStats.incAdminOutputBytes(meteredResponse.BytesWritten())
-			return
-		}
-
-		globalConnStats.incS3InputBytes(meteredRequest.BytesRead())
-		globalConnStats.incS3OutputBytes(meteredResponse.BytesWritten())
-
-		if r.URL != nil {
-			bucket := url2Bucket(r.URL.Path)
-			if bucket != "" && bucket != minioReservedBucket {
-				globalBucketConnStats.incS3InputBytes(bucket, meteredRequest.BytesRead())
-				globalBucketConnStats.incS3OutputBytes(bucket, meteredResponse.BytesWritten())
-			}
-		}
-	})
-}
-
 // Bad path components to be rejected by the path validity handler.
 const (
 	dotdotComponent = ".."
@@ -349,7 +296,7 @@ func hasBadHost(host string) error {
 // Check if the incoming path has bad path components,
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
-	path = strings.TrimSpace(path)
+	path = filepath.ToSlash(strings.TrimSpace(path)) // For windows '\' must be converted to '/'
 	for _, p := range strings.Split(path, SlashSeparator) {
 		switch strings.TrimSpace(p) {
 		case dotdotComponent:
@@ -388,6 +335,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (%s)", invalidReq.Description, err)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -402,6 +350,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 			atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 			return
@@ -415,6 +364,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 						tc.ResponseRecorder.LogErrBody = true
 					}
 
+					defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
 					return
@@ -427,6 +377,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 				tc.ResponseRecorder.LogErrBody = true
 			}
 
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			invalidReq := errorCodes.ToAPIErr(ErrInvalidRequest)
 			invalidReq.Description = fmt.Sprintf("%s (request has multiple authentication types, please use one)", invalidReq.Description)
 			writeErrorResponse(r.Context(), w, invalidReq, r.URL)
@@ -441,6 +392,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.FuncName = "handler.ValidRequest"
 					tc.ResponseRecorder.LogErrBody = true
 				}
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
 				return
 			}
@@ -453,6 +405,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.ResponseRecorder.LogErrBody = false
 				}
 
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 			} else {
 				if ok {
@@ -460,6 +413,7 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 					tc.ResponseRecorder.LogErrBody = true
 				}
 
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest), r.URL)
 			}
 			return
@@ -510,6 +464,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 		}
 		sr, err := globalDNSConfig.Get(bucket)
 		if err != nil {
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 			if err == dns.ErrNoEntriesFound {
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL)
 			} else {
@@ -552,9 +507,9 @@ func addCustomHeaders(h http.Handler) http.Handler {
 		// Set custom headers such as x-amz-request-id for each request.
 		w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
 		if globalLocalNodeName != "" {
-			w.Header().Set(xhttp.AmzRequestNodeID, globalLocalNodeNameHex)
+			w.Header().Set(xhttp.AmzRequestHostID, globalLocalNodeNameHex)
 		}
-		h.ServeHTTP(xhttp.NewResponseRecorder(w), r)
+		h.ServeHTTP(w, r)
 	})
 }
 
@@ -592,6 +547,7 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+
 		bucket, object := request2BucketObjectName(r)
 		uploadID := r.Form.Get(xhttp.UploadID)
 
@@ -608,6 +564,7 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 			}
 			// forward request to peer handling this upload
 			if globalBucketTargetSys.isOffline(remote.EndpointURL) {
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrReplicationRemoteConnectionError), r.URL)
 				return
 			}

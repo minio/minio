@@ -34,8 +34,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/minio/internal/rest"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -57,6 +57,10 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+	if client == nil || !client.IsOnline() {
+		return nil, errPeerNotReachable
+	}
+
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -307,25 +311,6 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	}
 	defer xhttp.DrainBody(respBody)
 	return nil
-}
-
-// cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
-// The response will contain a bloom filter starting at index x up to, but not including index y.
-// If y is 0, the response will not update y, but return the currently recorded information
-// from the current x to y-1.
-func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bloomFilterRequest) (*bloomFilterResponse, error) {
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(req)
-	if err != nil {
-		return nil, err
-	}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodCycleBloom, nil, &reader, -1)
-	if err != nil {
-		return nil, err
-	}
-	var resp bloomFilterResponse
-	defer xhttp.DrainBody(respBody)
-	return &resp, gob.NewDecoder(respBody).Decode(&resp)
 }
 
 // DeletePolicy - delete a specific canned policy.
@@ -838,14 +823,20 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	dec := gob.NewDecoder(respBody)
 	ch := make(chan Metric)
 	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
 		for {
 			var metric Metric
 			if err := dec.Decode(&metric); err != nil {
-				xhttp.DrainBody(respBody)
-				close(ch)
 				return
 			}
-			ch <- metric
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
 		}
 	}(ch)
 	return ch, nil

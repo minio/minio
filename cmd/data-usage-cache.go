@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -47,6 +48,9 @@ type dataUsageHash string
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
 
+// versionsHistogram is a histogram of number of versions in an object.
+type versionsHistogram [dataUsageVersionLen]uint64
+
 type dataUsageEntry struct {
 	Children dataUsageHashMap `msg:"ch"`
 	// These fields do no include any children.
@@ -54,6 +58,7 @@ type dataUsageEntry struct {
 	Objects          uint64               `msg:"os"`
 	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
 	ObjSizes         sizeHistogram        `msg:"szs"`
+	ObjVersions      versionsHistogram    `msg:"vh"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
 	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
 	Compacted        bool                 `msg:"c"`
@@ -276,7 +281,6 @@ type dataUsageCacheInfo struct {
 	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool
-	BloomFilter []byte `msg:"BloomFilter,omitempty"`
 
 	// Active lifecycle, if any on the bucket
 	lifeCycle *lifecycle.Lifecycle `msg:"-"`
@@ -292,6 +296,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
 	e.Versions += summary.versions
 	e.ObjSizes.add(summary.totalSize)
+	e.ObjVersions.add(summary.versions)
 
 	if e.ReplicationStats == nil {
 		e.ReplicationStats = &replicationAllStats{
@@ -350,6 +355,10 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
+	}
+
+	for i, v := range other.ObjVersions[:] {
+		e.ObjVersions[i] += v
 	}
 
 	if other.AllTierStats != nil {
@@ -649,10 +658,7 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 // StringAll returns a detailed string representation of all entries in the cache.
 func (d *dataUsageCache) StringAll() string {
 	// Remove bloom filter from print.
-	bf := d.Info.BloomFilter
-	d.Info.BloomFilter = nil
 	s := fmt.Sprintf("info:%+v\n", d.Info)
-	d.Info.BloomFilter = bf
 	for k, v := range d.Cache {
 		s += fmt.Sprintf("\t%v: %+v\n", k, v)
 	}
@@ -698,7 +704,7 @@ func (d *dataUsageCache) flatten(root dataUsageEntry) dataUsageEntry {
 func (h *sizeHistogram) add(size int64) {
 	// Fetch the histogram interval corresponding
 	// to the passed object size.
-	for i, interval := range ObjectsHistogramIntervals {
+	for i, interval := range ObjectsHistogramIntervals[:] {
 		if size >= interval.start && size <= interval.end {
 			h[i]++
 			break
@@ -711,6 +717,27 @@ func (h *sizeHistogram) toMap() map[string]uint64 {
 	res := make(map[string]uint64, dataUsageBucketLen)
 	for i, count := range h {
 		res[ObjectsHistogramIntervals[i].name] = count
+	}
+	return res
+}
+
+// add a version count to the histogram.
+func (h *versionsHistogram) add(versions uint64) {
+	// Fetch the histogram interval corresponding
+	// to the passed object size.
+	for i, interval := range ObjectsVersionCountIntervals[:] {
+		if versions >= uint64(interval.start) && versions <= uint64(interval.end) {
+			h[i]++
+			break
+		}
+	}
+}
+
+// toMap returns the map to a map[string]uint64.
+func (h *versionsHistogram) toMap() map[string]uint64 {
+	res := make(map[string]uint64, dataUsageVersionLen)
+	for i, count := range h {
+		res[ObjectsVersionCountIntervals[i].name] = count
 	}
 	return res
 }
@@ -745,10 +772,11 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		flat := d.flatten(*e)
 		bui := BucketUsageInfo{
-			Size:                 uint64(flat.Size),
-			VersionsCount:        flat.Versions,
-			ObjectsCount:         flat.Objects,
-			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+			Size:                    uint64(flat.Size),
+			VersionsCount:           flat.Versions,
+			ObjectsCount:            flat.Objects,
+			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
+			ObjectVersionsHistogram: flat.ObjVersions.toMap(),
 		}
 		if flat.ReplicationStats != nil {
 			bui.ReplicaSize = flat.ReplicationStats.ReplicaSize
@@ -845,43 +873,60 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 }
 
 type objectIO interface {
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (reader *GetObjectReader, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 }
 
 // load the cache content with name from minioMetaBackgroundOpsBucket.
 // Only backend errors are returned as errors.
+// The loader is optimistic and has no locking, but tries 5 times before giving up.
 // If the object is not found or unable to deserialize d is cleared and nil error is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
 	// Abandon if more than 5 minutes, so we don't hold up scanner.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, readLock, ObjectOptions{})
-	if err != nil {
-		switch err.(type) {
-		case ObjectNotFound:
-		case BucketNotFound:
-		case InsufficientReadQuorum:
-		case StorageErr:
-		default:
-			return toObjectErr(err, dataUsageBucket, name)
+	// Caches are read+written without locks,
+	retries := 0
+	for retries < 5 {
+		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, ObjectOptions{NoLock: true})
+		if err != nil {
+			switch err.(type) {
+			case ObjectNotFound, BucketNotFound:
+			case InsufficientReadQuorum, StorageErr:
+				retries++
+				time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
+				continue
+			default:
+				return toObjectErr(err, dataUsageBucket, name)
+			}
+			*d = dataUsageCache{}
+			return nil
 		}
-		*d = dataUsageCache{}
+		if err := d.deserialize(r); err != nil {
+			r.Close()
+			retries++
+			time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
+			continue
+		}
+		r.Close()
 		return nil
 	}
-	defer r.Close()
-	if err := d.deserialize(r); err != nil {
-		*d = dataUsageCache{}
-		logger.LogOnceIf(ctx, err, err.Error())
-	}
+	*d = dataUsageCache{}
 	return nil
 }
 
+// Maximum running concurrent saves on server.
+var maxConcurrentScannerSaves = make(chan struct{}, 4)
+
 // save the content of the cache to minioMetaBackgroundOpsBucket with the provided name.
+// Note that no locking is done when saving.
 func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) error {
 	var r io.Reader
-
+	maxConcurrentScannerSaves <- struct{}{}
+	defer func() {
+		<-maxConcurrentScannerSaves
+	}()
 	// If big, do streaming...
 	size := int64(-1)
 	if len(d.Cache) > 10000 {
@@ -913,7 +958,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		dataUsageBucket,
 		name,
 		NewPutObjReader(hr),
-		ObjectOptions{})
+		ObjectOptions{NoLock: true})
 	if isErrBucketNotFound(err) {
 		return nil
 	}

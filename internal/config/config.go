@@ -137,6 +137,11 @@ const (
 	// Add new constants here (similar to above) if you add new fields to config.
 )
 
+// Lambda config constants.
+const (
+	LambdaWebhookSubSys = madmin.LambdaWebhookSubSys
+)
+
 // NotifySubSystems - all notification sub-systems
 var NotifySubSystems = set.CreateStringSet(
 	NotifyKafkaSubSys,
@@ -149,6 +154,11 @@ var NotifySubSystems = set.CreateStringSet(
 	NotifyPostgresSubSys,
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
+)
+
+// LambdaSubSystems - all lambda sub-systesm
+var LambdaSubSystems = set.CreateStringSet(
+	LambdaWebhookSubSys,
 )
 
 // LoggerSubSystems - all sub-systems related to logger
@@ -592,6 +602,17 @@ var renamedSubsys = map[string]string{
 	// Add future sub-system renames
 }
 
+const ( // deprecated keys
+	apiReplicationWorkers       = "replication_workers"
+	apiReplicationFailedWorkers = "replication_failed_workers"
+)
+
+// map of subsystem to deleted keys
+var deletedSubSysKeys = map[string][]string{
+	APISubSys: {apiReplicationWorkers, apiReplicationFailedWorkers},
+	// Add future sub-system deleted keys
+}
+
 // Merge - merges a new config with all the
 // missing values for default configs,
 // returns a config.
@@ -622,9 +643,16 @@ func (c Config) Merge() Config {
 				}
 				subSys = rnSubSys
 			}
+			// Delete deprecated keys for subsystem if any
+			if keys, ok := deletedSubSysKeys[subSys]; ok {
+				for _, key := range keys {
+					ckvs.Delete(key)
+				}
+			}
 			cp[subSys][tgt] = ckvs
 		}
 	}
+
 	return cp
 }
 

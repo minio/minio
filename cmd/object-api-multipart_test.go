@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -32,6 +33,9 @@ import (
 
 // Wrapper for calling NewMultipartUpload tests for both Erasure multiple disks and single node setup.
 func TestObjectNewMultipartUpload(t *testing.T) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip()
+	}
 	ExecObjectLayerTest(t, testObjectNewMultipartUpload)
 }
 
@@ -110,9 +114,18 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		{"--", object, uploadID, BucketNotFound{}},
 		{"foo", object, uploadID, BucketNotFound{}},
 		{bucket, object, "foo-foo", InvalidUploadID{}},
-		{bucket, "\\", uploadID, InvalidUploadID{}},
 		{bucket, object, uploadID, nil},
 	}
+
+	if runtime.GOOS != globalWindowsOSName {
+		abortTestCases = append(abortTestCases, struct {
+			bucketName      string
+			objName         string
+			uploadID        string
+			expectedErrType error
+		}{bucket, "\\", uploadID, InvalidUploadID{}})
+	}
+
 	// Iterating over creatPartCases to generate multipart chunks.
 	for i, testCase := range abortTestCases {
 		err = obj.AbortMultipartUpload(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, opts)

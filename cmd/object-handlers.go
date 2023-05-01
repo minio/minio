@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
+	"github.com/minio/minio/internal/auth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -155,7 +156,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, object, opts)
@@ -237,11 +238,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Start:          offset,
 				End:            -1,
 			}
-			return getObjectNInfo(ctx, bucket, object, rs, r.Header, noLock, opts)
+			opts.NoLock = true
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 		},
 		actualSize,
 	)
-
+	defer objectRSC.Close()
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
@@ -346,7 +348,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				getObjectInfo := objectAPI.GetObjectInfo
@@ -388,9 +390,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
 			return
 		}
-		if rangeErr != nil {
-			logger.LogIf(ctx, rangeErr, logger.Application)
-		}
 	}
 
 	// Validate pre-conditions if any.
@@ -404,7 +403,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	var proxy proxyResult
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 	if err != nil {
 		var (
 			reader *GetObjectReader
@@ -416,7 +415,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
 			if perr != nil {
 				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
-				if !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
+				if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
 					logger.LogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 				}
@@ -474,22 +473,18 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	if !proxy.Proxy { // apply lifecycle rules only for local requests
-		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
-			var success bool
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				// Restored object delete would be still allowed to proceed as success
-				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-			}
-			if success {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-				return
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
+				// apply whatever the expiry rule is.
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
+					// If the ILM action is not on restored object return error.
+					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+					return
+				}
 			}
 		}
 
@@ -518,8 +513,9 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
@@ -549,7 +545,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -560,7 +556,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -647,7 +643,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				getObjectInfo := objectAPI.GetObjectInfo
@@ -731,22 +727,18 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if !proxy.Proxy { // apply lifecycle rules only locally not for proxied requests
-		// Automatically remove the object/version is an expiry lifecycle rule can be applied
+		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			evt := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
-			var success bool
-			switch evt.Action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				success = applyExpiryRule(objInfo, false, evt.Action == lifecycle.DeleteVersionAction)
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				// Restored object delete would be still allowed to proceed as success
-				// since transition behavior is slightly different.
-				applyExpiryRule(objInfo, true, evt.Action == lifecycle.DeleteRestoredVersionAction)
-			}
-			if success {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
-				return
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
+				// apply whatever the expiry rule is.
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
+					// If the ILM action is not on restored object return error.
+					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+					return
+				}
 			}
 		}
 		QueueReplicationHeal(ctx, bucket, objInfo)
@@ -809,8 +801,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	// Set standard object headers.
@@ -939,11 +932,16 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	cred := getReqAccessCred(r, globalSite.Region)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
-	return miniogo.NewCore(host, &miniogo.Options{
+	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
+	if err != nil {
+		return nil, err
+	}
+	core.SetAppInfo("minio-federated", ReleaseTag)
+	return core, nil
 }
 
 // Check if the destination bucket is on a remote site, this code only gets executed
@@ -1103,19 +1101,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
-
-	// FIXME: a possible race exists between a parallel
-	// GetObject v/s CopyObject with metadata updates, ideally
-	// we should be holding write lock here but it is not
-	// possible due to other constraints such as knowing
-	// the type of source content etc.
-	lock := noLock
-	if !cpSrcDstSame {
-		lock = readLock
+	if cpSrcDstSame {
+		getOpts.NoLock = true
 	}
 
 	var rs *HTTPRangeSpec
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -1780,7 +1771,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	opts.IndexCB = idxCb
 
-	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
+	if (!opts.MTime.IsZero() && opts.PreserveETag != "") ||
+		r.Header.Get(xhttp.IfMatch) != "" ||
+		r.Header.Get(xhttp.IfNoneMatch) != "" {
 		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1922,7 +1915,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
-	sendEvent(eventArgs{
+	evt := eventArgs{
 		EventName:    event.ObjectCreatedPut,
 		BucketName:   bucket,
 		Object:       objInfo,
@@ -1930,7 +1923,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
-	})
+	}
+	sendEvent(evt)
+	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+		evt.EventName = event.ObjectManyVersions
+		sendEvent(evt)
+	}
 
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
@@ -2091,11 +2089,24 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	// Extract request metadata
+	metadata, err := extractMetadata(ctx, r)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	metadata[xhttp.AmzStorageClass] = sc
+
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-		metadata := map[string]string{
-			xhttp.AmzStorageClass: sc,
+
+		// Copy metadata and make space for a bit more
+		metaCopy := make(map[string]string, len(metadata)+5)
+		for k, v := range metadata {
+			metaCopy[k] = v
 		}
+		// Shadow now...
+		metadata := metaCopy
 
 		actualSize := size
 		var idxCb func() []byte
@@ -2367,8 +2378,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	objInfo, err := deleteObject(ctx, bucket, object, opts)
 	if err != nil {
-		switch err.(type) {
-		case BucketNotFound:
+		if _, ok := err.(BucketNotFound); ok {
 			// When bucket doesn't exist specially handle it.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -3063,7 +3073,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 		}
 	}
 	// set or upgrade restore expiry
-	restoreExpiry := lifecycle.ExpectedExpiryTime(time.Now(), rreq.Days)
+	restoreExpiry := lifecycle.ExpectedExpiryTime(time.Now().UTC(), rreq.Days)
 	metadata := cloneMSS(objInfo.UserDefined)
 
 	// update self with restore metadata
@@ -3128,7 +3138,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 				},
 				actualSize,
 			)
-
+			defer objectRSC.Close()
 			if err = rreq.SelectParameters.Open(objectRSC); err != nil {
 				if serr, ok := err.(s3select.SelectError); ok {
 					encodedErrorResponse := encodeResponse(APIErrorResponse{

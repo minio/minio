@@ -32,8 +32,7 @@ import (
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
-	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -93,15 +92,6 @@ func (er erasureObjects) defaultWQuorum() int {
 		return dataCount + 1
 	}
 	return dataCount
-}
-
-// byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []madmin.Disk
-
-func (d byDiskTotal) Len() int      { return len(d) }
-func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d byDiskTotal) Less(i, j int) bool {
-	return d[i].TotalSpace < d[j].TotalSpace
 }
 
 func diskErrToDriveState(err error) (state string) {
@@ -208,6 +198,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				Scanning:       info.Scanning,
 				State:          diskErrToDriveState(err),
 				FreeInodes:     info.FreeInodes,
+				UsedInodes:     info.UsedInodes,
 			}
 			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
 			if info.Healing {
@@ -245,7 +236,9 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
 	disksInfo := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
-	sort.Sort(byDiskTotal(disksInfo))
+	sort.Slice(disksInfo, func(i, j int) bool {
+		return disksInfo[i].TotalSpace < disksInfo[j].TotalSpace
+	})
 
 	storageInfo := StorageInfo{
 		Disks: disksInfo,
@@ -351,7 +344,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 
 // nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
+func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -377,7 +370,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 		},
 		Cache: make(map[string]dataUsageEntry, len(oldCache.Cache)),
 	}
-	bloom := bf.bytes()
 
 	// Put all buckets into channel.
 	bucketCh := make(chan BucketInfo, len(buckets))
@@ -414,9 +406,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 
 		for {
 			select {
-			case <-ctx.Done():
-				// Return without saving.
-				return
 			case <-t.C:
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
@@ -454,6 +443,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 	// Start one scanner per disk
 	var wg sync.WaitGroup
 	wg.Add(len(disks))
+
 	for i := range disks {
 		go func(i int) {
 			defer wg.Done()
@@ -473,7 +463,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				if cache.Info.Name == "" {
 					cache.Info.Name = bucket.Name
 				}
-				cache.Info.BloomFilter = bloom
 				cache.Info.SkipHealing = healing
 				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
@@ -491,13 +480,13 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				go func(name string) {
 					defer wg.Done()
 					for update := range updates {
-						bucketResults <- dataUsageEntryInfo{
+						select {
+						case <-ctx.Done():
+						case bucketResults <- dataUsageEntryInfo{
 							Name:   name,
 							Parent: dataUsageRoot,
 							Entry:  update,
-						}
-						if intDataUpdateTracker.debug {
-							console.Debugln("z:", er.poolIndex, "s:", er.setIndex, "bucket", name, "got update", update)
+						}:
 						}
 					}
 				}(cache.Info.Name)
@@ -505,7 +494,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				before := cache.Info.LastUpdate
 				var err error
 				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode)
-				cache.Info.BloomFilter = nil
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
 						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
@@ -525,15 +513,16 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf
 				if r := cache.root(); r != nil {
 					root = cache.flatten(*r)
 				}
-				t := time.Now()
-				bucketResults <- dataUsageEntryInfo{
+				select {
+				case <-ctx.Done():
+					return
+				case bucketResults <- dataUsageEntryInfo{
 					Name:   cache.Info.Name,
 					Parent: dataUsageRoot,
 					Entry:  root,
+				}:
 				}
-				// We want to avoid synchronizing up all writes in case
-				// the results are piled up.
-				time.Sleep(time.Duration(float64(time.Since(t)) * rand.Float64()))
+
 				// Save cache
 				logger.LogIf(ctx, cache.save(ctx, er, cacheName))
 			}

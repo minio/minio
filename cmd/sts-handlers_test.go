@@ -36,7 +36,9 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	// The STS for root test needs to be the first one after setup.
 	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
+	suite.TestSTSWithDenyDeleteVersion(c)
 	suite.TestSTSWithTags(c)
+	suite.TestSTSServiceAccountsWithUsername(c)
 	suite.TestSTSWithGroupPolicy(c)
 	suite.TearDownSuite(c)
 }
@@ -71,6 +73,194 @@ func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
 			},
 		)
 	}
+}
+
+func (s *TestSuiteIAM) TestSTSServiceAccountsWithUsername(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := "dillon-bucket"
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy-username"
+	policyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::${aws:username}-*"
+   ]
+  }
+ ]
+}`)
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	if err = s.adm.AddUser(ctx, "dillon", "dillon-123"); err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, "dillon", false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: "dillon",
+			SecretKey: "dillon-123",
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Check that the LDAP sts cred is actually working.
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+
+	// 1. Check S3 access for service account ListObjects()
+	c.mustListObjects(ctx, svcClient, bucket)
+
+	// 2. Check S3 access for upload
+	c.mustUpload(ctx, svcClient, bucket)
+
+	// 3. Check S3 access for download
+	c.mustDownload(ctx, svcClient, bucket)
+}
+
+func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{ObjectLocking: true})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+   {
+    "Sid": "ObjectActionsRW",
+    "Effect": "Allow",
+    "Action": [
+     "s3:PutObject",
+     "s3:PutObjectTagging",
+     "s3:AbortMultipartUpload",
+     "s3:DeleteObject",
+     "s3:GetObject",
+     "s3:GetObjectTagging",
+     "s3:GetObjectVersion",
+     "s3:ListMultipartUploadParts"
+    ],
+    "Resource": [
+     "arn:aws:s3:::%s/*"
+    ]
+   },
+   {
+    "Sid": "DenyDeleteVersionAction",
+    "Effect": "Deny",
+    "Action": [
+     "s3:DeleteObjectVersion"
+    ],
+    "Resource": [
+     "arn:aws:s3:::%s/*"
+    ]
+   }
+  ]
+ }
+`, bucket, bucket))
+
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// confirm that the user is able to access the bucket
+	uClient := s.getUserClient(c, accessKey, secretKey, "")
+	versions := c.mustUploadReturnVersions(ctx, uClient, bucket)
+	c.mustNotDelete(ctx, uClient, bucket, versions[0])
+
+	assumeRole := cr.STSAssumeRole{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		Options: cr.STSAssumeRoleOptions{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+			Location:  "",
+		},
+	}
+
+	value, err := assumeRole.Retrieve()
+	if err != nil {
+		c.Fatalf("err calling assumeRole: %v", err)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	versions = c.mustUploadReturnVersions(ctx, minioClient, bucket)
+	c.mustNotDelete(ctx, minioClient, bucket, versions[0])
 }
 
 func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
@@ -171,9 +361,9 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 	}
 
 	// Validate sts creds can access the object
-	c.mustPutObjectWithTags(ctx, uClient, bucket, object)
-	c.mustGetObject(ctx, uClient, bucket, object)
-	c.mustHeadObject(ctx, uClient, bucket, object, 2)
+	c.mustPutObjectWithTags(ctx, minioClient, bucket, object)
+	c.mustGetObject(ctx, minioClient, bucket, object)
+	c.mustHeadObject(ctx, minioClient, bucket, object, 2)
 
 	// Validate that the client can remove objects
 	if err = minioClient.RemoveObjectTagging(ctx, bucket, object, minio.RemoveObjectTaggingOptions{}); err != nil {
@@ -437,6 +627,11 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	if !gotBuckets.Equals(shouldHaveBuckets) {
 		c.Fatalf("root user should have access to all buckets")
 	}
+
+	// This must fail.
+	if err := userAdmClient.AddUser(ctx, globalActiveCred.AccessKey, globalActiveCred.SecretKey); err == nil {
+		c.Fatal("AddUser() for root credential must fail via root STS creds")
+	}
 }
 
 // SetUpLDAP - expects to setup an LDAP test server using the test LDAP
@@ -485,6 +680,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
 				suite.TestLDAPSTSServiceAccounts(c)
+				suite.TestLDAPSTSServiceAccountsWithUsername(c)
 				suite.TestLDAPSTSServiceAccountsWithGroups(c)
 				suite.TearDownSuite(c)
 			},
@@ -724,6 +920,95 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
+}
+
+func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithUsername(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := "dillon"
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy-username"
+	policyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::${ldap:username}/*"
+   ]
+  }
+ ]
+}`)
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+	err = s.adm.SetPolicy(ctx, policy, userDN, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	ldapID := cr.LDAPIdentity{
+		Client:       s.TestSuiteCommon.client,
+		STSEndpoint:  s.endPoint,
+		LDAPUsername: "dillon",
+		LDAPPassword: "dillon",
+	}
+
+	value, err := ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	// Check that the LDAP sts cred is actually working.
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Create svc acc
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+
+	// 1. Check S3 access for service account ListObjects()
+	c.mustListObjects(ctx, svcClient, bucket)
+
+	// 2. Check S3 access for upload
+	c.mustUpload(ctx, svcClient, bucket)
+
+	// 3. Check S3 access for download
+	c.mustDownload(ctx, svcClient, bucket)
 }
 
 // In this test, the parent users gets their permissions from a group, rather

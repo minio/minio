@@ -825,7 +825,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	if set.CreateStringSet(groups...).Contains(group) {
 		c.Fatalf("created group still present!")
 	}
-	groupInfo, err = s.adm.GetGroupDescription(ctx, group)
+	_, err = s.adm.GetGroupDescription(ctx, group)
 	if err == nil {
 		c.Fatalf("group appears to exist")
 	}
@@ -1258,6 +1258,52 @@ func (c *check) mustListBuckets(ctx context.Context, client *minio.Client) {
 	_, err := client.ListBuckets(ctx)
 	if err != nil {
 		c.Fatalf("user was unable to list buckets: %v", err)
+	}
+}
+
+func (c *check) mustNotDelete(ctx context.Context, client *minio.Client, bucket string, vid string) {
+	c.Helper()
+
+	err := client.RemoveObject(ctx, bucket, "some-object", minio.RemoveObjectOptions{VersionID: vid})
+	if err == nil {
+		c.Fatalf("user must not be allowed to delete")
+	}
+
+	err = client.RemoveObject(ctx, bucket, "some-object", minio.RemoveObjectOptions{})
+	if err != nil {
+		c.Fatal("user must be able to create delete marker")
+	}
+}
+
+func (c *check) mustDownload(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
+	rd, err := client.GetObject(ctx, bucket, "some-object", minio.GetObjectOptions{})
+	if err != nil {
+		c.Fatalf("download did not succeed got %#v", err)
+	}
+	if _, err = io.Copy(io.Discard, rd); err != nil {
+		c.Fatalf("download did not succeed got %#v", err)
+	}
+}
+
+func (c *check) mustUploadReturnVersions(ctx context.Context, client *minio.Client, bucket string) []string {
+	c.Helper()
+	versions := []string{}
+	for i := 0; i < 5; i++ {
+		ui, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
+		if err != nil {
+			c.Fatalf("upload did not succeed got %#v", err)
+		}
+		versions = append(versions, ui.VersionID)
+	}
+	return versions
+}
+
+func (c *check) mustUpload(ctx context.Context, client *minio.Client, bucket string) {
+	c.Helper()
+	_, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
+	if err != nil {
+		c.Fatalf("upload did not succeed got %#v", err)
 	}
 }
 

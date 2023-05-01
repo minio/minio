@@ -64,12 +64,12 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
 ./mc admin replicate add minio1 minio2 minio3
 
-./mc admin policy set minio1 consoleAdmin user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc admin policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 sleep 5
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 ./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-./mc admin policy add minio1 rw ./docs/site-replication/rw.json
+./mc admin policy create minio1 rw ./docs/site-replication/rw.json
 
 sleep 5
 ./mc admin policy info minio2 rw >/dev/null 2>&1
@@ -276,7 +276,7 @@ kill -9 ${site1_pid}
 
 # Restart minio1 instance
 minio server --config-dir /tmp/minio-ldap --address ":9001" /tmp/minio-ldap-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
-sleep 30
+sleep 200
 
 # Test whether most recent tag update on minio2 is replicated to minio1
 val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key )

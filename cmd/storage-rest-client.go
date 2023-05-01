@@ -50,9 +50,18 @@ func isNetworkError(err error) bool {
 		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
 
+	switch {
 	// A peer node can be in shut down phase and proactively
 	// return 503 server closed error,consider it as an offline node
-	return err.Error() == http.ErrServerClosed.Error()
+	case strings.Contains(err.Error(), http.ErrServerClosed.Error()):
+		return true
+	// Corner case, the server closed the connection with a keep-alive timeout
+	// some requests are not retried internally, such as POST request with written body
+	case strings.Contains(err.Error(), "server closed idle connection"):
+		return true
+	}
+
+	return false
 }
 
 // Converts network error to storageErr. This function is
@@ -259,7 +268,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 // DiskInfo - fetch disk information for a remote disk.
-func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (client *storageRESTClient) DiskInfo(_ context.Context) (info DiskInfo, err error) {
 	if !client.IsOnline() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
@@ -272,7 +281,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
 			var info DiskInfo
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
 			if err != nil {
@@ -722,6 +731,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		return stat, err
 	}
 	rd := msgpNewReader(respReader)
+	defer readMsgpReaderPool.Put(rd)
 	for {
 		var st StatInfo
 		err = st.DecodeMsg(rd)

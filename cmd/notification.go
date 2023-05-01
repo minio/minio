@@ -18,9 +18,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,14 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -59,14 +56,23 @@ type NotificationPeerErr struct {
 //
 // A zero NotificationGroup is valid and does not cancel on error.
 type NotificationGroup struct {
-	wg   sync.WaitGroup
-	errs []NotificationPeerErr
+	wg         sync.WaitGroup
+	errs       []NotificationPeerErr
+	retryCount int
 }
 
 // WithNPeers returns a new NotificationGroup with length of errs slice upto nerrs,
 // upon Wait() errors are returned collected from all tasks.
 func WithNPeers(nerrs int) *NotificationGroup {
-	return &NotificationGroup{errs: make([]NotificationPeerErr, nerrs)}
+	return &NotificationGroup{errs: make([]NotificationPeerErr, nerrs), retryCount: 3}
+}
+
+// WithRetries sets the retry count for all function calls from the Go method.
+func (g *NotificationGroup) WithRetries(retryCount int) *NotificationGroup {
+	if g != nil {
+		g.retryCount = retryCount
+	}
+	return g
 }
 
 // Wait blocks until all function calls from the Go method have returned, then
@@ -88,17 +94,17 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 		g.errs[index] = NotificationPeerErr{
 			Host: addr,
 		}
-		for i := 0; i < 3; i++ {
+		for i := 0; i < g.retryCount; i++ {
 			if err := f(); err != nil {
 				g.errs[index].Err = err
 				// Last iteration log the error.
-				if i == 2 {
+				if i == g.retryCount-1 {
 					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
 					ctx := logger.SetReqInfo(ctx, reqInfo)
 					logger.LogIf(ctx, err)
 				}
 				// Wait for one second and no need wait after last attempt.
-				if i < 2 {
+				if i < g.retryCount-1 {
 					time.Sleep(1 * time.Second)
 				}
 				continue
@@ -110,7 +116,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 
 // DeletePolicy - deletes policy across all peers.
 func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -125,7 +131,7 @@ func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerEr
 
 // LoadPolicy - reloads a specific modified policy across all peers
 func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -140,7 +146,7 @@ func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr 
 
 // LoadPolicyMapping - reloads a policy mapping across all peers
 func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, userType IAMUserType, isGroup bool) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -155,7 +161,7 @@ func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, userType IAMUs
 
 // DeleteUser - deletes a specific user across all peers
 func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -170,7 +176,7 @@ func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
 
 // LoadUser - reloads a specific user across all peers
 func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -185,7 +191,7 @@ func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []Notification
 
 // LoadGroup - loads a specific group on all peers.
 func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -198,7 +204,7 @@ func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 
 // DeleteServiceAccount - deletes a specific service account across all peers
 func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -213,7 +219,7 @@ func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []Notificatio
 
 // LoadServiceAccount - reloads a specific service account across all peers
 func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
@@ -384,75 +390,6 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 	return ng.Wait()
 }
 
-// updateBloomFilter will cycle all servers to the current index and
-// return a merged bloom filter if a complete one can be retrieved.
-func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
-	req := bloomFilterRequest{
-		Current: current,
-		Oldest:  current - dataUsageUpdateDirCycles,
-	}
-	if current < dataUsageUpdateDirCycles {
-		req.Oldest = 0
-	}
-
-	// Load initial state from local...
-	var bf *bloomFilter
-	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req)
-	logger.LogIf(ctx, err)
-	if err == nil && bfr.Complete {
-		nbf := intDataUpdateTracker.newBloomFilter()
-		bf = &nbf
-		_, err = bf.ReadFrom(bytes.NewReader(bfr.Filter))
-		logger.LogIf(ctx, err)
-	}
-
-	var mu sync.Mutex
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		g.Go(func() error {
-			serverBF, err := client.cycleServerBloomFilter(ctx, req)
-			if false && intDataUpdateTracker.debug {
-				b, _ := json.MarshalIndent(serverBF, "", "  ")
-				logger.Info("Drive %v, Bloom filter: %v", client.host.Name, string(b))
-			}
-			// Keep lock while checking result.
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil || !serverBF.Complete || bf == nil {
-				logger.LogOnceIf(ctx, err, client.host.String(), client.cycleServerBloomFilter)
-				bf = nil
-				return nil
-			}
-
-			var tmp bloom.BloomFilter
-			_, err = tmp.ReadFrom(bytes.NewReader(serverBF.Filter))
-			if err != nil {
-				logger.LogIf(ctx, err)
-				bf = nil
-				return nil
-			}
-			if bf.BloomFilter == nil {
-				bf.BloomFilter = &tmp
-			} else {
-				err = bf.Merge(&tmp)
-				if err != nil {
-					logger.LogIf(ctx, err)
-					bf = nil
-					return nil
-				}
-			}
-			return nil
-		}, idx)
-	}
-	g.Wait()
-	return bf, nil
-}
-
 var errPeerNotReachable = errors.New("peer is not reachable")
 
 // GetLocks - makes GetLocks RPC call on all peers.
@@ -540,7 +477,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 
 // GetClusterAllBucketStats - returns bucket stats for all buckets from all remote peers.
 func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []BucketStatsMap {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	replicationStats := make([]BucketStatsMap, len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		index := index
@@ -581,7 +518,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 
 // GetClusterBucketStats - calls GetClusterBucketStats call on all peers for a cluster statistics view.
 func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketName string) []BucketStats {
-	ng := WithNPeers(len(sys.peerClients))
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	bucketStats := make([]BucketStats, len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		index := index
@@ -946,11 +883,13 @@ func (sys *NotificationSys) GetProcInfo(ctx context.Context) []madmin.ProcInfo {
 	return reply
 }
 
+// Construct a list of offline disks information for a given node.
+// If offlineHost is empty, do it for the local disks.
 func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin.Disk {
 	var offlineDisks []madmin.Disk
 	for _, pool := range endpoints {
 		for _, ep := range pool.Endpoints {
-			if offlineHost == ep.Host {
+			if offlineHost == "" && ep.IsLocal || offlineHost == ep.Host {
 				offlineDisks = append(offlineDisks, madmin.Disk{
 					Endpoint: ep.String(),
 					State:    string(madmin.ItemOffline),
@@ -1010,8 +949,6 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 				info.Endpoint = client.host.String()
 				info.State = string(madmin.ItemOffline)
 				info.Disks = getOfflineDisks(info.Endpoint, globalEndpoints)
-			} else {
-				info.State = string(madmin.ItemOnline)
 			}
 			reply[idx] = info
 		}(client, i)
@@ -1440,7 +1377,7 @@ func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTie
 	merged := globalTransitionState.getDailyAllTierStats()
 	for i, stat := range lastDayStats {
 		if errs[i] != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]))
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]), sys.peerClients[i].host.String())
 			continue
 		}
 		merged.merge(stat)

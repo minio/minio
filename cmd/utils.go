@@ -62,6 +62,7 @@ import (
 	"github.com/minio/mux"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	pkgAudit "github.com/minio/pkg/logger/message/audit"
 	xnet "github.com/minio/pkg/net"
 	"golang.org/x/oauth2"
 )
@@ -158,8 +159,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = PartTooSmall{}
 	}
 
-	switch minioErr.StatusCode {
-	case http.StatusMethodNotAllowed:
+	if minioErr.StatusCode == http.StatusMethodNotAllowed {
 		err = toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 	return err
@@ -639,6 +639,7 @@ const defaultDialTimeout = 5 * time.Second
 // NewHTTPTransportWithTimeout allows setting a timeout.
 func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	return xhttp.ConnSettings{
+		DialContext: newCustomDialContext(),
 		DNSCache:    globalDNSCache,
 		DialTimeout: defaultDialTimeout,
 		RootCAs:     globalRootCAs,
@@ -674,6 +675,7 @@ func newCustomDialContext() dialContext {
 func NewRemoteTargetHTTPTransport() func() *http.Transport {
 	return xhttp.ConnSettings{
 		DialContext: newCustomDialContext(),
+		DNSCache:    globalDNSCache,
 		RootCAs:     globalRootCAs,
 		EnableHTTP2: false,
 	}.NewRemoteTargetHTTPTransport()
@@ -907,19 +909,20 @@ func lcp(strs []string, pre bool) string {
 
 // Returns the mode in which MinIO is running
 func getMinioMode() string {
-	mode := globalMinioModeFS
-	if globalIsDistErasure {
-		mode = globalMinioModeDistErasure
-	} else if globalIsErasure {
-		mode = globalMinioModeErasure
-	} else if globalIsErasureSD {
-		mode = globalMinioModeErasureSD
+	switch {
+	case globalIsDistErasure:
+		return globalMinioModeDistErasure
+	case globalIsErasure:
+		return globalMinioModeErasure
+	case globalIsErasureSD:
+		return globalMinioModeErasureSD
+	default:
+		return globalMinioModeFS
 	}
-	return mode
 }
 
 func iamPolicyClaimNameOpenID() string {
-	return globalOpenIDConfig.GetIAMPolicyClaimName()
+	return globalIAMSys.OpenIDConfig.GetIAMPolicyClaimName()
 }
 
 func iamPolicyClaimNameSA() string {
@@ -1061,7 +1064,7 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = opts.Bucket
-	entry.API.Objects = []audit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
+	entry.API.Objects = []pkgAudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
 	entry.Tags = opts.Tags
 	// Merge tag information if found - this is currently needed for tags

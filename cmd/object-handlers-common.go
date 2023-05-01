@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -165,6 +165,30 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 	}
 
+	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
+	// otherwise return a 412 (precondition failed).
+	ifMatchETagHeader := r.Header.Get(xhttp.IfMatch)
+	if ifMatchETagHeader != "" {
+		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
+			// If the object ETag does not match with the specified ETag.
+			writeHeaders()
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
+			return true
+		}
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
+	if ifNoneMatchETagHeader != "" {
+		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+			// If the object ETag matches with the specified ETag.
+			writeHeaders()
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	}
+
 	etagMatch := opts.PreserveETag != "" && isETagEqual(objInfo.ETag, opts.PreserveETag)
 	vidMatch := opts.VersionID != "" && opts.VersionID == objInfo.VersionID
 	mtimeMatch := !opts.MTime.IsZero() && objInfo.ModTime.Unix() >= opts.MTime.Unix()
@@ -316,7 +340,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 		}
 	}
-	hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	hash.AddChecksumHeader(w, objInfo.decryptChecksums(0))
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete) {
@@ -343,6 +367,20 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				continue
 			}
 			dobj := deletedObjs[i]
+			oi := ObjectInfo{
+				Bucket:    bucket,
+				Name:      dobj.ObjectName,
+				VersionID: dobj.VersionID,
+			}
+			traceFn := globalLifecycleSys.trace(oi)
+			tags := make(map[string]interface{}, 1)
+			tags["newer-noncurrent-versions"] = true
+			// Send audit for the lifecycle delete operation
+			auditLogLifecycle(
+				ctx,
+				oi,
+				ILMExpiry, tags, traceFn)
+
 			sendEvent(eventArgs{
 				EventName:  event.ObjectRemovedDelete,
 				BucketName: bucket,
@@ -350,7 +388,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 					Name:      dobj.ObjectName,
 					VersionID: dobj.VersionID,
 				},
-				Host: "Internal: [ILM-EXPIRY]",
+				UserAgent: "Internal: [ILM-Expiry]",
+				Host:      globalLocalNodeName,
 			})
 		}
 	}

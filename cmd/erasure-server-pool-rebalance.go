@@ -32,7 +32,6 @@ import (
 
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v2"
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -133,6 +132,11 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	}, len(z.serverPools))
 	var totalCap, totalFree uint64
 	for _, disk := range si.Disks {
+		// Ignore invalid.
+		if disk.PoolIndex < 0 || len(diskStats) <= disk.PoolIndex {
+			// https://github.com/minio/minio/issues/16500
+			continue
+		}
 		totalCap += disk.TotalSpace
 		totalFree += disk.AvailableSpace
 
@@ -458,17 +462,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			}
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
-			event := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
-			switch action := event.Action; action {
-			case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
-				globalExpiryState.enqueueByDays(objInfo, false, action == lifecycle.DeleteVersionAction)
-				// Skip this entry.
-				return true
-			case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-				globalExpiryState.enqueueByDays(objInfo, true, action == lifecycle.DeleteRestoredVersionAction)
-				// Skip this entry.
+
+			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			if evt.Action.Delete() {
+				globalExpiryState.enqueueByDays(objInfo, evt)
 				return true
 			}
+
 			return false
 		}
 
@@ -550,10 +550,10 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						encodeDirObject(version.Name),
 						nil,
 						http.Header{},
-						noLock, // all mutations are blocked reads are safe without locks.
 						ObjectOptions{
 							VersionID:    version.VersionID,
 							NoDecryption: true,
+							NoLock:       true,
 						})
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.

@@ -104,6 +104,7 @@ The search filter must use the LDAP username to find the user DN. This is done v
 
 The returned user's DN and their password are then verified with the LDAP server. The user DN may also be associated with an [access policy](#managing-usergroup-access-policy).
 
+
 ### Group membership search
 
 MinIO can be optionally configured to find the groups of a user from AD/LDAP by specifying the folllowing variables:
@@ -116,6 +117,14 @@ MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of gr
 The search filter must use the username or the DN to find the user's groups. This is done via [variable substitution](#variable-substitution-in-configuration-strings).
 
 A group's DN may be associated with an [access policy](#managing-usergroup-access-policy).
+
+#### Nested groups usage in LDAP/AD
+If you are using Active directory with nested groups you have to add LDAP_MATCHING_RULE_IN_CHAIN: :1.2.840.113556.1.4.1941: to your query.
+For example:
+```shell
+group_search_filter: (&(objectClass=group)(member:1.2.840.113556.1.4.1941:=%d))
+user_dn_search_filter: (&(memberOf:1.2.840.113556.1.4.1941:=CN=group,DC=dc,DC=net)(sAMAccountName=%s))
+```
 
 ### Sample settings
 
@@ -144,18 +153,46 @@ In the configuration variables, `%s` is substituted with the _username_ from the
 Access policies may be associated by their name with a group or user directly. Access policies are first defined on the MinIO server using IAM policy JSON syntax. To define a new policy, you can use the [AWS policy generator](https://awspolicygen.s3.amazonaws.com/policygen.html). Copy the policy into a text file `mypolicy.json` and issue the command like so:
 
 ```sh
-mc admin policy add myminio mypolicy mypolicy.json
+mc admin policy create myminio mypolicy mypolicy.json
 ```
 
 To associate the policy with an LDAP user or group, use the full DN of the user or group:
 
 ```sh
-mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+mc admin idp ldap policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
 
 ```sh
-mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc admin idp ldap policy attach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
+
+To remove a policy association, use the similar `detach` command:
+
+```sh
+mc admin idp ldap policy detach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+```
+
+```sh
+mc admin idp ldap policy detach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+```
+
+
+Note that the commands above attempt to validate if the given entity (user or group) exist in the LDAP directory and return an error if they are not found.
+
+<details><summary> View **DEPRECATED** older policy association commands</summary>
+
+Please **do not use** these as they may be removed or their behavior may change.
+
+```sh
+mc admin policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+```
+
+
+```sh
+mc admin policy attach myminio mypolicy --group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+```
+
+</details>
 
 **Note that by default no policy is set on a user**. Thus even if they successfully authenticate with AD/LDAP credentials, they have no access to object storage as the default access policy is to deny all access.
 

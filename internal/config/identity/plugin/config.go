@@ -19,6 +19,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
@@ -27,9 +28,12 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sync"
+	"time"
 
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
 )
@@ -142,10 +146,93 @@ func (a *Args) Validate() error {
 	return nil
 }
 
+type serviceRTTMinuteStats struct {
+	statsTime           time.Time
+	rttMsSum, maxRttMs  float64
+	successRequestCount int64
+	failedRequestCount  int64
+}
+
+type metrics struct {
+	sync.Mutex
+	LastCheckSuccess time.Time
+	LastCheckFailure time.Time
+	lastFullMinute   serviceRTTMinuteStats
+	currentMinute    serviceRTTMinuteStats
+}
+
+func (h *metrics) setConnSuccess(reqStartTime time.Time) {
+	h.Lock()
+	defer h.Unlock()
+	h.LastCheckSuccess = reqStartTime
+}
+
+func (h *metrics) setConnFailure(reqStartTime time.Time) {
+	h.Lock()
+	defer h.Unlock()
+	h.LastCheckFailure = reqStartTime
+}
+
+func (h *metrics) updateLastFullMinute(currReqMinute time.Time) {
+	// Assumes the caller has h.Lock()'ed
+	h.lastFullMinute = h.currentMinute
+	h.currentMinute = serviceRTTMinuteStats{
+		statsTime: currReqMinute,
+	}
+}
+
+func (h *metrics) accumRequestRTT(reqStartTime time.Time, rttMs float64, isSuccess bool) {
+	h.Lock()
+	defer h.Unlock()
+
+	// Update connectivity times
+	if isSuccess {
+		if reqStartTime.After(h.LastCheckSuccess) {
+			h.LastCheckSuccess = reqStartTime
+		}
+	} else {
+		if reqStartTime.After(h.LastCheckFailure) {
+			h.LastCheckFailure = reqStartTime
+		}
+	}
+
+	// Round the reqest time *down* to whole minute.
+	reqTimeMinute := reqStartTime.Truncate(time.Minute)
+	if reqTimeMinute.After(h.currentMinute.statsTime) {
+		// Drop the last full minute now, since we got a request for a time we
+		// are not yet tracking.
+		h.updateLastFullMinute(reqTimeMinute)
+	}
+	var entry *serviceRTTMinuteStats
+	switch {
+	case reqTimeMinute.Equal(h.currentMinute.statsTime):
+		entry = &h.currentMinute
+	case reqTimeMinute.Equal(h.lastFullMinute.statsTime):
+		entry = &h.lastFullMinute
+	default:
+		// This request is too old, it should never happen, ignore it as we
+		// cannot return an error.
+		return
+	}
+
+	// Update stats
+	if isSuccess {
+		if entry.maxRttMs < rttMs {
+			entry.maxRttMs = rttMs
+		}
+		entry.rttMsSum += rttMs
+		entry.successRequestCount++
+	} else {
+		entry.failedRequestCount++
+	}
+}
+
 // AuthNPlugin - implements pluggable authentication via webhook.
 type AuthNPlugin struct {
-	args   Args
-	client *http.Client
+	args           Args
+	client         *http.Client
+	shutdownCtx    context.Context
+	serviceMetrics *metrics
 }
 
 // Enabled returns if AuthNPlugin is enabled.
@@ -218,14 +305,24 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 }
 
 // New - initializes Authorization Management Plugin.
-func New(args Args) *AuthNPlugin {
+func New(shutdownCtx context.Context, args Args) *AuthNPlugin {
 	if args.URL == nil || args.URL.Scheme == "" && args.AuthToken == "" {
 		return nil
 	}
-	return &AuthNPlugin{
-		args:   args,
-		client: &http.Client{Transport: args.Transport},
+	plugin := AuthNPlugin{
+		args:        args,
+		client:      &http.Client{Transport: args.Transport},
+		shutdownCtx: shutdownCtx,
+		serviceMetrics: &metrics{
+			Mutex:            sync.Mutex{},
+			LastCheckSuccess: time.Unix(0, 0),
+			LastCheckFailure: time.Unix(0, 0),
+			lastFullMinute:   serviceRTTMinuteStats{},
+			currentMinute:    serviceRTTMinuteStats{},
+		},
 	}
+	go plugin.doPeriodicHealthCheck()
+	return &plugin
 }
 
 // AuthNSuccessResponse - represents the response from the authentication plugin
@@ -269,7 +366,9 @@ func (o *AuthNPlugin) Authenticate(roleArn arn.ARN, token string) (AuthNResponse
 	q.Set("token", token)
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequest(http.MethodPost, u.String(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
 	if err != nil {
 		return AuthNResponse{}, err
 	}
@@ -278,11 +377,15 @@ func (o *AuthNPlugin) Authenticate(roleArn arn.ARN, token string) (AuthNResponse
 		req.Header.Set("Authorization", o.args.AuthToken)
 	}
 
+	reqStartTime := time.Now()
 	resp, err := o.client.Do(req)
 	if err != nil {
+		o.serviceMetrics.accumRequestRTT(reqStartTime, 0, false)
 		return AuthNResponse{}, err
 	}
 	defer o.args.CloseRespFn(resp.Body)
+	reqDurNanos := time.Since(reqStartTime).Nanoseconds()
+	o.serviceMetrics.accumRequestRTT(reqStartTime, float64(reqDurNanos)/1e6, true)
 
 	switch resp.StatusCode {
 	case 200:
@@ -318,5 +421,89 @@ func (o *AuthNPlugin) Authenticate(roleArn arn.ARN, token string) (AuthNResponse
 func (o *AuthNPlugin) GetRoleInfo() map[arn.ARN]string {
 	return map[arn.ARN]string{
 		o.args.RoleARN: o.args.RolePolicy,
+	}
+}
+
+// checkConnectivity returns true if we are able to connect to the plugin
+// service.
+func (o *AuthNPlugin) checkConnectivity(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
+	defer cancel()
+	u := url.URL(*o.args.URL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return false
+	}
+
+	if o.args.AuthToken != "" {
+		req.Header.Set("Authorization", o.args.AuthToken)
+	}
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer o.args.CloseRespFn(resp.Body)
+	return true
+}
+
+var (
+	healthCheckInterval = 1 * time.Minute
+	healthCheckTimeout  = 5 * time.Second
+)
+
+func (o *AuthNPlugin) doPeriodicHealthCheck() {
+	ticker := time.NewTicker(healthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			isConnected := o.checkConnectivity(o.shutdownCtx)
+			if isConnected {
+				o.serviceMetrics.setConnSuccess(now)
+			} else {
+				o.serviceMetrics.setConnFailure(now)
+			}
+		case <-o.shutdownCtx.Done():
+			return
+		}
+	}
+}
+
+// Metrics contains metrics about the authentication plugin service.
+type Metrics struct {
+	LastReachableSecs, LastUnreachableSecs float64
+
+	// Last whole minute stats
+	TotalRequests, FailedRequests int64
+	AvgSuccRTTMs                  float64
+	MaxSuccRTTMs                  float64
+}
+
+// Metrics reports metrics related to plugin service reachability and stats for the last whole minute
+func (o *AuthNPlugin) Metrics() Metrics {
+	if o == nil {
+		// Return empty metrics when not configured.
+		return Metrics{}
+	}
+	o.serviceMetrics.Lock()
+	defer o.serviceMetrics.Unlock()
+	l := &o.serviceMetrics.lastFullMinute
+	var avg float64
+	if l.successRequestCount > 0 {
+		avg = l.rttMsSum / float64(l.successRequestCount)
+	}
+	now := time.Now().UTC()
+	return Metrics{
+		LastReachableSecs:   now.Sub(o.serviceMetrics.LastCheckSuccess).Seconds(),
+		LastUnreachableSecs: now.Sub(o.serviceMetrics.LastCheckFailure).Seconds(),
+		TotalRequests:       l.failedRequestCount + l.successRequestCount,
+		FailedRequests:      l.failedRequestCount,
+		AvgSuccRTTMs:        avg,
+		MaxSuccRTTMs:        l.maxRttMs,
 	}
 }

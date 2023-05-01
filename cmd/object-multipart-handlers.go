@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
@@ -353,7 +354,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return false
 	}
 	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -417,7 +418,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 
-		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, "", "", dstOpts.ServerSideEncryption)
+		popts := minio.PutObjectPartOptions{
+			SSE: dstOpts.ServerSideEncryption,
+		}
+
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, popts)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -898,7 +903,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL)
 		return
 	}
-	if !sort.IsSorted(CompletedParts(complMultipartUpload.Parts)) {
+	if !sort.SliceIsSorted(complMultipartUpload.Parts, func(i, j int) bool {
+		return complMultipartUpload.Parts[i].PartNumber < complMultipartUpload.Parts[j].PartNumber
+	}) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartOrder), r.URL)
 		return
 	}
@@ -1032,7 +1039,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Notify object created event.
-	sendEvent(eventArgs{
+	evt := eventArgs{
 		EventName:    event.ObjectCreatedCompleteMultipartUpload,
 		BucketName:   bucket,
 		Object:       objInfo,
@@ -1040,7 +1047,13 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
-	})
+	}
+	sendEvent(evt)
+
+	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+		evt.EventName = event.ObjectManyVersions
+		sendEvent(evt)
+	}
 
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {

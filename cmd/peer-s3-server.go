@@ -25,8 +25,8 @@ import (
 	"sort"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (
@@ -80,6 +80,10 @@ func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
+	globalLocalDrivesMu.RLock()
+	globalLocalDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
 	quorum := (len(globalLocalDrives) / 2)
 
 	buckets = make([]BucketInfo, 0, 32)
@@ -128,6 +132,10 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 }
 
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
+	globalLocalDrivesMu.RLock()
+	globalLocalDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
 	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 	bucketsInfo := make([]BucketInfo, len(globalLocalDrives))
 
@@ -173,6 +181,10 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 }
 
 func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
+	globalLocalDrivesMu.RLock()
+	globalLocalDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
 	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.
@@ -208,6 +220,10 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
+	globalLocalDrivesMu.RLock()
+	globalLocalDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
 	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.

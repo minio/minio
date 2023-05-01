@@ -32,7 +32,7 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/pkg/logger/message/log"
 )
 
 // HighwayHash key for logging in anonymous mode
@@ -231,8 +231,8 @@ func getTrace(traceLevel int) []string {
 	return trace
 }
 
-// Return the highway hash of the passed string
-func hashString(input string) string {
+// HashString - return the highway hash of the passed string
+func HashString(input string) string {
 	hh, _ := highwayhash.New(magicHighwayHash256Key)
 	hh.Write([]byte(input))
 	return hex.EncodeToString(hh.Sum(nil))
@@ -328,9 +328,9 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	}
 
 	if anonFlag {
-		entry.API.Args.Bucket = hashString(entry.API.Args.Bucket)
-		entry.API.Args.Object = hashString(entry.API.Args.Object)
-		entry.RemoteHost = hashString(entry.RemoteHost)
+		entry.API.Args.Bucket = HashString(entry.API.Args.Bucket)
+		entry.API.Args.Object = HashString(entry.API.Args.Object)
+		entry.RemoteHost = HashString(entry.RemoteHost)
 		entry.Trace.Message = reflect.TypeOf(err).String()
 		entry.Trace.Variables = make(map[string]interface{})
 	}

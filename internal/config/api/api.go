@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,6 +20,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ const (
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
 	apiGzipObjects                 = "gzip_objects"
+	apiRootAccess                  = "root_access"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
@@ -60,6 +62,7 @@ const (
 	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
+	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default "on"
 )
 
 // Deprecated key and ENVs
@@ -129,6 +132,10 @@ var (
 			Key:   apiGzipObjects,
 			Value: "off",
 		},
+		config.KV{
+			Key:   apiRootAccess,
+			Value: "on",
+		},
 	}
 )
 
@@ -147,6 +154,7 @@ type Config struct {
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
 	DisableODirect              bool          `json:"disable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
+	RootAccess                  bool          `json:"root_access"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -193,6 +201,9 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+	if len(corsAllowOrigin) == 0 {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	}
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
@@ -203,14 +214,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	switch listQuorum {
 	case "strict", "optimal", "reduced", "disk":
 	default:
-		return cfg, errors.New("invalid value for list strict quorum")
+		return cfg, fmt.Errorf("invalid value %v for list_quorum", listQuorum)
 	}
 
 	replicationPriority := env.Get(EnvAPIReplicationPriority, kvs.GetWithDefault(apiReplicationPriority, DefaultKVS))
 	switch replicationPriority {
 	case "slow", "fast", "auto":
 	default:
-		return cfg, errors.New("invalid value for replication priority")
+		return cfg, fmt.Errorf("invalid value %v for replication_priority", replicationPriority)
 	}
 
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
@@ -242,8 +253,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
-
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
 
 	return Config{
 		RequestsMax:                 requestsMax,
@@ -259,5 +270,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		DeleteCleanupInterval:       deleteCleanupInterval,
 		DisableODirect:              disableODirect,
 		GzipObjects:                 gzipObjects,
+		RootAccess:                  rootAccess,
 	}, nil
 }

@@ -76,8 +76,7 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (er
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			tagName := se.Name.Local
 			switch tagName {
 			case "AllowQuotedRecordDelimiter":
@@ -158,8 +157,7 @@ func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			var s string
 			if err = d.DecodeElement(&s, &se); err != nil {
 				return err

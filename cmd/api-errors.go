@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -38,10 +38,12 @@ import (
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/versioning"
+	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/pkg/bucket/policy"
@@ -132,6 +134,7 @@ const (
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrReplicationDenyEditError
+	ErrRemoteTargetDenyEditError
 	ErrReplicationNoExistingObjects
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
@@ -164,7 +167,6 @@ const (
 	ErrMalformedDate
 	ErrMalformedPresignedDate
 	ErrMalformedCredentialDate
-	ErrMalformedCredentialRegion
 	ErrMalformedExpires
 	ErrNegativeExpires
 	ErrAuthHeaderEmpty
@@ -219,6 +221,7 @@ const (
 	ErrIncompatibleEncryptionMethod
 	ErrKMSNotConfigured
 	ErrKMSKeyNotFoundException
+	ErrKMSDefaultKeyAlreadyConfigured
 
 	ErrNoAccessKey
 	ErrInvalidToken
@@ -242,8 +245,6 @@ const (
 	// Add new extended error codes here.
 
 	// MinIO extended errors.
-	ErrReadQuorum
-	ErrWriteQuorum
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
@@ -267,6 +268,7 @@ const (
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
+	ErrAdminGroupDisabled
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminPolicyChangeAlreadyApplied
@@ -280,6 +282,7 @@ const (
 	ErrAdminConfigEnvOverridden
 	ErrAdminConfigDuplicateKeys
 	ErrAdminConfigInvalidIDPType
+	ErrAdminConfigLDAPNonDefaultConfigName
 	ErrAdminConfigLDAPValidation
 	ErrAdminConfigIDPCfgNameAlreadyExists
 	ErrAdminConfigIDPCfgNameDoesNotExist
@@ -410,6 +413,12 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrInvalidChecksum
+
+	// Lambda functions
+	ErrLambdaARNInvalid
+	ErrLambdaARNNotFound
+
+	apiErrCodeEnd // This is used only for the testing code
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -423,8 +432,7 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
 	if globalSite.Region != "" {
-		switch errCode {
-		case ErrAuthorizationHeaderMalformed:
+		if errCode == ErrAuthorizationHeaderMalformed {
 			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
 			return apiErr
 		}
@@ -919,6 +927,11 @@ var errorCodes = errorCodeMap{
 		Description:    "No matching ExistingsObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrRemoteTargetDenyEditError: {
+		Code:           "XMinioAdminRemoteTargetDenyEdit",
+		Description:    "Cannot alter remote target endpoint since this server is in a cluster replication setup. use `mc admin replicate update`",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrReplicationDenyEditError: {
 		Code:           "XMinioReplicationDenyEdit",
 		Description:    "Cannot alter local replication config since this server is in a cluster replication setup",
@@ -1166,6 +1179,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid keyId",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrKMSDefaultKeyAlreadyConfigured: {
+		Code:           "KMS.DefaultKeyAlreadyConfiguredException",
+		Description:    "A default encryption already exists and cannot be changed on KMS",
+		HTTPStatusCode: http.StatusConflict,
+	},
 	ErrNoAccessKey: {
 		Code:           "AccessDenied",
 		Description:    "No AWSAccessKey was presented",
@@ -1250,6 +1268,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified group is not empty - cannot remove it.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminGroupDisabled: {
+		Code:           "XMinioAdminGroupDisabled",
+		Description:    "The specified group is disabled.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminNoSuchPolicy: {
 		Code:           "XMinioAdminNoSuchPolicy",
 		Description:    "The canned policy does not exist.",
@@ -1310,6 +1333,11 @@ var errorCodes = errorCodeMap{
 	ErrAdminConfigInvalidIDPType: {
 		Code:           "XMinioAdminConfigInvalidIDPType",
 		Description:    fmt.Sprintf("Invalid IDP configuration type - must be one of %v", madmin.ValidIDPConfigTypes),
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigLDAPNonDefaultConfigName: {
+		Code:           "XMinioAdminConfigLDAPNonDefaultConfigName",
+		Description:    "Only a single LDAP configuration is supported - config name must be empty or `_`",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigLDAPValidation: {
@@ -1509,7 +1537,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBusy: {
-		Code:           "Busy",
+		Code:           "ServerBusy",
 		Description:    "The service is unavailable. Please retry.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
@@ -1948,6 +1976,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid checksum provided.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrLambdaARNInvalid: {
+		Code:           "LambdaARNInvalid",
+		Description:    "The specified lambda ARN is invalid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLambdaARNNotFound: {
+		Code:           "LambdaARNNotFound",
+		Description:    "The specified lambda ARN does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrPolicyAlreadyAttached: {
 		Code:           "XMinioPolicyAlreadyAttached",
 		Description:    "The specified policy is already attached.",
@@ -1971,15 +2009,15 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 
 	// Only return ErrClientDisconnected if the provided context is actually canceled.
 	// This way downstream context.Canceled will still report ErrOperationTimedOut
-	if contextCanceled(ctx) {
-		if ctx.Err() == context.Canceled {
-			return ErrClientDisconnected
-		}
+	if contextCanceled(ctx) && errors.Is(ctx.Err(), context.Canceled) {
+		return ErrClientDisconnected
 	}
 
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
+	case errNoSuchPolicy:
+		apiErr = ErrAdminNoSuchPolicy
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
 	case errNoSuchServiceAccount:
@@ -1990,8 +2028,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminGroupNotEmpty
 	case errNoSuchJob:
 		apiErr = ErrAdminNoSuchJob
-	case errNoSuchPolicy:
-		apiErr = ErrAdminNoSuchPolicy
 	case errNoPolicyToAttachOrDetach:
 		apiErr = ErrAdminPolicyChangeAlreadyApplied
 	case errSignatureMismatch:
@@ -2010,6 +2046,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidSecretKey
 	case errInvalidStorageClass:
 		apiErr = ErrInvalidStorageClass
+	case errErasureReadQuorum:
+		apiErr = ErrSlowDown
+	case errErasureWriteQuorum:
+		apiErr = ErrSlowDown
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters
@@ -2041,7 +2081,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case errKMSKeyNotFound:
 		apiErr = ErrKMSKeyNotFoundException
-
+	case errKMSDefaultKeyAlreadyConfigured:
+		apiErr = ErrKMSDefaultKeyAlreadyConfigured
 	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
@@ -2056,11 +2097,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockInvalidHeaders
 	case objectlock.ErrMalformedXML:
 		apiErr = ErrMalformedXML
+	case errInvalidMaxParts:
+		apiErr = ErrInvalidMaxParts
 	}
 
 	// Compression errors
-	switch err {
-	case errInvalidDecompressedSize:
+	if err == errInvalidDecompressedSize {
 		apiErr = ErrInvalidDecompressedSize
 	}
 
@@ -2071,7 +2113,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 
 	// etcd specific errors, a key is always a bucket for us return
 	// ErrNoSuchBucket in such a case.
-	if err == dns.ErrNoEntriesFound {
+	if errors.Is(err, dns.ErrNoEntriesFound) {
 		return ErrNoSuchBucket
 	}
 
@@ -2186,7 +2228,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrTransitionStorageClassNotFoundError
 	case InvalidObjectState:
 		apiErr = ErrInvalidObjectState
-
+	case PreConditionFailed:
+		apiErr = ErrPreconditionFailed
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
@@ -2195,6 +2238,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrARNNotification
 	case *event.ErrARNNotFound:
 		apiErr = ErrARNNotification
+	case *levent.ErrInvalidARN:
+		apiErr = ErrLambdaARNInvalid
+	case *levent.ErrARNNotFound:
+		apiErr = ErrLambdaARNNotFound
 	case *event.ErrUnknownRegion:
 		apiErr = ErrRegionNotification
 	case *event.ErrInvalidFilterName:
@@ -2258,38 +2305,27 @@ func toAPIError(ctx context.Context, err error) APIError {
 	}
 
 	apiErr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
-	e, ok := err.(dns.ErrInvalidBucketName)
-	if ok {
-		code := toAPIErrorCode(ctx, e)
-		apiErr = errorCodes.ToAPIErrWithErr(code, e)
-	}
-
-	if apiErr.Code == "NotImplemented" {
-		switch e := err.(type) {
-		case NotImplemented:
-			desc := e.Error()
-			if desc == "" {
-				desc = apiErr.Description
-			}
-			apiErr = APIError{
-				Code:           apiErr.Code,
-				Description:    desc,
-				HTTPStatusCode: apiErr.HTTPStatusCode,
-			}
-			return apiErr
+	switch apiErr.Code {
+	case "NotImplemented":
+		desc := fmt.Sprintf("%s (%v)", apiErr.Description, err)
+		apiErr = APIError{
+			Code:           apiErr.Code,
+			Description:    desc,
+			HTTPStatusCode: apiErr.HTTPStatusCode,
 		}
-	}
-
-	if apiErr.Code == "XMinioBackendDown" {
+	case "XMinioBackendDown":
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
-		return apiErr
-	}
-
-	if apiErr.Code == "InternalError" {
+	case "InternalError":
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
 		// their internal error types.
 		switch e := err.(type) {
+		case kms.Error:
+			apiErr = APIError{
+				Description:    e.Err.Error(),
+				Code:           e.APICode,
+				HTTPStatusCode: e.HTTPStatusCode,
+			}
 		case batchReplicationJobError:
 			apiErr = APIError(e)
 		case InvalidArgument:
@@ -2300,22 +2336,20 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case *xml.SyntaxError:
 			apiErr = APIError{
-				Code: "MalformedXML",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
-					e.Error()),
+				Code:           "MalformedXML",
+				Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, e),
 				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
 			}
 		case url.EscapeError:
 			apiErr = APIError{
-				Code: "XMinioInvalidObjectName",
-				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
-					e.Error()),
+				Code:           "XMinioInvalidObjectName",
+				Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description, e),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case versioning.Error:
 			apiErr = APIError{
 				Code:           "IllegalVersioningConfigurationException",
-				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e.Error()),
+				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case lifecycle.Error:
@@ -2381,19 +2415,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			// Add more other SDK related errors here if any in future.
 		default:
 			//nolint:gocritic
-			if errors.Is(err, errMalformedEncoding) {
-				apiErr = APIError{
-					Code:           "BadRequest",
-					Description:    err.Error(),
-					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else if errors.Is(err, errChunkTooBig) {
-				apiErr = APIError{
-					Code:           "BadRequest",
-					Description:    err.Error(),
-					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else if errors.Is(err, strconv.ErrRange) {
+			if errors.Is(err, errMalformedEncoding) || errors.Is(err, errChunkTooBig) || errors.Is(err, strconv.ErrRange) {
 				apiErr = APIError{
 					Code:           "BadRequest",
 					Description:    err.Error(),

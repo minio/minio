@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-12-12T19-27-27Z
+  tag: RELEASE.2023-04-13T03-08-07Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-12-13T00-23-28Z
+  tag: RELEASE.2023-04-12T02-21-51Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
@@ -64,13 +64,13 @@ minioAPIPort: "9000"
 minioConsolePort: "9001"
 
 ## Update strategy for Deployments
-DeploymentUpdate:
+deploymentUpdate:
   type: RollingUpdate
   maxUnavailable: 0
   maxSurge: 100%
 
 ## Update strategy for StatefulSets
-StatefulSetUpdate:
+statefulSetUpdate:
   updateStrategy: RollingUpdate
 
 ## Pod priority settings
@@ -157,7 +157,7 @@ persistence:
   ## Storage class of PV to bind. By default it looks for standard storage class.
   ## If the PV uses a different storage class, specify that here.
   storageClass: ""
-  VolumeName: ""
+  volumeName: ""
   accessMode: ReadWriteOnce
   size: 500Gi
 
@@ -433,7 +433,7 @@ makeBucketJob:
 ## List of command to run after minio install
 ## NOTE: the mc command TARGET is always "myminio"
 customCommands:
-  # - command: "admin policy set myminio consoleAdmin group='cn=ops,cn=groups,dc=example,dc=com'"
+  # - command: "admin policy attach myminio consoleAdmin --group='cn=ops,cn=groups,dc=example,dc=com'"
 
 ## Additional Annotations for the Kubernetes Job customCommandJob
 customCommandJob:

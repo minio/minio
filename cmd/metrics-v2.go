@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
@@ -77,7 +77,7 @@ func init() {
 		return allMetrics
 	}()
 
-	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
+	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(),
 		getLocalDriveStorageMetrics(),
 		getCacheMetrics(),
@@ -86,7 +86,10 @@ func init() {
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
 		getNotificationMetrics(),
-	})
+		getDistLockMetrics(),
+	}
+
+	nodeCollector = newMinioCollectorNode(nodeGroups)
 	clusterCollector = newMinioClusterCollector(allMetricsGroups)
 }
 
@@ -131,6 +134,7 @@ const (
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
 	notifySubsystem           MetricSubsystem = "notify"
+	lambdaSubsystem           MetricSubsystem = "lambda"
 	auditSubsystem            MetricSubsystem = "audit"
 )
 
@@ -151,6 +155,7 @@ const (
 	waitingTotal   MetricName = "waiting_total"
 	incomingTotal  MetricName = "incoming_total"
 	objectTotal    MetricName = "object_total"
+	versionTotal   MetricName = "version_total"
 	offlineTotal   MetricName = "offline_total"
 	onlineTotal    MetricName = "online_total"
 	openTotal      MetricName = "open_total"
@@ -182,8 +187,9 @@ const (
 	usageInfo   MetricName = "usage_info"
 	versionInfo MetricName = "version_info"
 
-	sizeDistribution = "size_distribution"
-	ttfbDistribution = "ttfb_seconds_distribution"
+	sizeDistribution    = "size_distribution"
+	versionDistribution = "version_distribution"
+	ttfbDistribution    = "ttfb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
@@ -504,6 +510,16 @@ func getBucketUsageObjectsTotalMD() MetricDescription {
 	}
 }
 
+func getBucketUsageVersionsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      versionTotal,
+		Help:      "Total number of versions",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketRepLatencyMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -559,6 +575,16 @@ func getBucketObjectDistributionMD() MetricDescription {
 		Namespace: bucketMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      sizeDistribution,
+		Help:      "Distribution of object sizes in the bucket, includes label for the bucket name",
+		Type:      histogramMetric,
+	}
+}
+
+func getBucketObjectVersionsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: objectsSubsystem,
+		Name:      versionDistribution,
 		Help:      "Distribution of object sizes in the bucket, includes label for the bucket name",
 		Type:      histogramMetric,
 	}
@@ -1385,6 +1411,7 @@ func getIAMNodeMetrics() *MetricsGroup {
 			sinceLastSyncMillis = (uint64(time.Now().UnixNano()) - lastSyncTime) / uint64(time.Millisecond)
 		}
 
+		pluginAuthNMetrics := globalAuthNPlugin.Metrics()
 		metrics = []Metric{
 			{
 				Description: MetricDescription{
@@ -1426,7 +1453,68 @@ func getIAMNodeMetrics() *MetricsGroup {
 				},
 				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshFailures)),
 			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_last_succ_seconds",
+					Help:      "When plugin authentication is configured, returns time (in seconds) since the last successful request to the service",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.LastReachableSecs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_last_fail_seconds",
+					Help:      "When plugin authentication is configured, returns time (in seconds) since the last failed request to the service",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.LastUnreachableSecs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_total_requests_minute",
+					Help:      "When plugin authentication is configured, returns total requests count in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: float64(pluginAuthNMetrics.TotalRequests),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_failed_requests_minute",
+					Help:      "When plugin authentication is configured, returns failed requests count in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: float64(pluginAuthNMetrics.FailedRequests),
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_succ_avg_rtt_ms_minute",
+					Help:      "When plugin authentication is configured, returns average round-trip-time of successful requests in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.AvgSuccRTTMs,
+			},
+			{
+				Description: MetricDescription{
+					Namespace: nodeMetricNamespace,
+					Subsystem: iamSubsystem,
+					Name:      "plugin_authn_service_succ_max_rtt_ms_minute",
+					Help:      "When plugin authentication is configured, returns maximum round-trip-time of successful requests in the last full minute",
+					Type:      gaugeMetric,
+				},
+				Value: pluginAuthNMetrics.MaxSuccRTTMs,
+			},
 		}
+
 		return metrics
 	})
 	return mg
@@ -1589,13 +1677,60 @@ func getCacheMetrics() *MetricsGroup {
 	return mg
 }
 
+func getDistLockMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		if !globalIsDistErasure {
+			return []Metric{}
+		}
+
+		st := globalLockServer.stats()
+
+		metrics := make([]Metric, 0, 3)
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "total",
+				Help:      "Number of current locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Total),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "write_total",
+				Help:      "Number of current WRITE locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Writes),
+		})
+		metrics = append(metrics, Metric{
+			Description: MetricDescription{
+				Namespace: minioNamespace,
+				Subsystem: "locks",
+				Name:      "read_total",
+				Help:      "Number of current READ locks on this peer",
+				Type:      gaugeMetric,
+			},
+			Value: float64(st.Reads),
+		})
+		return metrics
+	})
+	return mg
+}
+
 func getNotificationMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		stats := globalConfigTargetList.Stats()
-		metrics := make([]Metric, 0, 1+len(stats.TargetStats))
+		nstats := globalNotifyTargetList.Stats()
+		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
 		metrics = append(metrics, Metric{
 			Description: MetricDescription{
 				Namespace: minioNamespace,
@@ -1604,9 +1739,9 @@ func getNotificationMetrics() *MetricsGroup {
 				Help:      "Number of concurrent async Send calls active to all targets",
 				Type:      gaugeMetric,
 			},
-			Value: float64(stats.CurrentSendCalls),
+			Value: float64(nstats.CurrentSendCalls),
 		})
-		for _, st := range stats.TargetStats {
+		for _, st := range nstats.TargetStats {
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: minioNamespace,
@@ -1619,6 +1754,43 @@ func getNotificationMetrics() *MetricsGroup {
 				Value:          float64(st.CurrentQueue),
 			})
 		}
+
+		lstats := globalLambdaTargetList.Stats()
+		for _, st := range lstats.TargetStats {
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "active_requests",
+					Help:      "Number of in progress requests",
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.ActiveRequests),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "total_requests",
+					Help:      "Total number of requests sent since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.TotalRequests),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: lambdaSubsystem,
+					Name:      "failed_requests",
+					Help:      "Total number of requests that failed to send since start",
+					Type:      counterMetric,
+				},
+				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+				Value:          float64(st.FailedRequests),
+			})
+		}
+
 		// Audit and system:
 		audit := logger.CurrentStats()
 		for id, st := range audit {
@@ -1835,6 +2007,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			})
 
 			metrics = append(metrics, Metric{
+				Description:    getBucketUsageVersionsTotalMD(),
+				Value:          float64(usage.VersionsCount),
+				VariableLabels: map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
 				Description:    getBucketRepReceivedBytesMD(),
 				Value:          float64(stats.ReplicaSize),
 				VariableLabels: map[string]string{"bucket": bucket},
@@ -1896,6 +2074,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:          getBucketObjectDistributionMD(),
 				Histogram:            usage.ObjectSizesHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectVersionsMD(),
+				Histogram:            usage.ObjectVersionsHistogram,
 				HistogramBucketLabel: "range",
 				VariableLabels:       map[string]string{"bucket": bucket},
 			})
@@ -2260,8 +2444,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				continue
 			}
 			metricType := prometheus.GaugeValue
-			switch metric.Description.Type {
-			case counterMetric:
+			if metric.Description.Type == counterMetric {
 				metricType = prometheus.CounterValue
 			}
 			toPost := prometheus.MustNewConstMetric(
@@ -2369,8 +2552,7 @@ func (c *minioNodeCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 
 		metricType := prometheus.GaugeValue
-		switch metric.Description.Type {
-		case counterMetric:
+		if metric.Description.Type == counterMetric {
 			metricType = prometheus.CounterValue
 		}
 		ch <- prometheus.MustNewConstMetric(

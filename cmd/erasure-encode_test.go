@@ -24,7 +24,7 @@ import (
 	"io"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
 type badDisk struct{ StorageAPI }
@@ -38,10 +38,6 @@ func (a badDisk) AppendFile(ctx context.Context, volume string, path string, buf
 }
 
 func (a badDisk) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
-	return nil, errFaultyDisk
-}
-
-func (a badDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
 	return nil, errFaultyDisk
 }
 

@@ -127,15 +127,14 @@ func printServerCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logger.Info(color.Blue("API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
+	logger.Info(color.Blue("S3-API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
 	if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
 		logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s \n", cred.SecretKey)))
 		if region != "" {
 			logger.Info(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
 		}
 	}
-	printEventNotifiers()
 
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
@@ -145,11 +144,26 @@ func printServerCommonMsg(apiEndpoints []string) {
 			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 		}
 	}
+
+	printEventNotifiers()
+	printLambdaTargets()
 }
 
 // Prints startup message for Object API access, prints link to our SDK documentation.
 func printObjectAPIMsg() {
 	logger.Info(color.Blue("\nDocumentation: ") + "https://min.io/docs/minio/linux/index.html")
+}
+
+func printLambdaTargets() {
+	if globalLambdaTargetList == nil || globalLambdaTargetList.Empty() {
+		return
+	}
+
+	arnMsg := color.Blue("Object Lambda ARNs: ")
+	for _, arn := range globalLambdaTargetList.List(globalSite.Region) {
+		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
+	}
+	logger.Info(arnMsg + "\n")
 }
 
 // Prints bucket notification configurations.
@@ -168,7 +182,7 @@ func printEventNotifiers() {
 		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
 	}
 
-	logger.Info(arnMsg)
+	logger.Info(arnMsg + "\n")
 }
 
 // Prints startup message for command line access. Prints link to our documentation

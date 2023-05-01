@@ -61,6 +61,9 @@ var (
 	ErrInvalidSecretKeyLength = fmt.Errorf("secret key length should be between %d and %d", secretKeyMinLen, secretKeyMaxLen)
 )
 
+// AnonymousCredentials simply points to empty credentials
+var AnonymousCredentials = Credentials{}
+
 // IsAccessKeyValid - validate access key for right length.
 func IsAccessKeyValid(accessKey string) bool {
 	return len(accessKey) >= accessKeyMinLen
@@ -84,6 +87,9 @@ var (
 		SecretKey: DefaultSecretKey,
 	}
 )
+
+// claim key found in credentials which are service accounts
+const iamPolicyClaimNameSA = "sa-policy"
 
 const (
 	// AccountOn indicates that credentials are enabled
@@ -137,7 +143,8 @@ func (cred Credentials) IsTemp() bool {
 
 // IsServiceAccount - returns whether credential is a service account or not
 func (cred Credentials) IsServiceAccount() bool {
-	return cred.ParentUser != "" && (cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel))
+	_, ok := cred.Claims[iamPolicyClaimNameSA]
+	return cred.ParentUser != "" && ok
 }
 
 // IsValid - returns whether credential is valid or not.

@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ type warmBackendMinIO struct {
 
 var _ WarmBackend = (*warmBackendMinIO)(nil)
 
-func newWarmBackendMinIO(conf madmin.TierMinIO) (*warmBackendMinIO, error) {
+func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO, error) {
 	u, err := url.Parse(conf.Endpoint)
 	if err != nil {
 		return nil, err
@@ -53,10 +54,9 @@ func newWarmBackendMinIO(conf madmin.TierMinIO) (*warmBackendMinIO, error) {
 	if err != nil {
 		return nil, err
 	}
-	core, err := minio.NewCore(u.Host, opts)
-	if err != nil {
-		return nil, err
-	}
+	client.SetAppInfo(fmt.Sprintf("minio-tier-%s", tier), ReleaseTag)
+
+	core := &minio.Core{Client: client}
 	return &warmBackendMinIO{
 		warmBackendS3{
 			client: client,

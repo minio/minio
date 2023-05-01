@@ -101,7 +101,7 @@ func (gcs *warmBackendGCS) InUse(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func newWarmBackendGCS(conf madmin.TierGCS) (*warmBackendGCS, error) {
+func newWarmBackendGCS(conf madmin.TierGCS, _ string) (*warmBackendGCS, error) {
 	credsJSON, err := conf.GetCredentialJSON()
 	if err != nil {
 		return nil, err

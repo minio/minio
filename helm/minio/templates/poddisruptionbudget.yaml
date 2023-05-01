@@ -1,9 +1,12 @@
 {{- if .Values.podDisruptionBudget.enabled }}
+{{- if .Capabilities.APIVersions.Has "policy/v1beta1/PodDisruptionBudget" }}
 apiVersion: policy/v1beta1
+{{- else }}
+apiVersion: policy/v1
+{{- end }}
 kind: PodDisruptionBudget
 metadata:
   name: minio
-  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}
 spec:

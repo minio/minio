@@ -191,9 +191,6 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
 	}
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
-	if body != nil {
-		req.Header.Set("Expect", "100-continue")
-	}
 
 	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
 		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
@@ -260,12 +257,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 			}
 		}
 		return nil, &NetworkError{err}
-	}
-
-	final := resp.Trailer.Get("FinalStatus")
-	if final != "" && final != "Success" {
-		defer xhttp.DrainBody(resp.Body)
-		return nil, errors.New(final)
 	}
 
 	if resp.StatusCode != http.StatusOK {

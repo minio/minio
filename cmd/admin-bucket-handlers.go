@@ -31,7 +31,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -85,11 +85,6 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if quotaConfig.Type == "fifo" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
-		return
-	}
-
 	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -107,10 +102,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	}
 
 	// Call site replication hook.
-	if err = globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
+	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -172,7 +164,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	cred, _, _, s3Err := validateAdminSignature(ctx, r, "")
+	cred, _, s3Err := validateAdminSignature(ctx, r, "")
 	if s3Err != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
@@ -202,7 +194,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		ops = madmin.GetTargetUpdateOps(r.Form)
 	} else {
 		var exists bool // true if arn exists
-		target.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &target)
+		target.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &target, "")
 		if exists && target.Arn != "" { // return pre-existing ARN
 			data, err := json.Marshal(target.Arn)
 			if err != nil {
@@ -228,10 +220,12 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		for _, op := range ops {
 			switch op {
 			case madmin.CredentialsUpdateType:
-				if !globalSiteReplicationSys.isEnabled() {
-					tgt.Credentials = target.Credentials
-					tgt.TargetBucket = target.TargetBucket
+				if globalSiteReplicationSys.isEnabled() {
+					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetDenyEditError, err), r.URL)
+					return
 				}
+				tgt.Credentials = target.Credentials
+				tgt.TargetBucket = target.TargetBucket
 				tgt.Secure = target.Secure
 				tgt.Endpoint = target.Endpoint
 			case madmin.SyncUpdateType:
@@ -687,8 +681,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			continue
 		}
 		bucket, fileName := slc[0], slc[1]
-		switch fileName {
-		case objectLockConfig:
+		if fileName == objectLockConfig {
 			reader, err := file.Open()
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
@@ -757,8 +750,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			continue
 		}
 		bucket, fileName := slc[0], slc[1]
-		switch fileName {
-		case bucketVersioningConfig:
+		if fileName == bucketVersioningConfig {
 			reader, err := file.Open()
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
@@ -1032,11 +1024,6 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			quotaConfig, err := parseBucketQuota(bucket, data)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			if quotaConfig.Type == "fifo" {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore"))
 				continue
 			}
 

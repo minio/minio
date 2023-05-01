@@ -562,8 +562,7 @@ func (r *metacacheReader) readAll(ctx context.Context, dst chan<- metaCacheEntry
 	}
 	for {
 		if more, err := r.mr.ReadBool(); !more {
-			switch err {
-			case io.EOF:
+			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			r.err = err

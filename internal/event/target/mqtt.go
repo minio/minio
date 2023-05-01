@@ -31,6 +31,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -111,7 +112,7 @@ type MQTTTarget struct {
 	id         event.TargetID
 	args       MQTTArgs
 	client     mqtt.Client
-	store      Store
+	store      store.Store[event.Event]
 	quitCh     chan struct{}
 	loggerOnce logger.LogOnce
 }
@@ -119,6 +120,11 @@ type MQTTTarget struct {
 // ID - returns target ID.
 func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *MQTTTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -136,7 +142,7 @@ func (target *MQTTTarget) IsActive() (bool, error) {
 
 func (target *MQTTTarget) isActive() (bool, error) {
 	if !target.client.IsConnectionOpen() {
-		return false, errNotConnected
+		return false, store.ErrNotConnected
 	}
 	return true, nil
 }
@@ -156,7 +162,7 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 
 	token := target.client.Publish(target.args.Topic, target.args.QoS, false, string(data))
 	if !token.WaitTimeout(reconnectInterval) {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 	return token.Error()
 }
@@ -245,7 +251,7 @@ func (target *MQTTTarget) initMQTT() error {
 	token := target.client.Connect()
 	ok := token.WaitTimeout(reconnectInterval)
 	if !ok {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 	if token.Error() != nil {
 		return token.Error()
@@ -256,7 +262,7 @@ func (target *MQTTTarget) initMQTT() error {
 		return err
 	}
 	if !yes {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 
 	return nil
@@ -274,11 +280,11 @@ func NewMQTTTarget(id string, args MQTTArgs, loggerOnce logger.LogOnce) (*MQTTTa
 		args.KeepAlive = 10 * time.Second
 	}
 
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of MQTT `%s`: %w", id, err)
 		}
 	}
@@ -286,13 +292,13 @@ func NewMQTTTarget(id string, args MQTTArgs, loggerOnce logger.LogOnce) (*MQTTTa
 	target := &MQTTTarget{
 		id:         event.TargetID{ID: id, Name: "mqtt"},
 		args:       args,
-		store:      store,
+		store:      queueStore,
 		quitCh:     make(chan struct{}),
 		loggerOnce: loggerOnce,
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil

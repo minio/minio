@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -79,6 +79,11 @@ func (a kmsAPIHandlers) KMSMetricsHandler(w http.ResponseWriter, r *http.Request
 
 	if GlobalKMS == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	if _, ok := GlobalKMS.(kms.KeyManager); !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -168,7 +173,12 @@ func (a kmsAPIHandlers) KMSVersionHandler(w http.ResponseWriter, r *http.Request
 
 // KMSCreateKeyHandler - POST /minio/kms/v1/key/create?key-id=<master-key-id>
 func (a kmsAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
+	// If env variable MINIO_KMS_SECRET_KEY is populated, prevent creation of new keys
 	ctx := newContext(r, w, "KMSCreateKey")
+	if GlobalKMS != nil && GlobalKMS.IsLocal() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSDefaultKeyAlreadyConfigured), r.URL)
+		return
+	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSCreateKeyAction)
@@ -223,6 +233,15 @@ func (a kmsAPIHandlers) KMSDeleteKeyHandler(w http.ResponseWriter, r *http.Reque
 // KMSListKeysHandler - GET /minio/kms/v1/key/list?pattern=<pattern>
 func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSListKeys")
+	if GlobalKMS != nil && GlobalKMS.IsLocal() {
+		res, err := json.Marshal(GlobalKMS.List())
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, res)
+		return
+	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSListKeysAction)
@@ -236,7 +255,7 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 	manager, ok := GlobalKMS.(kms.KeyManager)
 	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
 	keys, err := manager.ListKeys(ctx, r.Form.Get("pattern"))

@@ -109,8 +109,7 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 		return ch, ErrAuthorizationHeaderMalformed
 	}
 	if credElements[2] != string(stype) {
-		switch stype {
-		case serviceSTS:
+		if stype == serviceSTS {
 			return ch, ErrInvalidServiceSTS
 		}
 		return ch, ErrInvalidServiceS3
@@ -280,7 +279,7 @@ func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues
 	signV4Values := signValues{}
 
 	var s3Err APIErrorCode
-	// Save credentail values.
+	// Save credential values.
 	signV4Values.Credential, s3Err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
 	if s3Err != ErrNone {
 		return sv, s3Err

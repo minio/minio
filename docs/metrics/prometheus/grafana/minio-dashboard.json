@@ -564,7 +564,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "max by (range) (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"})",
+          "expr": "max by (range) (sum (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"}) by (range))",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -1743,98 +1743,6 @@
       }
     },
     {
-      "aliasColors": {
-        "S3 Errors": "light-red",
-        "S3 Requests": "light-green"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 12
-      },
-      "hiddenSeries": false,
-      "id": 71,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "9.0.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum by (server,api) (increase(minio_s3_requests_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
-          "interval": "1m",
-          "intervalFactor": 2,
-          "legendFormat": "{{server,api}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        }
-      ],
-      "thresholds": [],
-      "timeRegions": [],
-      "title": "S3 API Request Error Rate",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "mode": "time",
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "$$hashKey": "object:331",
-          "format": "none",
-          "logBase": 1,
-          "show": true
-        },
-        {
-          "$$hashKey": "object:332",
-          "format": "short",
-          "logBase": 1,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false
-      }
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -2088,7 +1996,7 @@
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "S3 API Request Error Rate (5xx)",
+      "title": "S3 API Request 5xx Error Rate",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -2180,7 +2088,7 @@
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "S3 API Request Error Rate (4xx)",
+      "title": "S3 API Request 4xx Error Rate",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -2320,6 +2228,107 @@
           "format": "s",
           "logBase": 1,
           "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {
+      },
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "oQpdp674k"
+      },
+      "description": "Total TCP dial timeout/errors",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 10,
+      "fillGradient": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "hiddenSeries": false,
+      "id": 93,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "9.4.7",
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "oQpdp674k"
+          },
+          "editorMode": "code",
+          "expr": "rate(minio_inter_node_traffic_dial_errors{job=\"$scrape_jobs\"}[$__rate_interval])",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Internode TCP errors",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:211",
+          "decimals": 0,
+          "format": "none",
+          "label": "TCP Errors",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:212",
+          "format": "s",
+          "logBase": 1,
+          "show": false
         }
       ],
       "yaxis": {
@@ -2750,7 +2759,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "minio_cluster_disk_free_inodes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_disk_free_inodes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",

@@ -12,10 +12,10 @@ fi
 docker_switch_user() {
     if [ -n "${MINIO_USERNAME}" ] && [ -n "${MINIO_GROUPNAME}" ]; then
         if [ -n "${MINIO_UID}" ] && [ -n "${MINIO_GID}" ]; then
-            groupadd -g "$MINIO_GID" "$MINIO_GROUPNAME" && \
+            groupadd -f -g "$MINIO_GID" "$MINIO_GROUPNAME" && \
                 useradd -u "$MINIO_UID" -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
         else
-            groupadd "$MINIO_GROUPNAME" && \
+            groupadd -f "$MINIO_GROUPNAME" && \
                 useradd -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
         fi
         exec setpriv --reuid="${MINIO_USERNAME}" \

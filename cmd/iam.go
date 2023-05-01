@@ -42,6 +42,7 @@ import (
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
+	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/policy/opa"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	xhttp "github.com/minio/minio/internal/http"
@@ -87,8 +88,10 @@ type IAMSys struct {
 	sync.Mutex
 
 	iamRefreshInterval time.Duration
-	ldapConfig         xldap.Config  // only valid if usersSysType is LDAPUsers
-	openIDConfig       openid.Config // only valid if OpenID is configured
+
+	LDAPConfig   xldap.Config  // only valid if usersSysType is LDAPUsers
+	OpenIDConfig openid.Config // only valid if OpenID is configured
+	STSTLSConfig xtls.Config   // only valid if STS TLS is configured
 
 	usersSysType UsersSysType
 
@@ -163,7 +166,7 @@ func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) err
 
 // initStore initializes IAM stores
 func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
-	if sys.ldapConfig.Enabled() {
+	if sys.LDAPConfig.Enabled() {
 		sys.SetUsersSysType(LDAPUsersSysType)
 	}
 
@@ -213,17 +216,25 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
-	var err error
-	globalOpenIDConfig, err = openid.LookupConfig(s,
+	openidConfig, err := openid.LookupConfig(s,
 		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
 
 	// Initialize if LDAP is enabled
-	globalLDAPConfig, err = xldap.Lookup(s, globalRootCAs)
+	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
+	}
+
+	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err))
+	}
+
+	if stsTLSConfig.InsecureSkipVerify {
+		logger.LogIf(ctx, fmt.Errorf("CRITICAL: enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify))
 	}
 
 	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
@@ -232,7 +243,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err))
 	}
 
-	setGlobalAuthNPlugin(idplugin.New(authNPluginCfg))
+	setGlobalAuthNPlugin(idplugin.New(GlobalContext, authNPluginCfg))
 
 	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
 	if err != nil {
@@ -257,8 +268,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.Lock()
 	defer sys.Unlock()
 
-	sys.ldapConfig = globalLDAPConfig.Clone()
-	sys.openIDConfig = globalOpenIDConfig.Clone()
+	sys.LDAPConfig = ldapConfig
+	sys.OpenIDConfig = openidConfig
+	sys.STSTLSConfig = stsTLSConfig
+
 	sys.iamRefreshInterval = iamRefreshInterval
 
 	// Initialize IAM store
@@ -273,28 +286,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
-		if etcdClient != nil {
-			// ****  WARNING ****
-			// Migrating to encrypted backend on etcd should happen before initialization of
-			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
-				if errors.Is(err, errEtcdUnreachable) {
-					logger.Info("Connection to etcd timed out. Retrying..")
-					continue
-				}
-				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
-				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
-				return
-			}
-		}
-
 		// Migrate IAM configuration, if necessary.
 		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				continue
 			}
-			logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, unable to write the IAM format"))
+			logger.LogIf(ctx, fmt.Errorf("IAM sub-system is partially initialized, unable to write the IAM format: %w", err))
 			return
 		}
 
@@ -310,7 +308,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				continue
 			}
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available %w", err))
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available: %w", err))
 			}
 		}
 		break
@@ -322,7 +320,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Set up polling for expired accounts and credentials purging.
 	switch {
-	case sys.openIDConfig.ProviderEnabled():
+	case sys.OpenIDConfig.ProviderEnabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
@@ -337,7 +335,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 				}
 			}
 		}()
-	case sys.ldapConfig.Enabled():
+	case sys.LDAPConfig.Enabled():
 		go func() {
 			timer := time.NewTimer(refreshInterval)
 			defer timer.Stop()
@@ -363,7 +361,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.rolesMap = make(map[arn.ARN]string)
 
 	// From OpenID
-	if riMap := globalOpenIDConfig.GetRoleInfo(); riMap != nil {
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
 		sys.validateAndAddRolePolicyMappings(ctx, riMap)
 	}
 
@@ -800,7 +798,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListLDAPPolicyMappings(q, sys.ldapConfig.IsLDAPUserDN, sys.ldapConfig.IsLDAPGroupDN)
+		pe := sys.store.ListLDAPPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -916,10 +914,12 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	accessKey     string
-	secretKey     string
-	comment       string
+	sessionPolicy              *iampolicy.Policy
+	accessKey                  string
+	secretKey                  string
+	comment                    string
+	expiration                 *time.Time
+	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
 	claims map[string]interface{}
 }
@@ -954,7 +954,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if parentUser == opts.accessKey {
 		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
 	}
-
+	if siteReplicatorSvcAcc == opts.accessKey && !opts.allowSiteReplicatorAccount {
+		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
+	}
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
@@ -992,6 +994,14 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.Status = string(auth.AccountOn)
 	cred.Comment = opts.comment
 
+	if opts.expiration != nil {
+		expirationInUTC := opts.expiration.UTC()
+		if err := validateSvcExpirationInUTC(expirationInUTC); err != nil {
+			return auth.Credentials{}, time.Time{}, err
+		}
+		cred.Expiration = expirationInUTC
+	}
+
 	updatedAt, err := sys.store.AddServiceAccount(ctx, cred)
 	if err != nil {
 		return auth.Credentials{}, time.Time{}, err
@@ -1006,6 +1016,7 @@ type updateServiceAccountOpts struct {
 	secretKey     string
 	status        string
 	comment       string
+	expiration    *time.Time
 }
 
 // UpdateServiceAccount - edit a service account
@@ -1145,12 +1156,9 @@ func (sys *IAMSys) getAccountWithClaims(ctx context.Context, accessKey string) (
 		return UserIdentity{}, nil, errNoSuchAccount
 	}
 
-	jwtClaims, err := auth.ExtractClaims(acc.Credentials.SessionToken, acc.Credentials.SecretKey)
+	jwtClaims, err := extractJWTClaims(acc)
 	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(acc.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return UserIdentity{}, nil, err
-		}
+		return UserIdentity{}, nil, err
 	}
 
 	return acc, jwtClaims, nil
@@ -1171,13 +1179,11 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 		return nil, errNoSuchServiceAccount
 	}
 
-	jwtClaims, err := auth.ExtractClaims(sa.Credentials.SessionToken, sa.Credentials.SecretKey)
+	jwtClaims, err := extractJWTClaims(sa)
 	if err != nil {
-		jwtClaims, err = auth.ExtractClaims(sa.Credentials.SessionToken, globalActiveCred.SecretKey)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
+
 	return jwtClaims.Map(), nil
 }
 
@@ -1280,7 +1286,7 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 			continue
 		}
 		roleArn = roleArns[0]
-		u, err := sys.openIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
+		u, err := sys.OpenIDConfig.LookupUser(roleArn, puInfo.subClaimValue)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
@@ -1302,14 +1308,14 @@ func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
 	for parentUser := range parentUsers {
-		if !sys.ldapConfig.IsLDAPUserDN(parentUser) {
+		if !sys.LDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
 		allDistNames = append(allDistNames, parentUser)
 	}
 
-	expiredUsers, err := sys.ldapConfig.GetNonEligibleUserDistNames(allDistNames)
+	expiredUsers, err := sys.LDAPConfig.GetNonEligibleUserDistNames(allDistNames)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1331,7 +1337,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// DN to ldap username mapping for each LDAP user
 	parentUserToLDAPUsernameMap := make(map[string]string)
 	for _, cred := range allCreds {
-		if !sys.ldapConfig.IsLDAPUserDN(cred.ParentUser) {
+		if !sys.LDAPConfig.IsLDAPUserDN(cred.ParentUser) {
 			continue
 		}
 		// Check if this is the first time we are
@@ -1379,7 +1385,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 2. Query LDAP server for groups of the LDAP users collected.
-	updatedGroups, err := sys.ldapConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
+	updatedGroups, err := sys.LDAPConfig.LookupGroupMemberships(parentUsers, parentUserToLDAPUsernameMap)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		logger.LogIf(GlobalContext, err)
@@ -1433,6 +1439,11 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
+	if !ok {
+		if accessKey == globalActiveCred.AccessKey {
+			return newUserIdentity(globalActiveCred), true
+		}
+	}
 	return u, ok && u.Credentials.IsValid()
 }
 
@@ -1566,7 +1577,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	var dn string
 	var isGroup bool
 	if r.User != "" {
-		dn, err = globalLDAPConfig.DoesUsernameExist(r.User)
+		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return updatedAt, nil, err
@@ -1576,7 +1587,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		isGroup = false
 	} else {
-		if exists, err := globalLDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+		if exists, err := sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
 			logger.LogIf(ctx, err)
 			return updatedAt, nil, err
 		} else if !exists {
@@ -1693,9 +1704,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 
 	parentArgs := args
 	parentArgs.AccountName = parentUser
-	// These are dynamic values set them appropriately.
-	parentArgs.ConditionValues["username"] = []string{parentUser}
-	parentArgs.ConditionValues["userid"] = []string{parentUser}
 
 	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
 	if !ok {
@@ -1821,10 +1829,6 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	}
 
 	// 3. If an inline session-policy is present, evaluate it.
-
-	// These are dynamic values set them appropriately.
-	args.ConditionValues["username"] = []string{parentUser}
-	args.ConditionValues["userid"] = []string{parentUser}
 
 	// Now check if we have a sessionPolicy.
 	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)

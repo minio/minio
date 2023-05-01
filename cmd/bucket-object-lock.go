@@ -90,8 +90,8 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 
 	opts.VersionID = object.VersionID
 	if gerr != nil { // error from GetObjectInfo
-		switch gerr.(type) {
-		case MethodNotAllowed: // This happens usually for a delete marker
+		if _, ok := gerr.(MethodNotAllowed); ok {
+			// This happens usually for a delete marker
 			if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 				// Delete marker should be present and valid.
 				return ErrNone
@@ -156,11 +156,8 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 				return ErrNone
 			}
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html#object-lock-retention-modes
-			// If you try to delete objects protected by governance mode and have s3:BypassGovernanceRetention
-			// or s3:GetBucketObjectLockConfiguration permissions, the operation will succeed.
-			govBypassPerms1 := checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName)
-			govBypassPerms2 := checkRequestAuthType(ctx, r, policy.GetBucketObjectLockConfigurationAction, bucket, object.ObjectName)
-			if govBypassPerms1 != ErrNone && govBypassPerms2 != ErrNone {
+			// If you try to delete objects protected by governance mode and have s3:BypassGovernanceRetention, the operation will succeed.
+			if checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName) != ErrNone {
 				return ErrAccessDenied
 			}
 		}
@@ -195,8 +192,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 				days, objRetention.RetainUntilDate.Time,
 				objRetention.Mode, byPassSet, r, cred,
 				owner)
-			switch apiErr {
-			case ErrAccessDenied:
+			if apiErr == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -213,8 +209,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 					return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 				}
 			}
-			switch govPerm {
-			case ErrAccessDenied:
+			if govPerm == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -227,8 +222,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 			apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 				days, objRetention.RetainUntilDate.Time, objRetention.Mode,
 				false, r, cred, owner)
-			switch apiErr {
-			case ErrAccessDenied:
+			if apiErr == ErrAccessDenied {
 				return errAuthentication
 			}
 			return nil
@@ -239,8 +233,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 	apiErr := isPutRetentionAllowed(oi.Bucket, oi.Name,
 		days, objRetention.RetainUntilDate.Time,
 		objRetention.Mode, byPassSet, r, cred, owner)
-	switch apiErr {
-	case ErrAccessDenied:
+	if apiErr == ErrAccessDenied {
 		return errAuthentication
 	}
 	return nil

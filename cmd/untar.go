@@ -30,6 +30,7 @@ import (
 	"path"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/cosnicolaou/pbzip2"
 	"github.com/klauspost/compress/s2"
@@ -143,7 +144,8 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 	case formatS2:
 		r = s2.NewReader(bf)
 	case formatZstd:
-		dec, err := zstd.NewReader(bf)
+		// Limit to 16 MiB per stream.
+		dec, err := zstd.NewReader(bf, zstd.WithDecoderMaxWindow(16<<20))
 		if err != nil {
 			return err
 		}
@@ -202,7 +204,8 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 		}
 
 		name := header.Name
-		if name == slashSeparator {
+		switch path.Clean(name) {
+		case ".", slashSeparator:
 			continue
 		}
 
@@ -241,7 +244,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 					rc.Close()
 					<-asyncWriters
 					wg.Done()
-					//lint:ignore SA6002 we are fine with the tiny alloc
+					//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 					poolBuf128k.Put(b)
 				}()
 				if err := putObject(&rc, fi, name); err != nil {
@@ -257,6 +260,12 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 				}
 			}(name, header.FileInfo(), b)
 			continue
+		}
+
+		// If zero or earlier modtime, set to current.
+		// Otherwise the resulting objects will be invalid.
+		if header.ModTime.UnixNano() <= 0 {
+			header.ModTime = time.Now()
 		}
 
 		// Sync upload.

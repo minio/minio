@@ -70,6 +70,24 @@ const (
 	ActionCount
 )
 
+// DeleteRestored - Returns true if action demands delete on restored objects
+func (a Action) DeleteRestored() bool {
+	return a == DeleteRestoredAction || a == DeleteRestoredVersionAction
+}
+
+// DeleteVersioned - Returns true if action demands delete on a versioned object
+func (a Action) DeleteVersioned() bool {
+	return a == DeleteVersionAction || a == DeleteRestoredVersionAction
+}
+
+// Delete - Returns true if action demands delete on all objects (including restored)
+func (a Action) Delete() bool {
+	if a.DeleteRestored() {
+		return true
+	}
+	return a == DeleteVersionAction || a == DeleteAction
+}
+
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
 	XMLName xml.Name `xml:"LifecycleConfiguration"`
@@ -104,8 +122,7 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 			return err
 		}
 
-		switch se := t.(type) {
-		case xml.StartElement:
+		if se, ok := t.(xml.StartElement); ok {
 			switch se.Name.Local {
 			case "Rule":
 				var r Rule
@@ -276,35 +293,6 @@ type Event struct {
 	StorageClass string
 }
 
-type lifecycleEvents []Event
-
-func (es lifecycleEvents) Len() int {
-	return len(es)
-}
-
-func (es lifecycleEvents) Swap(i, j int) {
-	es[i], es[j] = es[j], es[i]
-}
-
-func (es lifecycleEvents) Less(i, j int) bool {
-	if es[i].Due.Equal(es[j].Due) {
-		// Prefer Expiration over Transition for both current and noncurrent
-		// versions
-		switch es[i].Action {
-		case DeleteAction, DeleteVersionAction:
-			return true
-		}
-		switch es[j].Action {
-		case DeleteAction, DeleteVersionAction:
-			return false
-		}
-		return true
-	}
-
-	// Prefer earlier occurring event
-	return es[i].Due.Before(es[j].Due)
-}
-
 // Eval returns the lifecycle event applicable now.
 func (lc Lifecycle) Eval(obj ObjectOpts) Event {
 	return lc.eval(obj, time.Now().UTC())
@@ -434,7 +422,24 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	if len(events) > 0 {
-		sort.Sort(lifecycleEvents(events))
+		sort.Slice(events, func(i, j int) bool {
+			if events[i].Due.Equal(events[j].Due) {
+				// Prefer Expiration over Transition for both current
+				// and noncurrent versions
+				switch events[i].Action {
+				case DeleteAction, DeleteVersionAction:
+					return true
+				}
+				switch events[j].Action {
+				case DeleteAction, DeleteVersionAction:
+					return false
+				}
+				return true
+			}
+
+			// Prefer earlier occurring event
+			return events[i].Due.Before(events[j].Due)
+		})
 		return events[0]
 	}
 

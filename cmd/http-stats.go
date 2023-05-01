@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -255,6 +254,10 @@ type HTTPStats struct {
 	totalS3Canceled         HTTPAPIStats
 }
 
+func (st *HTTPStats) loadRequestsInQueue() int32 {
+	return atomic.LoadInt32(&st.s3RequestsInQueue)
+}
+
 func (st *HTTPStats) addRequestsInQueue(i int32) {
 	atomic.AddInt32(&st.s3RequestsInQueue, i)
 }
@@ -295,12 +298,7 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *xhttp.ResponseRecorder) {
-	// Ignore non S3 requests
-	if strings.HasSuffix(r.URL.Path, minioReservedBucketPathWithSlash) {
-		return
-	}
-
+func (st *HTTPStats) updateStats(api string, w *xhttp.ResponseRecorder) {
 	st.totalS3Requests.Inc(api)
 
 	// Increment the prometheus http request response histogram with appropriate label

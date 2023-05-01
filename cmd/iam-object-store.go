@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -91,18 +93,40 @@ func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}
 	return saveConfig(ctx, iamOS.objAPI, objPath, data)
 }
 
+func decryptData(data []byte, objPath string) ([]byte, error) {
+	if utf8.Valid(data) {
+		return data, nil
+	}
+
+	pdata, err := madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	if err == nil {
+		return pdata, nil
+	}
+	if GlobalKMS != nil {
+		pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, objPath),
+		})
+		if err == nil {
+			return pdata, nil
+		}
+		pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: objPath,
+		})
+		if err == nil {
+			return pdata, nil
+		}
+	}
+	return nil, err
+}
+
 func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context, objPath string) ([]byte, ObjectInfo, error) {
 	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath, ObjectOptions{})
 	if err != nil {
 		return nil, meta, err
 	}
-	if !utf8.Valid(data) && GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-			minioMetaBucket: path.Join(minioMetaBucket, objPath),
-		})
-		if err != nil {
-			return nil, meta, err
-		}
+	data, err = decryptData(data, objPath)
+	if err != nil {
+		return nil, meta, err
 	}
 	return data, meta, nil
 }
@@ -182,6 +206,22 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
+	}
+
+	if u.Credentials.SessionToken != "" {
+		jwtClaims, err := extractJWTClaims(u)
+		if err != nil {
+			if u.Credentials.IsTemp() {
+				// We should delete such that the client can re-request
+				// for the expiring credentials.
+				iamOS.deleteIAMConfig(ctx, getUserIdentityPath(user, userType))
+				iamOS.deleteIAMConfig(ctx, getMappedPolicyPath(user, userType, false))
+				return nil
+			}
+			return err
+
+		}
+		u.Credentials.Claims = jwtClaims.Map()
 	}
 
 	m[user] = u
@@ -341,7 +381,9 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 // Assumes cache is locked by caller.
 func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
 	bootstrapTrace("loading all IAM items")
-
+	if iamOS.objAPI == nil {
+		return errServerNotInitialized
+	}
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
 		return err

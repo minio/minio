@@ -23,28 +23,24 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 // Object was stored with additional erasure codes due to degraded system at upload time
 const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
-
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []ObjectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
@@ -102,6 +98,52 @@ func (fi FileInfo) IsValid() bool {
 	return ((dataBlocks >= parityBlocks) &&
 		(dataBlocks > 0) && (parityBlocks >= 0) &&
 		correctIndexes)
+}
+
+func (fi FileInfo) checkMultipart() (int64, bool) {
+	if len(fi.Parts) == 0 {
+		return 0, false
+	}
+	if !crypto.IsMultiPart(fi.Metadata) {
+		return 0, false
+	}
+	var size int64
+	for _, part := range fi.Parts {
+		psize, err := sio.DecryptedSize(uint64(part.Size))
+		if err != nil {
+			return 0, false
+		}
+		size += int64(psize)
+	}
+
+	return size, len(extractETag(fi.Metadata)) != 32
+}
+
+// GetActualSize - returns the actual size of the stored object
+func (fi FileInfo) GetActualSize() (int64, error) {
+	if _, ok := fi.Metadata[ReservedMetadataPrefix+"compression"]; ok {
+		sizeStr, ok := fi.Metadata[ReservedMetadataPrefix+"actual-size"]
+		if !ok {
+			return -1, errInvalidDecompressedSize
+		}
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			return -1, errInvalidDecompressedSize
+		}
+		return size, nil
+	}
+	if _, ok := crypto.IsEncrypted(fi.Metadata); ok {
+		size, ok := fi.checkMultipart()
+		if !ok {
+			size, err := sio.DecryptedSize(uint64(fi.Size))
+			if err != nil {
+				err = errObjectTampered // assign correct error type
+			}
+			return int64(size), err
+		}
+		return size, nil
+	}
+	return fi.Size, nil
 }
 
 // ToObjectInfo - Converts metadata to object info.
@@ -185,6 +227,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.Checksum = fi.Checksum
+	objInfo.Inlined = fi.InlineData()
 	// Success.
 	return objInfo
 }
@@ -258,7 +301,7 @@ func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, act
 	fi.Parts = append(fi.Parts, partInfo)
 
 	// Parts in FileInfo should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(fi.Parts))
+	sort.Slice(fi.Parts, func(i, j int) bool { return fi.Parts[i].Number < fi.Parts[j].Number })
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
@@ -395,20 +438,33 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 	return evalDisks(disks, mErrs), err
 }
 
-func commonParity(parities []int) int {
+func commonParity(parities []int, defaultParityCount int) int {
+	N := len(parities)
+
 	occMap := make(map[int]int)
 	for _, p := range parities {
 		occMap[p]++
 	}
 
 	var maxOcc, commonParity int
-
 	for parity, occ := range occMap {
 		if parity == -1 {
 			// Ignore non defined parity
 			continue
 		}
-		if occ >= maxOcc {
+
+		readQuorum := N - parity
+		if defaultParityCount > 0 && parity == 0 {
+			// In this case, parity == 0 implies that this object version is a
+			// delete marker
+			readQuorum = N/2 + 1
+		}
+		if occ < readQuorum {
+			// Ignore this parity since we don't have enough shards for read quorum
+			continue
+		}
+
+		if occ > maxOcc {
 			maxOcc = occ
 			commonParity = parity
 		}
@@ -461,8 +517,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	}
 
 	parities := listObjectParities(partsMetaData, errs)
-	parityBlocks := commonParity(parities)
-
+	parityBlocks := commonParity(parities, defaultParityCount)
 	if parityBlocks < 0 {
 		return -1, -1, errErasureReadQuorum
 	}

@@ -53,9 +53,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/logger/message/log"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
 	"github.com/secure-io/sio-go"
 )
@@ -533,16 +533,19 @@ func lriToLockEntry(l lockRequesterInfo, now time.Time, resource, server string)
 func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 	now := time.Now().UTC()
 	entryMap := make(map[string]*madmin.LockEntry)
+	toEntry := func(lri lockRequesterInfo) string {
+		return fmt.Sprintf("%s/%s", lri.Name, lri.UID)
+	}
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
 			continue
 		}
 		for k, v := range peerLock.Locks {
 			for _, lockReqInfo := range v {
-				if val, ok := entryMap[lockReqInfo.Name]; ok {
+				if val, ok := entryMap[toEntry(lockReqInfo)]; ok {
 					val.ServerList = append(val.ServerList, peerLock.Addr)
 				} else {
-					entryMap[lockReqInfo.Name] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
+					entryMap[toEntry(lockReqInfo)] = lriToLockEntry(lockReqInfo, now, k, peerLock.Addr)
 				}
 			}
 		}
@@ -803,6 +806,8 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	for {
 		select {
 		case <-ctx.Done():
+			globalProfilerMu.Lock()
+			defer globalProfilerMu.Unlock()
 			for k, v := range globalProfiler {
 				v.Stop()
 				delete(globalProfiler, k)
@@ -1013,7 +1018,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if hr.errBody == "" {
 						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
 							r.URL.Path, w.Header().Get(xhttp.AmzRequestID),
-							globalDeploymentID))
+							w.Header().Get(xhttp.AmzRequestHostID)))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
@@ -1217,6 +1222,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	storageClass := strings.TrimSpace(r.Form.Get(peerRESTStorageClass))
 	customBucket := strings.TrimSpace(r.Form.Get(peerRESTBucket))
 	autotune := r.Form.Get("autotune") == "true"
+	noClear := r.Form.Get("noclear") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1258,14 +1264,16 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		if !bucketExists {
+		if !noClear && !bucketExists {
 			defer deleteObjectPerfBucket(objectAPI)
 		}
 	}
 
-	defer objectAPI.DeleteObject(ctx, customBucket, speedTest+SlashSeparator, ObjectOptions{
-		DeletePrefix: true,
-	})
+	if !noClear {
+		defer objectAPI.DeleteObject(ctx, customBucket, speedTest+SlashSeparator, ObjectOptions{
+			DeletePrefix: true,
+		})
+	}
 
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
@@ -1519,6 +1527,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
 		return
+	}
+
+	// Publish bootstrap events that have already occurred before client could subscribe.
+	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) {
+		go globalBootstrapTracer.Publish(ctx, globalTrace)
 	}
 
 	for _, peer := range peers {
@@ -1776,12 +1789,48 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseJSON(w, resp)
 }
 
-func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
+func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]madmin.ErasureSetInfo, error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+
+	z, _ := objectAPI.(*erasureServerPools)
+
+	poolsInfo := make(map[int]map[int]madmin.ErasureSetInfo)
+	for _, d := range allDisks {
+		poolInfo, ok := poolsInfo[d.PoolIndex]
+		if !ok {
+			poolInfo = make(map[int]madmin.ErasureSetInfo)
+		}
+		erasureSet, ok := poolInfo[d.SetIndex]
+		if !ok {
+			erasureSet.ID = d.SetIndex
+			cache := dataUsageCache{}
+			if err := cache.load(ctx, z.serverPools[d.PoolIndex].sets[d.SetIndex], dataUsageCacheName); err == nil {
+				dataUsageInfo := cache.dui(dataUsageRoot, nil)
+				erasureSet.ObjectsCount = dataUsageInfo.ObjectsTotalCount
+				erasureSet.VersionsCount = dataUsageInfo.VersionsTotalCount
+				erasureSet.Usage = dataUsageInfo.ObjectsTotalSize
+			}
+		}
+		erasureSet.RawCapacity += d.TotalSpace
+		erasureSet.RawUsage += d.UsedSpace
+		if d.Healing {
+			erasureSet.HealDisks = 1
+		}
+		poolInfo[d.SetIndex] = erasureSet
+		poolsInfo[d.PoolIndex] = poolInfo
+	}
+	return poolsInfo, nil
+}
+
+func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) madmin.InfoMessage {
 	kmsStat := fetchKMSStatus()
 
 	ldap := madmin.LDAP{}
-	if globalLDAPConfig.Enabled() {
-		ldapConn, err := globalLDAPConfig.LDAP.Connect()
+	if globalIAMSys.LDAPConfig.Enabled() {
+		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
 		//nolint:gocritic
 		if err != nil {
 			ldap.Status = string(madmin.ItemOffline)
@@ -1805,7 +1854,9 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 	assignPoolNumbers(servers)
 
+	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
 	var backend interface{}
+
 	mode := madmin.ItemInitializing
 
 	buckets := madmin.Buckets{}
@@ -1832,25 +1883,25 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 
 		// Fetching the backend information
 		backendInfo := objectAPI.BackendInfo()
-		if backendInfo.Type == madmin.Erasure {
-			// Calculate the number of online/offline disks of all nodes
-			var allDisks []madmin.Disk
-			for _, s := range servers {
-				allDisks = append(allDisks, s.Disks...)
-			}
-			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(allDisks)
+		// Calculate the number of online/offline disks of all nodes
+		var allDisks []madmin.Disk
+		for _, s := range servers {
+			allDisks = append(allDisks, s.Disks...)
+		}
+		onlineDisks, offlineDisks := getOnlineOfflineDisksStats(allDisks)
 
-			backend = madmin.ErasureBackend{
-				Type:             madmin.ErasureType,
-				OnlineDisks:      onlineDisks.Sum(),
-				OfflineDisks:     offlineDisks.Sum(),
-				StandardSCParity: backendInfo.StandardSCParity,
-				RRSCParity:       backendInfo.RRSCParity,
-			}
-		} else {
-			backend = madmin.FSBackend{
-				Type: madmin.FsType,
-			}
+		backend = madmin.ErasureBackend{
+			Type:             madmin.ErasureType,
+			OnlineDisks:      onlineDisks.Sum(),
+			OfflineDisks:     offlineDisks.Sum(),
+			StandardSCParity: backendInfo.StandardSCParity,
+			RRSCParity:       backendInfo.RRSCParity,
+			TotalSets:        backendInfo.TotalSets,
+			DrivesPerSet:     backendInfo.DrivesPerSet,
+		}
+
+		if poolsInfoEnabled {
+			poolsInfo, _ = getPoolsInfo(ctx, allDisks)
 		}
 	}
 
@@ -1876,6 +1927,7 @@ func getServerInfo(ctx context.Context, r *http.Request) madmin.InfoMessage {
 		Services:     services,
 		Backend:      backend,
 		Servers:      servers,
+		Pools:        poolsInfo,
 	}
 }
 
@@ -1901,7 +1953,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 		ki.Error = err.Error()
 		return ki
 	}
-
+	defer resp.Body.Close()
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(&ki); err != nil {
 		ki.Error = err.Error()
@@ -2078,8 +2130,8 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 			// No ellipses pattern. Anonymize host name from every pool arg
 			pools := strings.Fields(poolsArgs)
 			anonPools = make([]string, len(pools))
-			for _, arg := range pools {
-				anonPools = append(anonPools, anonAddr(arg))
+			for index, arg := range pools {
+				anonPools[index] = anonAddr(arg)
 			}
 			return cmdLineWithoutPools + strings.Join(anonPools, " ")
 		}
@@ -2182,7 +2234,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWriteSysConfig()
 
 		if query.Get("minioinfo") == "true" {
-			infoMessage := getServerInfo(healthCtx, nil)
+			infoMessage := getServerInfo(healthCtx, false, nil)
 			servers := make([]madmin.ServerInfo, 0, len(infoMessage.Servers))
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
@@ -2262,7 +2314,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	errResp := func(err error) {
 		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
-			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+			w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 		encodedErrorResponse := encodeResponse(errorResponse)
 		healthInfo.Error = string(encodedErrorResponse)
 		logger.LogIf(ctx, enc.Encode(healthInfo))
@@ -2357,7 +2409,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Marshal API response
-	jsonBytes, err := json.Marshal(getServerInfo(ctx, r))
+	jsonBytes, err := json.Marshal(getServerInfo(ctx, true, r))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -2387,7 +2439,7 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
-	for _, tgt := range globalConfigTargetList.Targets() {
+	for _, tgt := range globalNotifyTargetList.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()

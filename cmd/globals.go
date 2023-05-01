@@ -42,16 +42,14 @@ import (
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
-	xldap "github.com/minio/minio/internal/config/identity/ldap"
-	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
-	xtls "github.com/minio/minio/internal/config/identity/tls"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/config/subnet"
 	xhttp "github.com/minio/minio/internal/http"
 	etcd "go.etcd.io/etcd/client/v3"
 
+	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/certs"
@@ -177,7 +175,8 @@ var (
 	globalMinioConsoleHost = ""
 
 	// Holds the possible host endpoint.
-	globalMinioEndpoint = ""
+	globalMinioEndpoint    = ""
+	globalMinioEndpointURL *xnet.URL
 
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
@@ -185,7 +184,8 @@ var (
 	globalNotificationSys *NotificationSys
 
 	globalEventNotifier    *EventNotifier
-	globalConfigTargetList *event.TargetList
+	globalNotifyTargetList *event.TargetList
+	globalLambdaTargetList *levent.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
 	globalBucketMonitor     *bandwidth.Monitor
@@ -197,13 +197,9 @@ var (
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig = apiConfig{listQuorum: "strict"}
+	globalAPIConfig = apiConfig{listQuorum: "strict", rootAccess: true}
 
 	globalStorageClass storageclass.Config
-
-	globalLDAPConfig   xldap.Config
-	globalOpenIDConfig openid.Config
-	globalSTSTLSConfig xtls.Config
 
 	globalAuthNPlugin *idplugin.AuthNPlugin
 
@@ -257,6 +253,9 @@ var (
 	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
+
+	// Captures if root credentials are set via ENV.
+	globalCredViaEnv bool
 
 	globalPublicCerts []*x509.Certificate
 
@@ -357,8 +356,10 @@ var (
 	globalServiceFreezeCnt int32
 	globalServiceFreezeMu  sync.Mutex // Updates.
 
-	// List of local drives to this node, this is only set during server startup.
-	globalLocalDrives []StorageAPI
+	// List of local drives to this node, this is only set during server startup,
+	// and should never be mutated. Hold globalLocalDrivesMu to access.
+	globalLocalDrives   []StorageAPI
+	globalLocalDrivesMu sync.RWMutex
 
 	// Is MINIO_CI_CD set?
 	globalIsCICD bool

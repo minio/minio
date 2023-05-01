@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -105,7 +106,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, zipPath, opts)
@@ -187,7 +188,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			end = zipObjInfo.Size
 		}
 		rs := &HTTPRangeSpec{Start: file.Offset, End: end}
-		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, readLock, opts)
+		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, opts)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -223,7 +224,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -234,7 +235,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -330,7 +331,7 @@ func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucke
 	var objSize int64
 	for {
 		rs := &HTTPRangeSpec{IsSuffixLength: true, Start: int64(-size)}
-		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, rs, nil, readLock, opts)
+		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, rs, nil, opts)
 		if err != nil {
 			return nil, ObjectInfo{}, err
 		}
@@ -411,7 +412,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", "", nil),
+				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, zipPath, opts)

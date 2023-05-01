@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -34,7 +34,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/kes"
+	"github.com/minio/kes-go"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/fips"
@@ -48,10 +48,11 @@ import (
 
 var (
 	// AWS errors for invalid SSE-C requests.
-	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
-	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
-	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
-	errKMSKeyNotFound       = errors.New("Invalid KMS keyId")
+	errEncryptedObject                = errors.New("The object was stored using a form of SSE")
+	errInvalidSSEParameters           = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
+	errKMSNotConfigured               = errors.New("KMS not configured for a server side encrypted objects")
+	errKMSKeyNotFound                 = errors.New("Unknown KMS key ID")
+	errKMSDefaultKeyAlreadyConfigured = errors.New("A default encryption already exists on KMS")
 	// Additional MinIO errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 	// error returned when invalid encryption parameters are specified
@@ -109,7 +110,7 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 //
 // DecryptETags uses a KMS bulk decryption API, if available, which
 // is more efficient than decrypting ETags sequentually.
-func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error {
+func DecryptETags(ctx context.Context, k kms.KMS, objects []ObjectInfo) error {
 	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
 		metadata = make([]map[string]string, 0, BatchSize)
@@ -169,7 +170,7 @@ func DecryptETags(ctx context.Context, KMS kms.KMS, objects []ObjectInfo) error 
 		// For all SSE-S3 single-part objects we have to
 		// fetch their decryption keys. We do this using
 		// a Bulk-Decryption API call, if available.
-		keys, err := crypto.S3.UnsealObjectKeys(ctx, KMS, metadata, buckets, names)
+		keys, err := crypto.S3.UnsealObjectKeys(ctx, k, metadata, buckets, names)
 		if err != nil {
 			return err
 		}
@@ -1123,7 +1124,8 @@ func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn
 }
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.
-func (o *ObjectInfo) decryptChecksums() map[string]string {
+// if part > 0, and we have the checksum for the part that will be returned.
+func (o *ObjectInfo) decryptChecksums(part int) map[string]string {
 	data := o.Checksum
 	if len(data) == 0 {
 		return nil
@@ -1136,5 +1138,5 @@ func (o *ObjectInfo) decryptChecksums() map[string]string {
 		}
 		data = decrypted
 	}
-	return hash.ReadCheckSums(data)
+	return hash.ReadCheckSums(data, part)
 }

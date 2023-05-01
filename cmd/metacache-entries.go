@@ -189,6 +189,43 @@ func (e *metaCacheEntry) isLatestDeletemarker() bool {
 	return xlMeta.versions[0].header.Type == DeleteType
 }
 
+// isAllFreeVersions returns if all objects are free versions.
+// If metadata is NOT versioned false will always be returned.
+// If v2 and UNABLE to load metadata true will be returned.
+func (e *metaCacheEntry) isAllFreeVersions() bool {
+	if e.cached != nil {
+		if len(e.cached.versions) == 0 {
+			return true
+		}
+		for _, v := range e.cached.versions {
+			if !v.header.FreeVersion() {
+				return false
+			}
+		}
+		return true
+	}
+	if !isXL2V1Format(e.metadata) {
+		return false
+	}
+	if meta, _, err := isIndexedMetaV2(e.metadata); meta != nil {
+		return meta.AllHidden(false)
+	} else if err != nil {
+		return true
+	}
+	// Fall back...
+	xlMeta, err := e.xlmeta()
+	if err != nil || len(xlMeta.versions) == 0 {
+		return true
+	}
+	// Check versions..
+	for _, v := range e.cached.versions {
+		if !v.header.FreeVersion() {
+			return false
+		}
+	}
+	return true
+}
+
 // fileInfo returns the decoded metadata.
 // If entry is a directory it is returned as that.
 // If versioned the latest version will be returned.
@@ -779,15 +816,16 @@ func (m *metaCacheEntriesSorted) merge(other metaCacheEntriesSorted, limit int) 
 	a := m.entries()
 	b := other.entries()
 	for len(a) > 0 && len(b) > 0 {
-		if a[0].name == b[0].name && bytes.Equal(a[0].metadata, b[0].metadata) {
+		switch {
+		case a[0].name == b[0].name && bytes.Equal(a[0].metadata, b[0].metadata):
 			// Same, discard one.
 			merged = append(merged, a[0])
 			a = a[1:]
 			b = b[1:]
-		} else if a[0].name < b[0].name {
+		case a[0].name < b[0].name:
 			merged = append(merged, a[0])
 			a = a[1:]
-		} else {
+		default:
 			merged = append(merged, b[0])
 			b = b[1:]
 		}
