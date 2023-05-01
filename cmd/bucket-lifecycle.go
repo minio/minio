@@ -131,11 +131,11 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event) {
 
 // enqueueByNewerNoncurrent enqueues object versions expired by
 // NewerNoncurrentVersions limit for expiry.
-func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete) {
+func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete, lcEvent lifecycle.Event) {
 	select {
 	case <-GlobalContext.Done():
 		es.close()
-	case es.byNewerNoncurrentCh <- newerNoncurrentTask{bucket: bucket, versions: versions}:
+	case es.byNewerNoncurrentCh <- newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}:
 	default:
 	}
 }
@@ -183,7 +183,7 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 			nwk.Take()
 			go func(t newerNoncurrentTask) {
 				defer nwk.Give()
-				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions)
+				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions, t.event)
 			}(t)
 		}
 		nwk.Wait()
@@ -195,6 +195,7 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 type newerNoncurrentTask struct {
 	bucket   string
 	versions []ObjectToDelete
+	event    lifecycle.Event
 }
 
 type transitionTask struct {
@@ -868,17 +869,32 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 
 func auditLifecycleTags(event lifecycle.Event) map[string]interface{} {
 	const (
-		ilmAction = "ilm-action"
-		ilmDue    = "ilm-due"
-		ilmRuleID = "ilm-rule-id"
-		ilmTier   = "ilm-tier"
+		ilmAction                  = "ilm-action"
+		ilmDue                     = "ilm-due"
+		ilmRuleID                  = "ilm-rule-id"
+		ilmTier                    = "ilm-tier"
+		ilmNewerNoncurrentVersions = "ilm-newer-noncurrent-versions"
+		ilmNoncurrentDays          = "ilm-noncurrent-days"
 	)
 	tags := make(map[string]interface{}, 4)
 	tags[ilmAction] = event.Action.String()
-	tags[ilmDue] = event.Due
 	tags[ilmRuleID] = event.RuleID
+
+	if !event.Due.IsZero() {
+		tags[ilmDue] = event.Due
+	}
+
+	// rule with Transition/NoncurrentVersionTransition in effect
 	if event.StorageClass != "" {
 		tags[ilmTier] = event.StorageClass
+	}
+
+	// rule with NewernoncurrentVersions in effect
+	if event.NewerNoncurrentVersions > 0 {
+		tags[ilmNewerNoncurrentVersions] = event.NewerNoncurrentVersions
+	}
+	if event.NoncurrentDays > 0 {
+		tags[ilmNoncurrentDays] = event.NoncurrentDays
 	}
 	return tags
 }

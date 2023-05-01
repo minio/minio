@@ -287,10 +287,12 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 
 // Event contains a lifecycle action with associated info
 type Event struct {
-	Action       Action
-	RuleID       string
-	Due          time.Time
-	StorageClass string
+	Action                  Action
+	RuleID                  string
+	Due                     time.Time
+	NoncurrentDays          int
+	NewerNoncurrentVersions int
+	StorageClass            string
 }
 
 // Eval returns the lifecycle event applicable now.
@@ -480,15 +482,17 @@ func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) 
 
 // NoncurrentVersionsExpirationLimit returns the number of noncurrent versions
 // to be retained from the first applicable rule per S3 behavior.
-func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, int, int) {
-	var lim int
-	var days int
-	var ruleID string
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) Event {
 	for _, rule := range lc.FilterRules(obj) {
 		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 {
 			continue
 		}
-		return rule.ID, int(rule.NoncurrentVersionExpiration.NoncurrentDays), rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
+		return Event{
+			Action:                  DeleteVersionAction,
+			RuleID:                  rule.ID,
+			NoncurrentDays:          int(rule.NoncurrentVersionExpiration.NoncurrentDays),
+			NewerNoncurrentVersions: rule.NoncurrentVersionExpiration.NewerNoncurrentVersions,
+		}
 	}
-	return ruleID, days, lim
+	return Event{}
 }
