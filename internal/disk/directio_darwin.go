@@ -24,6 +24,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// ODirectPlatform indicates if the platform supports O_DIRECT
+const ODirectPlatform = true
+
 // OpenFileDirectIO - bypass kernel cache.
 func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, error) {
 	return directio.OpenFile(filePath, flag, perm)
