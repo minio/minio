@@ -657,13 +657,14 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 ) {
 	var err error
 
-	contentBytes := []byte("hello")
 	sha256sum := ""
 	var objectNames []string
 	for i := 0; i < 10; i++ {
+		contentBytes := []byte("hello")
 		objectName := "test-object-" + strconv.Itoa(i)
 		if i == 0 {
 			objectName += "/"
+			contentBytes = []byte{}
 		}
 		// uploading the object.
 		_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
@@ -676,6 +677,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 		objectNames = append(objectNames, objectName)
 	}
 
+	contentBytes := []byte("hello")
 	for _, name := range []string{"private/object", "public/object"} {
 		// Uploading the object with retention enabled
 		_, err = obj.PutObject(GlobalContext, bucketName, name, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})

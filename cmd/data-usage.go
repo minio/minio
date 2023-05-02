@@ -81,7 +81,7 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 
 				for id, usageInfo := range cache.flattenChildrens(*root) {
 					prefix := decodeDirObject(strings.TrimPrefix(id, bucket+slashSeparator))
-					// decodeDirObject to avoid any __XL_DIR__ objects
+					// decodeDirObject to avoid any __XLDIR__ objects
 					m[prefix] += uint64(usageInfo.Size)
 				}
 			}
