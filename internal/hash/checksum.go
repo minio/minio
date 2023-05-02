@@ -339,10 +339,21 @@ func (c *Checksum) AsMap() map[string]string {
 }
 
 // TransferChecksumHeader will transfer any checksum value that has been checked.
+// If checksum was trailing, they must have been added to r.Trailer.
 func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
-	t, s := getContentChecksum(r)
-	if !t.IsSet() || t.Is(ChecksumTrailing) {
-		// TODO: Add trailing when we can read it.
+	c, err := GetContentChecksum(r)
+	if err != nil || c == nil {
+		return
+	}
+	t, s := c.Type, c.Encoded
+	if !c.Type.IsSet() {
+		return
+	}
+	if c.Type.Is(ChecksumTrailing) {
+		val := r.Trailer.Get(t.Key())
+		if val != "" {
+			w.Header().Set(t.Key(), val)
+		}
 		return
 	}
 	w.Header().Set(t.Key(), s)
@@ -365,6 +376,32 @@ func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
 // Returns ErrInvalidChecksum if so.
 // Returns nil, nil if no checksum.
 func GetContentChecksum(r *http.Request) (*Checksum, error) {
+	if trailing := r.Header.Values(xhttp.AmzTrailer); len(trailing) > 0 {
+		var res *Checksum
+		for _, header := range trailing {
+			var duplicates bool
+			switch {
+			case strings.EqualFold(header, ChecksumCRC32C.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumCRC32C|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumCRC32.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumCRC32|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumSHA256.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumSHA256|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumSHA1.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumSHA1|ChecksumTrailing, "")
+			}
+			if duplicates {
+				return nil, ErrInvalidChecksum
+			}
+		}
+		if res != nil {
+			return res, nil
+		}
+	}
 	t, s := getContentChecksum(r)
 	if t == ChecksumNone {
 		if s == "" {
@@ -388,13 +425,7 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 		t |= NewChecksumType(alg)
 		if t.IsSet() {
 			hdr := t.Key()
-			// Not sure if this a valid method.
 			if s = r.Header.Get(hdr); s == "" {
-				if _, ok := r.Trailer[http.CanonicalHeaderKey(hdr)]; ok {
-					t |= ChecksumTrailing
-				} else {
-					t = ChecksumInvalid
-				}
 				return ChecksumNone, ""
 			}
 		}
@@ -411,18 +442,6 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 				s = got
 			}
 			return
-		}
-
-		if len(r.Trailer) > 0 {
-			if _, ok := r.Trailer[http.CanonicalHeaderKey(c.Key())]; ok {
-				if t != ChecksumNone {
-					t = ChecksumInvalid
-					s = ""
-				} else {
-					t = c | ChecksumTrailing
-					s = ""
-				}
-			}
 		}
 	}
 	checkType(ChecksumCRC32)

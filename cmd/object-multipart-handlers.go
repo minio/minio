@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -643,7 +642,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
-	fmt.Println("AAAAAAAAAAAAAAAAAAAAUTH:", rAuthType.String())
 
 	switch rAuthType {
 	case authTypeStreamingSigned, authTypeStreamingSignedTrailer:
@@ -655,7 +653,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	case authTypeStreamingUnsignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Error = newUnsignedV4ChunkedReader(r, rAuthType == authTypeStreamingSignedTrailer)
+		reader, s3Error = newUnsignedV4ChunkedReader(r, true)
 		if s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 			return
@@ -701,7 +699,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
-
 	var idxCb func() []byte
 	if isCompressed {
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)

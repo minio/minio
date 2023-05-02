@@ -217,6 +217,7 @@ func newSignV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser, API
 		region:            region,
 		chunkSHA256Writer: sha256.New(),
 		buffer:            make([]byte, 64*1024),
+		debug:             false,
 	}, ErrNone
 }
 
@@ -234,6 +235,7 @@ type s3ChunkedReader struct {
 	buffer            []byte
 	offset            int
 	err               error
+	debug             bool // Print details on failure. Add your own if more are needed.
 }
 
 func (cr *s3ChunkedReader) Close() (err error) {
@@ -260,9 +262,17 @@ const maxChunkSize = 16 << 20 // 16 MiB
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
+	if cr.err != nil {
+		if cr.debug {
+			fmt.Printf("s3ChunkedReader: Returning err: %v (%T)\n", cr.err, cr.err)
+		}
+		return 0, cr.err
+	}
 	defer func() {
-		if err != nil {
-			fmt.Println("Read err:", err)
+		if err != nil && err != io.EOF {
+			if cr.debug {
+				fmt.Println("Read err:", err)
+			}
 		}
 	}()
 	// First, if there is any unread data, copy it to the client
@@ -370,23 +380,6 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 		cr.err = err
 		return n, cr.err
 	}
-	b, err = cr.reader.ReadByte()
-	if b != '\r' || err != nil {
-		cr.err = errMalformedEncoding
-		return n, cr.err
-	}
-	b, err = cr.reader.ReadByte()
-	if err == io.EOF {
-		err = io.ErrUnexpectedEOF
-	}
-	if err != nil {
-		cr.err = err
-		return n, cr.err
-	}
-	if b != '\n' {
-		cr.err = errMalformedEncoding
-		return n, cr.err
-	}
 
 	// Once we have read the entire chunk successfully, we verify
 	// that the received signature matches our computed signature.
@@ -402,16 +395,44 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 	// If the chunk size is zero we return io.EOF. As specified by AWS,
 	// only the last chunk is zero-sized.
 	if len(cr.buffer) == 0 {
-		fmt.Println("EOF. Trailers:", cr.trailers)
+		if cr.debug {
+			fmt.Println("EOF. Reading Trailers:", cr.trailers)
+		}
 		if cr.trailers != nil {
 			err = cr.readTrailers()
-			fmt.Println("trailers returned:", err, "now:", cr.trailers)
+			if cr.debug {
+				fmt.Println("trailers returned:", err, "now:", cr.trailers)
+			}
 			if err != nil {
 				cr.err = err
 				return 0, err
 			}
 		}
 		cr.err = io.EOF
+		return n, cr.err
+	}
+
+	b, err = cr.reader.ReadByte()
+	if b != '\r' || err != nil {
+		if cr.debug {
+			fmt.Printf("want %q, got %q\n", "\r", string(b))
+		}
+		cr.err = errMalformedEncoding
+		return n, cr.err
+	}
+	b, err = cr.reader.ReadByte()
+	if err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
+	if err != nil {
+		cr.err = err
+		return n, cr.err
+	}
+	if b != '\n' {
+		if cr.debug {
+			fmt.Printf("want %q, got %q\n", "\r", string(b))
+		}
+		cr.err = errMalformedEncoding
 		return n, cr.err
 	}
 
@@ -435,7 +456,7 @@ func (cr *s3ChunkedReader) readTrailers() error {
 			valueBuffer.WriteByte(v)
 			continue
 		}
-		valueBuffer.WriteByte(v)
+		// End of buffer, do not add to value.
 		v, err = cr.reader.ReadByte()
 		if err != nil {
 			if err == io.EOF {
@@ -445,7 +466,6 @@ func (cr *s3ChunkedReader) readTrailers() error {
 		if v != '\n' {
 			return errMalformedEncoding
 		}
-		valueBuffer.WriteByte(v)
 		break
 	}
 
@@ -470,6 +490,9 @@ func (cr *s3ChunkedReader) readTrailers() error {
 			}
 		}
 		if string(tmp[:]) != "\n\r\n" {
+			if cr.debug {
+				fmt.Printf("signature, want %q, got %q", "\n\r\n", string(tmp[:]))
+			}
 			return errMalformedEncoding
 		}
 		// No need to write final newlines to buffer.
@@ -479,6 +502,9 @@ func (cr *s3ChunkedReader) readTrailers() error {
 	// Verify signature.
 	sig := signatureBuffer.Bytes()
 	if !bytes.HasPrefix(sig, []byte("x-amz-trailer-signature:")) {
+		if cr.debug {
+			fmt.Printf("prefix, want prefix %q, got %q", "x-amz-trailer-signature:", string(sig))
+		}
 		return errMalformedEncoding
 	}
 	sig = sig[len("x-amz-trailer-signature:"):]
@@ -486,13 +512,16 @@ func (cr *s3ChunkedReader) readTrailers() error {
 	cr.chunkSHA256Writer.Write(valueBuffer.Bytes())
 	wantSig := cr.getTrailerChunkSignature()
 	if !compareSignatureV4(string(sig), wantSig) {
+		if cr.debug {
+			fmt.Printf("signature, want: %q, got %q\nSignature buffer: %q\n", wantSig, string(sig), string(valueBuffer.Bytes()))
+		}
 		return errSignatureMismatch
 	}
 
 	// Parse trailers.
 	wantTrailers := make(map[string]struct{}, len(cr.trailers))
 	for k := range cr.trailers {
-		wantTrailers[k] = struct{}{}
+		wantTrailers[strings.ToLower(k)] = struct{}{}
 	}
 	input := bufio.NewScanner(bytes.NewReader(valueBuffer.Bytes()))
 	for input.Scan() {
@@ -503,11 +532,17 @@ func (cr *s3ChunkedReader) readTrailers() error {
 		// Find first separator.
 		idx := strings.IndexByte(line, trailerKVSeparator[0])
 		if idx <= 0 || idx >= len(line) {
+			if cr.debug {
+				fmt.Printf("index, ':' not found in %q\n", line)
+			}
 			return errMalformedEncoding
 		}
 		key := line[:idx]
 		value := line[idx+1:]
 		if _, ok := wantTrailers[key]; !ok {
+			if cr.debug {
+				fmt.Printf("%q not found in %q\n", key, cr.trailers)
+			}
 			return errMalformedEncoding
 		}
 		cr.trailers.Set(key, value)

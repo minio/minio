@@ -24,20 +24,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
-
-	"github.com/minio/minio/internal/auth"
 )
 
 // newUnsignedV4ChunkedReader returns a new s3UnsignedChunkedReader that translates the data read from r
 // out of HTTP "chunked" format before returning it.
 // The s3ChunkedReader returns io.EOF when the final 0-length chunk is read.
 func newUnsignedV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser, APIErrorCode) {
-	cred, seedSignature, region, seedDate, errCode := calculateSeedSignature(req, trailer)
-	if errCode != ErrNone {
-		return nil, errCode
-	}
-
 	if trailer {
 		// Discard anything unsigned.
 		req.Trailer = make(http.Header)
@@ -49,29 +41,22 @@ func newUnsignedV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser,
 		req.Trailer = nil
 	}
 	return &s3UnsignedChunkedReader{
-		trailers:      req.Trailer,
-		reader:        bufio.NewReader(req.Body),
-		cred:          cred,
-		seedSignature: seedSignature,
-		seedDate:      seedDate,
-		region:        region,
-		buffer:        make([]byte, 64*1024),
+		trailers: req.Trailer,
+		reader:   bufio.NewReader(req.Body),
+		buffer:   make([]byte, 64*1024),
 	}, ErrNone
 }
 
 // Represents the overall state that is required for decoding a
 // AWS Signature V4 chunked reader.
 type s3UnsignedChunkedReader struct {
-	reader        *bufio.Reader
-	cred          auth.Credentials
-	seedSignature string
-	seedDate      time.Time
-	region        string
-	trailers      http.Header
+	reader   *bufio.Reader
+	trailers http.Header
 
 	buffer []byte
 	offset int
 	err    error
+	debug  bool
 }
 
 func (cr *s3UnsignedChunkedReader) Close() (err error) {
@@ -100,7 +85,9 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 				return io.ErrUnexpectedEOF
 			}
 			if got != want {
-				fmt.Printf("mustread: want: %v got: %v\n", want, got)
+				if cr.debug {
+					fmt.Printf("mustread: want: %q got: %q\n", string(want), string(got))
+				}
 				return errMalformedEncoding
 			}
 			if err != nil {
@@ -140,7 +127,9 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 		case b >= 'A' && b <= 'F':
 			size = size<<4 | int(b-('A'-10))
 		default:
-			fmt.Printf("err size: %v\n", string(b))
+			if cr.debug {
+				fmt.Printf("err size: %v\n", string(b))
+			}
 			cr.err = errMalformedEncoding
 			return n, cr.err
 		}
@@ -165,18 +154,18 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 		cr.err = err
 		return n, cr.err
 	}
-	err = mustRead('\r', '\n')
-	if err != nil {
-		cr.err = err
-		return n, cr.err
-	}
 
 	// If the chunk size is zero we return io.EOF. As specified by AWS,
 	// only the last chunk is zero-sized.
 	if len(cr.buffer) == 0 {
+		if cr.debug {
+			fmt.Println("EOF")
+		}
 		if cr.trailers != nil {
 			err = cr.readTrailers()
-			fmt.Println("trailer returned:", err)
+			if cr.debug {
+				fmt.Println("trailer returned:", err)
+			}
 			if err != nil {
 				cr.err = err
 				return 0, err
@@ -184,6 +173,12 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 		}
 		cr.err = io.EOF
 		return n, cr.err
+	} else {
+		err = mustRead('\r', '\n')
+		if err != nil && err != io.EOF {
+			cr.err = err
+			return n, cr.err
+		}
 	}
 
 	cr.offset = copy(buf, cr.buffer)
@@ -215,6 +210,9 @@ func (cr *s3UnsignedChunkedReader) readTrailers() error {
 			}
 		}
 		if !bytes.Equal(tmp[:], []byte{'\n', '\r', '\n'}) {
+			if cr.debug {
+				fmt.Printf("got %q, want %q\n", string(tmp[:]), "\n\r\n")
+			}
 			return errMalformedEncoding
 		}
 		break
@@ -223,7 +221,7 @@ func (cr *s3UnsignedChunkedReader) readTrailers() error {
 	// Parse trailers.
 	wantTrailers := make(map[string]struct{}, len(cr.trailers))
 	for k := range cr.trailers {
-		wantTrailers[k] = struct{}{}
+		wantTrailers[strings.ToLower(k)] = struct{}{}
 	}
 	input := bufio.NewScanner(bytes.NewReader(valueBuffer.Bytes()))
 	for input.Scan() {
@@ -234,11 +232,17 @@ func (cr *s3UnsignedChunkedReader) readTrailers() error {
 		// Find first separator.
 		idx := strings.IndexByte(line, trailerKVSeparator[0])
 		if idx <= 0 || idx >= len(line) {
+			if cr.debug {
+				fmt.Printf("Could not find separator, got %q\n", line)
+			}
 			return errMalformedEncoding
 		}
-		key := line[:idx]
+		key := strings.ToLower(line[:idx])
 		value := line[idx+1:]
 		if _, ok := wantTrailers[key]; !ok {
+			if cr.debug {
+				fmt.Printf("Unknown key %q - expected on of %v\n", key, cr.trailers)
+			}
 			return errMalformedEncoding
 		}
 		cr.trailers.Set(key, value)

@@ -22,13 +22,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"net/http"
 
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/hash/sha256"
+	"github.com/minio/minio/internal/ioutil"
 )
 
 // A Reader wraps an io.Reader and computes the MD5 checksum
@@ -110,7 +110,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		r.checksum = MD5
 		r.contentSHA256 = SHA256
 		if r.size < 0 && size >= 0 {
-			r.src = etag.Wrap(io.LimitReader(r.src, size), r.src)
+			r.src = etag.Wrap(ioutil.HardLimitReader(r.src, size), r.src)
 			r.size = size
 		}
 		if r.actualSize <= 0 && actualSize >= 0 {
@@ -120,7 +120,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	}
 
 	if size >= 0 {
-		r := io.LimitReader(src, size)
+		r := ioutil.HardLimitReader(src, size)
 		if _, ok := src.(etag.Tagger); !ok {
 			src = etag.NewReader(r, MD5)
 		} else {
@@ -158,15 +158,12 @@ func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
 		return nil
 	}
 	r.contentHash = *cs
-	if ignoreValue {
-		// Ignore until we have trailing headers.
-		return nil
-	}
 	if cs.Type.Trailing() {
 		r.trailer = req.Trailer
-		if _, ok := r.trailer[http.CanonicalHeaderKey(cs.Type.Key())]; !ok {
-			return ErrInvalidChecksum
-		}
+	}
+	if ignoreValue {
+		// Do not validate, but allow for transfer
+		return nil
 	}
 
 	r.contentHasher = cs.Type.Hasher()
@@ -197,7 +194,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 		}
 		if r.contentHasher != nil {
 			if r.contentHash.Type.Trailing() {
-				fmt.Println("trailers now:", r.trailer)
+				var err error
 				r.contentHash.Encoded = r.trailer.Get(r.contentHash.Type.Key())
 				r.contentHash.Raw, err = base64.StdEncoding.DecodeString(r.contentHash.Encoded)
 				if err != nil || len(r.contentHash.Raw) == 0 {
@@ -293,6 +290,9 @@ func (r *Reader) ContentCRCType() ChecksumType {
 func (r *Reader) ContentCRC() map[string]string {
 	if r.contentHash.Type == ChecksumNone || !r.contentHash.Valid() {
 		return nil
+	}
+	if r.contentHash.Type.Trailing() {
+		return map[string]string{r.contentHash.Type.String(): r.trailer.Get(r.contentHash.Type.Key())}
 	}
 	return map[string]string{r.contentHash.Type.String(): r.contentHash.Encoded}
 }

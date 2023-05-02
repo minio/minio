@@ -591,7 +591,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 			return pi, InvalidArgument{
 				Bucket: bucket,
 				Object: fi.Name,
-				Err:    fmt.Errorf("checksum missing, want %s, got %s", cs, r.ContentCRCType().String()),
+				Err:    fmt.Errorf("checksum missing, want %q, got %q", cs, r.ContentCRCType().String()),
 			}
 		}
 	}
@@ -707,6 +707,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		Index:      index,
 		Checksums:  r.ContentCRC(),
 	}
+
 	fi.Parts = []ObjectPartInfo{partInfo}
 	partFI, err := fi.MarshalMsg(nil)
 	if err != nil {
