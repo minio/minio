@@ -349,7 +349,7 @@ func exponentialBackoffWait(r *rand.Rand, unit, cap time.Duration) func(uint) ti
 		if sleep > cap {
 			sleep = cap
 		}
-		sleep -= time.Duration(r.Float64() * float64(sleep))
+		sleep -= time.Duration(r.Float64() * float64(sleep-unit))
 		return sleep
 	}
 }
