@@ -78,7 +78,7 @@ spec:
               - key: {{ .Values.tls.publicCrt }}
                 path: CAs/public.crt
         {{- end }}
-      {{ if .Values.serviceAccount.create }}
+      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
       containers:
