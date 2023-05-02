@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/minio/minio/internal/ioutil"
 	"google.golang.org/api/googleapi"
 
 	"github.com/minio/madmin-go/v2"
@@ -199,6 +200,7 @@ const (
 	ErrInvalidTagDirective
 	ErrPolicyAlreadyAttached
 	ErrPolicyNotAttached
+	ErrExcessData
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -525,6 +527,11 @@ var errorCodes = errorCodeMap{
 	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrExcessData: {
+		Code:           "ExcessData",
+		Description:    "More data provided than indicated content length",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrPolicyTooLarge: {
@@ -2099,6 +2106,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrMalformedXML
 	case errInvalidMaxParts:
 		apiErr = ErrInvalidMaxParts
+	case ioutil.ErrOverread:
+		apiErr = ErrExcessData
 	}
 
 	// Compression errors

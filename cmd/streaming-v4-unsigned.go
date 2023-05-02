@@ -173,12 +173,12 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 		}
 		cr.err = io.EOF
 		return n, cr.err
-	} else {
-		err = mustRead('\r', '\n')
-		if err != nil && err != io.EOF {
-			cr.err = err
-			return n, cr.err
-		}
+	}
+	// read final terminator.
+	err = mustRead('\r', '\n')
+	if err != nil && err != io.EOF {
+		cr.err = err
+		return n, cr.err
 	}
 
 	cr.offset = copy(buf, cr.buffer)

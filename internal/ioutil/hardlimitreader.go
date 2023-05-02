@@ -5,7 +5,8 @@ import (
 	"io"
 )
 
-var ErrOverread = errors.New("input provided more bytes than allowed")
+// ErrOverread is returned to the reader when the hard limit of HardLimitReader is exceeded.
+var ErrOverread = errors.New("input provided more bytes than specified")
 
 // HardLimitReader returns a Reader that reads from r
 // but returns an error if the source provides more data than allowed.

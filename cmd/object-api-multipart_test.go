@@ -29,6 +29,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/ioutil"
 )
 
 // Wrapper for calling NewMultipartUpload tests for both Erasure multiple disks and single node setup.
@@ -277,7 +278,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Input with size less than the size of actual data inside the reader.
 		{
 			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "900150983cd24fb0d6963f7d28e17f73", intputDataSize: int64(len("abcd") - 1),
-			expectedError: hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"},
+			expectedError: ioutil.ErrOverread,
 		},
 
 		// Test case - 16-19.
