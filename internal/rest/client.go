@@ -343,8 +343,16 @@ func (c *Client) LastError() error {
 // computes the exponential backoff duration according to
 // https://www.awsarchitectureblog.com/2015/03/backoff.html
 func exponentialBackoffWait(r *rand.Rand, unit, cap time.Duration) func(uint) time.Duration {
+	if unit > time.Hour {
+		// Protect against integer overflow
+		panic("unit cannot exceed one hour")
+	}
 	return func(attempt uint) time.Duration {
-		// sleep = random_between(0, min(cap, base * 2 ** attempt))
+		if attempt > 16 {
+			// Protect against integer overflow
+			attempt = 16
+		}
+		// sleep = random_between(unit, min(cap, base * 2 ** attempt))
 		sleep := unit * time.Duration(1<<attempt)
 		if sleep > cap {
 			sleep = cap
