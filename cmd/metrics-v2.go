@@ -165,7 +165,7 @@ const (
 	total          MetricName = "total"
 	freeInodes     MetricName = "free_inodes"
 
-	failedCount     MetricName = "failed_count"
+	failedObjects   MetricName = "failed_objects"
 	failedBytes     MetricName = "failed_bytes"
 	freeBytes       MetricName = "free_bytes"
 	readBytes       MetricName = "read_bytes"
@@ -564,7 +564,7 @@ func getBucketRepFailedOperationsMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
 		Subsystem: replicationSubsystem,
-		Name:      failedCount,
+		Name:      failedObjects,
 		Help:      "Total number of objects which failed replication",
 		Type:      gaugeMetric,
 	}
