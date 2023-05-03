@@ -1680,7 +1680,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	case authTypeStreamingUnsignedTrailer:
 		// Initialize stream chunked reader with optional trailers.
-		reader, s3Err = newUnsignedV4ChunkedReader(r, rAuthType == authTypeStreamingUnsignedTrailer)
+		reader, s3Err = newUnsignedV4ChunkedReader(r, true)
 		if s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
@@ -1912,7 +1912,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
 	evt := eventArgs{
@@ -1930,6 +1929,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sendEvent(evt)
 	}
 
+	// Do not send checksums in events to avoid leaks.
+	hash.TransferChecksumHeader(w, r)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
@@ -1937,8 +1940,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		enqueueTransitionImmediate(objInfo)
 		logger.LogIf(ctx, os.Sweep())
 	}
-	// Do not send checksums in events to avoid leaks.
-	hash.TransferChecksumHeader(w, r)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
