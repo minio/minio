@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -37,7 +37,7 @@ import (
 // client did not calculate sha256 of the payload.
 const unsignedPayload = "UNSIGNED-PAYLOAD"
 
-// http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
+// http Header "x-amz-content-sha256" == "STREAMING-UNSIGNED-PAYLOAD-TRAILER" indicates that the
 // client did not calculate sha256 of the payload and there is a trailer.
 const unsignedPayloadTrailer = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
 
