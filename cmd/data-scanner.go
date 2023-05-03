@@ -1011,7 +1011,8 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		return objectInfos, nil
 	}
 
-	_, days, lim := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
+	event := i.lifeCycle.NoncurrentVersionsExpirationLimit(lifecycle.ObjectOpts{Name: i.objectPath()})
+	lim := event.NewerNoncurrentVersions
 	if lim == 0 || len(fivs) <= lim+1 { // fewer than lim _noncurrent_ versions
 		for _, fi := range fivs {
 			objectInfos = append(objectInfos, fi.ToObjectInfo(i.bucket, i.objectPath(), versioned))
@@ -1040,7 +1041,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		}
 
 		// NoncurrentDays not passed yet.
-		if time.Now().UTC().Before(lifecycle.ExpectedExpiryTime(obj.SuccessorModTime, days)) {
+		if time.Now().UTC().Before(lifecycle.ExpectedExpiryTime(obj.SuccessorModTime, event.NoncurrentDays)) {
 			// add this version back to remaining versions for
 			// subsequent lifecycle policy applications
 			fivs = append(fivs, fi)
@@ -1055,7 +1056,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		})
 	}
 
-	globalExpiryState.enqueueByNewerNoncurrent(i.bucket, toDel)
+	globalExpiryState.enqueueByNewerNoncurrent(i.bucket, toDel, event)
 	return objectInfos, nil
 }
 

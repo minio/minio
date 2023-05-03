@@ -168,12 +168,11 @@ func (target *KafkaTarget) isActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
-	if err := target.init(); err != nil {
-		return err
-	}
-
 	if target.store != nil {
 		return target.store.Put(eventData)
+	}
+	if err := target.init(); err != nil {
+		return err
 	}
 	_, err := target.isActive()
 	if err != nil {

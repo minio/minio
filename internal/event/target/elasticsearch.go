@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -200,12 +200,11 @@ func (target *ElasticsearchTarget) isActive() (bool, error) {
 
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.
 func (target *ElasticsearchTarget) Save(eventData event.Event) error {
-	if err := target.init(); err != nil {
-		return err
-	}
-
 	if target.store != nil {
 		return target.store.Put(eventData)
+	}
+	if err := target.init(); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
