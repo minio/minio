@@ -267,7 +267,8 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if err := s.checkODirectDiskSupport(); err == nil {
 		s.oDirect = true
 	} else {
-		if globalIsErasureSD && errors.Is(err, errUnsupportedDisk) {
+		// Allow if unsupported platform or single disk.
+		if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
 			s.oDirect = false
 		} else {
 			return s, err
@@ -375,6 +376,10 @@ func (s *xlStorage) Healing() *healingTracker {
 // with O_DIRECT support, return an error if any and return
 // errUnsupportedDisk if there is no O_DIRECT support
 func (s *xlStorage) checkODirectDiskSupport() error {
+	if !disk.ODirectPlatform {
+		return errUnsupportedDisk
+	}
+
 	// Check if backend is writable and supports O_DIRECT
 	uuid := mustGetUUID()
 	filePath := pathJoin(s.diskPath, ".writable-check-"+uuid+".tmp")
@@ -1498,16 +1503,23 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		}
 		return nil, dmTime, err
 	}
-	r := &xioutil.ODirectReader{
-		File:      f,
-		SmallFile: true,
+	r := io.Reader(f)
+	var dr *xioutil.ODirectReader
+	if odirectEnabled {
+		dr = &xioutil.ODirectReader{
+			File:      f,
+			SmallFile: true,
+		}
+		defer dr.Close()
+		r = dr
+	} else {
+		defer f.Close()
 	}
-	defer r.Close()
 
 	// Get size for precise allocation.
 	stat, err := f.Stat()
 	if err != nil {
-		buf, err = io.ReadAll(r)
+		buf, err = io.ReadAll(diskHealthReader(ctx, r))
 		return buf, dmTime, osErrToFileErr(err)
 	}
 	if stat.IsDir() {
@@ -1521,6 +1533,9 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		buf = buf[:sz]
 	} else {
 		buf = make([]byte, sz)
+	}
+	if dr != nil {
+		dr.SmallFile = sz <= xioutil.BlockSizeSmall*2
 	}
 	// Read file...
 	_, err = io.ReadFull(diskHealthReader(ctx, r), buf)

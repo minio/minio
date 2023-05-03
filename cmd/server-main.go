@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
@@ -641,7 +642,10 @@ func serverMain(ctx *cli.Context) {
 			setConsoleSrv(srv)
 
 			go func() {
-				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
+				server := newConsoleServerFn()
+				logger.FatalIf(server.Listen(), "Unable to initialize console server's sockets")
+				daemon.SdNotify(false, daemon.SdNotifyReady)
+				logger.FatalIf(server.Serve(), "Unable to initialize console server")
 			}()
 		}
 

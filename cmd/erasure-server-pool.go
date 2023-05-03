@@ -937,7 +937,15 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return ObjectInfo{}, err
 	}
 
+	origObject := object
 	object = encodeDirObject(object)
+	// Only directory objects skip creating new versions.
+	if object != origObject && isDirObject(object) && data.Size() == 0 {
+		// Treat all directory PUTs to behave as if they are performed
+		// on an unversioned bucket.
+		opts.Versioned = false
+		opts.VersionSuspended = false
+	}
 
 	if z.SinglePool() {
 		if !isMinioMetaBucketName(bucket) {

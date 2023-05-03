@@ -1031,6 +1031,10 @@ func decodeDirObject(object string) string {
 	return object
 }
 
+func isDirObject(object string) bool {
+	return HasSuffix(object, globalDirSuffix)
+}
+
 // Helper method to return total number of nodes in cluster
 func totalNodeCount() uint64 {
 	peers, _ := globalEndpoints.peers()

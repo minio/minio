@@ -132,4 +132,61 @@ if [ $ret -ne 0 ]; then
     exit 1
 fi
 
+./mc mb sitea/bucket-version/
+./mc mb siteb/bucket-version
+
+./mc version enable sitea/bucket-version/
+./mc version enable siteb/bucket-version/
+
+echo "adding replication rule for site a -> site b"
+./mc replicate add sitea/bucket-version/ \
+     --remote-bucket http://minio:minio123@127.0.0.1:9004/bucket-version
+
+./mc mb sitea/bucket-version/directory/
+
+sleep 2s
+
+./mc ls -r --versions sitea/bucket-version/ > /tmp/sitea_dirs.txt
+./mc ls -r --versions siteb/bucket-version/ > /tmp/siteb_dirs.txt
+
+out=$(diff -qpruN /tmp/sitea_dirs.txt /tmp/siteb_dirs.txt)
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "BUG: expected no 'diff' after replication: $out"
+    exit 1
+fi
+
+./mc rm -r --versions --force sitea/bucket-version/
+
+sleep 2s
+
+./mc ls -r --versions sitea/bucket-version/ > /tmp/sitea_dirs.txt
+./mc ls -r --versions siteb/bucket-version/ > /tmp/siteb_dirs.txt
+
+out=$(diff -qpruN /tmp/sitea_dirs.txt /tmp/siteb_dirs.txt)
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "BUG: expected no 'diff' after replication: $out"
+    exit 1
+fi
+
+## check if we don't create delete markers on the directory objects, its always permanent delete.
+./mc mb sitea/bucket-version/directory/
+
+sleep 2s
+
+./mc rm -r --force sitea/bucket-version/
+
+sleep 2s
+
+./mc ls -r --versions sitea/bucket-version/ > /tmp/sitea_dirs.txt
+./mc ls -r --versions siteb/bucket-version/ > /tmp/siteb_dirs.txt
+
+out=$(diff -qpruN /tmp/sitea_dirs.txt /tmp/siteb_dirs.txt)
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "BUG: expected no 'diff' after replication: $out"
+    exit 1
+fi
+
 catch
