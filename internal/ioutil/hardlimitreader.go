@@ -17,7 +17,6 @@
 
 // Package ioutil implements some I/O utility functions which are not covered
 // by the standard library.
-
 package ioutil
 
 import (
