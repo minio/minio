@@ -540,6 +540,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
+		// All deletes on directory objects needs to be for `nullVersionID`
+		if isDirObject(object.ObjectName) && object.VersionID == "" {
+			object.VersionID = nullVersionID
+		}
+
 		if replicateDeletes {
 			dsc = checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectV: ObjectV{

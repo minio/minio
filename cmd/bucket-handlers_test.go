@@ -747,8 +747,13 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 	deletedObjects := make([]DeletedObject, len(requestList[0].Objects))
 	for i := range requestList[0].Objects {
+		var vid string
+		if isDirObject(requestList[0].Objects[i].ObjectName) {
+			vid = nullVersionID
+		}
 		deletedObjects[i] = DeletedObject{
 			ObjectName: requestList[0].Objects[i].ObjectName,
+			VersionID:  vid,
 		}
 	}
 
@@ -758,9 +763,14 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	successRequest1 := encodeResponse(requestList[1])
 
 	deletedObjects = make([]DeletedObject, len(requestList[1].Objects))
-	for i := range requestList[0].Objects {
+	for i := range requestList[1].Objects {
+		var vid string
+		if isDirObject(requestList[0].Objects[i].ObjectName) {
+			vid = nullVersionID
+		}
 		deletedObjects[i] = DeletedObject{
 			ObjectName: requestList[1].Objects[i].ObjectName,
+			VersionID:  vid,
 		}
 	}
 

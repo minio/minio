@@ -189,4 +189,19 @@ if [ $ret -ne 0 ]; then
     exit 1
 fi
 
+sitea_count=$(cat /tmp/sitea_dirs.txt | wc -l) # need to do it this way to avoid filename in the output
+siteb_count=$(cat /tmp/siteb_dirs.txt | wc -l) # need to do it this way to avoid filename in the output
+sitea_out=$(cat /tmp/sitea_dirs.txt)
+siteb_out=$(cat /tmp/siteb_dirs.txt)
+
+if [ $sitea_count -ne 0 ]; then
+    echo "BUG: expected no 'directory objects' left after deletion: ${sitea_out}"
+    exit 1
+fi
+
+if [ $siteb_count -ne 0 ]; then
+    echo "BUG: expected no 'directory objects' left after deletion: ${siteb_out}"
+    exit 1
+fi
+
 catch

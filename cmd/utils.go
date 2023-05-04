@@ -1038,6 +1038,9 @@ func decodeDirObject(object string) string {
 }
 
 func isDirObject(object string) bool {
+	if obj := encodeDirObject(object); obj != object {
+		object = obj
+	}
 	return HasSuffix(object, globalDirSuffix)
 }
 
