@@ -61,6 +61,7 @@ const (
 type Server struct {
 	http.Server
 	Addrs           []string      // addresses on which the server listens for new connection.
+	TCPOptions      TCPOptions    // all the configurable TCP conn specific configurable options.
 	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
 	listenerMutex   sync.Mutex    // to guard 'listener' field.
 	listener        *httpListener // HTTP listener for all 'Addrs' field.
@@ -87,6 +88,7 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 	listener, err = newHTTPListener(
 		ctx,
 		srv.Addrs,
+		srv.TCPOptions,
 	)
 	if err != nil {
 		return err
@@ -210,6 +212,12 @@ func (srv *Server) UseBaseContext(ctx context.Context) *Server {
 // UseCustomLogger use customized logger for this HTTP *Server
 func (srv *Server) UseCustomLogger(l *log.Logger) *Server {
 	srv.ErrorLog = l
+	return srv
+}
+
+// UseTCPOptions use custom TCP options on raw socket
+func (srv *Server) UseTCPOptions(opts TCPOptions) *Server {
+	srv.TCPOptions = opts
 	return srv
 }
 

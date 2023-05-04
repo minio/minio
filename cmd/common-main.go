@@ -176,7 +176,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
+	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
@@ -197,6 +197,11 @@ func minioConfigToConsoleFeatures() {
 	if globalIAMSys.LDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
+	// Handle animation in welcome page
+	if value := env.Get(config.EnvBrowserLoginAnimation, "on"); value != "" {
+		os.Setenv("CONSOLE_ANIMATED_LOGIN", value)
+	}
+
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
@@ -621,7 +626,7 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
 	if globalBrowserEnabled {
-		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
+		if redirectURL := env.Get(config.EnvBrowserRedirectURL, ""); redirectURL != "" {
 			u, err := xnet.ParseHTTPURL(redirectURL)
 			if err != nil {
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
