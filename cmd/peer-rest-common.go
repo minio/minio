@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v30" // Removed bloom filter
+	peerRESTVersion = "v31" // Add replication MRF
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -76,6 +76,7 @@ const (
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodMetrics                     = "/metrics"
+	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
 )
 
 const (

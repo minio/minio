@@ -1260,7 +1260,7 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	if i.replication.Config == nil {
 		return
 	}
-	roi := queueReplicationHeal(ctx, oi.Bucket, oi, i.replication)
+	roi := queueReplicationHeal(ctx, oi.Bucket, oi, i.replication, 0)
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		return
 	}

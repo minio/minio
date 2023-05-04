@@ -944,3 +944,34 @@ func (client *peerRESTClient) Netperf(ctx context.Context, duration time.Duratio
 	err = gob.NewDecoder(respBody).Decode(&result)
 	return result, err
 }
+
+// GetReplicationMRF - get replication MRF for bucket
+func (client *peerRESTClient) GetReplicationMRF(ctx context.Context, bucket string) (chan madmin.ReplicationMRF, error) {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetReplicationMRF, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan madmin.ReplicationMRF)
+	go func(ch chan madmin.ReplicationMRF) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var entry madmin.ReplicationMRF
+			if err := dec.Decode(&entry); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- entry:
+			}
+		}
+	}(ch)
+	return ch, nil
+}
