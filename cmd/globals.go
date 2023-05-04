@@ -231,6 +231,7 @@ var (
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName    string
 	globalLocalNodeNameHex string
+	globalNodeNamesHex     map[string]struct{}
 
 	// The global subnet config
 	globalSubnetConfig subnet.Config
