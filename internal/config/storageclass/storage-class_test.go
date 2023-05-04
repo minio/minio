@@ -143,6 +143,7 @@ func TestParityCount(t *testing.T) {
 			RRS: StorageClass{
 				Parity: 2,
 			},
+			initialized: true,
 		}
 		// Set env var for test case 4
 		if i+1 == 4 {

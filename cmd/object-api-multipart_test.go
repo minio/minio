@@ -1197,14 +1197,14 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	objectNames := []string{"minio-object-1.txt"}
 	uploadIDs := []string{}
 
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
 		Standard: storageclass.StorageClass{
 			Parity: 4,
 		},
-	}
+	})
 
 	// bucketnames[0].
 	// objectNames[0].

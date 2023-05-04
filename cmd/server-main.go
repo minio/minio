@@ -748,7 +748,7 @@ func serverMain(ctx *cli.Context) {
 		printStartupMessage(getAPIEndpoints(), err)
 
 		// Print a warning at the end of the startup banner so it is more noticeable
-		if globalStorageClass.GetParityForSC("") == 0 {
+		if newObject.BackendInfo().StandardSCParity == 0 {
 			logger.Error("Warning: The standard parity is set to 0. This can lead to data loss.")
 		}
 	}()
