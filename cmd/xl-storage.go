@@ -678,12 +678,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 			} else if osIsPermission(err) {
 				return nil, errDiskAccessDenied
 			}
-			logger.LogIf(GlobalContext, err) // log unexpected errors
+			logger.LogOnceIf(GlobalContext, err, err.Error()) // log unexpected errors
 			return nil, errCorruptedFormat
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
-		logger.LogIf(GlobalContext, err) // log unexpected errors
+		logger.LogOnceIf(GlobalContext, err, err.Error()) // log unexpected errors
 		return nil, errCorruptedFormat
 	}
 	return fi, nil
