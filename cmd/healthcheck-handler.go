@@ -28,7 +28,7 @@ import (
 
 const unavailable = "offline"
 
-func isServerInitialized() bool {
+func isServerNotInitialized() bool {
 	return newObjectLayerFn() == nil
 }
 
@@ -36,7 +36,7 @@ func isServerInitialized() bool {
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterCheckHandler")
 
-	if isServerInitialized() {
+	if isServerNotInitialized() {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
@@ -77,7 +77,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterReadCheckHandler")
 
-	if isServerInitialized() {
+	if isServerNotInitialized() {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
@@ -104,7 +104,13 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if isServerInitialized() {
+	peerCall := r.Header.Get("x-minio-from-peer") != ""
+
+	if peerCall {
+		return
+	}
+
+	if isServerNotInitialized() {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
@@ -121,7 +127,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify if KMS is reachable if its configured
-	if GlobalKMS != nil {
+	if GlobalKMS != nil && !peerCall {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
