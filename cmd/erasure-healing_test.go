@@ -567,13 +567,13 @@ func TestHealingDanglingObject(t *testing.T) {
 	// Set globalStoragClass.STANDARD to EC:4 for this test
 	saveSC := globalStorageClass
 	defer func() {
-		globalStorageClass = saveSC
+		globalStorageClass.Update(saveSC)
 	}()
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 4,
 		},
-	}
+	})
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)

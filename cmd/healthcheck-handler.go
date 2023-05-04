@@ -55,6 +55,8 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if result.WriteQuorum > 0 {
 		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
 	}
+	w.Header().Set(xhttp.MinIOStorageClassDefaults, strconv.FormatBool(result.UsingDefaults))
+
 	if !result.Healthy {
 		// return how many drives are being healed if any
 		if result.HealingDrives > 0 {
