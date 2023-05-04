@@ -65,6 +65,18 @@ Similarly to suspend versioning set the configuration with Status set to `Suspen
 
 ## MinIO extension to Bucket Versioning
 
+### Idempotent versions on directory objects
+
+All directory objects such as objects that end with `/`, will only have one versionId (i.e `null`). A delete marker will never be created on these directory objects, instead a DELETE will delete the directory objects. This is done to ensure that directory objects even with multiple overwrites - do not ever need multiple versions in the first place. All overwrite calls on these directory objects are idempotent.
+
+> NOTE: Server side replication is supported for idempotent versions on directory objects.
+
+### Idempotent versions on delete markers
+
+Duplicate delete markers are not created on MinIO buckets with versioning, if an application performs a soft delete on an object repeatedly - that object will only ever have a single DELETE marker for all such successive attempts. This is done to ensure that repeated soft deletes do not ever need multiple versions in the first place.
+
+> NOTE: Server side replication is supported for idempotent versions on delete marked objects.
+
 ### Motivation
 
 **PLEASE READ: This feature is meant for advanced usecases only where the setup is using bucket versioning or with replicated buckets, use this feature to optimize versioning behavior for some specific applications. MinIO experts will evaluate and guide on the benefits for your application, please reach out to us on <https://subnet.min.io>.**
