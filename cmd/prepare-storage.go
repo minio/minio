@@ -125,15 +125,16 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	}
 
 	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
+	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL.String(), nil)
 	if err != nil {
-		cancel()
 		return err
 	}
 
+	req.Header.Set("x-minio-from-peer", "true")
+
 	resp, err := httpClient.Do(req)
-	cancel()
 	if err != nil {
 		return err
 	}
