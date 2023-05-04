@@ -2142,6 +2142,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return err
 		}
 		opts.MTime = info.ModTime()
+		if opts.MTime.Unix() <= 0 {
+			opts.MTime = UTCNow()
+		}
 		opts.IndexCB = idxCb
 
 		retentionMode, retentionDate, legalHold, s3err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
