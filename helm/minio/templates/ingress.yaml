@@ -49,7 +49,7 @@ spec:
               servicePort: {{ $servicePort }}
             {{- end }}
       {{- if . }}
-      host: {{ . | quote }}
+      host: {{ tpl . $ | quote }}
       {{- end }}
     {{- end }}
 {{- end }}

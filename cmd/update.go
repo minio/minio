@@ -403,7 +403,7 @@ func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, rel
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 	var updateTransport http.RoundTripper = &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(timeout),
+		DialContext:           xhttp.NewCustomDialContext(timeout, globalTCPOptions),
 		IdleConnTimeout:       timeout,
 		TLSHandshakeTimeout:   timeout,
 		ExpectContinueTimeout: timeout,
