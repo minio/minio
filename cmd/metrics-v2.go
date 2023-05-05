@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -114,6 +114,7 @@ const (
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
 	diskSubsystem             MetricSubsystem = "disk"
+	storageClassSubsystem     MetricSubsystem = "storage_class"
 	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
 	goRoutines                MetricSubsystem = "go_routine"
 	ioSubsystem               MetricSubsystem = "io"
@@ -426,6 +427,26 @@ func getNodeDrivesTotalMD() MetricDescription {
 		Subsystem: diskSubsystem,
 		Name:      total,
 		Help:      "Total drives",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeStandardParityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: storageClassSubsystem,
+		Name:      "standard_parity",
+		Help:      "standard storage class parity",
+		Type:      gaugeMetric,
+	}
+}
+
+func getNodeRRSParityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: storageClassSubsystem,
+		Name:      "rrs_parity",
+		Help:      "reduced redundancy storage class parity",
 		Type:      gaugeMetric,
 	}
 }
@@ -2187,23 +2208,33 @@ func getLocalStorageMetrics() *MetricsGroup {
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"disk": disk.DrivePath},
 			})
-
-			metrics = append(metrics, Metric{
-				Description: getNodeDrivesOfflineTotalMD(),
-				Value:       float64(offlineDrives.Sum()),
-			})
-
-			metrics = append(metrics, Metric{
-				Description: getNodeDrivesOnlineTotalMD(),
-				Value:       float64(onlineDrives.Sum()),
-			})
-
-			metrics = append(metrics, Metric{
-				Description: getNodeDrivesTotalMD(),
-				Value:       float64(totalDrives.Sum()),
-			})
-
 		}
+
+		metrics = append(metrics, Metric{
+			Description: getNodeDrivesOfflineTotalMD(),
+			Value:       float64(offlineDrives.Sum()),
+		})
+
+		metrics = append(metrics, Metric{
+			Description: getNodeDrivesOnlineTotalMD(),
+			Value:       float64(onlineDrives.Sum()),
+		})
+
+		metrics = append(metrics, Metric{
+			Description: getNodeDrivesTotalMD(),
+			Value:       float64(totalDrives.Sum()),
+		})
+
+		metrics = append(metrics, Metric{
+			Description: getNodeStandardParityMD(),
+			Value:       float64(storageInfo.Backend.StandardSCParity),
+		})
+
+		metrics = append(metrics, Metric{
+			Description: getNodeRRSParityMD(),
+			Value:       float64(storageInfo.Backend.RRSCParity),
+		})
+
 		return
 	})
 	return mg
