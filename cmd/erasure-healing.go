@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v2"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sync/errgroup"
 )
@@ -407,12 +408,31 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	availableDisks, dataErrs, diskMTime := disksWithAllParts(ctx, onlineDisks, partsMetadata,
 		errs, latestMeta, bucket, object, scanMode)
 
-	var erasure Erasure
-	var recreate bool
+	var (
+		reencode, recreate           bool
+		erasureWriter, erasureReader Erasure
+	)
+
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
+		erasureReader, err = NewErasure(ctx, latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
+		if err != nil {
+			return result, err
+		}
+
+		parity := erasureReader.parityBlocks
+		if opts.UpdateParity && bucket != minioMetaBucket {
+			p := globalStorageClass.GetParityForSC(latestMeta.Metadata[xhttp.AmzStorageClass])
+			if p < 0 {
+				return result, fmt.Errorf("invalid parity number: %d", p)
+			}
+			if p != parity {
+				reencode = true
+				parity = p
+			}
+		}
+
 		// Initialize erasure coding
-		erasure, err = NewErasure(ctx, latestMeta.Erasure.DataBlocks,
-			latestMeta.Erasure.ParityBlocks, latestMeta.Erasure.BlockSize)
+		erasureWriter, err = NewErasure(ctx, len(storageDisks)-parity, parity, latestMeta.Erasure.BlockSize)
 		if err != nil {
 			return result, err
 		}
@@ -424,7 +444,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		recreate = (opts.Recreate &&
 			!latestMeta.InlineData() &&
 			len(latestMeta.Parts) == 1 &&
-			erasure.ShardFileSize(latestMeta.Parts[0].ActualSize) < smallFileThreshold)
+			erasureWriter.ShardFileSize(latestMeta.Parts[0].ActualSize) < smallFileThreshold)
 	}
 
 	result.ObjectSize, err = latestMeta.GetActualSize()
@@ -453,7 +473,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			driveState = madmin.DriveStateCorrupt
 		}
 
-		if shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], latestMeta, recreate) {
+		if reencode || shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], latestMeta, recreate) {
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
@@ -501,7 +521,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		return result, nil
 	}
 
-	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
+	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && !reencode && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// When disk to heal count is greater than parity blocks we should simply error out.
 		err := fmt.Errorf("more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", errs, dataErrs, bucket, object, versionID)
 		logger.LogIf(ctx, err)
@@ -588,6 +608,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 		}
 
+		// Heal each part. The healed data will be written
+		// to .minio.sys/tmp/uuid/ which needs to be renamed
+		// later to the final location.
+
 		erasureInfo := latestMeta.Erasure
 		for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 			partSize := latestMeta.Parts[partIndex].Size
@@ -596,7 +620,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			partNumber := latestMeta.Parts[partIndex].Number
 			partIdx := latestMeta.Parts[partIndex].Index
 			partChecksums := latestMeta.Parts[partIndex].Checksums
-			tillOffset := erasure.ShardFileOffset(0, partSize, partSize)
 			readers := make([]io.ReaderAt, len(latestDisks))
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
 			for i, disk := range latestDisks {
@@ -605,8 +628,9 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
+				tillOffset := erasureReader.ShardFileOffset(0, partSize, partSize)
 				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
-					checksumInfo.Hash, erasure.ShardSize())
+					checksumInfo.Hash, erasureReader.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -615,18 +639,36 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				}
 				partPath := pathJoin(tmpID, dstDataDir, fmt.Sprintf("part.%d", partNumber))
 				if len(inlineBuffers) > 0 {
-					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)+32))
-					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
+					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasureWriter.ShardFileSize(latestMeta.Size)+32))
+					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasureWriter.ShardSize())
 				} else {
+					tillOffset := erasureWriter.ShardFileOffset(0, partSize, partSize)
 					writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
-						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+						tillOffset, DefaultBitrotAlgorithm, erasureWriter.ShardSize())
 				}
 			}
 
-			// Heal each part. erasure.Heal() will write the healed
-			// part to .minio/tmp/uuid/ which needs to be renamed
-			// later to the final location.
-			err = erasure.Heal(ctx, writers, readers, partSize)
+			if reencode {
+				rd, rw := io.Pipe()
+				go func() {
+					n, err := erasureReader.Decode(ctx, rw, readers, 0, partSize, partSize, nil)
+					if err == nil && n != partSize {
+						err = errors.New("unexpected content")
+					}
+					rw.CloseWithError(err)
+				}()
+				buffer := er.bp.Get()
+				n, encodeErr := erasureWriter.Encode(ctx, rd, writers, buffer, erasureWriter.dataBlocks)
+				er.bp.Put(buffer)
+				if encodeErr == nil && n != partSize {
+					encodeErr = errors.New("unexpected content")
+				}
+				rd.CloseWithError(encodeErr)
+				err = encodeErr
+			} else {
+				err = erasureReader.Heal(ctx, writers, readers, partSize)
+			}
+
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {
@@ -647,6 +689,9 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 					disksToHealCount--
 					continue
 				}
+
+				partsMetadata[i].Erasure.ParityBlocks = erasureWriter.parityBlocks
+				partsMetadata[i].Erasure.DataBlocks = erasureWriter.dataBlocks
 
 				partsMetadata[i].DataDir = dstDataDir
 				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
