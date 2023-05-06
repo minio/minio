@@ -437,6 +437,16 @@ func (e RemoteTargetConnectionErr) Error() string {
 	return fmt.Sprintf("Remote service endpoint %s not available\n\t%s", e.Endpoint, e.Err.Error())
 }
 
+// BucketRemoteIdenticalToSource remote already exists for this target type.
+type BucketRemoteIdenticalToSource struct {
+	GenericError
+	Endpoint string
+}
+
+func (e BucketRemoteIdenticalToSource) Error() string {
+	return fmt.Sprintf("Remote service endpoint %s is self referential to current cluster", e.Endpoint)
+}
+
 // BucketRemoteAlreadyExists remote already exists for this target type.
 type BucketRemoteAlreadyExists GenericError
 

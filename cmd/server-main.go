@@ -247,9 +247,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
-	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeNameHex))
+	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
-
+	globalNodeNamesHex = make(map[string]struct{})
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
@@ -258,6 +258,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 			} else {
 				globalRemoteEndpoints[ep.Host] = ep
 			}
+			nodeNameSum := sha256.Sum256([]byte(ep.Host))
+			globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
+
 		}
 	}
 
