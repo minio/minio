@@ -18,11 +18,13 @@ func _() {
 	_ = x[authTypeSignedV2-7]
 	_ = x[authTypeJWT-8]
 	_ = x[authTypeSTS-9]
+	_ = x[authTypeStreamingSignedTrailer-10]
+	_ = x[authTypeStreamingUnsignedTrailer-11]
 }
 
-const _authType_name = "UnknownAnonymousPresignedPresignedV2PostPolicyStreamingSignedSignedSignedV2JWTSTS"
+const _authType_name = "UnknownAnonymousPresignedPresignedV2PostPolicyStreamingSignedSignedSignedV2JWTSTSStreamingSignedTrailerStreamingUnsignedTrailer"
 
-var _authType_index = [...]uint8{0, 7, 16, 25, 36, 46, 61, 67, 75, 78, 81}
+var _authType_index = [...]uint8{0, 7, 16, 25, 36, 46, 61, 67, 75, 78, 81, 103, 127}
 
 func (i authType) String() string {
 	if i < 0 || i >= authType(len(_authType_index)-1) {

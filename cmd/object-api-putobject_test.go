@@ -29,6 +29,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/ioutil"
 )
 
 func md5Header(data []byte) map[string]string {
@@ -123,7 +124,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		9: {
 			bucketName: bucket, objName: object, inputData: []byte("abcd"),
 			inputMeta: map[string]string{"etag": "900150983cd24fb0d6963f7d28e17f73"}, intputDataSize: int64(len("abcd") - 1),
-			expectedError: hash.BadDigest{ExpectedMD5: "900150983cd24fb0d6963f7d28e17f73", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"},
+			expectedError: ioutil.ErrOverread,
 		},
 
 		// Validating for success cases.
@@ -162,9 +163,9 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		},
 
 		// data with size different from the actual number of bytes available in the reader
-		26: {bucketName: bucket, objName: object, inputData: data, intputDataSize: int64(len(data) - 1), expectedMd5: getMD5Hash(data[:len(data)-1])},
+		26: {bucketName: bucket, objName: object, inputData: data, intputDataSize: int64(len(data) - 1), expectedMd5: getMD5Hash(data[:len(data)-1]), expectedError: ioutil.ErrOverread},
 		27: {bucketName: bucket, objName: object, inputData: nilBytes, intputDataSize: int64(len(nilBytes) + 1), expectedMd5: getMD5Hash(nilBytes), expectedError: IncompleteBody{Bucket: bucket, Object: object}},
-		28: {bucketName: bucket, objName: object, inputData: fiveMBBytes, expectedMd5: getMD5Hash(fiveMBBytes)},
+		28: {bucketName: bucket, objName: object, inputData: fiveMBBytes, expectedMd5: getMD5Hash(fiveMBBytes), expectedError: ioutil.ErrOverread},
 
 		// valid data with X-Amz-Meta- meta
 		29: {bucketName: bucket, objName: object, inputData: data, inputMeta: map[string]string{"X-Amz-Meta-AppID": "a42"}, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
@@ -173,7 +174,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		30: {bucketName: bucket, objName: "emptydir/", inputData: []byte{}, expectedMd5: getMD5Hash([]byte{})},
 		// Put an object inside the empty directory
 		31: {bucketName: bucket, objName: "emptydir/" + object, inputData: data, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
-		// Put the empty object with a trailing slash again (refer to Test case 31), this needs to succeed
+		// Put the empty object with a trailing slash again (refer to Test case 30), this needs to succeed
 		32: {bucketName: bucket, objName: "emptydir/", inputData: []byte{}, expectedMd5: getMD5Hash([]byte{})},
 
 		// With invalid crc32.
@@ -187,23 +188,23 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		in := mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256)
 		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, in, ObjectOptions{UserDefined: testCase.inputMeta})
 		if actualErr != nil && testCase.expectedError == nil {
-			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i+1, instanceType, actualErr.Error())
+			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i, instanceType, actualErr.Error())
 			continue
 		}
 		if actualErr == nil && testCase.expectedError != nil {
-			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but passed instead.", i+1, instanceType, testCase.expectedError.Error())
+			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but passed instead.", i, instanceType, testCase.expectedError.Error())
 			continue
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && actualErr != testCase.expectedError {
-			t.Errorf("Test %d: %s: Expected to fail with error \"%v\", but instead failed with error \"%v\" instead.", i+1, instanceType, testCase.expectedError, actualErr)
+			t.Errorf("Test %d: %s: Expected to fail with error \"%v\", but instead failed with error \"%v\" instead.", i, instanceType, testCase.expectedError, actualErr)
 			continue
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil {
 			// Asserting whether the md5 output is correct.
 			if expectedMD5, ok := testCase.inputMeta["etag"]; ok && expectedMD5 != objInfo.ETag {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.ETag)
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i, instanceType, objInfo.ETag)
 				continue
 			}
 		}

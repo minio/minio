@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -37,6 +37,10 @@ import (
 // client did not calculate sha256 of the payload.
 const unsignedPayload = "UNSIGNED-PAYLOAD"
 
+// http Header "x-amz-content-sha256" == "STREAMING-UNSIGNED-PAYLOAD-TRAILER" indicates that the
+// client did not calculate sha256 of the payload and there is a trailer.
+const unsignedPayloadTrailer = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+
 // skipContentSha256Cksum returns true if caller needs to skip
 // payload checksum, false if not.
 func skipContentSha256Cksum(r *http.Request) bool {
@@ -62,7 +66,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 	// If x-amz-content-sha256 is set and the value is not
 	// 'UNSIGNED-PAYLOAD' we should validate the content sha256.
 	switch v[0] {
-	case unsignedPayload:
+	case unsignedPayload, unsignedPayloadTrailer:
 		return true
 	case emptySHA256:
 		// some broken clients set empty-sha256
@@ -70,12 +74,11 @@ func skipContentSha256Cksum(r *http.Request) bool {
 		// we should skip such clients and allow
 		// blindly such insecure clients only if
 		// S3 strict compatibility is disabled.
-		if r.ContentLength > 0 && !globalCLIContext.StrictS3Compat {
-			// We return true only in situations when
-			// deployment has asked MinIO to allow for
-			// such broken clients and content-length > 0.
-			return true
-		}
+
+		// We return true only in situations when
+		// deployment has asked MinIO to allow for
+		// such broken clients and content-length > 0.
+		return r.ContentLength > 0 && !globalCLIContext.StrictS3Compat
 	}
 	return false
 }
