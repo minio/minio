@@ -175,16 +175,18 @@ service:
   clusterIP: ~
   port: "9000"
   nodePort: 32000
+  loadBalancerIP: ~
+  externalIPs: []
+  annotations: {}
 
 ## Configure Ingress based on the documentation here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ##
 
 ingress:
   enabled: false
-  # ingressClassName: ""
+  ingressClassName: ~
   labels: {}
     # node-role.kubernetes.io/ingress: platform
-
   annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
@@ -206,13 +208,15 @@ consoleService:
   clusterIP: ~
   port: "9001"
   nodePort: 32001
+  loadBalancerIP: ~
+  externalIPs: []
+  annotations: {}
 
 consoleIngress:
   enabled: false
-  # ingressClassName: ""
+  ingressClassName: ~
   labels: {}
     # node-role.kubernetes.io/ingress: platform
-
   annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
@@ -357,7 +361,7 @@ makeUserJob:
 
 ## List of service accounts to be created after minio install
 ##
-# svcaccts:
+svcaccts: []
   ## accessKey, secretKey and parent user to be assigned to the service accounts
   ## Add new service accounts as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management/minio-user-management.html#service-accounts
   # - accessKey: console-svcacct
@@ -396,7 +400,7 @@ makeServiceAccountJob:
 
 ## List of buckets to be created after minio install
 ##
-buckets:
+buckets: []
   #   # Name of the bucket
   # - name: bucket1
   #   # Policy to be set on the
@@ -471,7 +475,7 @@ environment:
 ## This can be useful for LDAP password, etc
 ## The key in the secret must be 'config.env'
 ##
-# extraSecret: minio-extraenv
+extraSecret: ~
 
 ## OpenID Identity Management
 ## The following section documents environment variables for enabling external identity management using an OpenID Connect (OIDC)-compatible provider.
@@ -514,6 +518,7 @@ metrics:
     includeNode: false
     public: true
     additionalLabels: {}
+    annotations: {}
     # for node metrics
     relabelConfigs: {}
     # for cluster metrics
@@ -521,9 +526,11 @@ metrics:
       # metricRelabelings:
       #   - regex: (server|pod)
       #     action: labeldrop
-    # namespace: monitoring
-    # interval: 30s
-    # scrapeTimeout: 10s
+    namespace: ~
+    # Scrape interval, for example `interval: 30s`
+    interval: ~
+    # Scrape timeout, for example `scrapeTimeout: 10s`
+    scrapeTimeout: ~
 
 ## ETCD settings: https://github.com/minio/minio/blob/master/docs/sts/etcd.md
 ## Define endpoints to enable this section.
