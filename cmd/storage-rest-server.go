@@ -1294,6 +1294,7 @@ func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request)
 
 	var req ReadMultipleReq
 	mr := msgpNewReader(r.Body)
+	defer readMsgpReaderPool.Put(mr)
 	err := req.DecodeMsg(mr)
 	if err != nil {
 		rw.CloseWithError(err)
