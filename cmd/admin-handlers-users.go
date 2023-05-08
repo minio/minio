@@ -44,7 +44,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DeleteUserAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.DeleteUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -58,6 +58,13 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
+	// When the user is root credential you are not allowed to
+	// remove the root user. Also you cannot delete yourself.
+	if accessKey == globalActiveCred.AccessKey || accessKey == cred.AccessKey {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
 		return
 	}
@@ -239,6 +246,26 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
+
+	// Reject if the group add and remove are temporary credentials, or root credential.
+	for _, member := range updReq.Members {
+		ok, _, err := globalIAMSys.IsTempUser(member)
+		if err != nil && err != errNoSuchUser {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
+		// When the user is root credential you are not allowed to
+		// add policies for root user.
+		if member == globalActiveCred.AccessKey {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
+	}
+
 	var updatedAt time.Time
 	if updReq.IsRemove {
 		updatedAt, err = globalIAMSys.RemoveUsersFromGroup(ctx, updReq.Group, updReq.Members)
@@ -374,7 +401,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.EnableUserAdminAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, iampolicy.EnableUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -383,9 +410,9 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	accessKey := vars["accessKey"]
 	status := vars["status"]
 
-	// This API is not allowed to lookup master access key user status
-	if accessKey == globalActiveCred.AccessKey {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+	// you cannot enable or disable yourself.
+	if accessKey == creds.AccessKey {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
 		return
 	}
 
@@ -1627,6 +1654,12 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
 			return
 		}
+		// When the user is root credential you are not allowed to
+		// add policies for root user.
+		if entityName == globalActiveCred.AccessKey {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
 	}
 
 	// Validate that user or group exists.
@@ -1767,6 +1800,13 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
+
+		// When the user is root credential you are not allowed to
+		// add policies for root user.
+		if userOrGroup == globalActiveCred.AccessKey {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
 			return
 		}
@@ -2056,13 +2096,15 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 			userAccounts := make(map[string]madmin.AddOrUpdateUserReq)
 			for u, uid := range userIdentities {
-				status := madmin.AccountDisabled
-				if uid.Credentials.IsValid() {
-					status = madmin.AccountEnabled
-				}
 				userAccounts[u] = madmin.AddOrUpdateUserReq{
 					SecretKey: uid.Credentials.SecretKey,
-					Status:    status,
+					Status: func() madmin.AccountStatus {
+						// Export current credential status
+						if uid.Credentials.Status == auth.AccountOff {
+							return madmin.AccountDisabled
+						}
+						return madmin.AccountEnabled
+					}(),
 				}
 			}
 			userData, err := json.Marshal(userAccounts)
@@ -2101,6 +2143,10 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 			svcAccts := make(map[string]madmin.SRSvcAccCreate)
 			for user, acc := range serviceAccounts {
+				if user == siteReplicatorSvcAcc {
+					// skip site-replication service account.
+					continue
+				}
 				claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.Credentials.AccessKey)
 				if err != nil {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
@@ -2461,12 +2507,13 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				opts := newServiceAccountOpts{
-					accessKey:     user,
-					secretKey:     svcAcctReq.SecretKey,
-					sessionPolicy: sp,
-					claims:        svcAcctReq.Claims,
-					comment:       svcAcctReq.Comment,
-					expiration:    svcAcctReq.Expiration,
+					accessKey:                  user,
+					secretKey:                  svcAcctReq.SecretKey,
+					sessionPolicy:              sp,
+					claims:                     svcAcctReq.Claims,
+					comment:                    svcAcctReq.Comment,
+					expiration:                 svcAcctReq.Expiration,
+					allowSiteReplicatorAccount: false,
 				}
 
 				// In case of LDAP we need to resolve the targetUser to a DN and

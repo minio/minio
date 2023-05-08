@@ -24,6 +24,9 @@ import (
 	"os"
 )
 
+// ODirectPlatform indicates if the platform supports O_DIRECT
+const ODirectPlatform = false
+
 // OpenBSD, Windows, and illumos do not support O_DIRECT.
 // On Windows there is no documentation on disabling O_DIRECT.
 // For these systems we do not attempt to build the 'directio' dependency since

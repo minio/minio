@@ -39,7 +39,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 	"github.com/minio/pkg/wildcard"
 )
 
@@ -773,7 +773,7 @@ func (z *erasureServerPools) MakeBucket(ctx context.Context, bucket string, opts
 	return nil
 }
 
-func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -781,7 +781,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
-		return z.serverPools[0].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+		return z.serverPools[0].GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 	}
 
 	var unlockOnDefer bool
@@ -793,24 +793,14 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}()
 
 	// Acquire lock
-	if lockType != noLock {
+	if !opts.NoLock {
 		lock := z.NewNSLock(bucket, object)
-		switch lockType {
-		case writeLock:
-			lkctx, err := lock.GetLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.Unlock(lkctx) }
-		case readLock:
-			lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
-			if err != nil {
-				return nil, err
-			}
-			ctx = lkctx.Context()
-			nsUnlocker = func() { lock.RUnlock(lkctx) }
+		lkctx, err := lock.GetRLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return nil, err
 		}
+		ctx = lkctx.Context()
+		nsUnlocker = func() { lock.RUnlock(lkctx) }
 		unlockOnDefer = true
 	}
 
@@ -838,14 +828,17 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return nil, PreConditionFailed{}
 	}
 
-	lockType = noLock // do not take locks at lower levels for GetObjectNInfo()
-	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	opts.NoLock = true
+	gr, err = z.serverPools[zIdx].GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if unlockOnDefer {
-		unlockOnDefer = false
+		unlockOnDefer = gr.ObjInfo.Inlined
+	}
+
+	if !unlockOnDefer {
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 	return gr, nil
@@ -944,7 +937,15 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return ObjectInfo{}, err
 	}
 
+	origObject := object
 	object = encodeDirObject(object)
+	// Only directory objects skip creating new versions.
+	if object != origObject && isDirObject(object) && data.Size() == 0 {
+		// Treat all directory PUTs to behave as if they are performed
+		// on an unversioned bucket.
+		opts.Versioned = false
+		opts.VersionSuspended = false
+	}
 
 	if z.SinglePool() {
 		if !isMinioMetaBucketName(bucket) {
@@ -1314,7 +1315,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	opts.setBucketMeta(ctx)
 
-	if len(prefix) > 0 && maxKeys == 1 && delimiter == "" && marker == "" {
+	if len(prefix) > 0 && maxKeys == 1 && marker == "" {
 		// Optimization for certain applications like
 		// - Cohesity
 		// - Actifio, Splunk etc.
@@ -1327,7 +1328,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			if opts.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+					globalExpiryState.enqueueByDays(objInfo, evt)
 					if !evt.Action.DeleteRestored() {
 						// Skip entry if ILM action was DeleteVersionAction or DeleteAction
 						return loi, nil

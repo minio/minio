@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 	"github.com/minio/sio"
 )
 
@@ -41,13 +41,6 @@ import (
 const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
-
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []ObjectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
@@ -234,6 +227,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.Checksum = fi.Checksum
+	objInfo.Inlined = fi.InlineData()
 	// Success.
 	return objInfo
 }
@@ -307,7 +301,7 @@ func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, act
 	fi.Parts = append(fi.Parts, partInfo)
 
 	// Parts in FileInfo should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(fi.Parts))
+	sort.Slice(fi.Parts, func(i, j int) bool { return fi.Parts[i].Number < fi.Parts[j].Number })
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
@@ -444,20 +438,33 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 	return evalDisks(disks, mErrs), err
 }
 
-func commonParity(parities []int) int {
+func commonParity(parities []int, defaultParityCount int) int {
+	N := len(parities)
+
 	occMap := make(map[int]int)
 	for _, p := range parities {
 		occMap[p]++
 	}
 
 	var maxOcc, commonParity int
-
 	for parity, occ := range occMap {
 		if parity == -1 {
 			// Ignore non defined parity
 			continue
 		}
-		if occ >= maxOcc {
+
+		readQuorum := N - parity
+		if defaultParityCount > 0 && parity == 0 {
+			// In this case, parity == 0 implies that this object version is a
+			// delete marker
+			readQuorum = N/2 + 1
+		}
+		if occ < readQuorum {
+			// Ignore this parity since we don't have enough shards for read quorum
+			continue
+		}
+
+		if occ > maxOcc {
 			maxOcc = occ
 			commonParity = parity
 		}
@@ -510,8 +517,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	}
 
 	parities := listObjectParities(partsMetaData, errs)
-	parityBlocks := commonParity(parities)
-
+	parityBlocks := commonParity(parities, defaultParityCount)
 	if parityBlocks < 0 {
 		return -1, -1, errErasureReadQuorum
 	}

@@ -287,39 +287,12 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 
 // Event contains a lifecycle action with associated info
 type Event struct {
-	Action       Action
-	RuleID       string
-	Due          time.Time
-	StorageClass string
-}
-
-type lifecycleEvents []Event
-
-func (es lifecycleEvents) Len() int {
-	return len(es)
-}
-
-func (es lifecycleEvents) Swap(i, j int) {
-	es[i], es[j] = es[j], es[i]
-}
-
-func (es lifecycleEvents) Less(i, j int) bool {
-	if es[i].Due.Equal(es[j].Due) {
-		// Prefer Expiration over Transition for both current and noncurrent
-		// versions
-		switch es[i].Action {
-		case DeleteAction, DeleteVersionAction:
-			return true
-		}
-		switch es[j].Action {
-		case DeleteAction, DeleteVersionAction:
-			return false
-		}
-		return true
-	}
-
-	// Prefer earlier occurring event
-	return es[i].Due.Before(es[j].Due)
+	Action                  Action
+	RuleID                  string
+	Due                     time.Time
+	NoncurrentDays          int
+	NewerNoncurrentVersions int
+	StorageClass            string
 }
 
 // Eval returns the lifecycle event applicable now.
@@ -451,7 +424,24 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	if len(events) > 0 {
-		sort.Sort(lifecycleEvents(events))
+		sort.Slice(events, func(i, j int) bool {
+			if events[i].Due.Equal(events[j].Due) {
+				// Prefer Expiration over Transition for both current
+				// and noncurrent versions
+				switch events[i].Action {
+				case DeleteAction, DeleteVersionAction:
+					return true
+				}
+				switch events[j].Action {
+				case DeleteAction, DeleteVersionAction:
+					return false
+				}
+				return true
+			}
+
+			// Prefer earlier occurring event
+			return events[i].Due.Before(events[j].Due)
+		})
 		return events[0]
 	}
 
@@ -492,15 +482,17 @@ func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) 
 
 // NoncurrentVersionsExpirationLimit returns the number of noncurrent versions
 // to be retained from the first applicable rule per S3 behavior.
-func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) (string, int, int) {
-	var lim int
-	var days int
-	var ruleID string
+func (lc Lifecycle) NoncurrentVersionsExpirationLimit(obj ObjectOpts) Event {
 	for _, rule := range lc.FilterRules(obj) {
 		if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 {
 			continue
 		}
-		return rule.ID, int(rule.NoncurrentVersionExpiration.NoncurrentDays), rule.NoncurrentVersionExpiration.NewerNoncurrentVersions
+		return Event{
+			Action:                  DeleteVersionAction,
+			RuleID:                  rule.ID,
+			NoncurrentDays:          int(rule.NoncurrentVersionExpiration.NoncurrentDays),
+			NewerNoncurrentVersions: rule.NoncurrentVersionExpiration.NewerNoncurrentVersions,
+		}
 	}
-	return ruleID, days, lim
+	return Event{}
 }

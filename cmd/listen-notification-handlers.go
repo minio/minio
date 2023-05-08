@@ -20,6 +20,7 @@ package cmd
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/minio/minio/internal/event"
@@ -141,8 +142,30 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 		peer.Listen(listenCh, ctx.Done(), values)
 	}
 
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
-	defer keepAliveTicker.Stop()
+	var (
+		emptyEventTicker <-chan time.Time
+		keepAliveTicker  <-chan time.Time
+	)
+
+	if p := values.Get("ping"); p != "" {
+		pingInterval, err := strconv.Atoi(p)
+		if err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidQueryParams), r.URL)
+			return
+		}
+		if pingInterval < 1 {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidQueryParams), r.URL)
+			return
+		}
+		t := time.NewTicker(time.Duration(pingInterval) * time.Second)
+		defer t.Stop()
+		emptyEventTicker = t.C
+	} else {
+		// Deprecated Apr 2023
+		t := time.NewTicker(500 * time.Millisecond)
+		defer t.Stop()
+		keepAliveTicker = t.C
+	}
 
 	enc := json.NewEncoder(w)
 	for {
@@ -155,7 +178,12 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 				// Flush if nothing is queued
 				w.(http.Flusher).Flush()
 			}
-		case <-keepAliveTicker.C:
+		case <-emptyEventTicker:
+			if err := enc.Encode(struct{ Records []event.Event }{}); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}

@@ -25,13 +25,16 @@ import (
 // PipeWriter is similar to io.PipeWriter with wait group
 type PipeWriter struct {
 	*io.PipeWriter
+	once sync.Once
 	done func()
 }
 
 // CloseWithError close with supplied error the writer end.
 func (w *PipeWriter) CloseWithError(err error) error {
 	err = w.PipeWriter.CloseWithError(err)
-	w.done()
+	w.once.Do(func() {
+		w.done()
+	})
 	return err
 }
 

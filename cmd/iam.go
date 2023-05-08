@@ -286,21 +286,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
-		if etcdClient != nil {
-			// ****  WARNING ****
-			// Migrating to encrypted backend on etcd should happen before initialization of
-			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
-				if errors.Is(err, errEtcdUnreachable) {
-					logger.Info("Connection to etcd timed out. Retrying..")
-					continue
-				}
-				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
-				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
-				return
-			}
-		}
-
 		// Migrate IAM configuration, if necessary.
 		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {
@@ -929,11 +914,12 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	accessKey     string
-	secretKey     string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy              *iampolicy.Policy
+	accessKey                  string
+	secretKey                  string
+	comment                    string
+	expiration                 *time.Time
+	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
 	claims map[string]interface{}
 }
@@ -968,7 +954,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if parentUser == opts.accessKey {
 		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
 	}
-
+	if siteReplicatorSvcAcc == opts.accessKey && !opts.allowSiteReplicatorAccount {
+		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
+	}
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
@@ -1451,6 +1439,11 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
+	if !ok {
+		if accessKey == globalActiveCred.AccessKey {
+			return newUserIdentity(globalActiveCred), true
+		}
+	}
 	return u, ok && u.Credentials.IsValid()
 }
 

@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7"
@@ -43,6 +44,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -105,6 +107,27 @@ var ServerFlags = []cli.Flag{
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
 	},
+	cli.DurationFlag{
+		Name:   "conn-user-timeout",
+		Usage:  "custom TCP_USER_TIMEOUT for socket buffers",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_CONN_USER_TIMEOUT",
+	},
+	cli.StringFlag{
+		Name:   "interface",
+		Usage:  "bind to right VRF device for MinIO services",
+		Hidden: true,
+		EnvVar: "MINIO_INTERFACE",
+	},
+	cli.StringSliceFlag{
+		Name:  "ftp",
+		Usage: "enable and configure an FTP(Secure) server",
+	},
+	cli.StringSliceFlag{
+		Name:  "sftp",
+		Usage: "enable and configure an SFTP server",
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -145,22 +168,23 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 EXAMPLES:
-  1. Start minio server on "/home/shared" directory.
+  1. Start MinIO server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
   2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
      {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
 
-  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  3. Start distributed MinIO server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  4. Start distributed MinIO server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
+
+  5. Start distributed MinIO server, with FTP and SFTP servers on all interfaces via port 8021, 8022 respectively
+     {{.Prompt}} {{.HelpName}} http://node{1...4}.example.com/mnt/export{1...4} \
+           --ftp="address=:8021" --ftp="passive-port-range=30000-40000" \
+           --sftp="address=:8022" --sftp="ssh-private-key=${HOME}/.ssh/id_rsa"
 `,
 }
 
@@ -243,11 +267,26 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalInternodeTransport = NewInternodeHTTPTransport()()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
 
+	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
+		Logger: func(err error) {
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.LogIf(GlobalContext, err)
+			}
+		},
+	})
+
+	globalTCPOptions = xhttp.TCPOptions{
+		UserTimeout: int(ctx.Duration("conn-user-timeout").Milliseconds()),
+		Interface:   ctx.String("interface"),
+	}
+
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
+	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
 
 	globalIsErasure = (setupType == ErasureSetupType)
 	globalIsDistErasure = (setupType == DistErasureSetupType)
@@ -373,16 +412,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Once the config is fully loaded, initialize the new object layer.
 	setObjectLayer(newObject)
 
-	// ****  WARNING ****
-	// Migrating to encrypted backend should happen before initialization of any
-	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	lockTimeout := newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
-		timeout: 5 * time.Second,
-		minimum: 3 * time.Second,
-	})
 
 	for {
 		select {
@@ -392,56 +422,22 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		default:
 		}
 
-		bootstrapTrace("trying to acquire transaction.lock")
-
-		// Make sure to hold lock for entire migration to avoid
-		// such that only one server should migrate the entire config
-		// at a given time, this big transaction lock ensures this
-		// appropriately. This is also true for rotation of encrypted
-		// content.
-		txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-
-		// let one of the server acquire the lock, if not let them timeout.
-		// which shall be retried again by this loop.
-		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
-		if err != nil {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
-			waitDuration := time.Duration(r.Float64() * 5 * float64(time.Second))
-			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping for %v before retry", err, waitDuration))
-
-			// Sleep 0 -> 5 seconds, provider a higher range such that sleeps()
-			// and retries for lock are more spread out, needed orchestrated
-			// systems take 30s minimum to respond to DNS resolvers.
-			//
-			// Do not change this value.
-			time.Sleep(waitDuration)
-			continue
-		}
-
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
 		if globalIsDistErasure {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+			logger.Info("Waiting for all MinIO sub-systems to be initialize...")
 		}
 
-		// Migrate all backend configs to encrypted backend configs, optionally
-		// handles rotating keys for encryption, if there is any retriable failure
-		// that shall be retried if there is an error.
-		if err = handleEncryptedConfigBackend(newObject); err == nil {
-			// Upon success migrating the config, initialize all sub-systems
-			// if all sub-systems initialized successfully return right away
-			if err = initConfigSubsystem(lkctx.Context(), newObject); err == nil {
-				txnLk.Unlock(lkctx)
-				// All successful return.
-				if globalIsDistErasure {
-					// These messages only meant primarily for distributed setup, so only log during distributed setup.
-					logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
-				}
-				return nil
+		// Upon success migrating the config, initialize all sub-systems
+		// if all sub-systems initialized successfully return right away
+		err := initConfigSubsystem(ctx, newObject)
+		if err == nil {
+			// All successful return.
+			if globalIsDistErasure {
+				// These messages only meant primarily for distributed setup, so only log during distributed setup.
+				logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
 			}
+			return nil
 		}
-
-		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
-		txnLk.Unlock(lkctx)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
@@ -592,7 +588,8 @@ func serverMain(ctx *cli.Context) {
 		UseIdleTimeout(ctx.Duration("idle-timeout")).
 		UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
 		UseBaseContext(GlobalContext).
-		UseCustomLogger(log.New(io.Discard, "", 0)) // Turn-off random logging by Go stdlib
+		UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib
+		UseTCPOptions(globalTCPOptions)
 
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
@@ -664,8 +661,21 @@ func serverMain(ctx *cli.Context) {
 			setConsoleSrv(srv)
 
 			go func() {
-				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
+				server := newConsoleServerFn()
+				logger.FatalIf(server.Listen(), "Unable to initialize console server's sockets")
+				daemon.SdNotify(false, daemon.SdNotifyReady)
+				logger.FatalIf(server.Serve(), "Unable to initialize console server")
 			}()
+		}
+
+		// if we see FTP args, start FTP if possible
+		if len(ctx.StringSlice("ftp")) > 0 {
+			go startFTPServer(ctx)
+		}
+
+		// If we see SFTP args, start SFTP if possible
+		if len(ctx.StringSlice("sftp")) > 0 {
+			go startSFTPServer(ctx)
 		}
 	}()
 

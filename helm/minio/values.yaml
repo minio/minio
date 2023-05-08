@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2023-04-13T03-08-07Z
+  tag: RELEASE.2023-04-28T18-11-17Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -64,13 +64,13 @@ minioAPIPort: "9000"
 minioConsolePort: "9001"
 
 ## Update strategy for Deployments
-DeploymentUpdate:
+deploymentUpdate:
   type: RollingUpdate
   maxUnavailable: 0
   maxSurge: 100%
 
 ## Update strategy for StatefulSets
-StatefulSetUpdate:
+statefulSetUpdate:
   updateStrategy: RollingUpdate
 
 ## Pod priority settings
@@ -157,7 +157,7 @@ persistence:
   ## Storage class of PV to bind. By default it looks for standard storage class.
   ## If the PV uses a different storage class, specify that here.
   storageClass: ""
-  VolumeName: ""
+  volumeName: ""
   accessMode: ReadWriteOnce
   size: 500Gi
 

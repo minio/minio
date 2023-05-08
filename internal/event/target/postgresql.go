@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -188,13 +188,14 @@ func (target *PostgreSQLTarget) isActive() (bool, error) {
 
 // Save - saves the events to the store if questore is configured, which will be replayed when the PostgreSQL connection is active.
 func (target *PostgreSQLTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+
 	if err := target.init(); err != nil {
 		return err
 	}
 
-	if target.store != nil {
-		return target.store.Put(eventData)
-	}
 	_, err := target.isActive()
 	if err != nil {
 		return err

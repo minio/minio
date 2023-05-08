@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -80,17 +81,23 @@ func handleSignals() {
 			exit(stopProcess())
 		case osSignal := <-globalOSSignalCh:
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
+			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
 			switch signal {
 			case serviceRestart:
 				logger.Info("Restarting on service signal")
+				daemon.SdNotify(false, daemon.SdNotifyReloading)
 				stop := stopProcess()
 				rerr := restartProcess()
+				if rerr == nil {
+					daemon.SdNotify(false, daemon.SdNotifyReady)
+				}
 				logger.LogIf(context.Background(), rerr)
 				exit(stop && rerr == nil)
 			case serviceStop:
 				logger.Info("Stopping on service signal")
+				daemon.SdNotify(false, daemon.SdNotifyStopping)
 				exit(stopProcess())
 			}
 		}

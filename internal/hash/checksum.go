@@ -19,9 +19,11 @@ package hash
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"hash"
 	"hash/crc32"
 	"net/http"
@@ -29,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 // MinIOMultipartChecksum is as metadata on multipart uploads to indicate checksum type.
@@ -53,6 +56,10 @@ const (
 	ChecksumCRC32C
 	// ChecksumInvalid indicates an invalid checksum.
 	ChecksumInvalid
+	// ChecksumMultipart indicates the checksum is from a multipart upload.
+	ChecksumMultipart
+	// ChecksumIncludesMultipart indicates the checksum also contains part checksums.
+	ChecksumIncludesMultipart
 
 	// ChecksumNone indicates no checksum.
 	ChecksumNone ChecksumType = 0
@@ -180,7 +187,7 @@ func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
 }
 
 // ReadCheckSums will read checksums from b and return them.
-func ReadCheckSums(b []byte) map[string]string {
+func ReadCheckSums(b []byte, part int) map[string]string {
 	res := make(map[string]string, 1)
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
@@ -194,8 +201,38 @@ func ReadCheckSums(b []byte) map[string]string {
 		if length == 0 || len(b) < length {
 			break
 		}
-		res[typ.String()] = base64.StdEncoding.EncodeToString(b[:length])
+		cs := base64.StdEncoding.EncodeToString(b[:length])
 		b = b[length:]
+		if typ.Is(ChecksumMultipart) {
+			t, n := binary.Uvarint(b)
+			if n < 0 {
+				break
+			}
+			cs = fmt.Sprintf("%s-%d", cs, t)
+			b = b[n:]
+			if part > 0 {
+				cs = ""
+			}
+			if typ.Is(ChecksumIncludesMultipart) {
+				wantLen := int(t) * length
+				if len(b) < wantLen {
+					break
+				}
+				// Read part checksum
+				if part > 0 && uint64(part) <= t {
+					offset := (part - 1) * length
+					partCs := b[offset:]
+					cs = base64.StdEncoding.EncodeToString(partCs[:length])
+				}
+				b = b[wantLen:]
+			}
+		} else if part > 1 {
+			// For non-multipart, checksum is part 1.
+			cs = ""
+		}
+		if cs != "" {
+			res[typ.String()] = cs
+		}
 	}
 	if len(res) == 0 {
 		res = nil
@@ -225,8 +262,9 @@ func NewChecksumString(alg, value string) *Checksum {
 }
 
 // AppendTo will append the checksum to b.
+// 'parts' is used when checksum has ChecksumMultipart set.
 // ReadCheckSums reads the values back.
-func (c *Checksum) AppendTo(b []byte) []byte {
+func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 	if c == nil {
 		return nil
 	}
@@ -238,6 +276,25 @@ func (c *Checksum) AppendTo(b []byte) []byte {
 	}
 	b = append(b, tmp[:n]...)
 	b = append(b, crc...)
+	if c.Type.Is(ChecksumMultipart) {
+		var checksums int
+		// Ensure we don't divide by 0:
+		if c.Type.RawByteLen() == 0 || len(parts)%c.Type.RawByteLen() != 0 {
+			logger.LogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
+			checksums = 0
+			parts = nil
+		} else {
+			checksums = len(parts) / c.Type.RawByteLen()
+		}
+		if !c.Type.Is(ChecksumIncludesMultipart) {
+			parts = nil
+		}
+		n := binary.PutUvarint(tmp[:], uint64(checksums))
+		b = append(b, tmp[:n]...)
+		if len(parts) > 0 {
+			b = append(b, parts...)
+		}
+	}
 	return b
 }
 

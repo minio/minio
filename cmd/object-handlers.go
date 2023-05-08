@@ -238,7 +238,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Start:          offset,
 				End:            -1,
 			}
-			return getObjectNInfo(ctx, bucket, object, rs, r.Header, noLock, opts)
+			opts.NoLock = true
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 		},
 		actualSize,
 	)
@@ -402,7 +403,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	var proxy proxyResult
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 	if err != nil {
 		var (
 			reader *GetObjectReader
@@ -475,11 +476,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
@@ -512,8 +513,9 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
@@ -543,7 +545,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -554,7 +556,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -728,11 +730,11 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
@@ -799,8 +801,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	// Set standard object headers.
@@ -1098,19 +1101,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
-
-	// FIXME: a possible race exists between a parallel
-	// GetObject v/s CopyObject with metadata updates, ideally
-	// we should be holding write lock here but it is not
-	// possible due to other constraints such as knowing
-	// the type of source content etc.
-	lock := noLock
-	if !cpSrcDstSame {
-		lock = readLock
+	if cpSrcDstSame {
+		getOpts.NoLock = true
 	}
 
 	var rs *HTTPRangeSpec
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -2084,11 +2080,24 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	// Extract request metadata
+	metadata, err := extractMetadata(ctx, r)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	metadata[xhttp.AmzStorageClass] = sc
+
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-		metadata := map[string]string{
-			xhttp.AmzStorageClass: sc,
+
+		// Copy metadata and make space for a bit more
+		metaCopy := make(map[string]string, len(metadata)+5)
+		for k, v := range metadata {
+			metaCopy[k] = v
 		}
+		// Shadow now...
+		metadata := metaCopy
 
 		actualSize := size
 		var idxCb func() []byte

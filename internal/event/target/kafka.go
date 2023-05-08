@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
@@ -167,12 +168,11 @@ func (target *KafkaTarget) isActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
-	if err := target.init(); err != nil {
-		return err
-	}
-
 	if target.store != nil {
 		return target.store.Put(eventData)
+	}
+	if err := target.init(); err != nil {
+		return err
 	}
 	_, err := target.isActive()
 	if err != nil {
@@ -268,9 +268,9 @@ func (target *KafkaTarget) Close() error {
 
 // Check if atleast one broker in cluster is active
 func (k KafkaArgs) pingBrokers() bool {
+	d := net.Dialer{Timeout: 60 * time.Second}
 	for _, broker := range k.Brokers {
-		_, dErr := net.Dial("tcp", broker.String())
-		if dErr == nil {
+		if _, err := d.Dial("tcp", broker.String()); err == nil {
 			return true
 		}
 	}

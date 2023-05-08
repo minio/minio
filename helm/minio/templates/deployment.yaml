@@ -1,8 +1,5 @@
 {{- if eq .Values.mode "standalone" }}
-{{ $scheme := "http" }}
-{{- if .Values.tls.enabled }}
-{{ $scheme = "https" }}
-{{ end }}
+{{ $scheme := .Values.tls.enabled | ternary "https" "http" }}
 {{ $bucketRoot := or ($.Values.bucketRoot) ($.Values.mountPath) }}
 apiVersion: {{ template "minio.deployment.apiVersion" . }}
 kind: Deployment
@@ -13,21 +10,20 @@ metadata:
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- if .Values.additionalLabels }}
-{{ toYaml .Values.additionalLabels | trimSuffix "\n" | indent 4 }}
-{{- end }}
-{{- if .Values.additionalAnnotations }}
-  annotations:
-{{ toYaml .Values.additionalAnnotations | trimSuffix "\n" | indent 4 }}
-{{- end }}
+    {{- if .Values.additionalLabels }}
+      {{- toYaml .Values.additionalLabels | nindent 4 }}
+    {{- end }}
+  {{- if .Values.additionalAnnotations }}
+  annotations: {{- toYaml .Values.additionalAnnotations | nindent 4 }}
+  {{- end }}
 spec:
   strategy:
-    type: {{ .Values.DeploymentUpdate.type }}
-    {{- if eq .Values.DeploymentUpdate.type "RollingUpdate" }}
+    type: {{ .Values.deploymentUpdate.type }}
+    {{- if eq .Values.deploymentUpdate.type "RollingUpdate" }}
     rollingUpdate:
-      maxSurge: {{ .Values.DeploymentUpdate.maxSurge }}
-      maxUnavailable: {{ .Values.DeploymentUpdate.maxUnavailable }}
-    {{- end}}
+      maxSurge: {{ .Values.deploymentUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.deploymentUpdate.maxUnavailable }}
+    {{- end }}
   replicas: 1
   selector:
     matchLabels:
@@ -39,17 +35,17 @@ spec:
       labels:
         app: {{ template "minio.name" . }}
         release: {{ .Release.Name }}
-{{- if .Values.podLabels }}
-{{ toYaml .Values.podLabels | indent 8 }}
-{{- end }}
+        {{- if .Values.podLabels }}
+          {{- toYaml .Values.podLabels | nindent 8 }}
+        {{- end }}
       annotations:
-{{- if not .Values.ignoreChartChecksums }}
+        {{- if not .Values.ignoreChartChecksums }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-{{- end }}
-{{- if .Values.podAnnotations }}
-{{ toYaml .Values.podAnnotations | trimSuffix "\n" | indent 8 }}
-{{- end }}
+        {{- end }}
+        {{- if .Values.podAnnotations }}
+          {{- toYaml .Values.podAnnotations | trimSuffix "\n" | indent 8 }}
+        {{- end }}
     spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: "{{ .Values.priorityClassName }}"
@@ -57,7 +53,7 @@ spec:
       {{- if .Values.runtimeClassName }}
       runtimeClassName: "{{ .Values.runtimeClassName }}"
       {{- end }}
-{{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
+      {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
       securityContext:
         runAsUser: {{ .Values.securityContext.runAsUser }}
         runAsGroup: {{ .Values.securityContext.runAsGroup }}
@@ -65,10 +61,10 @@ spec:
         {{- if and (ge .Capabilities.KubeVersion.Major "1") (ge .Capabilities.KubeVersion.Minor "20") }}
         fsGroupChangePolicy: {{ .Values.securityContext.fsGroupChangePolicy }}
         {{- end }}
-{{- end }}
-{{ if .Values.serviceAccount.create }}
+      {{- end }}
+      {{ if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
-{{- end }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -113,11 +109,11 @@ spec:
             {{- if .Values.extraSecret }}
             - name: MINIO_CONFIG_ENV_FILE
               value: "/tmp/minio-config-env/config.env"
-            {{- end}}
+            {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
-            {{- end}}
+            {{- end }}
             {{- if .Values.oidc.enabled }}
             - name: MINIO_IDENTITY_OPENID_CONFIG_URL
               value: {{ .Values.oidc.configUrl }}
@@ -135,7 +131,7 @@ spec:
               value: {{ .Values.oidc.redirectUri }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
-            {{- end}}
+            {{- end }}
             {{- if .Values.etcd.endpoints }}
             - name: MINIO_ETCD_ENDPOINTS
               value: {{ join "," .Values.etcd.endpoints | quote }}
@@ -158,38 +154,34 @@ spec:
             {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end}}
-          resources:
-{{ toYaml .Values.resources | indent 12 }}
+              value: {{ tpl $val $ | quote }}
+            {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
         {{- with .Values.extraContainers }}
-        {{- if eq (typeOf .) "string" }}
-        {{- tpl . $ | nindent 8 }}
-        {{- else }}
-        {{- toYaml . | nindent 8 }}
+          {{- if eq (typeOf .) "string" }}
+            {{- tpl . $ | nindent 8 }}
+          {{- else }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
         {{- end }}
-        {{- end }}
-{{- with .Values.nodeSelector }}
-      nodeSelector:
-{{ toYaml . | indent 8 }}
-{{- end }}
-{{- include "minio.imagePullSecrets" . | indent 6 }}
-{{- with .Values.affinity }}
-      affinity:
-{{ toYaml . | indent 8 }}
-{{- end }}
-{{- with .Values.tolerations }}
-      tolerations:
-{{ toYaml . | indent 8 }}
-{{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "minio.imagePullSecrets" . | indent 6 }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
         - name: export
-        {{- if .Values.persistence.enabled }}
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ .Values.persistence.existingClaim | default (include "minio.fullname" .) }}
-        {{- else }}
+          {{- else }}
           emptyDir: {}
-        {{- end }}
+          {{- end }}
         {{- if .Values.extraSecret }}
         - name: extra-secret
           secret:

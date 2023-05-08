@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -40,7 +39,6 @@ type EventNotifier struct {
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	eventsQueue                chan eventArgs
 }
 
 // NewEventNotifier - creates new event notification object.
@@ -51,7 +49,6 @@ func NewEventNotifier() *EventNotifier {
 		targetResCh:                make(chan event.TargetIDResult),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		eventsQueue:                make(chan eventArgs, 10000),
 	}
 }
 
@@ -104,12 +101,6 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 	if err := evnot.targetList.Add(globalNotifyTargetList.Targets()...); err != nil {
 		return err
 	}
-
-	go func() {
-		for e := range evnot.eventsQueue {
-			evnot.send(e)
-		}
-	}()
 
 	go func() {
 		for res := range evnot.targetResCh {
@@ -210,16 +201,6 @@ func (evnot *EventNotifier) RemoveAllRemoteTargets() {
 
 // Send - sends the event to all registered notification targets
 func (evnot *EventNotifier) Send(args eventArgs) {
-	select {
-	case evnot.eventsQueue <- args:
-	default:
-		// A new goroutine is created for each notification job, eventsQueue is
-		// drained quickly and is not expected to be filled with any scenario.
-		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
-	}
-}
-
-func (evnot *EventNotifier) send(args eventArgs) {
 	evnot.RLock()
 	targetIDSet := evnot.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	evnot.RUnlock()

@@ -196,11 +196,12 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	if err := migrateMinioSysConfig(objLayer); err != nil {
+	srvCfg, err := readConfigWithoutMigrate(context.Background(), objLayer)
+	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	if err := migrateMinioSysConfigToKV(objLayer); err != nil {
+	if err = saveServerConfig(GlobalContext, objLayer, srvCfg); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

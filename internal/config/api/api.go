@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -45,6 +45,7 @@ const (
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
 	apiGzipObjects                 = "gzip_objects"
+	apiRootAccess                  = "root_access"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
@@ -61,6 +62,7 @@ const (
 	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
+	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default "on"
 )
 
 // Deprecated key and ENVs
@@ -130,6 +132,10 @@ var (
 			Key:   apiGzipObjects,
 			Value: "off",
 		},
+		config.KV{
+			Key:   apiRootAccess,
+			Value: "on",
+		},
 	}
 )
 
@@ -148,6 +154,7 @@ type Config struct {
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
 	DisableODirect              bool          `json:"disable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
+	RootAccess                  bool          `json:"root_access"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -247,6 +254,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
 
 	return Config{
 		RequestsMax:                 requestsMax,
@@ -262,5 +270,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		DeleteCleanupInterval:       deleteCleanupInterval,
 		DisableODirect:              disableODirect,
 		GzipObjects:                 gzipObjects,
+		RootAccess:                  rootAccess,
 	}, nil
 }

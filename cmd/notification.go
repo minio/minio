@@ -32,8 +32,8 @@ import (
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -883,11 +883,13 @@ func (sys *NotificationSys) GetProcInfo(ctx context.Context) []madmin.ProcInfo {
 	return reply
 }
 
+// Construct a list of offline disks information for a given node.
+// If offlineHost is empty, do it for the local disks.
 func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin.Disk {
 	var offlineDisks []madmin.Disk
 	for _, pool := range endpoints {
 		for _, ep := range pool.Endpoints {
-			if offlineHost == ep.Host {
+			if offlineHost == "" && ep.IsLocal || offlineHost == ep.Host {
 				offlineDisks = append(offlineDisks, madmin.Disk{
 					Endpoint: ep.String(),
 					State:    string(madmin.ItemOffline),
@@ -947,8 +949,6 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 				info.Endpoint = client.host.String()
 				info.State = string(madmin.ItemOffline)
 				info.Disks = getOfflineDisks(info.Endpoint, globalEndpoints)
-			} else {
-				info.State = string(madmin.ItemOnline)
 			}
 			reply[idx] = info
 		}(client, i)

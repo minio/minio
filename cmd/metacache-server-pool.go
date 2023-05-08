@@ -210,10 +210,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			}
 		}()
 		o.ID = ""
-
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
-		}
 	}
 
 	// Do listing in-place.
@@ -399,7 +395,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			if o.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+					globalExpiryState.enqueueByDays(objInfo, evt)
 					if !evt.Action.DeleteRestored() {
 						continue
 					} // queue version for replication upon expired restored copies if needed.

@@ -784,6 +784,11 @@ func (h *healSequence) healDiskMeta(objAPI ObjectLayer) error {
 }
 
 func (h *healSequence) healItems(objAPI ObjectLayer, bucketsOnly bool) error {
+	if h.clientToken == bgHealingUUID {
+		// For background heal do nothing.
+		return nil
+	}
+
 	if err := h.healDiskMeta(objAPI); err != nil {
 		return err
 	}
@@ -869,13 +874,8 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 
 	if !h.settings.Recursive {
 		if h.object != "" {
-			// Check if an object named as the objPrefix exists,
-			// and if so heal it.
-			oi, err := objAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
-			if err == nil {
-				if err = h.healObject(bucket, h.object, oi.VersionID); err != nil {
-					return err
-				}
+			if err := h.healObject(bucket, h.object, ""); err != nil {
+				return err
 			}
 		}
 

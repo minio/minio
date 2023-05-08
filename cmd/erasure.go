@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -92,15 +92,6 @@ func (er erasureObjects) defaultWQuorum() int {
 		return dataCount + 1
 	}
 	return dataCount
-}
-
-// byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []madmin.Disk
-
-func (d byDiskTotal) Len() int      { return len(d) }
-func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d byDiskTotal) Less(i, j int) bool {
-	return d[i].TotalSpace < d[j].TotalSpace
 }
 
 func diskErrToDriveState(err error) (state string) {
@@ -245,7 +236,9 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
 	disksInfo := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
-	sort.Sort(byDiskTotal(disksInfo))
+	sort.Slice(disksInfo, func(i, j int) bool {
+		return disksInfo[i].TotalSpace < disksInfo[j].TotalSpace
+	})
 
 	storageInfo := StorageInfo{
 		Disks: disksInfo,

@@ -193,6 +193,9 @@ type ObjectInfo struct {
 	// Checksums added on upload.
 	// Encoded, maybe encrypted.
 	Checksum []byte
+
+	// Inlined
+	Inlined bool
 }
 
 // ArchiveInfo returns any saved zip archive meta information.
@@ -548,13 +551,6 @@ type CompletePart struct {
 	ChecksumSHA1   string
 	ChecksumSHA256 string
 }
-
-// CompletedParts - is a collection satisfying sort.Interface.
-type CompletedParts []CompletePart
-
-func (a CompletedParts) Len() int           { return len(a) }
-func (a CompletedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a CompletedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // CompleteMultipartUpload - represents list of parts which are completed, this is sent by the
 // client during CompleteMultipartUpload request.

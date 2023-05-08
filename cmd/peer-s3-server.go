@@ -25,8 +25,8 @@ import (
 	"sort"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (

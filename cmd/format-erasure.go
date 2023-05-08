@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (
@@ -380,7 +380,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	disk.SetDiskID(diskID)
 	if healID != "" {
 		ctx := context.Background()
-		ht := newHealingTracker(disk, healID)
+		ht := initHealingTracker(disk, healID)
 		return ht.save(ctx)
 	}
 	return nil

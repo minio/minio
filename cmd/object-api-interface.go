@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/hash"
 
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
@@ -60,6 +61,7 @@ type ObjectOptions struct {
 	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
 	Transition        TransitionOptions
 	Expiration        ExpirationOptions
+	LifecycleEvent    lifecycle.Event
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
@@ -179,15 +181,6 @@ func (o *ObjectOptions) PutReplicationState() (r ReplicationState) {
 	return
 }
 
-// LockType represents required locking for ObjectLayer operations
-type LockType int
-
-const (
-	noLock LockType = iota
-	readLock
-	writeLock
-)
-
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Locking operations on object.
@@ -214,12 +207,12 @@ type ObjectLayer interface {
 	// Object operations.
 
 	// GetObjectNInfo returns a GetObjectReader that satisfies the
-	// ReadCloser interface. The Close method unlocks the object
-	// after reading, so it must always be called after usage.
+	// ReadCloser interface. The Close method runs any cleanup
+	// functions, so it must always be called after reading till EOF
 	//
 	// IMPORTANTLY, when implementations return err != nil, this
 	// function MUST NOT return a non-nil ReadCloser.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (reader *GetObjectReader, err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -272,7 +265,7 @@ func GetObject(ctx context.Context, api ObjectLayer, bucket, object string, star
 	}
 	Range := &HTTPRangeSpec{Start: startOffset, End: startOffset + length}
 
-	reader, err := api.GetObjectNInfo(ctx, bucket, object, Range, header, readLock, opts)
+	reader, err := api.GetObjectNInfo(ctx, bucket, object, Range, header, opts)
 	if err != nil {
 		return err
 	}

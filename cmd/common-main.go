@@ -59,7 +59,6 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
@@ -133,16 +132,6 @@ func init() {
 		}
 	}()
 
-	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
-		PassHost:     true,
-		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
-		Logger: func(err error) {
-			if err != nil && !errors.Is(err, context.Canceled) {
-				logger.LogIf(GlobalContext, err)
-			}
-		},
-	})
-
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
@@ -187,7 +176,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
+	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
@@ -208,6 +197,11 @@ func minioConfigToConsoleFeatures() {
 	if globalIAMSys.LDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
+	// Handle animation in welcome page
+	if value := env.Get(config.EnvBrowserLoginAnimation, "on"); value != "" {
+		os.Setenv("CONSOLE_ANIMATED_LOGIN", value)
+	}
+
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
@@ -632,7 +626,7 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
 	if globalBrowserEnabled {
-		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
+		if redirectURL := env.Get(config.EnvBrowserRedirectURL, ""); redirectURL != "" {
 			u, err := xnet.ParseHTTPURL(redirectURL)
 			if err != nil {
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
@@ -777,6 +771,7 @@ func handleCommonEnvVars() {
 			logger.Info(color.RedBold(msg))
 		}
 		globalActiveCred = cred
+		globalCredViaEnv = true
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}

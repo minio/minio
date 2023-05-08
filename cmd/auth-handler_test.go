@@ -375,14 +375,14 @@ func TestIsReqAuthenticated(t *testing.T) {
 
 	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
-
 	creds, err := auth.CreateCredentials("myuser", "mypassword")
 	if err != nil {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
 	globalActiveCred = creds
+
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	// List of test cases for validating http request authentication.
 	testCases := []struct {
@@ -464,15 +464,16 @@ func TestValidateAdminSignature(t *testing.T) {
 	}
 
 	initAllSubsystems(ctx)
-	initConfigSubsystem(ctx, objLayer)
 
-	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
+	initConfigSubsystem(ctx, objLayer)
 
 	creds, err := auth.CreateCredentials("admin", "mypassword")
 	if err != nil {
 		t.Fatalf("unable create credential, %s", err)
 	}
 	globalActiveCred = creds
+
+	globalIAMSys.Init(ctx, objLayer, globalEtcdClient, 2*time.Second)
 
 	testCases := []struct {
 		AccessKey string

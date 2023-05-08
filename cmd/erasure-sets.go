@@ -39,8 +39,8 @@ import (
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // setsDsyncLockers is encapsulated type for Close()
@@ -190,7 +190,6 @@ func (s *erasureSets) connectDisks() {
 
 	var wg sync.WaitGroup
 	diskMap := s.getDiskMap()
-	setsJustConnected := make([]bool, s.setCount)
 	for _, endpoint := range s.endpoints.Endpoints {
 		cdisk := diskMap[endpoint]
 		if cdisk != nil && cdisk.IsOnline() {
@@ -203,8 +202,6 @@ func (s *erasureSets) connectDisks() {
 			// putting it back into the s.erasureDisks by re-placing the disk again.
 			_, setIndex, _ := cdisk.GetDiskLoc()
 			if setIndex != -1 {
-				// Recently disconnected disks must go to MRF
-				setsJustConnected[setIndex] = cdisk.LastConn().After(s.lastConnectDisksOpTime)
 				continue
 			}
 		}
@@ -260,21 +257,11 @@ func (s *erasureSets) connectDisks() {
 				s.erasureDisks[setIndex][diskIndex] = disk
 			}
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			setsJustConnected[setIndex] = true // disk just went online we treat it is as MRF event
 			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
 
 	wg.Wait()
-
-	go func() {
-		for setIndex, justConnected := range setsJustConnected {
-			if !justConnected {
-				continue
-			}
-			globalMRFState.newSetReconnected(s.poolIndex, setIndex)
-		}
-	}()
 }
 
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
@@ -756,9 +743,9 @@ func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBucke
 // --- Object Operations ---
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	set := s.getHashedSet(object)
-	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+	return set.GetObjectNInfo(ctx, bucket, object, rs, h, opts)
 }
 
 // PutObject - writes an object to hashedSet based on the object name.

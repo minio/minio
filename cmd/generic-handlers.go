@@ -576,6 +576,8 @@ func setUploadForwardingHandler(h http.Handler) http.Handler {
 			for k := range w.Header() {
 				w.Header().Del(k)
 			}
+			ctx := newContext(r, w, "SiteReplicationUploadForwarding")
+			defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 			globalForwarder.ServeHTTP(w, r)
 			return
 		}

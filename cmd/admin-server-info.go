@@ -87,7 +87,6 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	}
 
 	props := madmin.ServerProperties{
-		State:    string(madmin.ItemInitializing),
 		Endpoint: addr,
 		Uptime:   UTCNow().Unix() - globalBootTime.Unix(),
 		Version:  Version,
@@ -146,7 +145,8 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks
 	} else {
-		props.State = string(madmin.ItemOffline)
+		props.State = string(madmin.ItemInitializing)
+		props.Disks = getOfflineDisks("", globalEndpoints)
 	}
 
 	return props
