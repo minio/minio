@@ -44,7 +44,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.podAnnotations }}
-          {{- toYaml .Values.podAnnotations | trimSuffix "\n" | indent 8 }}
+          {{- toYaml .Values.podAnnotations | trimSuffix "\n" | nindent 8 }}
         {{- end }}
     spec:
       {{- if .Values.priorityClassName }}
