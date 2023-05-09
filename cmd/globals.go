@@ -387,6 +387,9 @@ var (
 	// Controller for deleted file sweeper.
 	deletedCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
 
+	// Is MINIO_DISABLE_API_FREEZE_ON_BOOT set?
+	globalDisableFreezeOnBoot bool
+
 	// Add new variable global values here.
 )
 
