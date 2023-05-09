@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 
@@ -125,7 +126,7 @@ func (k KafkaArgs) Validate() error {
 
 // KafkaTarget - Kafka target.
 type KafkaTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       KafkaArgs
@@ -208,8 +209,8 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 	return err
 }
 
-// Send - reads an event from store and sends it to Kafka.
-func (target *KafkaTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to Kafka.
+func (target *KafkaTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -278,7 +279,7 @@ func (k KafkaArgs) pingBrokers() bool {
 }
 
 func (target *KafkaTarget) init() error {
-	return target.lazyInit.Do(target.initKafka)
+	return target.initOnce.Do(target.initKafka)
 }
 
 func (target *KafkaTarget) initKafka() error {

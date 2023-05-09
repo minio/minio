@@ -58,7 +58,7 @@ func NewConsoleLogger(ctx context.Context) *HTTPConsoleLoggerSys {
 }
 
 // IsOnline always true in case of console logger
-func (sys *HTTPConsoleLoggerSys) IsOnline() bool {
+func (sys *HTTPConsoleLoggerSys) IsOnline(_ context.Context) bool {
 	return true
 }
 
@@ -87,7 +87,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan log.Info, doneCh <-chan struct{}, node string, last int, logKind madmin.LogMask, filter func(entry log.Info) bool) error {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
-		logger.AddSystemTarget(sys)
+		logger.AddSystemTarget(GlobalContext, sys)
 	}
 
 	cnt := 0
@@ -128,7 +128,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan log.Info, doneCh <-chan st
 }
 
 // Init if HTTPConsoleLoggerSys is valid, always returns nil right now
-func (sys *HTTPConsoleLoggerSys) Init() error {
+func (sys *HTTPConsoleLoggerSys) Init(_ context.Context) error {
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (sys *HTTPConsoleLoggerSys) Type() types.TargetType {
 
 // Send log message 'e' to console and publish to console
 // log pubsub system
-func (sys *HTTPConsoleLoggerSys) Send(entry interface{}) error {
+func (sys *HTTPConsoleLoggerSys) Send(ctx context.Context, entry interface{}) error {
 	var lg log.Info
 	switch e := entry.(type) {
 	case log.Entry:

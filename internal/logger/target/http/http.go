@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -26,13 +26,17 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"strings"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger/target/types"
+	"github.com/minio/minio/internal/once"
+	"github.com/minio/minio/internal/store"
+	xnet "github.com/minio/pkg/net"
 )
 
 const (
@@ -41,6 +45,9 @@ const (
 
 	// maxWorkers is the maximum number of concurrent operations.
 	maxWorkers = 16
+
+	// the suffix for the configured queue dir where the logs will be persisted.
+	httpLoggerExtension = ".http.log"
 )
 
 const (
@@ -59,6 +66,7 @@ type Config struct {
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
 	QueueSize  int               `json:"queueSize"`
+	QueueDir   string            `json:"queueDir"`
 	Proxy      string            `json:"string"`
 	Transport  http.RoundTripper `json:"-"`
 
@@ -93,8 +101,19 @@ type Target struct {
 	// will attempt to establish the connection.
 	revive sync.Once
 
+	// store to persist and replay the logs to the target
+	// to avoid missing events when the target is down.
+	store              store.Store[interface{}]
+	storeCtxCancel     context.CancelFunc
+	initQueueStoreOnce once.Init
+
 	config Config
 	client *http.Client
+}
+
+// Name returns the name of the target
+func (h *Target) Name() string {
+	return "minio-http-" + h.config.Name
 }
 
 // Endpoint returns the backend endpoint
@@ -106,9 +125,9 @@ func (h *Target) String() string {
 	return h.config.Name
 }
 
-// IsOnline returns true if the initialization was successful
-func (h *Target) IsOnline() bool {
-	return atomic.LoadInt32(&h.status) == statusOnline
+// IsOnline returns true if the target is reachable.
+func (h *Target) IsOnline(ctx context.Context) bool {
+	return h.isAlive(ctx) == nil
 }
 
 // Stats returns the target statistics.
@@ -125,8 +144,34 @@ func (h *Target) Stats() types.TargetStats {
 	return stats
 }
 
+// This will check if we can reach the remote.
+func (h *Target) isAlive(ctx context.Context) (err error) {
+	return h.send(ctx, []byte(`{}`), 2*webhookCallTimeout)
+}
+
 // Init validate and initialize the http target
-func (h *Target) Init() (err error) {
+func (h *Target) Init(ctx context.Context) (err error) {
+	if h.config.QueueDir != "" {
+		return h.initQueueStoreOnce.DoWithContext(ctx, h.initQueueStore)
+	}
+	return h.initLogChannel(ctx)
+}
+
+func (h *Target) initQueueStore(ctx context.Context) (err error) {
+	var queueStore store.Store[interface{}]
+	queueDir := filepath.Join(h.config.QueueDir, h.Name())
+	queueStore = store.NewQueueStore[interface{}](queueDir, uint64(h.config.QueueSize), httpLoggerExtension)
+	if err = queueStore.Open(); err != nil {
+		return fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	h.store = queueStore
+	h.storeCtxCancel = cancel
+	store.StreamItems(h.store, h, ctx.Done(), h.config.LogOnce)
+	return
+}
+
+func (h *Target) initLogChannel(ctx context.Context) (err error) {
 	switch atomic.LoadInt32(&h.status) {
 	case statusOnline:
 		return nil
@@ -134,45 +179,7 @@ func (h *Target) Init() (err error) {
 		return errors.New("target is closed")
 	}
 
-	// This will check if we can reach the remote.
-	checkAlive := func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*webhookCallTimeout)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.config.Endpoint, strings.NewReader(`{}`))
-		if err != nil {
-			return err
-		}
-
-		req.Header.Set(xhttp.ContentType, "application/json")
-
-		// Set user-agent to indicate MinIO release
-		// version to the configured log endpoint
-		req.Header.Set("User-Agent", h.config.UserAgent)
-
-		if h.config.AuthToken != "" {
-			req.Header.Set("Authorization", h.config.AuthToken)
-		}
-
-		resp, err := h.client.Do(req)
-		if err != nil {
-			return err
-		}
-		// Drain any response.
-		xhttp.DrainBody(resp.Body)
-
-		if !acceptedResponseStatusCode(resp.StatusCode) {
-			if resp.StatusCode == http.StatusForbidden {
-				return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
-					h.config.Endpoint, resp.Status)
-			}
-			return fmt.Errorf("%s returned '%s', please check your endpoint configuration",
-				h.config.Endpoint, resp.Status)
-		}
-		return nil
-	}
-
-	err = checkAlive()
+	err = h.isAlive(ctx)
 	if err != nil {
 		// Start a goroutine that will continue to check if we can reach
 		h.revive.Do(func() {
@@ -183,14 +190,14 @@ func (h *Target) Init() (err error) {
 					if atomic.LoadInt32(&h.status) != statusOffline {
 						return
 					}
-					if err := checkAlive(); err == nil {
+					if err := h.isAlive(ctx); err == nil {
 						// We are online.
 						if atomic.CompareAndSwapInt32(&h.status, statusOffline, statusOnline) {
 							h.workerStartMu.Lock()
 							h.lastStarted = time.Now()
 							h.workerStartMu.Unlock()
 							atomic.AddInt64(&h.workers, 1)
-							go h.startHTTPLogger()
+							go h.startHTTPLogger(ctx)
 						}
 						return
 					}
@@ -205,19 +212,51 @@ func (h *Target) Init() (err error) {
 		h.lastStarted = time.Now()
 		h.workerStartMu.Unlock()
 		atomic.AddInt64(&h.workers, 1)
-		go h.startHTTPLogger()
+		go h.startHTTPLogger(ctx)
 	}
 	return nil
 }
 
-// Accepted HTTP Status Codes
-var acceptedStatusCodeMap = map[int]bool{http.StatusOK: true, http.StatusCreated: true, http.StatusAccepted: true, http.StatusNoContent: true}
+func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		h.config.Endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err)
+	}
+	req.Header.Set(xhttp.ContentType, "application/json")
+	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
+	req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
 
-func acceptedResponseStatusCode(code int) bool {
-	return acceptedStatusCodeMap[code]
+	// Set user-agent to indicate MinIO release
+	// version to the configured log endpoint
+	req.Header.Set("User-Agent", h.config.UserAgent)
+
+	if h.config.AuthToken != "" {
+		req.Header.Set("Authorization", h.config.AuthToken)
+	}
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err)
+	}
+
+	// Drain any response.
+	xhttp.DrainBody(resp.Body)
+
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent:
+		// accepted HTTP status codes.
+		return nil
+	case http.StatusForbidden:
+		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status)
+	default:
+		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status)
+	}
 }
 
-func (h *Target) logEntry(entry interface{}) {
+func (h *Target) logEntry(ctx context.Context, entry interface{}) {
 	logJSON, err := json.Marshal(&entry)
 	if err != nil {
 		atomic.AddInt64(&h.failedMessages, 1)
@@ -239,52 +278,14 @@ func (h *Target) logEntry(entry interface{}) {
 			time.Sleep(sleep)
 		}
 		tries++
-		ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-			h.config.Endpoint, bytes.NewReader(logJSON))
-		if err != nil {
-			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+		if err := h.send(ctx, logJSON, webhookCallTimeout); err != nil {
+			h.config.LogOnce(ctx, err, h.config.Endpoint)
 			atomic.AddInt64(&h.failedMessages, 1)
-			continue
-		}
-		req.Header.Set(xhttp.ContentType, "application/json")
-		req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
-		req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
-
-		// Set user-agent to indicate MinIO release
-		// version to the configured log endpoint
-		req.Header.Set("User-Agent", h.config.UserAgent)
-
-		if h.config.AuthToken != "" {
-			req.Header.Set("Authorization", h.config.AuthToken)
-		}
-
-		resp, err := h.client.Do(req)
-		if err != nil {
-			atomic.AddInt64(&h.failedMessages, 1)
-			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
-			continue
-		}
-
-		// Drain any response.
-		xhttp.DrainBody(resp.Body)
-
-		if acceptedResponseStatusCode(resp.StatusCode) {
-			return
-		}
-		// Log failure, retry
-		atomic.AddInt64(&h.failedMessages, 1)
-		switch resp.StatusCode {
-		case http.StatusForbidden:
-			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
-		default:
-			h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status), h.config.Endpoint)
 		}
 	}
 }
 
-func (h *Target) startHTTPLogger() {
+func (h *Target) startHTTPLogger(ctx context.Context) {
 	h.logChMu.RLock()
 	logCh := h.logCh
 	if logCh != nil {
@@ -302,7 +303,7 @@ func (h *Target) startHTTPLogger() {
 	// Send messages until channel is closed.
 	for entry := range logCh {
 		atomic.AddInt64(&h.totalMessages, 1)
-		h.logEntry(entry)
+		h.logEntry(ctx, entry)
 	}
 }
 
@@ -328,10 +329,41 @@ func New(config Config) *Target {
 	return h
 }
 
+// SendFromStore - reads the log from store and sends it to webhook.
+func (h *Target) SendFromStore(key string) (err error) {
+	var eventData interface{}
+	eventData, err = h.store.Get(key)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	atomic.AddInt64(&h.totalMessages, 1)
+	logJSON, err := json.Marshal(&eventData)
+	if err != nil {
+		atomic.AddInt64(&h.failedMessages, 1)
+		return
+	}
+	if err := h.send(context.Background(), logJSON, webhookCallTimeout); err != nil {
+		atomic.AddInt64(&h.failedMessages, 1)
+		if xnet.IsNetworkOrHostDown(err, true) {
+			return store.ErrNotConnected
+		}
+		return err
+	}
+	// Delete the event from store.
+	return h.store.Del(key)
+}
+
 // Send log message 'e' to http target.
 // If servers are offline messages are queued until queue is full.
 // If Cancel has been called the message is ignored.
-func (h *Target) Send(entry interface{}) error {
+func (h *Target) Send(ctx context.Context, entry interface{}) error {
+	if h.store != nil {
+		// save the entry to the queue store which will be replayed to the target.
+		return h.store.Put(entry)
+	}
 	if atomic.LoadInt32(&h.status) == statusClosed {
 		return nil
 	}
@@ -345,7 +377,7 @@ func (h *Target) Send(entry interface{}) error {
 	case h.logCh <- entry:
 	default:
 		// Drop messages until we are online.
-		if !h.IsOnline() {
+		if !h.IsOnline(ctx) {
 			return errors.New("log buffer full and remote offline")
 		}
 		nWorkers := atomic.LoadInt64(&h.workers)
@@ -358,7 +390,7 @@ func (h *Target) Send(entry interface{}) error {
 				if atomic.CompareAndSwapInt64(&h.workers, nWorkers, nWorkers+1) {
 					// Start another logger.
 					h.lastStarted = time.Now()
-					go h.startHTTPLogger()
+					go h.startHTTPLogger(ctx)
 				}
 			}
 			h.logCh <- entry
@@ -379,6 +411,12 @@ func (h *Target) Send(entry interface{}) error {
 // All messages sent to the target after this function has been called will be dropped.
 func (h *Target) Cancel() {
 	atomic.StoreInt32(&h.status, statusClosed)
+
+	// If queuestore is configured, cancel it's context to
+	// stop the replay go-routine.
+	if h.store != nil {
+		h.storeCtxCancel()
+	}
 
 	// Set logch to nil and close it.
 	// This will block all Send operations,

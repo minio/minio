@@ -31,6 +31,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
@@ -107,7 +108,7 @@ func (m MQTTArgs) Validate() error {
 
 // MQTTTarget - MQTT target.
 type MQTTTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       MQTTArgs
@@ -167,8 +168,8 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 	return token.Error()
 }
 
-// Send - reads an event from store and sends it to MQTT.
-func (target *MQTTTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to MQTT.
+func (target *MQTTTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -224,7 +225,7 @@ func (target *MQTTTarget) Close() error {
 }
 
 func (target *MQTTTarget) init() error {
-	return target.lazyInit.Do(target.initMQTT)
+	return target.initOnce.Do(target.initMQTT)
 }
 
 func (target *MQTTTarget) initMQTT() error {

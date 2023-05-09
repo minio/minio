@@ -588,7 +588,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			}
 			loggerCfg.HTTP[n] = l
 		}
-		if errs := logger.UpdateSystemTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateSystemTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
@@ -606,7 +606,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if errs := logger.UpdateAuditWebhookTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateAuditWebhookTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
@@ -620,7 +620,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-		if errs := logger.UpdateAuditKafkaTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateAuditKafkaTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:

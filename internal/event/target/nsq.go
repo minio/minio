@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
@@ -90,7 +91,7 @@ func (n NSQArgs) Validate() error {
 
 // NSQTarget - NSQ target.
 type NSQTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       NSQArgs
@@ -176,8 +177,8 @@ func (target *NSQTarget) send(eventData event.Event) error {
 	return target.producer.Publish(target.args.Topic, data)
 }
 
-// Send - reads an event from store and sends it to NSQ.
-func (target *NSQTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to NSQ.
+func (target *NSQTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func (target *NSQTarget) Close() (err error) {
 }
 
 func (target *NSQTarget) init() error {
-	return target.lazyInit.Do(target.initNSQ)
+	return target.initOnce.Do(target.initNSQ)
 }
 
 func (target *NSQTarget) initNSQ() error {

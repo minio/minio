@@ -35,6 +35,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	"github.com/minio/pkg/certs"
 	xnet "github.com/minio/pkg/net"
@@ -91,7 +92,7 @@ func (w WebhookArgs) Validate() error {
 
 // WebhookTarget - Webhook target.
 type WebhookTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       WebhookArgs
@@ -222,8 +223,8 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to webhook.
-func (target *WebhookTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to webhook.
+func (target *WebhookTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -256,7 +257,7 @@ func (target *WebhookTarget) Close() error {
 }
 
 func (target *WebhookTarget) init() error {
-	return target.lazyInit.Do(target.initWebhook)
+	return target.initOnce.Do(target.initWebhook)
 }
 
 // Only called from init()
