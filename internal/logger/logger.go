@@ -278,9 +278,9 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 		API = req.API
 	}
 
-	kv := req.GetTags()
-	tags := make(map[string]interface{}, len(kv))
-	for _, entry := range kv {
+	// Copy tags. We hold read lock already.
+	tags := make(map[string]interface{}, len(req.tags))
+	for _, entry := range req.tags {
 		tags[entry.Key] = entry.Val
 	}
 
