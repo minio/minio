@@ -238,6 +238,10 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}
+	if u.Credentials.Description == "" {
+		u.Credentials.Description = u.Credentials.Comment
+	}
+
 	m[user] = u
 	return nil
 }
