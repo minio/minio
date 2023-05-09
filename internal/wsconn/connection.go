@@ -28,14 +28,18 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-type Receiver struct {
+type Connection struct {
 	// Context for the server.
 	ctx context.Context
 
 	active map[uint32]*MuxClient
 }
 
-func (r *Receiver) Handler() http.HandlerFunc {
+func (r *Connection) Open() error {
+	return nil
+}
+
+func (r *Connection) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
@@ -45,7 +49,7 @@ func (r *Receiver) Handler() http.HandlerFunc {
 	}
 }
 
-func (r *Receiver) handleMessages(conn net.Conn) {
+func (r *Connection) handleMessages(conn net.Conn) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
