@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -2221,13 +2220,13 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 	delete(m, sessionPolicyNameExtracted)
 
 	// sessionPolicy is nil and there is embedded policy attached we remove
-	// rembedded policy at that point.
+	// embedded policy at that point.
 	if _, ok := m[iampolicy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
 		delete(m, iampolicy.SessionPolicyName)
 		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
-	if opts.sessionPolicy != nil {
+	if opts.sessionPolicy != nil { // session policies is being updated
 		if err := opts.sessionPolicy.Validate(); err != nil {
 			return updatedAt, err
 		}
@@ -2237,8 +2236,8 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 			return updatedAt, err
 		}
 
-		if len(policyBuf) > 16*humanize.KiByte {
-			return updatedAt, fmt.Errorf("Session policy should not exceed 16 KiB characters")
+		if len(policyBuf) > 2048 {
+			return updatedAt, errSessionPolicyTooLarge
 		}
 
 		// Overwrite session policy claims.

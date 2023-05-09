@@ -168,8 +168,14 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			}
 		case errors.Is(err, errPolicyInUse):
 			apiErr = APIError{
-				Code:           "XMinioAdminPolicyInUse",
+				Code:           "XMinioIAMPolicyInUse",
 				Description:    "The policy cannot be removed, as it is in use",
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errSessionPolicyTooLarge):
+			apiErr = APIError{
+				Code:           "XMinioIAMServiceAccountSessionPolicyTooLarge",
+				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case errors.Is(err, kes.ErrKeyExists):
