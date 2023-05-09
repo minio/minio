@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -944,8 +943,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		if err != nil {
 			return auth.Credentials{}, time.Time{}, err
 		}
-		if len(policyBuf) > 16*humanize.KiByte {
-			return auth.Credentials{}, time.Time{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
+		if len(policyBuf) > 2048 {
+			return auth.Credentials{}, time.Time{}, errSessionPolicyTooLarge
 		}
 	}
 

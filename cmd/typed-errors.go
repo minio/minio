@@ -115,3 +115,6 @@ var errUploadIDNotFound = errors.New("Specified Upload ID is not found")
 
 // error returned when PartNumber is greater than the maximum allowed 10000 parts
 var errInvalidMaxParts = errors.New("Part number is greater than the maximum allowed 10000 parts")
+
+// error returned for session policies > 2048
+var errSessionPolicyTooLarge = errors.New("Session policy should not exceed 2048 characters")
