@@ -714,6 +714,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		return err
 	}
 
+	// each set get its own thread separate from the concurrent
+	// objects/versions being decommissioned.
+	workerSize += len(pool.sets)
+
 	wk, err := workers.New(workerSize)
 	if err != nil {
 		return err
