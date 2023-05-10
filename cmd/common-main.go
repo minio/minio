@@ -136,6 +136,7 @@ func init() {
 
 	gob.Register(StorageErr(""))
 	gob.Register(madmin.TimeInfo{})
+	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
 
 	defaultAWSCredProvider = []credentials.Provider{
