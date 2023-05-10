@@ -106,7 +106,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -137,7 +137,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -168,7 +168,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -199,7 +199,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -230,7 +230,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
