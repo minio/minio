@@ -52,6 +52,7 @@ func init() {
 		getClusterStorageMetrics(),
 		getClusterTierMetrics(),
 		getKMSMetrics(),
+		getWebhookMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -137,6 +138,7 @@ const (
 	notifySubsystem           MetricSubsystem = "notify"
 	lambdaSubsystem           MetricSubsystem = "lambda"
 	auditSubsystem            MetricSubsystem = "audit"
+	webhookSubsystem          MetricSubsystem = "webhook"
 )
 
 // MetricName are the individual names for the metric.
@@ -211,6 +213,8 @@ const (
 	kmsRequestsError   = "request_error"
 	kmsRequestsFail    = "request_failure"
 	kmsUptime          = "uptime"
+
+	webhookOnline = "online"
 )
 
 const (
@@ -2363,6 +2367,39 @@ func getKMSNodeMetrics() *MetricsGroup {
 			Description: desc,
 			Value:       float64(Online),
 		}}
+	})
+	return mg
+}
+
+func getWebhookMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
+		metrics := make([]Metric, 0, len(tgts))
+		for _, t := range tgts {
+			isOnline := 0
+			if t.IsOnline(ctx) {
+				isOnline = 1
+			}
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookOnline,
+					Help:      "Is the webhook online?",
+					Type:      gaugeMetric,
+				},
+				VariableLabels: map[string]string{
+					"name":     t.String(),
+					"endpoint": t.Endpoint(),
+				},
+				Value: float64(isOnline),
+			})
+		}
+
+		return metrics
 	})
 	return mg
 }
