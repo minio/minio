@@ -214,7 +214,10 @@ const (
 	kmsRequestsFail    = "request_failure"
 	kmsUptime          = "uptime"
 
-	webhookOnline = "online"
+	webhookOnline         = "online"
+	webhookQueueLength    = "queue_length"
+	webhookTotalMessages  = "total_messages"
+	webhookFailedMessages = "failed_messages"
 )
 
 const (
@@ -2383,6 +2386,10 @@ func getWebhookMetrics() *MetricsGroup {
 			if t.IsOnline(ctx) {
 				isOnline = 1
 			}
+			labels := map[string]string{
+				"name":     t.String(),
+				"endpoint": t.Endpoint(),
+			}
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: clusterMetricNamespace,
@@ -2391,11 +2398,41 @@ func getWebhookMetrics() *MetricsGroup {
 					Help:      "Is the webhook online?",
 					Type:      gaugeMetric,
 				},
-				VariableLabels: map[string]string{
-					"name":     t.String(),
-					"endpoint": t.Endpoint(),
+				VariableLabels: labels,
+				Value:          float64(isOnline),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookQueueLength,
+					Help:      "Webhook queue length",
+					Type:      counterMetric,
 				},
-				Value: float64(isOnline),
+				VariableLabels: labels,
+				Value:          float64(t.Stats().QueueLength),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookTotalMessages,
+					Help:      "Total number of messages sent to this target",
+					Type:      counterMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(t.Stats().TotalMessages),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookFailedMessages,
+					Help:      "Number of messages that failed to send",
+					Type:      counterMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(t.Stats().FailedMessages),
 			})
 		}
 
