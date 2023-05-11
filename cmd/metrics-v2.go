@@ -69,6 +69,7 @@ func init() {
 		getIAMNodeMetrics(),
 		getKMSNodeMetrics(),
 		getMinioHealingMetrics(),
+		getWebhookMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -137,6 +138,7 @@ const (
 	notifySubsystem           MetricSubsystem = "notify"
 	lambdaSubsystem           MetricSubsystem = "lambda"
 	auditSubsystem            MetricSubsystem = "audit"
+	webhookSubsystem          MetricSubsystem = "webhook"
 )
 
 // MetricName are the individual names for the metric.
@@ -211,6 +213,11 @@ const (
 	kmsRequestsError   = "request_error"
 	kmsRequestsFail    = "request_failure"
 	kmsUptime          = "uptime"
+
+	webhookOnline         = "online"
+	webhookQueueLength    = "queue_length"
+	webhookTotalMessages  = "total_messages"
+	webhookFailedMessages = "failed_messages"
 )
 
 const (
@@ -2363,6 +2370,73 @@ func getKMSNodeMetrics() *MetricsGroup {
 			Description: desc,
 			Value:       float64(Online),
 		}}
+	})
+	return mg
+}
+
+func getWebhookMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
+		metrics := make([]Metric, 0, len(tgts))
+		for _, t := range tgts {
+			isOnline := 0
+			if t.IsOnline(ctx) {
+				isOnline = 1
+			}
+			labels := map[string]string{
+				"name":     t.String(),
+				"endpoint": t.Endpoint(),
+			}
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookOnline,
+					Help:      "Is the webhook online?",
+					Type:      gaugeMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(isOnline),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookQueueLength,
+					Help:      "Webhook queue length",
+					Type:      counterMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(t.Stats().QueueLength),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookTotalMessages,
+					Help:      "Total number of messages sent to this target",
+					Type:      counterMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(t.Stats().TotalMessages),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookFailedMessages,
+					Help:      "Number of messages that failed to send",
+					Type:      counterMetric,
+				},
+				VariableLabels: labels,
+				Value:          float64(t.Stats().FailedMessages),
+			})
+		}
+
+		return metrics
 	})
 	return mg
 }
