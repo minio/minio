@@ -43,12 +43,12 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.53
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.26.4
+	github.com/minio/console v0.27.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.1.0
+	github.com/minio/madmin-go/v2 v2.1.1
 	github.com/minio/minio-go/v7 v7.0.52
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.1
@@ -177,7 +177,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20230421183052-0da22db3af01 // indirect
+	github.com/minio/mc v0.0.0-20230509151326-6050568e66a6 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
