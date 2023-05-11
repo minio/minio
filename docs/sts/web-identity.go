@@ -90,7 +90,7 @@ func parseDiscoveryDoc(ustr string) (DiscoveryDoc, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return d, err
+		return d, errors.New(resp.Status)
 	}
 	dec := json.NewDecoder(resp.Body)
 	if err = dec.Decode(&d); err != nil {
