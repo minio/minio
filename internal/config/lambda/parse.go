@@ -35,18 +35,21 @@ import (
 var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
 
 // TestSubSysLambdaTargets - tests notification targets of given subsystem
-func TestSubSysLambdaTargets(ctx context.Context, cfg config.Config, subSys string, transport *http.Transport) error {
-	if err := checkValidLambdaKeysForSubSys(subSys, cfg[subSys]); err != nil {
+func TestSubSysLambdaTargets(ctx context.Context, cfg config.Config, subSys string, transport *http.Transport) (err error) {
+	if err = checkValidLambdaKeysForSubSys(subSys, cfg[subSys]); err != nil {
 		return err
 	}
 
-	targetList, err := fetchSubSysTargets(ctx, cfg, subSys, transport)
+	var targetList []event.Target
+	defer func() {
+		for _, target := range targetList {
+			target.Close()
+		}
+	}()
+
+	targetList, err = fetchSubSysTargets(ctx, cfg, subSys, transport)
 	if err != nil {
 		return err
-	}
-
-	for _, target := range targetList {
-		defer target.Close()
 	}
 
 	for _, target := range targetList {
