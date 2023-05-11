@@ -135,7 +135,7 @@ const (
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrReplicationDenyEditError
-	ErrRemoteTargetDenyEditError
+	ErrRemoteTargetDenyAddError
 	ErrReplicationNoExistingObjects
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
@@ -934,9 +934,9 @@ var errorCodes = errorCodeMap{
 		Description:    "No matching ExistingsObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrRemoteTargetDenyEditError: {
-		Code:           "XMinioAdminRemoteTargetDenyEdit",
-		Description:    "Cannot alter remote target endpoint since this server is in a cluster replication setup. use `mc admin replicate update`",
+	ErrRemoteTargetDenyAddError: {
+		Code:           "XMinioAdminRemoteTargetDenyAdd",
+		Description:    "Cannot add remote target endpoint since this server is in a cluster replication setup",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationDenyEditError: {
