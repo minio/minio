@@ -354,6 +354,11 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 	var subSys string
 	switch idpCfgType {
 	case madmin.OpenidIDPCfg:
+		// idpCfgType is OpenidIDPCfg,Can't delete _ (Default)
+		if cfgName == madmin.Default {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+			return
+		}
 		subSys = config.IdentityOpenIDSubSys
 		cfgInfos, err := globalIAMSys.OpenIDConfig.GetConfigInfo(cfgCopy, cfgName)
 		if err != nil {
