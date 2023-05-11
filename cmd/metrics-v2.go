@@ -52,7 +52,7 @@ func init() {
 		getClusterStorageMetrics(),
 		getClusterTierMetrics(),
 		getKMSMetrics(),
-		getWebhookMetrics(),
+		getWebhookClusterMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -70,6 +70,7 @@ func init() {
 		getIAMNodeMetrics(),
 		getKMSNodeMetrics(),
 		getMinioHealingMetrics(),
+		getWebhookPeerMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -2374,7 +2375,7 @@ func getKMSNodeMetrics() *MetricsGroup {
 	return mg
 }
 
-func getWebhookMetrics() *MetricsGroup {
+func getWebhookPeerMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
@@ -2382,25 +2383,10 @@ func getWebhookMetrics() *MetricsGroup {
 		tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
 		metrics := make([]Metric, 0, len(tgts))
 		for _, t := range tgts {
-			isOnline := 0
-			if t.IsOnline(ctx) {
-				isOnline = 1
-			}
 			labels := map[string]string{
 				"name":     t.String(),
 				"endpoint": t.Endpoint(),
 			}
-			metrics = append(metrics, Metric{
-				Description: MetricDescription{
-					Namespace: clusterMetricNamespace,
-					Subsystem: webhookSubsystem,
-					Name:      webhookOnline,
-					Help:      "Is the webhook online?",
-					Type:      gaugeMetric,
-				},
-				VariableLabels: labels,
-				Value:          float64(isOnline),
-			})
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: clusterMetricNamespace,
@@ -2433,6 +2419,39 @@ func getWebhookMetrics() *MetricsGroup {
 				},
 				VariableLabels: labels,
 				Value:          float64(t.Stats().FailedMessages),
+			})
+		}
+
+		return metrics
+	})
+	return mg
+}
+
+func getWebhookClusterMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
+		metrics := make([]Metric, 0, len(tgts))
+		for _, t := range tgts {
+			isOnline := 0
+			if t.IsOnline(ctx) {
+				isOnline = 1
+			}
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: clusterMetricNamespace,
+					Subsystem: webhookSubsystem,
+					Name:      webhookOnline,
+					Help:      "Is the webhook online?",
+					Type:      gaugeMetric,
+				},
+				VariableLabels: map[string]string{
+					"name":     t.String(),
+					"endpoint": t.Endpoint(),
+				},
+				Value: float64(isOnline),
 			})
 		}
 
