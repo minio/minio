@@ -461,9 +461,12 @@ func registerAPIRouter(router *mux.Router) {
 
 		// MinIO extension API for replication.
 		//
-		// GetBucketReplicationMetrics
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsV2Handler))))).Queries("replication-metrics", "2")
+		// deprecated handler
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsHandler))))).Queries("replication-metrics", "")
+
 		// ValidateBucketReplicationCreds
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("checkbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")

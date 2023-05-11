@@ -619,6 +619,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			for tgt, st := range sizeS.replTargetStats {
 				res["repl-size-"+tgt] = strconv.FormatInt(st.replicatedSize, 10)
+				res["repl-count-"+tgt] = strconv.FormatInt(st.replicatedCount, 10)
 				if st.failedCount > 0 {
 					res["repl-failed-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.failedCount, st.failedSize)
 				}
