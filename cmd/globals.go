@@ -89,9 +89,6 @@ const (
 	// can reach that size according to https://aws.amazon.com/articles/1434
 	maxFormFieldSize = int64(1 * humanize.MiByte)
 
-	// Limit memory allocation to store multipart data
-	maxFormMemory = int64(5 * humanize.MiByte)
-
 	// The maximum allowed time difference between the incoming request
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
