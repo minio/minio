@@ -622,14 +622,17 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			partChecksums := latestMeta.Parts[partIndex].Checksums
 			readers := make([]io.ReaderAt, len(latestDisks))
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
+
+			origPartErasureSize := erasureReader.ShardFileOffset(0, partSize, partSize)
+			newPartErasureSize := erasureWriter.ShardFileOffset(0, partSize, partSize)
+
 			for i, disk := range latestDisks {
 				if disk == OfflineDisk {
 					continue
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
-				tillOffset := erasureReader.ShardFileOffset(0, partSize, partSize)
-				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
+				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, origPartErasureSize, checksumAlgo,
 					checksumInfo.Hash, erasureReader.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
@@ -642,9 +645,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasureWriter.ShardFileSize(latestMeta.Size)+32))
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasureWriter.ShardSize())
 				} else {
-					tillOffset := erasureWriter.ShardFileOffset(0, partSize, partSize)
 					writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
-						tillOffset, DefaultBitrotAlgorithm, erasureWriter.ShardSize())
+						newPartErasureSize, DefaultBitrotAlgorithm, erasureWriter.ShardSize())
 				}
 			}
 
