@@ -664,10 +664,7 @@ func serverMain(ctx *cli.Context) {
 			setConsoleSrv(srv)
 
 			go func() {
-				server := newConsoleServerFn()
-				logger.FatalIf(server.Listen(), "Unable to initialize console server's sockets")
-				daemon.SdNotify(false, daemon.SdNotifyReady)
-				logger.FatalIf(server.Serve(), "Unable to initialize console server")
+				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 			}()
 		}
 
@@ -789,6 +786,8 @@ func serverMain(ctx *cli.Context) {
 		}
 		logger.Info("======")
 	}
+
+	daemon.SdNotify(false, daemon.SdNotifyReady)
 
 	<-globalOSSignalCh
 }
