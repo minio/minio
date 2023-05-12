@@ -85,16 +85,6 @@ type systemInfo struct {
 		UploadSessions bool `xml:"UploadSessions"`
 		IAMSTS         bool `xml:"IAMSTS"`
 	} `mxl:"ProtocolCapabilities"`
-	APIEndpoints struct {
-		IAMEndpoint string `xml:"IAMEndpoint"`
-		STSEndpoint string `xml:"STSEndpoint"`
-	} `xml:"APIEndpoints"`
-	SystemRecommendations struct {
-		S3ConcurrentTaskLimit    int `xml:"S3ConcurrentTaskLimit"`
-		S3MultiObjectDeleteLimit int `xml:"S3MultiObjectDeleteLimit"`
-		StorageCurrentTaskLimit  int `xml:"StorageCurrentTaskLimit"`
-		KBBlockSize              int `xml:"KbBlockSize"`
-	} `xml:"SystemRecommendations"`
 }
 
 // This optional functionality allows vendors to report space information to Veeam products, and Veeam will make placement
@@ -118,13 +108,10 @@ func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRa
 	switch object {
 	case systemXMLObject:
 		si := systemInfo{
-			ProtocolVersion: "1.0",
-			ModelName:       "MinIO " + ReleaseTag,
+			ProtocolVersion: "\"1.0\"",
+			ModelName:       "\"MinIO " + ReleaseTag + "\"",
 		}
 		si.ProtocolCapabilities.CapacityInfo = true
-
-		// Default recommended block size with MinIO
-		si.SystemRecommendations.KBBlockSize = 4096
 
 		buf = encodeResponse(&si)
 	case capacityXMLObject:
