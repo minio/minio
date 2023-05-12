@@ -604,9 +604,9 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, res.UploadID, ObjectOptions{})
 		parts := make([]CompletePart, len(objInfo.Parts))
 		for i, part := range objInfo.Parts {
-			hr, err := hash.NewReader(gr, part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewLimitReader(gr, part.Size, "", "", part.ActualSize)
 			if err != nil {
-				return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
+				return fmt.Errorf("decommissionObject: hash.NewLimitReader() %w", err)
 			}
 			pi, err := z.PutObjectPart(ctx, bucket, objInfo.Name, res.UploadID,
 				part.Number,
@@ -638,9 +638,9 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		return err
 	}
 
-	hr, err := hash.NewReader(gr, objInfo.Size, "", "", actualSize)
+	hr, err := hash.NewLimitReader(gr, objInfo.Size, "", "", actualSize)
 	if err != nil {
-		return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
+		return fmt.Errorf("decommissionObject: hash.NewLimitReader() %w", err)
 	}
 	_, err = z.PutObject(ctx,
 		bucket,

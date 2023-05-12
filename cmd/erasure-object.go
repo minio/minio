@@ -2088,7 +2088,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 
 	// rehydrate the parts back on disk as per the original xl.meta prior to transition
 	for _, partInfo := range oi.Parts {
-		hr, err := hash.NewReader(gr, partInfo.Size, "", "", partInfo.Size)
+		hr, err := hash.NewLimitReader(gr, partInfo.Size, "", "", partInfo.Size)
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}

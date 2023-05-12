@@ -69,7 +69,14 @@ type Reader struct {
 // NewReader may try merge the given size, MD5 and SHA256 values
 // into src - if src is a Reader - to avoid computing the same
 // checksums multiple times.
+// NewReader enforces S3 compatibility strictly by ensuring caller
+// does not send more content than specified size.
 func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+	// return hard limited reader
+	return newReader(src, size, md5Hex, sha256Hex, actualSize, true)
+}
+
+func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, hardLimitReader bool) (*Reader, error) {
 	MD5, err := hex.DecodeString(md5Hex)
 	if err != nil {
 		return nil, BadDigest{ // TODO(aead): Return an error that indicates that an invalid ETag has been specified
@@ -110,7 +117,12 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		r.checksum = MD5
 		r.contentSHA256 = SHA256
 		if r.size < 0 && size >= 0 {
-			r.src = etag.Wrap(ioutil.HardLimitReader(r.src, size), r.src)
+			switch hardLimitReader {
+			case true:
+				r.src = etag.Wrap(ioutil.HardLimitReader(r.src, size), r.src)
+			default:
+				r.src = etag.Wrap(io.LimitReader(r.src, size), r.src)
+			}
 			r.size = size
 		}
 		if r.actualSize <= 0 && actualSize >= 0 {
@@ -120,7 +132,13 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	}
 
 	if size >= 0 {
-		r := ioutil.HardLimitReader(src, size)
+		var r io.Reader
+		switch hardLimitReader {
+		case true:
+			r = ioutil.HardLimitReader(src, size)
+		default:
+			r = io.LimitReader(src, size)
+		}
 		if _, ok := src.(etag.Tagger); !ok {
 			src = etag.NewReader(r, MD5)
 		} else {
@@ -141,6 +159,13 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		contentSHA256: SHA256,
 		sha256:        h,
 	}, nil
+}
+
+// NewLimitReader is similar to NewReader but it will read only up to actualsize specified. It will return
+// EOF if actualsize is reached.
+func NewLimitReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+	// return io limited reader
+	return newReader(src, size, md5Hex, sha256Hex, actualSize, false)
 }
 
 // ErrInvalidChecksum is returned when an invalid checksum is provided in headers.
