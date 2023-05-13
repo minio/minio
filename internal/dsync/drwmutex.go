@@ -37,7 +37,7 @@ var dsyncLog bool
 // Retry unit interval
 var lockRetryMinInterval time.Duration
 
-var lockRetryBackOff func(uint) time.Duration
+var lockRetryBackOff func(*rand.Rand, uint) time.Duration
 
 func init() {
 	// Check for MINIO_DSYNC_TRACE env variable, if set logging will be enabled for failed REST operations.
@@ -53,7 +53,6 @@ func init() {
 	}
 
 	lockRetryBackOff = backoffWait(
-		rand.New(rand.NewSource(time.Now().UnixNano())),
 		lockRetryMinInterval,
 		100*time.Millisecond,
 		5*time.Second,
@@ -266,7 +265,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 				time.Sleep(opts.RetryInterval)
 			default:
 				attempt++
-				time.Sleep(lockRetryBackOff(attempt))
+				time.Sleep(lockRetryBackOff(dm.rng, attempt))
 			}
 		}
 	}
