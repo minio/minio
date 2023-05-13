@@ -121,7 +121,7 @@ func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRa
 	case systemXMLObject:
 		si := systemInfo{
 			ProtocolVersion: `"1.0"`,
-			ModelName:       "\"MinIO \"" + ReleaseTag + "\"",
+			ModelName:       "\"MinIO " + ReleaseTag + "\"",
 		}
 		si.ProtocolCapabilities.CapacityInfo = true
 
