@@ -141,11 +141,6 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
 		return
@@ -165,11 +160,6 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "EditTier")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 
 	if globalTierConfigMgr == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
