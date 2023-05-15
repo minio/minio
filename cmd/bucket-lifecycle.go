@@ -157,7 +157,7 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	ewk, err := workers.New(workerSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return
+		ewk = 4
 	}
 
 	nwk, err := workers.New(workerSize)
