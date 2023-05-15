@@ -2189,10 +2189,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrContentSHA256Mismatch
 	case hash.ChecksumMismatch:
 		apiErr = ErrContentChecksumMismatch
-	case ObjectTooLarge:
-		apiErr = ErrEntityTooLarge
-	case ObjectTooSmall:
+	case hash.SizeTooSmall:
 		apiErr = ErrEntityTooSmall
+	case hash.SizeTooLarge:
+		apiErr = ErrEntityTooLarge
 	case NotImplemented:
 		apiErr = ErrNotImplemented
 	case PartTooBig:

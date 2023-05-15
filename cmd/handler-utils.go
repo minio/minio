@@ -18,12 +18,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"regexp"
@@ -268,87 +265,6 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 		}
 	}
 	return strings.Join(newEncs, ",")
-}
-
-// Validate form field size for s3 specification requirement.
-func validateFormFieldSize(ctx context.Context, formValues http.Header) error {
-	// Iterate over form values
-	for k := range formValues {
-		// Check if value's field exceeds S3 limit
-		if int64(len(formValues.Get(k))) > maxFormFieldSize {
-			logger.LogIf(ctx, errSizeUnexpected)
-			return errSizeUnexpected
-		}
-	}
-
-	// Success.
-	return nil
-}
-
-// Extract form fields and file data from a HTTP POST Policy
-func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues http.Header, err error) {
-	// HTML Form values
-	fileName = ""
-
-	// Canonicalize the form values into http.Header.
-	formValues = make(http.Header)
-	for k, v := range form.Value {
-		formValues[http.CanonicalHeaderKey(k)] = v
-	}
-
-	// Validate form values.
-	if err = validateFormFieldSize(ctx, formValues); err != nil {
-		return nil, "", 0, nil, err
-	}
-
-	// this means that filename="" was not specified for file key and Go has
-	// an ugly way of handling this situation. Refer here
-	// https://golang.org/src/mime/multipart/formdata.go#L61
-	if len(form.File) == 0 {
-		b := &bytes.Buffer{}
-		for _, v := range formValues["File"] {
-			b.WriteString(v)
-		}
-		fileSize = int64(b.Len())
-		filePart = io.NopCloser(b)
-		return filePart, fileName, fileSize, formValues, nil
-	}
-
-	// Iterator until we find a valid File field and break
-	for k, v := range form.File {
-		canonicalFormName := http.CanonicalHeaderKey(k)
-		if canonicalFormName == "File" {
-			if len(v) == 0 {
-				logger.LogIf(ctx, errInvalidArgument)
-				return nil, "", 0, nil, errInvalidArgument
-			}
-			// Fetch fileHeader which has the uploaded file information
-			fileHeader := v[0]
-			// Set filename
-			fileName = fileHeader.Filename
-			// Open the uploaded part
-			filePart, err = fileHeader.Open()
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return nil, "", 0, nil, err
-			}
-			// Compute file size
-			fileSize, err = filePart.(io.Seeker).Seek(0, 2)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return nil, "", 0, nil, err
-			}
-			// Reset Seek to the beginning
-			_, err = filePart.(io.Seeker).Seek(0, 0)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return nil, "", 0, nil, err
-			}
-			// File found and ready for reading
-			break
-		}
-	}
-	return filePart, fileName, fileSize, formValues, nil
 }
 
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
