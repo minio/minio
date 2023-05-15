@@ -692,6 +692,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 					continue
 				}
 
+				if reencode {
+					partsMetadata[i].SetErasureParityUpdated(erasureReader.parityBlocks, erasureWriter.parityBlocks)
+				}
+
 				partsMetadata[i].Erasure.ParityBlocks = erasureWriter.parityBlocks
 				partsMetadata[i].Erasure.DataBlocks = erasureWriter.dataBlocks
 
