@@ -298,6 +298,7 @@ func (h *healingTracker) printTo(writer io.Writer) {
 	b, err := json.MarshalIndent(h, "", "  ")
 	if err != nil {
 		writer.Write([]byte(err.Error()))
+		return
 	}
 	writer.Write(b)
 }
