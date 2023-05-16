@@ -75,10 +75,6 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
 		return
@@ -137,10 +133,6 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
 		return
@@ -161,10 +153,6 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
 		return
@@ -211,10 +199,6 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
 		return
@@ -246,10 +230,6 @@ func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
 		return
@@ -270,10 +250,6 @@ func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Requ
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	if globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
 		return
