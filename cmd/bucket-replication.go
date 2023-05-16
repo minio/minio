@@ -1031,11 +1031,13 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		}(i, tgt)
 	}
 	wg.Wait()
+
+	replicationStatus = rinfos.ReplicationStatus() // used in defer function
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
 	eventName := event.ObjectReplicationComplete
-	if rinfos.ReplicationStatus() == replication.Failed {
+	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
 	newReplStatusInternal := rinfos.ReplicationStatusInternal()
