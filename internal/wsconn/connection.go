@@ -28,14 +28,44 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+// A Connection is a remote connection.
+// There is no distinction externally whether this was
 type Connection struct {
+	// State of the connection (atomic)
+	State State
+
+	// Non-atomic
+	Remote string
+
 	// Context for the server.
 	ctx context.Context
 
+	// Active mux connections.
 	active map[uint32]*MuxClient
 }
 
-func (r *Connection) Open() error {
+// State is a connection state.
+type State uint32
+
+const (
+	// StateUnconnected is the initial state of a connection.
+	// When the first message is sent it will attempt to connect.
+	StateUnconnected State = iota
+
+	// StateConnecting is the state from StateUnconnected while the connection is attempted to be established.
+	// After this connection will be StateConnected or StateConnectionError.
+	StateConnecting
+
+	// StateConnected is the state when the connection has been established and is considered stable.
+	// If the connection is lost, state will switch to StateConnecting.
+	StateConnected
+
+	// StateConnectionError is the state once a connection attempt has been made, and it failed.
+	// The connection will remain in this stat until the connection has been successfully re-established.
+	StateConnectionError
+)
+
+func (r *Connection) connect() error {
 	return nil
 }
 
@@ -69,7 +99,8 @@ func (r *Connection) handleMessages(conn net.Conn) {
 }
 
 type MuxClient struct {
-	ID   uint32
-	Seq  uint32
-	Resp chan ([]byte)
+	ID       uint32
+	Seq      uint32
+	Resp     chan []byte
+	Stateful bool
 }
