@@ -301,81 +301,31 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 		specifiedPools[pool.endpoints.CmdLine] = idx
 	}
 
-	replaceScheme := func(k string) string {
-		// This is needed as fallback when users are updating
-		// from http->https or https->http, we need to verify
-		// both because MinIO remembers the command-line in
-		// "exact" order - as long as this order is not disturbed
-		// we allow changing the "scheme" i.e internode communication
-		// from plain-text to TLS or from TLS to plain-text.
-		if strings.HasPrefix(k, "http://") {
-			k = strings.ReplaceAll(k, "http://", "https://")
-		} else if strings.HasPrefix(k, "https://") {
-			k = strings.ReplaceAll(k, "https://", "http://")
-		}
-		return k
-	}
-
 	var update bool
-	// Check if specified pools need to remove decommissioned pool.
+	// Check if specified pools need to be removed from decommissioned pool.
 	for k := range specifiedPools {
 		pi, ok := rememberedPools[k]
 		if !ok {
-			pi, ok = rememberedPools[replaceScheme(k)]
-			if ok {
-				update = true // Looks like user is changing from http->https or https->http
-			}
+			// we do not have the pool anymore that we previously remembered, since all
+			// the CLI checks out we can allow updates since we are mostly adding a pool here.
+			update = true
 		}
 		if ok && pi.completed {
 			return false, fmt.Errorf("pool(%s) = %s is decommissioned, please remove from server command line", humanize.Ordinal(pi.position+1), k)
 		}
 	}
 
-	// check if remembered pools are in right position or missing from command line.
-	for k, pi := range rememberedPools {
-		if pi.completed {
-			continue
-		}
-		_, ok := specifiedPools[k]
-		if !ok {
-			_, ok = specifiedPools[replaceScheme(k)]
-			if ok {
-				update = true // Looks like user is changing from http->https or https->http
-			}
-		}
-		if !ok {
-			update = true
-		}
-	}
-
-	// check when remembered pools and specified pools are same they are at the expected position
-	if len(rememberedPools) == len(specifiedPools) {
+	if len(specifiedPools) == len(rememberedPools) {
 		for k, pi := range rememberedPools {
 			pos, ok := specifiedPools[k]
-			if !ok {
-				pos, ok = specifiedPools[replaceScheme(k)]
-				if ok {
-					update = true // Looks like user is changing from http->https or https->http
-				}
-			}
-			if !ok {
-				update = true
-			}
 			if ok && pos != pi.position {
-				return false, fmt.Errorf("pool order change detected for %s, expected position is (%s) but found (%s)", k, humanize.Ordinal(pi.position+1), humanize.Ordinal(pos+1))
+				update = true // pool order is changing, its okay to allow it.
 			}
 		}
 	}
 
 	if !update {
-		update = len(rememberedPools) != len(specifiedPools)
-	}
-	if update {
-		for k, pi := range rememberedPools {
-			if pi.decomStarted && !pi.completed {
-				return false, fmt.Errorf("pool(%s) = %s is being decommissioned, No changes should be made to the command line arguments. Please complete the decommission in progress", humanize.Ordinal(pi.position+1), k)
-			}
-		}
+		update = len(specifiedPools) != len(rememberedPools)
 	}
 
 	return update, nil
@@ -507,60 +457,59 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 	// if no update is needed return right away.
 	if !update {
 		z.poolMeta = meta
-
-		pools := meta.returnResumablePools()
-		poolIndices := make([]int, 0, len(pools))
-		for _, pool := range pools {
-			idx := globalEndpoints.GetPoolIdx(pool.CmdLine)
-			if idx == -1 {
-				return fmt.Errorf("unexpected state present for decommission status pool(%s) not found", pool.CmdLine)
-			}
-			poolIndices = append(poolIndices, idx)
+	} else {
+		meta = poolMeta{} // to update write poolMeta fresh.
+		// looks like new pool was added we need to update,
+		// or this is a fresh installation (or an existing
+		// installation with pool removed)
+		meta.Version = poolMetaVersion
+		for idx, pool := range z.serverPools {
+			meta.Pools = append(meta.Pools, PoolStatus{
+				CmdLine:    pool.endpoints.CmdLine,
+				ID:         idx,
+				LastUpdate: UTCNow(),
+			})
 		}
+		if err = meta.save(ctx, z.serverPools); err != nil {
+			return err
+		}
+		z.poolMeta = meta
+	}
 
-		if len(poolIndices) > 0 && globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
-			go func() {
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				for {
-					if err := z.Decommission(ctx, poolIndices...); err != nil {
-						if errors.Is(err, errDecommissionAlreadyRunning) {
-							// A previous decommission running found restart it.
-							for _, idx := range poolIndices {
-								z.doDecommissionInRoutine(ctx, idx)
-							}
-							return
+	pools := meta.returnResumablePools()
+	poolIndices := make([]int, 0, len(pools))
+	for _, pool := range pools {
+		idx := globalEndpoints.GetPoolIdx(pool.CmdLine)
+		if idx == -1 {
+			return fmt.Errorf("unexpected state present for decommission status pool(%s) not found", pool.CmdLine)
+		}
+		poolIndices = append(poolIndices, idx)
+	}
+
+	if len(poolIndices) > 0 && globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
+		go func() {
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for {
+				if err := z.Decommission(ctx, poolIndices...); err != nil {
+					if errors.Is(err, errDecommissionAlreadyRunning) {
+						// A previous decommission running found restart it.
+						for _, idx := range poolIndices {
+							z.doDecommissionInRoutine(ctx, idx)
 						}
-						if configRetriableErrors(err) {
-							logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pools %v: %w: retrying..", pools, err))
-							time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
-							continue
-						}
-						logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pools, err))
 						return
 					}
+					if configRetriableErrors(err) {
+						logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pools %v: %w: retrying..", pools, err))
+						time.Sleep(time.Second + time.Duration(r.Float64()*float64(5*time.Second)))
+						continue
+					}
+					logger.LogIf(ctx, fmt.Errorf("Unable to resume decommission of pool %v: %w", pools, err))
+					return
 				}
-			}()
-		}
-
-		return nil
+			}
+		}()
 	}
 
-	meta = poolMeta{} // to update write poolMeta fresh.
-	// looks like new pool was added we need to update,
-	// or this is a fresh installation (or an existing
-	// installation with pool removed)
-	meta.Version = poolMetaVersion
-	for idx, pool := range z.serverPools {
-		meta.Pools = append(meta.Pools, PoolStatus{
-			CmdLine:    pool.endpoints.CmdLine,
-			ID:         idx,
-			LastUpdate: UTCNow(),
-		})
-	}
-	if err = meta.save(ctx, z.serverPools); err != nil {
-		return err
-	}
-	z.poolMeta = meta
 	return nil
 }
 
