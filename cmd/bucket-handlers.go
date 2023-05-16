@@ -973,7 +973,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		if fileName == "" {
 			// value, store as string in memory
 			n, err := io.CopyN(&b, part, maxMemoryBytes+1)
-			part.Close()
+			defer part.Close()
 			if err != nil && err != io.EOF {
 				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
