@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -721,9 +722,9 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewLimitReader(gr, part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
-				return fmt.Errorf("rebalanceObject: hash.NewLimitReader() %w", err)
+				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}
 			pi, err := z.PutObjectPart(ctx, bucket, oi.Name, res.UploadID,
 				part.Number,
