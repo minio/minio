@@ -413,7 +413,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 		}
 		defer rd.Close()
 
-		hr, err = hash.NewLimitReader(rd, objInfo.Size, "", "", objInfo.Size)
+		hr, err = hash.NewReader(io.LimitReader(rd, objInfo.Size), objInfo.Size, "", "", objInfo.Size)
 		if err != nil {
 			return err
 		}
