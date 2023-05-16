@@ -3098,7 +3098,7 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 
 	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath())
 	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
+		if errors.Is(err, errConfigNotFound) {
 			return rs, nil
 		}
 		return rs, err
