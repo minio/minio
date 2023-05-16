@@ -158,6 +158,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		IsDir:            HasSuffix(object, SlashSeparator),
 		Bucket:           bucket,
 		Name:             object,
+		ParityBlocks:     fi.Erasure.ParityBlocks,
+		DataBlocks:       fi.Erasure.DataBlocks,
 		VersionID:        versionID,
 		IsLatest:         fi.IsLatest,
 		DeleteMarker:     fi.Deleted,
