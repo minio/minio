@@ -927,6 +927,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	maxParts := 1000
 	// Canonicalize the form values into http.Header.
 	formValues := make(http.Header)
+
+	// Multiple values for the same key (one map entry, longer slice) are cheaper
+	// than the same number of values for different keys (many map entries), but
+	// using a consistent per-value cost for overhead is simpler.
+	const mapEntryOverhead = 200
+	maxMemoryBytes := 2 * int64(10<<20)
+
 	for {
 		part, err := reader.NextRawPart()
 		if errors.Is(err, io.EOF) {
@@ -952,12 +959,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 
 		fileName = part.FileName()
-
-		// Multiple values for the same key (one map entry, longer slice) are cheaper
-		// than the same number of values for different keys (many map entries), but
-		// using a consistent per-value cost for overhead is simpler.
-		const mapEntryOverhead = 200
-		maxMemoryBytes := 2 * int64(10<<20)
 		maxMemoryBytes -= int64(len(name))
 		maxMemoryBytes -= mapEntryOverhead
 		if maxMemoryBytes < 0 {
