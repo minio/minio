@@ -2380,7 +2380,7 @@ func getWebhookMetrics() *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
-		metrics := make([]Metric, 0, len(tgts))
+		metrics := make([]Metric, 0, len(tgts)*4)
 		for _, t := range tgts {
 			isOnline := 0
 			if t.IsOnline(ctx) {
