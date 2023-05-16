@@ -153,17 +153,17 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
 
 	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", strconv.Itoa((runtime.GOMAXPROCS(0)+1)/2)))
-
+	if workerSize == 0 {
+		workerSize = 4
+	}
 	ewk, err := workers.New(workerSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		ewk = 4
 	}
 
 	nwk, err := workers.New(workerSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		nwk = 4
 	}
 
 	go func() {
