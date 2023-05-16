@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -295,6 +296,14 @@ func (fi *FileInfo) SetInlineData() {
 		fi.Metadata = make(map[string]string, 1)
 	}
 	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
+}
+
+// SetErasureParityUpdated adds trace information about an object parity update during healing
+func (fi *FileInfo) SetErasureParityUpdated(old, new int) {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string, 1)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+"erasure-parity-update"] = fmt.Sprintf("%d->%d", old, new)
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata
