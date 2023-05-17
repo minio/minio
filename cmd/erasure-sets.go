@@ -226,6 +226,7 @@ func (s *erasureSets) connectDisks() {
 			if err != nil {
 				printEndpointError(endpoint, err, false)
 				disk.Close()
+				s.erasureDisksMu.Unlock()
 				return
 			}
 
