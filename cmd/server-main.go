@@ -633,47 +633,27 @@ func serverMain(ctx *cli.Context) {
 		logger.Info(color.RedBold(msg))
 	}
 
-	go func() {
-		if !globalDisableFreezeOnBoot {
-			// Freeze the services until the bucket notification subsystem gets initialized.
-			freezeServices()
-			defer unfreezeServices()
+	if !globalDisableFreezeOnBoot {
+		// Freeze the services until the bucket notification subsystem gets initialized.
+		freezeServices()
+	}
 
-			t := time.AfterFunc(5*time.Minute, func() {
-				logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set 'MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
-			})
-			defer t.Stop()
+	bootstrapTrace("initializing the server")
+	if err = initServer(GlobalContext, newObject); err != nil {
+		var cerr config.Err
+		// For any config error, we don't need to drop into safe-mode
+		// instead its a user error and should be fixed by user.
+		if errors.As(err, &cerr) {
+			logger.FatalIf(err, "Unable to initialize the server")
 		}
 
-		bootstrapTrace("initializing the server")
-		if err = initServer(GlobalContext, newObject); err != nil {
-			var cerr config.Err
-			// For any config error, we don't need to drop into safe-mode
-			// instead its a user error and should be fixed by user.
-			if errors.As(err, &cerr) {
-				logger.FatalIf(err, "Unable to initialize the server")
-			}
-
-			// If context was canceled
-			if errors.Is(err, context.Canceled) {
-				logger.FatalIf(err, "Server startup canceled upon user request")
-			}
-
-			logger.LogIf(GlobalContext, err)
+		// If context was canceled
+		if errors.Is(err, context.Canceled) {
+			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
 
-		// Initialize bucket notification system.
-		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
-
-		// List buckets to initialize bucket metadata sub-sys.
-		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
-		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
-		}
-
-		// Initialize bucket metadata sub-system.
-		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
-	}()
+		logger.LogIf(GlobalContext, err)
+	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
 	go func() {
@@ -704,8 +684,11 @@ func serverMain(ctx *cli.Context) {
 		}
 	}()
 
-	// Background all other operations such as initializing bucket metadata etc.
 	go func() {
+		if !globalDisableFreezeOnBoot {
+			defer unfreezeServices()
+		}
+
 		// Initialize data scanner.
 		initDataScanner(GlobalContext, newObject)
 
@@ -743,16 +726,27 @@ func serverMain(ctx *cli.Context) {
 			setCacheObjectLayer(cacheAPI)
 		}
 
-		// List buckets to heal, and be re-used for loading configs.
+		t := time.AfterFunc(5*time.Minute, func() {
+			logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set 'MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+		})
+		defer t.Stop()
+
+		// Initialize bucket notification system.
+		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
+
+		// List buckets to initialize bucket metadata sub-sys.
 		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to heal: %w", err))
+			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 		}
+
+		// Initialize bucket metadata sub-system.
+		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
 
 		// initialize replication resync state.
 		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
-		// Initialize site replication manager after bucket metadat
+		// Initialize site replication manager after bucket metadata
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize quota manager.

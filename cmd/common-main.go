@@ -777,9 +777,7 @@ func handleCommonEnvVars() {
 		globalActiveCred = auth.DefaultCredentials
 	}
 
-	if env.Get("MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" {
-		globalDisableFreezeOnBoot = true
-	}
+	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.
