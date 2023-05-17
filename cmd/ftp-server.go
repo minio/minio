@@ -215,6 +215,7 @@ func startFTPServer(c *cli.Context) {
 		portRange     string
 		tlsPrivateKey string
 		tlsPublicCert string
+		endpoint      string
 	)
 
 	var err error
@@ -243,6 +244,8 @@ func startFTPServer(c *cli.Context) {
 			tlsPrivateKey = tokens[1]
 		case "tls-public-cert":
 			tlsPublicCert = tokens[1]
+		case "endpoint":
+			endpoint = tokens[1]
 		}
 	}
 
@@ -277,7 +280,7 @@ func startFTPServer(c *cli.Context) {
 	ftpServer, err := ftp.NewServer(&ftp.Options{
 		Name:           name,
 		WelcomeMessage: fmt.Sprintf("Welcome to MinIO FTP Server Version='%s' License='GNU AGPLv3'", Version),
-		Driver:         NewFTPDriver(),
+		Driver:         NewFTPDriver(endpoint),
 		Port:           port,
 		Perm:           ftp.NewSimplePerm("nobody", "nobody"),
 		TLS:            tls,

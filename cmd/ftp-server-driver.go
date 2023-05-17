@@ -44,8 +44,12 @@ type ftpDriver struct {
 }
 
 // NewFTPDriver implements ftp.Driver interface
-func NewFTPDriver() ftp.Driver {
-	return &ftpDriver{endpoint: fmt.Sprintf("127.0.0.1:%s", globalMinioPort)}
+func NewFTPDriver(endpoint string) ftp.Driver {
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("127.0.0.1:%s", globalMinioPort)
+	}
+
+	return &ftpDriver{endpoint: endpoint}
 }
 
 func buildMinioPath(p string) string {
