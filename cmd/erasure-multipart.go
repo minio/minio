@@ -201,12 +201,22 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
-				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 				return nil
 			}
 			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(fi.ModTime) > expiry {
-				er.deleteAll(ctx, minioMetaMultipartBucket, uploadIDPath)
+				removeAll(pathJoin(diskPath, minioMetaMultipartBucket, uploadIDPath))
+			}
+			wait()
+			vi, err := disk.StatVol(ctx, pathJoin(minioMetaMultipartBucket, shaDir))
+			if err != nil {
+				return nil
+			}
+			wait = deletedCleanupSleeper.Timer(ctx)
+			if now.Sub(vi.Created) > expiry {
+				// We are not deleting shaDir recursively here, if shaDir is empty
+				// and its older then we can happily delete it.
+				Remove(pathJoin(diskPath, minioMetaMultipartBucket, shaDir))
 			}
 			wait()
 			return nil
@@ -223,7 +233,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		}
 		wait := deletedCleanupSleeper.Timer(ctx)
 		if now.Sub(vi.Created) > expiry {
-			er.deleteAll(ctx, minioMetaTmpBucket, tmpDir)
+			removeAll(pathJoin(diskPath, minioMetaTmpBucket, tmpDir))
 		}
 		wait()
 		return nil
