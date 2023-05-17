@@ -2677,8 +2677,8 @@ func (c *minioNodeCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func getOrderedLabelValueArrays(labelsWithValue map[string]string) (labels, values []string) {
-	labels = make([]string, 0)
-	values = make([]string, 0)
+	labels = make([]string, 0, len(labelsWithValue))
+	values = make([]string, 0, len(labelsWithValue))
 	for l, v := range labelsWithValue {
 		labels = append(labels, l)
 		values = append(values, v)
