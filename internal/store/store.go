@@ -54,7 +54,7 @@ type Store[I any] interface {
 }
 
 // replayItems - Reads the items from the store and replays.
-func replayItems[I any](store Store[I], doneCh <-chan struct{}, logger logger, id string) <-chan string {
+func replayItems[I any](store Store[I], doneCh <-chan struct{}, log logger, id string) <-chan string {
 	itemKeyCh := make(chan string)
 
 	go func() {
@@ -66,7 +66,7 @@ func replayItems[I any](store Store[I], doneCh <-chan struct{}, logger logger, i
 		for {
 			names, err := store.List()
 			if err != nil {
-				logger(context.Background(), fmt.Errorf("store.List() failed with: %w", err), id)
+				log(context.Background(), fmt.Errorf("store.List() failed with: %w", err), id)
 			} else {
 				for _, name := range names {
 					select {
