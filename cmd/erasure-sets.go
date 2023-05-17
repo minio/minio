@@ -221,16 +221,14 @@ func (s *erasureSets) connectDisks() {
 			if disk.IsLocal() && disk.Healing() != nil {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
 			}
-			s.erasureDisksMu.RLock()
+			s.erasureDisksMu.Lock()
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			s.erasureDisksMu.RUnlock()
 			if err != nil {
 				printEndpointError(endpoint, err, false)
 				disk.Close()
 				return
 			}
 
-			s.erasureDisksMu.Lock()
 			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
 				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
 					err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive: expecting %s, found %s, refusing to use the drive",
