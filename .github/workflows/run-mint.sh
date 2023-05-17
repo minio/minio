@@ -35,7 +35,6 @@ docker run --rm --net=host \
 	 mc           \
 	 minio-go     \
 	 minio-java   \
-	 minio-js     \
 	 minio-py     \
 	 s3cmd        \
 	 s3select     \

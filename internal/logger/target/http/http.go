@@ -127,7 +127,10 @@ func (h *Target) String() string {
 
 // IsOnline returns true if the target is reachable.
 func (h *Target) IsOnline(ctx context.Context) bool {
-	return h.isAlive(ctx) == nil
+	if err := h.checkAlive(ctx); err != nil {
+		return !xnet.IsNetworkOrHostDown(err, false)
+	}
+	return true
 }
 
 // Stats returns the target statistics.
@@ -145,7 +148,7 @@ func (h *Target) Stats() types.TargetStats {
 }
 
 // This will check if we can reach the remote.
-func (h *Target) isAlive(ctx context.Context) (err error) {
+func (h *Target) checkAlive(ctx context.Context) (err error) {
 	return h.send(ctx, []byte(`{}`), 2*webhookCallTimeout)
 }
 
@@ -179,8 +182,7 @@ func (h *Target) initLogChannel(ctx context.Context) (err error) {
 		return errors.New("target is closed")
 	}
 
-	err = h.isAlive(ctx)
-	if err != nil {
+	if !h.IsOnline(ctx) {
 		// Start a goroutine that will continue to check if we can reach
 		h.revive.Do(func() {
 			go func() {
@@ -190,7 +192,7 @@ func (h *Target) initLogChannel(ctx context.Context) (err error) {
 					if atomic.LoadInt32(&h.status) != statusOffline {
 						return
 					}
-					if err := h.isAlive(ctx); err == nil {
+					if h.IsOnline(ctx) {
 						// We are online.
 						if atomic.CompareAndSwapInt32(&h.status, statusOffline, statusOnline) {
 							h.workerStartMu.Lock()
@@ -223,7 +225,7 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		h.config.Endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err)
+		return fmt.Errorf("invalid configuration for '%s'; %v", h.config.Endpoint, err)
 	}
 	req.Header.Set(xhttp.ContentType, "application/json")
 	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
