@@ -1847,7 +1847,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	assignPoolNumbers(servers)
 
 	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
-	var backend interface{}
+	var backend madmin.ErasureBackend
 
 	mode := madmin.ItemInitializing
 

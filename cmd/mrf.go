@@ -120,11 +120,9 @@ func (m *mrfState) newSetReconnected(pool, set int) {
 // Get current MRF stats of the last MRF activity
 func (m *mrfState) getCurrentMRFRoundInfo() madmin.MRFStatus {
 	m.mu.Lock()
-	triggeredAt := m.triggeredAt
 	itemsHealed := m.itemsHealed
 	bytesHealed := m.bytesHealed
 	pendingItems := m.pendingItems
-	pendingBytes := m.pendingBytes
 	m.mu.Unlock()
 
 	if pendingItems == 0 {
@@ -132,11 +130,8 @@ func (m *mrfState) getCurrentMRFRoundInfo() madmin.MRFStatus {
 	}
 
 	return madmin.MRFStatus{
-		Started:     triggeredAt,
 		ItemsHealed: itemsHealed,
 		BytesHealed: bytesHealed,
-		TotalItems:  itemsHealed + pendingItems,
-		TotalBytes:  bytesHealed + pendingBytes,
 	}
 }
 

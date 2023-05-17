@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/xml"
+	miniogo "github.com/minio/minio-go/v7"
 	"io"
 	"net/http"
 	"net/url"
@@ -415,8 +416,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL)
 			return
 		}
-
-		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, "", "", dstOpts.ServerSideEncryption)
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, miniogo.PutObjectPartOptions{
+			SSE: dstOpts.ServerSideEncryption,
+		})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
