@@ -1346,10 +1346,10 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
-					if d.isScanner {
-						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-					}
 					<-timer.C
+				}
+				if d.isScanner {
+					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
 				return
 			case <-timer.C:
