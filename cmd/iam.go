@@ -791,13 +791,13 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 		return nil, errServerNotInitialized
 	}
 
-	if sys.usersSysType != LDAPUsersSysType {
+	if !sys.LDAPConfig.Enabled() {
 		return nil, errIAMActionNotAllowed
 	}
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListLDAPPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -864,7 +864,16 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListPolicyMappings(q)
+		var userPredicate, groupPredicate func(string) bool
+		if sys.LDAPConfig.Enabled() {
+			userPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPUserDN(s)
+			}
+			groupPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPGroupDN(s)
+			}
+		}
+		pe := sys.store.ListPolicyMappings(q, userPredicate, groupPredicate)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
