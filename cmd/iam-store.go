@@ -2184,8 +2184,12 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		cr.SecretKey = opts.secretKey
 	}
 
-	if opts.comment != "" {
-		cr.Comment = opts.comment
+	if opts.name != "" {
+		cr.Name = opts.name
+	}
+
+	if opts.description != "" {
+		cr.Description = opts.description
 	}
 
 	if opts.expiration != nil {

@@ -224,6 +224,10 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 		u.Credentials.Claims = jwtClaims.Map()
 	}
 
+	if u.Credentials.Description == "" {
+		u.Credentials.Description = u.Credentials.Comment
+	}
+
 	m[user] = u
 	return nil
 }
