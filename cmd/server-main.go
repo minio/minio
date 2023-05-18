@@ -687,6 +687,10 @@ func serverMain(ctx *cli.Context) {
 	go func() {
 		if !globalDisableFreezeOnBoot {
 			defer unfreezeServices()
+			t := time.AfterFunc(5*time.Minute, func() {
+				logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+			})
+			defer t.Stop()
 		}
 
 		// Initialize data scanner.
@@ -725,11 +729,6 @@ func serverMain(ctx *cli.Context) {
 
 			setCacheObjectLayer(cacheAPI)
 		}
-
-		t := time.AfterFunc(5*time.Minute, func() {
-			logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set 'MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
-		})
-		defer t.Stop()
 
 		// Initialize bucket notification system.
 		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
