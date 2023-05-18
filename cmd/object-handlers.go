@@ -479,7 +479,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(event, objInfo)
+				applyExpiryRule(event, lcEventSrcS3GetObj, objInfo)
 				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -733,7 +733,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(event, objInfo)
+				applyExpiryRule(event, lcEventSrcS3HeadObj, objInfo)
 				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -1560,7 +1560,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrcS3CopyObj)
 		// Remove the transitioned object whose object version is being overwritten.
 		logger.LogIf(ctx, os.Sweep())
 	}
@@ -1937,7 +1937,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrcS3PutObj)
 		logger.LogIf(ctx, os.Sweep())
 	}
 }

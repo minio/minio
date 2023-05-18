@@ -98,6 +98,7 @@ func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string) {
 type expiryTask struct {
 	objInfo ObjectInfo
 	event   lifecycle.Event
+	src     lcEventSrc
 }
 
 type expiryState struct {
@@ -120,11 +121,11 @@ func (es *expiryState) close() {
 }
 
 // enqueueByDays enqueues object versions expired by days for expiry.
-func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event) {
+func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
 	select {
 	case <-GlobalContext.Done():
 		es.close()
-	case es.byDaysCh <- expiryTask{objInfo: oi, event: event}:
+	case es.byDaysCh <- expiryTask{objInfo: oi, event: event, src: src}:
 	default:
 	}
 }
@@ -172,9 +173,9 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 			go func(t expiryTask) {
 				defer ewk.Give()
 				if t.objInfo.TransitionedObject.Status != "" {
-					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.event)
+					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.event, t.src)
 				} else {
-					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.event)
+					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.event, t.src)
 				}
 			}(t)
 		}
@@ -202,6 +203,7 @@ type newerNoncurrentTask struct {
 
 type transitionTask struct {
 	objInfo ObjectInfo
+	src     lcEventSrc
 	event   lifecycle.Event
 }
 
@@ -220,10 +222,10 @@ type transitionState struct {
 	lastDayStats map[string]*lastDayTierStats
 }
 
-func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event) {
+func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
 	select {
 	case <-t.ctx.Done():
-	case t.transitionCh <- transitionTask{objInfo: oi, event: event}:
+	case t.transitionCh <- transitionTask{objInfo: oi, event: event, src: src}:
 	default:
 	}
 }
@@ -276,7 +278,7 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 				return
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
-			if err := transitionObject(t.ctx, objectAPI, task.objInfo, task.event); err != nil {
+			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
 				logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
 					task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
 			} else {
@@ -358,11 +360,11 @@ func validateTransitionTier(lc *lifecycle.Lifecycle) error {
 
 // enqueueTransitionImmediate enqueues obj for transition if eligible.
 // This is to be called after a successful upload of an object (version).
-func enqueueTransitionImmediate(obj ObjectInfo) {
+func enqueueTransitionImmediate(obj ObjectInfo, src lcEventSrc) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
 		switch event := lc.Eval(obj.ToLifecycleOpts()); event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-			globalTransitionState.queueTransitionTask(obj, event)
+			globalTransitionState.queueTransitionTask(obj, event, src)
 		}
 	}
 }
@@ -372,13 +374,13 @@ func enqueueTransitionImmediate(obj ObjectInfo) {
 //
 // 1. when a restored (via PostRestoreObject API) object expires.
 // 2. when a transitioned object expires (based on an ILM rule).
-func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *ObjectInfo, lcOpts lifecycle.ObjectOpts, lcEvent lifecycle.Event) error {
+func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *ObjectInfo, lcOpts lifecycle.ObjectOpts, lcEvent lifecycle.Event, src lcEventSrc) error {
 	traceFn := globalLifecycleSys.trace(*oi)
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name)
 	opts.VersionID = lcOpts.VersionID
 	opts.Expiration = ExpirationOptions{Expire: true}
-	tags := auditLifecycleTags(lcEvent)
+	tags := auditLifecycleTags(newLifecycleAuditEvent(src, lcEvent))
 	if lcEvent.Action.DeleteRestored() {
 		// delete locally restored copy of object or object version
 		// from the source, while leaving metadata behind. The data on
@@ -449,18 +451,18 @@ func genTransitionObjName(bucket string) (string, error) {
 // storage specified by the transition ARN, the metadata is left behind on source cluster and original content
 // is moved to the transition tier. Note that in the case of encrypted objects, entire encrypted stream is moved
 // to the transition tier without decrypting or re-encrypting.
-func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo, lcEvent lifecycle.Event) error {
+func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo, lae lcAuditEvent) error {
 	opts := ObjectOptions{
 		Transition: TransitionOptions{
 			Status: lifecycle.TransitionPending,
-			Tier:   lcEvent.StorageClass,
+			Tier:   lae.event.StorageClass,
 			ETag:   oi.ETag,
 		},
-		LifecycleEvent:   lcEvent,
-		VersionID:        oi.VersionID,
-		Versioned:        globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name),
-		VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name),
-		MTime:            oi.ModTime,
+		LifecycleAuditEvent: lae,
+		VersionID:           oi.VersionID,
+		Versioned:           globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name),
+		VersionSuspended:    globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name),
+		MTime:               oi.ModTime,
 	}
 	return objectAPI.TransitionObject(ctx, oi.Bucket, oi.Name, opts)
 }
@@ -869,8 +871,11 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 	}
 }
 
-func auditLifecycleTags(event lifecycle.Event) map[string]interface{} {
+func auditLifecycleTags(lae lcAuditEvent) map[string]interface{} {
+	event := lae.event
+	src := lae.source
 	const (
+		ilmSrc                     = "ilm-src"
 		ilmAction                  = "ilm-action"
 		ilmDue                     = "ilm-due"
 		ilmRuleID                  = "ilm-rule-id"
@@ -878,7 +883,10 @@ func auditLifecycleTags(event lifecycle.Event) map[string]interface{} {
 		ilmNewerNoncurrentVersions = "ilm-newer-noncurrent-versions"
 		ilmNoncurrentDays          = "ilm-noncurrent-days"
 	)
-	tags := make(map[string]interface{}, 4)
+	tags := make(map[string]interface{}, 5)
+	if src > lcEventSrcNone {
+		tags[ilmSrc] = src
+	}
 	tags[ilmAction] = event.Action.String()
 	tags[ilmRuleID] = event.RuleID
 
@@ -899,4 +907,32 @@ func auditLifecycleTags(event lifecycle.Event) map[string]interface{} {
 		tags[ilmNoncurrentDays] = event.NoncurrentDays
 	}
 	return tags
+}
+
+type lcAuditEvent struct {
+	source lcEventSrc
+	event  lifecycle.Event
+}
+
+//go:generate stringer -type lcEventSrc -trimprefix $GOFILE
+type lcEventSrc uint8
+
+const (
+	lcEventSrcNone lcEventSrc = iota
+	lcEventSrcScanner
+	lcEventSrcDecom
+	lcEventSrcRebal
+	lcEventSrcS3HeadObj
+	lcEventSrcS3GetObj
+	lcEventSrcS3ListObjs
+	lcEventSrcS3PutObj
+	lcEventSrcS3CopyObj
+	lcEventSrcS3CompleteMultipartObj
+)
+
+func newLifecycleAuditEvent(src lcEventSrc, event lifecycle.Event) lcAuditEvent {
+	return lcAuditEvent{
+		source: src,
+		event:  event,
+	}
 }
