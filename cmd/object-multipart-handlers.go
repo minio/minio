@@ -1055,7 +1055,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
-		enqueueTransitionImmediate(objInfo, lcEventSrcS3CompleteMultipartObj)
+		enqueueTransitionImmediate(objInfo, lcEventSrc_s3CompleteMultipartUpload)
 		logger.LogIf(ctx, os.Sweep())
 	}
 }

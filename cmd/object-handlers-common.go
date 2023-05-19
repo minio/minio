@@ -375,7 +375,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 			}
 			traceFn := globalLifecycleSys.trace(oi)
 			// Note: NewerNoncurrentVersions action is performed only scanner today
-			tags := auditLifecycleTags(newLifecycleAuditEvent(lcEventSrcScanner, lcEvent))
+			tags := newLifecycleAuditEvent(lcEventSrc_Scanner, lcEvent).Tags()
 
 			// Send audit for the lifecycle delete operation
 			auditLogLifecycle(

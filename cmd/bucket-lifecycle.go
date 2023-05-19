@@ -380,7 +380,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name)
 	opts.VersionID = lcOpts.VersionID
 	opts.Expiration = ExpirationOptions{Expire: true}
-	tags := auditLifecycleTags(newLifecycleAuditEvent(src, lcEvent))
+	tags := newLifecycleAuditEvent(src, lcEvent).Tags()
 	if lcEvent.Action.DeleteRestored() {
 		// delete locally restored copy of object or object version
 		// from the source, while leaving metadata behind. The data on
@@ -455,7 +455,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo,
 	opts := ObjectOptions{
 		Transition: TransitionOptions{
 			Status: lifecycle.TransitionPending,
-			Tier:   lae.event.StorageClass,
+			Tier:   lae.StorageClass,
 			ETag:   oi.ETag,
 		},
 		LifecycleAuditEvent: lae,
@@ -868,71 +868,5 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 		RestoreOngoing:   oi.RestoreOngoing,
 		RestoreExpires:   oi.RestoreExpires,
 		TransitionStatus: oi.TransitionedObject.Status,
-	}
-}
-
-func auditLifecycleTags(lae lcAuditEvent) map[string]interface{} {
-	event := lae.event
-	src := lae.source
-	const (
-		ilmSrc                     = "ilm-src"
-		ilmAction                  = "ilm-action"
-		ilmDue                     = "ilm-due"
-		ilmRuleID                  = "ilm-rule-id"
-		ilmTier                    = "ilm-tier"
-		ilmNewerNoncurrentVersions = "ilm-newer-noncurrent-versions"
-		ilmNoncurrentDays          = "ilm-noncurrent-days"
-	)
-	tags := make(map[string]interface{}, 5)
-	if src > lcEventSrcNone {
-		tags[ilmSrc] = src
-	}
-	tags[ilmAction] = event.Action.String()
-	tags[ilmRuleID] = event.RuleID
-
-	if !event.Due.IsZero() {
-		tags[ilmDue] = event.Due
-	}
-
-	// rule with Transition/NoncurrentVersionTransition in effect
-	if event.StorageClass != "" {
-		tags[ilmTier] = event.StorageClass
-	}
-
-	// rule with NewernoncurrentVersions in effect
-	if event.NewerNoncurrentVersions > 0 {
-		tags[ilmNewerNoncurrentVersions] = event.NewerNoncurrentVersions
-	}
-	if event.NoncurrentDays > 0 {
-		tags[ilmNoncurrentDays] = event.NoncurrentDays
-	}
-	return tags
-}
-
-type lcAuditEvent struct {
-	source lcEventSrc
-	event  lifecycle.Event
-}
-
-//go:generate stringer -type lcEventSrc -trimprefix $GOFILE
-type lcEventSrc uint8
-
-const (
-	lcEventSrcNone lcEventSrc = iota
-	lcEventSrcScanner
-	lcEventSrcDecom
-	lcEventSrcRebal
-	lcEventSrcS3HeadObj
-	lcEventSrcS3GetObj
-	lcEventSrcS3ListObjs
-	lcEventSrcS3PutObj
-	lcEventSrcS3CopyObj
-	lcEventSrcS3CompleteMultipartObj
-)
-
-func newLifecycleAuditEvent(src lcEventSrc, event lifecycle.Event) lcAuditEvent {
-	return lcAuditEvent{
-		source: src,
-		event:  event,
 	}
 }

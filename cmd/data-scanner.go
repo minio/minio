@@ -945,9 +945,9 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	switch lcEvt.Action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-		return applyLifecycleAction(lcEvt, lcEventSrcScanner, oi), 0
+		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), 0
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		return applyLifecycleAction(lcEvt, lcEventSrcScanner, oi), size
+		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), size
 	default:
 		// No action.
 		return false, size
@@ -1198,7 +1198,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		return false
 	}
 
-	tags := auditLifecycleTags(newLifecycleAuditEvent(src, lcEvent))
+	tags := newLifecycleAuditEvent(src, lcEvent).Tags()
 	// Send audit for the lifecycle delete operation
 	auditLogLifecycle(ctx, obj, ILMExpiry, tags, traceFn)
 

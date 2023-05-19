@@ -395,7 +395,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			if o.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrcS3ListObjs)
+					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {
 						continue
 					} // queue version for replication upon expired restored copies if needed.
