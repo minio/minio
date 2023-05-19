@@ -419,8 +419,8 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 
 	sys.objAPI = objAPI
 
-	// Load bucket metadata sys in background
-	go sys.init(ctx, buckets)
+	// Load bucket metadata sys.
+	sys.init(ctx, buckets)
 	return nil
 }
 
