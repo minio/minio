@@ -1123,14 +1123,18 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var serviceAccountsNames []string
+	var serviceAccountList []madmin.ServiceAccountInfo
 
 	for _, svc := range serviceAccounts {
-		serviceAccountsNames = append(serviceAccountsNames, svc.AccessKey)
+		expiryTime := svc.Expiration
+		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
+			AccessKey:  svc.AccessKey,
+			Expiration: &expiryTime,
+		})
 	}
 
 	listResp := madmin.ListServiceAccountsResp{
-		Accounts: serviceAccountsNames,
+		Accounts: serviceAccountList,
 	}
 
 	data, err := json.Marshal(listResp)
