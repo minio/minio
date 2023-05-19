@@ -90,7 +90,7 @@ func parseDiscoveryDoc(ustr string) (DiscoveryDoc, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return d, errors.New(resp.Status)
+		return d, fmt.Errorf("unexpected error returned by %s : status(%s)", ustr, resp.Status)
 	}
 	dec := json.NewDecoder(resp.Body)
 	if err = dec.Decode(&d); err != nil {
