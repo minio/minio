@@ -345,6 +345,13 @@ func (s *Metadata) MarshalXML(e *xxml.Encoder, start xxml.StartElement) error {
 	return e.EncodeToken(start.End())
 }
 
+// ObjectInternalInfo contains some internal information about a given
+// object, it will printed in listing calls with enabled metadata.
+type ObjectInternalInfo struct {
+	K int // Data blocks
+	M int // Parity blocks
+}
+
 // Object container for object metadata
 type Object struct {
 	Key          string
@@ -361,6 +368,8 @@ type Object struct {
 	// UserMetadata user-defined metadata
 	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
 	UserTags     string    `xml:"UserTags,omitempty"`
+
+	Internal *ObjectInternalInfo `xml:"Internal,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -552,6 +561,10 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 				}
 				content.UserMetadata.Set(k, v)
 			}
+			content.Internal = &ObjectInternalInfo{
+				K: object.DataBlocks,
+				M: object.ParityBlocks,
+			}
 		}
 		content.Owner = owner
 		content.VersionID = object.VersionID
@@ -686,6 +699,10 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 						continue
 					}
 					content.UserMetadata.Set(k, v)
+				}
+				content.Internal = &ObjectInternalInfo{
+					K: object.DataBlocks,
+					M: object.ParityBlocks,
 				}
 			}
 		}
