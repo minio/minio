@@ -705,7 +705,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
-					LockEnabled: config.ObjectLockEnabled == "Enabled",
+					LockEnabled: config.Enabled(),
 				}
 				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
