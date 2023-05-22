@@ -260,6 +260,10 @@ func initConsoleServer() (*restapi.Server, error) {
 		return nil, err
 	}
 
+	subPath := restapi.GetSubPath()
+	swaggerSpec.Spec().BasePath = subPath + swaggerSpec.Spec().BasePath
+	swaggerSpec.OrigSpec().BasePath = subPath + swaggerSpec.OrigSpec().BasePath
+
 	api := operations.NewConsoleAPI(swaggerSpec)
 
 	if !serverDebugLog {
