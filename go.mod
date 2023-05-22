@@ -2,6 +2,12 @@ module github.com/minio/minio
 
 go 1.19
 
+replace github.com/minio/madmin-go/v2 v2.1.3 => github.com/kaankabalak/madmin-go/v2 v2.0.0-20230519061012-102072a41823
+
+replace github.com/minio/mc v0.0.0-20230517184609-052cf01a9604 => github.com/kaankabalak/mc v0.0.0-20230522181621-c5cc9599f2cc
+
+replace github.com/minio/console v0.27.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
+
 require (
 	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-storage-blob-go v0.15.0
