@@ -380,6 +380,8 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 	default:
 		// Drop messages until we are online.
 		if !h.IsOnline(ctx) {
+			atomic.AddInt64(&h.totalMessages, 1)
+			atomic.AddInt64(&h.failedMessages, 1)
 			return errors.New("log buffer full and remote offline")
 		}
 		nWorkers := atomic.LoadInt64(&h.workers)
