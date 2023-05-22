@@ -1064,7 +1064,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 		wg.Wait()
 
-		if int(atomicOfflineDrives.Load()) > len(storageDisks)/2 {
+		if int(atomicOfflineDrives.Load()) >= len(storageDisks+1)/2 {
 			// if offline drives are more than 50% of the drives
 			// we have no quorum, we shouldn't proceed just
 			// fail at that point.
