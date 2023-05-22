@@ -1601,15 +1601,24 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 		return u, errIAMActionNotAllowed
 	}
 
+	policies := cache.iamUserPolicyMap[name].Policies
+	userGroups := cache.iamUserGroupMemberships[name].ToSlice()
+	for _, group := range userGroups {
+		mappedGroupPolicy, ok2 := cache.iamGroupPolicyMap[group]
+		if ok2 {
+			policies += "," + mappedGroupPolicy.Policies
+		}
+	}
+
 	return madmin.UserInfo{
-		PolicyName: cache.iamUserPolicyMap[name].Policies,
+		PolicyName: policies,
 		Status: func() madmin.AccountStatus {
 			if cred.IsValid() {
 				return madmin.AccountEnabled
 			}
 			return madmin.AccountDisabled
 		}(),
-		MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
+		MemberOf:  userGroups,
 		UpdatedAt: cache.iamUserPolicyMap[name].UpdatedAt,
 	}, nil
 }
