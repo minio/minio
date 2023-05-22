@@ -155,10 +155,10 @@ func (target *WebhookTarget) isActive() (bool, error) {
 	}
 	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return false, fmt.Errorf("unexpected error returned by %s : status(%s)", target.args.Endpoint.String(), resp.Status)
 	}
-	// http.StatusOK means its up
+	// StatusCode<400 means its up
 	return true, nil
 }
 
