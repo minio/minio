@@ -158,7 +158,7 @@ func (target *WebhookTarget) isActive() (bool, error) {
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("unexpected error returned by %s : status(%s)", target.args.Endpoint.String(), resp.Status)
 	}
-	// No network failure i.e response from the target means its up
+	// http.StatusOK means its up
 	return true, nil
 }
 
