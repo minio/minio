@@ -229,6 +229,11 @@ type Config struct {
 	} `xml:"Rule,omitempty"`
 }
 
+// Enabled returns true if config.ObjectLockEnabled is set to Enabled
+func (config *Config) Enabled() bool {
+	return config.ObjectLockEnabled == Enabled
+}
+
 // UnmarshalXML - decodes XML data.
 func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	// Make subtype to avoid recursive UnmarshalXML().
