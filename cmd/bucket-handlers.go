@@ -1023,12 +1023,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, fmt.Errorf("Invalid checksum: %w", err))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
 	}
 	if checksum != nil && checksum.Type.Trailing() {
 		// Not officially supported in POST requests.
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("Trailing checksums not available for POST operations"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
 	}
 
 	formValues.Set("Bucket", bucket)
