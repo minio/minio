@@ -291,7 +291,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		metadata = make(map[string]string)
 	}
 
-	wantCRC, err := hash.GetContentChecksum(r)
+	wantCRC, err := hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,
@@ -377,7 +377,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 			}
 		}
 	}
-	opts.WantChecksum, err = hash.GetContentChecksum(r)
+	opts.WantChecksum, err = hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,

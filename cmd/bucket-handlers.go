@@ -1018,6 +1018,20 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
+	checksum, err := hash.GetContentChecksum(formValues)
+	if err != nil {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, fmt.Errorf("Invalid checksum: %w", err))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
+	if checksum != nil && checksum.Type.Trailing() {
+		// Not officially supported in POST requests.
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("Trailing checksums not available for POST operations"))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
 
 	formValues.Set("Bucket", bucket)
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
@@ -1072,6 +1086,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+	if checksum != nil && checksum.Valid() {
+		err = hashReader.AddChecksum(r, false)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Handle policy if it is set.
@@ -1167,6 +1188,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if checksum != nil && checksum.Valid() {
+			err = hashReader.AddChecksum(r, true)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+		}
 		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1224,6 +1252,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		redirectURL.RawQuery = v.Encode()
 		writeRedirectSeeOther(w, redirectURL.String())
 		return
+	}
+
+	// Add checksum header.
+	if checksum != nil && checksum.Valid() {
+		hash.AddChecksumHeader(w, checksum.AsMap())
 	}
 
 	// Decide what http response to send depending on success_action_status parameter
