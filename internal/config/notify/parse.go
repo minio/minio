@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,9 +59,22 @@ func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, subSy
 	}
 
 	for _, target := range targetList {
-		// Just for call init.
-		// Ignore target is online or offline
-		_, _ = target.IsActive()
+		if target.ID().ID == config.Default {
+			// For console UI config
+			// When target set should be online
+			yes, err := target.IsActive()
+			if err == nil && !yes {
+				err = ErrTargetsOffline
+			}
+			if err != nil {
+				return fmt.Errorf("error (%s): %w", target.ID(), err)
+			}
+		} else {
+			// For env config.
+			// Just for call init.
+			// Ignore target is online or offline
+			_, _ = target.IsActive()
+		}
 	}
 
 	return nil
