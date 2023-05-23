@@ -119,6 +119,16 @@ func newBucketMetadata(name string) BucketMetadata {
 	}
 }
 
+// Versioning returns true if versioning is enabled
+func (b BucketMetadata) Versioning() bool {
+	return b.LockEnabled || (b.versioningConfig != nil && b.versioningConfig.Enabled()) || (b.objectLockConfig != nil && b.objectLockConfig.Enabled())
+}
+
+// ObjectLocking returns true if object locking is enabled
+func (b BucketMetadata) ObjectLocking() bool {
+	return b.LockEnabled || (b.objectLockConfig != nil && b.objectLockConfig.Enabled())
+}
+
 // SetCreatedAt preserves the CreatedAt time for bucket across sites in site replication. It defaults to
 // creation time of bucket on this cluster in all other cases.
 func (b *BucketMetadata) SetCreatedAt(createdAt time.Time) {

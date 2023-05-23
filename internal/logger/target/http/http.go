@@ -283,6 +283,8 @@ func (h *Target) logEntry(ctx context.Context, entry interface{}) {
 		if err := h.send(ctx, logJSON, webhookCallTimeout); err != nil {
 			h.config.LogOnce(ctx, err, h.config.Endpoint)
 			atomic.AddInt64(&h.failedMessages, 1)
+		} else {
+			return
 		}
 	}
 }

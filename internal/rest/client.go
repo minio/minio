@@ -202,23 +202,28 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 
 type respBodyMonitor struct {
 	io.ReadCloser
-	expectTimeouts bool
+	expectTimeouts  bool
+	errorStatusOnce sync.Once
 }
 
-func (r respBodyMonitor) Read(p []byte) (n int, err error) {
+func (r *respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
-		atomic.AddUint64(&globalStats.errs, 1)
-	}
+	r.errorStatus(err)
 	return
 }
 
-func (r respBodyMonitor) Close() (err error) {
+func (r *respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
-	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
-		atomic.AddUint64(&globalStats.errs, 1)
-	}
+	r.errorStatus(err)
 	return
+}
+
+func (r *respBodyMonitor) errorStatus(err error) {
+	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
+		r.errorStatusOnce.Do(func() {
+			atomic.AddUint64(&globalStats.errs, 1)
+		})
+	}
 }
 
 // Call - make a REST call with context.
