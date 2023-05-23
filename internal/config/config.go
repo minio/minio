@@ -426,6 +426,30 @@ func (c Config) DelFrom(r io.Reader) error {
 	return scanner.Err()
 }
 
+const ContextKeyForTargetFromConfig = "ContextKeyForTargetFromConfig"
+
+// ParseTargetIDs - read all targetIDs from reader
+func ParseConfigTargetID(r io.Reader) (ids map[string]bool, err error) {
+	ids = make(map[string]bool)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		// Skip any empty lines, or comment like characters
+		text := scanner.Text()
+		if text == "" || strings.HasPrefix(text, KvComment) {
+			continue
+		}
+		_, _, tgt, err := GetSubSys(text)
+		if err != nil {
+			return nil, err
+		}
+		ids[tgt] = true
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return
+}
+
 // ReadConfig - read content from input and write into c.
 // Returns whether all parameters were dynamic.
 func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {

@@ -58,9 +58,12 @@ func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, subSy
 		defer target.Close()
 	}
 
+	tgts, ok := ctx.Value(config.ContextKeyForTargetFromConfig).(map[string]bool)
+	if !ok {
+		tgts = make(map[string]bool)
+	}
 	for _, target := range targetList {
-		if target.ID().ID == config.Default {
-			// For console UI config
+		if tgts[target.ID().ID] {
 			// When target set should be online
 			yes, err := target.IsActive()
 			if err == nil && !yes {
@@ -70,7 +73,6 @@ func TestSubSysNotificationTargets(ctx context.Context, cfg config.Config, subSy
 				return fmt.Errorf("error (%s): %w", target.ID(), err)
 			}
 		} else {
-			// For env config.
 			// Just for call init.
 			// Ignore target is online or offline
 			_, _ = target.IsActive()
