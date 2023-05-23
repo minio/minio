@@ -28,7 +28,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/hash"
 
-	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
@@ -54,14 +53,14 @@ type ObjectOptions struct {
 	DeleteMarker            bool // Is only set in DELETE operations for delete marker replication
 	CheckDMReplicationReady bool // Is delete marker ready to be replicated - set only during HEAD
 
-	UserDefined       map[string]string   // only set in case of POST/PUT operations
-	PartNumber        int                 // only useful in case of GetObject/HeadObject
-	CheckPrecondFn    CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	EvalMetadataFn    EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
-	DeleteReplication ReplicationState    // Represents internal replication state needed for Delete replication
-	Transition        TransitionOptions
-	Expiration        ExpirationOptions
-	LifecycleEvent    lifecycle.Event
+	UserDefined         map[string]string   // only set in case of POST/PUT operations
+	PartNumber          int                 // only useful in case of GetObject/HeadObject
+	CheckPrecondFn      CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	EvalMetadataFn      EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
+	DeleteReplication   ReplicationState    // Represents internal replication state needed for Delete replication
+	Transition          TransitionOptions
+	Expiration          ExpirationOptions
+	LifecycleAuditEvent lcAuditEvent
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 

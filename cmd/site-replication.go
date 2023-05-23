@@ -1615,12 +1615,10 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			return errSRBackendIssue(err)
 		}
 
-		var opts MakeBucketOptions
-		if meta.objectLockConfig != nil {
-			opts.LockEnabled = meta.objectLockConfig.ObjectLockEnabled == "Enabled"
+		opts := MakeBucketOptions{
+			LockEnabled: meta.ObjectLocking(),
+			CreatedAt:   bucketInfo.Created.UTC(),
 		}
-
-		opts.CreatedAt = bucketInfo.Created.UTC()
 
 		// Now call the MakeBucketHook on existing bucket - this will
 		// create buckets and replication rules on peer clusters.

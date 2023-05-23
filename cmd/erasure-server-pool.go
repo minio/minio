@@ -1320,7 +1320,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			if opts.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt)
+					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {
 						// Skip entry if ILM action was DeleteVersionAction or DeleteAction
 						return loi, nil
@@ -1627,8 +1627,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 	meta, err := globalBucketMetadataSys.Get(bucket)
 	if err == nil {
 		bucketInfo.Created = meta.Created
-		bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
-		bucketInfo.ObjectLocking = meta.LockEnabled
+		bucketInfo.Versioning = meta.Versioning()
+		bucketInfo.ObjectLocking = meta.ObjectLocking()
 	}
 	return bucketInfo, nil
 }
