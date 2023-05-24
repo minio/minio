@@ -22,8 +22,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -540,6 +542,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			oss[index].SetTransitionState(goi.TransitionedObject)
 		}
 
+		// All deletes on directory objects needs to be for `nullVersionID`
+		if isDirObject(object.ObjectName) && object.VersionID == "" {
+			object.VersionID = nullVersionID
+		}
+
 		if replicateDeletes {
 			dsc = checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectV: ObjectV{
@@ -907,40 +914,124 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	reader, err := r.MultipartReader()
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
-	// Read multipart data and save in memory and in the disk if needed
-	form, err := reader.ReadForm(maxFormMemory)
+	var (
+		fileBody io.ReadCloser
+		fileName string
+	)
+
+	maxParts := 1000
+	// Canonicalize the form values into http.Header.
+	formValues := make(http.Header)
+	for {
+		part, err := reader.NextRawPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+		if maxParts <= 0 {
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+		maxParts--
+
+		name := part.FormName()
+		if name == "" {
+			continue
+		}
+
+		fileName = part.FileName()
+
+		// Multiple values for the same key (one map entry, longer slice) are cheaper
+		// than the same number of values for different keys (many map entries), but
+		// using a consistent per-value cost for overhead is simpler.
+		const mapEntryOverhead = 200
+		maxMemoryBytes := 2 * int64(10<<20)
+		maxMemoryBytes -= int64(len(name))
+		maxMemoryBytes -= mapEntryOverhead
+		if maxMemoryBytes < 0 {
+			// We can't actually take this path, since nextPart would already have
+			// rejected the MIME headers for being too large. Check anyway.
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+
+		var b bytes.Buffer
+		if fileName == "" {
+			// value, store as string in memory
+			n, err := io.CopyN(&b, part, maxMemoryBytes+1)
+			part.Close()
+			if err != nil && err != io.EOF {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			maxMemoryBytes -= n
+			if maxMemoryBytes < 0 {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			if n > maxFormFieldSize {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			formValues[http.CanonicalHeaderKey(name)] = append(formValues[http.CanonicalHeaderKey(name)], b.String())
+			continue
+		}
+
+		// In accordance with https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+		// The file or text content.
+		// The file or text content must be the last field in the form.
+		// You cannot upload more than one file at a time.
+		fileBody = part // we have found the File part of the request breakout
+		defer part.Close()
+		break
+	}
+
+	if _, ok := formValues["Key"]; !ok {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The name of the uploaded key is missing"))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
+	if fileName == "" {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The file or text content is missing"))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
+	checksum, err := hash.GetContentChecksum(formValues)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, fmt.Errorf("Invalid checksum: %w", err))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-
-	// Remove all tmp files created during multipart upload
-	defer form.RemoveAll()
-
-	// Extract all form fields
-	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(ctx, form)
-	if err != nil {
+	if checksum != nil && checksum.Type.Trailing() {
+		// Not officially supported in POST requests.
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("Trailing checksums not available for POST operations"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-
-	// Check if file is provided, error out otherwise.
-	if fileBody == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPOSTFileRequired), r.URL)
-		return
-	}
-
-	// Close multipart file
-	defer fileBody.Close()
 
 	formValues.Set("Bucket", bucket)
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
@@ -990,6 +1081,20 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	hashReader, err := hash.NewReader(fileBody, -1, "", "", -1)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if checksum != nil && checksum.Valid() {
+		err = hashReader.AddChecksum(r, false)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
 		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
@@ -1010,15 +1115,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		// should not exceed the maximum single Put size (5 GiB)
 		lengthRange := postPolicyForm.Conditions.ContentLengthRange
 		if lengthRange.Valid {
-			if fileSize < lengthRange.Min {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errDataTooSmall), r.URL)
-				return
-			}
-
-			if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errDataTooLarge), r.URL)
-				return
-			}
+			hashReader.SetExpectedMin(lengthRange.Min)
+			hashReader.SetExpectedMax(lengthRange.Max)
 		}
 	}
 
@@ -1030,12 +1128,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
 	var objectEncryptionKey crypto.ObjectKey
@@ -1090,12 +1182,18 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		info := ObjectInfo{Size: fileSize}
-		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
+		// do not try to verify encrypted content/
+		hashReader, err = hash.NewReader(reader, -1, "", "", -1)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
+		}
+		if checksum != nil && checksum.Valid() {
+			err = hashReader.AddChecksum(r, true)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 		}
 		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 		if err != nil {
@@ -1154,6 +1252,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		redirectURL.RawQuery = v.Encode()
 		writeRedirectSeeOther(w, redirectURL.String())
 		return
+	}
+
+	// Add checksum header.
+	if checksum != nil && checksum.Valid() {
+		hash.AddChecksumHeader(w, checksum.AsMap())
 	}
 
 	// Decide what http response to send depending on success_action_status parameter

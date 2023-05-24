@@ -60,8 +60,8 @@ func (target ExampleTarget) send(eventData Event) error {
 	return nil
 }
 
-// Send - interface compatible method does no-op.
-func (target ExampleTarget) Send(eventKey string) error {
+// SendFromStore - interface compatible method does no-op.
+func (target *ExampleTarget) SendFromStore(eventKey string) error {
 	return nil
 }
 

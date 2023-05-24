@@ -215,7 +215,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if err != nil {
 		switch minio.ToErrorResponse(err).Code {
 		case "NoSuchBucket":
-			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket, Err: err}
 		case "AccessDenied":
 			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, AccessKey: tgt.Credentials.AccessKey, Err: err}
 		}

@@ -36,6 +36,7 @@ import (
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 	"github.com/pkg/errors"
@@ -153,7 +154,7 @@ func (a ElasticsearchArgs) Validate() error {
 
 // ElasticsearchTarget - Elasticsearch target.
 type ElasticsearchTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       ElasticsearchArgs
@@ -263,8 +264,8 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to Elasticsearch.
-func (target *ElasticsearchTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to Elasticsearch.
+func (target *ElasticsearchTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -344,7 +345,7 @@ func (target *ElasticsearchTarget) checkAndInitClient(ctx context.Context) error
 }
 
 func (target *ElasticsearchTarget) init() error {
-	return target.lazyInit.Do(target.initElasticsearch)
+	return target.initOnce.Do(target.initElasticsearch)
 }
 
 func (target *ElasticsearchTarget) initElasticsearch() error {

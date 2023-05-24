@@ -1222,7 +1222,8 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			secretKey:     change.Create.SecretKey,
 			sessionPolicy: sp,
 			claims:        change.Create.Claims,
-			comment:       change.Create.Comment,
+			name:          change.Create.Name,
+			description:   change.Create.Description,
 			expiration:    change.Create.Expiration,
 		}
 		_, _, err = globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
@@ -1248,7 +1249,8 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		opts := updateServiceAccountOpts{
 			secretKey:     change.Update.SecretKey,
 			status:        change.Update.Status,
-			comment:       change.Update.Comment,
+			name:          change.Update.Name,
+			description:   change.Update.Description,
 			sessionPolicy: sp,
 			expiration:    change.Update.Expiration,
 		}
@@ -1613,12 +1615,10 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			return errSRBackendIssue(err)
 		}
 
-		var opts MakeBucketOptions
-		if meta.objectLockConfig != nil {
-			opts.LockEnabled = meta.objectLockConfig.ObjectLockEnabled == "Enabled"
+		opts := MakeBucketOptions{
+			LockEnabled: meta.ObjectLocking(),
+			CreatedAt:   bucketInfo.Created.UTC(),
 		}
-
-		opts.CreatedAt = bucketInfo.Created.UTC()
 
 		// Now call the MakeBucketHook on existing bucket - this will
 		// create buckets and replication rules on peer clusters.
@@ -1852,7 +1852,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        acc.Credentials.Status,
-						Comment:       acc.Credentials.Comment,
+						Name:          acc.Credentials.Name,
+						Description:   acc.Credentials.Description,
 						Expiration:    &acc.Credentials.Expiration,
 					},
 				},
@@ -4737,7 +4738,8 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        creds.Status,
-						Comment:       creds.Comment,
+						Name:          creds.Name,
+						Description:   creds.Description,
 						Expiration:    &creds.Expiration,
 					},
 				},

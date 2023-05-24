@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/minio/minio/internal/ioutil"
 	"google.golang.org/api/googleapi"
 
 	"github.com/minio/madmin-go/v2"
@@ -134,7 +135,7 @@ const (
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrReplicationDenyEditError
-	ErrRemoteTargetDenyEditError
+	ErrRemoteTargetDenyAddError
 	ErrReplicationNoExistingObjects
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
@@ -199,6 +200,7 @@ const (
 	ErrInvalidTagDirective
 	ErrPolicyAlreadyAttached
 	ErrPolicyNotAttached
+	ErrExcessData
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -525,6 +527,11 @@ var errorCodes = errorCodeMap{
 	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrExcessData: {
+		Code:           "ExcessData",
+		Description:    "More data provided than indicated content length",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrPolicyTooLarge: {
@@ -927,9 +934,9 @@ var errorCodes = errorCodeMap{
 		Description:    "No matching ExistingsObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrRemoteTargetDenyEditError: {
-		Code:           "XMinioAdminRemoteTargetDenyEdit",
-		Description:    "Cannot alter remote target endpoint since this server is in a cluster replication setup. use `mc admin replicate update`",
+	ErrRemoteTargetDenyAddError: {
+		Code:           "XMinioAdminRemoteTargetDenyAdd",
+		Description:    "Cannot add remote target endpoint since this server is in a cluster replication setup",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationDenyEditError: {
@@ -2099,6 +2106,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrMalformedXML
 	case errInvalidMaxParts:
 		apiErr = ErrInvalidMaxParts
+	case ioutil.ErrOverread:
+		apiErr = ErrExcessData
 	}
 
 	// Compression errors
@@ -2180,10 +2189,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrContentSHA256Mismatch
 	case hash.ChecksumMismatch:
 		apiErr = ErrContentChecksumMismatch
-	case ObjectTooLarge:
-		apiErr = ErrEntityTooLarge
-	case ObjectTooSmall:
+	case hash.SizeTooSmall:
 		apiErr = ErrEntityTooSmall
+	case hash.SizeTooLarge:
+		apiErr = ErrEntityTooLarge
 	case NotImplemented:
 		apiErr = ErrNotImplemented
 	case PartTooBig:

@@ -278,9 +278,9 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 		API = req.API
 	}
 
-	kv := req.GetTags()
-	tags := make(map[string]interface{}, len(kv))
-	for _, entry := range kv {
+	// Copy tags. We hold read lock already.
+	tags := make(map[string]interface{}, len(req.tags))
+	for _, entry := range req.tags {
 		tags[entry.Key] = entry.Val
 	}
 
@@ -347,7 +347,7 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 
 	if consoleTgt != nil {
 		entry := errToEntry(ctx, err, errKind...)
-		consoleTgt.Send(entry)
+		consoleTgt.Send(ctx, entry)
 	}
 }
 
@@ -366,10 +366,10 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	entry := errToEntry(ctx, err, errKind...)
 	// Iterate over all logger targets to send the log entry
 	for _, t := range systemTgts {
-		if err := t.Send(entry); err != nil {
+		if err := t.Send(ctx, entry); err != nil {
 			if consoleTgt != nil {
 				entry.Trace.Message = fmt.Sprintf("event(%#v) was not sent to Logger target (%#v): %#v", entry, t, err)
-				consoleTgt.Send(entry)
+				consoleTgt.Send(ctx, entry)
 			}
 		}
 	}

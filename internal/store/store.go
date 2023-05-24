@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -32,13 +31,15 @@ const (
 	retryInterval = 3 * time.Second
 )
 
+type logger = func(ctx context.Context, err error, id string, errKind ...interface{})
+
 // ErrNotConnected - indicates that the target connection is not active.
 var ErrNotConnected = errors.New("not connected to target server/service")
 
 // Target - store target interface
 type Target interface {
 	Name() string
-	Send(key string) error
+	SendFromStore(key string) error
 }
 
 // Store - Used to persist items.
@@ -53,7 +54,7 @@ type Store[I any] interface {
 }
 
 // replayItems - Reads the items from the store and replays.
-func replayItems[I any](store Store[I], doneCh <-chan struct{}, loggerOnce logger.LogOnce, id string) <-chan string {
+func replayItems[I any](store Store[I], doneCh <-chan struct{}, log logger, id string) <-chan string {
 	itemKeyCh := make(chan string)
 
 	go func() {
@@ -65,7 +66,7 @@ func replayItems[I any](store Store[I], doneCh <-chan struct{}, loggerOnce logge
 		for {
 			names, err := store.List()
 			if err != nil {
-				loggerOnce(context.Background(), fmt.Errorf("store.List() failed with: %w", err), id)
+				log(context.Background(), fmt.Errorf("store.List() failed with: %w", err), id)
 			} else {
 				for _, name := range names {
 					select {
@@ -89,20 +90,20 @@ func replayItems[I any](store Store[I], doneCh <-chan struct{}, loggerOnce logge
 }
 
 // sendItems - Reads items from the store and re-plays.
-func sendItems(target Target, itemKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce logger.LogOnce) {
+func sendItems(target Target, itemKeyCh <-chan string, doneCh <-chan struct{}, logger logger) {
 	retryTicker := time.NewTicker(retryInterval)
 	defer retryTicker.Stop()
 
 	send := func(itemKey string) bool {
 		for {
-			err := target.Send(itemKey)
+			err := target.SendFromStore(itemKey)
 			if err == nil {
 				break
 			}
 
 			if err != ErrNotConnected && !xnet.IsConnResetErr(err) {
-				loggerOnce(context.Background(),
-					fmt.Errorf("target.Send() failed with '%w'", err),
+				logger(context.Background(),
+					fmt.Errorf("target.SendFromStore() failed with '%w'", err),
 					target.Name())
 			}
 
@@ -135,11 +136,11 @@ func sendItems(target Target, itemKeyCh <-chan string, doneCh <-chan struct{}, l
 }
 
 // StreamItems reads the keys from the store and replays the corresponding item to the target.
-func StreamItems[I any](store Store[I], target Target, doneCh <-chan struct{}, loggerOnce logger.LogOnce) {
+func StreamItems[I any](store Store[I], target Target, doneCh <-chan struct{}, logger logger) {
 	go func() {
 		// Replays the items from the store.
-		itemKeyCh := replayItems(store, doneCh, loggerOnce, target.Name())
+		itemKeyCh := replayItems(store, doneCh, logger, target.Name())
 		// Send items from the store.
-		sendItems(target, itemKeyCh, doneCh, loggerOnce)
+		sendItems(target, itemKeyCh, doneCh, logger)
 	}()
 }

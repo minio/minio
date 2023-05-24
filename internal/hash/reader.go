@@ -28,6 +28,7 @@ import (
 
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/hash/sha256"
+	"github.com/minio/minio/internal/ioutil"
 )
 
 // A Reader wraps an io.Reader and computes the MD5 checksum
@@ -38,8 +39,10 @@ import (
 // are not empty then it will check whether the computed
 // match the reference values.
 type Reader struct {
-	src       io.Reader
-	bytesRead int64
+	src         io.Reader
+	bytesRead   int64
+	expectedMin int64
+	expectedMax int64
 
 	size       int64
 	actualSize int64
@@ -50,6 +53,8 @@ type Reader struct {
 	// Content checksum
 	contentHash   Checksum
 	contentHasher hash.Hash
+
+	trailer http.Header
 
 	sha256 hash.Hash
 }
@@ -62,11 +67,19 @@ type Reader struct {
 //
 // If size resp. actualSize is unknown at the time of calling
 // NewReader then it should be set to -1.
+// When size is >=0 it *must* match the amount of data provided by r.
 //
 // NewReader may try merge the given size, MD5 and SHA256 values
 // into src - if src is a Reader - to avoid computing the same
 // checksums multiple times.
+// NewReader enforces S3 compatibility strictly by ensuring caller
+// does not send more content than specified size.
 func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+	// return hard limited reader
+	return newReader(src, size, md5Hex, sha256Hex, actualSize)
+}
+
+func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
 	MD5, err := hex.DecodeString(md5Hex)
 	if err != nil {
 		return nil, BadDigest{ // TODO(aead): Return an error that indicates that an invalid ETag has been specified
@@ -101,13 +114,13 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 			}
 		}
 		if r.size >= 0 && size >= 0 && r.size != size {
-			return nil, ErrSizeMismatch{Want: r.size, Got: size}
+			return nil, SizeMismatch{Want: r.size, Got: size}
 		}
 
 		r.checksum = MD5
 		r.contentSHA256 = SHA256
 		if r.size < 0 && size >= 0 {
-			r.src = etag.Wrap(io.LimitReader(r.src, size), r.src)
+			r.src = etag.Wrap(ioutil.HardLimitReader(r.src, size), r.src)
 			r.size = size
 		}
 		if r.actualSize <= 0 && actualSize >= 0 {
@@ -117,7 +130,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	}
 
 	if size >= 0 {
-		r := io.LimitReader(src, size)
+		r := ioutil.HardLimitReader(src, size)
 		if _, ok := src.(etag.Tagger); !ok {
 			src = etag.NewReader(r, MD5)
 		} else {
@@ -143,11 +156,21 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 // ErrInvalidChecksum is returned when an invalid checksum is provided in headers.
 var ErrInvalidChecksum = errors.New("invalid checksum")
 
+// SetExpectedMin set expected minimum data expected from reader
+func (r *Reader) SetExpectedMin(expectedMin int64) {
+	r.expectedMin = expectedMin
+}
+
+// SetExpectedMax set expected max data expected from reader
+func (r *Reader) SetExpectedMax(expectedMax int64) {
+	r.expectedMax = expectedMax
+}
+
 // AddChecksum will add checksum checks as specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html
 // Returns ErrInvalidChecksum if a problem with the checksum is found.
 func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
-	cs, err := GetContentChecksum(req)
+	cs, err := GetContentChecksum(req.Header)
 	if err != nil {
 		return ErrInvalidChecksum
 	}
@@ -155,10 +178,24 @@ func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
 		return nil
 	}
 	r.contentHash = *cs
-	if cs.Type.Trailing() || ignoreValue {
-		// Ignore until we have trailing headers.
+	if cs.Type.Trailing() {
+		r.trailer = req.Trailer
+	}
+	return r.AddNonTrailingChecksum(cs, ignoreValue)
+}
+
+// AddNonTrailingChecksum will add a checksum to the reader.
+// The checksum cannot be trailing.
+func (r *Reader) AddNonTrailingChecksum(cs *Checksum, ignoreValue bool) error {
+	if cs == nil {
 		return nil
 	}
+	r.contentHash = *cs
+	if ignoreValue {
+		// Do not validate, but allow for transfer
+		return nil
+	}
+
 	r.contentHasher = cs.Type.Hasher()
 	if r.contentHasher == nil {
 		return ErrInvalidChecksum
@@ -177,6 +214,17 @@ func (r *Reader) Read(p []byte) (int, error) {
 	}
 
 	if err == io.EOF { // Verify content SHA256, if set.
+		if r.expectedMin > 0 {
+			if r.bytesRead < r.expectedMin {
+				return 0, SizeTooSmall{Want: r.expectedMin, Got: r.bytesRead}
+			}
+		}
+		if r.expectedMax > 0 {
+			if r.bytesRead > r.expectedMax {
+				return 0, SizeTooLarge{Want: r.expectedMax, Got: r.bytesRead}
+			}
+		}
+
 		if r.sha256 != nil {
 			if sum := r.sha256.Sum(nil); !bytes.Equal(r.contentSHA256, sum) {
 				return n, SHA256Mismatch{
@@ -186,6 +234,14 @@ func (r *Reader) Read(p []byte) (int, error) {
 			}
 		}
 		if r.contentHasher != nil {
+			if r.contentHash.Type.Trailing() {
+				var err error
+				r.contentHash.Encoded = r.trailer.Get(r.contentHash.Type.Key())
+				r.contentHash.Raw, err = base64.StdEncoding.DecodeString(r.contentHash.Encoded)
+				if err != nil || len(r.contentHash.Raw) == 0 {
+					return 0, ChecksumMismatch{Got: r.contentHash.Encoded}
+				}
+			}
 			if sum := r.contentHasher.Sum(nil); !bytes.Equal(r.contentHash.Raw, sum) {
 				err := ChecksumMismatch{
 					Want: r.contentHash.Encoded,
@@ -275,6 +331,9 @@ func (r *Reader) ContentCRCType() ChecksumType {
 func (r *Reader) ContentCRC() map[string]string {
 	if r.contentHash.Type == ChecksumNone || !r.contentHash.Valid() {
 		return nil
+	}
+	if r.contentHash.Type.Trailing() {
+		return map[string]string{r.contentHash.Type.String(): r.trailer.Get(r.contentHash.Type.Key())}
 	}
 	return map[string]string{r.contentHash.Type.String(): r.contentHash.Encoded}
 }

@@ -15,9 +15,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package target
+package once
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -25,23 +26,48 @@ import (
 // Inspired from Golang sync.Once but it is only marked
 // initialized when the provided function returns nil.
 
-type lazyInit struct {
+// Init represents the structure.
+type Init struct {
 	done uint32
 	m    sync.Mutex
 }
 
-func (l *lazyInit) Do(f func() error) error {
+// Do is similar to sync.Once.Do - makes one successful
+// call to the function. ie, it invokes the function
+// if it is not successful yet.
+func (l *Init) Do(f func() error) error {
 	if atomic.LoadUint32(&l.done) == 0 {
-		return l.doSlow(f)
+		return l.do(f)
 	}
 	return nil
 }
 
-func (l *lazyInit) doSlow(f func() error) error {
+func (l *Init) do(f func() error) error {
 	l.m.Lock()
 	defer l.m.Unlock()
 	if atomic.LoadUint32(&l.done) == 0 {
 		if err := f(); err != nil {
+			return err
+		}
+		// Mark as done only when f() is successful
+		atomic.StoreUint32(&l.done, 1)
+	}
+	return nil
+}
+
+// DoWithContext is similar to Do except that it accepts a context as an argument to be passed.
+func (l *Init) DoWithContext(ctx context.Context, f func(context.Context) error) error {
+	if atomic.LoadUint32(&l.done) == 0 {
+		return l.doWithContext(ctx, f)
+	}
+	return nil
+}
+
+func (l *Init) doWithContext(ctx context.Context, f func(context.Context) error) error {
+	l.m.Lock()
+	defer l.m.Unlock()
+	if atomic.LoadUint32(&l.done) == 0 {
+		if err := f(ctx); err != nil {
 			return err
 		}
 		// Mark as done only when f() is successful

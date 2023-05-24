@@ -174,6 +174,11 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	// benefits of replication, make sure to apply version suspension
 	// only at bucket level instead.
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
+	// For directory objects, delete `null` version permanently.
+	if isDirObject(object) && opts.VersionID == "" {
+		opts.VersionID = nullVersionID
+	}
+
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
 		switch delMarker {
@@ -286,7 +291,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		metadata = make(map[string]string)
 	}
 
-	wantCRC, err := hash.GetContentChecksum(r)
+	wantCRC, err := hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,
@@ -321,9 +326,16 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	if err != nil {
 		return opts, err
 	}
+
 	opts.VersionID = vid
 	opts.Versioned = versioned
 	opts.VersionSuspended = versionSuspended
+
+	// For directory objects skip creating new versions.
+	if isDirObject(object) && vid == "" {
+		opts.VersionID = nullVersionID
+	}
+
 	opts.MTime = mtime
 	opts.ReplicationSourceLegalholdTimestamp = lholdtimestmp
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
@@ -365,7 +377,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 			}
 		}
 	}
-	opts.WantChecksum, err = hash.GetContentChecksum(r)
+	opts.WantChecksum, err = hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,

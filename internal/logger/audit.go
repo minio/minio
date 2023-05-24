@@ -124,7 +124,12 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.HeaderBytes = headerBytes
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.API.TimeToResponseInNS = strconv.FormatInt(timeToResponse.Nanoseconds(), 10)
-		entry.Tags = reqInfo.GetTagsMap()
+		// We hold the lock, so we cannot call reqInfo.GetTagsMap().
+		tags := make(map[string]interface{}, len(reqInfo.tags))
+		for _, t := range reqInfo.tags {
+			tags[t.Key] = t.Val
+		}
+		entry.Tags = tags
 		// ignore cases for ttfb when its zero.
 		if timeToFirstByte != 0 {
 			entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
@@ -139,7 +144,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
-		if err := t.Send(entry); err != nil {
+		if err := t.Send(ctx, entry); err != nil {
 			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), madmin.LogKindAll)
 		}
 	}

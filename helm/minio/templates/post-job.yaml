@@ -45,6 +45,8 @@ spec:
         fsGroup: {{ .Values.postJob.securityContext.fsGroup }}
       {{- end }}
       volumes:
+        - name: etc-path
+          emptyDir: {}
         - name: minio-configuration
           projected:
             sources:
@@ -78,6 +80,9 @@ spec:
               - key: {{ .Values.tls.publicCrt }}
                 path: CAs/public.crt
         {{- end }}
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
       containers:
         {{- if .Values.buckets }}
         - name: minio-make-bucket
@@ -100,6 +105,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -129,6 +136,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -158,6 +167,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -187,6 +198,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -216,6 +229,8 @@ spec:
             - name: MINIO_PORT
               value: {{ .Values.service.port | quote }}
           volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}

@@ -770,7 +770,7 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 		var err error
 		duration, err = time.ParseDuration(dstr)
 		if err != nil {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 			return
 		}
 	}
@@ -1855,7 +1855,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	assignPoolNumbers(servers)
 
 	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
-	var backend interface{}
+	var backend madmin.ErasureBackend
 
 	mode := madmin.ItemInitializing
 
@@ -2511,13 +2511,13 @@ func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 	var auditloggerInfo []madmin.Audit
 	for _, tgt := range logger.SystemTargets() {
 		if tgt.Endpoint() != "" {
-			loggerInfo = append(loggerInfo, madmin.Logger{tgt.String(): logger.TargetStatus(tgt)})
+			loggerInfo = append(loggerInfo, madmin.Logger{tgt.String(): logger.TargetStatus(GlobalContext, tgt)})
 		}
 	}
 
 	for _, tgt := range logger.AuditTargets() {
 		if tgt.Endpoint() != "" {
-			auditloggerInfo = append(auditloggerInfo, madmin.Audit{tgt.String(): logger.TargetStatus(tgt)})
+			auditloggerInfo = append(auditloggerInfo, madmin.Audit{tgt.String(): logger.TargetStatus(GlobalContext, tgt)})
 		}
 	}
 

@@ -355,7 +355,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
-		endpointList, newSetupType, err := CreateEndpoints(serverAddr, false, setArgs...)
+		endpointList, newSetupType, err := CreateEndpoints(serverAddr, setArgs...)
 		if err != nil {
 			return nil, -1, err
 		}
@@ -371,36 +371,35 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		return endpointServerPools, setupType, nil
 	}
 
-	var foundPrevLocal bool
+	var poolArgs [][][]string
 	for _, arg := range args {
 		if !ellipses.HasEllipses(arg) && len(args) > 1 {
 			// TODO: support SNSD deployments to be decommissioned in future
 			return nil, -1, fmt.Errorf("all args must have ellipses for pool expansion (%w) args: %s", errInvalidArgument, args)
 		}
+
 		setArgs, err := GetAllSets(arg)
 		if err != nil {
 			return nil, -1, err
 		}
 
-		endpointList, gotSetupType, err := CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
-		if err != nil {
-			return nil, -1, err
-		}
+		poolArgs = append(poolArgs, setArgs)
+	}
+
+	poolEndpoints, setupType, err := CreatePoolEndpoints(serverAddr, poolArgs...)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	for i, endpointList := range poolEndpoints {
 		if err = endpointServerPools.Add(PoolEndpoints{
-			SetCount:     len(setArgs),
-			DrivesPerSet: len(setArgs[0]),
+			SetCount:     len(poolArgs[i]),
+			DrivesPerSet: len(poolArgs[i][0]),
 			Endpoints:    endpointList,
-			CmdLine:      arg,
 			Platform:     fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
+			CmdLine:      args[i],
 		}); err != nil {
 			return nil, -1, err
-		}
-		foundPrevLocal = endpointList.atleastOneEndpointLocal()
-		if setupType == UnknownSetupType {
-			setupType = gotSetupType
-		}
-		if setupType == ErasureSetupType && gotSetupType == DistErasureSetupType {
-			setupType = DistErasureSetupType
 		}
 	}
 

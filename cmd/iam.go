@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -917,7 +916,7 @@ type newServiceAccountOpts struct {
 	sessionPolicy              *iampolicy.Policy
 	accessKey                  string
 	secretKey                  string
-	comment                    string
+	name, description          string
 	expiration                 *time.Time
 	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
@@ -944,8 +943,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		if err != nil {
 			return auth.Credentials{}, time.Time{}, err
 		}
-		if len(policyBuf) > 16*humanize.KiByte {
-			return auth.Credentials{}, time.Time{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
+		if len(policyBuf) > 2048 {
+			return auth.Credentials{}, time.Time{}, errSessionPolicyTooLarge
 		}
 	}
 
@@ -992,7 +991,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.ParentUser = parentUser
 	cred.Groups = groups
 	cred.Status = string(auth.AccountOn)
-	cred.Comment = opts.comment
+	cred.Name = opts.name
+	cred.Description = opts.description
 
 	if opts.expiration != nil {
 		expirationInUTC := opts.expiration.UTC()
@@ -1012,11 +1012,11 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 }
 
 type updateServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	secretKey     string
-	status        string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy     *iampolicy.Policy
+	secretKey         string
+	status            string
+	name, description string
+	expiration        *time.Time
 }
 
 // UpdateServiceAccount - edit a service account

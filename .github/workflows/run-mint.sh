@@ -8,8 +8,9 @@ export SECRET_KEY="$3"
 export JOB_NAME="$4"
 export MINT_MODE="full"
 
-docker system prune -f
-docker volume prune -f
+docker system prune -f || true
+docker volume prune -f || true
+docker volume rm $(docker volume ls -f dangling=true) || true
 
 ## change working directory
 cd .github/workflows/mint
@@ -34,7 +35,6 @@ docker run --rm --net=host \
 	 mc           \
 	 minio-go     \
 	 minio-java   \
-	 minio-js     \
 	 minio-py     \
 	 s3cmd        \
 	 s3select     \
@@ -45,6 +45,7 @@ sleep 10s
 
 docker system prune -f || true
 docker volume prune -f || true
+docker volume rm $(docker volume ls -f dangling=true) || true
 
 ## change working directory
 cd ../../../

@@ -18,6 +18,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -36,10 +37,10 @@ type Target interface {
 	String() string
 	Endpoint() string
 	Stats() types.TargetStats
-	Init() error
-	IsOnline() bool
+	Init(ctx context.Context) error
+	IsOnline(ctx context.Context) bool
 	Cancel()
-	Send(entry interface{}) error
+	Send(ctx context.Context, entry interface{}) error
 	Type() types.TargetType
 }
 
@@ -57,12 +58,12 @@ var (
 )
 
 // TargetStatus returns status of the target (online|offline)
-func TargetStatus(h Target) madmin.Status {
-	if h.IsOnline() {
+func TargetStatus(ctx context.Context, h Target) madmin.Status {
+	if h.IsOnline(ctx) {
 		return madmin.Status{Status: string(madmin.ItemOnline)}
 	}
 	// Previous initialization had failed. Try again.
-	if e := h.Init(); e == nil {
+	if e := h.Init(ctx); e == nil {
 		return madmin.Status{Status: string(madmin.ItemOnline)}
 	}
 	return madmin.Status{Status: string(madmin.ItemOffline)}
@@ -124,8 +125,8 @@ var (
 
 // AddSystemTarget adds a new logger target to the
 // list of enabled loggers
-func AddSystemTarget(t Target) error {
-	if err := t.Init(); err != nil {
+func AddSystemTarget(ctx context.Context, t Target) error {
+	if err := t.Init(ctx); err != nil {
 		return err
 	}
 
@@ -144,7 +145,7 @@ func AddSystemTarget(t Target) error {
 	return nil
 }
 
-func initSystemTargets(cfgMap map[string]http.Config) ([]Target, []error) {
+func initSystemTargets(ctx context.Context, cfgMap map[string]http.Config) ([]Target, []error) {
 	tgts := []Target{}
 	errs := []error{}
 	for _, l := range cfgMap {
@@ -152,7 +153,7 @@ func initSystemTargets(cfgMap map[string]http.Config) ([]Target, []error) {
 			t := http.New(l)
 			tgts = append(tgts, t)
 
-			e := t.Init()
+			e := t.Init(ctx)
 			if e != nil {
 				errs = append(errs, e)
 			}
@@ -161,7 +162,7 @@ func initSystemTargets(cfgMap map[string]http.Config) ([]Target, []error) {
 	return tgts, errs
 }
 
-func initKafkaTargets(cfgMap map[string]kafka.Config) ([]Target, []error) {
+func initKafkaTargets(ctx context.Context, cfgMap map[string]kafka.Config) ([]Target, []error) {
 	tgts := []Target{}
 	errs := []error{}
 	for _, l := range cfgMap {
@@ -169,7 +170,7 @@ func initKafkaTargets(cfgMap map[string]kafka.Config) ([]Target, []error) {
 			t := kafka.New(l)
 			tgts = append(tgts, t)
 
-			e := t.Init()
+			e := t.Init(ctx)
 			if e != nil {
 				errs = append(errs, e)
 			}
@@ -200,8 +201,8 @@ func cancelTargets(targets []Target) {
 }
 
 // UpdateSystemTargets swaps targets with newly loaded ones from the cfg
-func UpdateSystemTargets(cfg Config) []error {
-	newTgts, errs := initSystemTargets(cfg.HTTP)
+func UpdateSystemTargets(ctx context.Context, cfg Config) []error {
+	newTgts, errs := initSystemTargets(ctx, cfg.HTTP)
 
 	swapSystemMuRW.Lock()
 	consoleTargets, otherTargets := splitTargets(systemTargets, types.TargetConsole)
@@ -214,8 +215,8 @@ func UpdateSystemTargets(cfg Config) []error {
 }
 
 // UpdateAuditWebhookTargets swaps audit webhook targets with newly loaded ones from the cfg
-func UpdateAuditWebhookTargets(cfg Config) []error {
-	newWebhookTgts, errs := initSystemTargets(cfg.AuditWebhook)
+func UpdateAuditWebhookTargets(ctx context.Context, cfg Config) []error {
+	newWebhookTgts, errs := initSystemTargets(ctx, cfg.AuditWebhook)
 
 	swapAuditMuRW.Lock()
 	// Retain kafka targets
@@ -229,8 +230,8 @@ func UpdateAuditWebhookTargets(cfg Config) []error {
 }
 
 // UpdateAuditKafkaTargets swaps audit kafka targets with newly loaded ones from the cfg
-func UpdateAuditKafkaTargets(cfg Config) []error {
-	newKafkaTgts, errs := initKafkaTargets(cfg.AuditKafka)
+func UpdateAuditKafkaTargets(ctx context.Context, cfg Config) []error {
+	newKafkaTgts, errs := initKafkaTargets(ctx, cfg.AuditKafka)
 
 	swapAuditMuRW.Lock()
 	// Retain webhook targets

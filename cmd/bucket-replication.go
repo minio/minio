@@ -26,6 +26,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"path"
 	"reflect"
 	"strings"
@@ -138,6 +139,13 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		// validate replication ARN against target endpoint
 		c := globalBucketTargetSys.GetRemoteTargetClient(ctx, arnStr)
 		if c != nil {
+			if err := checkRemoteEndpoint(ctx, c.EndpointURL()); err != nil {
+				switch err.(type) {
+				case BucketRemoteIdenticalToSource:
+					return true, errorCodes.ToAPIErrWithErr(ErrBucketRemoteIdenticalToSource, fmt.Errorf("remote target endpoint %s is self referential", c.EndpointURL().String()))
+				default:
+				}
+			}
 			if c.EndpointURL().String() == clnt.EndpointURL().String() {
 				selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
 				if !sameTarget {
@@ -152,6 +160,45 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		return false, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 	}
 	return sameTarget, toAPIError(ctx, nil)
+}
+
+// performs a http request to remote endpoint to check if deployment id of remote endpoint is same as
+// local cluster deployment id. This is to prevent replication to self, especially in case of a loadbalancer
+// in front of MinIO.
+func checkRemoteEndpoint(ctx context.Context, epURL *url.URL) error {
+	reqURL := &url.URL{
+		Scheme: epURL.Scheme,
+		Host:   epURL.Host,
+		Path:   healthCheckReadinessPath,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{
+		Transport: NewHTTPTransport(),
+		Timeout:   10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if err == nil {
+		// Drain the connection.
+		xhttp.DrainBody(resp.Body)
+	}
+	if resp != nil {
+		amzid := resp.Header.Get(xhttp.AmzRequestHostID)
+		if _, ok := globalNodeNamesHex[amzid]; ok {
+			return BucketRemoteIdenticalToSource{
+				Endpoint: epURL.String(),
+			}
+		}
+	}
+	return nil
 }
 
 type mustReplicateOptions struct {
@@ -984,11 +1031,13 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		}(i, tgt)
 	}
 	wg.Wait()
+
+	replicationStatus = rinfos.ReplicationStatus() // used in defer function
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
 	eventName := event.ObjectReplicationComplete
-	if rinfos.ReplicationStatus() == replication.Failed {
+	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
 	newReplStatusInternal := rinfos.ReplicationStatusInternal()
@@ -1438,7 +1487,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	)
 
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(r, partInfo.ActualSize, "", "", partInfo.ActualSize)
+		hr, err = hash.NewReader(io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
 		if err != nil {
 			return err
 		}
@@ -3051,7 +3100,7 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 
 	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath())
 	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
+		if errors.Is(err, errConfigNotFound) {
 			return rs, nil
 		}
 		return rs, err

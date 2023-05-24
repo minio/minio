@@ -30,6 +30,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 	"github.com/rabbitmq/amqp091-go"
@@ -112,7 +113,7 @@ func (a *AMQPArgs) Validate() error {
 
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       AMQPArgs
@@ -289,8 +290,8 @@ func (target *AMQPTarget) Save(eventData event.Event) error {
 	return target.send(eventData, ch, confirms)
 }
 
-// Send - sends event to AMQP091.
-func (target *AMQPTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to AMQP091.
+func (target *AMQPTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -329,7 +330,7 @@ func (target *AMQPTarget) Close() error {
 }
 
 func (target *AMQPTarget) init() error {
-	return target.lazyInit.Do(target.initAMQP)
+	return target.initOnce.Do(target.initAMQP)
 }
 
 func (target *AMQPTarget) initAMQP() error {

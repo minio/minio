@@ -937,15 +937,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return ObjectInfo{}, err
 	}
 
-	origObject := object
 	object = encodeDirObject(object)
-	// Only directory objects skip creating new versions.
-	if object != origObject && isDirObject(object) && data.Size() == 0 {
-		// Treat all directory PUTs to behave as if they are performed
-		// on an unversioned bucket.
-		opts.Versioned = false
-		opts.VersionSuspended = false
-	}
 
 	if z.SinglePool() {
 		if !isMinioMetaBucketName(bucket) {
@@ -1328,7 +1320,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			if opts.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt)
+					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {
 						// Skip entry if ILM action was DeleteVersionAction or DeleteAction
 						return loi, nil
@@ -1635,8 +1627,8 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 	meta, err := globalBucketMetadataSys.Get(bucket)
 	if err == nil {
 		bucketInfo.Created = meta.Created
-		bucketInfo.Versioning = meta.LockEnabled || globalBucketVersioningSys.Enabled(bucket)
-		bucketInfo.ObjectLocking = meta.LockEnabled
+		bucketInfo.Versioning = meta.Versioning()
+		bucketInfo.ObjectLocking = meta.ObjectLocking()
 	}
 	return bucketInfo, nil
 }
@@ -2123,6 +2115,7 @@ type HealthResult struct {
 	HealingDrives int
 	PoolID, SetID int
 	WriteQuorum   int
+	UsingDefaults bool
 }
 
 // ReadHealth returns if the cluster can serve read requests
@@ -2217,6 +2210,11 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		}
 	}
 
+	var usingDefaults bool
+	if globalStorageClass.GetParityForSC(storageclass.STANDARD) < 0 {
+		usingDefaults = true
+	}
+
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
 			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
@@ -2229,6 +2227,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 					PoolID:        poolIdx,
 					SetID:         setIdx,
 					WriteQuorum:   poolWriteQuorums[poolIdx],
+					UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
 				}
 			}
 		}
@@ -2248,8 +2247,9 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	// to look at the healing side of the code.
 	if !opts.Maintenance {
 		return HealthResult{
-			Healthy:     true,
-			WriteQuorum: maximumWriteQuorum,
+			Healthy:       true,
+			WriteQuorum:   maximumWriteQuorum,
+			UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
 		}
 	}
 
@@ -2257,6 +2257,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
 		WriteQuorum:   maximumWriteQuorum,
+		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
 	}
 }
 

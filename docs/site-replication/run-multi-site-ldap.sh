@@ -149,6 +149,11 @@ if [ $? -eq 0 ]; then
 fi
 
 ./mc mb minio1/newbucket
+# copy large upload to newbucket on minio1
+truncate -s 17M lrgfile
+expected_checksum=$(cat ./lrgfile | md5sum)
+
+./mc cp ./lrgfile minio1/newbucket
 
 # create a bucket bucket2 on minio1.
 ./mc mb minio1/bucket2
@@ -180,6 +185,19 @@ if [ $? -ne 0 ]; then
     echo "expecting object to be present. exiting.."
     exit_1;
 fi
+
+sleep 10
+./mc stat minio3/newbucket/lrgfile
+if [ $? -ne 0 ]; then
+    echo "expected object to be present, exiting.."
+    exit_1;
+fi
+actual_checksum=$(./mc cat minio3/newbucket/lrgfile | md5sum)
+if [ "${expected_checksum}" != "${actual_checksum}" ]; then
+    echo "replication failed on multipart objects expected ${expected_checksum} got ${actual_checksum}"
+    exit
+fi
+rm ./lrgfile
 
 vID=$(./mc stat minio2/newbucket/README.md --json | jq .versionID)
 if [ $? -ne 0 ]; then

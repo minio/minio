@@ -136,6 +136,7 @@ func init() {
 
 	gob.Register(StorageErr(""))
 	gob.Register(madmin.TimeInfo{})
+	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
 
 	defaultAWSCredProvider = []credentials.Provider{
@@ -775,6 +776,8 @@ func handleCommonEnvVars() {
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}
+
+	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.

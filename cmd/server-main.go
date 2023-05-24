@@ -247,9 +247,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
-	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeNameHex))
+	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
-
+	globalNodeNamesHex = make(map[string]struct{})
 	globalRemoteEndpoints = make(map[string]Endpoint)
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
@@ -258,6 +258,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 			} else {
 				globalRemoteEndpoints[ep.Host] = ep
 			}
+			nodeNameSum := sha256.Sum256([]byte(ep.Host))
+			globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
+
 		}
 	}
 
@@ -513,7 +516,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddSystemTarget(globalConsoleSys)
+	logger.AddSystemTarget(GlobalContext, globalConsoleSys)
 
 	// Perform any self-tests
 	bitrotSelfTest()
@@ -630,6 +633,11 @@ func serverMain(ctx *cli.Context) {
 		logger.Info(color.RedBold(msg))
 	}
 
+	if !globalDisableFreezeOnBoot {
+		// Freeze the services until the bucket notification subsystem gets initialized.
+		freezeServices()
+	}
+
 	bootstrapTrace("initializing the server")
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err
@@ -661,10 +669,7 @@ func serverMain(ctx *cli.Context) {
 			setConsoleSrv(srv)
 
 			go func() {
-				server := newConsoleServerFn()
-				logger.FatalIf(server.Listen(), "Unable to initialize console server's sockets")
-				daemon.SdNotify(false, daemon.SdNotifyReady)
-				logger.FatalIf(server.Serve(), "Unable to initialize console server")
+				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 			}()
 		}
 
@@ -679,8 +684,15 @@ func serverMain(ctx *cli.Context) {
 		}
 	}()
 
-	// Background all other operations such as initializing bucket metadata etc.
 	go func() {
+		if !globalDisableFreezeOnBoot {
+			defer unfreezeServices()
+			t := time.AfterFunc(5*time.Minute, func() {
+				logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+			})
+			defer t.Stop()
+		}
+
 		// Initialize data scanner.
 		initDataScanner(GlobalContext, newObject)
 
@@ -708,9 +720,6 @@ func serverMain(ctx *cli.Context) {
 			}
 		}()
 
-		// Initialize bucket notification system first before loading bucket metadata.
-		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
-
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {
 			logger.Info(color.Yellow("WARNING: Drive caching is deprecated for single/multi drive MinIO setups."))
@@ -721,18 +730,22 @@ func serverMain(ctx *cli.Context) {
 			setCacheObjectLayer(cacheAPI)
 		}
 
-		// List buckets to heal, and be re-used for loading configs.
+		// Initialize bucket notification system.
+		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
+
+		// List buckets to initialize bucket metadata sub-sys.
 		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to heal: %w", err))
+			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 		}
-		// initialize replication resync state.
-		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Initialize bucket metadata sub-system.
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
 
-		// Initialize site replication manager after bucket metadat
+		// initialize replication resync state.
+		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+
+		// Initialize site replication manager after bucket metadata
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize quota manager.
@@ -748,7 +761,7 @@ func serverMain(ctx *cli.Context) {
 		printStartupMessage(getAPIEndpoints(), err)
 
 		// Print a warning at the end of the startup banner so it is more noticeable
-		if globalStorageClass.GetParityForSC("") == 0 {
+		if newObject.BackendInfo().StandardSCParity == 0 {
 			logger.Error("Warning: The standard parity is set to 0. This can lead to data loss.")
 		}
 	}()
@@ -786,6 +799,8 @@ func serverMain(ctx *cli.Context) {
 		}
 		logger.Info("======")
 	}
+
+	daemon.SdNotify(false, daemon.SdNotifyReady)
 
 	<-globalOSSignalCh
 }

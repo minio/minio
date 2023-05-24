@@ -210,6 +210,11 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
+	if globalSiteReplicationSys.isEnabled() && !update {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetDenyAddError, err), r.URL)
+		return
+	}
+
 	if update {
 		// overlay the updates on existing target
 		tgt := globalBucketTargetSys.GetRemoteBucketTargetByArn(ctx, bucket, target.Arn)
@@ -220,14 +225,14 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		for _, op := range ops {
 			switch op {
 			case madmin.CredentialsUpdateType:
-				if globalSiteReplicationSys.isEnabled() {
-					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetDenyEditError, err), r.URL)
-					return
+				if !globalSiteReplicationSys.isEnabled() {
+					// credentials update is possible only in bucket replication. User will never
+					// know the site replicator creds.
+					tgt.Credentials = target.Credentials
+					tgt.TargetBucket = target.TargetBucket
+					tgt.Secure = target.Secure
+					tgt.Endpoint = target.Endpoint
 				}
-				tgt.Credentials = target.Credentials
-				tgt.TargetBucket = target.TargetBucket
-				tgt.Secure = target.Secure
-				tgt.Endpoint = target.Endpoint
 			case madmin.SyncUpdateType:
 				tgt.ReplicationSync = target.ReplicationSync
 			case madmin.ProxyUpdateType:
@@ -700,7 +705,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
-					LockEnabled: config.ObjectLockEnabled == "Enabled",
+					LockEnabled: config.Enabled(),
 				}
 				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {

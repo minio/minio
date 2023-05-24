@@ -303,8 +303,8 @@ func (c Checksum) Valid() bool {
 	if c.Type == ChecksumInvalid {
 		return false
 	}
-	if len(c.Encoded) == 0 || c.Type.Is(ChecksumTrailing) {
-		return c.Type.Is(ChecksumNone) || c.Type.Is(ChecksumTrailing)
+	if len(c.Encoded) == 0 || c.Type.Trailing() {
+		return c.Type.Is(ChecksumNone) || c.Type.Trailing()
 	}
 	raw := c.Raw
 	return c.Type.RawByteLen() == len(raw)
@@ -339,10 +339,21 @@ func (c *Checksum) AsMap() map[string]string {
 }
 
 // TransferChecksumHeader will transfer any checksum value that has been checked.
+// If checksum was trailing, they must have been added to r.Trailer.
 func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
-	t, s := getContentChecksum(r)
-	if !t.IsSet() || t.Is(ChecksumTrailing) {
-		// TODO: Add trailing when we can read it.
+	c, err := GetContentChecksum(r.Header)
+	if err != nil || c == nil {
+		return
+	}
+	t, s := c.Type, c.Encoded
+	if !c.Type.IsSet() {
+		return
+	}
+	if c.Type.Is(ChecksumTrailing) {
+		val := r.Trailer.Get(t.Key())
+		if val != "" {
+			w.Header().Set(t.Key(), val)
+		}
 		return
 	}
 	w.Header().Set(t.Key(), s)
@@ -364,8 +375,34 @@ func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
 // GetContentChecksum returns content checksum.
 // Returns ErrInvalidChecksum if so.
 // Returns nil, nil if no checksum.
-func GetContentChecksum(r *http.Request) (*Checksum, error) {
-	t, s := getContentChecksum(r)
+func GetContentChecksum(h http.Header) (*Checksum, error) {
+	if trailing := h.Values(xhttp.AmzTrailer); len(trailing) > 0 {
+		var res *Checksum
+		for _, header := range trailing {
+			var duplicates bool
+			switch {
+			case strings.EqualFold(header, ChecksumCRC32C.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumCRC32C|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumCRC32.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumCRC32|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumSHA256.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumSHA256|ChecksumTrailing, "")
+			case strings.EqualFold(header, ChecksumSHA1.Key()):
+				duplicates = res != nil
+				res = NewChecksumWithType(ChecksumSHA1|ChecksumTrailing, "")
+			}
+			if duplicates {
+				return nil, ErrInvalidChecksum
+			}
+		}
+		if res != nil {
+			return res, nil
+		}
+	}
+	t, s := getContentChecksum(h)
 	if t == ChecksumNone {
 		if s == "" {
 			return nil, nil
@@ -381,26 +418,21 @@ func GetContentChecksum(r *http.Request) (*Checksum, error) {
 
 // getContentChecksum returns content checksum type and value.
 // Returns ChecksumInvalid if so.
-func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
+func getContentChecksum(h http.Header) (t ChecksumType, s string) {
 	t = ChecksumNone
-	alg := r.Header.Get(xhttp.AmzChecksumAlgo)
+	alg := h.Get(xhttp.AmzChecksumAlgo)
 	if alg != "" {
 		t |= NewChecksumType(alg)
 		if t.IsSet() {
 			hdr := t.Key()
-			if s = r.Header.Get(hdr); s == "" {
-				if strings.EqualFold(r.Header.Get(xhttp.AmzTrailer), hdr) {
-					t |= ChecksumTrailing
-				} else {
-					t = ChecksumInvalid
-				}
+			if s = h.Get(hdr); s == "" {
 				return ChecksumNone, ""
 			}
 		}
 		return t, s
 	}
 	checkType := func(c ChecksumType) {
-		if got := r.Header.Get(c.Key()); got != "" {
+		if got := h.Get(c.Key()); got != "" {
 			// If already set, invalid
 			if t != ChecksumNone {
 				t = ChecksumInvalid
@@ -409,6 +441,7 @@ func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
 				t = c
 				s = got
 			}
+			return
 		}
 	}
 	checkType(ChecksumCRC32)

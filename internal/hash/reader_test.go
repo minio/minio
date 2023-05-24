@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/minio/minio/internal/ioutil"
 )
 
 // Tests functions like Size(), MD5*(), SHA256*()
@@ -79,7 +81,7 @@ func TestHashReaderVerification(t *testing.T) {
 		md5hex, sha256hex string
 		err               error
 	}{
-		{
+		0: {
 			desc:       "Success, no checksum verification provided.",
 			src:        bytes.NewReader([]byte("abcd")),
 			size:       4,
@@ -124,7 +126,7 @@ func TestHashReaderVerification(t *testing.T) {
 				CalculatedSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 			},
 		},
-		{
+		5: {
 			desc:       "Correct sha256, nested",
 			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
@@ -137,13 +139,15 @@ func TestHashReaderVerification(t *testing.T) {
 			size:       4,
 			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
+			err:        ioutil.ErrOverread,
 		},
-		{
+		7: {
 			desc:       "Correct sha256, nested, truncated, swapped",
 			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", -1),
 			size:       4,
 			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
+			err:        ioutil.ErrOverread,
 		},
 		{
 			desc:       "Incorrect MD5, nested",
@@ -162,6 +166,7 @@ func TestHashReaderVerification(t *testing.T) {
 			size:       4,
 			actualSize: 4,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
+			err:        ioutil.ErrOverread,
 		},
 		{
 			desc:       "Correct MD5, nested",
@@ -177,6 +182,7 @@ func TestHashReaderVerification(t *testing.T) {
 			actualSize: 4,
 			sha256hex:  "",
 			md5hex:     "e2fc714c4727ee9395f324cd2e7f331f",
+			err:        ioutil.ErrOverread,
 		},
 		{
 			desc:       "Correct MD5, nested, truncated",
@@ -184,6 +190,7 @@ func TestHashReaderVerification(t *testing.T) {
 			size:       4,
 			actualSize: 4,
 			md5hex:     "e2fc714c4727ee9395f324cd2e7f331f",
+			err:        ioutil.ErrOverread,
 		},
 	}
 	for i, testCase := range testCases {
@@ -194,6 +201,10 @@ func TestHashReaderVerification(t *testing.T) {
 			}
 			_, err = io.Copy(io.Discard, r)
 			if err != nil {
+				if testCase.err == nil {
+					t.Errorf("Test %q; got unexpected error: %v", testCase.desc, err)
+					return
+				}
 				if err.Error() != testCase.err.Error() {
 					t.Errorf("Test %q: Expected error %s, got error %s", testCase.desc, testCase.err, err)
 				}

@@ -479,7 +479,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(event, objInfo)
+				applyExpiryRule(event, lcEventSrc_s3GetObject, objInfo)
 				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -733,7 +733,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(event, objInfo)
+				applyExpiryRule(event, lcEventSrc_s3HeadObject, objInfo)
 				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
@@ -1560,7 +1560,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrc_s3CopyObject)
 		// Remove the transitioned object whose object version is being overwritten.
 		logger.LogIf(ctx, os.Sweep())
 	}
@@ -1615,7 +1615,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
-	if rAuthType == authTypeStreamingSigned {
+	switch rAuthType {
+	// Check signature types that must have content length
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
 		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
@@ -1669,9 +1671,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	switch rAuthType {
-	case authTypeStreamingSigned:
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Err = newSignV4ChunkedReader(r)
+		reader, s3Err = newSignV4ChunkedReader(r, rAuthType == authTypeStreamingSignedTrailer)
+		if s3Err != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+			return
+		}
+	case authTypeStreamingUnsignedTrailer:
+		// Initialize stream chunked reader with optional trailers.
+		reader, s3Err = newUnsignedV4ChunkedReader(r, true)
 		if s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
@@ -1903,7 +1912,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
 	evt := eventArgs{
@@ -1921,15 +1929,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sendEvent(evt)
 	}
 
+	// Do not send checksums in events to avoid leaks.
+	hash.TransferChecksumHeader(w, r)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrc_s3PutObject)
 		logger.LogIf(ctx, os.Sweep())
 	}
-	// Do not send checksums in events to avoid leaks.
-	hash.TransferChecksumHeader(w, r)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -1983,7 +1993,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
-	if rAuthType == authTypeStreamingSigned {
+	if rAuthType == authTypeStreamingSigned || rAuthType == authTypeStreamingSignedTrailer {
 		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
@@ -2023,9 +2033,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	}
 
 	switch rAuthType {
-	case authTypeStreamingSigned:
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Err = newSignV4ChunkedReader(r)
+		reader, s3Err = newSignV4ChunkedReader(r, rAuthType == authTypeStreamingSignedTrailer)
 		if s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
@@ -2142,6 +2152,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return err
 		}
 		opts.MTime = info.ModTime()
+		if opts.MTime.Unix() <= 0 {
+			opts.MTime = UTCNow()
+		}
 		opts.IndexCB = idxCb
 
 		retentionMode, retentionDate, legalHold, s3err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)

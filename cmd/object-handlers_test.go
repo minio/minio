@@ -1100,6 +1100,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		},
 		// Test case - 7
 		// Chunk with malformed encoding.
+		// Causes signature mismatch.
 		{
 			bucketName:         bucketName,
 			objectName:         objectName,
@@ -1107,7 +1108,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			dataLen:            1024,
 			chunkSize:          1024,
 			expectedContent:    []byte{},
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,

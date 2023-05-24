@@ -33,6 +33,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
@@ -146,7 +147,7 @@ func (m MySQLArgs) Validate() error {
 
 // MySQLTarget - MySQL target.
 type MySQLTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       MySQLArgs
@@ -252,8 +253,8 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to MySQL.
-func (target *MySQLTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to MySQL.
+func (target *MySQLTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -349,7 +350,7 @@ func (target *MySQLTarget) executeStmts() error {
 }
 
 func (target *MySQLTarget) init() error {
-	return target.lazyInit.Do(target.initMySQL)
+	return target.initOnce.Do(target.initMySQL)
 }
 
 func (target *MySQLTarget) initMySQL() error {

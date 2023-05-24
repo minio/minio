@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -465,7 +466,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			if evt.Action.Delete() {
-				globalExpiryState.enqueueByDays(objInfo, evt)
+				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
 			}
 
@@ -721,7 +722,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewReader(gr, part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}

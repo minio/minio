@@ -423,6 +423,16 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		return
 	}
 	if err = validateConfig(cfg, subSys); err != nil {
+
+		var validationErr ldap.Validation
+		if errors.As(err, &validationErr) {
+			// If we got an LDAP validation error, we need to send appropriate
+			// error message back to client (likely mc).
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigLDAPValidation),
+				validationErr.FormatError(), r.URL)
+			return
+		}
+
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}

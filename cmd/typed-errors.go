@@ -30,9 +30,6 @@ var errMethodNotAllowed = errors.New("Method not allowed")
 // errSignatureMismatch means signature did not match.
 var errSignatureMismatch = errors.New("Signature does not match")
 
-// used when we deal with data larger than expected
-var errSizeUnexpected = errors.New("Data size larger than expected")
-
 // When upload object size is greater than 5G in a single PUT/POST operation.
 var errDataTooLarge = errors.New("Object size larger than allowed limit")
 
@@ -115,3 +112,6 @@ var errUploadIDNotFound = errors.New("Specified Upload ID is not found")
 
 // error returned when PartNumber is greater than the maximum allowed 10000 parts
 var errInvalidMaxParts = errors.New("Part number is greater than the maximum allowed 10000 parts")
+
+// error returned for session policies > 2048
+var errSessionPolicyTooLarge = errors.New("Session policy should not exceed 2048 characters")
