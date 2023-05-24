@@ -63,7 +63,8 @@ type LifecycleSys struct{}
 
 // Get - gets lifecycle config associated to a given bucket name.
 func (sys *LifecycleSys) Get(bucketName string) (lc *lifecycle.Lifecycle, err error) {
-	return globalBucketMetadataSys.GetLifecycleConfig(bucketName)
+	lc, _, err = globalBucketMetadataSys.GetLifecycleConfig(bucketName)
+	return lc, err
 }
 
 // NewLifecycleSys - creates new lifecycle system.

@@ -253,6 +253,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidObjectNamePrefixSlash
 	ErrInvalidResourceName
+	ErrInvalidLifecycleQueryParameter
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrClientDisconnected
@@ -1253,6 +1254,11 @@ var errorCodes = errorCodeMap{
 	ErrMalformedJSON: {
 		Code:           "XMinioMalformedJSON",
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidLifecycleQueryParameter: {
+		Code:           "XMinioInvalidLifecycleParameter",
+		Description:    "The boolean value provided for withUpdatedAt query parameter was invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminNoSuchUser: {
