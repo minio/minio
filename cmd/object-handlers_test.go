@@ -3693,6 +3693,27 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 
 			expectedAPIError: ErrInvalidAccessKeyID,
 		},
+		// Case where part number is invalid.
+		9: {
+			objectName: testObject,
+			content:    "hello",
+			partNumber: "0",
+			fault:      None,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedAPIError: ErrInvalidPart,
+		},
+		10: {
+			objectName: testObject,
+			content:    "hello",
+			partNumber: "-10",
+			fault:      None,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedAPIError: ErrInvalidPart,
+		},
 	}
 
 	reqV2Str := "V2 Signed HTTP request"
