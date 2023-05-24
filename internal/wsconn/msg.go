@@ -29,12 +29,13 @@ const (
 	OpDisconnectMux
 	OpMsg
 	OpUnblock
+	OpError
 )
 
 const (
-	// FlagCRCx3 indicates that, the lower 32 bits of xxhash3
+	// FlagCRCxxh3 indicates that, the lower 32 bits of xxhash3
 	// of the packet content will be sent after the message.
-	FlagCRCx3 = 1 << iota
+	FlagCRCxxh3 = 1 << iota
 )
 
 //msgp:tuple message

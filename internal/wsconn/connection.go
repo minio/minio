@@ -29,7 +29,8 @@ import (
 )
 
 // A Connection is a remote connection.
-// There is no distinction externally whether this was
+// There is no distinction externally whether the connection was initiated from
+// this server or from the remote.
 type Connection struct {
 	// State of the connection (atomic)
 	State State
@@ -73,7 +74,7 @@ func (r *Connection) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
-			// handle error
+			w.WriteHeader()
 		}
 		go r.handleMessages(conn)
 	}
