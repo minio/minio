@@ -2,8 +2,6 @@ module github.com/minio/minio
 
 go 1.19
 
-replace github.com/minio/madmin-go/v2 v2.1.3 => github.com/kaankabalak/madmin-go/v2 v2.0.0-20230519061012-102072a41823
-
 replace github.com/minio/mc v0.0.0-20230517184609-052cf01a9604 => github.com/kaankabalak/mc v0.0.0-20230522181621-c5cc9599f2cc
 
 replace github.com/minio/console v0.27.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
@@ -54,7 +52,7 @@ require (
 	github.com/minio/dperf v0.4.4
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.1.3
+	github.com/minio/madmin-go/v2 v2.2.0
 	github.com/minio/minio-go/v7 v7.0.54
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.2
