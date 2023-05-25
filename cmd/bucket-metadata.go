@@ -88,6 +88,7 @@ type BucketMetadata struct {
 	QuotaConfigUpdatedAt        time.Time
 	ReplicationConfigUpdatedAt  time.Time
 	VersioningConfigUpdatedAt   time.Time
+	LifecycleConfigUpdatedAt    time.Time
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig           *policy.Policy
@@ -426,6 +427,10 @@ func (b *BucketMetadata) defaultTimestamps() {
 
 	if b.VersioningConfigUpdatedAt.IsZero() {
 		b.VersioningConfigUpdatedAt = b.Created
+	}
+
+	if b.LifecycleConfigUpdatedAt.IsZero() {
+		b.LifecycleConfigUpdatedAt = b.Created
 	}
 }
 
