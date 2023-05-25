@@ -62,6 +62,9 @@ const (
 	objectLockConfig        = "object-lock.xml"
 	bucketTaggingConfig     = "tagging.xml"
 	bucketReplicationConfig = "replication.xml"
+
+	xMinIOErrCodeHeader = "x-minio-error-code"
+	xMinIOErrDescHeader = "x-minio-error-desc"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -1355,7 +1358,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		errCode := errorCodes.ToAPIErr(s3Error)
+		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
+		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
+		writeErrorResponseHeadersOnly(w, errCode)
 		return
 	}
 

@@ -421,7 +421,10 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 				}
 			}
 		}
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		errCode := errorCodes.ToAPIErr(s3Error)
+		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
+		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
+		writeErrorResponseHeadersOnly(w, errCode)
 		return
 	}
 
@@ -432,18 +435,18 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 
 	// We do not allow offsetting into extracted files.
 	if opts.PartNumber != 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidPartNumber))
 		return
 	}
 
 	if r.Header.Get(xhttp.Range) != "" {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
 		return
 	}
 
 	zipObjInfo, err := getObjectInfo(ctx, bucket, zipPath, opts)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
 
@@ -451,22 +454,22 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	if len(zipInfo) == 0 {
 		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
 		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 			return
 		}
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, opts)
 	}
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
 
 	file, err := zipindex.FindSerialized(zipInfo, object)
 	if err != nil {
 		if err == io.EOF {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchKey), r.URL)
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 		} else {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		}
 		return
 	}
