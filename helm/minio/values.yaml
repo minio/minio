@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2023-04-12T02-21-51Z
+  tag: RELEASE.2023-05-18T16-59-00Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
