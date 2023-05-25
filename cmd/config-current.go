@@ -283,7 +283,7 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) error {
+func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, objAPI ObjectLayer) error {
 	switch subSys {
 	case config.SiteSubSys:
 		if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
@@ -393,7 +393,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 	}
 
 	if config.NotifySubSystems.Contains(subSys) {
-		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, subSys, NewHTTPTransport()); err != nil {
+		if err := notify.TestSubSysNotificationTargets(ctx, s, subSys, NewHTTPTransport()); err != nil {
 			return err
 		}
 	}
@@ -407,7 +407,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 	return nil
 }
 
-func validateConfig(s config.Config, subSys string) error {
+func validateConfig(ctx context.Context, s config.Config, subSys string) error {
 	objAPI := newObjectLayerFn()
 
 	// We must have a global lock for this so nobody else modifies env while we do.
@@ -419,12 +419,12 @@ func validateConfig(s config.Config, subSys string) error {
 	// Enable env values to validate KMS.
 	defer env.SetEnvOn()
 	if subSys != "" {
-		return validateSubSysConfig(s, subSys, objAPI)
+		return validateSubSysConfig(ctx, s, subSys, objAPI)
 	}
 
 	// No sub-system passed. Validate all of them.
 	for _, ss := range config.SubSystems.ToSlice() {
-		if err := validateSubSysConfig(s, ss, objAPI); err != nil {
+		if err := validateSubSysConfig(ctx, s, ss, objAPI); err != nil {
 			return err
 		}
 	}
