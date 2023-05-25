@@ -506,16 +506,20 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bucket, version.Name, version) {
-					logger.LogIf(ctx, fmt.Errorf("found %s/%s (%s) expired object based on ILM rules, skipping and scheduled for deletion", bucket, version.Name, version.VersionID))
+					rebalanced++
 					continue
 				}
 
-				// We will skip rebalancing delete markers
-				// with single version, its as good as there
-				// is no data associated with the object.
+				// Empty delete markers we can assume that they can be purged
+				// as there is no more data associated with them.
 				if version.Deleted && len(fivs.Versions) == 1 {
-					logger.LogIf(ctx, fmt.Errorf("found %s/%s delete marked object with no other versions, skipping since there is no data to be rebalanced", bucket, version.Name))
+					rebalanced++
 					continue
+				}
+
+				versionID := version.VersionID
+				if versionID == "" {
+					versionID = nullVersionID
 				}
 
 				if version.Deleted {
@@ -523,8 +527,8 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						bucket,
 						version.Name,
 						ObjectOptions{
-							Versioned:         vc.PrefixEnabled(version.Name),
-							VersionID:         version.VersionID,
+							Versioned:         true,
+							VersionID:         versionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
 							DeleteMarker:      true, // make sure we create a delete marker
@@ -552,7 +556,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						nil,
 						http.Header{},
 						ObjectOptions{
-							VersionID:    version.VersionID,
+							VersionID:    versionID,
 							NoDecryption: true,
 							NoLock:       true,
 						})
