@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -128,37 +129,14 @@ func (target *WebhookTarget) Store() event.TargetStore {
 }
 
 func (target *WebhookTarget) isActive() (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, target.args.Endpoint.String(), nil)
+	conn, err := net.DialTimeout("tcp", target.args.Endpoint.Host, 5*time.Second)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, false) {
 			return false, store.ErrNotConnected
 		}
 		return false, err
 	}
-	tokens := strings.Fields(target.args.AuthToken)
-	switch len(tokens) {
-	case 2:
-		req.Header.Set("Authorization", target.args.AuthToken)
-	case 1:
-		req.Header.Set("Authorization", "Bearer "+target.args.AuthToken)
-	}
-
-	resp, err := target.httpClient.Do(req)
-	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, true) {
-			return false, store.ErrNotConnected
-		}
-		return false, err
-	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
-		return false, fmt.Errorf("unexpected error returned by %s : status(%s)", target.args.Endpoint.String(), resp.Status)
-	}
-	// StatusCode<400 means its up
+	defer conn.Close()
 	return true, nil
 }
 
