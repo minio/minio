@@ -460,7 +460,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					return
 				}
 			case bucketLifecycleConfig:
-				config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
+				config, _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
 				if err != nil {
 					if errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
 						continue
@@ -705,7 +705,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
-					LockEnabled: config.ObjectLockEnabled == "Enabled",
+					LockEnabled: config.Enabled(),
 				}
 				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {

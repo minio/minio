@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/mimedb"
 	"github.com/minio/pkg/sync/errgroup"
+	uatomic "go.uber.org/atomic"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -371,29 +372,61 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		userDefined["etag"] = opts.PreserveETag
 	}
 	onlineDisks := er.getDisks()
+
+	// Get parity and data drive count based on storage class metadata
 	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
 	if parityDrives < 0 {
 		parityDrives = er.defaultParityCount
 	}
 
+	// If we have offline disks upgrade the number of erasure codes for this object.
 	parityOrig := parityDrives
+
+	atomicParityDrives := uatomic.NewInt64(0)
+	atomicOfflineDrives := uatomic.NewInt64(0)
+
+	// Start with current parityDrives
+	atomicParityDrives.Store(int64(parityDrives))
+
+	var wg sync.WaitGroup
 	for _, disk := range onlineDisks {
-		if parityDrives >= len(onlineDisks)/2 {
-			parityDrives = len(onlineDisks) / 2
-			break
-		}
 		if disk == nil {
-			parityDrives++
+			atomicParityDrives.Inc()
+			atomicOfflineDrives.Inc()
 			continue
 		}
-		di, err := disk.DiskInfo(ctx)
-		if err != nil || di.ID == "" {
-			parityDrives++
+		if !disk.IsOnline() {
+			atomicParityDrives.Inc()
+			atomicOfflineDrives.Inc()
+			continue
 		}
+		wg.Add(1)
+		go func(disk StorageAPI) {
+			defer wg.Done()
+			di, err := disk.DiskInfo(ctx)
+			if err != nil || di.ID == "" {
+				atomicOfflineDrives.Inc()
+				atomicParityDrives.Inc()
+			}
+		}(disk)
+	}
+	wg.Wait()
+
+	if int(atomicOfflineDrives.Load()) > len(onlineDisks)/2 {
+		// if offline drives are more than 50% of the drives
+		// we have no quorum, we shouldn't proceed just
+		// fail at that point.
+		return nil, toObjectErr(errErasureWriteQuorum, bucket, object)
+	}
+
+	parityDrives = int(atomicParityDrives.Load())
+	if parityDrives >= len(onlineDisks)/2 {
+		parityDrives = len(onlineDisks) / 2
 	}
 	if parityOrig != parityDrives {
 		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
+
 	dataDrives := len(onlineDisks) - parityDrives
 
 	// we now know the number of blocks this object needs for data and parity.
