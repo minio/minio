@@ -564,6 +564,19 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
 
+	entryMap := make(map[string]int, 0)
+	for _, entry := range m.o {
+		name := strings.TrimPrefix(entry.name, prefix)
+		if name == "" {
+			continue
+		}
+		s := strings.Split(name, delimiter)
+		if len(s) == 0 {
+			continue
+		}
+		entryMap[s[0]] = entryMap[s[0]] + 1
+	}
+
 	for _, entry := range m.o {
 		if entry.isObject() {
 			if delimiter != "" {
@@ -602,6 +615,14 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 			idx = len(prefix) + idx + len(delimiter)
 			currPrefix := entry.name[:idx]
 			if currPrefix == prevPrefix {
+				continue
+			}
+			// if prefix is empty dir, should not return this prefix
+			s := strings.Split(currPrefix, delimiter)
+			if len(s) == 0 {
+				continue
+			}
+			if subs := entryMap[s[0]]; subs > 0 {
 				continue
 			}
 			prevPrefix = currPrefix
