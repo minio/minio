@@ -211,8 +211,8 @@ const (
 	// Header indiicates last rtention update time on source
 	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
 	// predicted date/time of transition
-	MinIOTransition = "X-Minio-Transition"
-
+	MinIOTransition            = "X-Minio-Transition"
+	MinIOLifecycleCfgUpdatedAt = "X-Minio-LifecycleConfig-UpdatedAt"
 	// MinIOCompressed is returned when object is compressed
 	MinIOCompressed = "X-Minio-Compressed"
 

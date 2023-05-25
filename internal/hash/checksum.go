@@ -341,7 +341,7 @@ func (c *Checksum) AsMap() map[string]string {
 // TransferChecksumHeader will transfer any checksum value that has been checked.
 // If checksum was trailing, they must have been added to r.Trailer.
 func TransferChecksumHeader(w http.ResponseWriter, r *http.Request) {
-	c, err := GetContentChecksum(r)
+	c, err := GetContentChecksum(r.Header)
 	if err != nil || c == nil {
 		return
 	}
@@ -375,8 +375,8 @@ func AddChecksumHeader(w http.ResponseWriter, c map[string]string) {
 // GetContentChecksum returns content checksum.
 // Returns ErrInvalidChecksum if so.
 // Returns nil, nil if no checksum.
-func GetContentChecksum(r *http.Request) (*Checksum, error) {
-	if trailing := r.Header.Values(xhttp.AmzTrailer); len(trailing) > 0 {
+func GetContentChecksum(h http.Header) (*Checksum, error) {
+	if trailing := h.Values(xhttp.AmzTrailer); len(trailing) > 0 {
 		var res *Checksum
 		for _, header := range trailing {
 			var duplicates bool
@@ -402,7 +402,7 @@ func GetContentChecksum(r *http.Request) (*Checksum, error) {
 			return res, nil
 		}
 	}
-	t, s := getContentChecksum(r)
+	t, s := getContentChecksum(h)
 	if t == ChecksumNone {
 		if s == "" {
 			return nil, nil
@@ -418,21 +418,21 @@ func GetContentChecksum(r *http.Request) (*Checksum, error) {
 
 // getContentChecksum returns content checksum type and value.
 // Returns ChecksumInvalid if so.
-func getContentChecksum(r *http.Request) (t ChecksumType, s string) {
+func getContentChecksum(h http.Header) (t ChecksumType, s string) {
 	t = ChecksumNone
-	alg := r.Header.Get(xhttp.AmzChecksumAlgo)
+	alg := h.Get(xhttp.AmzChecksumAlgo)
 	if alg != "" {
 		t |= NewChecksumType(alg)
 		if t.IsSet() {
 			hdr := t.Key()
-			if s = r.Header.Get(hdr); s == "" {
+			if s = h.Get(hdr); s == "" {
 				return ChecksumNone, ""
 			}
 		}
 		return t, s
 	}
 	checkType := func(c ChecksumType) {
-		if got := r.Header.Get(c.Key()); got != "" {
+		if got := h.Get(c.Key()); got != "" {
 			// If already set, invalid
 			if t != ChecksumNone {
 				t = ChecksumInvalid
