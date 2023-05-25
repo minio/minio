@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -70,7 +71,9 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 	if nilCount >= p.writeQuorum {
 		return nil
 	}
-	return reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
+
+	writeErr := reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
+	return fmt.Errorf("%w (offline-disks=%d/%d)", writeErr, countErrs(p.errs, errDiskNotFound), len(p.writers))
 }
 
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.

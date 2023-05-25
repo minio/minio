@@ -2026,6 +2026,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		return ErrClientDisconnected
 	}
 
+	// Unwrap the error first
+	err = unwrapAll(err)
+
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
