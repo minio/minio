@@ -1001,6 +1001,8 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	data := r.Reader
+
 	if opts.CheckPrecondFn != nil {
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
@@ -1011,7 +1013,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 	}
 
-	data := r.Reader
+	// Validate input data size and it can never be less than -1.
+	if data.Size() < -1 {
+		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		return ObjectInfo{}, toObjectErr(errInvalidArgument)
+	}
 
 	userDefined := cloneMSS(opts.UserDefined)
 
@@ -1029,6 +1035,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		parityOrig := parityDrives
 
 		atomicParityDrives := uatomic.NewInt64(0)
+		atomicOfflineDrives := uatomic.NewInt64(0)
+
 		// Start with current parityDrives
 		atomicParityDrives.Store(int64(parityDrives))
 
@@ -1036,10 +1044,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		for _, disk := range storageDisks {
 			if disk == nil {
 				atomicParityDrives.Inc()
+				atomicOfflineDrives.Inc()
 				continue
 			}
 			if !disk.IsOnline() {
 				atomicParityDrives.Inc()
+				atomicOfflineDrives.Inc()
 				continue
 			}
 			wg.Add(1)
@@ -1047,11 +1057,19 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				defer wg.Done()
 				di, err := disk.DiskInfo(ctx)
 				if err != nil || di.ID == "" {
+					atomicOfflineDrives.Inc()
 					atomicParityDrives.Inc()
 				}
 			}(disk)
 		}
 		wg.Wait()
+
+		if int(atomicOfflineDrives.Load()) >= (len(storageDisks)+1)/2 {
+			// if offline drives are more than 50% of the drives
+			// we have no quorum, we shouldn't proceed just
+			// fail at that point.
+			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+		}
 
 		parityDrives = int(atomicParityDrives.Load())
 		if parityDrives >= len(storageDisks)/2 {
@@ -1068,12 +1086,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	writeQuorum := dataDrives
 	if dataDrives == parityDrives {
 		writeQuorum++
-	}
-
-	// Validate input data size and it can never be less than zero.
-	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
-		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
 	// Initialize parts metadata
