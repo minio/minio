@@ -426,9 +426,13 @@ func (c Config) DelFrom(r io.Reader) error {
 	return scanner.Err()
 }
 
-const ContextKeyForTargetFromConfig = "ContextKeyForTargetFromConfig"
+// ContextKeyString is type(string) for contextKey
+type ContextKeyString string
 
-// ParseTargetIDs - read all targetIDs from reader
+// ContextKeyForTargetFromConfig - key for context for target from config
+const ContextKeyForTargetFromConfig = ContextKeyString("ContextKeyForTargetFromConfig")
+
+// ParseConfigTargetID - read all targetIDs from reader
 func ParseConfigTargetID(r io.Reader) (ids map[string]bool, err error) {
 	ids = make(map[string]bool)
 	scanner := bufio.NewScanner(r)
