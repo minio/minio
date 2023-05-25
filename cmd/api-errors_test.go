@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/minio/minio/internal/crypto"
@@ -67,11 +65,6 @@ var toAPIErrorTests = []struct {
 }
 
 func TestAPIErrCode(t *testing.T) {
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer os.RemoveAll(disk)
-
-	initFSObjects(disk, t)
-
 	ctx := context.Background()
 	for i, testCase := range toAPIErrorTests {
 		errCode := toAPIErrorCode(ctx, testCase.err)

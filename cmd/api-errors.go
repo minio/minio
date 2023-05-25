@@ -253,6 +253,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidObjectNamePrefixSlash
 	ErrInvalidResourceName
+	ErrInvalidLifecycleQueryParameter
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrClientDisconnected
@@ -1255,6 +1256,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidLifecycleQueryParameter: {
+		Code:           "XMinioInvalidLifecycleParameter",
+		Description:    "The boolean value provided for withUpdatedAt query parameter was invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminNoSuchUser: {
 		Code:           "XMinioAdminNoSuchUser",
 		Description:    "The specified user does not exist.",
@@ -2019,6 +2025,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if contextCanceled(ctx) && errors.Is(ctx.Err(), context.Canceled) {
 		return ErrClientDisconnected
 	}
+
+	// Unwrap the error first
+	err = unwrapAll(err)
 
 	switch err {
 	case errInvalidArgument:

@@ -1261,3 +1261,14 @@ func MockOpenIDTestUserInteraction(ctx context.Context, pro OpenIDClientAppParam
 	// fmt.Printf("TOKEN: %s\n", rawIDToken)
 	return rawIDToken, nil
 }
+
+// unwrapAll will unwrap the returned error completely.
+func unwrapAll(err error) error {
+	for {
+		werr := errors.Unwrap(err)
+		if werr == nil {
+			return err
+		}
+		err = werr
+	}
+}
