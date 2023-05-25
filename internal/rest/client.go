@@ -340,14 +340,7 @@ func (c *Client) LastConn() time.Time {
 func (c *Client) LastError() error {
 	c.RLock()
 	defer c.RUnlock()
-	return c.lastErr
-}
-
-// LastErrTime returns previous error time
-func (c *Client) LastErrTime() (time.Time, bool) {
-	c.RLock()
-	defer c.RUnlock()
-	return c.lastErrTime, !c.lastErrTime.IsZero()
+	return fmt.Errorf("[%s] %w", c.lastErrTime.Format(time.RFC3339), c.lastErr)
 }
 
 // computes the exponential backoff duration according to
