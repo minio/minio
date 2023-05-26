@@ -17,33 +17,24 @@
 
 package wsconn
 
-import (
-	"github.com/google/uuid"
-)
+import "context"
 
-// Manager will
-type Manager struct {
-	// ID is an instance ID, that will change whenever the server restarts.
-	// This allows remotes to keep track of whether state is preserved.
-	ID uuid.UUID
-
-	// Immutable after creation, so no locks.
-	targets map[string]*Connection
+type MuxClient struct {
+	ID       uint64
+	Seq      uint32
+	Resp     chan []byte
+	Stateful bool
+	ctx      context.Context
+	parent   *Connection
 }
 
-func NewManager(local string, hosts []string) *Manager {
-	m := Manager{
-		ID:      uuid.New(),
-		targets: make(map[string]*Connection, len(hosts)),
+func newMuxClient(id uint64, parent *Connection, stateful bool) *MuxClient {
+	return &MuxClient{
+		ID:       id,
+		Seq:      0,
+		Resp:     make(chan []byte, 1),
+		Stateful: stateful,
+		ctx:      context.TODO(),
+		parent:   parent,
 	}
-	for _, host := range hosts {
-		m.targets[host] = NewConnection(m.ID, host)
-	}
-	return &m
-}
-
-// Connection will return the connection for the specified host.
-// If the host does not exist nil will be returned.
-func (m *Manager) Connection(host string) *Connection {
-	return m.targets[host]
 }

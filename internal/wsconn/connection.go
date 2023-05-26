@@ -22,10 +22,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/google/uuid"
 	"github.com/minio/minio/internal/logger"
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 // A Connection is a remote connection.
@@ -35,14 +38,20 @@ type Connection struct {
 	// State of the connection (atomic)
 	State State
 
+	// NextID is the next ID that can be used (atomic).
+	NextID uint64
+
 	// Non-atomic
 	Remote string
+
+	// ID of this server instance.
+	id uuid.UUID
 
 	// Context for the server.
 	ctx context.Context
 
 	// Active mux connections.
-	active map[uint32]*MuxClient
+	active *xsync.MapOf[uint64, *MuxClient]
 }
 
 // State is a connection state.
@@ -66,6 +75,30 @@ const (
 	StateConnectionError
 )
 
+// NewConnection will create an unconnected connection to a remote.
+func NewConnection(id uuid.UUID, remote string) *Connection {
+	return &Connection{
+		State:  StateUnconnected,
+		Remote: remote,
+		id:     id,
+		ctx:    context.TODO(),
+		active: xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+	}
+}
+
+func (r *Connection) NewMuxClient(stateful bool) *MuxClient {
+	id := atomic.AddUint64(&r.NextID, 1)
+	c := newMuxClient(id, r, stateful)
+	for {
+		// Handle the extremely unlikely scenario that we wrapped.
+		if _, ok := r.active.LoadOrStore(id, c); !ok {
+			break
+		}
+		c.ID = atomic.AddUint64(&r.NextID, 1)
+	}
+	return c
+}
+
 func (r *Connection) connect() error {
 	return nil
 }
@@ -74,7 +107,8 @@ func (r *Connection) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
-			w.WriteHeader()
+			w.WriteHeader(http.StatusUpgradeRequired)
+			return
 		}
 		go r.handleMessages(conn)
 	}
@@ -97,11 +131,4 @@ func (r *Connection) handleMessages(conn net.Conn) {
 			// handle error
 		}
 	}
-}
-
-type MuxClient struct {
-	ID       uint32
-	Seq      uint32
-	Resp     chan []byte
-	Stateful bool
 }
