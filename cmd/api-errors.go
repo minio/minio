@@ -269,6 +269,7 @@ const (
 
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
+	ErrAdminNoSuchUserLDAPWarn
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
@@ -1266,6 +1267,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified user does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminNoSuchUserLDAPWarn: {
+		Code:           "XMinioAdminNoSuchUser",
+		Description:    "The specified user does not exist. If you meant a user in LDAP, use `mc idp ldap`",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrAdminNoSuchGroup: {
 		Code:           "XMinioAdminNoSuchGroup",
 		Description:    "The specified group does not exist.",
@@ -2036,6 +2042,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchPolicy
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchUserLDAPWarn:
+		apiErr = ErrAdminNoSuchUserLDAPWarn
 	case errNoSuchServiceAccount:
 		apiErr = ErrAdminServiceAccountNotFound
 	case errNoSuchGroup:
