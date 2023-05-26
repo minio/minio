@@ -657,7 +657,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				}
 			}
 		}
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		errCode := errorCodes.ToAPIErr(s3Error)
+		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
+		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
+		writeErrorResponseHeadersOnly(w, errCode)
 		return
 	}
 
@@ -680,7 +683,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				objInfo = oi
 			}
 			if proxy.Err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
+				writeErrorResponseHeadersOnly(w, toAPIError(ctx, proxy.Err))
 				return
 			}
 		}
@@ -692,7 +695,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		errCode := errorCodes.ToAPIErr(s3Error)
+		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
+		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
+		writeErrorResponseHeadersOnly(w, errCode)
 		return
 	}
 
