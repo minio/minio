@@ -1,0 +1,22 @@
+name: Shell formatting checks
+
+on:
+  pull_request:
+    branches:
+    - master
+
+permissions:
+  contents: read
+    
+jobs:
+  build:
+    name: runner / shfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: luizm/action-sh-checker@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHFMT_OPTS: "-s"
+        with:
+          sh_checker_shellcheck_disable: true # disable for now

@@ -226,12 +226,10 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 // toAdminAPIErrCode - converts errErasureWriteQuorum error to admin API
 // specific error.
 func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
-	switch err {
-	case errErasureWriteQuorum:
+	if errors.Is(err, errErasureWriteQuorum) {
 		return ErrAdminConfigNoQuorum
-	default:
-		return toAPIErrorCode(ctx, err)
 	}
+	return toAPIErrorCode(ctx, err)
 }
 
 // wraps export error for more context

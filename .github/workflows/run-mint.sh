@@ -19,26 +19,13 @@ docker-compose -f minio-${MODE}.yaml up -d
 sleep 5m
 
 docker run --rm --net=host \
-       --name="mint-${MODE}-${JOB_NAME}" \
-       -e SERVER_ENDPOINT="127.0.0.1:9000" \
-       -e ACCESS_KEY="${ACCESS_KEY}" \
-       -e SECRET_KEY="${SECRET_KEY}" \
-       -e ENABLE_HTTPS=0 \
-       -e MINT_MODE="${MINT_MODE}" \
-       docker.io/minio/mint:edge \
-	 aws-sdk-go   \
-	 aws-sdk-java \
-	 aws-sdk-php  \
-	 aws-sdk-ruby \
-	 awscli       \
-	 healthcheck  \
-	 mc           \
-	 minio-go     \
-	 minio-java   \
-	 minio-py     \
-	 s3cmd        \
-	 s3select     \
-	 versioning
+	--name="mint-${MODE}-${JOB_NAME}" \
+	-e SERVER_ENDPOINT="127.0.0.1:9000" \
+	-e ACCESS_KEY="${ACCESS_KEY}" \
+	-e SECRET_KEY="${SECRET_KEY}" \
+	-e ENABLE_HTTPS=0 \
+	-e MINT_MODE="${MINT_MODE}" \
+	docker.io/minio/mint:edge
 
 docker-compose -f minio-${MODE}.yaml down || true
 sleep 10s
@@ -49,4 +36,3 @@ docker volume rm $(docker volume ls -f dangling=true) || true
 
 ## change working directory
 cd ../../../
-

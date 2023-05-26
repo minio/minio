@@ -88,7 +88,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 
 	if write {
 		reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-		if reducedErr == errErasureWriteQuorum {
+		if errors.Is(reducedErr, errErasureWriteQuorum) {
 			return fi, nil, reducedErr
 		}
 	} else {
@@ -563,7 +563,7 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
+	if errors.Is(err, errErasureWriteQuorum) {
 		// Remove all written
 		g := errgroup.WithNErrs(len(disks))
 		for index := range disks {
