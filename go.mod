@@ -7,6 +7,7 @@ replace github.com/minio/mc v0.0.0-20230517184609-052cf01a9604 => github.com/kaa
 replace github.com/minio/console v0.27.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
 
 require (
+	aead.dev/mem v0.2.0
 	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Shopify/sarama v1.38.1
@@ -100,7 +101,6 @@ require (
 )
 
 require (
-	aead.dev/mem v0.2.0 // indirect
 	aead.dev/minisign v0.2.0 // indirect
 	cloud.google.com/go v0.110.0 // indirect
 	cloud.google.com/go/compute v1.19.0 // indirect
@@ -241,3 +241,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/madmin-go/v2 v2.2.0 => github.com/shtripat/madmin-go/v2 v2.0.0-20230530051309-4b1ad133cc30

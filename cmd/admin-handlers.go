@@ -23,6 +23,7 @@ import (
 	crand "crypto/rand"
 	"crypto/rsa"
 	"crypto/subtle"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -32,6 +33,7 @@ import (
 	"hash/crc32"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,10 +43,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"aead.dev/mem"
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zip"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/madmin-go/v2/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -54,6 +59,8 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
@@ -2465,44 +2472,261 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 }
 
 // fetchKMSStatus fetches KMS-related status information.
-func fetchKMSStatus() madmin.KMS {
-	kmsStat := madmin.KMS{}
-	if GlobalKMS == nil {
-		kmsStat.Status = "disabled"
-		return kmsStat
+func fetchKMSStatus() []madmin.KMS {
+	client := getKesClient()
+	stats := []madmin.KMS{}
+	endpoints := []string{}
+	endpointsEnv := env.Get(kms.EnvKESEndpoint, "")
+	if endpointsEnv != "" {
+		endpoints = strings.Split(endpointsEnv, ",")
 	}
-
-	stat, err := GlobalKMS.Stat(context.Background())
-	if err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
-		return kmsStat
-	}
-	if len(stat.Endpoints) == 0 {
-		kmsStat.Status = stat.Name
-		return kmsStat
-	}
-	kmsStat.Status = string(madmin.ItemOnline)
 
 	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(context.Background(), "", kmsContext)
-	if err != nil {
-		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-	} else {
-		kmsStat.Encrypt = "success"
+	for _, endpoint := range endpoints {
+		// 1. Get stats for the KES instance
+		stat, err := getStatus(client, endpoint)
+		if err != nil {
+			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline)})
+			continue
+		}
+
+		// 2. Generate a new key using the KMS.
+		key, err := generateKey(env.Get(kms.EnvKESKeyName, ""), kmsContext, client, endpoint)
+		if err != nil {
+			stat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+		} else {
+			stat.Encrypt = "success"
+		}
+		// 3. Verify that we can indeed decrypt the (encrypted) key
+		decryptedKey, err := decryptKey(key.KeyID, key.Ciphertext, kmsContext, client, endpoint)
+		switch {
+		case err != nil:
+			stat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+		case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+			stat.Decrypt = "Decryption failed: decrypted key does not match generated key"
+		default:
+			stat.Decrypt = "success"
+		}
+		stats = append(stats, stat)
 	}
 
-	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
-	switch {
-	case err != nil:
-		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-	case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
-		kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-	default:
-		kmsStat.Decrypt = "success"
+	return stats
+}
+
+type KESStatus struct {
+	Version string        `json:"version"`
+	OS      string        `json:"os"`
+	Arch    string        `json:"arch"`
+	UpTime  time.Duration `json:"uptime"`
+
+	CPUs       int    `json:"num_cpu"`
+	UsableCPUs int    `json:"num_cpu_used"`
+	HeapAlloc  uint64 `json:"mem_heap_used"`
+	StackAlloc uint64 `json:"mem_stack_used"`
+}
+
+// getStatus gets status details for a KES endpoint
+func getStatus(client http.Client, endpoint string) (madmin.KMS, error) {
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint+"/v1/status", nil)
+	if err != nil {
+		logger.Fatal(err, fmt.Sprintf("Failed to create http request for endpoint: %s", endpoint))
+		return madmin.KMS{}, err
 	}
-	return kmsStat
+	resp, err := client.Do(request)
+	if err != nil {
+		return madmin.KMS{}, err
+	}
+
+	var response KESStatus
+	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
+		return madmin.KMS{}, err
+	}
+	return madmin.KMS{Status: string(madmin.ItemOnline), Endpoint: endpoint, Version: response.Version}, nil
+}
+
+// generateKey generates a sample key
+func generateKey(keyID string, cryptoCtx kms.Context, client http.Client, endpoint string) (kms.DEK, error) {
+	ctxBytes, err := cryptoCtx.MarshalText()
+	if err != nil {
+		return kms.DEK{}, err
+	}
+
+	type Request struct {
+		Context []byte `json:"context,omitempty"` // A context is optional
+	}
+	type Response struct {
+		Plaintext  []byte `json:"plaintext"`
+		Ciphertext []byte `json:"ciphertext"`
+	}
+
+	body, err := json.Marshal(Request{
+		Context: ctxBytes,
+	})
+	if err != nil {
+		return kms.DEK{}, err
+	}
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint+"/v1/key/generate", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		return kms.DEK{}, err
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		return kms.DEK{}, err
+	}
+	defer resp.Body.Close()
+
+	var response Response
+	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
+		return kms.DEK{}, err
+	}
+
+	return kms.DEK{
+		KeyID:      keyID,
+		Plaintext:  response.Plaintext,
+		Ciphertext: response.Ciphertext,
+	}, nil
+}
+
+// decryptKey decrypts a given cipher
+func decryptKey(keyID string, ciphertext []byte, ctx kms.Context, client http.Client, endpoint string) ([]byte, error) {
+	ctxBytes, err := ctx.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+
+	type Request struct {
+		Ciphertext []byte `json:"ciphertext"`
+		Context    []byte `json:"context,omitempty"` // A context is optional
+	}
+	type Response struct {
+		Plaintext []byte `json:"plaintext"`
+	}
+	body, err := json.Marshal(Request{
+		Ciphertext: ciphertext,
+		Context:    ctxBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint+"/v1/key/decrypt", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var response Response
+	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
+		return nil, err
+	}
+	return response.Plaintext, nil
+}
+
+// getKesClient returns an http client for KES
+func getKesClient() http.Client {
+	var client http.Client
+	rootCAs, err := certs.GetRootCAs(env.Get(kms.EnvKESServerCA, globalCertsCADir.Get()))
+	if err != nil {
+		logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(kms.EnvKESServerCA, globalCertsCADir.Get())))
+	}
+	if env.IsSet(kms.EnvKESAPIKey) {
+		key, err := kes.ParseAPIKey(env.Get(kms.EnvKESAPIKey, ""))
+		if err != nil {
+			logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(kms.EnvKESAPIKey, "")))
+		}
+		cert, err := kes.GenerateCertificate(key)
+		if err != nil {
+			logger.Fatal(err, fmt.Sprintf("Failed to generate certificate from KES API key %q", env.Get(kms.EnvKESAPIKey, "")))
+		}
+		client = http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				TLSClientConfig: &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					Certificates:       []tls.Certificate{cert},
+					RootCAs:            rootCAs,
+					ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+				},
+			},
+		}
+	} else {
+		loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
+			// Manually load the certificate and private key into memory.
+			// We need to check whether the private key is encrypted, and
+			// if so, decrypt it using the user-provided password.
+			certBytes, err := os.ReadFile(certFile)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("unable to load KES client certificate as specified by the shell environment: %v", err)
+			}
+			keyBytes, err := os.ReadFile(keyFile)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("unable to load KES client private key as specified by the shell environment: %v", err)
+			}
+			privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
+			if len(rest) != 0 {
+				return tls.Certificate{}, errors.New("unable to load KES client private key as specified by the shell environment: private key contains additional data")
+			}
+			if x509.IsEncryptedPEMBlock(privateKeyPEM) {
+				keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(kms.EnvKESClientPassword, "")))
+				if err != nil {
+					return tls.Certificate{}, fmt.Errorf("unable to decrypt KES client private key as specified by the shell environment: %v", err)
+				}
+				keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
+			}
+			certificate, err := tls.X509KeyPair(certBytes, keyBytes)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("unable to load KES client certificate as specified by the shell environment: %v", err)
+			}
+			return certificate, nil
+		}
+
+		reloadCertEvents := make(chan tls.Certificate, 1)
+		certificate, err := certs.NewCertificate(env.Get(kms.EnvKESClientCert, ""), env.Get(kms.EnvKESClientKey, ""), loadX509KeyPair)
+		if err != nil {
+			logger.Fatal(err, "Failed to load KES client certificate")
+		}
+		certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
+		certificate.Notify(reloadCertEvents)
+
+		client = http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				TLSClientConfig: &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					Certificates:       []tls.Certificate{certificate.Get()},
+					RootCAs:            rootCAs,
+					ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
+				},
+			},
+		}
+	}
+	return client
 }
 
 // fetchLoggerDetails return log info
