@@ -125,7 +125,7 @@ func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.Resp
 		return
 	}
 
-	if err = validateConfig(cfg, subSys); err != nil {
+	if err = validateConfig(ctx, cfg, subSys); err != nil {
 
 		var validationErr ldap.Validation
 		if errors.As(err, &validationErr) {
@@ -422,7 +422,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	if err = validateConfig(cfg, subSys); err != nil {
+	if err = validateConfig(ctx, cfg, subSys); err != nil {
 
 		var validationErr ldap.Validation
 		if errors.As(err, &validationErr) {

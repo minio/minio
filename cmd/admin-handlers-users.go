@@ -1767,7 +1767,7 @@ func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *ht
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/attach
+// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/attach
 func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AttachPolicyBuiltin")
 
@@ -1835,18 +1835,17 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		}
 
 		// Validate that user exists.
-		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
-			if !ok {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
+		if !ok {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				// When LDAP is enabled, warn user that they are using the wrong
+				// API.
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
 				return
 			}
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
 		}
-	}
-
-	userType := regUser
-	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
-		userType = stsUser
 	}
 
 	var existingPolicies []string
@@ -1878,6 +1877,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	existingPolicies = append(existingPolicies, policiesToAttach...)
 	newPolicies := strings.Join(existingPolicies, ",")
 
+	userType := regUser
 	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1898,7 +1898,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	writeResponse(w, http.StatusCreated, nil, mimeNone)
 }
 
-// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/detach
+// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/detach
 func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DetachPolicyBuiltin")
 
@@ -1959,12 +1959,16 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		}
 
 		// Validate that user exists.
-		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
-			if !ok {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
+		if !ok {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				// When LDAP is enabled, warn user that they are using the wrong
+				// API.
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
 				return
 			}
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
 		}
 	}
 
