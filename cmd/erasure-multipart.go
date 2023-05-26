@@ -499,21 +499,6 @@ func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object 
 	return er.newMultipartUpload(ctx, bucket, object, opts)
 }
 
-// CopyObjectPart - reads incoming stream and internally erasure codes
-// them. This call is similar to put object part operation but the source
-// data is read from an existing object.
-//
-// Implements S3 compatible Upload Part Copy API.
-func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
-	partInfo, err := er.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, NewPutObjReader(srcInfo.Reader), dstOpts)
-	if err != nil {
-		return pi, toObjectErr(err, dstBucket, dstObject)
-	}
-
-	// Success.
-	return partInfo, nil
-}
-
 // renamePart - renames multipart part to its relevant location under uploadID.
 func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
@@ -667,7 +652,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1:
 		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			buffer = make([]byte, data.ActualSize()+256, data.ActualSize()*2+512)
+			// Account for padding and forced compression overhead and encryption.
+			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
 		} else {
 			buffer = er.bp.Get()
 			defer er.bp.Put(buffer)
