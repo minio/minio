@@ -2,9 +2,7 @@ module github.com/minio/minio
 
 go 1.19
 
-replace github.com/minio/mc v0.0.0-20230517184609-052cf01a9604 => github.com/kaankabalak/mc v0.0.0-20230522181621-c5cc9599f2cc
-
-replace github.com/minio/console v0.27.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
+replace github.com/minio/console v0.28.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
 
 require (
 	cloud.google.com/go/storage v1.30.1
@@ -53,7 +51,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
 	github.com/minio/madmin-go/v2 v2.2.0
-	github.com/minio/minio-go/v7 v7.0.54
+	github.com/minio/minio-go/v7 v7.0.55-0.20230525060734-b7836f021bfb
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.2
 	github.com/minio/selfupdate v0.6.0
@@ -183,7 +181,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20230523171519-7415469c72f3 // indirect
+	github.com/minio/mc v0.0.0-20230526175537-0fac0e006eae // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
