@@ -412,7 +412,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 	wg.Wait()
 
-	if int(atomicOfflineDrives.Load()) > len(onlineDisks)/2 {
+	if int(atomicOfflineDrives.Load()) >= (len(onlineDisks)+1)/2 {
 		// if offline drives are more than 50% of the drives
 		// we have no quorum, we shouldn't proceed just
 		// fail at that point.
