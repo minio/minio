@@ -1165,7 +1165,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 			}
 		}
 		for i, p := range listPartsInfo.Parts {
-			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind != crypto.S3)
+			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind == crypto.SSEC)
 			listPartsInfo.Parts[i].Size = p.ActualSize
 		}
 	}
