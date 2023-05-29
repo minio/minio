@@ -64,7 +64,7 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
 ./mc admin replicate add minio1 minio2 minio3
 
-./mc admin idp ldap policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc idp ldap policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 sleep 5
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
