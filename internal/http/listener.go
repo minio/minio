@@ -23,6 +23,8 @@ import (
 	"net"
 	"strings"
 	"syscall"
+
+	"github.com/coreos/go-systemd/v22/activation"
 )
 
 type acceptResult struct {
@@ -150,6 +152,21 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 			if strings.EqualFold(host, "localhost") {
 				isLocalhost = true
 			}
+		}
+	}
+
+	// Get the list of socket-activated listeners
+	named_listeners, _ := activation.ListenersWithNames()
+	server_listeners, ok := named_listeners["server"]
+	if ok {
+		for _, l := range server_listeners {
+			tcpListener, ok := l.(*net.TCPListener)
+			if !ok {
+				err = fmt.Errorf("unexpected listener type found %v in the socket-activated list", l)
+				return nil, err
+			}
+
+			tcpListeners = append(tcpListeners, tcpListener)
 		}
 	}
 
