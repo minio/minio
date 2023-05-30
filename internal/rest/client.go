@@ -99,6 +99,7 @@ type Client struct {
 
 	sync.RWMutex // mutex for lastErr
 	lastErr      error
+	lastErrTime  time.Time
 }
 
 type restError string
@@ -339,7 +340,7 @@ func (c *Client) LastConn() time.Time {
 func (c *Client) LastError() error {
 	c.RLock()
 	defer c.RUnlock()
-	return c.lastErr
+	return fmt.Errorf("[%s] %w", c.lastErrTime.Format(time.RFC3339), c.lastErr)
 }
 
 // computes the exponential backoff duration according to
@@ -370,6 +371,7 @@ func exponentialBackoffWait(r *rand.Rand, unit, cap time.Duration) func(uint) ti
 func (c *Client) MarkOffline(err error) bool {
 	c.Lock()
 	c.lastErr = err
+	c.lastErrTime = time.Now()
 	c.Unlock()
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
