@@ -121,12 +121,11 @@ func init() {
 		} else {
 			t = time.NewTicker(10 * time.Minute)
 		}
-		globalDNSCache.RefreshWithOptions(options)
 		defer t.Stop()
 		for {
+			globalDNSCache.RefreshWithOptions(options)
 			select {
 			case <-t.C:
-				globalDNSCache.RefreshWithOptions(options)
 			case <-GlobalContext.Done():
 				return
 			}
