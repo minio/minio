@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -124,6 +125,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		readTriggerCh <- true
 	}
 
+	disksNotFound := int32(0)
 	bitrotHeal := int32(0)       // Atomic bool flag.
 	missingPartsHeal := int32(0) // Atomic bool flag.
 	readerIndex := 0
@@ -164,10 +166,13 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			p.buf[bufIdx] = p.buf[bufIdx][:p.shardSize]
 			n, err := rr.ReadAt(p.buf[bufIdx], p.offset)
 			if err != nil {
-				if errors.Is(err, errFileNotFound) {
+				switch {
+				case errors.Is(err, errFileNotFound):
 					atomic.StoreInt32(&missingPartsHeal, 1)
-				} else if errors.Is(err, errFileCorrupt) {
+				case errors.Is(err, errFileCorrupt):
 					atomic.StoreInt32(&bitrotHeal, 1)
+				case errors.Is(err, errDiskNotFound):
+					atomic.AddInt32(&disksNotFound, 1)
 				}
 
 				// This will be communicated upstream.
@@ -189,16 +194,16 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	wg.Wait()
 	if p.canDecode(newBuf) {
 		p.offset += p.shardSize
-		if atomic.LoadInt32(&missingPartsHeal) == 1 {
+		if missingPartsHeal == 1 {
 			return newBuf, errFileNotFound
-		} else if atomic.LoadInt32(&bitrotHeal) == 1 {
+		} else if bitrotHeal == 1 {
 			return newBuf, errFileCorrupt
 		}
 		return newBuf, nil
 	}
 
 	// If we cannot decode, just return read quorum error.
-	return nil, errErasureReadQuorum
+	return nil, fmt.Errorf("%w (offline-disks=%d/%d)", errErasureReadQuorum, disksNotFound, len(p.readers))
 }
 
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.

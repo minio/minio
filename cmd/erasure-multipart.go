@@ -88,7 +88,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 
 	if write {
 		reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-		if reducedErr == errErasureWriteQuorum {
+		if errors.Is(reducedErr, errErasureWriteQuorum) {
 			return fi, nil, reducedErr
 		}
 	} else {
@@ -412,7 +412,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 	wg.Wait()
 
-	if int(atomicOfflineDrives.Load()) > len(onlineDisks)/2 {
+	if int(atomicOfflineDrives.Load()) >= (len(onlineDisks)+1)/2 {
 		// if offline drives are more than 50% of the drives
 		// we have no quorum, we shouldn't proceed just
 		// fail at that point.
@@ -499,21 +499,6 @@ func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object 
 	return er.newMultipartUpload(ctx, bucket, object, opts)
 }
 
-// CopyObjectPart - reads incoming stream and internally erasure codes
-// them. This call is similar to put object part operation but the source
-// data is read from an existing object.
-//
-// Implements S3 compatible Upload Part Copy API.
-func (er erasureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
-	partInfo, err := er.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, NewPutObjReader(srcInfo.Reader), dstOpts)
-	if err != nil {
-		return pi, toObjectErr(err, dstBucket, dstObject)
-	}
-
-	// Success.
-	return partInfo, nil
-}
-
 // renamePart - renames multipart part to its relevant location under uploadID.
 func renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
@@ -563,7 +548,7 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
-	if err == errErasureWriteQuorum {
+	if errors.Is(err, errErasureWriteQuorum) {
 		// Remove all written
 		g := errgroup.WithNErrs(len(disks))
 		for index := range disks {
@@ -667,7 +652,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1:
 		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			buffer = make([]byte, data.ActualSize()+256, data.ActualSize()*2+512)
+			// Account for padding and forced compression overhead and encryption.
+			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
 		} else {
 			buffer = er.bp.Get()
 			defer er.bp.Put(buffer)

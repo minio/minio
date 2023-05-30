@@ -2,23 +2,23 @@
 
 # shellcheck disable=SC2120
 exit_1() {
-    cleanup
+	cleanup
 
-    echo "minio1 ============"
-    cat /tmp/minio1_1.log
-    echo "minio2 ============"
-    cat /tmp/minio2_1.log
-    echo "minio3 ============"
-    cat /tmp/minio3_1.log
+	echo "minio1 ============"
+	cat /tmp/minio1_1.log
+	echo "minio2 ============"
+	cat /tmp/minio2_1.log
+	echo "minio3 ============"
+	cat /tmp/minio3_1.log
 
-    exit 1
+	exit 1
 }
 
 cleanup() {
-    echo "Cleaning up instances of MinIO"
-    pkill minio
-    pkill -9 minio
-    rm -rf /tmp/minio-ldap-idp{1,2,3}
+	echo "Cleaning up instances of MinIO"
+	pkill minio
+	pkill -9 minio
+	rm -rf /tmp/minio-ldap-idp{1,2,3}
 }
 
 cleanup
@@ -45,8 +45,8 @@ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="ou=swengg,dc=min,dc=io"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member=%d))"
 
 if [ ! -f ./mc ]; then
-    wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc \
-	&& chmod +x mc
+	wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
+		chmod +x mc
 fi
 
 minio server --config-dir /tmp/minio-ldap --address ":9001" /tmp/minio-ldap-idp1/{1...4} >/tmp/minio1_1.log 2>&1 &
@@ -64,7 +64,7 @@ export MC_HOST_minio3=http://minio:minio123@localhost:9003
 
 ./mc admin replicate add minio1 minio2 minio3
 
-./mc admin policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+./mc idp ldap policy attach minio1 consoleAdmin --user="uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 sleep 5
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
@@ -80,72 +80,72 @@ sleep 5
 sleep 10
 ./mc admin policy info minio1 rw
 if [ $? -eq 0 ]; then
-    echo "expecting the command to fail, exiting.."
-    exit_1;
+	echo "expecting the command to fail, exiting.."
+	exit_1
 fi
 
 ./mc admin policy info minio2 rw
 if [ $? -eq 0 ]; then
-    echo "expecting the command to fail, exiting.."
-    exit_1;
+	echo "expecting the command to fail, exiting.."
+	exit_1
 fi
 
 ./mc admin user info minio1 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
-    exit_1;
+	echo "policy mapping missing, exiting.."
+	exit_1
 fi
 
 ./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
-    exit_1;
+	echo "policy mapping missing, exiting.."
+	exit_1
 fi
 
 ./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
 if [ $? -ne 0 ]; then
-    echo "policy mapping missing, exiting.."
-    exit_1;
+	echo "policy mapping missing, exiting.."
+	exit_1
 fi
 
 # LDAP simple user
 ./mc admin user svcacct add minio2 dillon --access-key testsvc --secret-key testsvc123
 if [ $? -ne 0 ]; then
-    echo "adding svc account failed, exiting.."
-    exit_1;
+	echo "adding svc account failed, exiting.."
+	exit_1
 fi
 
 sleep 10
 
 ./mc admin user svcacct info minio1 testsvc
 if [ $? -ne 0 ]; then
-    echo "svc account not mirrored, exiting.."
-    exit_1;
+	echo "svc account not mirrored, exiting.."
+	exit_1
 fi
 
 ./mc admin user svcacct info minio2 testsvc
 if [ $? -ne 0 ]; then
-    echo "svc account not mirrored, exiting.."
-    exit_1;
+	echo "svc account not mirrored, exiting.."
+	exit_1
 fi
 
 ./mc admin user svcacct rm minio1 testsvc
 if [ $? -ne 0 ]; then
-    echo "removing svc account failed, exiting.."
-    exit_1;
+	echo "removing svc account failed, exiting.."
+	exit_1
 fi
 
 sleep 10
 ./mc admin user svcacct info minio2 testsvc
 if [ $? -eq 0 ]; then
-    echo "svc account found after delete, exiting.."
-    exit_1;
+	echo "svc account found after delete, exiting.."
+	exit_1
 fi
 
 ./mc admin user svcacct info minio3 testsvc
 if [ $? -eq 0 ]; then
-    echo "svc account found after delete, exiting.."
-    exit_1;
+	echo "svc account found after delete, exiting.."
+	exit_1
 fi
 
 ./mc mb minio1/newbucket
@@ -161,14 +161,14 @@ expected_checksum=$(cat ./lrgfile | md5sum)
 sleep 5
 ./mc stat minio2/newbucket
 if [ $? -ne 0 ]; then
-    echo "expecting bucket to be present. exiting.."
-    exit_1;
+	echo "expecting bucket to be present. exiting.."
+	exit_1
 fi
 
 ./mc stat minio3/newbucket
 if [ $? -ne 0 ]; then
-    echo "expecting bucket to be present. exiting.."
-    exit_1;
+	echo "expecting bucket to be present. exiting.."
+	exit_1
 fi
 
 ./mc cp README.md minio2/newbucket/
@@ -176,57 +176,57 @@ fi
 sleep 5
 ./mc stat minio1/newbucket/README.md
 if [ $? -ne 0 ]; then
-    echo "expecting object to be present. exiting.."
-    exit_1;
+	echo "expecting object to be present. exiting.."
+	exit_1
 fi
 
 ./mc stat minio3/newbucket/README.md
 if [ $? -ne 0 ]; then
-    echo "expecting object to be present. exiting.."
-    exit_1;
+	echo "expecting object to be present. exiting.."
+	exit_1
 fi
 
 sleep 10
 ./mc stat minio3/newbucket/lrgfile
 if [ $? -ne 0 ]; then
-    echo "expected object to be present, exiting.."
-    exit_1;
+	echo "expected object to be present, exiting.."
+	exit_1
 fi
 actual_checksum=$(./mc cat minio3/newbucket/lrgfile | md5sum)
 if [ "${expected_checksum}" != "${actual_checksum}" ]; then
-    echo "replication failed on multipart objects expected ${expected_checksum} got ${actual_checksum}"
-    exit
+	echo "replication failed on multipart objects expected ${expected_checksum} got ${actual_checksum}"
+	exit
 fi
 rm ./lrgfile
 
 vID=$(./mc stat minio2/newbucket/README.md --json | jq .versionID)
 if [ $? -ne 0 ]; then
-    echo "expecting object to be present. exiting.."
-    exit_1;
+	echo "expecting object to be present. exiting.."
+	exit_1
 fi
 ./mc tag set --version-id "${vID}" minio2/newbucket/README.md "k=v"
 if [ $? -ne 0 ]; then
-    echo "expecting tag set to be successful. exiting.."
-    exit_1;
+	echo "expecting tag set to be successful. exiting.."
+	exit_1
 fi
 sleep 5
 
 ./mc tag remove --version-id "${vID}" minio2/newbucket/README.md
 if [ $? -ne 0 ]; then
-    echo "expecting tag removal to be successful. exiting.."
-    exit_1;
+	echo "expecting tag removal to be successful. exiting.."
+	exit_1
 fi
 sleep 5
 
 replStatus_minio2=$(./mc stat minio2/newbucket/README.md --json | jq -r .replicationStatus)
 if [ $? -ne 0 ]; then
-    echo "expecting object to be present. exiting.."
-    exit_1;
+	echo "expecting object to be present. exiting.."
+	exit_1
 fi
 
 if [ ${replStatus_minio2} != "COMPLETED" ]; then
-    echo "expected tag removal to have replicated, exiting..."
-    exit_1;
+	echo "expected tag removal to have replicated, exiting..."
+	exit_1
 fi
 
 ./mc rm minio3/newbucket/README.md
@@ -234,54 +234,54 @@ sleep 5
 
 ./mc stat minio2/newbucket/README.md
 if [ $? -eq 0 ]; then
-    echo "expected file to be deleted, exiting.."
-    exit_1;
+	echo "expected file to be deleted, exiting.."
+	exit_1
 fi
 
 ./mc stat minio1/newbucket/README.md
 if [ $? -eq 0 ]; then
-    echo "expected file to be deleted, exiting.."
-    exit_1;
+	echo "expected file to be deleted, exiting.."
+	exit_1
 fi
 
 ./mc mb --with-lock minio3/newbucket-olock
 sleep 5
 
-enabled_minio2=$(./mc stat --json minio2/newbucket-olock| jq -r .ObjectLock.enabled)
+enabled_minio2=$(./mc stat --json minio2/newbucket-olock | jq -r .ObjectLock.enabled)
 if [ $? -ne 0 ]; then
-    echo "expected bucket to be mirrored with object-lock but not present, exiting..."
-    exit_1;
+	echo "expected bucket to be mirrored with object-lock but not present, exiting..."
+	exit_1
 fi
 
 if [ "${enabled_minio2}" != "Enabled" ]; then
-    echo "expected bucket to be mirrored with object-lock enabled, exiting..."
-    exit_1;
+	echo "expected bucket to be mirrored with object-lock enabled, exiting..."
+	exit_1
 fi
 
-enabled_minio1=$(./mc stat --json minio1/newbucket-olock| jq -r .ObjectLock.enabled)
+enabled_minio1=$(./mc stat --json minio1/newbucket-olock | jq -r .ObjectLock.enabled)
 if [ $? -ne 0 ]; then
-    echo "expected bucket to be mirrored with object-lock but not present, exiting..."
-    exit_1;
+	echo "expected bucket to be mirrored with object-lock but not present, exiting..."
+	exit_1
 fi
 
 if [ "${enabled_minio1}" != "Enabled" ]; then
-    echo "expected bucket to be mirrored with object-lock enabled, exiting..."
-    exit_1;
+	echo "expected bucket to be mirrored with object-lock enabled, exiting..."
+	exit_1
 fi
 
 # "Test if most recent tag update is replicated"
 ./mc tag set minio2/newbucket "key=val1"
 if [ $? -ne 0 ]; then
-    echo "expecting tag set to be successful. exiting.."
-    exit_1;
+	echo "expecting tag set to be successful. exiting.."
+	exit_1
 fi
 
 sleep 10
 
 val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key)
 if [ "${val}" != "val1" ]; then
-    echo "expected bucket tag to have replicated, exiting..."
-    exit_1;
+	echo "expected bucket tag to have replicated, exiting..."
+	exit_1
 fi
 # stop minio1
 kill -9 ${site1_pid}
@@ -297,17 +297,17 @@ minio server --config-dir /tmp/minio-ldap --address ":9001" /tmp/minio-ldap-idp1
 sleep 200
 
 # Test whether most recent tag update on minio2 is replicated to minio1
-val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key )
+val=$(./mc tag list minio1/newbucket --json | jq -r .tagset | jq -r .key)
 if [ "${val}" != "val2" ]; then
-    echo "expected bucket tag to have replicated, exiting..."
-    exit_1;
+	echo "expected bucket tag to have replicated, exiting..."
+	exit_1
 fi
 
 # Test if bucket created/deleted when minio1 is down healed
-diff -q <(./mc ls minio1)  <(./mc ls minio2) 1>/dev/null
-if  [ $? -ne 0 ]; then
-    echo "expected 'bucket2' delete and 'newbucket2' creation to have replicated, exiting..."
-    exit_1;
+diff -q <(./mc ls minio1) <(./mc ls minio2) 1>/dev/null
+if [ $? -ne 0 ]; then
+	echo "expected 'bucket2' delete and 'newbucket2' creation to have replicated, exiting..."
+	exit_1
 fi
 
 cleanup

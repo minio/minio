@@ -184,6 +184,21 @@ func (r *Reader) AddChecksum(req *http.Request, ignoreValue bool) error {
 	return r.AddNonTrailingChecksum(cs, ignoreValue)
 }
 
+// AddChecksumNoTrailer will add checksum checks as specified in
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html
+// Returns ErrInvalidChecksum if a problem with the checksum is found.
+func (r *Reader) AddChecksumNoTrailer(headers http.Header, ignoreValue bool) error {
+	cs, err := GetContentChecksum(headers)
+	if err != nil {
+		return ErrInvalidChecksum
+	}
+	if cs == nil {
+		return nil
+	}
+	r.contentHash = *cs
+	return r.AddNonTrailingChecksum(cs, ignoreValue)
+}
+
 // AddNonTrailingChecksum will add a checksum to the reader.
 // The checksum cannot be trailing.
 func (r *Reader) AddNonTrailingChecksum(cs *Checksum, ignoreValue bool) error {

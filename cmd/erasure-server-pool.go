@@ -1459,7 +1459,7 @@ func (z *erasureServerPools) CopyObjectPart(ctx context.Context, srcBucket, srcO
 	}
 
 	return z.PutObjectPart(ctx, destBucket, destObject, uploadID, partID,
-		NewPutObjReader(srcInfo.Reader), dstOpts)
+		srcInfo.PutObjReader, dstOpts)
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
