@@ -53,7 +53,7 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 		}
 		return err
 	}
-	defer syscall.CloseHandle(handle)
+	defer syscall.FindClose(handle)
 
 	for ; ; err = syscall.FindNextFile(handle, data) {
 		if err != nil {
@@ -128,7 +128,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		return nil, syscallErrToFileErr(dirPath, err)
 	}
 
-	defer syscall.CloseHandle(handle)
+	defer syscall.FindClose(handle)
 
 	count := opts.count
 	for ; count != 0; err = syscall.FindNextFile(handle, data) {
