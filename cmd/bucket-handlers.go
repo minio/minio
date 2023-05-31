@@ -439,6 +439,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// The max. XML contains 100000 object names (each at most 1024 bytes long) + XML overhead
 	const maxBodySize = 2 * 100000 * 1024
 
+	if r.ContentLength > maxBodySize {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
+		return
+	}
+
 	// Unmarshal list of keys to be deleted.
 	deleteObjectsReq := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjectsReq, maxBodySize); err != nil {
