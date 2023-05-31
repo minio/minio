@@ -165,6 +165,16 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 // Delete delete the bucket metadata for the specified bucket.
 // must be used by all callers instead of using Update() with nil configData.
 func (sys *BucketMetadataSys) Delete(ctx context.Context, bucket string, configFile string) (updatedAt time.Time, err error) {
+	meta, _, err := sys.GetConfig(GlobalContext, bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return updatedAt, BucketSSEConfigNotFound{Bucket: bucket}
+		}
+		return updatedAt, err
+	}
+	if meta.sseConfig == nil {
+		return updatedAt, BucketSSEConfigNotFound{Bucket: bucket}
+	}
 	return sys.updateAndParse(ctx, bucket, configFile, nil, false)
 }
 
