@@ -313,6 +313,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 			var versionNotFound int
 			for _, version := range fivs.Versions {
+				// Ignore a version with a modtime newer than healing start
+				if version.ModTime.After(tracker.Started) {
+					continue
+				}
 				if err := bgSeq.queueHealTask(healSource{
 					bucket:    bucket,
 					object:    version.Name,
