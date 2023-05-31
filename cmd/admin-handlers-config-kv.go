@@ -546,7 +546,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 // setLoggerWebhookSubnetProxy - Sets the logger webhook's subnet proxy value to
 // one being set for subnet proxy
 func setLoggerWebhookSubnetProxy(subSys string, cfg config.Config) bool {
-	if subSys == config.SubnetSubSys {
+	if subSys == config.SubnetSubSys || subSys == config.LoggerWebhookSubSys {
 		subnetWebhookCfg := cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
 		loggerWebhookSubnetProxy := subnetWebhookCfg.Get(logger.Proxy)
 		subnetProxy := cfg[config.SubnetSubSys][config.Default].Get(logger.Proxy)
