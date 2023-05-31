@@ -499,18 +499,22 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	// Set encryption response headers
-	switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
-	case crypto.S3:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-	case crypto.S3KMS:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-		w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
-		if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+
+	if kind, isEncrypted := crypto.IsEncrypted(objInfo.UserDefined); isEncrypted {
+		switch kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.S3KMS:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
+			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
+				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+			}
+		case crypto.SSEC:
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
-	case crypto.SSEC:
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
