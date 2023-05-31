@@ -1656,7 +1656,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 
 	config, err := objectlock.ParseObjectLockConfig(r.Body)
 	if err != nil {
-		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr := errorCodes.ToAPIErr(ErrInvalidArgument)
 		apiErr.Description = err.Error()
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
@@ -1670,7 +1670,11 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 
 	// Deny object locking configuration settings on existing buckets without object lock enabled.
 	if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed), r.URL)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		}
 		return
 	}
 

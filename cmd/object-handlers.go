@@ -28,6 +28,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2702,7 +2703,8 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Notify object  event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutRetention,
@@ -2808,8 +2810,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Allow getObjectTagging if policy action is set.
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectTaggingAction, bucket, object); s3Error != ErrNone {
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
@@ -2820,10 +2821,19 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Get object tags
 	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Set this such that authorization policies can be applied on the object tags.
+	if tags := ot.String(); tags != "" {
+		r.Header.Set(xhttp.AmzObjectTagging, tags)
+	}
+
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
@@ -2842,6 +2852,10 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 			Value: v,
 		})
 	}
+	// Always return in sorted order for tags.
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Key < list[j].Key
+	})
 	otags.TagSet.Tags = list
 
 	writeSuccessResponseXML(w, encodeResponse(otags))
