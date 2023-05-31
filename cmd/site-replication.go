@@ -236,6 +236,12 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLayer) error {
 	buf, err := readConfig(ctx, objAPI, getSRStateFilePath())
 	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			c.Lock()
+			defer c.Unlock()
+			c.state = srState{}
+			c.enabled = false
+		}
 		return err
 	}
 
@@ -2270,6 +2276,17 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 			if errors.Is(err, BucketRemoteTargetNotFound{Bucket: t.SourceBucket}) {
 				continue
 			}
+			return err
+		}
+		targets, terr := globalBucketTargetSys.ListBucketTargets(ctx, t.SourceBucket)
+		if terr != nil {
+			return err
+		}
+		tgtBytes, terr := json.Marshal(&targets)
+		if terr != nil {
+			return err
+		}
+		if _, err = globalBucketMetadataSys.Update(ctx, t.SourceBucket, bucketTargetsFile, tgtBytes); err != nil {
 			return err
 		}
 	}
