@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -548,12 +549,20 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		// `mc head` will close the connection, will make this error
+		if e, ok := err.(*net.OpError); ok {
+			if e.Op == "write" && e.Net == "tcp" {
+				if es, ok := e.Err.(*os.SyscallError); ok && es.Syscall == "wsasend" {
+					goto close
+				}
+			}
+		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
 			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
-
+close:
 	if err = httpWriter.Close(); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
