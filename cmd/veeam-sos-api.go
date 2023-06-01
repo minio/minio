@@ -115,6 +115,15 @@ const (
 	capacityXMLObject = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
 )
 
+func veeamSOSAPIHeadObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	gr, err := veeamSOSAPIGetObject(ctx, bucket, object, nil, opts)
+	if gr != nil {
+		gr.Close()
+		return gr.ObjInfo, nil
+	}
+	return ObjectInfo{}, err
+}
+
 func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var buf []byte
 	switch object {
