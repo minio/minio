@@ -417,8 +417,9 @@ func (p poolMeta) save(ctx context.Context, pools []*erasureSets) error {
 	}
 
 	// Saves on all pools to make sure decommissioning of first pool is allowed.
-	for _, eset := range pools {
+	for i, eset := range pools {
 		if err = saveConfig(ctx, eset, poolMetaName, buf); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
 			return err
 		}
 	}
