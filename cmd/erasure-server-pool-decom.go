@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -545,7 +545,6 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	if objInfo.isMultipart() {
 		res, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
 			VersionID:   objInfo.VersionID,
-			MTime:       objInfo.ModTime,
 			UserDefined: objInfo.UserDefined,
 		})
 		if err != nil {
