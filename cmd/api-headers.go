@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -67,11 +68,20 @@ func setCommonHeaders(w http.ResponseWriter) {
 func encodeResponse(response interface{}) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(xml.Header)
-	if err := xml.NewEncoder(&buf).Encode(response); err != nil {
+	if err := xmlMarshalToWriter(&buf, response); err != nil {
 		logger.LogIf(GlobalContext, err)
 		return nil
 	}
 	return buf.Bytes()
+}
+
+// xmlMarshalToWriter use like xml.Marshal, use writer instead
+func xmlMarshalToWriter(w io.Writer, response interface{}) error {
+	enc := xml.NewEncoder(w)
+	if err := enc.Encode(response); err != nil {
+		return err
+	}
+	return enc.Close()
 }
 
 // Use this encodeResponseList() to support control characters

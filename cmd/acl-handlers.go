@@ -158,7 +158,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 		Permission: "FULL_CONTROL",
 	})
 
-	if err := xml.NewEncoder(w).Encode(acl); err != nil {
+	if err := xmlMarshalToWriter(w, acl); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -273,7 +273,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 		},
 		Permission: "FULL_CONTROL",
 	})
-	if err := xml.NewEncoder(w).Encode(acl); err != nil {
+	if err := xmlMarshalToWriter(w, acl); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
