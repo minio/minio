@@ -2,8 +2,6 @@ module github.com/minio/minio
 
 go 1.19
 
-replace github.com/minio/console v0.28.0 => github.com/kaankabalak/console v0.3.27-0.20230519061458-4cb5186da8d1
-
 require (
 	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -45,7 +43,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.54
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.28.0
+	github.com/minio/console v0.29.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.4
 	github.com/minio/highwayhash v1.0.2
