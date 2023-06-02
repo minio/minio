@@ -284,4 +284,10 @@ Examples:
 		"",
 		"MINIO_API_TRANSITION_WORKERS: should be >= GOMAXPROCS/2",
 	)
+
+	ErrInvalidDiskHighWatermarkPercentValue = newErrFn(
+		"Invalid value for disk high watermark percent",
+		"",
+		"MINIO_ALLOCATION_DISK_HIGH_WATERMARK_PERCENT: should be percentage or decimal , For example: 0.8 or 80%.",
+	)
 )

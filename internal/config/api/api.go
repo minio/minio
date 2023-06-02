@@ -77,6 +77,15 @@ const (
 	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
 )
 
+// Minio disk usage ENVs
+const (
+	apiDiskHighWatermarkPercent = "disk_high_watermark_percent"
+	apiDiskHighWatermarkSize    = "disk_high_watermark_size"
+
+	EnvDiskHighWatermarkPercent = "MINIO_ALLOCATION_DISK_HIGH_WATERMARK_PERCENT"
+	EnvDiskHighWatermarkSize    = "MINIO_ALLOCATION_DISK_HIGH_WATERMARK_SIZE"
+)
+
 // DefaultKVS - default storage class config
 var (
 	DefaultKVS = config.KVS{
@@ -136,6 +145,14 @@ var (
 			Key:   apiRootAccess,
 			Value: "on",
 		},
+		config.KV{
+			Key:   apiDiskHighWatermarkPercent,
+			Value: "100%",
+		},
+		config.KV{
+			Key:   apiDiskHighWatermarkSize,
+			Value: "-1M",
+		},
 	}
 )
 
@@ -155,6 +172,8 @@ type Config struct {
 	DisableODirect              bool          `json:"disable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
+	DiskHighWatermarkPercent    float64       `json:"disk_high_watermark_percent"`
+	DiskHighWatermarkSize       string        `json:"disk_high_watermark_size"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -255,6 +274,18 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
 	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
+	diskHighWatermarkPercent, err := strconv.ParseFloat(strings.ReplaceAll(env.Get(EnvDiskHighWatermarkPercent,
+		kvs.GetWithDefault(apiDiskHighWatermarkPercent, DefaultKVS)), "%", ""), 64)
+	if err != nil {
+		return cfg, config.ErrInvalidDiskHighWatermarkPercentValue(nil)
+	}
+	if diskHighWatermarkPercent < 0 {
+		return cfg, config.ErrInvalidDiskHighWatermarkPercentValue(nil)
+	}
+	if diskHighWatermarkPercent > 1 {
+		diskHighWatermarkPercent = diskHighWatermarkPercent / 100
+	}
+	diskHighWatermarkSize := env.Get(EnvDiskHighWatermarkSize, kvs.GetWithDefault(apiDiskHighWatermarkSize, DefaultKVS))
 
 	return Config{
 		RequestsMax:                 requestsMax,
@@ -271,5 +302,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		DisableODirect:              disableODirect,
 		GzipObjects:                 gzipObjects,
 		RootAccess:                  rootAccess,
+		DiskHighWatermarkSize:       diskHighWatermarkSize,
+		DiskHighWatermarkPercent:    diskHighWatermarkPercent,
 	}, nil
 }

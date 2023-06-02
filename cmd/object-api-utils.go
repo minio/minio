@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"io"
 	"math/rand"
 	"net"
@@ -1186,6 +1187,20 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 		}
 		if int64(disk.Free) <= perDisk {
 			return false, nil
+		}
+		diskUsedSize := perDisk + int64(disk.Used)
+		diskHighWatermarkSize := globalAPIConfig.getDiskHighWatermarkSize()
+		if diskUsedSize >= diskHighWatermarkSize {
+			return false, fmt.Errorf("maximum available disk watermark is exceeded , "+
+				"expected free space [%s] , total used space [%s] , maximum available space [%s]",
+				humanize.Bytes(uint64(perDisk)), humanize.Bytes(uint64(diskUsedSize)), humanize.Bytes(uint64(diskHighWatermarkSize)))
+		}
+		diskHighWatermarkPercent := globalAPIConfig.getDiskHighWatermarkPercent()
+		diskHighWatermarkSize = int64(float64(disk.Total) * diskHighWatermarkPercent)
+		if diskUsedSize >= diskHighWatermarkSize {
+			return false, fmt.Errorf("maximum available disk watermark is exceeded , "+
+				"expected free space [%s] , total used space [%s] , maximum available space [%s]",
+				humanize.Bytes(uint64(perDisk)), humanize.Bytes(uint64(diskUsedSize)), humanize.Bytes(uint64(diskHighWatermarkSize)))
 		}
 	}
 

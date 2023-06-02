@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"github.com/dustin/go-humanize"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -52,6 +54,9 @@ type apiConfig struct {
 	disableODirect              bool
 	gzipObjects                 bool
 	rootAccess                  bool
+
+	diskHighWatermarkPercent float64
+	diskHighWatermarkSize    string
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -154,6 +159,8 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.disableODirect = cfg.DisableODirect
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
+	t.diskHighWatermarkPercent = cfg.DiskHighWatermarkPercent
+	t.diskHighWatermarkSize = cfg.DiskHighWatermarkSize
 }
 
 func (t *apiConfig) isDisableODirect() bool {
@@ -324,4 +331,21 @@ func (t *apiConfig) getTransitionWorkers() int {
 	defer t.mu.RUnlock()
 
 	return t.transitionWorkers
+}
+
+func (t *apiConfig) getDiskHighWatermarkPercent() float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.diskHighWatermarkPercent
+}
+
+func (t *apiConfig) getDiskHighWatermarkSize() int64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	bytes, err := humanize.ParseBigBytes(t.diskHighWatermarkSize)
+	if err != nil {
+		return math.MaxInt64
+	}
+	return bytes.Int64()
 }
