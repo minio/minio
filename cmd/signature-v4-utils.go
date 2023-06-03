@@ -31,6 +31,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"golang.org/x/exp/slices"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -199,7 +200,7 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 	reqQueries := r.Form
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
-	if !contains(signedHeaders, "host") {
+	if !slices.Contains(signedHeaders, "host") {
 		return nil, ErrUnsignedHeaders
 	}
 	extractedSignedHeaders := make(http.Header)

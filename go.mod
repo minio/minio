@@ -88,6 +88,7 @@ require (
 	go.uber.org/zap v1.24.0
 	goftp.io/server/v2 v2.0.0
 	golang.org/x/crypto v0.9.0
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/oauth2 v0.8.0
 	golang.org/x/sys v0.8.0
 	golang.org/x/time v0.3.0
