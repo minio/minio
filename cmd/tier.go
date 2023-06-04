@@ -76,10 +76,10 @@ var tierConfigPath = path.Join(minioConfigPrefix, tierConfigFile)
 
 // TierConfigMgr holds the collection of remote tiers configured in this deployment.
 type TierConfigMgr struct {
-	sync.RWMutex `msg:"-"`
-	drivercache  map[string]WarmBackend `msg:"-"`
+	drivercache map[string]WarmBackend `msg:"-"`
 
-	Tiers map[string]madmin.TierConfig `json:"tiers"`
+	Tiers        map[string]madmin.TierConfig `json:"tiers"`
+	sync.RWMutex `msg:"-"`
 }
 
 // IsTierValid returns true if there exists a remote tier by name tierName,

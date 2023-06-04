@@ -38,15 +38,15 @@ import (
 // replicatedTargetInfo struct represents replication info on a target
 type replicatedTargetInfo struct {
 	Arn                   string
-	Size                  int64
-	Duration              time.Duration
 	ReplicationAction     replicationAction // full or metadata only
-	OpType                replication.Type  // whether incoming replication, existing object, healing etc..
 	ReplicationStatus     replication.StatusType
 	PrevReplicationStatus replication.StatusType
 	VersionPurgeStatus    VersionPurgeStatusType
 	ResyncTimestamp       string
-	ReplicationResynced   bool // true only if resync attempted for this target
+	Size                  int64
+	Duration              time.Duration
+	OpType                replication.Type // whether incoming replication, existing object, healing etc..
+	ReplicationResynced   bool             // true only if resync attempted for this target
 }
 
 // Empty returns true for a target if arn is empty
@@ -176,10 +176,10 @@ func (o *ObjectInfo) TargetReplicationStatus(arn string) (status replication.Sta
 }
 
 type replicateTargetDecision struct {
-	Replicate   bool   // Replicate to this target
-	Synchronous bool   // Synchronous replication configured.
 	Arn         string // ARN of replication target
 	ID          string
+	Replicate   bool // Replicate to this target
+	Synchronous bool // Synchronous replication configured.
 }
 
 func (t *replicateTargetDecision) String() string {
@@ -279,9 +279,9 @@ func (r *ResyncDecision) mustResyncTarget(tgtArn string) bool {
 
 // ResyncTargetDecision is struct that represents resync decision for this target
 type ResyncTargetDecision struct {
-	Replicate       bool
-	ResetID         string
 	ResetBeforeDate time.Time
+	ResetID         string
+	Replicate       bool
 }
 
 var errInvalidReplicateDecisionFormat = fmt.Errorf("ReplicateDecision has invalid format")
@@ -324,17 +324,17 @@ func parseReplicateDecision(s string) (r ReplicateDecision, err error) {
 
 // ReplicationState represents internal replication state
 type ReplicationState struct {
-	ReplicaTimeStamp          time.Time              // timestamp when last replica update was received
-	ReplicaStatus             replication.StatusType // replica statusstringis
-	DeleteMarker              bool                   // represents DeleteMarker replication state
-	ReplicationTimeStamp      time.Time              // timestamp when last replication activity happened
-	ReplicationStatusInternal string                 // stringified representation of all replication activity
+	ReplicaTimeStamp          time.Time                         // timestamp when last replica update was received
+	ReplicationTimeStamp      time.Time                         // timestamp when last replication activity happened
+	Targets                   map[string]replication.StatusType // map of ARN->replication status for ongoing replication activity
+	PurgeTargets              map[string]VersionPurgeStatusType // map of ARN->VersionPurgeStatus for all the targets
+	ResetStatusesMap          map[string]string                 // map of ARN-> stringified reset id and timestamp for all the targets
+	ReplicaStatus             replication.StatusType            // replica statusstringis
+	ReplicationStatusInternal string                            // stringified representation of all replication activity
 	// VersionPurgeStatusInternal is internally in the format "arn1=PENDING;arn2=COMMPLETED;"
-	VersionPurgeStatusInternal string                            // stringified representation of all version purge statuses
-	ReplicateDecisionStr       string                            // stringified representation of replication decision for each target
-	Targets                    map[string]replication.StatusType // map of ARN->replication status for ongoing replication activity
-	PurgeTargets               map[string]VersionPurgeStatusType // map of ARN->VersionPurgeStatus for all the targets
-	ResetStatusesMap           map[string]string                 // map of ARN-> stringified reset id and timestamp for all the targets
+	VersionPurgeStatusInternal string // stringified representation of all version purge statuses
+	ReplicateDecisionStr       string // stringified representation of replication decision for each target
+	DeleteMarker               bool   // represents DeleteMarker replication state
 }
 
 // Equal returns true if replication state is identical for version purge statuses and (replica)tion statuses.
@@ -584,12 +584,15 @@ type ResyncTargetsInfo struct {
 
 // ResyncTarget is a struct representing the Target reset ID where target is identified by its Arn
 type ResyncTarget struct {
-	Arn       string    `json:"arn"`
-	ResetID   string    `json:"resetid"`
 	StartTime time.Time `json:"startTime"`
 	EndTime   time.Time `json:"endTime"`
+	Arn       string    `json:"arn"`
+	ResetID   string    `json:"resetid"`
 	// Status of resync operation
 	ResyncStatus string `json:"resyncStatus,omitempty"`
+	// Last bucket/object replicated.
+	Bucket string `json:"bucket,omitempty"`
+	Object string `json:"object,omitempty"`
 	// Completed size in bytes
 	ReplicatedSize int64 `json:"completedReplicationSize"`
 	// Failed size in bytes
@@ -598,9 +601,6 @@ type ResyncTarget struct {
 	FailedCount int64 `json:"failedReplicationCount"`
 	// Total number of failed operations
 	ReplicatedCount int64 `json:"replicationCount"`
-	// Last bucket/object replicated.
-	Bucket string `json:"bucket,omitempty"`
-	Object string `json:"object,omitempty"`
 }
 
 // VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
@@ -630,9 +630,9 @@ func (v VersionPurgeStatusType) Pending() bool {
 type replicationResyncer struct {
 	// map of bucket to their resync status
 	statusMap      map[string]BucketReplicationResyncStatus
-	workerSize     int
 	resyncCancelCh chan struct{}
 	workerCh       chan struct{}
+	workerSize     int
 	sync.RWMutex
 }
 
@@ -645,10 +645,10 @@ const (
 )
 
 type resyncOpts struct {
+	resyncBefore time.Time
 	bucket       string
 	arn          string
 	resyncID     string
-	resyncBefore time.Time
 }
 
 // ResyncStatusType status of resync operation
@@ -694,10 +694,13 @@ func (rt ResyncStatusType) String() string {
 type TargetReplicationResyncStatus struct {
 	StartTime  time.Time `json:"startTime" msg:"st"`
 	LastUpdate time.Time `json:"lastUpdated" msg:"lst"`
-	// Resync ID assigned to this reset
-	ResyncID string `json:"resyncID" msg:"id"`
 	// ResyncBeforeDate - resync all objects created prior to this date
 	ResyncBeforeDate time.Time `json:"resyncBeforeDate" msg:"rdt"`
+	// Resync ID assigned to this reset
+	ResyncID string `json:"resyncID" msg:"id"`
+	// Last bucket/object replicated.
+	Bucket string `json:"-" msg:"bkt"`
+	Object string `json:"-" msg:"obj"`
 	// Status of resync operation
 	ResyncStatus ResyncStatusType `json:"resyncStatus" msg:"rst"`
 	// Failed size in bytes
@@ -708,18 +711,15 @@ type TargetReplicationResyncStatus struct {
 	ReplicatedSize int64 `json:"completedReplicationSize"  msg:"rs"`
 	// Total number of failed operations
 	ReplicatedCount int64 `json:"replicationCount"  msg:"rrc"`
-	// Last bucket/object replicated.
-	Bucket string `json:"-" msg:"bkt"`
-	Object string `json:"-" msg:"obj"`
 }
 
 // BucketReplicationResyncStatus captures current replication resync status
 type BucketReplicationResyncStatus struct {
-	Version int `json:"version" msg:"v"`
+	LastUpdate time.Time `json:"lastUpdate" msg:"lu"`
 	// map of remote arn to their resync status for a bucket
 	TargetsMap map[string]TargetReplicationResyncStatus `json:"resyncMap,omitempty" msg:"brs"`
+	Version    int                                      `json:"version" msg:"v"`
 	ID         int                                      `json:"id" msg:"id"`
-	LastUpdate time.Time                                `json:"lastUpdate" msg:"lu"`
 }
 
 func (rs *BucketReplicationResyncStatus) cloneTgtStats() (m map[string]TargetReplicationResyncStatus) {

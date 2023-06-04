@@ -154,11 +154,11 @@ type serviceRTTMinuteStats struct {
 }
 
 type metrics struct {
-	sync.Mutex
 	LastCheckSuccess time.Time
 	LastCheckFailure time.Time
 	lastFullMinute   serviceRTTMinuteStats
 	currentMinute    serviceRTTMinuteStats
+	sync.Mutex
 }
 
 func (h *metrics) setConnSuccess(reqStartTime time.Time) {
@@ -229,10 +229,10 @@ func (h *metrics) accumRequestRTT(reqStartTime time.Time, rttMs float64, isSucce
 
 // AuthNPlugin - implements pluggable authentication via webhook.
 type AuthNPlugin struct {
-	args           Args
-	client         *http.Client
 	shutdownCtx    context.Context
+	client         *http.Client
 	serviceMetrics *metrics
+	args           Args
 }
 
 // Enabled returns if AuthNPlugin is enabled.
@@ -328,9 +328,9 @@ func New(shutdownCtx context.Context, args Args) *AuthNPlugin {
 // AuthNSuccessResponse - represents the response from the authentication plugin
 // service.
 type AuthNSuccessResponse struct {
+	Claims             map[string]interface{} `json:"claims"`
 	User               string                 `json:"user"`
 	MaxValiditySeconds int                    `json:"maxValiditySeconds"`
-	Claims             map[string]interface{} `json:"claims"`
 }
 
 // AuthNErrorResponse - represents an error response from the authN plugin.

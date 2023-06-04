@@ -49,13 +49,13 @@ type Bucket struct {
 
 // Object represents object metadata of the event.
 type Object struct {
+	UserMetadata map[string]string `json:"userMetadata,omitempty"`
 	Key          string            `json:"key"`
-	Size         int64             `json:"size,omitempty"`
 	ETag         string            `json:"eTag,omitempty"`
 	ContentType  string            `json:"contentType,omitempty"`
-	UserMetadata map[string]string `json:"userMetadata,omitempty"`
 	VersionID    string            `json:"versionId,omitempty"`
 	Sequencer    string            `json:"sequencer"`
+	Size         int64             `json:"size,omitempty"`
 }
 
 // Metadata represents event metadata.
@@ -76,16 +76,16 @@ type Source struct {
 // Event represents event notification information defined in
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html.
 type Event struct {
-	EventVersion      string            `json:"eventVersion"`
-	EventSource       string            `json:"eventSource"`
-	AwsRegion         string            `json:"awsRegion"`
-	EventTime         string            `json:"eventTime"`
-	EventName         Name              `json:"eventName"`
-	UserIdentity      Identity          `json:"userIdentity"`
 	RequestParameters map[string]string `json:"requestParameters"`
 	ResponseElements  map[string]string `json:"responseElements"`
 	S3                Metadata          `json:"s3"`
 	Source            Source            `json:"source"`
+	EventVersion      string            `json:"eventVersion"`
+	EventSource       string            `json:"eventSource"`
+	AwsRegion         string            `json:"awsRegion"`
+	EventTime         string            `json:"eventTime"`
+	UserIdentity      Identity          `json:"userIdentity"`
+	EventName         Name              `json:"eventName"`
 	Type              madmin.TraceType  `json:"-"`
 }
 
@@ -96,7 +96,7 @@ func (e Event) Mask() uint64 {
 
 // Log represents event information for some event targets.
 type Log struct {
-	EventName Name
 	Key       string
 	Records   []Event
+	EventName Name
 }

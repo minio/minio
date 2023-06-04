@@ -47,6 +47,9 @@ var DefaultKVS = config.KVS{
 
 // Config represents the subnet related configuration
 type Config struct {
+
+	// Transport configured with proxy_url if set optionally.
+	transport http.RoundTripper
 	// The subnet license token - Deprecated Dec 2021
 	License string `json:"license"`
 
@@ -55,9 +58,6 @@ type Config struct {
 
 	// The HTTP(S) proxy URL to use for connecting to SUBNET
 	Proxy string `json:"proxy"`
-
-	// Transport configured with proxy_url if set optionally.
-	transport http.RoundTripper
 }
 
 var configLock sync.RWMutex

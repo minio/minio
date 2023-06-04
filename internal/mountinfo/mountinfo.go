@@ -25,9 +25,9 @@ type mountInfo struct {
 	Device  string
 	Path    string
 	FSType  string
-	Options []string
 	Freq    string
 	Pass    string
+	Options []string
 }
 
 func (m mountInfo) String() string {

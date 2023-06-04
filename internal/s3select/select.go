@@ -112,12 +112,12 @@ func (c *CompressionType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 
 // InputSerialization - represents elements inside <InputSerialization/> in request XML.
 type InputSerialization struct {
-	CompressionType CompressionType    `xml:"CompressionType"`
+	CompressionType CompressionType `xml:"CompressionType"`
+	format          string
 	CSVArgs         csv.ReaderArgs     `xml:"CSV"`
 	JSONArgs        json.ReaderArgs    `xml:"JSON"`
 	ParquetArgs     parquet.ReaderArgs `xml:"Parquet"`
 	unmarshaled     bool
-	format          string
 }
 
 // IsEmpty - returns whether input serialization is empty or not.
@@ -168,10 +168,10 @@ func (input *InputSerialization) UnmarshalXML(d *xml.Decoder, start xml.StartEle
 
 // OutputSerialization - represents elements inside <OutputSerialization/> in request XML.
 type OutputSerialization struct {
+	format      string
 	CSVArgs     csv.WriterArgs  `xml:"CSV"`
 	JSONArgs    json.WriterArgs `xml:"JSON"`
 	unmarshaled bool
-	format      string
 }
 
 // IsEmpty - returns whether output serialization is empty or not.
@@ -278,17 +278,17 @@ func (s *ScanRange) StartLen() (start, length int64, err error) {
 // represents elements inside <SelectRequest/> in request XML specified in detail at
 // https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html.
 type S3Select struct {
-	XMLName        xml.Name            `xml:"SelectRequest"`
-	Expression     string              `xml:"Expression"`
-	ExpressionType string              `xml:"ExpressionType"`
-	Input          InputSerialization  `xml:"InputSerialization"`
-	Output         OutputSerialization `xml:"OutputSerialization"`
-	Progress       RequestProgress     `xml:"RequestProgress"`
-	ScanRange      *ScanRange          `xml:"ScanRange"`
+	recordReader recordReader
+	ScanRange    *ScanRange `xml:"ScanRange"`
 
 	statement      *sql.SelectStatement
 	progressReader *progressReader
-	recordReader   recordReader
+	Input          InputSerialization  `xml:"InputSerialization"`
+	Output         OutputSerialization `xml:"OutputSerialization"`
+	XMLName        xml.Name            `xml:"SelectRequest"`
+	Expression     string              `xml:"Expression"`
+	ExpressionType string              `xml:"ExpressionType"`
+	Progress       RequestProgress     `xml:"RequestProgress"`
 }
 
 var legacyXMLName = "SelectObjectContentRequest"
@@ -675,8 +675,8 @@ func NewS3Select(r io.Reader) (*S3Select, error) {
 
 // limitedReadCloser is like io.LimitedReader, but also implements io.Closer.
 type limitedReadCloser struct {
-	io.LimitedReader
 	io.Closer
+	io.LimitedReader
 }
 
 func newLimitedReadCloser(r io.ReadCloser, n int64) *limitedReadCloser {
@@ -693,16 +693,17 @@ type ObjectSegmentReaderFn func(offset int64) (io.ReadCloser, error)
 // ObjectReadSeekCloser implements ReadSeekCloser interface for reading objects.
 // It uses a function that returns a io.ReadCloser for the object.
 type ObjectReadSeekCloser struct {
+	reader io.ReadCloser
+
+	// Error storing reader.Close()
+	closerErr     error
 	segmentReader ObjectSegmentReaderFn
 
 	size   int64 // actual object size regardless of compression/encryption
 	offset int64
-	reader io.ReadCloser
 
 	// reader can be closed idempotently multiple times
 	closerOnce sync.Once
-	// Error storing reader.Close()
-	closerErr error
 }
 
 // NewObjectReadSeekCloser creates a new ObjectReadSeekCloser.

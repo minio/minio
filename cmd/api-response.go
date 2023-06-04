@@ -62,7 +62,9 @@ type PolicyStatus struct {
 type ListVersionsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListVersionsResult" json:"-"`
 
-	Name      string
+	// Marks the last version of the Key returned in a truncated response.
+	VersionIDMarker string `xml:"VersionIdMarker"`
+
 	Prefix    string
 	KeyMarker string
 
@@ -81,20 +83,19 @@ type ListVersionsResponse struct {
 	// for the version-id-marker request parameter in a subsequent request.
 	NextVersionIDMarker string `xml:"NextVersionIdMarker"`
 
-	// Marks the last version of the Key returned in a truncated response.
-	VersionIDMarker string `xml:"VersionIdMarker"`
-
-	MaxKeys   int
+	Name      string
 	Delimiter string
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string `xml:"EncodingType,omitempty"`
 
 	CommonPrefixes []CommonPrefix
 	Versions       []ObjectVersion
 
-	// Encoding type used to encode object keys in the response.
-	EncodingType string `xml:"EncodingType,omitempty"`
+	MaxKeys int
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
 }
 
 // ListObjectsResponse - format for list objects response.
@@ -114,17 +115,18 @@ type ListObjectsResponse struct {
 	// subsequent request to get the next set of object keys.
 	NextMarker string `xml:"NextMarker,omitempty"`
 
-	MaxKeys   int
 	Delimiter string
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string `xml:"EncodingType,omitempty"`
 
 	Contents       []Object
 	CommonPrefixes []CommonPrefix
 
-	// Encoding type used to encode object keys in the response.
-	EncodingType string `xml:"EncodingType,omitempty"`
+	MaxKeys int
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
 }
 
 // ListObjectsV2Response - format for list objects response.
@@ -144,78 +146,81 @@ type ListObjectsV2Response struct {
 	ContinuationToken     string `xml:"ContinuationToken,omitempty"`
 	NextContinuationToken string `xml:"NextContinuationToken,omitempty"`
 
-	KeyCount  int
-	MaxKeys   int
-	Delimiter string
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
+	// Encoding type used to encode object keys in the response.
+	EncodingType string `xml:"EncodingType,omitempty"`
+	Delimiter    string
 
 	Contents       []Object
 	CommonPrefixes []CommonPrefix
 
-	// Encoding type used to encode object keys in the response.
-	EncodingType string `xml:"EncodingType,omitempty"`
+	KeyCount int
+	MaxKeys  int
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
 }
 
 // Part container for part metadata.
 type Part struct {
-	PartNumber   int
 	LastModified string
 	ETag         string
-	Size         int64
 
 	// Checksum values
 	ChecksumCRC32  string `xml:"ChecksumCRC32,omitempty"`
 	ChecksumCRC32C string `xml:"ChecksumCRC32C,omitempty"`
 	ChecksumSHA1   string `xml:"ChecksumSHA1,omitempty"`
 	ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
+	PartNumber     int
+	Size           int64
 }
 
 // ListPartsResponse - format for list parts response.
 type ListPartsResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
-
-	Bucket   string
-	Key      string
-	UploadID string `xml:"UploadId"`
-
 	Initiator Initiator
-	Owner     Owner
+	XMLName   xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult" json:"-"`
+
+	Owner Owner
 
 	// The class of storage used to store the object.
 	StorageClass string
+
+	UploadID string `xml:"UploadId"`
+
+	Key string
+
+	Bucket string
+
+	ChecksumAlgorithm string
+	// List of parts.
+	Parts []Part `xml:"Part"`
 
 	PartNumberMarker     int
 	NextPartNumberMarker int
 	MaxParts             int
 	IsTruncated          bool
-
-	ChecksumAlgorithm string
-	// List of parts.
-	Parts []Part `xml:"Part"`
 }
 
 // ListMultipartUploadsResponse - format for list multipart uploads response.
 type ListMultipartUploadsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
 
-	Bucket             string
+	Delimiter          string
 	KeyMarker          string
 	UploadIDMarker     string `xml:"UploadIdMarker"`
 	NextKeyMarker      string
 	NextUploadIDMarker string `xml:"NextUploadIdMarker"`
-	Delimiter          string
-	Prefix             string
-	EncodingType       string `xml:"EncodingType,omitempty"`
-	MaxUploads         int
-	IsTruncated        bool
+
+	Bucket       string
+	Prefix       string
+	EncodingType string `xml:"EncodingType,omitempty"`
 
 	// List of pending uploads.
 	Uploads []Upload `xml:"Upload"`
 
 	// Delimed common prefixes.
 	CommonPrefixes []CommonPrefix
+	MaxUploads     int
+	IsTruncated    bool
 }
 
 // ListBucketsResponse - format for list buckets response
@@ -254,8 +259,9 @@ type Bucket struct {
 // ObjectVersion container for object version metadata
 type ObjectVersion struct {
 	Object
-	IsLatest  bool
 	VersionID string `xml:"VersionId"`
+
+	IsLatest bool
 
 	isDeleteMarker bool
 }
@@ -273,14 +279,16 @@ func (o ObjectVersion) MarshalXML(e *xxml.Encoder, start xxml.StartElement) erro
 
 // DeleteMarkerVersion container for delete marker metadata
 type DeleteMarkerVersion struct {
-	Key          string
-	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
 
 	// Owner of the object.
 	Owner Owner
 
-	IsLatest  bool
+	Key          string
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+
 	VersionID string `xml:"VersionId"`
+
+	IsLatest bool
 }
 
 // Metadata metadata items implemented to ensure XML marshaling works.
@@ -354,22 +362,25 @@ type ObjectInternalInfo struct {
 
 // Object container for object metadata
 type Object struct {
-	Key          string
-	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
-	ETag         string
-	Size         int64
+
+	// UserMetadata user-defined metadata
+	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
+
+	Internal *ObjectInternalInfo `xml:"Internal,omitempty"`
 
 	// Owner of the object.
 	Owner Owner
 
+	Key          string
+	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
+	ETag         string
+
 	// The class of storage used to store the object.
 	StorageClass string
 
-	// UserMetadata user-defined metadata
-	UserMetadata *Metadata `xml:"UserMetadata,omitempty"`
-	UserTags     string    `xml:"UserTags,omitempty"`
+	UserTags string `xml:"UserTags,omitempty"`
 
-	Internal *ObjectInternalInfo `xml:"Internal,omitempty"`
+	Size int64
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object

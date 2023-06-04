@@ -32,13 +32,13 @@ type throttle struct {
 
 // Monitor holds the state of the global bucket monitor
 type Monitor struct {
-	tlock                 sync.RWMutex // mutex for bucketThrottle
+	ctx                   context.Context // Context for generate
 	bucketThrottle        map[string]map[string]*throttle
-	mlock                 sync.RWMutex                             // mutex for activeBuckets map
 	activeBuckets         map[string]map[string]*bucketMeasurement // Buckets with objects in flight
 	bucketMovingAvgTicker *time.Ticker                             // Ticker for calculating moving averages
-	ctx                   context.Context                          // Context for generate
 	NodeCount             uint64
+	tlock                 sync.RWMutex // mutex for bucketThrottle
+	mlock                 sync.RWMutex // mutex for activeBuckets map
 }
 
 // NewMonitor returns a monitor with defaults.

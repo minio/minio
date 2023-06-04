@@ -30,10 +30,10 @@ const (
 
 // bucketMeasurement captures the bandwidth details for one bucket
 type bucketMeasurement struct {
-	lock                 sync.Mutex
-	bytesSinceLastWindow uint64    // Total bytes since last window was processed
 	startTime            time.Time // Start time for window
+	bytesSinceLastWindow uint64    // Total bytes since last window was processed
 	expMovingAvg         float64   // Previously calculate sliding window
+	lock                 sync.Mutex
 }
 
 // newBucketMeasurement creates a new instance of the measurement with the initial start time.

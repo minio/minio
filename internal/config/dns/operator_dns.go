@@ -105,7 +105,7 @@ func (c *OperatorDNS) Put(bucket string) error {
 		io.Copy(&errorStringBuilder, io.LimitReader(resp.Body, resp.ContentLength))
 		errorString := errorStringBuilder.String()
 		if resp.StatusCode == http.StatusConflict {
-			return ErrBucketConflict(Error{bucket, errors.New(errorString)})
+			return ErrBucketConflict(Error{errors.New(errorString), bucket})
 		}
 		return newError(bucket, fmt.Errorf("service create for bucket %s, failed with status %s, error %s", bucket, resp.Status, errorString))
 	}
@@ -113,7 +113,7 @@ func (c *OperatorDNS) Put(bucket string) error {
 }
 
 func newError(bucket string, err error) error {
-	e := Error{bucket, err}
+	e := Error{err, bucket}
 	if strings.Contains(err.Error(), "invalid bucket name") {
 		return ErrInvalidBucketName(e)
 	}

@@ -84,11 +84,10 @@ const (
 
 // MySQLArgs - MySQL target arguments.
 type MySQLArgs struct {
-	Enable             bool     `json:"enable"`
+	Host               xnet.URL `json:"host"`
 	Format             string   `json:"format"`
 	DSN                string   `json:"dsnString"`
 	Table              string   `json:"table"`
-	Host               xnet.URL `json:"host"`
 	Port               string   `json:"port"`
 	User               string   `json:"user"`
 	Password           string   `json:"password"`
@@ -96,6 +95,7 @@ type MySQLArgs struct {
 	QueueDir           string   `json:"queueDir"`
 	QueueLimit         uint64   `json:"queueLimit"`
 	MaxOpenConnections int      `json:"maxOpenConnections"`
+	Enable             bool     `json:"enable"`
 }
 
 // Validate MySQLArgs fields
@@ -147,19 +147,20 @@ func (m MySQLArgs) Validate() error {
 
 // MySQLTarget - MySQL target.
 type MySQLTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       MySQLArgs
+	store      store.Store[event.Event]
 	updateStmt *sql.Stmt
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	db         *sql.DB
-	store      store.Store[event.Event]
-	firstPing  bool
 	loggerOnce logger.LogOnce
 
 	quitCh chan struct{}
+
+	id       event.TargetID
+	args     MySQLArgs
+	initOnce once.Init
+
+	firstPing bool
 }
 
 // ID - returns target ID.

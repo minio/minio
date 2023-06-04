@@ -100,6 +100,22 @@ type CacheObjectLayer interface {
 
 // Abstracts disk caching - used by the S3 layer
 type cacheObjects struct {
+	InnerCopyObjectFn func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
+	// Cache stats
+	cacheStats *CacheStats
+
+	InnerGetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	InnerDeleteObjectFn  func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+
+	InnerGetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error)
+	InnerCompleteMultipartUploadFn func(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	// retry queue for writeback cache mode to reattempt upload to backend
+	wbRetryCh                   chan ObjectInfo
+	InnerPutObjectPartFn        func(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error)
+	InnerCopyObjectPartFn       func(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error)
+	InnerNewMultipartUploadFn   func(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error)
+	InnerAbortMultipartUploadFn func(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
+	InnerPutObjectFn            func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	// slice of cache drives
 	cache []*diskCache
 	// file path patterns to exclude from cache
@@ -107,26 +123,11 @@ type cacheObjects struct {
 	// number of accesses after which to cache an object
 	after int
 	// commit objects in async manner
-	commitWriteback    bool
-	commitWritethrough bool
+	commitWriteback bool
 
 	// if true migration is in progress from v1 to v2
-	migrating bool
-	// retry queue for writeback cache mode to reattempt upload to backend
-	wbRetryCh chan ObjectInfo
-	// Cache stats
-	cacheStats *CacheStats
-
-	InnerGetObjectNInfoFn          func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error)
-	InnerGetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerDeleteObjectFn            func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerPutObjectFn               func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerCopyObjectFn              func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerNewMultipartUploadFn      func(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error)
-	InnerPutObjectPartFn           func(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error)
-	InnerAbortMultipartUploadFn    func(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
-	InnerCompleteMultipartUploadFn func(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	InnerCopyObjectPartFn          func(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error)
+	migrating          bool
+	commitWritethrough bool
 }
 
 func (c *cacheObjects) incHitsToMeta(ctx context.Context, dcache *diskCache, bucket, object string, size int64, eTag string, rs *HTTPRangeSpec) error {

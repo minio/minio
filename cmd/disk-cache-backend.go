@@ -77,24 +77,24 @@ type CacheChecksumInfoV1 struct {
 
 // Represents the cache metadata struct
 type cacheMeta struct {
-	Version string   `json:"version"`
-	Stat    StatInfo `json:"stat"` // Stat of the current object `cache.json`.
-
-	// checksums of blocks on disk.
-	Checksum CacheChecksumInfoV1 `json:"checksum,omitempty"`
 	// Metadata map for current object.
 	Meta map[string]string `json:"meta,omitempty"`
 	// Ranges maps cached range to associated filename.
-	Ranges map[string]string `json:"ranges,omitempty"`
-	// Hits is a counter on the number of times this object has been accessed so far.
-	Hits   int    `json:"hits,omitempty"`
-	Bucket string `json:"bucket,omitempty"`
-	Object string `json:"object,omitempty"`
+	Ranges  map[string]string `json:"ranges,omitempty"`
+	Version string            `json:"version"`
+	Bucket  string            `json:"bucket,omitempty"`
+	Object  string            `json:"object,omitempty"`
+	Stat    StatInfo          `json:"stat"` // Stat of the current object `cache.json`.
+
+	// checksums of blocks on disk.
+	Checksum CacheChecksumInfoV1 `json:"checksum,omitempty"`
 	// for multipart upload
 	PartNumbers     []int    `json:"partNums,omitempty"`   // Part Numbers
 	PartETags       []string `json:"partETags,omitempty"`  // Part ETags
 	PartSizes       []int64  `json:"partSizes,omitempty"`  // Part Sizes
 	PartActualSizes []int64  `json:"partASizes,omitempty"` // Part ActualSizes (compression)
+	// Hits is a counter on the number of times this object has been accessed so far.
+	Hits int `json:"hits,omitempty"`
 }
 
 // RangeInfo has the range, file and range length information for a cached range.
@@ -158,27 +158,28 @@ func (m *cacheMeta) ToObjectInfo() (o ObjectInfo) {
 
 // represents disk cache struct
 type diskCache struct {
+	pool sync.Pool
+
+	retryWritebackCh chan ObjectInfo
+	// Object functions pointing to the corresponding functions of backend implementation.
+	NewNSLockFn func(cachePath string) RWLocker
+
+	triggerGC chan struct{}
+	// nsMutex namespace lock
+	nsMutex       *nsLockMap
+	stats         CacheDiskStats // disk cache stats for prometheus
+	dir           string         // caching directory
+	lowWatermark  int
+	highWatermark int
+	after         int // minimum accesses before an object is cached.
+	quotaPct      int // max usage in %
 	// is set to 0 if drive is offline
 	online       uint32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	purgeRunning int32
 
-	triggerGC          chan struct{}
-	dir                string         // caching directory
-	stats              CacheDiskStats // disk cache stats for prometheus
-	quotaPct           int            // max usage in %
-	pool               sync.Pool
-	after              int // minimum accesses before an object is cached.
-	lowWatermark       int
-	highWatermark      int
 	enableRange        bool
 	commitWriteback    bool
 	commitWritethrough bool
-
-	retryWritebackCh chan ObjectInfo
-	// nsMutex namespace lock
-	nsMutex *nsLockMap
-	// Object functions pointing to the corresponding functions of backend implementation.
-	NewNSLockFn func(cachePath string) RWLocker
 }
 
 // Inits the disk cache dir if it is not initialized already.

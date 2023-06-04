@@ -35,18 +35,18 @@ import (
 //	path: 'bucket/' or '/bucket/' => Heal bucket
 //	path: 'bucket/object' => Heal object
 type healTask struct {
+	// Healing response will be sent here
+	respCh    chan healResult
 	bucket    string
 	object    string
 	versionID string
 	opts      madmin.HealOpts
-	// Healing response will be sent here
-	respCh chan healResult
 }
 
 // healResult represents a healing result with a possible error
 type healResult struct {
-	result madmin.HealResultItem
 	err    error
+	result madmin.HealResultItem
 }
 
 // healRoutine receives heal tasks, to heal buckets, objects and format.json

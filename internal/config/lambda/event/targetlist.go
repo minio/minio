@@ -48,8 +48,8 @@ type TargetStat struct {
 
 // TargetList - holds list of targets indexed by target ID.
 type TargetList struct {
-	sync.RWMutex
 	targets map[TargetID]Target
+	sync.RWMutex
 }
 
 // Add - adds unique target to target list.
@@ -87,10 +87,10 @@ func (list *TargetList) Lookup(arnStr string) (Target, error) {
 // TargetIDResult returns result of Remove/Send operation, sets err if
 // any for the associated TargetID
 type TargetIDResult struct {
-	// ID where the remove or send were initiated.
-	ID TargetID
 	// Stores any error while removing a target or while sending an event.
 	Err error
+	// ID where the remove or send were initiated.
+	ID TargetID
 }
 
 // Remove - closes and removes targets by given target IDs.

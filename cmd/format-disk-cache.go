@@ -54,12 +54,12 @@ type formatCacheV1 struct {
 	Cache struct {
 		Version string `json:"version"` // Version of 'cache' format.
 		This    string `json:"this"`    // This field carries assigned disk uuid.
-		// Disks field carries the input disk order generated the first
-		// time when fresh disks were supplied.
-		Disks []string `json:"disks"`
 		// Distribution algorithm represents the hashing algorithm
 		// to pick the right set index for an object.
 		DistributionAlgo string `json:"distributionAlgo"`
+		// Disks field carries the input disk order generated the first
+		// time when fresh disks were supplied.
+		Disks []string `json:"disks"`
 	} `json:"cache"` // Cache field holds cache format.
 }
 

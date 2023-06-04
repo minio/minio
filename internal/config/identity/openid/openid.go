@@ -144,7 +144,9 @@ var DummyRoleARN = func() arn.ARN {
 
 // Config - OpenID Config
 type Config struct {
-	Enabled bool
+	pubKeys publicKeys
+
+	transport http.RoundTripper
 
 	// map of roleARN to providerCfg's
 	arnProviderCfgsMap map[arn.ARN]*providerCfg
@@ -152,11 +154,10 @@ type Config struct {
 	// map of config names to providerCfg's
 	ProviderCfgs map[string]*providerCfg
 
-	pubKeys          publicKeys
 	roleArnPolicyMap map[arn.ARN]string
 
-	transport   http.RoundTripper
 	closeRespFn func(io.ReadCloser)
+	Enabled     bool
 }
 
 // Clone returns a cloned copy of OpenID config.

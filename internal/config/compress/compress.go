@@ -27,10 +27,10 @@ import (
 
 // Config represents the compression settings.
 type Config struct {
-	Enabled        bool     `json:"enabled"`
-	AllowEncrypted bool     `json:"allow_encryption"`
 	Extensions     []string `json:"extensions"`
 	MimeTypes      []string `json:"mime-types"`
+	Enabled        bool     `json:"enabled"`
+	AllowEncrypted bool     `json:"allow_encryption"`
 }
 
 // Compression environment variables

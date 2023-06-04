@@ -335,15 +335,16 @@ func isMetadataSame(m1, m2 map[string]string) bool {
 }
 
 type fileScorer struct {
+
+	// queue is a linked list of files we want to delete.
+	// The list is kept sorted according to score, highest at top, lowest at bottom.
+	queue     list.List
 	saveBytes uint64
 	now       int64
 	maxHits   int
 	// 1/size for consistent score.
 	sizeMult float64
 
-	// queue is a linked list of files we want to delete.
-	// The list is kept sorted according to score, highest at top, lowest at bottom.
-	queue       list.List
 	queuedBytes uint64
 	seenBytes   uint64
 }

@@ -100,21 +100,21 @@ const (
 
 // Credentials holds access and secret keys.
 type Credentials struct {
+	Expiration   time.Time              `xml:"Expiration" json:"expiration,omitempty" yaml:"-"`
+	Claims       map[string]interface{} `xml:"-" json:"claims,omitempty"`
 	AccessKey    string                 `xml:"AccessKeyId" json:"accessKey,omitempty" yaml:"accessKey"`
 	SecretKey    string                 `xml:"SecretAccessKey" json:"secretKey,omitempty" yaml:"secretKey"`
 	SessionToken string                 `xml:"SessionToken" json:"sessionToken,omitempty" yaml:"sessionToken"`
-	Expiration   time.Time              `xml:"Expiration" json:"expiration,omitempty" yaml:"-"`
 	Status       string                 `xml:"-" json:"status,omitempty"`
 	ParentUser   string                 `xml:"-" json:"parentUser,omitempty"`
-	Groups       []string               `xml:"-" json:"groups,omitempty"`
-	Claims       map[string]interface{} `xml:"-" json:"claims,omitempty"`
 	Name         string                 `xml:"-" json:"name,omitempty"`
 	Description  string                 `xml:"-" json:"description,omitempty"`
 
 	// Deprecated: In favor of Description - when reading credentials from
 	// storage the value of this field is placed in the Description field above
 	// if the existing Description from storage is empty.
-	Comment string `xml:"-" json:"comment,omitempty"`
+	Comment string   `xml:"-" json:"comment,omitempty"`
+	Groups  []string `xml:"-" json:"groups,omitempty"`
 }
 
 func (cred Credentials) String() string {

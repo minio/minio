@@ -50,12 +50,12 @@ func newUnsignedV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser,
 // Represents the overall state that is required for decoding a
 // AWS Signature V4 chunked reader.
 type s3UnsignedChunkedReader struct {
+	err      error
 	reader   *bufio.Reader
 	trailers http.Header
 
 	buffer []byte
 	offset int
-	err    error
 	debug  bool
 }
 

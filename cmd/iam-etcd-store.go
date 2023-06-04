@@ -59,13 +59,13 @@ func extractPathPrefixAndSuffix(s string, prefix string, suffix string) string {
 
 // IAMEtcdStore implements IAMStorageAPI
 type IAMEtcdStore struct {
-	sync.RWMutex
-
 	*iamCache
+
+	client *etcd.Client
 
 	usersSysType UsersSysType
 
-	client *etcd.Client
+	sync.RWMutex
 }
 
 func newIAMEtcdStore(client *etcd.Client, usersSysType UsersSysType) *IAMEtcdStore {

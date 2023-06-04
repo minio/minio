@@ -44,8 +44,9 @@ import (
 type BucketMetadataSys struct {
 	objAPI ObjectLayer
 
-	sync.RWMutex
 	metadataMap map[string]BucketMetadata
+
+	sync.RWMutex
 }
 
 // Count returns number of bucket metadata map entries.

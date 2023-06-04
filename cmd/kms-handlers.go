@@ -613,12 +613,12 @@ func (a kmsAPIHandlers) KMSDescribeIdentityHandler(w http.ResponseWriter, r *htt
 }
 
 type describeSelfIdentityResponse struct {
+	CreatedAt  time.Time   `json:"createdAt"`
 	Policy     *kes.Policy `json:"policy"`
 	PolicyName string      `json:"policyName"`
 	Identity   string      `json:"identity"`
-	IsAdmin    bool        `json:"isAdmin"`
-	CreatedAt  time.Time   `json:"createdAt"`
 	CreatedBy  string      `json:"createdBy"`
+	IsAdmin    bool        `json:"isAdmin"`
 }
 
 // KMSDescribeSelfIdentityHandler - GET /minio/kms/v1/identity/describe-self

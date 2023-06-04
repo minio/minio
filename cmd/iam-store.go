@@ -161,9 +161,9 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 
 // UserIdentity represents a user's secret key and their status
 type UserIdentity struct {
-	Version     int              `json:"version"`
-	Credentials auth.Credentials `json:"credentials"`
 	UpdatedAt   time.Time        `json:"updatedAt,omitempty"`
+	Credentials auth.Credentials `json:"credentials"`
+	Version     int              `json:"version"`
 }
 
 func newUserIdentity(cred auth.Credentials) UserIdentity {
@@ -172,10 +172,10 @@ func newUserIdentity(cred auth.Credentials) UserIdentity {
 
 // GroupInfo contains info about a group
 type GroupInfo struct {
-	Version   int       `json:"version"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 	Status    string    `json:"status"`
 	Members   []string  `json:"members"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	Version   int       `json:"version"`
 }
 
 func newGroupInfo(members []string) GroupInfo {
@@ -184,9 +184,9 @@ func newGroupInfo(members []string) GroupInfo {
 
 // MappedPolicy represents a policy name mapped to a user or group
 type MappedPolicy struct {
-	Version   int       `json:"version"`
-	Policies  string    `json:"policy"`
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	Policies  string    `json:"policy"`
+	Version   int       `json:"version"`
 }
 
 // converts a mapped policy into a slice of distinct policies
@@ -211,10 +211,10 @@ func newMappedPolicy(policy string) MappedPolicy {
 
 // PolicyDoc represents an IAM policy with some metadata.
 type PolicyDoc struct {
-	Version    int `json:",omitempty"`
-	Policy     iampolicy.Policy
 	CreateDate time.Time `json:",omitempty"`
 	UpdateDate time.Time `json:",omitempty"`
+	Policy     iampolicy.Policy
+	Version    int `json:",omitempty"`
 }
 
 func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
@@ -273,8 +273,8 @@ type options struct {
 }
 
 type iamWatchEvent struct {
-	isCreated bool // !isCreated implies a delete event.
 	keyPath   string
+	isCreated bool // !isCreated implies a delete event.
 }
 
 // iamCache contains in-memory cache of IAM data.
@@ -1716,8 +1716,8 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 
 // ParentUserInfo contains extra info about a the parent user.
 type ParentUserInfo struct {
-	subClaimValue string
 	roleArns      set.StringSet
+	subClaimValue string
 }
 
 // GetAllParentUsers - returns all distinct "parent-users" associated with STS

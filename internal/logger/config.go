@@ -232,10 +232,10 @@ var (
 
 // Config console and http logger targets
 type Config struct {
-	Console      Console                 `json:"console"`
 	HTTP         map[string]http.Config  `json:"http"`
 	AuditWebhook map[string]http.Config  `json:"audit"`
 	AuditKafka   map[string]kafka.Config `json:"audit_kafka"`
+	Console      Console                 `json:"console"`
 }
 
 // NewConfig - initialize new logger config.

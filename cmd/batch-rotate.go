@@ -136,10 +136,10 @@ const (
 
 // BatchJobKeyRotateEncryption defines key rotation encryption options passed
 type BatchJobKeyRotateEncryption struct {
+	kmsContext kms.Context          `msg:"-"`
 	Type       BatchKeyRotationType `yaml:"type" json:"type"`
 	Key        string               `yaml:"key" json:"key"`
 	Context    string               `yaml:"context" json:"context"`
-	kmsContext kms.Context          `msg:"-"`
 }
 
 // Validate validates input key rotation encryption options.
@@ -178,13 +178,13 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 
 // BatchKeyRotateFilter holds all the filters currently supported for batch replication
 type BatchKeyRotateFilter struct {
-	NewerThan     time.Duration      `yaml:"newerThan,omitempty" json:"newerThan"`
-	OlderThan     time.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedAfter  time.Time          `yaml:"createdAfter,omitempty" json:"createdAfter"`
 	CreatedBefore time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
+	KMSKeyID      string             `yaml:"kmskeyid" json:"kmskey"`
 	Tags          []BatchKeyRotateKV `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchKeyRotateKV `yaml:"metadata,omitempty" json:"metadata"`
-	KMSKeyID      string             `yaml:"kmskeyid" json:"kmskey"`
+	NewerThan     time.Duration      `yaml:"newerThan,omitempty" json:"newerThan"`
+	OlderThan     time.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 }
 
 // BatchKeyRotateNotification success or failure notification endpoint for each job attempts
@@ -205,12 +205,12 @@ type BatchJobKeyRotateFlags struct {
 
 // BatchJobKeyRotateV1 v1 of batch key rotation job
 type BatchJobKeyRotateV1 struct {
+	Encryption BatchJobKeyRotateEncryption `yaml:"encryption" json:"encryption"`
 	APIVersion string                      `yaml:"apiVersion" json:"apiVersion"`
-	Flags      BatchJobKeyRotateFlags      `yaml:"flags" json:"flags"`
 	Bucket     string                      `yaml:"bucket" json:"bucket"`
 	Prefix     string                      `yaml:"prefix" json:"prefix"`
 	Endpoint   string                      `yaml:"endpoint" json:"endpoint"`
-	Encryption BatchJobKeyRotateEncryption `yaml:"encryption" json:"encryption"`
+	Flags      BatchJobKeyRotateFlags      `yaml:"flags" json:"flags"`
 }
 
 // Notify notifies notification endpoint if configured regarding job failure or success.

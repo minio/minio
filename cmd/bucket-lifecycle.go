@@ -97,15 +97,15 @@ func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string) {
 }
 
 type expiryTask struct {
-	objInfo ObjectInfo
 	event   lifecycle.Event
+	objInfo ObjectInfo
 	src     lcEventSrc
 }
 
 type expiryState struct {
-	once                sync.Once
 	byDaysCh            chan expiryTask
 	byNewerNoncurrentCh chan newerNoncurrentTask
+	once                sync.Once
 }
 
 // PendingTasks returns the number of pending ILM expiry tasks.
@@ -197,30 +197,31 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 // newerNoncurrentTask encapsulates arguments required by worker to expire objects
 // by NewerNoncurrentVersions
 type newerNoncurrentTask struct {
+	event    lifecycle.Event
 	bucket   string
 	versions []ObjectToDelete
-	event    lifecycle.Event
 }
 
 type transitionTask struct {
+	event   lifecycle.Event
 	objInfo ObjectInfo
 	src     lcEventSrc
-	event   lifecycle.Event
 }
 
 type transitionState struct {
+	ctx          context.Context
+	objAPI       ObjectLayer
 	transitionCh chan transitionTask
 
-	ctx        context.Context
-	objAPI     ObjectLayer
-	mu         sync.Mutex
-	numWorkers int
-	killCh     chan struct{}
+	killCh chan struct{}
+
+	lastDayStats map[string]*lastDayTierStats
+	numWorkers   int
+
+	lastDayMu sync.RWMutex
+	mu        sync.Mutex
 
 	activeTasks int32
-
-	lastDayMu    sync.RWMutex
-	lastDayStats map[string]*lastDayTierStats
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
@@ -470,9 +471,9 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo,
 
 type auditTierOp struct {
 	Tier             string `json:"tier"`
+	Error            string `json:"error,omitempty"`
 	TimeToResponseNS int64  `json:"timeToResponseNS"`
 	OutputBytes      int64  `json:"tx,omitempty"`
-	Error            string `json:"error,omitempty"`
 }
 
 func auditTierActions(ctx context.Context, tier string, bytes int64) func(err error) {
@@ -592,13 +593,13 @@ func (sp *SelectParameters) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 
 // RestoreObjectRequest - xml to restore a transitioned object
 type RestoreObjectRequest struct {
+	SelectParameters *SelectParameters  `xml:"SelectParameters,omitempty"`
 	XMLName          xml.Name           `xml:"http://s3.amazonaws.com/doc/2006-03-01/ RestoreRequest" json:"-"`
-	Days             int                `xml:"Days,omitempty"`
 	Type             RestoreRequestType `xml:"Type,omitempty"`
 	Tier             string             `xml:"Tier"`
 	Description      string             `xml:"Description,omitempty"`
-	SelectParameters *SelectParameters  `xml:"SelectParameters,omitempty"`
 	OutputLocation   OutputLocation     `xml:"OutputLocation,omitempty"`
+	Days             int                `xml:"Days,omitempty"`
 }
 
 // Maximum 2MiB size per restore object request.
@@ -751,8 +752,8 @@ func (oi ObjectInfo) IsRemote() bool {
 // restoreObjStatus represents a restore-object's status. It can be either
 // ongoing or completed.
 type restoreObjStatus struct {
-	ongoing bool
 	expiry  time.Time
+	ongoing bool
 }
 
 // ongoingRestoreObj constructs restoreObjStatus for an ongoing restore-object.

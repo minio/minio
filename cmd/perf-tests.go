@@ -37,12 +37,12 @@ import (
 // SpeedTestResult return value of the speedtest function
 type SpeedTestResult struct {
 	Endpoint      string
-	Uploads       uint64
-	Downloads     uint64
+	Error         string
 	UploadTimes   madmin.TimeDurations
 	DownloadTimes madmin.TimeDurations
 	DownloadTTFB  madmin.TimeDurations
-	Error         string
+	Uploads       uint64
+	Downloads     uint64
 }
 
 func newRandomReader(size int) io.Reader {
@@ -228,9 +228,9 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 // the last peer to connect and the first peer to disconnect.
 // This is to improve the RX throughput accuracy.
 type netPerfRX struct {
-	RX                uint64    // RX bytes
 	lastToConnect     time.Time // time at which last peer to connect to us
 	firstToDisconnect time.Time // time at which the first peer disconnects from us
+	RX                uint64    // RX bytes
 	RXSample          uint64    // RX bytes between lastToConnect and firstToDisconnect
 	activeConnections uint64
 	sync.RWMutex
@@ -271,9 +271,9 @@ func (n *netPerfRX) Reset() {
 
 // Reader to read random data.
 type netperfReader struct {
-	n   uint64
 	eof chan struct{}
 	buf []byte
+	n   uint64
 }
 
 func (m *netperfReader) Read(b []byte) (int, error) {

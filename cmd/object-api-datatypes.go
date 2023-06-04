@@ -84,12 +84,13 @@ var ObjectsVersionCountIntervals = [dataUsageVersionLen]objectHistogramInterval{
 
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
-	// Name of the bucket.
-	Name string
 
 	// Date and time when the bucket was created.
 	Created time.Time
 	Deleted time.Time
+
+	// Name of the bucket.
+	Name string
 
 	// Bucket features enabled
 	Versioning, ObjectLocking bool
@@ -97,43 +98,38 @@ type BucketInfo struct {
 
 // ObjectInfo - represents object metadata.
 type ObjectInfo struct {
-	// Name of the bucket.
-	Bucket string
-
-	// Name of the object.
-	Name string
-
-	// Date and time when the object was last modified.
-	ModTime time.Time
-
-	// Total object size.
-	Size int64
-
-	// IsDir indicates if the object is prefix.
-	IsDir bool
-
-	// Hex encoded unique entity tag of the object.
-	ETag string
-
-	// Version ID of this object.
-	VersionID string
-
-	// IsLatest indicates if this is the latest current version
-	// latest can be true for delete marker or a version.
-	IsLatest bool
-
-	// DeleteMarker indicates if the versionId corresponds
-	// to a delete marker on an object.
-	DeleteMarker bool
-
-	// Transitioned object information
-	TransitionedObject TransitionedObject
 
 	// RestoreExpires indicates date a restored object expires
 	RestoreExpires time.Time
 
-	// RestoreOngoing indicates if a restore is in progress
-	RestoreOngoing bool
+	//  The modtime of the successor object version if any
+	SuccessorModTime time.Time
+
+	// Date and time when the object was last modified.
+	ModTime time.Time
+
+	// Date and time when the object was last accessed.
+	AccTime time.Time
+
+	// Date and time at which the object is no longer able to be cached
+	Expires time.Time
+
+	// Implements writer and reader used by CopyObject API
+	Writer io.WriteCloser `json:"-"`
+	// User-Defined metadata
+	UserDefined map[string]string
+
+	Reader       *hash.Reader  `json:"-"`
+	PutObjReader *PutObjReader `json:"-"`
+
+	// Transitioned object information
+	TransitionedObject TransitionedObject
+
+	// CacheStatus sets status of whether this is a cache hit/miss
+	CacheStatus CacheStatusType
+
+	// Specify object storage class
+	StorageClass string
 
 	// A standard MIME type describing the format of the object.
 	ContentType string
@@ -143,62 +139,72 @@ type ObjectInfo struct {
 	// by the Content-Type header field.
 	ContentEncoding string
 
-	// Date and time at which the object is no longer able to be cached
-	Expires time.Time
+	// Hex encoded unique entity tag of the object.
+	ETag string
 
-	// CacheStatus sets status of whether this is a cache hit/miss
-	CacheStatus CacheStatusType
+	// internal representation of version purge status
+	VersionPurgeStatusInternal string
 	// CacheLookupStatus sets whether a cacheable response is present in the cache
 	CacheLookupStatus CacheStatusType
 
-	// Specify object storage class
-	StorageClass string
+	// Name of the object.
+	Name string
 
 	ReplicationStatusInternal string
 	ReplicationStatus         replication.StatusType
-	// User-Defined metadata
-	UserDefined map[string]string
+	// Name of the bucket.
+	Bucket string
 
 	// User-Defined object tags
 	UserTags string
 
+	// Version ID of this object.
+	VersionID string
+
+	VersionPurgeStatus VersionPurgeStatusType
+
 	// List of individual parts, maximum size of upto 10,000
 	Parts []ObjectPartInfo `json:"-"`
-
-	// Implements writer and reader used by CopyObject API
-	Writer       io.WriteCloser `json:"-"`
-	Reader       *hash.Reader   `json:"-"`
-	PutObjReader *PutObjReader  `json:"-"`
-
-	metadataOnly bool
-	versionOnly  bool // adds a new version, only used by CopyObject
-	keyRotation  bool
-
-	// Date and time when the object was last accessed.
-	AccTime time.Time
-
-	Legacy bool // indicates object on disk is in legacy data format
-
-	// backendType indicates which backend filled this structure
-	backendType BackendType
-	// internal representation of version purge status
-	VersionPurgeStatusInternal string
-	VersionPurgeStatus         VersionPurgeStatusType
-
-	// The total count of all versions of this object
-	NumVersions int
-	//  The modtime of the successor object version if any
-	SuccessorModTime time.Time
 
 	// Checksums added on upload.
 	// Encoded, maybe encrypted.
 	Checksum []byte
 
+	// backendType indicates which backend filled this structure
+	backendType BackendType
+
+	// The total count of all versions of this object
+	NumVersions  int
+	ParityBlocks int
+
+	// Total object size.
+	Size int64
+
+	DataBlocks int
+
+	// IsDir indicates if the object is prefix.
+	IsDir bool
+
+	metadataOnly bool
+	versionOnly  bool // adds a new version, only used by CopyObject
+
+	// IsLatest indicates if this is the latest current version
+	// latest can be true for delete marker or a version.
+	IsLatest bool
+
+	// RestoreOngoing indicates if a restore is in progress
+	RestoreOngoing bool
+
+	// DeleteMarker indicates if the versionId corresponds
+	// to a delete marker on an object.
+	DeleteMarker bool
+
 	// Inlined
 	Inlined bool
 
-	DataBlocks   int
-	ParityBlocks int
+	Legacy bool // indicates object on disk is in legacy data format
+
+	keyRotation bool
 }
 
 // ArchiveInfo returns any saved zip archive meta information.
@@ -283,17 +289,17 @@ func (o ObjectInfo) tierStats() tierStats {
 
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
-	ObjectInfo
-	OpType               replication.Type
-	EventType            string
-	RetryCount           uint32
-	ResetID              string
+	ReplicationTimestamp time.Time
 	Dsc                  ReplicateDecision
 	ExistingObjResync    ResyncDecision
-	TargetArn            string
 	TargetStatuses       map[string]replication.StatusType
 	TargetPurgeStatuses  map[string]VersionPurgeStatusType
-	ReplicationTimestamp time.Time
+	EventType            string
+	ResetID              string
+	TargetArn            string
+	ObjectInfo
+	OpType     replication.Type
+	RetryCount uint32
 }
 
 // MultipartInfo captures metadata information about the uploadId
@@ -302,6 +308,12 @@ type ReplicateObjectInfo struct {
 // - encrypted
 // - compressed
 type MultipartInfo struct {
+
+	// Date and time at which the multipart upload was initiated.
+	Initiated time.Time
+
+	// Any metadata set during InitMultipartUpload, including encryption headers.
+	UserDefined map[string]string
 	// Name of the bucket.
 	Bucket string
 
@@ -310,16 +322,14 @@ type MultipartInfo struct {
 
 	// Upload ID identifying the multipart upload whose parts are being listed.
 	UploadID string
-
-	// Date and time at which the multipart upload was initiated.
-	Initiated time.Time
-
-	// Any metadata set during InitMultipartUpload, including encryption headers.
-	UserDefined map[string]string
 }
 
 // ListPartsInfo - represents list of all parts.
 type ListPartsInfo struct {
+
+	// Any metadata set during InitMultipartUpload, including encryption headers.
+	UserDefined map[string]string
+
 	// Name of the bucket.
 	Bucket string
 
@@ -331,6 +341,12 @@ type ListPartsInfo struct {
 
 	// The class of storage used to store the object.
 	StorageClass string
+
+	// ChecksumAlgorithm if set
+	ChecksumAlgorithm string
+
+	// List of all parts.
+	Parts []PartInfo
 
 	// Part number after which listing begins.
 	PartNumberMarker int
@@ -345,15 +361,6 @@ type ListPartsInfo struct {
 
 	// Indicates whether the returned list of parts is truncated.
 	IsTruncated bool
-
-	// List of all parts.
-	Parts []PartInfo
-
-	// Any metadata set during InitMultipartUpload, including encryption headers.
-	UserDefined map[string]string
-
-	// ChecksumAlgorithm if set
-	ChecksumAlgorithm string
 }
 
 // Lookup - returns if uploadID is valid
@@ -385,6 +392,23 @@ type ListMultipartsInfo struct {
 	// used for the upload-id-marker request parameter in a subsequent request.
 	NextUploadIDMarker string
 
+	// When a prefix is provided in the request, The result contains only keys
+	// starting with the specified prefix.
+	Prefix string
+
+	// A character used to truncate the object prefixes.
+	// NOTE: only supported delimiter is '/'.
+	Delimiter string
+
+	EncodingType string // Not supported yet.
+
+	// List of all pending uploads.
+	Uploads []MultipartInfo
+
+	// CommonPrefixes contains all (if there are any) keys between Prefix and the
+	// next occurrence of the string specified by delimiter.
+	CommonPrefixes []string
+
 	// Maximum number of multipart uploads that could have been included in the
 	// response.
 	MaxUploads int
@@ -394,23 +418,6 @@ type ListMultipartsInfo struct {
 	// if the number of multipart uploads exceeds the limit allowed or specified
 	// by max uploads.
 	IsTruncated bool
-
-	// List of all pending uploads.
-	Uploads []MultipartInfo
-
-	// When a prefix is provided in the request, The result contains only keys
-	// starting with the specified prefix.
-	Prefix string
-
-	// A character used to truncate the object prefixes.
-	// NOTE: only supported delimiter is '/'.
-	Delimiter string
-
-	// CommonPrefixes contains all (if there are any) keys between Prefix and the
-	// next occurrence of the string specified by delimiter.
-	CommonPrefixes []string
-
-	EncodingType string // Not supported yet.
 }
 
 // TransitionedObject transitioned object tier and status.
@@ -418,8 +425,8 @@ type TransitionedObject struct {
 	Name        string
 	VersionID   string
 	Tier        string
-	FreeVersion bool
 	Status      string
+	FreeVersion bool
 }
 
 // DeletedObjectInfo - container for list objects versions deleted objects.
@@ -442,11 +449,6 @@ type DeletedObjectInfo struct {
 
 // ListObjectVersionsInfo - container for list objects versions.
 type ListObjectVersionsInfo struct {
-	// Indicates whether the returned list objects response is truncated. A
-	// value of true indicates that the list was truncated. The list can be truncated
-	// if the number of objects exceeds the limit allowed or specified
-	// by max keys.
-	IsTruncated bool
 
 	// When response is truncated (the IsTruncated element value in the response is true),
 	// you can use the key name in this field as marker in the subsequent
@@ -464,15 +466,15 @@ type ListObjectVersionsInfo struct {
 
 	// List of prefixes for this request.
 	Prefixes []string
-}
-
-// ListObjectsInfo - container for list objects.
-type ListObjectsInfo struct {
 	// Indicates whether the returned list objects response is truncated. A
 	// value of true indicates that the list was truncated. The list can be truncated
 	// if the number of objects exceeds the limit allowed or specified
 	// by max keys.
 	IsTruncated bool
+}
+
+// ListObjectsInfo - container for list objects.
+type ListObjectsInfo struct {
 
 	// When response is truncated (the IsTruncated element value in the response is true),
 	// you can use the key name in this field as marker in the subsequent
@@ -487,15 +489,15 @@ type ListObjectsInfo struct {
 
 	// List of prefixes for this request.
 	Prefixes []string
-}
-
-// ListObjectsV2Info - container for list objects version 2.
-type ListObjectsV2Info struct {
 	// Indicates whether the returned list objects response is truncated. A
 	// value of true indicates that the list was truncated. The list can be truncated
 	// if the number of objects exceeds the limit allowed or specified
 	// by max keys.
 	IsTruncated bool
+}
+
+// ListObjectsV2Info - container for list objects version 2.
+type ListObjectsV2Info struct {
 
 	// When response is truncated (the IsTruncated element value in the response
 	// is true), you can use the key name in this field as marker in the subsequent
@@ -511,13 +513,15 @@ type ListObjectsV2Info struct {
 
 	// List of prefixes for this request.
 	Prefixes []string
+	// Indicates whether the returned list objects response is truncated. A
+	// value of true indicates that the list was truncated. The list can be truncated
+	// if the number of objects exceeds the limit allowed or specified
+	// by max keys.
+	IsTruncated bool
 }
 
 // PartInfo - represents individual part metadata.
 type PartInfo struct {
-	// Part number that identifies the part. This is a positive integer between
-	// 1 and 10,000.
-	PartNumber int
 
 	// Date and time at which the part was uploaded.
 	LastModified time.Time
@@ -525,25 +529,25 @@ type PartInfo struct {
 	// Entity tag returned when the part was initially uploaded.
 	ETag string
 
-	// Size in bytes of the part.
-	Size int64
-
-	// Decompressed Size.
-	ActualSize int64
-
 	// Checksum values
 	ChecksumCRC32  string
 	ChecksumCRC32C string
 	ChecksumSHA1   string
 	ChecksumSHA256 string
+	// Part number that identifies the part. This is a positive integer between
+	// 1 and 10,000.
+	PartNumber int
+
+	// Size in bytes of the part.
+	Size int64
+
+	// Decompressed Size.
+	ActualSize int64
 }
 
 // CompletePart - represents the part that was completed, this is sent by the client
 // during CompleteMultipartUpload request.
 type CompletePart struct {
-	// Part number identifying the part. This is a positive integer between 1 and
-	// 10,000
-	PartNumber int
 
 	// Entity tag returned when the part was uploaded.
 	ETag string
@@ -553,6 +557,9 @@ type CompletePart struct {
 	ChecksumCRC32C string
 	ChecksumSHA1   string
 	ChecksumSHA256 string
+	// Part number identifying the part. This is a positive integer between 1 and
+	// 10,000
+	PartNumber int
 }
 
 // CompleteMultipartUpload - represents list of parts which are completed, this is sent by the

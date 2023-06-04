@@ -95,8 +95,8 @@ type Select struct {
 // SelectExpression represents the items requested in the select
 // statement
 type SelectExpression struct {
-	All         bool                 `parser:"  @\"*\""`
 	Expressions []*AliasedExpression `parser:"| @@ { \",\" @@ }"`
+	All         bool                 `parser:"  @\"*\""`
 }
 
 // TableExpression represents the FROM clause
@@ -184,22 +184,22 @@ type ConditionRHS struct {
 
 // Compare represents the RHS of a comparison expression
 type Compare struct {
-	Operator string   `parser:"@( \"<>\" | \"<=\" | \">=\" | \"=\" | \"<\" | \">\" | \"!=\" | \"IS\" \"NOT\" | \"IS\")"`
 	Operand  *Operand `parser:"  @@"`
+	Operator string   `parser:"@( \"<>\" | \"<=\" | \">=\" | \"=\" | \"<\" | \">\" | \"!=\" | \"IS\" \"NOT\" | \"IS\")"`
 }
 
 // Like represents the RHS of a LIKE expression
 type Like struct {
-	Not        bool     `parser:" @\"NOT\"? "`
 	Pattern    *Operand `parser:" \"LIKE\" @@ "`
 	EscapeChar *Operand `parser:" (\"ESCAPE\" @@)? "`
+	Not        bool     `parser:" @\"NOT\"? "`
 }
 
 // Between represents the RHS of a BETWEEN expression
 type Between struct {
-	Not   bool     `parser:" @\"NOT\"? "`
 	Start *Operand `parser:" \"BETWEEN\" @@ "`
 	End   *Operand `parser:" \"AND\" @@ "`
+	Not   bool     `parser:" @\"NOT\"? "`
 }
 
 // In represents the RHS of an IN expression
@@ -224,8 +224,8 @@ type Operand struct {
 
 // OpFactor represents the right-side of a +/- operation.
 type OpFactor struct {
-	Op    string  `parser:"@(\"+\" | \"-\")"`
 	Right *MultOp `parser:"@@"`
+	Op    string  `parser:"@(\"+\" | \"-\")"`
 }
 
 // MultOp represents a single term followed by an optional sequence of
@@ -237,8 +237,8 @@ type MultOp struct {
 
 // OpUnaryTerm represents the right side of *, / or % binary operations.
 type OpUnaryTerm struct {
-	Op    string     `parser:"@(\"*\" | \"/\" | \"%\")"`
 	Right *UnaryTerm `parser:"@@"`
+	Op    string     `parser:"@(\"*\" | \"/\" | \"%\")"`
 }
 
 // UnaryTerm represents a single negated term or a primary term
@@ -288,8 +288,8 @@ type SimpleArgFunc struct {
 
 // CountFunc represents the COUNT sql function
 type CountFunc struct {
-	StarArg bool        `parser:" \"COUNT\" \"(\" ( @\"*\"?"`
 	ExprArg *Expression `parser:" @@? )! \")\""`
+	StarArg bool        `parser:" \"COUNT\" \"(\" ( @\"*\"?"`
 }
 
 // CastFunc represents CAST sql function
@@ -309,8 +309,8 @@ type SubstringFunc struct {
 
 // ExtractFunc represents EXTRACT sql function
 type ExtractFunc struct {
-	Timeword string       `parser:" \"EXTRACT\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword | \"TIMEZONE_HOUR\":Timeword | \"TIMEZONE_MINUTE\":Timeword ) "`
 	From     *PrimaryTerm `parser:" \"FROM\" @@ \")\" "`
+	Timeword string       `parser:" \"EXTRACT\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword | \"TIMEZONE_HOUR\":Timeword | \"TIMEZONE_MINUTE\":Timeword ) "`
 }
 
 // TrimFunc represents TRIM sql function
@@ -322,16 +322,16 @@ type TrimFunc struct {
 
 // DateAddFunc represents the DATE_ADD function
 type DateAddFunc struct {
-	DatePart  string       `parser:" \"DATE_ADD\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\""`
 	Quantity  *Operand     `parser:" @@ \",\""`
 	Timestamp *PrimaryTerm `parser:" @@ \")\""`
+	DatePart  string       `parser:" \"DATE_ADD\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\""`
 }
 
 // DateDiffFunc represents the DATE_DIFF function
 type DateDiffFunc struct {
-	DatePart   string       `parser:" \"DATE_DIFF\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\" "`
 	Timestamp1 *PrimaryTerm `parser:" @@ \",\" "`
 	Timestamp2 *PrimaryTerm `parser:" @@ \")\" "`
+	DatePart   string       `parser:" \"DATE_DIFF\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\" "`
 }
 
 // LitValue represents a literal value parsed from the sql

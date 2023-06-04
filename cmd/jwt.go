@@ -55,8 +55,8 @@ func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audien
 	}
 	type value struct {
 		created time.Time
-		res     string
 		err     error
+		res     string
 	}
 	cache, err := lru.NewARC(100)
 	if err != nil {

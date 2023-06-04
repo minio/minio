@@ -39,9 +39,9 @@ var (
 // https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html
 type Config struct {
 	XMLName xml.Name `xml:"ReplicationConfiguration" json:"-"`
-	Rules   []Rule   `xml:"Rule" json:"Rules"`
 	// RoleArn is being reused for MinIO replication ARN
 	RoleArn string `xml:"Role" json:"Role"`
+	Rules   []Rule `xml:"Rule" json:"Rules"`
 }
 
 // Maximum 2MiB size per replication config.
@@ -153,12 +153,12 @@ type ObjectOpts struct {
 	Name           string
 	UserTags       string
 	VersionID      string
+	TargetArn      string
+	OpType         Type
 	DeleteMarker   bool
 	SSEC           bool
-	OpType         Type
 	Replica        bool
 	ExistingObject bool
-	TargetArn      string
 }
 
 // HasExistingObjectReplication returns true if any of the rule returns 'ExistingObjects' replication.

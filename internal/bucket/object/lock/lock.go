@@ -162,10 +162,10 @@ func (r Retention) Retain(created time.Time) bool {
 
 // DefaultRetention - default retention configuration.
 type DefaultRetention struct {
-	XMLName xml.Name `xml:"DefaultRetention"`
-	Mode    RetMode  `xml:"Mode"`
 	Days    *uint64  `xml:"Days"`
 	Years   *uint64  `xml:"Years"`
+	XMLName xml.Name `xml:"DefaultRetention"`
+	Mode    RetMode  `xml:"Mode"`
 }
 
 // Maximum support retention days and years supported by AWS S3.
@@ -221,12 +221,12 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 // Config - object lock configuration specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/Type_API_ObjectLockConfiguration.html
 type Config struct {
-	XMLNS             string   `xml:"xmlns,attr,omitempty"`
-	XMLName           xml.Name `xml:"ObjectLockConfiguration"`
-	ObjectLockEnabled string   `xml:"ObjectLockEnabled"`
-	Rule              *struct {
+	Rule *struct {
 		DefaultRetention DefaultRetention `xml:"DefaultRetention"`
 	} `xml:"Rule,omitempty"`
+	XMLName           xml.Name `xml:"ObjectLockConfiguration"`
+	XMLNS             string   `xml:"xmlns,attr,omitempty"`
+	ObjectLockEnabled string   `xml:"ObjectLockEnabled"`
 }
 
 // Enabled returns true if config.ObjectLockEnabled is set to Enabled
@@ -335,10 +335,10 @@ func (rDate RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartElem
 // ObjectRetention specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectRetention.html
 type ObjectRetention struct {
-	XMLNS           string        `xml:"xmlns,attr,omitempty"`
-	XMLName         xml.Name      `xml:"Retention"`
-	Mode            RetMode       `xml:"Mode,omitempty"`
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
+	XMLName         xml.Name      `xml:"Retention"`
+	XMLNS           string        `xml:"xmlns,attr,omitempty"`
+	Mode            RetMode       `xml:"Mode,omitempty"`
 }
 
 // Maximum 4KiB size per object retention config.

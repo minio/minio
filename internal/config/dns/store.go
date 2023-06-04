@@ -19,8 +19,8 @@ package dns
 
 // Error - DNS related errors error.
 type Error struct {
-	Bucket string
 	Err    error
+	Bucket string
 }
 
 // ErrInvalidBucketName for buckets with invalid name

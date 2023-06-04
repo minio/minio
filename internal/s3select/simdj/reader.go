@@ -189,8 +189,8 @@ func NewElementReader(ch chan simdjson.Object, err *error, args *json.ReaderArgs
 // safeCloser will wrap a Reader as a ReadCloser.
 // It is safe to call Close while the reader is being used.
 type safeCloser struct {
-	closed uint32
 	r      io.Reader
+	closed uint32
 }
 
 func (s *safeCloser) Read(p []byte) (n int, err error) {

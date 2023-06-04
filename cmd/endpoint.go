@@ -54,8 +54,8 @@ const (
 // ProxyEndpoint - endpoint used for proxy redirects
 // See proxyRequest() for details.
 type ProxyEndpoint struct {
-	Endpoint
 	Transport http.RoundTripper
+	Endpoint
 }
 
 // Endpoint - any type of endpoint.
@@ -197,13 +197,13 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 // PoolEndpoints represent endpoints in a given pool
 // along with its setCount and setDriveCount.
 type PoolEndpoints struct {
-	// indicates if endpoints are provided in non-ellipses style
-	Legacy       bool
-	SetCount     int
-	DrivesPerSet int
-	Endpoints    Endpoints
 	CmdLine      string
 	Platform     string
+	Endpoints    Endpoints
+	SetCount     int
+	DrivesPerSet int
+	// indicates if endpoints are provided in non-ellipses style
+	Legacy bool
 }
 
 // EndpointServerPools - list of list of endpoints

@@ -34,10 +34,14 @@ const (
 
 // SelectStatement is the top level parsed and analyzed structure
 type SelectStatement struct {
-	selectAST *Select
 
 	// Analysis result of the statement
 	selectQProp qProp
+
+	selectAST *Select
+
+	// Table alias
+	tableAlias string
 
 	// Result of parsing the limit clause if one is present
 	// (otherwise -1)
@@ -45,9 +49,6 @@ type SelectStatement struct {
 
 	// Count of rows that have been output.
 	outputCount int64
-
-	// Table alias
-	tableAlias string
 }
 
 // ParseSelectStatement - parses a select query from the given string

@@ -186,14 +186,14 @@ func wrapSRErr(err error) SRError {
 
 // SiteReplicationSys - manages cluster-level replication.
 type SiteReplicationSys struct {
-	sync.RWMutex
-
-	enabled bool
+	iamMetaCache srIAMCache
 
 	// In-memory and persisted multi-site replication state.
 	state srState
 
-	iamMetaCache srIAMCache
+	sync.RWMutex
+
+	enabled bool
 }
 
 type srState srStateV1
@@ -210,9 +210,8 @@ type srStateV1 struct {
 
 // srStateData represents the format of the current `srStateFile`.
 type srStateData struct {
-	Version int `json:"version"`
-
 	SRState srStateV1 `json:"srState"`
+	Version int       `json:"version"`
 }
 
 // Init - initialize the site replication manager.
@@ -331,8 +330,8 @@ const (
 // PeerSiteInfo is a wrapper struct around madmin.PeerSite with extra info on site status
 type PeerSiteInfo struct {
 	madmin.PeerSite
-	self         bool
 	DeploymentID string
+	self         bool
 	Replicated   bool // true if already participating in site replication
 	Empty        bool // true if cluster has no buckets
 }
@@ -3173,9 +3172,9 @@ func isBktReplCfgReplicated(total int, cfgs []*sreplication.Config) bool {
 
 // cache of IAM info fetched in last SiteReplicationMetaInfo call
 type srIAMCache struct {
-	sync.RWMutex
-	lastUpdate time.Time
 	srIAMInfo  madmin.SRInfo // caches IAM info
+	lastUpdate time.Time
+	sync.RWMutex
 }
 
 func (c *SiteReplicationSys) getSRCachedIAMInfo() (info madmin.SRInfo, ok bool) {
@@ -3679,34 +3678,28 @@ func (c *SiteReplicationSys) startHealRoutine(ctx context.Context, objAPI Object
 }
 
 type srBucketStatsSummary struct {
-	madmin.SRBucketStatsSummary
 	meta srBucketMetaInfo
+	madmin.SRBucketStatsSummary
 }
 
 type srPolicyStatsSummary struct {
-	madmin.SRPolicyStatsSummary
 	policy srPolicy
+	madmin.SRPolicyStatsSummary
 }
 
 type srUserStatsSummary struct {
-	madmin.SRUserStatsSummary
 	userInfo   srUserInfo
 	userPolicy srPolicyMapping
+	madmin.SRUserStatsSummary
 }
 
 type srGroupStatsSummary struct {
-	madmin.SRGroupStatsSummary
 	groupDesc   srGroupDesc
 	groupPolicy srPolicyMapping
+	madmin.SRGroupStatsSummary
 }
 
 type srStatusInfo struct {
-	// SRStatusInfo returns detailed status on site replication status
-	Enabled      bool
-	MaxBuckets   int                             // maximum buckets seen across sites
-	MaxUsers     int                             // maximum users seen across sites
-	MaxGroups    int                             // maximum groups seen across sites
-	MaxPolicies  int                             // maximum policies across sites
 	Sites        map[string]madmin.PeerInfo      // deployment->sitename
 	StatsSummary map[string]madmin.SRSiteSummary // map of deployment id -> site stat
 	// BucketStats map of bucket to slice of deployment IDs with stats. This is populated only if there are
@@ -3720,7 +3713,13 @@ type srStatusInfo struct {
 	UserStats map[string]map[string]srUserStatsSummary
 	// GroupStats map of group to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific bucket's stats are requested
-	GroupStats map[string]map[string]srGroupStatsSummary
+	GroupStats  map[string]map[string]srGroupStatsSummary
+	MaxBuckets  int // maximum buckets seen across sites
+	MaxUsers    int // maximum users seen across sites
+	MaxGroups   int // maximum groups seen across sites
+	MaxPolicies int // maximum policies across sites
+	// SRStatusInfo returns detailed status on site replication status
+	Enabled bool
 }
 
 // SRBucketDeleteOp - type of delete op
@@ -4932,8 +4931,8 @@ func isPolicyMappingEqual(p1, p2 srPolicyMapping) bool {
 }
 
 type srPeerInfo struct {
-	madmin.PeerInfo
 	EndpointURL *url.URL
+	madmin.PeerInfo
 }
 
 // getPeerForUpload returns the site replication peer handling this upload. Defaults to local cluster otherwise

@@ -56,19 +56,19 @@ const (
 
 // RedisArgs - Redis target arguments.
 type RedisArgs struct {
-	Enable     bool      `json:"enable"`
 	Format     string    `json:"format"`
-	Addr       xnet.Host `json:"address"`
 	Password   string    `json:"password"`
 	Key        string    `json:"key"`
 	QueueDir   string    `json:"queueDir"`
+	Addr       xnet.Host `json:"address"`
 	QueueLimit uint64    `json:"queueLimit"`
+	Enable     bool      `json:"enable"`
 }
 
 // RedisAccessEvent holds event log data and timestamp
 type RedisAccessEvent struct {
-	Event     []event.Event
 	EventTime string
+	Event     []event.Event
 }
 
 // Validate RedisArgs fields
@@ -119,15 +119,16 @@ func (r RedisArgs) validateFormat(c redis.Conn) error {
 
 // RedisTarget - Redis target.
 type RedisTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       RedisArgs
-	pool       *redis.Pool
 	store      store.Store[event.Event]
-	firstPing  bool
+	pool       *redis.Pool
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+
+	id       event.TargetID
+	args     RedisArgs
+	initOnce once.Init
+
+	firstPing bool
 }
 
 // ID - returns target ID.

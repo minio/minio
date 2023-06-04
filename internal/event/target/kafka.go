@@ -76,26 +76,26 @@ const (
 
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
-	Enable     bool        `json:"enable"`
-	Brokers    []xnet.Host `json:"brokers"`
-	Topic      string      `json:"topic"`
-	QueueDir   string      `json:"queueDir"`
-	QueueLimit uint64      `json:"queueLimit"`
-	Version    string      `json:"version"`
-	TLS        struct {
-		Enable        bool               `json:"enable"`
+	TLS struct {
 		RootCAs       *x509.CertPool     `json:"-"`
-		SkipVerify    bool               `json:"skipVerify"`
-		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
 		ClientTLSCert string             `json:"clientTLSCert"`
 		ClientTLSKey  string             `json:"clientTLSKey"`
+		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
+		Enable        bool               `json:"enable"`
+		SkipVerify    bool               `json:"skipVerify"`
 	} `json:"tls"`
 	SASL struct {
-		Enable    bool   `json:"enable"`
 		User      string `json:"username"`
 		Password  string `json:"password"`
 		Mechanism string `json:"mechanism"`
+		Enable    bool   `json:"enable"`
 	} `json:"sasl"`
+	Topic      string      `json:"topic"`
+	QueueDir   string      `json:"queueDir"`
+	Version    string      `json:"version"`
+	Brokers    []xnet.Host `json:"brokers"`
+	QueueLimit uint64      `json:"queueLimit"`
+	Enable     bool        `json:"enable"`
 }
 
 // Validate KafkaArgs fields
@@ -126,15 +126,15 @@ func (k KafkaArgs) Validate() error {
 
 // KafkaTarget - Kafka target.
 type KafkaTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       KafkaArgs
 	producer   sarama.SyncProducer
-	config     *sarama.Config
 	store      store.Store[event.Event]
+	config     *sarama.Config
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+	args       KafkaArgs
+
+	id       event.TargetID
+	initOnce once.Init
 }
 
 // ID - returns target ID.

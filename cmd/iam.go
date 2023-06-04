@@ -77,30 +77,34 @@ const (
 
 // IAMSys - config system.
 type IAMSys struct {
-	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	// metrics
-	LastRefreshTimeUnixNano         uint64
-	LastRefreshDurationMilliseconds uint64
-	TotalRefreshSuccesses           uint64
-	TotalRefreshFailures            uint64
-
-	sync.Mutex
-
-	iamRefreshInterval time.Duration
-
-	LDAPConfig   xldap.Config  // only valid if usersSysType is LDAPUsers
 	OpenIDConfig openid.Config // only valid if OpenID is configured
-	STSTLSConfig xtls.Config   // only valid if STS TLS is configured
 
-	usersSysType UsersSysType
-
-	rolesMap map[arn.ARN]string
+	// configLoaded will be closed and remain so after first load.
+	configLoaded chan struct{}
 
 	// Persistence layer for IAM subsystem
 	store *IAMStoreSys
 
-	// configLoaded will be closed and remain so after first load.
-	configLoaded chan struct{}
+	rolesMap map[arn.ARN]string
+
+	usersSysType UsersSysType
+
+	LDAPConfig xldap.Config // only valid if usersSysType is LDAPUsers
+	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	// metrics
+	LastRefreshTimeUnixNano uint64
+
+	iamRefreshInterval time.Duration
+
+	TotalRefreshFailures uint64
+
+	TotalRefreshSuccesses           uint64
+	LastRefreshDurationMilliseconds uint64
+
+	sync.Mutex
+
+	STSTLSConfig xtls.Config // only valid if STS TLS is configured
+
 }
 
 // IAMUserType represents a user type inside MinIO server
@@ -922,14 +926,15 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy              *iampolicy.Policy
+	sessionPolicy *iampolicy.Policy
+	expiration    *time.Time
+
+	claims                     map[string]interface{}
 	accessKey                  string
 	secretKey                  string
 	name, description          string
-	expiration                 *time.Time
 	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
-	claims map[string]interface{}
 }
 
 // NewServiceAccount - create a new service account
@@ -1022,10 +1027,10 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 type updateServiceAccountOpts struct {
 	sessionPolicy     *iampolicy.Policy
+	expiration        *time.Time
 	secretKey         string
 	status            string
 	name, description string
-	expiration        *time.Time
 }
 
 // UpdateServiceAccount - edit a service account

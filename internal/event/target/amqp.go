@@ -38,12 +38,12 @@ import (
 
 // AMQPArgs - AMQP target arguments.
 type AMQPArgs struct {
-	Enable            bool     `json:"enable"`
 	URL               xnet.URL `json:"url"`
+	QueueDir          string   `json:"queueDir"`
 	Exchange          string   `json:"exchange"`
 	RoutingKey        string   `json:"routingKey"`
 	ExchangeType      string   `json:"exchangeType"`
-	DeliveryMode      uint8    `json:"deliveryMode"`
+	QueueLimit        uint64   `json:"queueLimit"`
 	Mandatory         bool     `json:"mandatory"`
 	Immediate         bool     `json:"immediate"`
 	Durable           bool     `json:"durable"`
@@ -51,8 +51,8 @@ type AMQPArgs struct {
 	NoWait            bool     `json:"noWait"`
 	AutoDeleted       bool     `json:"autoDeleted"`
 	PublisherConfirms bool     `json:"publisherConfirms"`
-	QueueDir          string   `json:"queueDir"`
-	QueueLimit        uint64   `json:"queueLimit"`
+	Enable            bool     `json:"enable"`
+	DeliveryMode      uint8    `json:"deliveryMode"`
 }
 
 //lint:file-ignore ST1003 We cannot change these exported names.
@@ -113,16 +113,17 @@ func (a *AMQPArgs) Validate() error {
 
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       AMQPArgs
-	conn       *amqp091.Connection
-	connMutex  sync.Mutex
 	store      store.Store[event.Event]
+	conn       *amqp091.Connection
 	loggerOnce logger.LogOnce
 
 	quitCh chan struct{}
+
+	id       event.TargetID
+	args     AMQPArgs
+	initOnce once.Init
+
+	connMutex sync.Mutex
 }
 
 // ID - returns TargetID.

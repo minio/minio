@@ -44,21 +44,23 @@ import (
 )
 
 type erasureServerPools struct {
-	poolMetaMutex sync.RWMutex
-	poolMeta      poolMeta
-
-	rebalMu   sync.RWMutex
 	rebalMeta *rebalanceMeta
 
-	deploymentID     [16]byte
+	s3Peer           *S3PeerSys
 	distributionAlgo string
+
+	poolMeta poolMeta
 
 	serverPools []*erasureSets
 
 	// Active decommission canceler
 	decommissionCancelers []context.CancelFunc
 
-	s3Peer *S3PeerSys
+	poolMetaMutex sync.RWMutex
+
+	rebalMu sync.RWMutex
+
+	deploymentID [16]byte
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -388,9 +390,9 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 
 // PoolObjInfo represents the state of current object version per pool
 type PoolObjInfo struct {
-	Index   int
-	ObjInfo ObjectInfo
 	Err     error
+	ObjInfo ObjectInfo
+	Index   int
 }
 
 func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bucket, object string, opts ObjectOptions) (PoolObjInfo, error) {
@@ -850,9 +852,9 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 func (z *erasureServerPools) getLatestObjectInfoWithIdx(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, int, error) {
 	object = encodeDirObject(object)
 	results := make([]struct {
-		zIdx int
-		oi   ObjectInfo
 		err  error
+		oi   ObjectInfo
+		zIdx int
 	}, len(z.serverPools))
 	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
@@ -2103,18 +2105,18 @@ const (
 
 // HealthOptions takes input options to return sepcific information
 type HealthOptions struct {
-	Maintenance    bool
 	DeploymentType string
+	Maintenance    bool
 }
 
 // HealthResult returns the current state of the system, also
 // additionally with any specific heuristic information which
 // was queried
 type HealthResult struct {
-	Healthy       bool
 	HealingDrives int
 	PoolID, SetID int
 	WriteQuorum   int
+	Healthy       bool
 	UsingDefaults bool
 }
 

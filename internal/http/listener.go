@@ -33,10 +33,10 @@ type acceptResult struct {
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
 type httpListener struct {
-	tcpListeners []*net.TCPListener // underlaying TCP listeners.
-	acceptCh     chan acceptResult  // channel where all TCP listeners write accepted connection.
 	ctx          context.Context
+	acceptCh     chan acceptResult // channel where all TCP listeners write accepted connection.
 	ctxCanceler  context.CancelFunc
+	tcpListeners []*net.TCPListener // underlaying TCP listeners.
 }
 
 // start - starts separate goroutine for each TCP listener.  A valid new connection is passed to httpListener.acceptCh.
@@ -120,8 +120,8 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
-	UserTimeout int    // this value is expected to be in milliseconds
 	Interface   string // this is a VRF device passed via `--interface` flag
+	UserTimeout int    // this value is expected to be in milliseconds
 }
 
 // newHTTPListener - creates new httpListener object which is interface compatible to net.Listener.

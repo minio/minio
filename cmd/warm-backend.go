@@ -112,8 +112,8 @@ func (op tierOp) String() string {
 }
 
 type tierPermErr struct {
-	Op  tierOp
 	Err error
+	Op  tierOp
 }
 
 func (te tierPermErr) Error() string {

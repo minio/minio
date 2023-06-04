@@ -42,59 +42,9 @@ import (
 )
 
 type listPathOptions struct {
-	// ID of the listing.
-	// This will be used to persist the list.
-	ID string
 
-	// Bucket of the listing.
-	Bucket string
-
-	// Directory inside the bucket.
-	// When unset listPath will set this based on Prefix
-	BaseDir string
-
-	// Scan/return only content with prefix.
-	Prefix string
-
-	// FilterPrefix will return only results with this prefix when scanning.
-	// Should never contain a slash.
-	// Prefix should still be set.
-	FilterPrefix string
-
-	// Marker to resume listing.
-	// The response will be the first entry >= this object name.
-	Marker string
-
-	// Limit the number of results.
-	Limit int
-
-	// The number of disks to ask.
-	AskDisks string
-
-	// InclDeleted will keep all entries where latest version is a delete marker.
-	InclDeleted bool
-
-	// Scan recursively.
-	// If false only main directory will be scanned.
-	// Should always be true if Separator is n SlashSeparator.
-	Recursive bool
-
-	// Separator to use.
-	Separator string
-
-	// Create indicates that the lister should not attempt to load an existing cache.
-	Create bool
-
-	// Include pure directories.
-	IncludeDirectories bool
-
-	// Transient is set if the cache is transient due to an error or being a reserved bucket.
-	// This means the cache metadata will not be persisted on disk.
-	// A transient result will never be returned from the cache so knowing the list id is required.
-	Transient bool
-
-	// Versioned is this a ListObjectVersions call.
-	Versioned bool
+	// Replication configuration
+	Replication replicationConfig
 
 	// Versioning config is used for if the path
 	// has versioning enabled.
@@ -105,17 +55,68 @@ type listPathOptions struct {
 	// Is not transferred across request calls.
 	Lifecycle *lifecycle.Lifecycle
 
+	// Marker to resume listing.
+	// The response will be the first entry >= this object name.
+	Marker string
+
+	// Scan/return only content with prefix.
+	Prefix string
+
+	// ID of the listing.
+	// This will be used to persist the list.
+	ID string
+
+	// The number of disks to ask.
+	AskDisks string
+
+	// FilterPrefix will return only results with this prefix when scanning.
+	// Should never contain a slash.
+	// Prefix should still be set.
+	FilterPrefix string
+
+	// Separator to use.
+	Separator string
+
+	// Bucket of the listing.
+	Bucket string
+
+	// Directory inside the bucket.
+	// When unset listPath will set this based on Prefix
+	BaseDir string
+
 	// Retention configuration, needed to be passed along with lifecycle if set.
 	Retention lock.Retention
 
-	// Replication configuration
-	Replication replicationConfig
+	// Limit the number of results.
+	Limit int
+
+	// pool and set of where the cache is located.
+	pool, set int
+
+	// InclDeleted will keep all entries where latest version is a delete marker.
+	InclDeleted bool
+
+	// Versioned is this a ListObjectVersions call.
+	Versioned bool
+
+	// Transient is set if the cache is transient due to an error or being a reserved bucket.
+	// This means the cache metadata will not be persisted on disk.
+	// A transient result will never be returned from the cache so knowing the list id is required.
+	Transient bool
+
+	// Include pure directories.
+	IncludeDirectories bool
 
 	// StopDiskAtLimit will stop listing on each disk when limit number off objects has been returned.
 	StopDiskAtLimit bool
 
-	// pool and set of where the cache is located.
-	pool, set int
+	// Create indicates that the lister should not attempt to load an existing cache.
+	Create bool
+
+	// Scan recursively.
+	// If false only main directory will be scanned.
+	// Should always be true if Separator is n SlashSeparator.
+	Recursive bool
 }
 
 func init() {
@@ -683,11 +684,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 }
 
 type metaCacheRPC struct {
-	o      listPathOptions
-	mu     sync.Mutex
 	meta   *metacache
 	rpc    *peerRESTClient
 	cancel context.CancelFunc
+	o      listPathOptions
+	mu     sync.Mutex
 }
 
 func (m *metaCacheRPC) setErr(err string) {
@@ -833,25 +834,6 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 }
 
 type listPathRawOptions struct {
-	disks         []StorageAPI
-	fallbackDisks []StorageAPI
-	bucket, path  string
-	recursive     bool
-
-	// Only return results with this prefix.
-	filterPrefix string
-
-	// Forward to this prefix before returning results.
-	forwardTo string
-
-	// Minimum number of good disks to continue.
-	// An error will be returned if this many disks returned an error.
-	minDisks       int
-	reportNotFound bool
-
-	// perDiskLimit will limit each disk to return n objects.
-	// If <= 0 all results will be returned until canceled.
-	perDiskLimit int
 
 	// Callbacks with results:
 	// If set to nil, it will not be called.
@@ -859,15 +841,37 @@ type listPathRawOptions struct {
 	// agreed is called if all disks agreed.
 	agreed func(entry metaCacheEntry)
 
+	// finished will be called when all streams have finished and
+	// more than one disk returned an error.
+	// Will not be called if everything operates as expected.
+	finished func(errs []error)
+
 	// partial will be called when there is disagreement between disks.
 	// if disk did not return any result, but also haven't errored
 	// the entry will be empty and errs will
 	partial func(entries metaCacheEntries, errs []error)
 
-	// finished will be called when all streams have finished and
-	// more than one disk returned an error.
-	// Will not be called if everything operates as expected.
-	finished func(errs []error)
+	// Forward to this prefix before returning results.
+	forwardTo string
+
+	// Only return results with this prefix.
+	filterPrefix string
+
+	bucket, path  string
+	disks         []StorageAPI
+	fallbackDisks []StorageAPI
+
+	// Minimum number of good disks to continue.
+	// An error will be returned if this many disks returned an error.
+	minDisks int
+
+	// perDiskLimit will limit each disk to return n objects.
+	// If <= 0 all results will be returned until canceled.
+	perDiskLimit int
+
+	recursive bool
+
+	reportNotFound bool
 }
 
 // listPathRaw will list a path on the provided drives.

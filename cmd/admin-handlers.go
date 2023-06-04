@@ -289,12 +289,12 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 // ServerProperties holds some server information such as, version, region
 // uptime, etc..
 type ServerProperties struct {
-	Uptime       int64    `json:"uptime"`
 	Version      string   `json:"version"`
 	CommitID     string   `json:"commitID"`
 	DeploymentID string   `json:"deploymentID"`
 	Region       string   `json:"region"`
 	SQSARN       []string `json:"sqsARN"`
+	Uptime       int64    `json:"uptime"`
 }
 
 // ServerConnStats holds transferred bytes from/to the server
@@ -317,18 +317,18 @@ type ServerHTTPAPIStats struct {
 // ServerHTTPStats holds all type of http operations performed to/from the server
 // including their average execution time.
 type ServerHTTPStats struct {
-	S3RequestsInQueue      int32              `json:"s3RequestsInQueue"`
-	S3RequestsIncoming     uint64             `json:"s3RequestsIncoming"`
 	CurrentS3Requests      ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests        ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors          ServerHTTPAPIStats `json:"totalS3Errors"`
 	TotalS35xxErrors       ServerHTTPAPIStats `json:"totalS35xxErrors"`
 	TotalS34xxErrors       ServerHTTPAPIStats `json:"totalS34xxErrors"`
 	TotalS3Canceled        ServerHTTPAPIStats `json:"totalS3Canceled"`
+	S3RequestsIncoming     uint64             `json:"s3RequestsIncoming"`
 	TotalS3RejectedAuth    uint64             `json:"totalS3RejectedAuth"`
 	TotalS3RejectedTime    uint64             `json:"totalS3RejectedTime"`
 	TotalS3RejectedHeader  uint64             `json:"totalS3RejectedHeader"`
 	TotalS3RejectedInvalid uint64             `json:"totalS3RejectedInvalid"`
+	S3RequestsInQueue      int32              `json:"s3RequestsInQueue"`
 }
 
 // StorageInfoHandler - GET /minio/admin/v3/storageinfo
@@ -566,8 +566,8 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 
 // PeerLocks holds server information result of one node
 type PeerLocks struct {
-	Addr  string
 	Locks map[string][]lockRequesterInfo
+	Addr  string
 }
 
 // ForceUnlockHandler force unlocks requested resource
@@ -653,8 +653,8 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 // profiling action in a given server - deprecated API
 type StartProfilingResult struct {
 	NodeName string `json:"nodeName"`
-	Success  bool   `json:"success"`
 	Error    string `json:"error"`
+	Success  bool   `json:"success"`
 }
 
 // StartProfilingHandler - POST /minio/admin/v3/profiling/start?profilerType={profilerType}
@@ -826,12 +826,12 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 // dummyFileInfo represents a dummy representation of a profile data file
 // present only in memory, it helps to generate the zip stream.
 type dummyFileInfo struct {
+	modTime time.Time
+	sys     interface{}
 	name    string
 	size    int64
 	mode    os.FileMode
-	modTime time.Time
 	isDir   bool
-	sys     interface{}
 }
 
 func (f dummyFileInfo) Name() string       { return f.name }
@@ -869,8 +869,8 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 
 type healInitParams struct {
 	bucket, objPrefix     string
-	hs                    madmin.HealOpts
 	clientToken           string
+	hs                    madmin.HealOpts
 	forceStart, forceStop bool
 }
 
@@ -972,9 +972,9 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	// try this server to generate a new token.
 
 	type healResp struct {
-		respBytes []byte
-		apiErr    APIError
 		errBody   string
+		apiErr    APIError
+		respBytes []byte
 	}
 
 	// Define a closure to start sending whitespace to client
@@ -1092,7 +1092,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), hip.hs, hip.forceStart)
 		go func() {
 			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh, objectAPI)
-			hr := healResp{respBytes, apiErr, errMsg}
+			hr := healResp{respBytes: respBytes, apiErr: apiErr, errBody: errMsg}
 			respCh <- hr
 		}()
 	}

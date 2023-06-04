@@ -30,10 +30,10 @@ type SelectError interface {
 }
 
 type s3Error struct {
+	cause      error
 	code       string
 	message    string
 	statusCode int
-	cause      error
 }
 
 func (err *s3Error) Cause() error {

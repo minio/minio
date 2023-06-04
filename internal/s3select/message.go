@@ -245,16 +245,17 @@ func NewErrorMessage(errorCode, errorMessage string) []byte {
 type messageWriter struct {
 	writer          http.ResponseWriter
 	getProgressFunc func() (int64, int64)
-	bytesReturned   int64
-
-	payloadBuffer      []byte
-	payloadBufferIndex int
-	payloadCh          chan *bytes.Buffer
-
-	finBytesScanned, finBytesProcessed int64
+	payloadCh       chan *bytes.Buffer
 
 	errCh  chan []byte
 	doneCh chan struct{}
+
+	payloadBuffer []byte
+	bytesReturned int64
+
+	payloadBufferIndex int
+
+	finBytesScanned, finBytesProcessed int64
 }
 
 func (writer *messageWriter) write(data []byte) bool {

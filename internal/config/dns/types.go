@@ -29,16 +29,23 @@ const (
 
 // SrvRecord - represents a DNS service record
 type SrvRecord struct {
-	Host     string      `json:"host,omitempty"`
-	Port     json.Number `json:"port,omitempty"`
-	Priority int         `json:"priority,omitempty"`
-	Weight   int         `json:"weight,omitempty"`
-	Text     string      `json:"text,omitempty"`
-	Mail     bool        `json:"mail,omitempty"` // Be an MX record. Priority becomes Preference.
-	TTL      uint32      `json:"ttl,omitempty"`
 
 	// Holds info about when the entry was created first.
 	CreationDate time.Time `json:"creationDate"`
+
+	Host string      `json:"host,omitempty"`
+	Port json.Number `json:"port,omitempty"`
+	Text string      `json:"text,omitempty"`
+
+	// Group is used to group (or *not* to group) different services
+	// together. Services with an identical Group are returned in
+	// the same answer.
+	Group string `json:"group,omitempty"`
+
+	// Key carries the original key used during Put().
+	Key      string `json:"-"`
+	Priority int    `json:"priority,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
 
 	// When a SRV record with a "Host: IP-address" is added, we synthesize
 	// a srv.Target domain name.  Normally we convert the full Key where
@@ -47,11 +54,7 @@ type SrvRecord struct {
 	// DNS name.
 	TargetStrip int `json:"targetstrip,omitempty"`
 
-	// Group is used to group (or *not* to group) different services
-	// together. Services with an identical Group are returned in
-	// the same answer.
-	Group string `json:"group,omitempty"`
+	TTL uint32 `json:"ttl,omitempty"`
 
-	// Key carries the original key used during Put().
-	Key string `json:"-"`
+	Mail bool `json:"mail,omitempty"` // Be an MX record. Priority becomes Preference.
 }

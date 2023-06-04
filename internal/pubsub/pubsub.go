@@ -26,20 +26,20 @@ import (
 // Sub - subscriber entity.
 type Sub[T Maskable] struct {
 	ch     chan T
-	types  Mask
 	filter func(entry T) bool
+	types  Mask
 }
 
 // PubSub holds publishers and subscribers
 type PubSub[T Maskable, M Maskable] struct {
-	// atomics, keep at top:
-	types          uint64
-	numSubscribers int32
-	maxSubscribers int32
 
 	// not atomics:
 	subs []*Sub[T]
+	// atomics, keep at top:
+	types uint64
 	sync.RWMutex
+	numSubscribers int32
+	maxSubscribers int32
 }
 
 // Publish message to the subscribers.

@@ -82,21 +82,21 @@ type apiEndpoints struct {
 }
 
 type systemInfo struct {
-	XMLName              xml.Name `xml:"SystemInfo" json:"-"`
-	ProtocolVersion      string   `xml:"ProtocolVersion"`
-	ModelName            string   `xml:"ModelName"`
-	ProtocolCapabilities struct {
-		CapacityInfo   bool `xml:"CapacityInfo"`
-		UploadSessions bool `xml:"UploadSessions"`
-		IAMSTS         bool `xml:"IAMSTS"`
-	} `mxl:"ProtocolCapabilities"`
 	APIEndpoints          *apiEndpoints `xml:"APIEndpoints,omitempty"`
+	XMLName               xml.Name      `xml:"SystemInfo" json:"-"`
+	ProtocolVersion       string        `xml:"ProtocolVersion"`
+	ModelName             string        `xml:"ModelName"`
 	SystemRecommendations struct {
 		S3ConcurrentTaskLimit    int `xml:"S3ConcurrentTaskLimit,omitempty"`
 		S3MultiObjectDeleteLimit int `xml:"S3MultiObjectDeleteLimit,omitempty"`
 		StorageCurrentTaskLimit  int `xml:"StorageCurrentTaskLimit,omitempty"`
 		KBBlockSize              int `xml:"KbBlockSize"`
 	} `xml:"SystemRecommendations"`
+	ProtocolCapabilities struct {
+		CapacityInfo   bool `xml:"CapacityInfo"`
+		UploadSessions bool `xml:"UploadSessions"`
+		IAMSTS         bool `xml:"IAMSTS"`
+	} `mxl:"ProtocolCapabilities"`
 }
 
 // This optional functionality allows vendors to report space information to Veeam products, and Veeam will make placement

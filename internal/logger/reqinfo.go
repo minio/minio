@@ -32,8 +32,8 @@ const contextLogKey = contextKeyType("miniolog")
 
 // KeyVal - appended to ReqInfo.Tags
 type KeyVal struct {
-	Key string
 	Val interface{}
+	Key string
 }
 
 // ObjectVersion object version key/versionId
@@ -45,22 +45,22 @@ type ObjectVersion struct {
 // ReqInfo stores the request info.
 // Reading/writing directly to struct requires appropriate R/W lock.
 type ReqInfo struct {
-	RemoteHost   string           // Client Host/IP
-	Host         string           // Node Host/IP
-	UserAgent    string           // User Agent
+	Cred         auth.Credentials `json:"-"`
+	VersionID    string           `json:",omitempty"` // corresponding versionID for the object
+	Region       string           `json:"-"`
 	DeploymentID string           // x-minio-deployment-id
 	RequestID    string           // x-amz-request-id
 	API          string           // API name - GetObject PutObject NewMultipartUpload etc.
 	BucketName   string           `json:",omitempty"` // Bucket name
-	ObjectName   string           `json:",omitempty"` // Object name
-	VersionID    string           `json:",omitempty"` // corresponding versionID for the object
-	Objects      []ObjectVersion  `json:",omitempty"` // Only set during MultiObject delete handler.
-	Cred         auth.Credentials `json:"-"`
-	Region       string           `json:"-"`
-	Owner        bool             `json:"-"`
+	UserAgent    string           // User Agent
 	AuthType     string           `json:"-"`
+	ObjectName   string           `json:",omitempty"` // Object name
+	Host         string           // Node Host/IP
+	RemoteHost   string           // Client Host/IP
+	Objects      []ObjectVersion  `json:",omitempty"` // Only set during MultiObject delete handler.
 	tags         []KeyVal         // Any additional info not accommodated by above fields
 	sync.RWMutex
+	Owner bool `json:"-"`
 }
 
 // NewReqInfo :
@@ -83,7 +83,10 @@ func (r *ReqInfo) AppendTags(key string, val interface{}) *ReqInfo {
 	}
 	r.Lock()
 	defer r.Unlock()
-	r.tags = append(r.tags, KeyVal{key, val})
+	r.tags = append(r.tags, KeyVal{
+		Key: key,
+		Val: val,
+	})
 	return r
 }
 
@@ -105,7 +108,10 @@ func (r *ReqInfo) SetTags(key string, val interface{}) *ReqInfo {
 	}
 	if !updated {
 		// Append to the end of tags list
-		r.tags = append(r.tags, KeyVal{key, val})
+		r.tags = append(r.tags, KeyVal{
+			Key: key,
+			Val: val,
+		})
 	}
 	return r
 }

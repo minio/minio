@@ -89,33 +89,36 @@ func isValidVolname(volname string) bool {
 
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
-	diskPath string
-	endpoint Endpoint
+	formatLastCheck time.Time
 
-	globalSync bool
-	oDirect    bool // indicates if this disk supports ODirect
-	rootDisk   bool
+	formatFileInfo os.FileInfo
+	diskPath       string
+	endpoint       Endpoint
 
 	diskID string
+
+	formatData []byte
+
+	diskInfoCache timedValue
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
 
-	// Indicate of NSScanner is in progress in this disk
-	scanning int32
-
-	formatFileInfo  os.FileInfo
-	formatLegacy    bool
-	formatLastCheck time.Time
-
-	diskInfoCache timedValue
 	sync.RWMutex
-
-	formatData []byte
 
 	// mutex to prevent concurrent read operations overloading walks.
 	walkMu     sync.Mutex
 	walkReadMu sync.Mutex
+
+	// Indicate of NSScanner is in progress in this disk
+	scanning int32
+
+	formatLegacy bool
+	rootDisk     bool
+
+	oDirect bool // indicates if this disk supports ODirect
+
+	globalSync bool
 }
 
 // checkPathLength - returns error if given path name length more than 255

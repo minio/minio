@@ -40,12 +40,12 @@ var errLimitExceeded = errors.New("the maximum store limit reached")
 
 // QueueStore - Filestore for persisting items.
 type QueueStore[_ any] struct {
-	sync.RWMutex
-	entryLimit uint64
-	directory  string
-	fileExt    string
+	entries   map[string]int64 // key -> modtime as unix nano
+	directory string
+	fileExt   string
 
-	entries map[string]int64 // key -> modtime as unix nano
+	entryLimit uint64
+	sync.RWMutex
 }
 
 // NewQueueStore - Creates an instance for QueueStore.

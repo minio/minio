@@ -65,15 +65,19 @@ func (n *NetworkError) Unwrap() error {
 
 // Client - http based RPC client.
 type Client struct {
-	connected int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	_         int32 // For 64 bits alignment
-	lastConn  int64
+	lastErrTime time.Time
+	lastErr     error
+
+	httpClient *http.Client
 
 	// HealthCheckFn is the function set to test for health.
 	// If not set the client will not keep track of health.
 	// Calling this returns true or false if the target
 	// is online or offline.
 	HealthCheckFn func() bool
+
+	url          *url.URL
+	newAuthToken func(audience string) string
 
 	// HealthCheckRetryUnit will be used to calculate the exponential
 	// backoff when trying to reconnect to an offline node
@@ -86,20 +90,18 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
+	lastConn int64
+
+	sync.RWMutex       // mutex for lastErr
+	connected    int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	_            int32 // For 64 bits alignment
+
 	// ExpectTimeouts indicates if context timeouts are expected.
 	// This will not mark the client offline in these cases.
 	ExpectTimeouts bool
 
 	// Avoid metrics update if set to true
 	NoMetrics bool
-
-	httpClient   *http.Client
-	url          *url.URL
-	newAuthToken func(audience string) string
-
-	sync.RWMutex // mutex for lastErr
-	lastErr      error
-	lastErrTime  time.Time
 }
 
 type restError string

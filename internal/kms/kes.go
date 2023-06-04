@@ -39,19 +39,6 @@ const (
 // parameters - like KMS endpoints or authentication
 // credentials.
 type Config struct {
-	// Endpoints contains a list of KMS server
-	// HTTP endpoints.
-	Endpoints []string
-
-	// Enclave is the KES server enclave. If empty,
-	// none resp. the default KES server enclave
-	// will be used.
-	Enclave string
-
-	// DefaultKeyID is the key ID used when
-	// no explicit key ID is specified for
-	// a cryptographic operation.
-	DefaultKeyID string
 
 	// APIKey is an credential provided by env. var.
 	// to authenticate to a KES server. Either an
@@ -69,6 +56,20 @@ type Config struct {
 	// RootCAs is a set of root CA certificates
 	// to verify the KMS server TLS certificate.
 	RootCAs *x509.CertPool
+
+	// Enclave is the KES server enclave. If empty,
+	// none resp. the default KES server enclave
+	// will be used.
+	Enclave string
+
+	// DefaultKeyID is the key ID used when
+	// no explicit key ID is specified for
+	// a cryptographic operation.
+	DefaultKeyID string
+
+	// Endpoints contains a list of KMS server
+	// HTTP endpoints.
+	Endpoints []string
 }
 
 // NewWithConfig returns a new KMS using the given
@@ -160,10 +161,11 @@ func NewWithConfig(config Config) (KMS, error) {
 }
 
 type kesClient struct {
-	lock         sync.RWMutex
+	client  *kes.Client
+	enclave *kes.Enclave
+
 	defaultKeyID string
-	client       *kes.Client
-	enclave      *kes.Enclave
+	lock         sync.RWMutex
 
 	bulkAvailable bool
 }

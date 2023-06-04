@@ -135,14 +135,14 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
-	endpoint   Endpoint
 	restClient *rest.Client
+	endpoint   Endpoint
 	diskID     string
+
+	diskInfoCache timedValue
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
-
-	diskInfoCache timedValue
 }
 
 // Retrieve location indexes.

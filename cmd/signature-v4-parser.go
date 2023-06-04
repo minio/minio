@@ -157,14 +157,14 @@ func parseSignedHeader(signedHdrElement string) ([]string, APIErrorCode) {
 // signValues data type represents structured form of AWS Signature V4 header.
 type signValues struct {
 	Credential    credentialHeader
-	SignedHeaders []string
 	Signature     string
+	SignedHeaders []string
 }
 
 // preSignValues data type represents structued form of AWS Signature V4 query string.
 type preSignValues struct {
+	Date time.Time
 	signValues
-	Date    time.Time
 	Expires time.Duration
 }
 

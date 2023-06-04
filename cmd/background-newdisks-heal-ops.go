@@ -44,20 +44,31 @@ const (
 
 // healingTracker is used to persist healing information during a heal.
 type healingTracker struct {
-	disk StorageAPI    `msg:"-"`
-	mu   *sync.RWMutex `msg:"-"`
-
-	ID         string
-	PoolIndex  int
-	SetIndex   int
-	DiskIndex  int
-	Path       string
-	Endpoint   string
 	Started    time.Time
 	LastUpdate time.Time
 
-	ObjectsTotalCount uint64
-	ObjectsTotalSize  uint64
+	disk StorageAPI    `msg:"-"`
+	mu   *sync.RWMutex `msg:"-"`
+
+	ID string
+
+	// ID of the current healing operation
+	HealID string
+
+	// Add future tracking capabilities
+	// Be sure that they are included in toHealingDisk
+	Path     string
+	Endpoint string
+	Object   string `json:"-"`
+
+	// Last object scanned.
+	Bucket string `json:"-"`
+
+	// Filled during heal.
+	HealedBuckets []string
+
+	// Filled on startup/restarts.
+	QueuedBuckets []string
 
 	ItemsHealed uint64
 	ItemsFailed uint64
@@ -65,9 +76,9 @@ type healingTracker struct {
 	BytesDone   uint64
 	BytesFailed uint64
 
-	// Last object scanned.
-	Bucket string `json:"-"`
-	Object string `json:"-"`
+	ObjectsTotalSize uint64
+
+	ObjectsTotalCount uint64
 
 	// Numbers when current bucket started healing,
 	// for resuming with correct numbers.
@@ -76,17 +87,9 @@ type healingTracker struct {
 	ResumeBytesDone   uint64 `json:"-"`
 	ResumeBytesFailed uint64 `json:"-"`
 
-	// Filled on startup/restarts.
-	QueuedBuckets []string
-
-	// Filled during heal.
-	HealedBuckets []string
-
-	// ID of the current healing operation
-	HealID string
-
-	// Add future tracking capabilities
-	// Be sure that they are included in toHealingDisk
+	DiskIndex int
+	SetIndex  int
+	PoolIndex int
 }
 
 // loadHealingTracker will load the healing tracker from the supplied disk.

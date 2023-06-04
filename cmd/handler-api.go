@@ -34,24 +34,25 @@ import (
 )
 
 type apiConfig struct {
-	mu sync.RWMutex
-
-	requestsDeadline time.Duration
-	requestsPool     chan struct{}
-	clusterDeadline  time.Duration
-	listQuorum       string
-	corsAllowOrigins []string
-	// total drives per erasure set across pools.
-	totalDriveCount     int
+	requestsPool        chan struct{}
+	listQuorum          string
 	replicationPriority string
-	transitionWorkers   int
+	corsAllowOrigins    []string
+	// total drives per erasure set across pools.
+	totalDriveCount int
+	clusterDeadline time.Duration
+
+	requestsDeadline  time.Duration
+	transitionWorkers int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
 	deleteCleanupInterval       time.Duration
-	disableODirect              bool
-	gzipObjects                 bool
-	rootAccess                  bool
+	mu                          sync.RWMutex
+
+	disableODirect bool
+	gzipObjects    bool
+	rootAccess     bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"

@@ -711,8 +711,8 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 
 // RenameDataResp - RenameData()'s response.
 type RenameDataResp struct {
-	Signature uint64
 	Err       error
+	Signature uint64
 }
 
 // RenameDataHandler - renames a meta object and data dir to destination.

@@ -54,10 +54,10 @@ var (
 
 // Args opa general purpose policy engine configuration.
 type Args struct {
-	URL         *xnet.URL             `json:"url"`
-	AuthToken   string                `json:"authToken"`
 	Transport   http.RoundTripper     `json:"-"`
+	URL         *xnet.URL             `json:"url"`
 	CloseRespFn func(r io.ReadCloser) `json:"-"`
+	AuthToken   string                `json:"authToken"`
 }
 
 // Validate - validate opa configuration params.

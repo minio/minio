@@ -244,12 +244,12 @@ type MetricDescription struct {
 
 // Metric captures the details for a metric
 type Metric struct {
-	Description          MetricDescription `json:"Description"`
 	StaticLabels         map[string]string `json:"StaticLabels"`
-	Value                float64           `json:"Value"`
 	VariableLabels       map[string]string `json:"VariableLabels"`
-	HistogramBucketLabel string            `json:"HistogramBucketLabel"`
 	Histogram            map[string]uint64 `json:"Histogram"`
+	Description          MetricDescription `json:"Description"`
+	HistogramBucketLabel string            `json:"HistogramBucketLabel"`
+	Value                float64           `json:"Value"`
 }
 
 // MetricsGroup are a group of metrics that are initialized together.
@@ -2505,8 +2505,8 @@ func getKMSMetrics() *MetricsGroup {
 }
 
 type minioClusterCollector struct {
-	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
+	metricsGroups []*MetricsGroup
 }
 
 func newMinioClusterCollector(metricsGroups []*MetricsGroup) *minioClusterCollector {
@@ -2600,8 +2600,8 @@ func ReportMetrics(ctx context.Context, metricsGroups []*MetricsGroup) <-chan Me
 
 // minioNodeCollector is the Custom Collector
 type minioNodeCollector struct {
-	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
+	metricsGroups []*MetricsGroup
 }
 
 // Describe sends the super-set of all possible descriptors of metrics

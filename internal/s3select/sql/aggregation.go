@@ -40,8 +40,9 @@ var (
 
 type aggVal struct {
 	runningSum             *Value
-	runningCount           int64
 	runningMax, runningMin *Value
+
+	runningCount int64
 
 	// Stores if at least one record has been seen
 	seen bool

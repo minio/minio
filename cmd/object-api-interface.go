@@ -43,45 +43,53 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 
 // ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
-	ServerSideEncryption encrypt.ServerSide
-	VersionSuspended     bool      // indicates if the bucket was previously versioned but is currently suspended.
-	Versioned            bool      // indicates if the bucket is versioned
-	VersionID            string    // Specifies the versionID which needs to be overwritten or read
-	MTime                time.Time // Is only set in POST/PUT operations
-	Expires              time.Time // Is only used in POST/PUT operations
+	DeleteReplication                   ReplicationState // Represents internal replication state needed for Delete replication
+	ReplicationSourceLegalholdTimestamp time.Time        // set if MinIOSourceObjectLegalholdTimestamp received
+	ReplicationSourceRetentionTimestamp time.Time        // set if MinIOSourceObjectRetentionTimestamp received
+	MTime                               time.Time        // Is only set in POST/PUT operations
+	Expires                             time.Time        // Is only used in POST/PUT operations
 
-	DeleteMarker            bool // Is only set in DELETE operations for delete marker replication
-	CheckDMReplicationReady bool // Is delete marker ready to be replicated - set only during HEAD
+	ReplicationSourceTaggingTimestamp time.Time // set if MinIOSourceTaggingTimestamp received
+	ServerSideEncryption              encrypt.ServerSide
+	CheckPrecondFn                    CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
 
-	UserDefined         map[string]string   // only set in case of POST/PUT operations
-	PartNumber          int                 // only useful in case of GetObject/HeadObject
-	CheckPrecondFn      CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	EvalMetadataFn      EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
-	DeleteReplication   ReplicationState    // Represents internal replication state needed for Delete replication
-	Transition          TransitionOptions
-	Expiration          ExpirationOptions
-	LifecycleAuditEvent lcAuditEvent
+	UserDefined map[string]string // only set in case of POST/PUT operations
+
+	WalkFilter     func(info FileInfo) bool // return WalkFilter returns 'true/false'
+	EvalMetadataFn EvalMetadataFn           // only set for retention settings, meant to be used only when updating metadata in-place.
+
+	// Provides a per object encryption function, allowing metadata encryption.
+	EncryptFn objectMetaEncryptFn
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
-	NoDecryption                        bool      // indicates if the stream must be decrypted.
-	PreserveETag                        string    // preserves this etag during a PUT call.
-	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
-	ReplicationRequest                  bool      // true only if replication request
-	ReplicationSourceTaggingTimestamp   time.Time // set if MinIOSourceTaggingTimestamp received
-	ReplicationSourceLegalholdTimestamp time.Time // set if MinIOSourceObjectLegalholdTimestamp received
-	ReplicationSourceRetentionTimestamp time.Time // set if MinIOSourceObjectRetentionTimestamp received
-	DeletePrefix                        bool      // set true to enforce a prefix deletion, only application for DeleteObject API,
+	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
+
+	// IndexCB will return any index created but the compression.
+	// Object must have been read at this point.
+	IndexCB func() []byte
+
+	Transition          TransitionOptions
+	WalkMarker          string // set to skip until this object
+	VersionID           string // Specifies the versionID which needs to be overwritten or read
+	PreserveETag        string // preserves this etag during a PUT call.
+	LifecycleAuditEvent lcAuditEvent
+
+	PartNumber         int  // only useful in case of GetObject/HeadObject
+	ProxyHeaderSet     bool // only set for GET/HEAD in active-active replication scenario
+	ReplicationRequest bool // true only if replication request
+	ProxyRequest       bool // only set for GET/HEAD in active-active replication scenario
+	NoLock             bool // indicates to lower layers if the caller is expecting to hold locks.
+
+	NoDecryption bool // indicates if the stream must be decrypted.
+	DeletePrefix bool // set true to enforce a prefix deletion, only application for DeleteObject API,
 
 	Speedtest bool // object call specifically meant for SpeedTest code, set to 'true' when invoked by SpeedtestHandler.
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool
 
-	// Provides a per object encryption function, allowing metadata encryption.
-	EncryptFn objectMetaEncryptFn
+	Expiration ExpirationOptions
 
 	// SkipDecommissioned set to 'true' if the call requires skipping the pool being decommissioned.
 	// mainly set for certain WRITE operations.
@@ -90,13 +98,11 @@ type ObjectOptions struct {
 	// participating in a rebalance operation. Typically set for 'write' operations.
 	SkipRebalancing bool
 
-	WalkFilter      func(info FileInfo) bool // return WalkFilter returns 'true/false'
-	WalkMarker      string                   // set to skip until this object
-	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
+	CheckDMReplicationReady bool // Is delete marker ready to be replicated - set only during HEAD
 
-	// IndexCB will return any index created but the compression.
-	// Object must have been read at this point.
-	IndexCB func() []byte
+	DeleteMarker     bool // Is only set in DELETE operations for delete marker replication
+	Versioned        bool // indicates if the bucket is versioned
+	VersionSuspended bool // indicates if the bucket was previously versioned but is currently suspended.
 
 	InclFreeVersions bool
 }
@@ -108,29 +114,29 @@ type ExpirationOptions struct {
 
 // TransitionOptions represents object options for transition ObjectLayer operation
 type TransitionOptions struct {
+	RestoreExpiry  time.Time
+	RestoreRequest *RestoreObjectRequest
 	Status         string
 	Tier           string
 	ETag           string
-	RestoreRequest *RestoreObjectRequest
-	RestoreExpiry  time.Time
 	ExpireRestored bool
 }
 
 // MakeBucketOptions represents bucket options for ObjectLayer bucket operations
 type MakeBucketOptions struct {
+	CreatedAt         time.Time // only for site replication
 	LockEnabled       bool
 	VersioningEnabled bool
-	ForceCreate       bool      // Create buckets even if they are already created.
-	CreatedAt         time.Time // only for site replication
-	NoLock            bool      // does not lock the make bucket call if set to 'true'
+	ForceCreate       bool // Create buckets even if they are already created.
+	NoLock            bool // does not lock the make bucket call if set to 'true'
 }
 
 // DeleteBucketOptions provides options for DeleteBucket calls.
 type DeleteBucketOptions struct {
+	SRDeleteOp SRBucketDeleteOp // only when site replication is enabled
 	NoLock     bool             // does not lock the delete bucket call if set to 'true'
 	NoRecreate bool             // do not recreate bucket on delete failures
 	Force      bool             // Force deletion
-	SRDeleteOp SRBucketDeleteOp // only when site replication is enabled
 }
 
 // BucketOptions provides options for ListBuckets and GetBucketInfo call.

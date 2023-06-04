@@ -28,8 +28,8 @@ type Identity struct {
 
 // UserRequest user request headers
 type UserRequest struct {
-	URL     string      `json:"url"`
 	Headers http.Header `json:"headers"`
+	URL     string      `json:"url"`
 }
 
 // GetObjectContext provides the necessary details to perform
@@ -73,8 +73,8 @@ type GetObjectContext struct {
 //	  "protocolVersion": "1.00"
 //	}
 type Event struct {
-	ProtocolVersion  string            `json:"protocolVersion"`
+	UserRequest      UserRequest       `json:"userRequest"`
 	GetObjectContext *GetObjectContext `json:"getObjectContext"`
 	UserIdentity     Identity          `json:"userIdentity"`
-	UserRequest      UserRequest       `json:"userRequest"`
+	ProtocolVersion  string            `json:"protocolVersion"`
 }

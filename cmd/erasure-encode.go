@@ -30,8 +30,8 @@ import (
 // Writes in parallel to writers
 type parallelWriter struct {
 	writers     []io.Writer
-	writeQuorum int
 	errs        []error
+	writeQuorum int
 }
 
 // Write writes data to writers in parallel.

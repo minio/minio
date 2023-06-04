@@ -47,10 +47,11 @@ type AssumedRoleUser struct {
 type AssumeRoleResponse struct {
 	XMLName xml.Name `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleResponse" json:"-"`
 
-	Result           AssumeRoleResult `xml:"AssumeRoleResult"`
 	ResponseMetadata struct {
 		RequestID string `xml:"RequestId,omitempty"`
 	} `xml:"ResponseMetadata,omitempty"`
+
+	Result AssumeRoleResult `xml:"AssumeRoleResult"`
 }
 
 // AssumeRoleResult - Contains the response to a successful AssumeRole
@@ -88,14 +89,6 @@ type AssumeRoleWithWebIdentityResponse struct {
 // WebIdentityResult - Contains the response to a successful AssumeRoleWithWebIdentity
 // request, including temporary credentials that can be used to make MinIO API requests.
 type WebIdentityResult struct {
-	// The identifiers for the temporary security credentials that the operation
-	// returns.
-	AssumedRoleUser AssumedRoleUser `xml:",omitempty"`
-
-	// The intended audience (also known as client ID) of the web identity token.
-	// This is traditionally the client identifier issued to the application that
-	// requested the client grants.
-	Audience string `xml:",omitempty"`
 
 	// The temporary security credentials, which include an access key ID, a secret
 	// access key, and a security (or session) token.
@@ -106,10 +99,14 @@ type WebIdentityResult struct {
 	// Also, future updates to AWS might require larger sizes.
 	Credentials auth.Credentials `xml:",omitempty"`
 
-	// A percentage value that indicates the size of the policy in packed form.
-	// The service rejects any policy with a packed size greater than 100 percent,
-	// which means the policy exceeded the allowed space.
-	PackedPolicySize int `xml:",omitempty"`
+	// The identifiers for the temporary security credentials that the operation
+	// returns.
+	AssumedRoleUser AssumedRoleUser `xml:",omitempty"`
+
+	// The intended audience (also known as client ID) of the web identity token.
+	// This is traditionally the client identifier issued to the application that
+	// requested the client grants.
+	Audience string `xml:",omitempty"`
 
 	// The issuing authority of the web identity token presented. For OpenID Connect
 	// ID tokens, this contains the value of the iss field. For OAuth 2.0 id_tokens,
@@ -124,6 +121,11 @@ type WebIdentityResult struct {
 	// For OpenID Connect ID tokens, this field contains the value returned by the identity
 	// provider as the token's sub (Subject) claim.
 	SubjectFromWebIdentityToken string `xml:",omitempty"`
+
+	// A percentage value that indicates the size of the policy in packed form.
+	// The service rejects any policy with a packed size greater than 100 percent,
+	// which means the policy exceeded the allowed space.
+	PackedPolicySize int `xml:",omitempty"`
 }
 
 // AssumeRoleWithClientGrantsResponse contains the result of successful AssumeRoleWithClientGrants request.
@@ -138,14 +140,6 @@ type AssumeRoleWithClientGrantsResponse struct {
 // ClientGrantsResult - Contains the response to a successful AssumeRoleWithClientGrants
 // request, including temporary credentials that can be used to make MinIO API requests.
 type ClientGrantsResult struct {
-	// The identifiers for the temporary security credentials that the operation
-	// returns.
-	AssumedRoleUser AssumedRoleUser `xml:",omitempty"`
-
-	// The intended audience (also known as client ID) of the web identity token.
-	// This is traditionally the client identifier issued to the application that
-	// requested the client grants.
-	Audience string `xml:",omitempty"`
 
 	// The temporary security credentials, which include an access key ID, a secret
 	// access key, and a security (or session) token.
@@ -156,10 +150,14 @@ type ClientGrantsResult struct {
 	// Also, future updates to AWS might require larger sizes.
 	Credentials auth.Credentials `xml:",omitempty"`
 
-	// A percentage value that indicates the size of the policy in packed form.
-	// The service rejects any policy with a packed size greater than 100 percent,
-	// which means the policy exceeded the allowed space.
-	PackedPolicySize int `xml:",omitempty"`
+	// The identifiers for the temporary security credentials that the operation
+	// returns.
+	AssumedRoleUser AssumedRoleUser `xml:",omitempty"`
+
+	// The intended audience (also known as client ID) of the web identity token.
+	// This is traditionally the client identifier issued to the application that
+	// requested the client grants.
+	Audience string `xml:",omitempty"`
 
 	// The issuing authority of the web identity token presented. For OpenID Connect
 	// ID tokens, this contains the value of the iss field. For OAuth 2.0 id_tokens,
@@ -174,6 +172,11 @@ type ClientGrantsResult struct {
 	// For OpenID Connect ID tokens, this field contains the value returned by the identity
 	// provider as the token's sub (Subject) claim.
 	SubjectFromToken string `xml:",omitempty"`
+
+	// A percentage value that indicates the size of the policy in packed form.
+	// The service rejects any policy with a packed size greater than 100 percent,
+	// which means the policy exceeded the allowed space.
+	PackedPolicySize int `xml:",omitempty"`
 }
 
 // AssumeRoleWithLDAPResponse contains the result of successful

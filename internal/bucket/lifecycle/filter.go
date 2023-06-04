@@ -28,19 +28,22 @@ var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or A
 
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {
-	XMLName xml.Name `xml:"Filter"`
-	set     bool
-
-	Prefix Prefix
-
-	And    And
-	andSet bool
-
-	Tag    Tag
-	tagSet bool
 
 	// Caching tags, only once
 	cachedTags map[string]string
+
+	Tag     Tag
+	XMLName xml.Name `xml:"Filter"`
+
+	And And
+
+	Prefix Prefix
+
+	set bool
+
+	andSet bool
+
+	tagSet bool
 }
 
 // MarshalXML - produces the xml representation of the Filter struct

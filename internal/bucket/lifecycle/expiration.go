@@ -106,9 +106,9 @@ type ExpireDeleteMarker struct {
 
 // Expiration - expiration actions for a rule in lifecycle configuration.
 type Expiration struct {
+	Date         ExpirationDate     `xml:"Date,omitempty"`
 	XMLName      xml.Name           `xml:"Expiration"`
 	Days         ExpirationDays     `xml:"Days,omitempty"`
-	Date         ExpirationDate     `xml:"Date,omitempty"`
 	DeleteMarker ExpireDeleteMarker `xml:"ExpiredObjectDeleteMarker"`
 
 	set bool

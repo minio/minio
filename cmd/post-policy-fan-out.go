@@ -32,10 +32,10 @@ import (
 
 type fanOutOptions struct {
 	Kind     crypto.Type
-	KeyID    string
-	Key      []byte
 	KmsCtx   kms.Context
 	Checksum *hash.Checksum
+	KeyID    string
+	Key      []byte
 }
 
 // fanOutPutObject takes an input source reader and fans out multiple PUT operations

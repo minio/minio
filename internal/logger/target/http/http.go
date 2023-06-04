@@ -58,20 +58,20 @@ const (
 
 // Config http logger target
 type Config struct {
-	Enabled    bool              `json:"enabled"`
-	Name       string            `json:"name"`
-	UserAgent  string            `json:"userAgent"`
-	Endpoint   string            `json:"endpoint"`
-	AuthToken  string            `json:"authToken"`
-	ClientCert string            `json:"clientCert"`
-	ClientKey  string            `json:"clientKey"`
-	QueueSize  int               `json:"queueSize"`
-	QueueDir   string            `json:"queueDir"`
-	Proxy      string            `json:"string"`
-	Transport  http.RoundTripper `json:"-"`
+	Transport http.RoundTripper `json:"-"`
 
 	// Custom logger
-	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
+	LogOnce    func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
+	Name       string                                                                  `json:"name"`
+	UserAgent  string                                                                  `json:"userAgent"`
+	Endpoint   string                                                                  `json:"endpoint"`
+	AuthToken  string                                                                  `json:"authToken"`
+	ClientCert string                                                                  `json:"clientCert"`
+	ClientKey  string                                                                  `json:"clientKey"`
+	QueueDir   string                                                                  `json:"queueDir"`
+	Proxy      string                                                                  `json:"string"`
+	QueueSize  int                                                                     `json:"queueSize"`
+	Enabled    bool                                                                    `json:"enabled"`
 }
 
 // Target implements logger.Target and sends the json
@@ -80,35 +80,36 @@ type Config struct {
 // buffer is full, new logs are just ignored and an error
 // is returned to the caller.
 type Target struct {
-	totalMessages  int64
-	failedMessages int64
-	status         int32
+	config      Config
+	lastStarted time.Time
 
-	// Worker control
-	workers       int64
-	workerStartMu sync.Mutex
-	lastStarted   time.Time
-
-	wg sync.WaitGroup
+	// store to persist and replay the logs to the target
+	// to avoid missing events when the target is down.
+	store store.Store[interface{}]
 
 	// Channel of log entries.
 	// Reading logCh must hold read lock on logChMu (to avoid read race)
 	// Sending a value on logCh must hold read lock on logChMu (to avoid closing)
-	logCh   chan interface{}
-	logChMu sync.RWMutex
+	logCh          chan interface{}
+	client         *http.Client
+	storeCtxCancel context.CancelFunc
+
+	wg sync.WaitGroup
+
+	// Worker control
+	workers        int64
+	totalMessages  int64
+	failedMessages int64
+	logChMu        sync.RWMutex
 
 	// If the first init fails, this starts a goroutine that
 	// will attempt to establish the connection.
 	revive sync.Once
 
-	// store to persist and replay the logs to the target
-	// to avoid missing events when the target is down.
-	store              store.Store[interface{}]
-	storeCtxCancel     context.CancelFunc
 	initQueueStoreOnce once.Init
 
-	config Config
-	client *http.Client
+	workerStartMu sync.Mutex
+	status        int32
 }
 
 // Name returns the name of the target

@@ -227,10 +227,10 @@ func (e InsufficientWriteQuorum) Unwrap() error {
 
 // GenericError - generic object layer error.
 type GenericError struct {
+	Err       error
 	Bucket    string
 	Object    string
 	VersionID string
-	Err       error
 }
 
 // Unwrap the error to its underlying error.
@@ -623,9 +623,9 @@ func (e InvalidUploadID) Error() string {
 
 // InvalidPart One or more of the specified parts could not be found
 type InvalidPart struct {
-	PartNumber int
 	ExpETag    string
 	GotETag    string
+	PartNumber int
 }
 
 func (e InvalidPart) Error() string {
@@ -635,9 +635,9 @@ func (e InvalidPart) Error() string {
 
 // PartTooSmall - error if part size is less than 5MB.
 type PartTooSmall struct {
+	PartETag   string
 	PartSize   int64
 	PartNumber int
-	PartETag   string
 }
 
 func (e PartTooSmall) Error() string {

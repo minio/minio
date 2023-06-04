@@ -35,10 +35,10 @@ type bootstrapInfo struct {
 	source string
 }
 type bootstrapTracer struct {
-	mu         sync.RWMutex
-	idx        int
-	info       [bootstrapMsgsLimit]bootstrapInfo
 	lastUpdate time.Time
+	info       [bootstrapMsgsLimit]bootstrapInfo
+	idx        int
+	mu         sync.RWMutex
 }
 
 var globalBootstrapTracer = &bootstrapTracer{}

@@ -52,8 +52,8 @@ type bootstrapRESTServer struct{}
 
 // ServerSystemConfig - captures information about server configuration.
 type ServerSystemConfig struct {
-	MinioEndpoints EndpointServerPools
 	MinioEnv       map[string]string
+	MinioEndpoints EndpointServerPools
 }
 
 // Diff - returns error on first difference found in two configs.
@@ -164,8 +164,8 @@ func registerBootstrapRESTHandlers(router *mux.Router) {
 
 // client to talk to bootstrap NEndpoints.
 type bootstrapRESTClient struct {
-	endpoint   Endpoint
 	restClient *rest.Client
+	endpoint   Endpoint
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected

@@ -144,12 +144,12 @@ func (r BatchReplicateRetry) Validate() error {
 
 // BatchReplicateFilter holds all the filters currently supported for batch replication
 type BatchReplicateFilter struct {
-	NewerThan     time.Duration         `yaml:"newerThan,omitempty" json:"newerThan"`
-	OlderThan     time.Duration         `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedAfter  time.Time             `yaml:"createdAfter,omitempty" json:"createdAfter"`
 	CreatedBefore time.Time             `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobReplicateKV `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobReplicateKV `yaml:"metadata,omitempty" json:"metadata"`
+	NewerThan     time.Duration         `yaml:"newerThan,omitempty" json:"newerThan"`
+	OlderThan     time.Duration         `yaml:"olderThan,omitempty" json:"olderThan"`
 }
 
 // BatchReplicateNotification success or failure notification endpoint for each job attempts
@@ -163,8 +163,8 @@ type BatchReplicateNotification struct {
 // - notify
 // - retry
 type BatchJobReplicateFlags struct {
-	Filter BatchReplicateFilter       `yaml:"filter" json:"filter"`
 	Notify BatchReplicateNotification `yaml:"notify" json:"notify"`
+	Filter BatchReplicateFilter       `yaml:"filter" json:"filter"`
 	Retry  BatchReplicateRetry        `yaml:"retry" json:"retry"`
 }
 
@@ -254,12 +254,12 @@ func (s BatchJobReplicateSource) ValidPath() bool {
 
 // BatchJobReplicateV1 v1 of batch job replication
 type BatchJobReplicateV1 struct {
-	APIVersion string                  `yaml:"apiVersion" json:"apiVersion"`
-	Flags      BatchJobReplicateFlags  `yaml:"flags" json:"flags"`
-	Target     BatchJobReplicateTarget `yaml:"target" json:"target"`
-	Source     BatchJobReplicateSource `yaml:"source" json:"source"`
+	clnt   *miniogo.Core           `msg:"-"`
+	Target BatchJobReplicateTarget `yaml:"target" json:"target"`
+	Source BatchJobReplicateSource `yaml:"source" json:"source"`
 
-	clnt *miniogo.Core `msg:"-"`
+	APIVersion string                 `yaml:"apiVersion" json:"apiVersion"`
+	Flags      BatchJobReplicateFlags `yaml:"flags" json:"flags"`
 }
 
 // RemoteToLocal returns true if source is remote and target is local
@@ -269,13 +269,13 @@ func (r BatchJobReplicateV1) RemoteToLocal() bool {
 
 // BatchJobRequest this is an internal data structure not for external consumption.
 type BatchJobRequest struct {
-	ID        string               `yaml:"-" json:"name"`
-	User      string               `yaml:"-" json:"user"`
 	Started   time.Time            `yaml:"-" json:"started"`
-	Location  string               `yaml:"-" json:"location"`
+	ctx       context.Context      `msg:"-"`
 	Replicate *BatchJobReplicateV1 `yaml:"replicate" json:"replicate"`
 	KeyRotate *BatchJobKeyRotateV1 `yaml:"keyrotate" json:"keyrotate"`
-	ctx       context.Context      `msg:"-"`
+	ID        string               `yaml:"-" json:"name"`
+	User      string               `yaml:"-" json:"user"`
+	Location  string               `yaml:"-" json:"location"`
 }
 
 // Notify notifies notification endpoint if configured regarding job failure or success.
@@ -795,29 +795,30 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 
 // batchJobInfo current batch replication information
 type batchJobInfo struct {
-	mu sync.RWMutex `json:"-" msg:"-"`
-
-	Version       int       `json:"-" msg:"v"`
-	JobID         string    `json:"jobID" msg:"jid"`
-	JobType       string    `json:"jobType" msg:"jt"`
-	StartTime     time.Time `json:"startTime" msg:"st"`
-	LastUpdate    time.Time `json:"lastUpdate" msg:"lu"`
-	RetryAttempts int       `json:"retryAttempts" msg:"ra"`
-
-	Complete bool `json:"complete" msg:"cmp"`
-	Failed   bool `json:"failed" msg:"fld"`
+	StartTime  time.Time `json:"startTime" msg:"st"`
+	LastUpdate time.Time `json:"lastUpdate" msg:"lu"`
 
 	// Last bucket/object batch replicated
 	Bucket string `json:"-" msg:"lbkt"`
 	Object string `json:"-" msg:"lobj"`
 
+	JobID         string `json:"jobID" msg:"jid"`
+	JobType       string `json:"jobType" msg:"jt"`
+	DeleteMarkers int64  `json:"deleteMarkers" msg:"dm"`
+	RetryAttempts int    `json:"retryAttempts" msg:"ra"`
+
+	Version int `json:"-" msg:"v"`
+
 	// Verbose information
-	Objects             int64 `json:"objects" msg:"ob"`
-	DeleteMarkers       int64 `json:"deleteMarkers" msg:"dm"`
-	ObjectsFailed       int64 `json:"objectsFailed" msg:"obf"`
-	DeleteMarkersFailed int64 `json:"deleteMarkersFailed" msg:"dmf"`
-	BytesTransferred    int64 `json:"bytesTransferred" msg:"bt"`
-	BytesFailed         int64 `json:"bytesFailed" msg:"bf"`
+	Objects             int64        `json:"objects" msg:"ob"`
+	ObjectsFailed       int64        `json:"objectsFailed" msg:"obf"`
+	DeleteMarkersFailed int64        `json:"deleteMarkersFailed" msg:"dmf"`
+	BytesTransferred    int64        `json:"bytesTransferred" msg:"bt"`
+	BytesFailed         int64        `json:"bytesFailed" msg:"bf"`
+	mu                  sync.RWMutex `json:"-" msg:"-"`
+
+	Complete bool `json:"complete" msg:"cmp"`
+	Failed   bool `json:"failed" msg:"fld"`
 }
 
 const (
@@ -1641,13 +1642,13 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 type BatchJobPool struct {
 	ctx          context.Context
 	objLayer     ObjectLayer
-	once         sync.Once
-	mu           sync.Mutex
 	jobCh        chan *BatchJobRequest
-	jmu          sync.Mutex // protects jobCancelers
 	jobCancelers map[string]context.CancelFunc
 	workerKillCh chan struct{}
 	workerSize   int
+	once         sync.Once
+	mu           sync.Mutex
+	jmu          sync.Mutex // protects jobCancelers
 }
 
 var globalBatchJobPool *BatchJobPool
@@ -1800,8 +1801,8 @@ func (j *BatchJobPool) canceler(jobID string, cancel bool) error {
 
 //msgp:ignore batchJobMetrics
 type batchJobMetrics struct {
-	sync.RWMutex
 	metrics map[string]*batchJobInfo
+	sync.RWMutex
 }
 
 var globalBatchJobsMetrics = batchJobMetrics{

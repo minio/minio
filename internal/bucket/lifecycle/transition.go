@@ -98,10 +98,11 @@ func (tDays TransitionDays) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 
 // Transition - transition actions for a rule in lifecycle configuration.
 type Transition struct {
-	XMLName      xml.Name       `xml:"Transition"`
-	Days         TransitionDays `xml:"Days,omitempty"`
 	Date         TransitionDate `xml:"Date,omitempty"`
+	XMLName      xml.Name       `xml:"Transition"`
 	StorageClass string         `xml:"StorageClass,omitempty"`
+
+	Days TransitionDays `xml:"Days,omitempty"`
 
 	set bool
 }

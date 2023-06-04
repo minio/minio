@@ -62,11 +62,11 @@ func newCountUpReader(reader io.Reader) *countUpReader {
 
 type progressReader struct {
 	rc              io.ReadCloser
+	closer          io.ReadCloser
 	scannedReader   *countUpReader
 	processedReader *countUpReader
 
 	closedMu sync.Mutex
-	closer   io.ReadCloser
 	closed   bool
 }
 

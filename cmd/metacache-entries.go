@@ -32,14 +32,15 @@ import (
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
 type metaCacheEntry struct {
+
+	// cached contains the metadata if decoded.
+	cached *xlMetaV2
+
 	// name is the full name of the object including prefixes
 	name string
 	// Metadata. If none is present it is not an object but only a prefix.
 	// Entries without metadata will only be present in non-recursive scans.
 	metadata []byte
-
-	// cached contains the metadata if decoded.
-	cached *xlMetaV2
 
 	// Indicates the entry can be reused and only one reference to metadata is expected.
 	reusable bool
@@ -328,19 +329,20 @@ func (m metaCacheEntries) shallowClone() metaCacheEntries {
 }
 
 type metadataResolutionParams struct {
-	dirQuorum int // Number if disks needed for a directory to 'exist'.
-	objQuorum int // Number of disks needed for an object to 'exist'.
+	bucket string // Name of the bucket. Used for generating cached fileinfo.
+
+	// Reusable slice for resolution
+	candidates [][]xlMetaV2ShallowVersion
+	dirQuorum  int // Number if disks needed for a directory to 'exist'.
+	objQuorum  int // Number of disks needed for an object to 'exist'.
 
 	// An optimization request only an 'n' amount of versions from xl.meta
 	// to avoid resolving all versions to figure out the latest 'version'
 	// for ListObjects, ListObjectsV2
 	requestedVersions int
 
-	bucket string // Name of the bucket. Used for generating cached fileinfo.
-	strict bool   // Versions must match exactly, including all metadata.
+	strict bool // Versions must match exactly, including all metadata.
 
-	// Reusable slice for resolution
-	candidates [][]xlMetaV2ShallowVersion
 }
 
 // resolve multiple entries.
@@ -467,9 +469,9 @@ func (m metaCacheEntries) names() []string {
 
 // metaCacheEntriesSorted contains metacache entries that are sorted.
 type metaCacheEntriesSorted struct {
-	o metaCacheEntries
 	// list id is not serialized
 	listID string
+	o      metaCacheEntries
 	// Reuse buffers
 	reuse bool
 }

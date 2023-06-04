@@ -52,16 +52,16 @@ type sizeHistogram [dataUsageBucketLen]uint64
 type versionsHistogram [dataUsageVersionLen]uint64
 
 type dataUsageEntry struct {
-	Children dataUsageHashMap `msg:"ch"`
-	// These fields do no include any children.
-	Size             int64                `msg:"sz"`
-	Objects          uint64               `msg:"os"`
-	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
-	ObjSizes         sizeHistogram        `msg:"szs"`
-	ObjVersions      versionsHistogram    `msg:"vh"`
+	Children         dataUsageHashMap     `msg:"ch"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
 	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
-	Compacted        bool                 `msg:"c"`
+	ObjSizes         sizeHistogram        `msg:"szs"`
+	ObjVersions      versionsHistogram    `msg:"vh"`
+	// These fields do no include any children.
+	Size      int64  `msg:"sz"`
+	Objects   uint64 `msg:"os"`
+	Versions  uint64 `msg:"vs"` // Versions that are not delete markers.
+	Compacted bool   `msg:"c"`
 }
 
 // allTierStats is a collection of per-tier stats across all configured remote
@@ -173,15 +173,17 @@ type replicationAllStatsV1 struct {
 
 //msgp:tuple dataUsageEntryV2
 type dataUsageEntryV2 struct {
-	// These fields do no include any children.
-	Size     int64
-	Objects  uint64
-	ObjSizes sizeHistogram
 	Children dataUsageHashMap
+	ObjSizes sizeHistogram
+	// These fields do no include any children.
+	Size    int64
+	Objects uint64
 }
 
 //msgp:tuple dataUsageEntryV3
 type dataUsageEntryV3 struct {
+	Children dataUsageHashMap
+	ObjSizes sizeHistogram
 	// These fields do no include any children.
 	Size                   int64
 	ReplicatedSize         uint64
@@ -189,8 +191,6 @@ type dataUsageEntryV3 struct {
 	ReplicationFailedSize  uint64
 	ReplicaSize            uint64
 	Objects                uint64
-	ObjSizes               sizeHistogram
-	Children               dataUsageHashMap
 }
 
 //msgp:tuple dataUsageEntryV4
@@ -205,26 +205,26 @@ type dataUsageEntryV4 struct {
 
 //msgp:tuple dataUsageEntryV5
 type dataUsageEntryV5 struct {
-	Children dataUsageHashMap
-	// These fields do no include any children.
-	Size             int64
-	Objects          uint64
-	Versions         uint64 // Versions that are not delete markers.
-	ObjSizes         sizeHistogram
+	Children         dataUsageHashMap
 	ReplicationStats *replicationStatsV1
-	Compacted        bool
+	ObjSizes         sizeHistogram
+	// These fields do no include any children.
+	Size      int64
+	Objects   uint64
+	Versions  uint64 // Versions that are not delete markers.
+	Compacted bool
 }
 
 //msgp:tuple dataUsageEntryV6
 type dataUsageEntryV6 struct {
-	Children dataUsageHashMap
-	// These fields do no include any children.
-	Size             int64
-	Objects          uint64
-	Versions         uint64 // Versions that are not delete markers.
-	ObjSizes         sizeHistogram
+	Children         dataUsageHashMap
 	ReplicationStats *replicationAllStatsV1
-	Compacted        bool
+	ObjSizes         sizeHistogram
+	// These fields do no include any children.
+	Size      int64
+	Objects   uint64
+	Versions  uint64 // Versions that are not delete markers.
+	Compacted bool
 }
 
 // dataUsageCache contains a cache of data usage entries latest version.
@@ -274,13 +274,8 @@ type dataUsageEntryInfo struct {
 }
 
 type dataUsageCacheInfo struct {
-	// Name of the bucket. Also root element.
-	Name       string
-	NextCycle  uint32
-	LastUpdate time.Time
-	// indicates if the disk is being healed and scanner
-	// should skip healing the disk
-	SkipHealing bool
+	LastUpdate  time.Time
+	replication replicationConfig `msg:"-"`
 
 	// Active lifecycle, if any on the bucket
 	lifeCycle *lifecycle.Lifecycle `msg:"-"`
@@ -288,8 +283,13 @@ type dataUsageCacheInfo struct {
 	// optional updates channel.
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
-	updates     chan<- dataUsageEntry `msg:"-"`
-	replication replicationConfig     `msg:"-"`
+	updates chan<- dataUsageEntry `msg:"-"`
+	// Name of the bucket. Also root element.
+	Name      string
+	NextCycle uint32
+	// indicates if the disk is being healed and scanner
+	// should skip healing the disk
+	SkipHealing bool
 }
 
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
@@ -597,8 +597,8 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 	// console.Debugf(" %d children found, compacting %v\n", total, path)
 
 	leaves := make([]struct {
-		objects uint64
 		path    dataUsageHash
+		objects uint64
 	}, total)
 	// Collect current leaves that have children.
 	leaves = leaves[:0]
@@ -614,8 +614,8 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 		}
 		sz := d.sizeRecursive(path.Key())
 		leaves = append(leaves, struct {
-			objects uint64
 			path    dataUsageHash
+			objects uint64
 		}{objects: sz.Objects, path: path})
 		for ch := range e.Children {
 			add(dataUsageHash(ch))
@@ -1345,10 +1345,10 @@ func (z dataUsageHashMap) Msgsize() (s int) {
 //msgp:decode ignore currentScannerCycle
 
 type currentScannerCycle struct {
-	current        uint64
-	next           uint64
 	started        time.Time
 	cycleCompleted []time.Time
+	current        uint64
+	next           uint64
 }
 
 // clone returns a clone.

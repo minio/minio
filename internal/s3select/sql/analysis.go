@@ -48,9 +48,8 @@ var (
 
 // qProp contains analysis info about an SQL term.
 type qProp struct {
+	err                      error
 	isAggregation, isRowFunc bool
-
-	err error
 }
 
 // `combine` combines a pair of `qProp`s, so that errors are

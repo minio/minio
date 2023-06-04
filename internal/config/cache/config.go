@@ -36,17 +36,17 @@ const (
 
 // Config represents cache config settings
 type Config struct {
-	Enabled         bool     `json:"-"`
+	CacheCommitMode string   `json:"commit"`
 	Drives          []string `json:"drives"`
+	Exclude         []string `json:"exclude"`
 	Expiry          int      `json:"expiry"`
 	MaxUse          int      `json:"maxuse"`
 	Quota           int      `json:"quota"`
-	Exclude         []string `json:"exclude"`
 	After           int      `json:"after"`
 	WatermarkLow    int      `json:"watermark_low"`
 	WatermarkHigh   int      `json:"watermark_high"`
+	Enabled         bool     `json:"-"`
 	Range           bool     `json:"range"`
-	CacheCommitMode string   `json:"commit"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling

@@ -2785,8 +2785,8 @@ type ObjectTagSet struct {
 }
 
 type objectTagging struct {
-	XMLName xml.Name      `xml:"Tagging"`
 	TagSet  *ObjectTagSet `xml:"TagSet"`
+	XMLName xml.Name      `xml:"Tagging"`
 }
 
 // GetObjectTaggingHandler - GET object tagging

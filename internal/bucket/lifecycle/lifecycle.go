@@ -265,17 +265,17 @@ func (lc Lifecycle) FilterRules(obj ObjectOpts) []Rule {
 // ObjectOpts provides information to deduce the lifecycle actions
 // which can be triggered on the resultant object.
 type ObjectOpts struct {
+	ModTime          time.Time
+	SuccessorModTime time.Time
+	RestoreExpires   time.Time
 	Name             string
 	UserTags         string
-	ModTime          time.Time
 	VersionID        string
+	TransitionStatus string
+	NumVersions      int
 	IsLatest         bool
 	DeleteMarker     bool
-	NumVersions      int
-	SuccessorModTime time.Time
-	TransitionStatus string
 	RestoreOngoing   bool
-	RestoreExpires   time.Time
 }
 
 // ExpiredObjectDeleteMarker returns true if an object version referred to by o
@@ -287,12 +287,12 @@ func (o ObjectOpts) ExpiredObjectDeleteMarker() bool {
 
 // Event contains a lifecycle action with associated info
 type Event struct {
-	Action                  Action
-	RuleID                  string
 	Due                     time.Time
+	RuleID                  string
+	StorageClass            string
+	Action                  Action
 	NoncurrentDays          int
 	NewerNoncurrentVersions int
-	StorageClass            string
 }
 
 // Eval returns the lifecycle event applicable now.

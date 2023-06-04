@@ -42,12 +42,12 @@ const (
 
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
-	sync.RWMutex
 	arnRemotesMap map[string]*TargetClient
 	targetsMap    map[string][]madmin.BucketTarget
-	hMutex        sync.RWMutex
 	hc            map[string]epHealth
 	hcClient      *madmin.AnonymousClient
+	sync.RWMutex
+	hMutex sync.RWMutex
 }
 
 // epHealth struct represents health of a replication target endpoint.
@@ -561,13 +561,13 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 // TargetClient is the struct for remote target client.
 type TargetClient struct {
 	*minio.Client
-	healthCheckDuration time.Duration
 	Bucket              string // remote bucket target
-	replicateSync       bool
 	StorageClass        string // storage class on remote
-	disableProxy        bool
 	ARN                 string // ARN to uniquely identify remote target
 	ResetID             string
 	Endpoint            string
+	healthCheckDuration time.Duration
+	replicateSync       bool
+	disableProxy        bool
 	Secure              bool
 }

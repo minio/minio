@@ -42,9 +42,9 @@ import (
 // SigningMethodHMAC - Implements the HMAC-SHA family of signing methods signing methods
 // Expects key type of []byte for both signing and validation
 type SigningMethodHMAC struct {
+	HasherPool sync.Pool
 	Name       string
 	Hash       crypto.Hash
-	HasherPool sync.Pool
 }
 
 // Specific instances for HS256, HS384, HS512
@@ -185,8 +185,8 @@ func (c *StandardClaims) UnmarshalJSON(b []byte) (err error) {
 
 // MapClaims - implements custom unmarshaller
 type MapClaims struct {
-	AccessKey string `json:"accessKey,omitempty"`
 	jwtgo.MapClaims
+	AccessKey string `json:"accessKey,omitempty"`
 }
 
 // GetAccessKey will return the access key.

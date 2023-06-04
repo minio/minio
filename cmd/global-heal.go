@@ -217,10 +217,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		type healEntryResult struct {
+			name      string
 			bytes     uint64
 			success   bool
 			entryDone bool
-			name      string
 		}
 		healEntryDone := func(name string) healEntryResult {
 			return healEntryResult{

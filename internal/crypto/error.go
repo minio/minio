@@ -26,8 +26,8 @@ import (
 // an object. It indicates that the object itself or its metadata was
 // modified accidentally or maliciously.
 type Error struct {
-	msg   string
 	cause error
+	msg   string
 }
 
 // Errorf - formats according to a format specifier and returns

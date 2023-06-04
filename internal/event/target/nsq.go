@@ -56,15 +56,15 @@ const (
 
 // NSQArgs - NSQ target arguments.
 type NSQArgs struct {
-	Enable      bool      `json:"enable"`
-	NSQDAddress xnet.Host `json:"nsqdAddress"`
 	Topic       string    `json:"topic"`
+	QueueDir    string    `json:"queueDir"`
+	NSQDAddress xnet.Host `json:"nsqdAddress"`
+	QueueLimit  uint64    `json:"queueLimit"`
 	TLS         struct {
 		Enable     bool `json:"enable"`
 		SkipVerify bool `json:"skipVerify"`
 	} `json:"tls"`
-	QueueDir   string `json:"queueDir"`
-	QueueLimit uint64 `json:"queueLimit"`
+	Enable bool `json:"enable"`
 }
 
 // Validate NSQArgs fields
@@ -91,15 +91,15 @@ func (n NSQArgs) Validate() error {
 
 // NSQTarget - NSQ target.
 type NSQTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       NSQArgs
-	producer   *nsq.Producer
 	store      store.Store[event.Event]
+	producer   *nsq.Producer
 	config     *nsq.Config
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+
+	id       event.TargetID
+	args     NSQArgs
+	initOnce once.Init
 }
 
 // ID - returns target ID.

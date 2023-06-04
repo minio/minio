@@ -80,10 +80,10 @@ var (
 
 // Config - server etcd config.
 type Config struct {
-	Enabled     bool   `json:"enabled"`
+	clientv3.Config
 	PathPrefix  string `json:"pathPrefix"`
 	CoreDNSPath string `json:"coreDNSPath"`
-	clientv3.Config
+	Enabled     bool   `json:"enabled"`
 }
 
 // New - initialize new etcd client.

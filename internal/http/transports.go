@@ -39,19 +39,20 @@ type ConnSettings struct {
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	// Dial settings, used if DialContext is nil.
-	DNSCache    *dnscache.Resolver
-	DialTimeout time.Duration
+	DNSCache *dnscache.Resolver
 
 	// TLS Settings
-	RootCAs          *x509.CertPool
+	RootCAs *x509.CertPool
+
+	// TCP Options
+	TCPOptions       TCPOptions
 	CipherSuites     []uint16
 	CurvePreferences []tls.CurveID
 
+	DialTimeout time.Duration
+
 	// HTTP2
 	EnableHTTP2 bool
-
-	// TCP Options
-	TCPOptions TCPOptions
 }
 
 func (s ConnSettings) getDefaultTransport() *http.Transport {

@@ -32,27 +32,27 @@ import (
 
 // Reader - CSV record reader for S3Select.
 type Reader struct {
+	bufferPool   sync.Pool     // pool of []byte objects for input
+	csvDstPool   sync.Pool     // pool of [][]string used for output
+	readCloser   io.ReadCloser // raw input
+	err          error         // global error state, only touched by Reader.Read
+	buf          *bufio.Reader // input to the splitter
 	args         *ReaderArgs
-	readCloser   io.ReadCloser    // raw input
-	buf          *bufio.Reader    // input to the splitter
-	columnNames  []string         // names of columns
 	nameIndexMap map[string]int64 // name to column index
-	current      [][]string       // current block of results to be returned
-	recordsRead  int              // number of records read in current slice
+	close        chan struct{}    // used for shutting down the splitter before end of stream
 	input        chan *queueItem  // input for workers
 	queue        chan *queueItem  // output from workers in order
-	err          error            // global error state, only touched by Reader.Read
-	bufferPool   sync.Pool        // pool of []byte objects for input
-	csvDstPool   sync.Pool        // pool of [][]string used for output
-	close        chan struct{}    // used for shutting down the splitter before end of stream
+	columnNames  []string         // names of columns
+	current      [][]string       // current block of results to be returned
 	readerWg     sync.WaitGroup   // used to keep track of async reader.
+	recordsRead  int              // number of records read in current slice
 }
 
 // queueItem is an item in the queue.
 type queueItem struct {
-	input []byte          // raw input sent to the worker
-	dst   chan [][]string // result of block decode
 	err   error           // any error encountered will be set here
+	dst   chan [][]string // result of block decode
+	input []byte          // raw input sent to the worker
 }
 
 // Read - reads single record.

@@ -52,12 +52,12 @@ const (
 
 // WebhookArgs - Webhook target arguments.
 type WebhookArgs struct {
-	Enable     bool            `json:"enable"`
+	Transport  *http.Transport `json:"-"`
 	Endpoint   xnet.URL        `json:"endpoint"`
 	AuthToken  string          `json:"authToken"`
-	Transport  *http.Transport `json:"-"`
 	ClientCert string          `json:"clientCert"`
 	ClientKey  string          `json:"clientKey"`
+	Enable     bool            `json:"enable"`
 }
 
 // Validate WebhookArgs fields
@@ -76,19 +76,19 @@ func (w WebhookArgs) Validate() error {
 
 // WebhookTarget - Webhook target.
 type WebhookTarget struct {
-	activeRequests int64
-	totalRequests  int64
-	failedRequests int64
-
-	lazyInit lazyInit
-
-	id         event.TargetID
-	args       WebhookArgs
 	transport  *http.Transport
 	httpClient *http.Client
 	loggerOnce logger.LogOnce
 	cancel     context.CancelFunc
 	cancelCh   <-chan struct{}
+	args       WebhookArgs
+
+	id             event.TargetID
+	activeRequests int64
+	totalRequests  int64
+	failedRequests int64
+
+	lazyInit lazyInit
 }
 
 // ID - returns target ID.

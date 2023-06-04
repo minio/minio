@@ -28,22 +28,23 @@ import (
 // ResponseRecorder - is a wrapper to trap the http response
 // status code and to record the response body
 type ResponseRecorder struct {
+	StartTime time.Time
 	http.ResponseWriter
+	// Internal recording buffer
+	headers    bytes.Buffer
+	body       bytes.Buffer
 	StatusCode int
+
+	TimeToFirstByte time.Duration
+	// number of bytes written
+	bytesWritten int
+	// number of bytes of response headers written
+	headerBytesWritten int
 	// Log body of 4xx or 5xx responses
 	LogErrBody bool
 	// Log body of all responses
 	LogAllBody bool
 
-	TimeToFirstByte time.Duration
-	StartTime       time.Time
-	// number of bytes written
-	bytesWritten int
-	// number of bytes of response headers written
-	headerBytesWritten int
-	// Internal recording buffer
-	headers bytes.Buffer
-	body    bytes.Buffer
 	// Indicate if headers are written in the log
 	headersLogged bool
 }

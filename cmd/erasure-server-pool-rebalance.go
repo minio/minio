@@ -43,18 +43,19 @@ import (
 // rebalanceStats contains per-pool rebalance statistics like number of objects,
 // versions and bytes rebalanced out of a pool
 type rebalanceStats struct {
-	InitFreeSpace uint64 `json:"initFreeSpace" msg:"ifs"` // Pool free space at the start of rebalance
-	InitCapacity  uint64 `json:"initCapacity" msg:"ic"`   // Pool capacity at the start of rebalance
+	Info   rebalanceInfo `json:"info" msg:"inf"`
+	Bucket string        `json:"bucket" msg:"bu"` // Last rebalanced bucket
+	Object string        `json:"object" msg:"ob"` // Last rebalanced object
 
-	Buckets           []string      `json:"buckets" msg:"bus"`           // buckets being rebalanced or to be rebalanced
-	RebalancedBuckets []string      `json:"rebalancedBuckets" msg:"rbs"` // buckets rebalanced
-	Bucket            string        `json:"bucket" msg:"bu"`             // Last rebalanced bucket
-	Object            string        `json:"object" msg:"ob"`             // Last rebalanced object
-	NumObjects        uint64        `json:"numObjects" msg:"no"`         // Number of objects rebalanced
-	NumVersions       uint64        `json:"numVersions" msg:"nv"`        // Number of versions rebalanced
-	Bytes             uint64        `json:"bytes" msg:"bs"`              // Number of bytes rebalanced
-	Participating     bool          `json:"participating" msg:"par"`
-	Info              rebalanceInfo `json:"info" msg:"inf"`
+	Buckets           []string `json:"buckets" msg:"bus"`           // buckets being rebalanced or to be rebalanced
+	RebalancedBuckets []string `json:"rebalancedBuckets" msg:"rbs"` // buckets rebalanced
+	InitFreeSpace     uint64   `json:"initFreeSpace" msg:"ifs"`     // Pool free space at the start of rebalance
+	InitCapacity      uint64   `json:"initCapacity" msg:"ic"`       // Pool capacity at the start of rebalance
+
+	NumObjects    uint64 `json:"numObjects" msg:"no"`  // Number of objects rebalanced
+	NumVersions   uint64 `json:"numVersions" msg:"nv"` // Number of versions rebalanced
+	Bytes         uint64 `json:"bytes" msg:"bs"`       // Number of bytes rebalanced
+	Participating bool   `json:"participating" msg:"par"`
 }
 
 func (rs *rebalanceStats) update(bucket string, fi FileInfo) {
@@ -90,12 +91,12 @@ type rebalanceInfo struct {
 
 // rebalanceMeta contains information pertaining to an ongoing rebalance operation.
 type rebalanceMeta struct {
-	cancel          context.CancelFunc `msg:"-"` // to be invoked on rebalance-stop
 	lastRefreshedAt time.Time          `msg:"-"`
 	StoppedAt       time.Time          `msg:"stopTs"` // Time when rebalance-stop was issued.
+	cancel          context.CancelFunc `msg:"-"`      // to be invoked on rebalance-stop
 	ID              string             `msg:"id"`     // ID of the ongoing rebalance operation
-	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
 	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
+	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
 }
 
 var errRebalanceNotStarted = errors.New("rebalance not started")

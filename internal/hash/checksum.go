@@ -67,9 +67,9 @@ const (
 
 // Checksum is a type and base 64 encoded value.
 type Checksum struct {
-	Type    ChecksumType
 	Encoded string
 	Raw     []byte
+	Type    ChecksumType
 }
 
 // Is returns if c is all of t.

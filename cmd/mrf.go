@@ -32,10 +32,10 @@ const (
 // partialOperation is a successful upload/delete of an object
 // but not written in all disks (having quorum)
 type partialOperation struct {
+	queued    time.Time
 	bucket    string
 	object    string
 	versionID string
-	queued    time.Time
 }
 
 // mrfState sncapsulates all the information
@@ -44,8 +44,9 @@ type mrfState struct {
 	ctx       context.Context
 	objectAPI ObjectLayer
 
-	mu   sync.Mutex
 	opCh chan partialOperation
+
+	mu sync.Mutex
 }
 
 // Initialize healing MRF subsystem

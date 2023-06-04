@@ -37,10 +37,10 @@ var localMetacacheMgr = &metacacheManager{
 }
 
 type metacacheManager struct {
-	mu      sync.RWMutex
-	init    sync.Once
 	buckets map[string]*bucketMetacache
 	trash   map[string]metacache // Recently deleted lists.
+	mu      sync.RWMutex
+	init    sync.Once
 }
 
 const metacacheMaxEntries = 5000

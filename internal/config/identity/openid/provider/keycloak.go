@@ -36,15 +36,15 @@ type Token struct {
 
 // KeycloakProvider implements Provider interface for KeyCloak Identity Provider.
 type KeycloakProvider struct {
-	sync.Mutex
-
-	oeConfig DiscoveryDoc
 	client   http.Client
 	adminURL string
 	realm    string
 
+	oeConfig DiscoveryDoc
+
 	// internal value refreshed
 	accessToken Token
+	sync.Mutex
 }
 
 // LoginWithUser authenticates username/password, not needed for Keycloak

@@ -81,13 +81,13 @@ func (a BitrotAlgorithm) String() string {
 
 // NewBitrotVerifier returns a new BitrotVerifier implementing the given algorithm.
 func NewBitrotVerifier(algorithm BitrotAlgorithm, checksum []byte) *BitrotVerifier {
-	return &BitrotVerifier{algorithm, checksum}
+	return &BitrotVerifier{algorithm: algorithm, sum: checksum}
 }
 
 // BitrotVerifier can be used to verify protected data.
 type BitrotVerifier struct {
-	algorithm BitrotAlgorithm
 	sum       []byte
+	algorithm BitrotAlgorithm
 }
 
 // BitrotAlgorithmFromString returns a bitrot algorithm from the given string representation.

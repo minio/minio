@@ -67,17 +67,17 @@ const (
 
 // MQTTArgs - MQTT target arguments.
 type MQTTArgs struct {
-	Enable               bool           `json:"enable"`
+	RootCAs              *x509.CertPool `json:"-"`
 	Broker               xnet.URL       `json:"broker"`
 	Topic                string         `json:"topic"`
-	QoS                  byte           `json:"qos"`
 	User                 string         `json:"username"`
 	Password             string         `json:"password"`
+	QueueDir             string         `json:"queueDir"`
 	MaxReconnectInterval time.Duration  `json:"reconnectInterval"`
 	KeepAlive            time.Duration  `json:"keepAliveInterval"`
-	RootCAs              *x509.CertPool `json:"-"`
-	QueueDir             string         `json:"queueDir"`
 	QueueLimit           uint64         `json:"queueLimit"`
+	Enable               bool           `json:"enable"`
+	QoS                  byte           `json:"qos"`
 }
 
 // Validate MQTTArgs fields
@@ -108,14 +108,14 @@ func (m MQTTArgs) Validate() error {
 
 // MQTTTarget - MQTT target.
 type MQTTTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       MQTTArgs
 	client     mqtt.Client
 	store      store.Store[event.Event]
 	quitCh     chan struct{}
 	loggerOnce logger.LogOnce
+
+	id       event.TargetID
+	args     MQTTArgs
+	initOnce once.Init
 }
 
 // ID - returns target ID.

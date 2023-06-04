@@ -24,14 +24,14 @@ import (
 
 // DeletedObject objects deleted
 type DeletedObject struct {
-	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
-	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
-	ObjectName            string `xml:"Key,omitempty"`
-	VersionID             string `xml:"VersionId,omitempty"`
-	// MTime of DeleteMarker on source that needs to be propagated to replica
-	DeleteMarkerMTime DeleteMarkerMTime `xml:"-"`
 	// MinIO extensions to support delete marker replication
 	ReplicationState ReplicationState `xml:"-"`
+	// MTime of DeleteMarker on source that needs to be propagated to replica
+	DeleteMarkerMTime     DeleteMarkerMTime `xml:"-"`
+	DeleteMarkerVersionID string            `xml:"DeleteMarkerVersionId,omitempty"`
+	ObjectName            string            `xml:"Key,omitempty"`
+	VersionID             string            `xml:"VersionId,omitempty"`
+	DeleteMarker          bool              `xml:"DeleteMarker,omitempty"`
 }
 
 // DeleteMarkerMTime is an embedded type containing time.Time for XML marshal
@@ -76,8 +76,8 @@ type createBucketLocationConfiguration struct {
 
 // DeleteObjectsRequest - xml carrying the object key names which needs to be deleted.
 type DeleteObjectsRequest struct {
-	// Element to enable quiet mode for the request
-	Quiet bool
 	// List of objects to be deleted
 	Objects []ObjectToDelete `xml:"Object"`
+	// Element to enable quiet mode for the request
+	Quiet bool
 }

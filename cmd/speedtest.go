@@ -32,13 +32,13 @@ import (
 const speedTest = "speedtest"
 
 type speedTestOpts struct {
+	storageClass     string
+	bucketName       string
 	objectSize       int
 	concurrencyStart int
 	concurrency      int
 	duration         time.Duration
 	autotune         bool
-	storageClass     string
-	bucketName       string
 }
 
 // Get the max throughput and iops numbers.

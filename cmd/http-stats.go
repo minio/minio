@@ -121,8 +121,8 @@ type bucketS3RXTX struct {
 }
 
 type bucketConnStats struct {
-	sync.RWMutex
 	stats map[string]*bucketS3RXTX
+	sync.RWMutex
 }
 
 func newBucketConnStats() *bucketConnStats {
@@ -239,19 +239,19 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
+	currentS3Requests       HTTPAPIStats
+	totalS3Canceled         HTTPAPIStats
+	totalS35xxErrors        HTTPAPIStats
+	totalS34xxErrors        HTTPAPIStats
+	totalS3Errors           HTTPAPIStats
+	totalS3Requests         HTTPAPIStats
+	rejectedRequestsAuth    uint64
+	rejectedRequestsInvalid uint64
+	rejectedRequestsHeader  uint64
+	rejectedRequestsTime    uint64
+	s3RequestsIncoming      uint64
 	s3RequestsInQueue       int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	_                       int32 // For 64 bits alignment
-	s3RequestsIncoming      uint64
-	rejectedRequestsAuth    uint64
-	rejectedRequestsTime    uint64
-	rejectedRequestsHeader  uint64
-	rejectedRequestsInvalid uint64
-	currentS3Requests       HTTPAPIStats
-	totalS3Requests         HTTPAPIStats
-	totalS3Errors           HTTPAPIStats
-	totalS34xxErrors        HTTPAPIStats
-	totalS35xxErrors        HTTPAPIStats
-	totalS3Canceled         HTTPAPIStats
 }
 
 func (st *HTTPStats) loadRequestsInQueue() int32 {

@@ -27,13 +27,13 @@ import (
 type RequestRecorder struct {
 	// Data source to record
 	io.Reader
-	// Response body should be logged
-	LogBody bool
 
 	// internal recording buffer
 	buf bytes.Buffer
 	// total bytes read including header size
 	bytesRead int
+	// Response body should be logged
+	LogBody bool
 }
 
 // Close is a no operation closer

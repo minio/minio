@@ -40,22 +40,22 @@ type DeleteOptions struct {
 //
 //msgp:tuple DiskInfo
 type DiskInfo struct {
-	Total      uint64
-	Free       uint64
-	Used       uint64
-	UsedInodes uint64
-	FreeInodes uint64
-	Major      uint32
-	Minor      uint32
+	Metrics    DiskMetrics
 	FSType     string
+	Error      string // carries the error over the network
+	ID         string
+	MountPath  string
+	Endpoint   string
+	FreeInodes uint64
+	Total      uint64
+	UsedInodes uint64
+	Used       uint64
+	Free       uint64
+	Minor      uint32
+	Major      uint32
 	RootDisk   bool
 	Healing    bool
 	Scanning   bool
-	Endpoint   string
-	MountPath  string
-	ID         string
-	Metrics    DiskMetrics
-	Error      string // carries the error over the network
 }
 
 // DiskMetrics has the information about XL Storage APIs
@@ -76,11 +76,11 @@ type VolsInfo []VolInfo
 //
 //msgp:tuple VolInfo
 type VolInfo struct {
-	// Name of the volume.
-	Name string
 
 	// Date and time when the volume was created.
 	Created time.Time
+	// Name of the volume.
+	Name string
 }
 
 // FilesInfo represent a list of files, additionally
@@ -139,100 +139,103 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 // The above means that any added/deleted fields are incompatible.
 // Make sure to bump the internode version at storage-rest-common.go
 type RawFileInfo struct {
-	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
-	Buf []byte `msg:"b"`
 
 	// DiskMTime indicates the mtime of the xl.meta on disk
 	// This is mainly used for detecting a particular issue
 	// reported in https://github.com/minio/minio/pull/13803
 	DiskMTime time.Time `msg:"dmt"`
+	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
+	Buf []byte `msg:"b"`
 }
 
 // FileInfo - represents file stat information.
 // The above means that any added/deleted fields are incompatible.
 // Make sure to bump the internode version at storage-rest-common.go
 type FileInfo struct {
-	// Name of the volume.
-	Volume string `msg:"v,omitempty"`
-
-	// Name of the file.
-	Name string `msg:"n,omitempty"`
-
-	// Version of the file.
-	VersionID string `msg:"vid,omitempty"`
-
-	// Indicates if the version is the latest
-	IsLatest bool `msg:"is"`
-
-	// Deleted is set when this FileInfo represents
-	// a deleted marker for a versioned bucket.
-	Deleted bool `msg:"del"`
-
-	// TransitionStatus is set to Pending/Complete for transitioned
-	// entries based on state of transition
-	TransitionStatus string `msg:"ts"`
-	// TransitionedObjName is the object name on the remote tier corresponding
-	// to object (version) on the source tier.
-	TransitionedObjName string `msg:"to"`
-	// TransitionTier is the storage class label assigned to remote tier.
-	TransitionTier string `msg:"tt"`
-	// TransitionVersionID stores a version ID of the object associate
-	// with the remote tier.
-	TransitionVersionID string `msg:"tv"`
-	// ExpireRestored indicates that the restored object is to be expired.
-	ExpireRestored bool `msg:"exp"`
-
-	// DataDir of the file
-	DataDir string `msg:"dd"`
-
-	// Indicates if this object is still in V1 format.
-	XLV1 bool `msg:"v1"`
+	ReplicationState ReplicationState `msg:"rs"` // Internal replication state to be passed back in ObjectInfo
 
 	// Date and time when the file was last modified, if Deleted
 	// is 'true' this value represents when while was deleted.
 	ModTime time.Time `msg:"mt"`
-
-	// Total file size.
-	Size int64 `msg:"sz"`
-
-	// File mode bits.
-	Mode uint32 `msg:"m"`
-
-	// WrittenByVersion is the unix time stamp of the MinIO
-	// version that created this version of the object.
-	WrittenByVersion uint64 `msg:"wv"`
-
-	// File metadata
-	Metadata map[string]string `msg:"meta"`
-
-	// All the parts per object.
-	Parts []ObjectPartInfo `msg:"parts"`
-
-	// Erasure info for all objects.
-	Erasure ErasureInfo `msg:"ei"`
-
-	MarkDeleted      bool             `msg:"md"` // mark this version as deleted
-	ReplicationState ReplicationState `msg:"rs"` // Internal replication state to be passed back in ObjectInfo
-
-	Data []byte `msg:"d,allownil"` // optionally carries object data
-
-	NumVersions      int       `msg:"nv"`
-	SuccessorModTime time.Time `msg:"smt"`
-
-	Fresh bool `msg:"fr"` // indicates this is a first time call to write FileInfo.
-
-	// Position of this version or object in a multi-object delete call,
-	// no other caller must set this value other than multi-object delete call.
-	// usage in other calls in undefined please avoid.
-	Idx int `msg:"i"`
 
 	// DiskMTime indicates the mtime of the xl.meta on disk
 	// This is mainly used for detecting a particular issue
 	// reported in https://github.com/minio/minio/pull/13803
 	DiskMTime time.Time `msg:"dmt"`
 
+	SuccessorModTime time.Time `msg:"smt"`
+
+	// File metadata
+	Metadata map[string]string `msg:"meta"`
+
+	// TransitionedObjName is the object name on the remote tier corresponding
+	// to object (version) on the source tier.
+	TransitionedObjName string `msg:"to"`
+
+	// TransitionStatus is set to Pending/Complete for transitioned
+	// entries based on state of transition
+	TransitionStatus string `msg:"ts"`
+	// TransitionTier is the storage class label assigned to remote tier.
+	TransitionTier string `msg:"tt"`
+	// TransitionVersionID stores a version ID of the object associate
+	// with the remote tier.
+	TransitionVersionID string `msg:"tv"`
+	// Name of the volume.
+	Volume string `msg:"v,omitempty"`
+
+	// DataDir of the file
+	DataDir string `msg:"dd"`
+
+	// Version of the file.
+	VersionID string `msg:"vid,omitempty"`
+
+	// Name of the file.
+	Name string `msg:"n,omitempty"`
+
+	// Erasure info for all objects.
+	Erasure ErasureInfo `msg:"ei"`
+
+	Data []byte `msg:"d,allownil"` // optionally carries object data
+
+	// All the parts per object.
+	Parts []ObjectPartInfo `msg:"parts"`
+
 	// Combined checksum when object was uploaded.
 	Checksum []byte `msg:"cs,allownil"`
+
+	NumVersions int `msg:"nv"`
+
+	// Total file size.
+	Size int64 `msg:"sz"`
+
+	// Position of this version or object in a multi-object delete call,
+	// no other caller must set this value other than multi-object delete call.
+	// usage in other calls in undefined please avoid.
+	Idx int `msg:"i"`
+
+	// WrittenByVersion is the unix time stamp of the MinIO
+	// version that created this version of the object.
+	WrittenByVersion uint64 `msg:"wv"`
+
+	// File mode bits.
+	Mode uint32 `msg:"m"`
+
+	// ExpireRestored indicates that the restored object is to be expired.
+	ExpireRestored bool `msg:"exp"`
+
+	// Deleted is set when this FileInfo represents
+	// a deleted marker for a versioned bucket.
+	Deleted bool `msg:"del"`
+
+	Fresh bool `msg:"fr"` // indicates this is a first time call to write FileInfo.
+
+	// Indicates if this object is still in V1 format.
+	XLV1 bool `msg:"v1"`
+
+	// Indicates if the version is the latest
+	IsLatest bool `msg:"is"`
+
+	MarkDeleted bool `msg:"md"` // mark this version as deleted
 }
 
 // WriteQuorum returns expected write quorum for this FileInfo
@@ -336,11 +339,11 @@ type ReadMultipleReq struct {
 
 // ReadMultipleResp contains a single response from a ReadMultipleReq.
 type ReadMultipleResp struct {
+	Modtime time.Time // Modtime of file on disk.
 	Bucket  string    // Bucket as given by request.
 	Prefix  string    // Prefix as given by request.
 	File    string    // File name as given in request.
-	Exists  bool      // Returns whether the file existed on disk.
 	Error   string    // Returns any error when reading.
 	Data    []byte    // Contains all data of file.
-	Modtime time.Time // Modtime of file on disk.
+	Exists  bool      // Returns whether the file existed on disk.
 }

@@ -32,12 +32,12 @@ import (
 type parallelReader struct {
 	readers       []io.ReaderAt
 	orgReaders    []io.ReaderAt
+	buf           [][]byte
+	readerToBuf   []int
 	dataBlocks    int
 	offset        int64
 	shardSize     int64
 	shardFileSize int64
-	buf           [][]byte
-	readerToBuf   []int
 }
 
 // newParallelReader returns parallelReader.

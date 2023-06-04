@@ -129,17 +129,17 @@ func (e *ExistingObjectReplication) UnmarshalXML(dec *xml.Decoder, start xml.Sta
 
 // Rule - a rule for replication configuration.
 type Rule struct {
+	Filter                  Filter                  `xml:"Filter" json:"Filter"`
+	Destination             Destination             `xml:"Destination" json:"Destination"`
 	XMLName                 xml.Name                `xml:"Rule" json:"Rule"`
 	ID                      string                  `xml:"ID,omitempty" json:"ID,omitempty"`
 	Status                  Status                  `xml:"Status" json:"Status"`
-	Priority                int                     `xml:"Priority" json:"Priority"`
 	DeleteMarkerReplication DeleteMarkerReplication `xml:"DeleteMarkerReplication" json:"DeleteMarkerReplication"`
 	// MinIO extension to replicate versioned deletes
 	DeleteReplication         DeleteReplication         `xml:"DeleteReplication" json:"DeleteReplication"`
-	Destination               Destination               `xml:"Destination" json:"Destination"`
 	SourceSelectionCriteria   SourceSelectionCriteria   `xml:"SourceSelectionCriteria" json:"SourceSelectionCriteria"`
-	Filter                    Filter                    `xml:"Filter" json:"Filter"`
 	ExistingObjectReplication ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"ExistingObjectReplication,omitempty"`
+	Priority                  int                       `xml:"Priority" json:"Priority"`
 }
 
 var (

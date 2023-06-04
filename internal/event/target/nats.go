@@ -90,32 +90,32 @@ const (
 
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
-	Enable        bool      `json:"enable"`
-	Address       xnet.Host `json:"address"`
-	Subject       string    `json:"subject"`
-	Username      string    `json:"username"`
-	Password      string    `json:"password"`
-	Token         string    `json:"token"`
-	TLS           bool      `json:"tls"`
-	TLSSkipVerify bool      `json:"tlsSkipVerify"`
-	Secure        bool      `json:"secure"`
-	CertAuthority string    `json:"certAuthority"`
-	ClientCert    string    `json:"clientCert"`
-	ClientKey     string    `json:"clientKey"`
-	PingInterval  int64     `json:"pingInterval"`
-	QueueDir      string    `json:"queueDir"`
-	QueueLimit    uint64    `json:"queueLimit"`
-	JetStream     struct {
-		Enable bool `json:"enable"`
-	} `json:"jetStream"`
-	Streaming struct {
-		Enable             bool   `json:"enable"`
+	RootCAs       *x509.CertPool `json:"-"`
+	ClientKey     string         `json:"clientKey"`
+	Subject       string         `json:"subject"`
+	Username      string         `json:"username"`
+	Password      string         `json:"password"`
+	Token         string         `json:"token"`
+	QueueDir      string         `json:"queueDir"`
+	CertAuthority string         `json:"certAuthority"`
+	ClientCert    string         `json:"clientCert"`
+	Address       xnet.Host      `json:"address"`
+	Streaming     struct {
 		ClusterID          string `json:"clusterID"`
-		Async              bool   `json:"async"`
 		MaxPubAcksInflight int    `json:"maxPubAcksInflight"`
+		Enable             bool   `json:"enable"`
+		Async              bool   `json:"async"`
 	} `json:"streaming"`
 
-	RootCAs *x509.CertPool `json:"-"`
+	PingInterval int64  `json:"pingInterval"`
+	QueueLimit   uint64 `json:"queueLimit"`
+	Enable       bool   `json:"enable"`
+	Secure       bool   `json:"secure"`
+	JetStream    struct {
+		Enable bool `json:"enable"`
+	} `json:"jetStream"`
+	TLSSkipVerify bool `json:"tlsSkipVerify"`
+	TLS           bool `json:"tls"`
 }
 
 // Validate NATSArgs fields
@@ -217,16 +217,16 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 
 // NATSTarget - NATS target.
 type NATSTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
 	args       NATSArgs
-	natsConn   *nats.Conn
 	stanConn   stan.Conn
 	jstream    nats.JetStream
 	store      store.Store[event.Event]
+	natsConn   *nats.Conn
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+
+	id       event.TargetID
+	initOnce once.Init
 }
 
 // ID - returns target ID.

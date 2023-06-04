@@ -681,9 +681,9 @@ func getCompressedOffsets(oi ObjectInfo, offset int64, decrypt func([]byte) ([]b
 // provide a ReadCloser interface that unlocks on Close()
 type GetObjectReader struct {
 	io.Reader
-	ObjInfo    ObjectInfo
-	cleanUpFns []func()
 	opts       ObjectOptions
+	cleanUpFns []func()
+	ObjInfo    ObjectInfo
 	once       sync.Once
 }
 

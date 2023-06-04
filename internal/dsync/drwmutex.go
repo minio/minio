@@ -109,21 +109,21 @@ var DefaultTimeouts = Timeouts{
 
 // A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
+	rng                  *rand.Rand
+	clnt                 *Dsync
+	cancelRefresh        context.CancelFunc
 	Names                []string
 	writeLocks           []string // Array of nodes that granted a write lock
 	readLocks            []string // Array of array of nodes that granted reader locks
-	rng                  *rand.Rand
-	m                    sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
-	clnt                 *Dsync
-	cancelRefresh        context.CancelFunc
 	refreshInterval      time.Duration
 	lockRetryMinInterval time.Duration
+	m                    sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 }
 
 // Granted - represents a structure of a granted lock.
 type Granted struct {
-	index   int
 	lockUID string // Locked if set with UID string, unlocked if empty
+	index   int
 }
 
 func (g *Granted) isLocked() bool {

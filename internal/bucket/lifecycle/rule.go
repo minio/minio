@@ -33,16 +33,16 @@ const (
 
 // Rule - a rule for lifecycle configuration.
 type Rule struct {
-	XMLName    xml.Name   `xml:"Rule"`
-	ID         string     `xml:"ID,omitempty"`
-	Status     Status     `xml:"Status"`
-	Filter     Filter     `xml:"Filter,omitempty"`
-	Prefix     Prefix     `xml:"Prefix,omitempty"`
-	Expiration Expiration `xml:"Expiration,omitempty"`
-	Transition Transition `xml:"Transition,omitempty"`
+	Filter                      Filter                      `xml:"Filter,omitempty"`
+	Expiration                  Expiration                  `xml:"Expiration,omitempty"`
+	XMLName                     xml.Name                    `xml:"Rule"`
+	ID                          string                      `xml:"ID,omitempty"`
+	Status                      Status                      `xml:"Status"`
+	Transition                  Transition                  `xml:"Transition,omitempty"`
+	NoncurrentVersionTransition NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty"`
+	Prefix                      Prefix                      `xml:"Prefix,omitempty"`
 	// FIXME: add a type to catch unsupported AbortIncompleteMultipartUpload AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
 	NoncurrentVersionExpiration NoncurrentVersionExpiration `xml:"NoncurrentVersionExpiration,omitempty"`
-	NoncurrentVersionTransition NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty"`
 }
 
 var (

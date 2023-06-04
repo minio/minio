@@ -42,12 +42,12 @@ type objSweeper struct {
 	Object              string
 	Bucket              string
 	VersionID           string // version ID set by application, applies only to DeleteObject and DeleteObjects APIs
-	Versioned           bool
-	Suspended           bool
 	TransitionStatus    string
 	TransitionTier      string
 	TransitionVersionID string
 	RemoteObject        string
+	Versioned           bool
+	Suspended           bool
 }
 
 // newObjSweeper returns an objSweeper for a given bucket and object.

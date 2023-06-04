@@ -32,9 +32,9 @@ import (
 
 // Record - is a CSV record.
 type Record struct {
+	nameIndexMap map[string]int64
 	columnNames  []string
 	csvRecord    []string
-	nameIndexMap map[string]int64
 }
 
 // Get - gets the value for a column name. CSV fields do not have any

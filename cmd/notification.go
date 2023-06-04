@@ -47,8 +47,8 @@ type NotificationSys struct {
 
 // NotificationPeerErr returns error associated for a remote peer.
 type NotificationPeerErr struct {
-	Host xnet.Host // Remote host on which the rpc call was initiated
 	Err  error     // Error returned by the remote peer for an rpc call
+	Host xnet.Host // Remote host on which the rpc call was initiated
 }
 
 // A NotificationGroup is a collection of goroutines working on subtasks that are part of
@@ -56,8 +56,8 @@ type NotificationPeerErr struct {
 //
 // A zero NotificationGroup is valid and does not cancel on error.
 type NotificationGroup struct {
-	wg         sync.WaitGroup
 	errs       []NotificationPeerErr
+	wg         sync.WaitGroup
 	retryCount int
 }
 

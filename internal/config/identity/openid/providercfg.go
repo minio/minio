@@ -32,25 +32,27 @@ import (
 )
 
 type providerCfg struct {
-	// Used for user interface like console
-	DisplayName string
+	provider provider.Provider
 
 	JWKS struct {
 		URL *xnet.URL
 	}
-	URL                *xnet.URL
-	ClaimPrefix        string
-	ClaimName          string
-	ClaimUserinfo      bool
-	RedirectURI        string
-	RedirectURIDynamic bool
-	DiscoveryDoc       DiscoveryDoc
-	ClientID           string
-	ClientSecret       string
-	RolePolicy         string
+	URL *xnet.URL
 
-	roleArn  arn.ARN
-	provider provider.Provider
+	roleArn     arn.ARN
+	RedirectURI string
+	// Used for user interface like console
+	DisplayName string
+
+	ClientID     string
+	ClientSecret string
+	RolePolicy   string
+
+	ClaimName          string
+	ClaimPrefix        string
+	DiscoveryDoc       DiscoveryDoc
+	ClaimUserinfo      bool
+	RedirectURIDynamic bool
 }
 
 func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg {

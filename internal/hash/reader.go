@@ -39,24 +39,25 @@ import (
 // are not empty then it will check whether the computed
 // match the reference values.
 type Reader struct {
-	src         io.Reader
+	src           io.Reader
+	contentHasher hash.Hash
+
+	sha256 hash.Hash
+
+	trailer http.Header
+
+	// Content checksum
+	contentHash Checksum
+
+	checksum      etag.ETag
+	contentSHA256 []byte
+
 	bytesRead   int64
 	expectedMin int64
 	expectedMax int64
 
 	size       int64
 	actualSize int64
-
-	checksum      etag.ETag
-	contentSHA256 []byte
-
-	// Content checksum
-	contentHash   Checksum
-	contentHasher hash.Hash
-
-	trailer http.Header
-
-	sha256 hash.Hash
 }
 
 // NewReader returns a new Reader that wraps src and computes

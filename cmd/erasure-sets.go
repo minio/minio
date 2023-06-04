@@ -50,30 +50,36 @@ type setsDsyncLockers [][]dsync.NetLocker
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type erasureSets struct {
-	sets []*erasureObjects
+	lastConnectDisksOpTime time.Time
 
 	// Reference format.
 	format *formatErasureV3
 
-	// erasureDisks mutex to lock erasureDisks.
-	erasureDisksMu sync.RWMutex
+	// A channel to send the set index to the MRF when
+	// any disk belonging to that set is connected
+	setReconnectEvent chan int
 
-	// Re-ordered list of disks per set.
-	erasureDisks [][]StorageAPI
+	// List of endpoints provided on the command line.
+	endpoints PoolEndpoints
 
-	// Distributed locker clients.
-	erasureLockers setsDsyncLockers
+	// Distribution algorithm of choice.
+	distributionAlgo string
 
 	// Distributed lock owner (constant per running instance).
 	erasureLockOwner string
 
-	// List of endpoints provided on the command line.
-	endpoints PoolEndpoints
+	// Distributed locker clients.
+	erasureLockers setsDsyncLockers
 
 	// String version of all the endpoints, an optimization
 	// to avoid url.String() conversion taking CPU on
 	// large disk setups.
 	endpointStrings []string
+
+	sets []*erasureObjects
+
+	// Re-ordered list of disks per set.
+	erasureDisks [][]StorageAPI
 
 	// Total number of sets and the number of disks per set.
 	setCount, setDriveCount int
@@ -81,15 +87,10 @@ type erasureSets struct {
 
 	poolIndex int
 
-	// A channel to send the set index to the MRF when
-	// any disk belonging to that set is connected
-	setReconnectEvent chan int
+	// erasureDisks mutex to lock erasureDisks.
+	erasureDisksMu sync.RWMutex
 
-	// Distribution algorithm of choice.
-	distributionAlgo string
-	deploymentID     [16]byte
-
-	lastConnectDisksOpTime time.Time
+	deploymentID [16]byte
 }
 
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
@@ -533,9 +534,9 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 
 type auditObjectOp struct {
 	Name  string   `json:"name"`
+	Disks []string `json:"disks"`
 	Pool  int      `json:"poolId"`
 	Set   int      `json:"setId"`
-	Disks []string `json:"disks"`
 }
 
 // Add erasure set information to the current context
@@ -789,13 +790,13 @@ func (s *erasureSets) DeleteObject(ctx context.Context, bucket string, object st
 // for each set, the error response of each delete will be returned
 func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	type delObj struct {
+		// object to delete
+		object ObjectToDelete
 		// Set index associated to this object
 		setIndex int
 		// Original index from the list of arguments
 		// where this object is passed
 		origIndex int
-		// object to delete
-		object ObjectToDelete
 	}
 
 	// Transform []delObj to the list of object names

@@ -243,11 +243,11 @@ var s2DecPool = sync.Pool{New: func() interface{} {
 
 // metacacheReader allows reading a cache stream.
 type metacacheReader struct {
-	mr      *msgp.Reader
-	current metaCacheEntry
 	err     error // stateful error
+	mr      *msgp.Reader
 	closer  func()
 	creator func() error
+	current metaCacheEntry
 }
 
 // newMetacacheReader creates a new cache reader.
@@ -758,8 +758,8 @@ func (r *metacacheReader) Close() error {
 
 // metacacheBlockWriter collects blocks and provides a callaback to store them.
 type metacacheBlockWriter struct {
-	wg           sync.WaitGroup
 	streamErr    error
+	wg           sync.WaitGroup
 	blockEntries int
 }
 
@@ -832,11 +832,11 @@ func (w *metacacheBlockWriter) Close() error {
 }
 
 type metacacheBlock struct {
-	data  []byte
-	n     int
 	First string `json:"f"`
 	Last  string `json:"l"`
-	EOS   bool   `json:"eos,omitempty"`
+	data  []byte
+	n     int
+	EOS   bool `json:"eos,omitempty"`
 }
 
 func (b metacacheBlock) headerKV() map[string]string {

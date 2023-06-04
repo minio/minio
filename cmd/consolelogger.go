@@ -37,14 +37,14 @@ const defaultLogBufferCount = 10000
 
 // HTTPConsoleLoggerSys holds global console logger state
 type HTTPConsoleLoggerSys struct {
+	pubsub         *pubsub.PubSub[log.Info, madmin.LogMask]
+	console        *console.Target
+	logBuf         *ring.Ring
+	nodeName       string
 	totalMessages  int64
 	failedMessages int64
 
 	sync.RWMutex
-	pubsub   *pubsub.PubSub[log.Info, madmin.LogMask]
-	console  *console.Target
-	nodeName string
-	logBuf   *ring.Ring
 }
 
 // NewConsoleLogger - creates new HTTPConsoleLoggerSys with all nodes subscribed to

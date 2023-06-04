@@ -1257,12 +1257,12 @@ type EnvPair struct {
 
 // SubsysInfo holds config info for a subsystem target.
 type SubsysInfo struct {
+
+	// map of config parameter name to EnvPair.
+	EnvMap         map[string]EnvPair
 	SubSys, Target string
 	Defaults       KVS
 	Config         KVS
-
-	// map of config parameter name to EnvPair.
-	EnvMap map[string]EnvPair
 }
 
 // GetSubsysInfo returns `SubsysInfo`s for all targets for the subsystem, when

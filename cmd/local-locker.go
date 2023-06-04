@@ -29,19 +29,19 @@ import (
 
 // lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	Name            string    // name of the resource lock was requested for
-	Writer          bool      // Bool whether write or read lock.
-	UID             string    // UID to uniquely identify request of client.
 	Timestamp       time.Time // Timestamp set at the time of initialization.
 	TimeLastRefresh time.Time // Timestamp for last lock refresh.
+	Name            string    // name of the resource lock was requested for
+	UID             string    // UID to uniquely identify request of client.
 	Source          string    // Contains line, function and filename reqesting the lock.
-	Group           bool      // indicates if it was a group lock.
 	// Owner represents the UUID of the owner who originally requested the lock
 	// useful in expiry.
 	Owner string
 	// Quorum represents the quorum required for this lock to be active.
 	Quorum int
 	idx    int
+	Writer bool // Bool whether write or read lock.
+	Group  bool // indicates if it was a group lock.
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
@@ -51,9 +51,9 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 
 // localLocker implements Dsync.NetLocker
 type localLocker struct {
-	mutex   sync.Mutex
 	lockMap map[string][]lockRequesterInfo
 	lockUID map[string]string // UUID -> resource map.
+	mutex   sync.Mutex
 }
 
 func (l *localLocker) String() string {

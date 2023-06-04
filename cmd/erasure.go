@@ -46,11 +46,6 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // erasureObjects - Implements ER object layer.
 type erasureObjects struct {
-	setDriveCount      int
-	defaultParityCount int
-
-	setIndex  int
-	poolIndex int
 
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
@@ -70,7 +65,12 @@ type erasureObjects struct {
 
 	// Byte pools used for temporary i/o buffers,
 	// legacy objects.
-	bpOld *bpool.BytePoolCap
+	bpOld              *bpool.BytePoolCap
+	setDriveCount      int
+	defaultParityCount int
+
+	setIndex  int
+	poolIndex int
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

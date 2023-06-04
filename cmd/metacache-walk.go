@@ -42,12 +42,6 @@ type WalkDirOptions struct {
 	// Directory inside the bucket.
 	BaseDir string
 
-	// Do a full recursive scan.
-	Recursive bool
-
-	// ReportNotFound will return errFileNotFound if all disks reports the BaseDir cannot be found.
-	ReportNotFound bool
-
 	// FilterPrefix will only return results with given prefix within folder.
 	// Should never contain a slash.
 	FilterPrefix string
@@ -57,6 +51,12 @@ type WalkDirOptions struct {
 
 	// Limit the number of returned objects if > 0.
 	Limit int
+
+	// Do a full recursive scan.
+	Recursive bool
+
+	// ReportNotFound will return errFileNotFound if all disks reports the BaseDir cannot be found.
+	ReportNotFound bool
 }
 
 // WalkDir will traverse a directory and return all entries found.

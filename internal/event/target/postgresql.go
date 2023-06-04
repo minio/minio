@@ -79,18 +79,18 @@ const (
 
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
-	Enable             bool      `json:"enable"`
 	Format             string    `json:"format"`
 	ConnectionString   string    `json:"connectionString"`
 	Table              string    `json:"table"`
-	Host               xnet.Host `json:"host"`     // default: localhost
 	Port               string    `json:"port"`     // default: 5432
 	Username           string    `json:"username"` // default: user running minio
 	Password           string    `json:"password"` // default: no password
 	Database           string    `json:"database"` // default: same as user
 	QueueDir           string    `json:"queueDir"`
+	Host               xnet.Host `json:"host"` // default: localhost
 	QueueLimit         uint64    `json:"queueLimit"`
 	MaxOpenConnections int       `json:"maxOpenConnections"`
+	Enable             bool      `json:"enable"`
 }
 
 // Validate PostgreSQLArgs fields
@@ -139,19 +139,20 @@ func (p PostgreSQLArgs) Validate() error {
 
 // PostgreSQLTarget - PostgreSQL target.
 type PostgreSQLTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       PostgreSQLArgs
+	store      store.Store[event.Event]
 	updateStmt *sql.Stmt
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	db         *sql.DB
-	store      store.Store[event.Event]
-	firstPing  bool
-	connString string
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+
+	id         event.TargetID
+	connString string
+	args       PostgreSQLArgs
+	initOnce   once.Init
+
+	firstPing bool
 }
 
 // ID - returns target ID.

@@ -46,10 +46,9 @@ type TargetStore interface {
 
 // TargetStats is a collection of stats for multiple targets.
 type TargetStats struct {
+	TargetStats map[string]TargetStat
 	// CurrentSendCalls is the number of concurrent async Send calls to all targets
 	CurrentSendCalls int64
-
-	TargetStats map[string]TargetStat
 }
 
 // TargetStat is the stats of a single target.
@@ -60,11 +59,11 @@ type TargetStat struct {
 
 // TargetList - holds list of targets indexed by target ID.
 type TargetList struct {
+	targets map[TargetID]Target
 	// The number of concurrent async Send calls to all targets
 	currentSendCalls int64
 
 	sync.RWMutex
-	targets map[TargetID]Target
 }
 
 // Add - adds unique target to target list.
@@ -94,10 +93,10 @@ func (list *TargetList) Exists(id TargetID) bool {
 // TargetIDResult returns result of Remove/Send operation, sets err if
 // any for the associated TargetID
 type TargetIDResult struct {
-	// ID where the remove or send were initiated.
-	ID TargetID
 	// Stores any error while removing a target or while sending an event.
 	Err error
+	// ID where the remove or send were initiated.
+	ID TargetID
 }
 
 // Remove - closes and removes targets by given target IDs.

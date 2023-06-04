@@ -96,13 +96,13 @@ type formatErasureV2 struct {
 	Erasure struct {
 		Version string `json:"version"` // Version of 'xl' format.
 		This    string `json:"this"`    // This field carries assigned disk uuid.
+		// Distribution algorithm represents the hashing algorithm
+		// to pick the right set index for an object.
+		DistributionAlgo string `json:"distributionAlgo"`
 		// Sets field carries the input disk order generated the first
 		// time when fresh disks were supplied, it is a two dimensional
 		// array second dimension represents list of disks used per set.
 		Sets [][]string `json:"sets"`
-		// Distribution algorithm represents the hashing algorithm
-		// to pick the right set index for an object.
-		DistributionAlgo string `json:"distributionAlgo"`
 	} `json:"xl"`
 }
 
@@ -115,13 +115,13 @@ type formatErasureV3 struct {
 	Erasure struct {
 		Version string `json:"version"` // Version of 'xl' format.
 		This    string `json:"this"`    // This field carries assigned disk uuid.
+		// Distribution algorithm represents the hashing algorithm
+		// to pick the right set index for an object.
+		DistributionAlgo string `json:"distributionAlgo"`
 		// Sets field carries the input disk order generated the first
 		// time when fresh disks were supplied, it is a two dimensional
 		// array second dimension represents list of disks used per set.
 		Sets [][]string `json:"sets"`
-		// Distribution algorithm represents the hashing algorithm
-		// to pick the right set index for an object.
-		DistributionAlgo string `json:"distributionAlgo"`
 	} `json:"xl"`
 }
 

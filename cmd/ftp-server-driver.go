@@ -61,8 +61,8 @@ func buildMinioDir(p string) string {
 }
 
 type minioFileInfo struct {
-	p     string
 	info  minio.ObjectInfo
+	p     string
 	isDir bool
 }
 

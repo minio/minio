@@ -224,11 +224,11 @@ func (c *CoreDNS) String() string {
 
 // CoreDNS - represents dns config for coredns server.
 type CoreDNS struct {
-	domainNames []string
 	domainIPs   set.StringSet
+	etcdClient  *clientv3.Client
 	domainPort  string
 	prefixPath  string
-	etcdClient  *clientv3.Client
+	domainNames []string
 }
 
 // EtcdOption - functional options pattern style

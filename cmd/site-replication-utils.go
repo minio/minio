@@ -30,13 +30,13 @@ import (
 
 // SiteResyncStatus captures current replication resync status for a target site
 type SiteResyncStatus struct {
-	Version int `json:"version" msg:"v"`
-	// Overall site status
-	Status                        ResyncStatusType            `json:"st" msg:"ss"`
-	DeplID                        string                      `json:"dId" msg:"did"`
 	BucketStatuses                map[string]ResyncStatusType `json:"buckets" msg:"bkts"`
-	TotBuckets                    int                         `json:"totbuckets" msg:"tb"`
 	TargetReplicationResyncStatus `json:"currSt" msg:"cst"`
+	DeplID                        string `json:"dId" msg:"did"`
+	Version                       int    `json:"version" msg:"v"`
+	// Overall site status
+	Status     ResyncStatusType `json:"st" msg:"ss"`
+	TotBuckets int              `json:"totbuckets" msg:"tb"`
 }
 
 func (s *SiteResyncStatus) clone() SiteResyncStatus {
@@ -56,17 +56,17 @@ const (
 )
 
 type resyncState struct {
-	resyncID  string
 	LastSaved time.Time
+	resyncID  string
 }
 
 //msgp:ignore siteResyncMetrics
 type siteResyncMetrics struct {
-	sync.RWMutex
 	// resyncStatus maps resync ID to resync status for peer
 	resyncStatus map[string]SiteResyncStatus
 	// map peer deployment ID to resync ID
 	peerResyncMap map[string]resyncState
+	sync.RWMutex
 }
 
 func newSiteResyncMetrics(ctx context.Context) *siteResyncMetrics {

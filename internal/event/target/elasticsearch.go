@@ -116,15 +116,15 @@ type esClient interface {
 
 // ElasticsearchArgs - Elasticsearch target arguments.
 type ElasticsearchArgs struct {
-	Enable     bool            `json:"enable"`
-	Format     string          `json:"format"`
+	Transport  *http.Transport `json:"-"`
 	URL        xnet.URL        `json:"url"`
+	Format     string          `json:"format"`
 	Index      string          `json:"index"`
 	QueueDir   string          `json:"queueDir"`
-	QueueLimit uint64          `json:"queueLimit"`
-	Transport  *http.Transport `json:"-"`
 	Username   string          `json:"username"`
 	Password   string          `json:"password"`
+	QueueLimit uint64          `json:"queueLimit"`
+	Enable     bool            `json:"enable"`
 }
 
 // Validate ElasticsearchArgs fields
@@ -154,14 +154,14 @@ func (a ElasticsearchArgs) Validate() error {
 
 // ElasticsearchTarget - Elasticsearch target.
 type ElasticsearchTarget struct {
-	initOnce once.Init
-
-	id         event.TargetID
-	args       ElasticsearchArgs
 	client     esClient
 	store      store.Store[event.Event]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
+	args       ElasticsearchArgs
+
+	id       event.TargetID
+	initOnce once.Init
 }
 
 // ID - returns target ID.

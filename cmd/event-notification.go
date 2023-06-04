@@ -34,11 +34,11 @@ import (
 
 // EventNotifier - notifies external systems about events in MinIO.
 type EventNotifier struct {
-	sync.RWMutex
 	targetList                 *event.TargetList
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
+	sync.RWMutex
 }
 
 // NewEventNotifier - creates new event notification object.
@@ -213,13 +213,13 @@ func (evnot *EventNotifier) Send(args eventArgs) {
 }
 
 type eventArgs struct {
-	EventName    event.Name
-	BucketName   string
-	Object       ObjectInfo
 	ReqParams    map[string]string
 	RespElements map[string]string
+	BucketName   string
 	Host         string
 	UserAgent    string
+	Object       ObjectInfo
+	EventName    event.Name
 }
 
 // ToEvent - converts to notification event.

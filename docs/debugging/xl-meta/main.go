@@ -126,9 +126,9 @@ FLAGS:
 					return nil, err
 				}
 				type version struct {
-					Idx      int
 					Header   json.RawMessage
 					Metadata json.RawMessage
+					Idx      int
 				}
 				versions := make([]version, nVers)
 				err = decodeVersions(v, nVers, func(idx int, hdr, meta []byte) error {

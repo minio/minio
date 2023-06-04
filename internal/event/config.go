@@ -161,8 +161,8 @@ type common struct {
 
 // Queue - represents elements inside <QueueConfiguration>
 type Queue struct {
-	common
 	ARN ARN `xml:"Queue"`
+	common
 }
 
 // UnmarshalXML - decodes XML data.

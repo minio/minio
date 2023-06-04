@@ -30,20 +30,19 @@ import (
 
 // JWKS - https://tools.ietf.org/html/rfc7517
 type JWKS struct {
-	Keys []*JWKS `json:"keys,omitempty"`
-
 	Kty string `json:"kty"`
 	Use string `json:"use,omitempty"`
 	Kid string `json:"kid,omitempty"`
 	Alg string `json:"alg,omitempty"`
 
-	Crv string `json:"crv,omitempty"`
-	X   string `json:"x,omitempty"`
-	Y   string `json:"y,omitempty"`
-	D   string `json:"d,omitempty"`
-	N   string `json:"n,omitempty"`
-	E   string `json:"e,omitempty"`
-	K   string `json:"k,omitempty"`
+	Crv  string  `json:"crv,omitempty"`
+	X    string  `json:"x,omitempty"`
+	Y    string  `json:"y,omitempty"`
+	D    string  `json:"d,omitempty"`
+	N    string  `json:"n,omitempty"`
+	E    string  `json:"e,omitempty"`
+	K    string  `json:"k,omitempty"`
+	Keys []*JWKS `json:"keys,omitempty"`
 }
 
 var (

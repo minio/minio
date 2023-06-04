@@ -103,9 +103,9 @@ var magicHeaders = []struct {
 }
 
 type untarOptions struct {
+	prefixAll  string
 	ignoreDirs bool
 	ignoreErrs bool
-	prefixAll  string
 }
 
 // disconnectReader will ensure that no reads can take place on

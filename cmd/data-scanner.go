@@ -232,32 +232,36 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 }
 
 type cachedFolder struct {
-	name              string
 	parent            *dataUsageHash
+	name              string
 	objectHealProbDiv uint32
 }
 
 type folderScanner struct {
-	root        string
-	getSize     getSizeFn
 	oldCache    dataUsageCache
 	newCache    dataUsageCache
 	updateCache dataUsageCache
 
-	dataUsageScannerDebug bool
-	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
-	scanMode              madmin.HealScanMode
+	lastUpdate time.Time
+
+	getSize getSizeFn
+
+	// updateCurrentPath should be called whenever a new path is scanned.
+	updateCurrentPath func(string)
+
+	// If set updates will be sent regularly to this channel.
+	// Will not be closed when returned.
+	updates chan<- dataUsageEntry
+	root    string
 
 	disks       []StorageAPI
 	disksQuorum int
 
-	// If set updates will be sent regularly to this channel.
-	// Will not be closed when returned.
-	updates    chan<- dataUsageEntry
-	lastUpdate time.Time
+	scanMode madmin.HealScanMode
 
-	// updateCurrentPath should be called whenever a new path is scanned.
-	updateCurrentPath func(string)
+	healObjectSelect uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
+
+	dataUsageScannerDebug bool
 }
 
 // Cache structure and compaction:
@@ -840,12 +844,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 // scannerItem represents each file while walking.
 type scannerItem struct {
+	replication replicationConfig
+	lifeCycle   *lifecycle.Lifecycle
 	Path        string
 	bucket      string // Bucket.
 	prefix      string // Only the prefix if any, does not have final object name.
 	objectName  string // Only the object name without prefixes.
-	replication replicationConfig
-	lifeCycle   *lifecycle.Lifecycle
 	Typ         fs.FileMode
 	heal        struct {
 		enabled bool
@@ -855,6 +859,8 @@ type scannerItem struct {
 }
 
 type sizeSummary struct {
+	replTargetStats map[string]replTargetSizeSummary
+	tiers           map[string]tierStats
 	totalSize       int64
 	versions        uint64
 	replicatedSize  int64
@@ -863,8 +869,6 @@ type sizeSummary struct {
 	replicaSize     int64
 	pendingCount    uint64
 	failedCount     uint64
-	replTargetStats map[string]replTargetSizeSummary
-	tiers           map[string]tierStats
 }
 
 // replTargetSizeSummary holds summary of replication stats by target
@@ -1288,7 +1292,9 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 }
 
 type dynamicSleeper struct {
-	mu sync.RWMutex
+
+	// cycle will be closed
+	cycle chan struct{}
 
 	// Sleep factor
 	factor float64
@@ -1301,8 +1307,7 @@ type dynamicSleeper struct {
 	// This is to avoid too small costly sleeps.
 	minSleep time.Duration
 
-	// cycle will be closed
-	cycle chan struct{}
+	mu sync.RWMutex
 
 	// isScanner should be set when this is used by the scanner
 	// to record metrics.

@@ -616,25 +616,27 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint3
 // DecryptBlocksReader - decrypts multipart parts, while implementing
 // a io.Reader compatible interface.
 type DecryptBlocksReader struct {
-	// Source of the encrypted content that will be decrypted
-	reader io.Reader
 	// Current decrypter for the current encrypted data block
 	decrypter io.Reader
-	// Start sequence number
-	startSeqNum uint32
+	// Source of the encrypted content that will be decrypted
+	reader   io.Reader
+	metadata map[string]string
+
+	header http.Header
+	// Customer Key
+	customerKeyHeader string
+	bucket, object    string
+	// Parts information
+	parts []ObjectPartInfo
 	// Current part index
 	partIndex int
-	// Parts information
-	parts          []ObjectPartInfo
-	header         http.Header
-	bucket, object string
-	metadata       map[string]string
 
 	partDecRelOffset, partEncRelOffset int64
 
+	// Start sequence number
+	startSeqNum uint32
+
 	copySource bool
-	// Customer Key
-	customerKeyHeader string
 }
 
 func (d *DecryptBlocksReader) buildDecrypter(partID int) error {

@@ -67,41 +67,42 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
+	PolicyConfigUpdatedAt    time.Time
+	Created                  time.Time
+	LifecycleConfigUpdatedAt time.Time
+
+	VersioningConfigUpdatedAt  time.Time
+	ReplicationConfigUpdatedAt time.Time
+	QuotaConfigUpdatedAt       time.Time
+	TaggingConfigUpdatedAt     time.Time
+	EncryptionConfigUpdatedAt  time.Time
+	ObjectLockConfigUpdatedAt  time.Time
+	lifecycleConfig            *lifecycle.Lifecycle
+
+	// Unexported fields. Must be updated atomically.
+	policyConfig                *policy.Policy
+	bucketTargetConfigMeta      map[string]string
+	bucketTargetConfig          *madmin.BucketTargets
+	replicationConfig           *replication.Config
+	quotaConfig                 *madmin.BucketQuota
+	taggingConfig               *tags.Tags
+	sseConfig                   *bucketsse.BucketSSEConfig
+	versioningConfig            *versioning.Versioning
+	objectLockConfig            *objectlock.Config
+	notificationConfig          *event.Config
 	Name                        string
-	Created                     time.Time
-	LockEnabled                 bool // legacy not used anymore.
+	EncryptionConfigXML         []byte
 	PolicyConfigJSON            []byte
 	NotificationConfigXML       []byte
 	LifecycleConfigXML          []byte
 	ObjectLockConfigXML         []byte
 	VersioningConfigXML         []byte
-	EncryptionConfigXML         []byte
-	TaggingConfigXML            []byte
 	QuotaConfigJSON             []byte
-	ReplicationConfigXML        []byte
-	BucketTargetsConfigJSON     []byte
+	TaggingConfigXML            []byte
 	BucketTargetsConfigMetaJSON []byte
-	PolicyConfigUpdatedAt       time.Time
-	ObjectLockConfigUpdatedAt   time.Time
-	EncryptionConfigUpdatedAt   time.Time
-	TaggingConfigUpdatedAt      time.Time
-	QuotaConfigUpdatedAt        time.Time
-	ReplicationConfigUpdatedAt  time.Time
-	VersioningConfigUpdatedAt   time.Time
-	LifecycleConfigUpdatedAt    time.Time
-
-	// Unexported fields. Must be updated atomically.
-	policyConfig           *policy.Policy
-	notificationConfig     *event.Config
-	lifecycleConfig        *lifecycle.Lifecycle
-	objectLockConfig       *objectlock.Config
-	versioningConfig       *versioning.Versioning
-	sseConfig              *bucketsse.BucketSSEConfig
-	taggingConfig          *tags.Tags
-	quotaConfig            *madmin.BucketQuota
-	replicationConfig      *replication.Config
-	bucketTargetConfig     *madmin.BucketTargets
-	bucketTargetConfigMeta map[string]string
+	BucketTargetsConfigJSON     []byte
+	ReplicationConfigXML        []byte
+	LockEnabled                 bool // legacy not used anymore.
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.

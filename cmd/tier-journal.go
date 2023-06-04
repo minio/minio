@@ -36,9 +36,9 @@ import (
 //msgp:ignore tierJournal tierDiskJournal walkfn
 
 type tierDiskJournal struct {
-	sync.RWMutex
-	diskPath string
 	file     *os.File // active journal file
+	diskPath string
+	sync.RWMutex
 }
 
 type tierJournal struct {

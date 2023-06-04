@@ -224,18 +224,19 @@ func newSignV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser, API
 // Represents the overall state that is required for decoding a
 // AWS Signature V4 chunked reader.
 type s3ChunkedReader struct {
-	reader        *bufio.Reader
-	cred          auth.Credentials
-	seedSignature string
-	seedDate      time.Time
-	region        string
-	trailers      http.Header
+	seedDate time.Time
 
 	chunkSHA256Writer hash.Hash // Calculates sha256 of chunk data.
-	buffer            []byte
-	offset            int
 	err               error
-	debug             bool // Print details on failure. Add your own if more are needed.
+	reader            *bufio.Reader
+	trailers          http.Header
+
+	cred          auth.Credentials
+	seedSignature string
+	region        string
+	buffer        []byte
+	offset        int
+	debug         bool // Print details on failure. Add your own if more are needed.
 }
 
 func (cr *s3ChunkedReader) Close() (err error) {

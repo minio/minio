@@ -75,13 +75,13 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
-	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
-	apiCalls     [storageMetricLast]uint64
 	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
-	diskID       string
 	storage      *xlStorage
 	health       *diskHealthTracker
+	diskID       string
 	metricsCache timedValue
+	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
+	apiCalls [storageMetricLast]uint64
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
@@ -609,6 +609,9 @@ func init() {
 }
 
 type diskHealthTracker struct {
+
+	// Concurrency tokens.
+	tokens chan struct{}
 	// atomic time of last success
 	lastSuccess int64
 
@@ -620,9 +623,6 @@ type diskHealthTracker struct {
 
 	// Atomic number of requests blocking for a token.
 	blocked int32
-
-	// Concurrency tokens.
-	tokens chan struct{}
 }
 
 // newDiskHealthTracker creates a new disk health tracker.

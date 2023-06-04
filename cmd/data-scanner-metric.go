@@ -16,20 +16,23 @@ import (
 type scannerMetric uint8
 
 type scannerMetrics struct {
-	// All fields must be accessed atomically and aligned.
-	operations [scannerMetricLast]uint64
-	latency    [scannerMetricLastRealtime]lockedLastMinuteLatency
-
-	// actions records actions performed.
-	actions        [lifecycle.ActionCount]uint64
-	actionsLatency [lifecycle.ActionCount]lockedLastMinuteLatency
+	cycleInfo *currentScannerCycle
 
 	// currentPaths contains (string,*currentPathTracker) for each disk processing.
 	// Alignment not required.
 	currentPaths sync.Map
 
+	latency [scannerMetricLastRealtime]lockedLastMinuteLatency
+
+	actionsLatency [lifecycle.ActionCount]lockedLastMinuteLatency
+
+	// All fields must be accessed atomically and aligned.
+	operations [scannerMetricLast]uint64
+
+	// actions records actions performed.
+	actions [lifecycle.ActionCount]uint64
+
 	cycleInfoMu sync.Mutex
-	cycleInfo   *currentScannerCycle
 }
 
 var globalScannerMetrics scannerMetrics

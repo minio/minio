@@ -60,38 +60,42 @@ func isXLMetaErasureInfoValid(data, parity int) bool {
 
 // A xlMetaV1Object represents `xl.meta` metadata header.
 type xlMetaV1Object struct {
-	Version string   `json:"version"` // Version of the current `xl.meta`.
-	Format  string   `json:"format"`  // Format of the current `xl.meta`.
-	Stat    StatInfo `json:"stat"`    // Stat of the current object `xl.meta`.
-	// Erasure coded info for the current object `xl.meta`.
-	Erasure ErasureInfo `json:"erasure"`
+	// Metadata map for current object `xl.meta`.
+	Meta    map[string]string `json:"meta,omitempty"`
+	Version string            `json:"version"` // Version of the current `xl.meta`.
+	Format  string            `json:"format"`  // Format of the current `xl.meta`.
 	// MinIO release tag for current object `xl.meta`.
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
-	// Metadata map for current object `xl.meta`.
-	Meta map[string]string `json:"meta,omitempty"`
-	// Captures all the individual object `xl.meta`.
-	Parts []ObjectPartInfo `json:"parts,omitempty"`
 
 	// Dummy values used for legacy use cases.
 	VersionID string `json:"versionId,omitempty"`
 	DataDir   string `json:"dataDir,omitempty"` // always points to "legacy"
+	// Erasure coded info for the current object `xl.meta`.
+	Erasure ErasureInfo `json:"erasure"`
+	Stat    StatInfo    `json:"stat"` // Stat of the current object `xl.meta`.
+	// Captures all the individual object `xl.meta`.
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 
 // StatInfo - carries stat information of the object.
 type StatInfo struct {
-	Size    int64     `json:"size"`    // Size of the object `xl.meta`.
 	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.meta`.
 	Name    string    `json:"name"`
-	Dir     bool      `json:"dir"`
+	Size    int64     `json:"size"` // Size of the object `xl.meta`.
 	Mode    uint32    `json:"mode"`
+	Dir     bool      `json:"dir"`
 }
 
 // ErasureInfo holds erasure coding and bitrot related information.
 type ErasureInfo struct {
 	// Algorithm is the string representation of erasure-coding-algorithm
 	Algorithm string `json:"algorithm"`
+	// Distribution is the distribution of the data and parity blocks
+	Distribution []int `json:"distribution"`
+	// Checksums holds all bitrot checksums of all erasure encoded blocks
+	Checksums []ChecksumInfo `json:"checksum,omitempty"`
 	// DataBlocks is the number of data blocks for erasure-coding
 	DataBlocks int `json:"data"`
 	// ParityBlocks is the number of parity blocks for erasure-coding
@@ -100,10 +104,6 @@ type ErasureInfo struct {
 	BlockSize int64 `json:"blockSize"`
 	// Index is the index of the current disk
 	Index int `json:"index"`
-	// Distribution is the distribution of the data and parity blocks
-	Distribution []int `json:"distribution"`
-	// Checksums holds all bitrot checksums of all erasure encoded blocks
-	Checksums []ChecksumInfo `json:"checksum,omitempty"`
 }
 
 // BitrotAlgorithm specifies a algorithm used for bitrot protection.
@@ -128,20 +128,20 @@ const (
 // ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
 type ObjectPartInfo struct {
+	ModTime    time.Time         `json:"modTime"`                           // Date and time at which the part was uploaded.
+	Checksums  map[string]string `json:"crc,omitempty" msg:"crc,omitempty"` // Content Checksums
 	ETag       string            `json:"etag,omitempty"`
+	Index      []byte            `json:"index,omitempty" msg:"index,omitempty"`
 	Number     int               `json:"number"`
 	Size       int64             `json:"size"`       // Size of the part on the disk.
 	ActualSize int64             `json:"actualSize"` // Original size of the part without compression or encryption bytes.
-	ModTime    time.Time         `json:"modTime"`    // Date and time at which the part was uploaded.
-	Index      []byte            `json:"index,omitempty" msg:"index,omitempty"`
-	Checksums  map[string]string `json:"crc,omitempty" msg:"crc,omitempty"` // Content Checksums
 }
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.
 type ChecksumInfo struct {
+	Hash       []byte
 	PartNumber int
 	Algorithm  BitrotAlgorithm
-	Hash       []byte
 }
 
 type checksumInfoJSON struct {

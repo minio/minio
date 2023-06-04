@@ -1552,9 +1552,9 @@ type DeletedObjectReplicationInfo struct {
 	DeletedObject
 	Bucket    string
 	EventType string
-	OpType    replication.Type
 	ResetID   string
 	TargetArn string
+	OpType    replication.Type
 }
 
 // ToMRFEntry returns the relevant info needed by MRF
@@ -1605,18 +1605,10 @@ var (
 
 // ReplicationPool describes replication pool
 type ReplicationPool struct {
-	// atomic ops:
-	activeWorkers    int32
-	activeMRFWorkers int32
-
 	objLayer ObjectLayer
 	ctx      context.Context
-	priority string
-	mu       sync.RWMutex
 	resyncer *replicationResyncer
 
-	// workers:
-	workers         []chan ReplicationWorkerOperation
 	existingWorkers chan ReplicationWorkerOperation
 
 	// mrf:
@@ -1624,8 +1616,17 @@ type ReplicationPool struct {
 	mrfReplicaCh    chan ReplicationWorkerOperation
 	mrfSaveCh       chan MRFReplicateEntry
 	mrfStopCh       chan struct{}
-	mrfWorkerSize   int
 	saveStateCh     chan struct{}
+	priority        string
+
+	// workers:
+	workers          []chan ReplicationWorkerOperation
+	mrfWorkerSize    int
+	mu               sync.RWMutex
+	activeMRFWorkers int32
+
+	// atomic ops:
+	activeWorkers int32
 }
 
 // ReplicationWorkerOperation is a shared interface of replication operations.
@@ -1958,8 +1959,8 @@ func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 }
 
 type proxyResult struct {
-	Proxy bool
 	Err   error
+	Proxy bool
 }
 
 // get Reader from replication target if active-active replication is in place and

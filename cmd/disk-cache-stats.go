@@ -24,15 +24,15 @@ import (
 // CacheDiskStats represents cache disk statistics
 // such as current disk usage and available.
 type CacheDiskStats struct {
+	Dir string
 	// used cache size
 	UsageSize uint64
 	// total cache disk capacity
 	TotalCapacity uint64
-	// indicates if usage is high or low, if high value is '1', if low its '0'
-	UsageState int32
 	// indicates the current usage percentage of this cache disk
 	UsagePercent uint64
-	Dir          string
+	// indicates if usage is high or low, if high value is '1', if low its '0'
+	UsageState int32
 }
 
 // GetUsageLevelString gets the string representation for the usage level.
@@ -46,10 +46,10 @@ func (c *CacheDiskStats) GetUsageLevelString() (u string) {
 // CacheStats - represents bytes served from cache,
 // cache hits and cache misses.
 type CacheStats struct {
+	GetDiskStats func() []CacheDiskStats
 	BytesServed  uint64
 	Hits         uint64
 	Misses       uint64
-	GetDiskStats func() []CacheDiskStats
 }
 
 // Increase total bytes served from cache

@@ -33,12 +33,12 @@ const defaultFlushInterval = time.Duration(100) * time.Millisecond
 // Forwarder forwards all incoming HTTP requests to configured transport.
 type Forwarder struct {
 	RoundTripper http.RoundTripper
-	PassHost     bool
 	Logger       func(error)
 	ErrorHandler func(http.ResponseWriter, *http.Request, error)
 
 	// internal variables
 	rewriter *headerRewriter
+	PassHost bool
 }
 
 // NewForwarder creates an instance of Forwarder based on the provided list of configuration options
@@ -52,8 +52,8 @@ func NewForwarder(f *Forwarder) *Forwarder {
 }
 
 type bufPool struct {
-	sz   int
 	pool sync.Pool
+	sz   int
 }
 
 func (b *bufPool) Put(buf []byte) {

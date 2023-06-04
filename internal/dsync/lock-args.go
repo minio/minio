@@ -24,9 +24,6 @@ type LockArgs struct {
 	// Unique ID of lock/unlock request.
 	UID string
 
-	// Resources contains single or multiple entries to be locked/unlocked.
-	Resources []string
-
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	Source string
@@ -34,6 +31,9 @@ type LockArgs struct {
 	// Owner represents unique ID for this instance, an owner who originally requested
 	// the locked resource, useful primarily in figuring our stale locks.
 	Owner string
+
+	// Resources contains single or multiple entries to be locked/unlocked.
+	Resources []string
 
 	// Quorum represents the expected quorum for this lock type.
 	Quorum int

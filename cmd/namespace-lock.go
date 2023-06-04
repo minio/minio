@@ -76,17 +76,17 @@ func newNSLock(isDistErasure bool) *nsLockMap {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	ref int32
 	*lsync.LRWMutex
+	ref int32
 }
 
 // nsLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
+	lockMap      map[string]*nsLock
+	lockMapMutex sync.Mutex
 	// Indicates if namespace is part of a distributed setup.
 	isDistErasure bool
-	lockMap       map[string]*nsLock
-	lockMapMutex  sync.Mutex
 }
 
 // Lock the namespace resource.
@@ -221,8 +221,8 @@ func (di *distLockInstance) RUnlock(lc LockContext) {
 type localLockInstance struct {
 	ns     *nsLockMap
 	volume string
-	paths  []string
 	opsID  string
+	paths  []string
 }
 
 // NewNSLock - returns a lock instance for a given volume and
@@ -238,7 +238,7 @@ func (n *nsLockMap) NewNSLock(lockers func() ([]dsync.NetLocker, string), volume
 		return &distLockInstance{drwmutex, opsID}
 	}
 	sort.Strings(paths)
-	return &localLockInstance{n, volume, paths, opsID}
+	return &localLockInstance{ns: n, volume: volume, paths: paths, opsID: opsID}
 }
 
 // Lock - block until write lock is taken or timeout has occurred.

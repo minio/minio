@@ -30,11 +30,11 @@ import (
 
 // ODirectReader - to support O_DIRECT reads for erasure backends.
 type ODirectReader struct {
-	File      *os.File
-	SmallFile bool
 	err       error
-	buf       []byte
+	File      *os.File
 	bufp      *[]byte
+	buf       []byte
+	SmallFile bool
 	seenRead  bool
 }
 

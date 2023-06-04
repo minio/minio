@@ -27,13 +27,14 @@ var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or A
 
 // Filter - a filter for a replication configuration Rule.
 type Filter struct {
-	XMLName xml.Name `xml:"Filter" json:"Filter"`
-	Prefix  string
-	And     And
-	Tag     Tag
 
 	// Caching tags, only once
 	cachedTags map[string]string
+	Tag        Tag
+
+	XMLName xml.Name `xml:"Filter" json:"Filter"`
+	Prefix  string
+	And     And
 }
 
 // IsEmpty returns true if filter is not set

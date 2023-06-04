@@ -24,8 +24,8 @@ import (
 )
 
 type lastDayTierStats struct {
-	Bins      [24]tierStats
 	UpdatedAt time.Time
+	Bins      [24]tierStats
 }
 
 func (l *lastDayTierStats) addStats(ts tierStats) {

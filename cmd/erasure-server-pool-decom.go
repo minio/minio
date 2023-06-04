@@ -41,31 +41,34 @@ import (
 
 // PoolDecommissionInfo currently decommissioning information
 type PoolDecommissionInfo struct {
-	StartTime   time.Time `json:"startTime" msg:"st"`
-	StartSize   int64     `json:"startSize" msg:"ss"`
-	TotalSize   int64     `json:"totalSize" msg:"ts"`
-	CurrentSize int64     `json:"currentSize" msg:"cs"`
+	StartTime time.Time `json:"startTime" msg:"st"`
+	Object    string    `json:"-" msg:"obj"`
 
-	Complete bool `json:"complete" msg:"cmp"`
-	Failed   bool `json:"failed" msg:"fl"`
-	Canceled bool `json:"canceled" msg:"cnl"`
+	// Captures prefix that is currently being
+	// decommissioned inside the 'Bucket'
+	Prefix string `json:"-" msg:"pfx"`
+
+	// Last bucket/object decommissioned.
+	Bucket string `json:"-" msg:"bkt"`
 
 	// Internal information.
 	QueuedBuckets         []string `json:"-" msg:"bkts"`
 	DecommissionedBuckets []string `json:"-" msg:"dbkts"`
 
-	// Last bucket/object decommissioned.
-	Bucket string `json:"-" msg:"bkt"`
-	// Captures prefix that is currently being
-	// decommissioned inside the 'Bucket'
-	Prefix string `json:"-" msg:"pfx"`
-	Object string `json:"-" msg:"obj"`
-
 	// Verbose information
-	ItemsDecommissioned     int64 `json:"-" msg:"id"`
+	ItemsDecommissioned int64 `json:"-" msg:"id"`
+	CurrentSize         int64 `json:"currentSize" msg:"cs"`
+
+	TotalSize               int64 `json:"totalSize" msg:"ts"`
+	StartSize               int64 `json:"startSize" msg:"ss"`
 	ItemsDecommissionFailed int64 `json:"-" msg:"idf"`
 	BytesDone               int64 `json:"-" msg:"bd"`
 	BytesFailed             int64 `json:"-" msg:"bf"`
+	Canceled                bool  `json:"canceled" msg:"cnl"`
+
+	Failed bool `json:"failed" msg:"fl"`
+
+	Complete bool `json:"complete" msg:"cmp"`
 }
 
 // bucketPop should be called when a bucket is done decommissioning.
@@ -112,16 +115,16 @@ func (pd *PoolDecommissionInfo) bucketPush(bucket decomBucketInfo) {
 
 // PoolStatus captures current pool status
 type PoolStatus struct {
-	ID           int                   `json:"id" msg:"id"`
-	CmdLine      string                `json:"cmdline" msg:"cl"`
 	LastUpdate   time.Time             `json:"lastUpdate" msg:"lu"`
 	Decommission *PoolDecommissionInfo `json:"decommissionInfo,omitempty" msg:"dec"`
+	CmdLine      string                `json:"cmdline" msg:"cl"`
+	ID           int                   `json:"id" msg:"id"`
 }
 
 //go:generate msgp -file $GOFILE -unexported
 type poolMeta struct {
-	Version int          `msg:"v"`
 	Pools   []PoolStatus `msg:"pls"`
+	Version int          `msg:"v"`
 }
 
 // A decommission resumable tells us if decommission is worth

@@ -147,31 +147,31 @@ func (e ChecksumAlgo) valid() bool {
 
 // xlMetaV2DeleteMarker defines the data struct for the delete marker journal type
 type xlMetaV2DeleteMarker struct {
-	VersionID [16]byte          `json:"ID" msg:"ID"`                               // Version ID for delete marker
-	ModTime   int64             `json:"MTime" msg:"MTime"`                         // Object delete marker modified time
 	MetaSys   map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,omitempty"` // Delete marker internal metadata
+	ModTime   int64             `json:"MTime" msg:"MTime"`                         // Object delete marker modified time
+	VersionID [16]byte          `json:"ID" msg:"ID"`                               // Version ID for delete marker
 }
 
 // xlMetaV2Object defines the data struct for object journal type
 type xlMetaV2Object struct {
-	VersionID          [16]byte          `json:"ID" msg:"ID"`                                    // Version ID
-	DataDir            [16]byte          `json:"DDir" msg:"DDir"`                                // Data dir ID
-	ErasureAlgorithm   ErasureAlgo       `json:"EcAlgo" msg:"EcAlgo"`                            // Erasure coding algorithm
-	ErasureM           int               `json:"EcM" msg:"EcM"`                                  // Erasure data blocks
-	ErasureN           int               `json:"EcN" msg:"EcN"`                                  // Erasure parity blocks
-	ErasureBlockSize   int64             `json:"EcBSize" msg:"EcBSize"`                          // Erasure block size
-	ErasureIndex       int               `json:"EcIndex" msg:"EcIndex"`                          // Erasure disk index
-	ErasureDist        []uint8           `json:"EcDist" msg:"EcDist"`                            // Erasure distribution
-	BitrotChecksumAlgo ChecksumAlgo      `json:"CSumAlgo" msg:"CSumAlgo"`                        // Bitrot checksum algo
+	MetaUser           map[string]string `json:"MetaUsr,omitempty" msg:"MetaUsr,allownil"`       // Object version metadata set by user
+	MetaSys            map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,allownil"`       // Object version internal metadata
 	PartNumbers        []int             `json:"PartNums" msg:"PartNums"`                        // Part Numbers
-	PartETags          []string          `json:"PartETags" msg:"PartETags,allownil"`             // Part ETags
-	PartSizes          []int64           `json:"PartSizes" msg:"PartSizes"`                      // Part Sizes
-	PartActualSizes    []int64           `json:"PartASizes,omitempty" msg:"PartASizes,allownil"` // Part ActualSizes (compression)
 	PartIndices        [][]byte          `json:"PartIndices,omitempty" msg:"PartIdx,omitempty"`  // Part Indexes (compression)
+	PartActualSizes    []int64           `json:"PartASizes,omitempty" msg:"PartASizes,allownil"` // Part ActualSizes (compression)
+	PartSizes          []int64           `json:"PartSizes" msg:"PartSizes"`                      // Part Sizes
+	PartETags          []string          `json:"PartETags" msg:"PartETags,allownil"`             // Part ETags
+	ErasureDist        []uint8           `json:"EcDist" msg:"EcDist"`                            // Erasure distribution
+	ErasureN           int               `json:"EcN" msg:"EcN"`                                  // Erasure parity blocks
+	ErasureIndex       int               `json:"EcIndex" msg:"EcIndex"`                          // Erasure disk index
+	ErasureBlockSize   int64             `json:"EcBSize" msg:"EcBSize"`                          // Erasure block size
+	ErasureM           int               `json:"EcM" msg:"EcM"`                                  // Erasure data blocks
 	Size               int64             `json:"Size" msg:"Size"`                                // Object version size
 	ModTime            int64             `json:"MTime" msg:"MTime"`                              // Object version modified time
-	MetaSys            map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,allownil"`       // Object version internal metadata
-	MetaUser           map[string]string `json:"MetaUsr,omitempty" msg:"MetaUsr,allownil"`       // Object version metadata set by user
+	VersionID          [16]byte          `json:"ID" msg:"ID"`                                    // Version ID
+	DataDir            [16]byte          `json:"DDir" msg:"DDir"`                                // Data dir ID
+	BitrotChecksumAlgo ChecksumAlgo      `json:"CSumAlgo" msg:"CSumAlgo"`                        // Bitrot checksum algo
+	ErasureAlgorithm   ErasureAlgo       `json:"EcAlgo" msg:"EcAlgo"`                            // Erasure coding algorithm
 }
 
 // xlMetaV2Version describes the journal entry, Type defines
@@ -179,11 +179,11 @@ type xlMetaV2Object struct {
 // on what Type field carries, it is imperative for the caller
 // to verify which journal type first before accessing rest of the fields.
 type xlMetaV2Version struct {
-	Type             VersionType           `json:"Type" msg:"Type"`
 	ObjectV1         *xlMetaV1Object       `json:"V1Obj,omitempty" msg:"V1Obj,omitempty"`
 	ObjectV2         *xlMetaV2Object       `json:"V2Obj,omitempty" msg:"V2Obj,omitempty"`
 	DeleteMarker     *xlMetaV2DeleteMarker `json:"DelObj,omitempty" msg:"DelObj,omitempty"`
 	WrittenByVersion uint64                `msg:"v"` // Tracks written by MinIO version
+	Type             VersionType           `json:"Type" msg:"Type"`
 }
 
 // xlFlags contains flags on the object.
@@ -860,8 +860,8 @@ func isIndexedMetaV2(buf []byte) (meta xlMetaBuf, data xlMetaInlineData, err err
 }
 
 type xlMetaV2ShallowVersion struct {
-	header xlMetaV2VersionHeader
 	meta   []byte
+	header xlMetaV2VersionHeader
 }
 
 //msgp:ignore xlMetaV2 xlMetaV2ShallowVersion

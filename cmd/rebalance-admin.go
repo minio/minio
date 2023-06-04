@@ -23,27 +23,27 @@ import (
 )
 
 type rebalPoolProgress struct {
+	Bucket      string        `json:"bucket"`
+	Object      string        `json:"object"`
 	NumObjects  uint64        `json:"objects"`
 	NumVersions uint64        `json:"versions"`
 	Bytes       uint64        `json:"bytes"`
-	Bucket      string        `json:"bucket"`
-	Object      string        `json:"object"`
 	Elapsed     time.Duration `json:"elapsed"`
 	ETA         time.Duration `json:"eta"`
 }
 
 type rebalancePoolStatus struct {
-	ID       int               `json:"id"`                 // Pool index (zero-based)
 	Status   string            `json:"status"`             // Active if rebalance is running, empty otherwise
-	Used     float64           `json:"used"`               // Percentage used space
 	Progress rebalPoolProgress `json:"progress,omitempty"` // is empty when rebalance is not running
+	ID       int               `json:"id"`                 // Pool index (zero-based)
+	Used     float64           `json:"used"`               // Percentage used space
 }
 
 // rebalanceAdminStatus holds rebalance status related information exported to mc, console, etc.
 type rebalanceAdminStatus struct {
+	StoppedAt time.Time             `json:"stoppedAt,omitempty"`
 	ID        string                // identifies the ongoing rebalance operation by a uuid
 	Pools     []rebalancePoolStatus `json:"pools"` // contains all pools, including inactive
-	StoppedAt time.Time             `json:"stoppedAt,omitempty"`
 }
 
 func rebalanceStatus(ctx context.Context, z *erasureServerPools) (r rebalanceAdminStatus, err error) {

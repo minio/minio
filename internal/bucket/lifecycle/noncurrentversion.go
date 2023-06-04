@@ -97,8 +97,8 @@ func (n NoncurrentVersionExpiration) Validate() error {
 
 // NoncurrentVersionTransition - an action for lifecycle configuration rule.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays TransitionDays `xml:"NoncurrentDays"`
 	StorageClass   string         `xml:"StorageClass"`
+	NoncurrentDays TransitionDays `xml:"NoncurrentDays"`
 	set            bool
 }
 

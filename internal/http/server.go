@@ -59,12 +59,12 @@ const (
 
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
+	listener   *httpListener // HTTP listener for all 'Addrs' field.
+	TCPOptions TCPOptions    // all the configurable TCP conn specific configurable options.
+	Addrs      []string      // addresses on which the server listens for new connection.
 	http.Server
-	Addrs           []string      // addresses on which the server listens for new connection.
-	TCPOptions      TCPOptions    // all the configurable TCP conn specific configurable options.
 	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
 	listenerMutex   sync.Mutex    // to guard 'listener' field.
-	listener        *httpListener // HTTP listener for all 'Addrs' field.
 	inShutdown      uint32        // indicates whether the server is in shutdown or not
 	requestCount    int32         // counter holds no. of request in progress.
 }

@@ -141,13 +141,13 @@ var (
 
 // Config storage class configuration
 type Config struct {
-	RequestsMax                 int           `json:"requests_max"`
-	RequestsDeadline            time.Duration `json:"requests_deadline"`
-	ClusterDeadline             time.Duration `json:"cluster_deadline"`
-	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
-	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
 	ListQuorum                  string        `json:"list_quorum"`
 	ReplicationPriority         string        `json:"replication_priority"`
+	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
+	RequestsMax                 int           `json:"requests_max"`
+	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
+	ClusterDeadline             time.Duration `json:"cluster_deadline"`
+	RequestsDeadline            time.Duration `json:"requests_deadline"`
 	TransitionWorkers           int           `json:"transition_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`

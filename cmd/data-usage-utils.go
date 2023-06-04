@@ -45,7 +45,10 @@ type BucketTargetUsageInfo struct {
 // - total objects in a bucket
 // - object size histogram per bucket
 type BucketUsageInfo struct {
-	Size uint64 `json:"size"`
+	ObjectSizesHistogram    map[string]uint64                `json:"objectsSizesHistogram"`
+	ObjectVersionsHistogram map[string]uint64                `json:"objectsVersionsHistogram"`
+	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+	Size                    uint64                           `json:"size"`
 	// Following five fields suffixed with V1 are here for backward compatibility
 	// Total Size for objects that have not yet been replicated
 	ReplicationPendingSizeV1 uint64 `json:"objectsPendingReplicationTotalSize"`
@@ -58,12 +61,9 @@ type BucketUsageInfo struct {
 	// Total number of objects that failed replication
 	ReplicationFailedCountV1 uint64 `json:"objectsFailedReplicationCount"`
 
-	ObjectsCount            uint64                           `json:"objectsCount"`
-	ObjectSizesHistogram    map[string]uint64                `json:"objectsSizesHistogram"`
-	ObjectVersionsHistogram map[string]uint64                `json:"objectsVersionsHistogram"`
-	VersionsCount           uint64                           `json:"versionsCount"`
-	ReplicaSize             uint64                           `json:"objectReplicaTotalSize"`
-	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+	ObjectsCount  uint64 `json:"objectsCount"`
+	VersionsCount uint64 `json:"versionsCount"`
+	ReplicaSize   uint64 `json:"objectReplicaTotalSize"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -72,17 +72,7 @@ type DataUsageInfo struct {
 	// This does not indicate a full scan.
 	LastUpdate time.Time `json:"lastUpdate"`
 
-	// Objects total count across all buckets
-	ObjectsTotalCount uint64 `json:"objectsCount"`
-
-	// Objects total count across all buckets
-	VersionsTotalCount uint64 `json:"versionsCount"`
-
-	// Objects total size across all buckets
-	ObjectsTotalSize uint64                           `json:"objectsTotalSize"`
-	ReplicationInfo  map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
-	// Total number of buckets in this cluster
-	BucketsCount uint64 `json:"bucketsCount"`
+	ReplicationInfo map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
 
 	// Buckets usage info provides following information across all buckets
 	// - total size of the bucket
@@ -94,6 +84,17 @@ type DataUsageInfo struct {
 
 	// TierStats contains per-tier stats of all configured remote tiers
 	TierStats *allTierStats `json:"tierStats,omitempty"`
+
+	// Objects total count across all buckets
+	ObjectsTotalCount uint64 `json:"objectsCount"`
+
+	// Objects total count across all buckets
+	VersionsTotalCount uint64 `json:"versionsCount"`
+
+	// Objects total size across all buckets
+	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
+	// Total number of buckets in this cluster
+	BucketsCount uint64 `json:"bucketsCount"`
 }
 
 func (dui DataUsageInfo) tierStats() []madmin.TierInfo {

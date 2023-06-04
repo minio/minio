@@ -519,10 +519,10 @@ func dumpRequest(r *http.Request) string {
 	// to ignore URL encoded values.
 	rawURI := strings.ReplaceAll(r.RequestURI, "%", "%%")
 	req := struct {
+		Header     http.Header `json:"header"`
 		Method     string      `json:"method"`
 		RequestURI string      `json:"reqURI"`
-		Header     http.Header `json:"header"`
-	}{r.Method, rawURI, header}
+	}{Method: r.Method, RequestURI: rawURI, Header: header}
 
 	var buffer bytes.Buffer
 	enc := json.NewEncoder(&buffer)
@@ -939,6 +939,10 @@ func iamPolicyClaimNameSA() string {
 // for a specific amount of time.
 // An Update function must be set to provide an updated value when needed.
 type timedValue struct {
+	lastUpdate time.Time
+
+	// Managed values.
+	value interface{}
 	// Update must return an updated value.
 	// If an error is returned the cached value is not set.
 	// Only one caller will call this function at any time, others will be blocking.
@@ -951,18 +955,15 @@ type timedValue struct {
 	// Should be set before calling Get().
 	TTL time.Duration
 
-	// When set to true, return the last cached value
-	// even if updating the value errors out
-	Relax bool
+	mu sync.RWMutex
 
 	// Once can be used to initialize values for lazy initialization.
 	// Should be set before calling Get().
 	Once sync.Once
 
-	// Managed values.
-	value      interface{}
-	lastUpdate time.Time
-	mu         sync.RWMutex
+	// When set to true, return the last cached value
+	// even if updating the value errors out
+	Relax bool
 }
 
 // Get will return a cached value or fetch a new one.
@@ -1056,6 +1057,7 @@ func totalNodeCount() uint64 {
 
 // AuditLogOptions takes options for audit logging subsystem activity
 type AuditLogOptions struct {
+	Tags      map[string]interface{}
 	Event     string
 	APIName   string
 	Status    string
@@ -1063,7 +1065,6 @@ type AuditLogOptions struct {
 	Object    string
 	VersionID string
 	Error     string
-	Tags      map[string]interface{}
 }
 
 // sends audit logs for internal subsystem activity

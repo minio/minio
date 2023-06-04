@@ -36,14 +36,14 @@ import (
 
 // IAMObjectStore implements IAMStorageAPI
 type IAMObjectStore struct {
-	// Protect access to storage within the current server.
-	sync.RWMutex
+	objAPI ObjectLayer
 
 	*iamCache
 
 	usersSysType UsersSysType
 
-	objAPI ObjectLayer
+	// Protect access to storage within the current server.
+	sync.RWMutex
 }
 
 func newIAMObjectStore(objAPI ObjectLayer, usersSysType UsersSysType) *IAMObjectStore {
@@ -525,8 +525,8 @@ func (iamOS *IAMObjectStore) deleteGroupInfo(ctx context.Context, name string) e
 
 // helper type for listIAMConfigItems
 type itemOrErr struct {
-	Item string
 	Err  error
+	Item string
 }
 
 // Lists files or dirs in the minioMetaBucket at the given path

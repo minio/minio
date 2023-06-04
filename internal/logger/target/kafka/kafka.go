@@ -47,30 +47,31 @@ const kafkaLoggerExtension = ".kafka.log"
 
 // Config - kafka target arguments.
 type Config struct {
-	Enabled bool        `json:"enable"`
-	Brokers []xnet.Host `json:"brokers"`
-	Topic   string      `json:"topic"`
-	Version string      `json:"version"`
-	TLS     struct {
-		Enable        bool               `json:"enable"`
-		RootCAs       *x509.CertPool     `json:"-"`
-		SkipVerify    bool               `json:"skipVerify"`
-		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
-		ClientTLSCert string             `json:"clientTLSCert"`
-		ClientTLSKey  string             `json:"clientTLSKey"`
-	} `json:"tls"`
-	SASL struct {
-		Enable    bool   `json:"enable"`
-		User      string `json:"username"`
-		Password  string `json:"password"`
-		Mechanism string `json:"mechanism"`
-	} `json:"sasl"`
-	// Queue store
-	QueueSize int    `json:"queueSize"`
-	QueueDir  string `json:"queueDir"`
 
 	// Custom logger
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
+	TLS     struct {
+		RootCAs       *x509.CertPool     `json:"-"`
+		ClientTLSCert string             `json:"clientTLSCert"`
+		ClientTLSKey  string             `json:"clientTLSKey"`
+		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
+		Enable        bool               `json:"enable"`
+		SkipVerify    bool               `json:"skipVerify"`
+	} `json:"tls"`
+	SASL struct {
+		User      string `json:"username"`
+		Password  string `json:"password"`
+		Mechanism string `json:"mechanism"`
+		Enable    bool   `json:"enable"`
+	} `json:"sasl"`
+	Topic    string `json:"topic"`
+	Version  string `json:"version"`
+	QueueDir string `json:"queueDir"`
+
+	Brokers []xnet.Host `json:"brokers"`
+	// Queue store
+	QueueSize int  `json:"queueSize"`
+	Enabled   bool `json:"enable"`
 }
 
 // Check if atleast one broker in cluster is active
@@ -88,25 +89,27 @@ func (k Config) pingBrokers() (err error) {
 
 // Target - Kafka target.
 type Target struct {
-	totalMessages  int64
-	failedMessages int64
+	kconfig Config
 
-	wg     sync.WaitGroup
-	doneCh chan struct{}
+	// store to persist and replay the logs to the target
+	// to avoid missing events when the target is down.
+	store store.Store[audit.Entry]
+
+	producer sarama.SyncProducer
+	doneCh   chan struct{}
 
 	// Channel of log entries
 	logCh chan audit.Entry
 
-	// store to persist and replay the logs to the target
-	// to avoid missing events when the target is down.
-	store              store.Store[audit.Entry]
-	storeCtxCancel     context.CancelFunc
+	storeCtxCancel context.CancelFunc
+	config         *sarama.Config
+
+	wg             sync.WaitGroup
+	totalMessages  int64
+	failedMessages int64
+
 	initKafkaOnce      once.Init
 	initQueueStoreOnce once.Init
-
-	producer sarama.SyncProducer
-	kconfig  Config
-	config   *sarama.Config
 }
 
 func (h *Target) validate() error {
