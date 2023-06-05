@@ -2084,10 +2084,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force boo
 				//.DS_Store exsits
 				if err == nil {
 					// delete first
-					err := Remove(storeFilePath)
-					if err != nil {
-						return err
-					}
+					Remove(storeFilePath)
 					// try again
 					Remove(deletePath)
 				}
