@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"syscall"
 )
 
@@ -129,61 +128,36 @@ type TCPOptions struct {
 // httpListener is capable to
 // * listen to multiple addresses
 // * controls incoming connections only doing HTTP protocol
-func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions) (listener *httpListener, err error) {
-	var tcpListeners []*net.TCPListener
-
-	// Close all opened listeners on error
-	defer func() {
-		if err == nil {
-			return
-		}
-
-		for _, tcpListener := range tcpListeners {
-			// Ignore error on close.
-			tcpListener.Close()
-		}
-	}()
-
-	isLocalhost := false
-	for _, serverAddr := range serverAddrs {
-		host, _, err := net.SplitHostPort(serverAddr)
-		if err == nil {
-			if strings.EqualFold(host, "localhost") {
-				isLocalhost = true
-			}
-		}
-	}
+func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions) (listener *httpListener, listenErrs []error) {
+	tcpListeners := make([]*net.TCPListener, 0, len(serverAddrs))
+	listenErrs = make([]error, len(serverAddrs))
 
 	// Unix listener with special TCP options.
 	listenCfg := net.ListenConfig{
 		Control: setTCPParametersFn(opts),
 	}
 
-	// Silently ignore failure to bind on DNS cached ipv6 loopback if user specifies "localhost"
-	for _, serverAddr := range serverAddrs {
-		var l net.Listener
-		if l, err = listenCfg.Listen(ctx, "tcp", serverAddr); err != nil {
+	for i, serverAddr := range serverAddrs {
+		var (
+			l net.Listener
+			e error
+		)
+		if l, e = listenCfg.Listen(ctx, "tcp", serverAddr); e != nil {
 			if opts.Trace != nil {
-				opts.Trace(fmt.Sprint("listenCfg.Listen: ", err.Error()))
+				opts.Trace(fmt.Sprint("listenCfg.Listen: ", e.Error()))
 			}
 
-			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
-				continue
-			}
-			return nil, err
+			listenErrs[i] = e
+			continue
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
-			err = fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
+			listenErrs[i] = fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
 			if opts.Trace != nil {
-				opts.Trace(fmt.Sprint("net.TCPListener: ", err.Error()))
+				opts.Trace(fmt.Sprint("net.TCPListener: ", listenErrs[i].Error()))
 			}
-
-			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
-				continue
-			}
-			return nil, err
+			continue
 		}
 		if opts.Trace != nil {
 			opts.Trace(fmt.Sprint("adding listener to ", tcpListener.Addr()))
@@ -191,15 +165,9 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		tcpListeners = append(tcpListeners, tcpListener)
 	}
 
-	// Fail if no listeners found
 	if len(tcpListeners) == 0 {
-		// Report specific issue
-		if err != nil {
-			return nil, err
-		}
-		// Report general issue
-		err = fmt.Errorf("%v listeners found, expected at least 1", 0)
-		return nil, err
+		// No listeners initialized, no need to continue
+		return
 	}
 
 	listener = &httpListener{
@@ -212,5 +180,5 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	}
 	listener.start()
 
-	return listener, nil
+	return
 }
