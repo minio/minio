@@ -395,6 +395,7 @@ func configRetriableErrors(err error) bool {
 
 func bootstrapTrace(msg string) {
 	globalBootstrapTracer.Record(msg, 2)
+	fmt.Fprintln(os.Stderr, time.Now().Round(time.Millisecond).Format(time.RFC3339), "bootstrap:", msg)
 
 	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
 		return
@@ -598,6 +599,7 @@ func serverMain(ctx *cli.Context) {
 		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
 	}()
 
+	fmt.Fprintln(os.Stderr, time.Now().Round(time.Millisecond).Format(time.RFC3339), "setHTTPServer")
 	setHTTPServer(httpServer)
 
 	if globalIsDistErasure {
@@ -608,6 +610,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	bootstrapTrace("newObjectLayer")
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
@@ -616,11 +619,15 @@ func serverMain(ctx *cli.Context) {
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
 
+	bootstrapTrace("newSharedLock")
 	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
 
 	// Enable background operations for erasure coding
+	bootstrapTrace("initAutoHeal")
 	initAutoHeal(GlobalContext, newObject)
+	bootstrapTrace("initHealMRF")
 	initHealMRF(GlobalContext, newObject)
+	bootstrapTrace("initBackgroundExpiry")
 	initBackgroundExpiry(GlobalContext, newObject)
 
 	if !globalCLIContext.StrictS3Compat {
@@ -657,15 +664,18 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize users credentials and policies in background right after config has initialized.
 	go func() {
+		bootstrapTrace("globalIAMSys.Init")
 		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
 		// Initialize
 		if globalBrowserEnabled {
+			bootstrapTrace("initConsoleServer")
 			srv, err := initConsoleServer()
 			if err != nil {
 				logger.FatalIf(err, "Unable to initialize console service")
 			}
 
+			bootstrapTrace("setConsoleSrv")
 			setConsoleSrv(srv)
 
 			go func() {
@@ -675,11 +685,13 @@ func serverMain(ctx *cli.Context) {
 
 		// if we see FTP args, start FTP if possible
 		if len(ctx.StringSlice("ftp")) > 0 {
+			bootstrapTrace("startFTPServer")
 			go startFTPServer(ctx)
 		}
 
 		// If we see SFTP args, start SFTP if possible
 		if len(ctx.StringSlice("sftp")) > 0 {
+			bootstrapTrace("startFTPServer")
 			go startSFTPServer(ctx)
 		}
 	}()
@@ -694,17 +706,22 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		// Initialize data scanner.
+		bootstrapTrace("initDataScanner")
 		initDataScanner(GlobalContext, newObject)
 
 		// Initialize background replication
+		bootstrapTrace("initBackgroundReplication")
 		initBackgroundReplication(GlobalContext, newObject)
 
+		bootstrapTrace("globalTransitionState.Init")
 		globalTransitionState.Init(newObject)
 
 		// Initialize batch job pool.
+		bootstrapTrace("newBatchJobPool")
 		globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
 
 		// Initialize the license update job
+		bootstrapTrace("initLicenseUpdateJob")
 		initLicenseUpdateJob(GlobalContext, newObject)
 
 		go func() {
@@ -734,26 +751,31 @@ func serverMain(ctx *cli.Context) {
 		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
 
 		// List buckets to initialize bucket metadata sub-sys.
+		bootstrapTrace("ListBuckets")
 		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 		}
 
 		// Initialize bucket metadata sub-system.
+		bootstrapTrace("globalBucketMetadataSys.Init")
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
 
 		// initialize replication resync state.
 		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Initialize site replication manager after bucket metadata
+		bootstrapTrace("globalSiteReplicationSys.Init")
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
 
 		// Initialize quota manager.
+		bootstrapTrace("globalBucketQuotaSys.Init")
 		globalBucketQuotaSys.Init(newObject)
 
 		// Populate existing buckets to the etcd backend
 		if globalDNSConfig != nil {
 			// Background this operation.
+			bootstrapTrace("initFederatorBackend")
 			go initFederatorBackend(buckets, newObject)
 		}
 
@@ -770,6 +792,7 @@ func serverMain(ctx *cli.Context) {
 	if region == "" {
 		region = "us-east-1"
 	}
+	bootstrapTrace("globalMinioClient")
 	globalMinioClient, err = minio.New(globalLocalNodeName, &minio.Options{
 		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
 		Secure:    globalIsTLS,

@@ -41,7 +41,7 @@ var lockRetryBackOff func(*rand.Rand, uint) time.Duration
 
 func init() {
 	// Check for MINIO_DSYNC_TRACE env variable, if set logging will be enabled for failed REST operations.
-	dsyncLog = os.Getenv("_MINIO_DSYNC_TRACE") == "1"
+	dsyncLog = true || os.Getenv("_MINIO_DSYNC_TRACE") == "1"
 
 	lockRetryMinInterval = 250 * time.Millisecond
 	if lri := os.Getenv("_MINIO_LOCK_RETRY_INTERVAL"); lri != "" {
