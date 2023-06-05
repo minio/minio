@@ -11,8 +11,6 @@ x-minio-common: &minio-common
     MINIO_CI_CD: "on"
     MINIO_ROOT_USER: "minio"
     MINIO_ROOT_PASSWORD: "minio123"
-    MINIO_COMPRESS: "true"
-    MINIO_COMPRESS_MIMETYPES: "*"
     MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
