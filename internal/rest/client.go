@@ -86,10 +86,6 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
-	// ExpectTimeouts indicates if context timeouts are expected.
-	// This will not mark the client offline in these cases.
-	ExpectTimeouts bool
-
 	// Avoid metrics update if set to true
 	NoMetrics bool
 
@@ -249,12 +245,14 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		req.ContentLength = length
 	}
 
+	_, expectTimeouts := ctx.Deadline()
+
 	req, update := setupReqStatsUpdate(req)
 	defer update()
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+		if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
 			if !c.NoMetrics {
 				atomic.AddUint64(&globalStats.errs, 1)
 			}
@@ -284,7 +282,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := io.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
 				if !c.NoMetrics {
 					atomic.AddUint64(&globalStats.errs, 1)
 				}
@@ -299,8 +297,8 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		}
 		return nil, errors.New(resp.Status)
 	}
-	if !c.NoMetrics && !c.ExpectTimeouts {
-		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: c.ExpectTimeouts}
+	if !c.NoMetrics {
+		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: expectTimeouts}
 	}
 	return resp.Body, nil
 }
