@@ -52,6 +52,9 @@ type Connection struct {
 
 	// Active mux connections.
 	active *xsync.MapOf[uint64, *MuxClient]
+
+	// outQueue is the output queue
+	outQueue chan []byte
 }
 
 // State is a connection state.
@@ -75,32 +78,49 @@ const (
 	StateConnectionError
 )
 
+const defaultOutQueue = 10000
+
 // NewConnection will create an unconnected connection to a remote.
 func NewConnection(id uuid.UUID, remote string) *Connection {
 	return &Connection{
-		State:  StateUnconnected,
-		Remote: remote,
-		id:     id,
-		ctx:    context.TODO(),
-		active: xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		State:    StateUnconnected,
+		Remote:   remote,
+		id:       id,
+		ctx:      context.TODO(),
+		active:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		outQueue: make(chan []byte, defaultOutQueue),
 	}
 }
 
-func (r *Connection) NewMuxClient(stateful bool) *MuxClient {
+func (r *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 	id := atomic.AddUint64(&r.NextID, 1)
-	c := newMuxClient(id, r, stateful)
+	c := newMuxClient(ctx, id, r)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
 		if _, ok := r.active.LoadOrStore(id, c); !ok {
 			break
 		}
-		c.ID = atomic.AddUint64(&r.NextID, 1)
+		c.MuxID = atomic.AddUint64(&r.NextID, 1)
 	}
 	return c
 }
 
-func (r *Connection) connect() error {
-	return nil
+func (r *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
+	id := atomic.AddUint64(&r.NextID, 1)
+	c := newMuxClient(ctx, id, r)
+	for {
+		// Handle the extremely unlikely scenario that we wrapped.
+		if _, ok := r.active.LoadOrStore(id, c); !ok {
+			break
+		}
+		c.MuxID = atomic.AddUint64(&r.NextID, 1)
+	}
+	defer r.active.Delete(c.MuxID)
+	return c.roundtrip(h, req)
+}
+
+func (r *Connection) send(msg []byte) {
+	r.outQueue <- msg
 }
 
 func (r *Connection) Handler() http.HandlerFunc {

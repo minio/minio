@@ -115,7 +115,7 @@ func TestXLV2FormatData(t *testing.T) {
 
 	serialized, err := xl.AppendTo(nil)
 	failOnErr(err)
-	// Roundtrip data
+	// roundtrip data
 	var xl2 xlMetaV2
 	failOnErr(xl2.Load(serialized))
 

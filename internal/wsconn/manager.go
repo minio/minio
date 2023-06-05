@@ -21,6 +21,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// apiVersion is a major version of the entire api.
+// Bumping this should only be done when overall,
+// incompatible changes are made, not when adding a new handler
+// or changing an existin handler.
+const apiVersion = 1
+
 // Manager will
 type Manager struct {
 	// ID is an instance ID, that will change whenever the server restarts.
@@ -29,6 +35,15 @@ type Manager struct {
 
 	// Immutable after creation, so no locks.
 	targets map[string]*Connection
+
+	// Handlers
+	stateless [handlerLast]StatelessHandler
+
+	// Handlers
+	streams [handlerLast]*StatelessHandler
+
+	// versions of each handler
+	version [handlerLast]uint8
 }
 
 func NewManager(local string, hosts []string) *Manager {
@@ -46,4 +61,34 @@ func NewManager(local string, hosts []string) *Manager {
 // If the host does not exist nil will be returned.
 func (m *Manager) Connection(host string) *Connection {
 	return m.targets[host]
+}
+
+// RegisterStateless will register a stateless handler that serves
+// []byte -> ([]byte, error) requests.
+func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
+	if !id.valid() {
+		return ErrUnknownHandler
+	}
+	idx := id.ID()
+	if m.stateless[idx] != nil || m.streams[idx] != nil {
+		return ErrHandlerAlreadyExists
+	}
+	m.stateless[idx] = h
+	m.version[idx] = id.Version()
+	return nil
+}
+
+// RegisterStreamingHandler will register a stateless handler that serves
+// two-way streaming requests.
+func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) error {
+	if !id.valid() {
+		return ErrUnknownHandler
+	}
+	idx := id.ID()
+	if m.stateless[idx] != nil || m.streams[idx] != nil {
+		return ErrHandlerAlreadyExists
+	}
+	m.stateless[idx] = h
+	m.version[idx] = id.Version()
+	return nil
 }

@@ -27,6 +27,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/go-openapi/loads v0.21.2
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/gobwas/ws v1.2.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/uuid v1.3.0
@@ -72,6 +73,7 @@ require (
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0
 	github.com/prometheus/procfs v0.9.0
+	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rs/cors v1.9.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
@@ -137,7 +139,6 @@ require (
 	github.com/go-openapi/validate v0.22.1 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.2.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -206,7 +207,6 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/prom2json v1.3.2 // indirect
-	github.com/puzpuzpuz/xsync/v2 v2.4.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rivo/tview v0.0.0-20230511053024-822bd067b165 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
