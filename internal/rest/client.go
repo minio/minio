@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"path"
 	"strings"
@@ -92,6 +93,9 @@ type Client struct {
 
 	// Avoid metrics update if set to true
 	NoMetrics bool
+
+	// TraceOutput will print debug information on non-200 calls if set.
+	TraceOutput io.Writer // Debug trace output
 
 	httpClient   *http.Client
 	url          *url.URL
@@ -220,6 +224,66 @@ func (r respBodyMonitor) Close() (err error) {
 	return
 }
 
+// dumpHTTP - dump HTTP request and response.
+func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
+	// Starts http dump.
+	_, err := fmt.Fprintln(c.TraceOutput, "---------START-HTTP---------")
+	if err != nil {
+		return
+	}
+
+	// Filter out Signature field from Authorization header.
+	origAuth := req.Header.Get("Authorization")
+	if origAuth != "" {
+		req.Header.Set("Authorization", "**REDACTED**")
+	}
+
+	// Only display request header.
+	reqTrace, err := httputil.DumpRequestOut(req, false)
+	if err != nil {
+		return
+	}
+
+	// Write request to trace output.
+	_, err = fmt.Fprint(c.TraceOutput, string(reqTrace))
+	if err != nil {
+		return
+	}
+
+	// Only display response header.
+	var respTrace []byte
+
+	// For errors we make sure to dump response body as well.
+	if resp.StatusCode != http.StatusOK &&
+		resp.StatusCode != http.StatusPartialContent &&
+		resp.StatusCode != http.StatusNoContent {
+		respTrace, err = httputil.DumpResponse(resp, true)
+		if err != nil {
+			return
+		}
+	} else {
+		respTrace, err = httputil.DumpResponse(resp, false)
+		if err != nil {
+			return
+		}
+	}
+
+	// Write response to trace output.
+	_, err = fmt.Fprint(c.TraceOutput, strings.TrimSuffix(string(respTrace), "\r\n"))
+	if err != nil {
+		return
+	}
+
+	// Ends the http dump.
+	_, err = fmt.Fprintln(c.TraceOutput, "---------END-HTTP---------")
+	if err != nil {
+		return
+	}
+
+	// Returns success.
+	return
+}
+
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	urlStr := c.url.String()
@@ -257,6 +321,12 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 			}
 		}
 		return nil, &NetworkError{err}
+	}
+
+	// If trace is enabled, dump http request and response,
+	// except when the traceErrorsOnly enabled and the response's status code is ok
+	if c.TraceOutput != nil && resp.StatusCode != http.StatusOK {
+		c.dumpHTTP(req, resp)
 	}
 
 	if resp.StatusCode != http.StatusOK {

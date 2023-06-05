@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"time"
 
@@ -265,7 +266,9 @@ func newBootstrapRESTClients(endpointServerPools EndpointServerPools) []*bootstr
 
 			// Only proceed for remote endpoints.
 			if !endpoint.IsLocal {
-				clnts = append(clnts, newBootstrapRESTClient(endpoint))
+				cl := newBootstrapRESTClient(endpoint)
+				cl.restClient.TraceOutput = os.Stderr
+				clnts = append(clnts, cl)
 			}
 		}
 	}
