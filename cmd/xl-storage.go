@@ -2077,6 +2077,21 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force boo
 			if isObjectDir {
 				return errFileNotFound
 			}
+			// if we have .DS_Store only on macOS
+			if runtime.GOOS == globalMacOSName {
+				storeFilePath := pathJoin(deletePath, ".DS_Store")
+				_, err := Stat(storeFilePath)
+				//.DS_Store exsits
+				if err == nil {
+					// delete first
+					err := Remove(storeFilePath)
+					if err != nil {
+						return err
+					}
+					// try again
+					Remove(deletePath)
+				}
+			}
 			// Ignore errors if the directory is not empty. The server relies on
 			// this functionality, and sometimes uses recursion that should not
 			// error on parent directories.
