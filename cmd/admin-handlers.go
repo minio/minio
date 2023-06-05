@@ -2579,6 +2579,7 @@ func fetchKMSStatus() []madmin.KMS {
 	return stats
 }
 
+// KESStatus represents response from /v1/status of KES endpoint
 type KESStatus struct {
 	Version string        `json:"version"`
 	OS      string        `json:"os"`
