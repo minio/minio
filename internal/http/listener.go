@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"syscall"
+	"time"
 )
 
 type acceptResult struct {
@@ -153,15 +155,18 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	for i, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = listenCfg.Listen(ctx, "tcp", serverAddr); err != nil {
+			fmt.Fprintln(os.Stderr, time.Now().Round(time.Millisecond).Format(time.RFC3339), serverAddr, "listenCfg err:", err)
 			listenErrs[i] = fmt.Errorf("%s: %w", serverAddr, err)
 			continue
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
-			listenErrs[i] = fmt.Errorf("%s: unexpected listener type found %v, expected net.TCPListener", serverAddr, l)
+			listenErrs[i] = fmt.Errorf("%s: unexpected listener type found %T, expected net.TCPListener", serverAddr, l)
+			fmt.Fprintln(os.Stderr, serverAddr, time.Now().Round(time.Millisecond).Format(time.RFC3339), "net.TCPListener:", err)
 			continue
 		}
+		fmt.Fprintln(os.Stderr, time.Now().Round(time.Millisecond).Format(time.RFC3339), "Adding listener to", tcpListener.Addr())
 
 		tcpListeners = append(tcpListeners, tcpListener)
 	}
@@ -176,6 +181,7 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		acceptCh:     make(chan acceptResult, len(tcpListeners)),
 	}
 	listener.ctx, listener.ctxCanceler = context.WithCancel(ctx)
+	fmt.Fprintln(os.Stderr, time.Now().Round(time.Millisecond).Format(time.RFC3339), "starting", len(listener.tcpListeners), "listeners")
 	listener.start()
 
 	return listener, nil

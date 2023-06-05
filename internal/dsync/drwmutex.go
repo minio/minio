@@ -39,7 +39,7 @@ var lockRetryInterval time.Duration
 
 func init() {
 	// Check for MINIO_DSYNC_TRACE env variable, if set logging will be enabled for failed REST operations.
-	dsyncLog = os.Getenv("_MINIO_DSYNC_TRACE") == "1"
+	dsyncLog = true || os.Getenv("_MINIO_DSYNC_TRACE") == "1"
 
 	// lockRetryInterval specifies the maximum time between retries for failed locks.
 	// Average retry time will be value / 2.
