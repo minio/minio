@@ -57,6 +57,10 @@ func (m *bucketMeasurement) updateExponentialMovingAverage(endTime time.Time) {
 		m.lock.Unlock()
 	}()
 
+	if m.startTime.IsZero() {
+		return
+	}
+
 	if endTime.Before(m.startTime) {
 		return
 	}
