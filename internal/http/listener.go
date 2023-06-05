@@ -19,9 +19,9 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"syscall"
 )
 
@@ -143,38 +143,24 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		}
 	}()
 
-	isLocalhost := false
-	for _, serverAddr := range serverAddrs {
-		host, _, err := net.SplitHostPort(serverAddr)
-		if err == nil {
-			if strings.EqualFold(host, "localhost") {
-				isLocalhost = true
-			}
-		}
-	}
-
 	// Unix listener with special TCP options.
 	listenCfg := net.ListenConfig{
 		Control: setTCPParametersFn(opts),
 	}
 
-	// Silently ignore failure to bind on DNS cached ipv6 loopback if user specifies "localhost"
-	for _, serverAddr := range serverAddrs {
+	listenErrs := make([]error, len(serverAddrs))
+
+	for i, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = listenCfg.Listen(ctx, "tcp", serverAddr); err != nil {
-			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
-				continue
-			}
-			return nil, err
+			listenErrs[i] = fmt.Errorf("%s: %w", serverAddr, err)
+			continue
 		}
 
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
-			err = fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
-			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
-				continue
-			}
-			return nil, err
+			listenErrs[i] = fmt.Errorf("%s: unexpected listener type found %v, expected net.TCPListener", serverAddr, l)
+			continue
 		}
 
 		tcpListeners = append(tcpListeners, tcpListener)
@@ -182,13 +168,7 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 
 	// Fail if no listeners found
 	if len(tcpListeners) == 0 {
-		// Report specific issue
-		if err != nil {
-			return nil, err
-		}
-		// Report general issue
-		err = fmt.Errorf("%v listeners found, expected at least 1", 0)
-		return nil, err
+		return nil, fmt.Errorf("unable to listen on any interface: %w", errors.Join(listenErrs...))
 	}
 
 	listener = &httpListener{
