@@ -1329,7 +1329,11 @@ func (c *check) assertSvcAccAppearsInListing(ctx context.Context, madmClient *ma
 	if err != nil {
 		c.Fatalf("unable to list svc accounts: %v", err)
 	}
-	if !set.CreateStringSet(listResp.Accounts...).Contains(svcAK) {
+	var accessKeys []string
+	for _, item := range listResp.Accounts {
+		accessKeys = append(accessKeys, item.AccessKey)
+	}
+	if !set.CreateStringSet(accessKeys...).Contains(svcAK) {
 		c.Fatalf("service account did not appear in listing!")
 	}
 }

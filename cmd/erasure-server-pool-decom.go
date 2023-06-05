@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -417,8 +417,9 @@ func (p poolMeta) save(ctx context.Context, pools []*erasureSets) error {
 	}
 
 	// Saves on all pools to make sure decommissioning of first pool is allowed.
-	for _, eset := range pools {
+	for i, eset := range pools {
 		if err = saveConfig(ctx, eset, poolMetaName, buf); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
 			return err
 		}
 	}
@@ -545,7 +546,6 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	if objInfo.isMultipart() {
 		res, err := z.NewMultipartUpload(ctx, bucket, objInfo.Name, ObjectOptions{
 			VersionID:   objInfo.VersionID,
-			MTime:       objInfo.ModTime,
 			UserDefined: objInfo.UserDefined,
 		})
 		if err != nil {
