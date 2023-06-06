@@ -349,7 +349,6 @@ func newPeerS3Client(peer *xnet.Host) *peerS3Client {
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	// Use a separate client to avoid recursive calls.
 	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.ExpectTimeouts = true
 	healthClient.NoMetrics = true
 
 	// Construct a new health function.
