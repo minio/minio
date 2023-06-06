@@ -543,7 +543,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if isEncrypted {
-		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
+		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.S3.IsRequested(r.Header))
 	}
 
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
@@ -1165,7 +1165,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 			}
 		}
 		for i, p := range listPartsInfo.Parts {
-			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind != crypto.S3)
+			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind == crypto.S3)
 			listPartsInfo.Parts[i].Size = p.ActualSize
 		}
 	}
