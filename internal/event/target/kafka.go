@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/event"
@@ -161,7 +162,7 @@ func (target *KafkaTarget) IsActive() (bool, error) {
 }
 
 func (target *KafkaTarget) isActive() (bool, error) {
-	if !target.args.pingBrokers() {
+	if err := target.args.pingBrokers(); err != nil {
 		return false, store.ErrNotConnected
 	}
 	return true, nil
@@ -268,14 +269,32 @@ func (target *KafkaTarget) Close() error {
 }
 
 // Check if atleast one broker in cluster is active
-func (k KafkaArgs) pingBrokers() bool {
-	d := net.Dialer{Timeout: 60 * time.Second}
-	for _, broker := range k.Brokers {
-		if _, err := d.Dial("tcp", broker.String()); err == nil {
-			return true
-		}
+func (k KafkaArgs) pingBrokers() (err error) {
+	d := net.Dialer{Timeout: 1 * time.Second}
+
+	errs := make([]error, len(k.Brokers))
+	var wg sync.WaitGroup
+	for idx, broker := range k.Brokers {
+		broker := broker
+		idx := idx
+		wg.Add(1)
+		go func(broker xnet.Host, idx int) {
+			defer wg.Done()
+
+			_, errs[idx] = d.Dial("tcp", broker.String())
+		}(broker, idx)
 	}
-	return false
+	wg.Wait()
+
+	var retErr error
+	for _, err := range errs {
+		if err == nil {
+			// if one of them is active we are good.
+			return nil
+		}
+		retErr = err
+	}
+	return retErr
 }
 
 func (target *KafkaTarget) init() error {
@@ -295,6 +314,7 @@ func (target *KafkaTarget) initKafka() error {
 		config.Version = kafkaVersion
 	}
 
+	config.Net.KeepAlive = 60 * time.Second
 	config.Net.SASL.User = args.SASL.User
 	config.Net.SASL.Password = args.SASL.Password
 	initScramClient(args, config) // initializes configured scram client.
