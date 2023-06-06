@@ -47,9 +47,13 @@ func NewBucketQuotaSys() *BucketQuotaSys {
 // Init initialize bucket quota.
 func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 	sys.bucketStorageCache.Once.Do(func() {
-		sys.bucketStorageCache.TTL = 1 * time.Second
+		// Set this to 10 secs since its enough, as scanner
+		// does not update the bucket usage values frequently.
+		sys.bucketStorageCache.TTL = 10 * time.Second
+		// Rely on older value if usage loading fails from disk.
+		sys.bucketStorageCache.Relax = true
 		sys.bucketStorageCache.Update = func() (interface{}, error) {
-			ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objAPI)
@@ -60,16 +64,20 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 // GetBucketUsageInfo return bucket usage info for a given bucket
 func (sys *BucketQuotaSys) GetBucketUsageInfo(bucket string) (BucketUsageInfo, error) {
 	v, err := sys.bucketStorageCache.Get()
-	if err != nil {
-		return BucketUsageInfo{}, err
+	if err != nil && v != nil {
+		logger.LogIf(GlobalContext, fmt.Errorf("unable to retrieve usage information for bucket: %s, relying on older value cached in-memory: err(%v)", bucket, err))
 	}
+	if v == nil {
+		logger.LogIf(GlobalContext, errors.New("unable to retrieve usage information for bucket: %s, no reliable usage value available - quota will not be enforced"))
+	}
+
+	var bui BucketUsageInfo
 
 	dui, ok := v.(DataUsageInfo)
-	if !ok {
-		return BucketUsageInfo{}, fmt.Errorf("internal error: Unexpected DUI data type: %T", v)
+	if ok {
+		bui = dui.BucketsUsage[bucket]
 	}
 
-	bui := dui.BucketsUsage[bucket]
 	return bui, nil
 }
 
@@ -100,6 +108,10 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 	}
 
 	if q != nil && q.Type == madmin.HardQuota && q.Quota > 0 {
+		if uint64(size) >= q.Quota { // check if file size already exceeds the quota
+			return BucketQuotaExceeded{Bucket: bucket}
+		}
+
 		bui, err := sys.GetBucketUsageInfo(bucket)
 		if err != nil {
 			return err

@@ -716,7 +716,6 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 	if oi.isMultipart() {
 		res, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
 			VersionID:   oi.VersionID,
-			MTime:       oi.ModTime,
 			UserDefined: oi.UserDefined,
 		})
 		if err != nil {

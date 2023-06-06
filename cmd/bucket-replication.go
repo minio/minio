@@ -1462,6 +1462,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 
 func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts minio.PutObjectOptions) (err error) {
 	var uploadedParts []minio.CompletePart
+	// new multipart must not set mtime as it may lead to erroneous cleanups at various intervals.
+	opts.Internal.SourceMTime = time.Time{} // this value is saved properly in CompleteMultipartUpload()
 	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		return err

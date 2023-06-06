@@ -818,8 +818,8 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 
 	// As per AWS S3 Spec, ETag for SSE-C encrypted objects need not be MD5Sum of the data.
 	// Since server side copy with same source and dest just replaces the ETag, we save
-	// encrypted content MD5Sum as ETag for both SSE-C and SSE-S3, we standardize the ETag
-	// encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
+	// encrypted content MD5Sum as ETag for both SSE-C and SSE-KMS, we standardize the ETag
+	// encryption across SSE-C and SSE-KMS, and only return last 32 bytes for SSE-C
 	if (crypto.SSEC.IsEncrypted(objInfo.UserDefined) || crypto.S3KMS.IsEncrypted(objInfo.UserDefined)) && !copySource {
 		return objInfo.ETag[len(objInfo.ETag)-32:]
 	}
@@ -828,15 +828,15 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 	if err != nil {
 		return objInfo.ETag
 	}
-	return tryDecryptETag(objectEncryptionKey, objInfo.ETag, false)
+	return tryDecryptETag(objectEncryptionKey, objInfo.ETag, true)
 }
 
 // helper to decrypt Etag given object encryption key and encrypted ETag
-func tryDecryptETag(key []byte, encryptedETag string, ssec bool) string {
-	// ETag for SSE-C encrypted objects need not be content MD5Sum.While encrypted
+func tryDecryptETag(key []byte, encryptedETag string, sses3 bool) string {
+	// ETag for SSE-C or SSE-KMS encrypted objects need not be content MD5Sum.While encrypted
 	// md5sum is stored internally, return just the last 32 bytes of hex-encoded and
 	// encrypted md5sum string for SSE-C
-	if ssec {
+	if !sses3 {
 		return encryptedETag[len(encryptedETag)-32:]
 	}
 	var objectKey crypto.ObjectKey
