@@ -50,6 +50,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	"golang.org/x/exp/slices"
 )
 
 // ServerFlags - server command specific flags
@@ -792,7 +793,7 @@ func serverMain(ctx *cli.Context) {
 		}
 		for _, v := range os.Environ() {
 			// Do not print sensitive creds in debug.
-			if contains(ks, strings.Split(v, "=")[0]) {
+			if slices.Contains(ks, strings.Split(v, "=")[0]) {
 				continue
 			}
 			logger.Info(v)
