@@ -2539,16 +2539,22 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 
 // fetchKMSStatus fetches KMS-related status information.
 func fetchKMSStatus() []madmin.KMS {
-	client := getKesClient()
-	stats := []madmin.KMS{}
-	endpoints := []string{}
-	endpointsEnv := env.Get(kms.EnvKESEndpoint, "")
-	if endpointsEnv != "" {
-		endpoints = strings.Split(endpointsEnv, ",")
+	if GlobalKMS == nil {
+		return []madmin.KMS{}
+	}
+	stat, err := GlobalKMS.Stat(context.Background())
+	if err != nil {
+		return []madmin.KMS{}
+	}
+	if len(stat.Endpoints) == 0 {
+		return []madmin.KMS{}
 	}
 
+	client := getKesClient()
+	stats := []madmin.KMS{}
+
 	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-	for _, endpoint := range endpoints {
+	for _, endpoint := range stat.Endpoints {
 		// 1. Get stats for the KES instance
 		stat, err := getStatus(client, endpoint)
 		if err != nil {
