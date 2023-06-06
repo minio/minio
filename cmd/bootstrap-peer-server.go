@@ -267,7 +267,9 @@ func newBootstrapRESTClients(endpointServerPools EndpointServerPools) []*bootstr
 			// Only proceed for remote endpoints.
 			if !endpoint.IsLocal {
 				cl := newBootstrapRESTClient(endpoint)
-				cl.restClient.TraceOutput = os.Stderr
+				if serverDebugLog {
+					cl.restClient.TraceOutput = os.Stdout
+				}
 				clnts = append(clnts, cl)
 			}
 		}
