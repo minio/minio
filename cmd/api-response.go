@@ -85,7 +85,7 @@ type ListVersionsResponse struct {
 	VersionIDMarker string `xml:"VersionIdMarker"`
 
 	MaxKeys   int
-	Delimiter string
+	Delimiter string `xml:"Delimiter,omitempty"`
 	// A flag that indicates whether or not ListObjects returned all of the results
 	// that satisfied the search criteria.
 	IsTruncated bool
@@ -115,7 +115,7 @@ type ListObjectsResponse struct {
 	NextMarker string `xml:"NextMarker,omitempty"`
 
 	MaxKeys   int
-	Delimiter string
+	Delimiter string `xml:"Delimiter,omitempty"`
 	// A flag that indicates whether or not ListObjects returned all of the results
 	// that satisfied the search criteria.
 	IsTruncated bool
@@ -146,7 +146,7 @@ type ListObjectsV2Response struct {
 
 	KeyCount  int
 	MaxKeys   int
-	Delimiter string
+	Delimiter string `xml:"Delimiter,omitempty"`
 	// A flag that indicates whether or not ListObjects returned all of the results
 	// that satisfied the search criteria.
 	IsTruncated bool
@@ -205,7 +205,7 @@ type ListMultipartUploadsResponse struct {
 	UploadIDMarker     string `xml:"UploadIdMarker"`
 	NextKeyMarker      string
 	NextUploadIDMarker string `xml:"NextUploadIdMarker"`
-	Delimiter          string
+	Delimiter          string `xml:"Delimiter,omitempty"`
 	Prefix             string
 	EncodingType       string `xml:"EncodingType,omitempty"`
 	MaxUploads         int
@@ -360,7 +360,7 @@ type Object struct {
 	Size         int64
 
 	// Owner of the object.
-	Owner Owner
+	Owner *Owner `xml:"Owner,omitempty"`
 
 	// The class of storage used to store the object.
 	StorageClass string
@@ -506,7 +506,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata metaCheckFn) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
 
-	owner := Owner{
+	owner := &Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
@@ -602,7 +602,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
-	owner := Owner{
+	owner := &Owner{
 		ID:          globalMinioDefaultOwnerID,
 		DisplayName: "minio",
 	}
@@ -651,10 +651,14 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata metaCheckFn) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
-	owner := Owner{
-		ID:          globalMinioDefaultOwnerID,
-		DisplayName: "minio",
+	var owner *Owner
+	if fetchOwner {
+		owner = &Owner{
+			ID:          globalMinioDefaultOwnerID,
+			DisplayName: "minio",
+		}
 	}
+
 	data := ListObjectsV2Response{}
 
 	for _, object := range objects {
