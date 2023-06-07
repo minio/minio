@@ -190,7 +190,6 @@ func (api objectAPIHandlers) listObjectsV2Handler(ctx context.Context, w http.Re
 	}
 
 	// Validate the query params before beginning to serve the request.
-	// fetch-owner is not validated since it is a boolean
 	if s3Error := validateListObjectsArgs(prefix, token, delimiter, encodingType, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
