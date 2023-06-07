@@ -73,6 +73,9 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, opts.UserTimeout)
 
 			if opts.Interface != "" {
+				if h, _, err := net.SplitHostPort(address); err == nil {
+					address = h
+				}
 				// Create socket on specific vrf device.
 				// To catch all kinds of special cases this filters specifically for loopback networks.
 				if ip := net.ParseIP(address); ip != nil && !ip.IsLoopback() {
