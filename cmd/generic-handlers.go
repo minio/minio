@@ -356,7 +356,10 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 			return
 		}
 		// Check for bad components in URL query values.
-		for _, vv := range r.Form {
+		for k, vv := range r.Form {
+			if k == "delimiter" { // delimiters are allowed to have `.` or `..`
+				continue
+			}
 			for _, v := range vv {
 				if hasBadPathComponent(v) {
 					if ok {

@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/wildcard"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -377,7 +378,7 @@ func removeStandardStorageClass(metadata map[string]string) map[string]string {
 func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
 	newMeta := make(map[string]string, len(metadata))
 	for k, v := range metadata {
-		if contains(keyNames, k) {
+		if slices.Contains(keyNames, k) {
 			continue
 		}
 		newMeta[k] = v
