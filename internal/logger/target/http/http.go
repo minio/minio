@@ -103,8 +103,9 @@ type Target struct {
 
 	// store to persist and replay the logs to the target
 	// to avoid missing events when the target is down.
-	store              store.Store[interface{}]
-	storeCtxCancel     context.CancelFunc
+	store          store.Store[interface{}]
+	storeCtxCancel context.CancelFunc
+
 	initQueueStoreOnce once.Init
 
 	config Config
@@ -136,12 +137,12 @@ func (h *Target) IsOnline(ctx context.Context) bool {
 // Stats returns the target statistics.
 func (h *Target) Stats() types.TargetStats {
 	h.logChMu.RLock()
-	logCh := h.logCh
+	queueLength := len(h.logCh)
 	h.logChMu.RUnlock()
 	stats := types.TargetStats{
 		TotalMessages:  atomic.LoadInt64(&h.totalMessages),
 		FailedMessages: atomic.LoadInt64(&h.failedMessages),
-		QueueLength:    len(logCh),
+		QueueLength:    queueLength,
 	}
 
 	return stats
@@ -149,7 +150,7 @@ func (h *Target) Stats() types.TargetStats {
 
 // This will check if we can reach the remote.
 func (h *Target) checkAlive(ctx context.Context) (err error) {
-	return h.send(ctx, []byte(`{}`), 2*webhookCallTimeout)
+	return h.send(ctx, []byte(`{}`), webhookCallTimeout)
 }
 
 // Init validate and initialize the http target
@@ -406,7 +407,7 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 		// an error immediately to the caller
 		atomic.AddInt64(&h.totalMessages, 1)
 		atomic.AddInt64(&h.failedMessages, 1)
-		return errors.New("log buffer full")
+		return errors.New("log buffer full, remote endpoint is not able to keep up")
 	}
 
 	return nil
