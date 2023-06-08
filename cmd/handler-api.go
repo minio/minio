@@ -97,8 +97,17 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.clusterDeadline = cfg.ClusterDeadline
-	t.corsAllowOrigins = cfg.CorsAllowOrigin
+	clusterDeadline := cfg.ClusterDeadline
+	if clusterDeadline == 0 {
+		clusterDeadline = 10 * time.Second
+	}
+	t.clusterDeadline = clusterDeadline
+	corsAllowOrigin := cfg.CorsAllowOrigin
+	if len(corsAllowOrigin) == 0 {
+		corsAllowOrigin = []string{"*"}
+	}
+	t.corsAllowOrigins = corsAllowOrigin
+
 	maxSetDrives := 0
 	for _, setDriveCount := range setDriveCounts {
 		t.totalDriveCount += setDriveCount
@@ -136,13 +145,16 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
 	}
 	t.requestsDeadline = cfg.RequestsDeadline
-	t.listQuorum = cfg.ListQuorum
+	listQuorum := cfg.ListQuorum
+	if listQuorum == "" {
+		listQuorum = "strict"
+	}
+	t.listQuorum = listQuorum
 	if globalReplicationPool != nil &&
 		cfg.ReplicationPriority != t.replicationPriority {
 		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority)
 	}
 	t.replicationPriority = cfg.ReplicationPriority
-
 	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
@@ -181,12 +193,20 @@ func (t *apiConfig) getListQuorum() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
+	if t.listQuorum == "" {
+		return "strict"
+	}
+
 	return t.listQuorum
 }
 
 func (t *apiConfig) getCorsAllowOrigins() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
+	if len(t.corsAllowOrigins) == 0 {
+		return []string{"*"}
+	}
 
 	corsAllowOrigins := make([]string, len(t.corsAllowOrigins))
 	copy(corsAllowOrigins, t.corsAllowOrigins)
@@ -316,12 +336,20 @@ func (t *apiConfig) getReplicationPriority() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
+	if t.replicationPriority == "" {
+		return "auto"
+	}
+
 	return t.replicationPriority
 }
 
 func (t *apiConfig) getTransitionWorkers() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
+	if t.transitionWorkers <= 0 {
+		return runtime.GOMAXPROCS(0) / 2
+	}
 
 	return t.transitionWorkers
 }
