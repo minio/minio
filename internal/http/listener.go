@@ -120,8 +120,9 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
-	UserTimeout int    // this value is expected to be in milliseconds
-	Interface   string // this is a VRF device passed via `--interface` flag
+	UserTimeout int              // this value is expected to be in milliseconds
+	Interface   string           // this is a VRF device passed via `--interface` flag
+	Trace       func(msg string) // Trace when starting.
 }
 
 // newHTTPListener - creates new httpListener object which is interface compatible to net.Listener.
@@ -162,6 +163,10 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
 		if l, err = listenCfg.Listen(ctx, "tcp", serverAddr); err != nil {
+			if opts.Trace != nil {
+				opts.Trace(fmt.Sprint("listenCfg.Listen: ", err.Error()))
+			}
+
 			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
 				continue
 			}
@@ -171,12 +176,18 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
 			err = fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
+			if opts.Trace != nil {
+				opts.Trace(fmt.Sprint("net.TCPListener: ", err.Error()))
+			}
+
 			if isLocalhost && strings.HasPrefix(serverAddr, "[::1") {
 				continue
 			}
 			return nil, err
 		}
-
+		if opts.Trace != nil {
+			opts.Trace(fmt.Sprint("adding listener to ", tcpListener.Addr()))
+		}
 		tcpListeners = append(tcpListeners, tcpListener)
 	}
 
@@ -196,6 +207,9 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		acceptCh:     make(chan acceptResult, len(tcpListeners)),
 	}
 	listener.ctx, listener.ctxCanceler = context.WithCancel(ctx)
+	if opts.Trace != nil {
+		opts.Trace(fmt.Sprint("opening ", len(listener.tcpListeners), " listeners"))
+	}
 	listener.start()
 
 	return listener, nil
