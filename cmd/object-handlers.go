@@ -90,7 +90,7 @@ const (
 func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
 		if header, ok := supportedHeadGetReqParams[strings.ToLower(k)]; ok {
-			w.Header()[header] = []string{strings.Join(v, ";")}
+			w.Header()[header] = []string{strings.Join(v, ",")}
 		}
 	}
 }
