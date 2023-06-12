@@ -661,7 +661,7 @@ func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.Si
 	for _, peer := range c.state.Peers {
 		info.Sites = append(info.Sites, peer)
 	}
-	sort.SliceStable(info.Sites, func(i, j int) bool {
+	sort.Slice(info.Sites, func(i, j int) bool {
 		return info.Sites[i].Name < info.Sites[j].Name
 	})
 
