@@ -2343,11 +2343,17 @@ func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {
 }
 
 func validateSvcExpirationInUTC(expirationInUTC time.Time) error {
+	if expirationInUTC.IsZero() || expirationInUTC.Equal(timeSentinel) {
+		// Service accounts might not have expiration in older releases.
+		return nil
+	}
+
 	currentTime := time.Now().UTC()
 	minExpiration := currentTime.Add(minServiceAccountExpiry)
 	maxExpiration := currentTime.Add(maxServiceAccountExpiry)
 	if expirationInUTC.Before(minExpiration) || expirationInUTC.After(maxExpiration) {
 		return errInvalidSvcAcctExpiration
 	}
+
 	return nil
 }

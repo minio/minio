@@ -878,16 +878,16 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	// Content-Length is required and should be non-zero
-	if r.ContentLength <= 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
-		return
-	}
-
 	// Get upload id.
 	uploadID, _, _, _, s3Error := getObjectResources(r.Form)
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	// Content-Length is required and should be non-zero
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingPart), r.URL)
 		return
 	}
 
@@ -897,9 +897,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 	if len(complMultipartUpload.Parts) == 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingPart), r.URL)
 		return
 	}
+
 	if !sort.SliceIsSorted(complMultipartUpload.Parts, func(i, j int) bool {
 		return complMultipartUpload.Parts[i].PartNumber < complMultipartUpload.Parts[j].PartNumber
 	}) {
