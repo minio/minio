@@ -612,7 +612,14 @@ func serverMain(ctx *cli.Context) {
 
 	httpServer.TCPOptions.Trace = bootstrapTrace
 	go func() {
-		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
+		serveFn, err := httpServer.Init(GlobalContext, func(listenAddr string, err error) {
+			logger.LogIf(GlobalContext, fmt.Errorf("Unable to listen on `%s`: %v", listenAddr, err))
+		})
+		if err != nil {
+			globalHTTPServerErrorCh <- err
+			return
+		}
+		globalHTTPServerErrorCh <- serveFn()
 	}()
 
 	bootstrapTrace("setHTTPServer")

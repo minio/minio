@@ -87,6 +87,7 @@ const (
 	ErrInternalError
 	ErrInvalidAccessKeyID
 	ErrAccessKeyDisabled
+	ErrInvalidArgument
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
@@ -561,6 +562,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidAccessKeyId",
 		Description:    "Your account is disabled; please contact your administrator.",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrInvalidArgument: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid argument",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidBucketName: {
 		Code:           "InvalidBucketName",
