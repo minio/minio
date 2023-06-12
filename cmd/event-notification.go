@@ -35,20 +35,18 @@ import (
 // EventNotifier - notifies external systems about events in MinIO.
 type EventNotifier struct {
 	sync.RWMutex
-	targetList                 *event.TargetList
-	targetResCh                chan event.TargetIDResult
-	bucketRulesMap             map[string]event.RulesMap
-	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
+	targetList     *event.TargetList
+	targetResCh    chan event.TargetIDResult
+	bucketRulesMap map[string]event.RulesMap
 }
 
 // NewEventNotifier - creates new event notification object.
 func NewEventNotifier() *EventNotifier {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.InitBucketTargets()
 	return &EventNotifier{
-		targetList:                 event.NewTargetList(),
-		targetResCh:                make(chan event.TargetIDResult),
-		bucketRulesMap:             make(map[string]event.RulesMap),
-		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
+		targetList:     event.NewTargetList(),
+		targetResCh:    make(chan event.TargetIDResult),
+		bucketRulesMap: make(map[string]event.RulesMap),
 	}
 }
 
@@ -122,10 +120,6 @@ func (evnot *EventNotifier) AddRulesMap(bucketName string, rulesMap event.RulesM
 
 	rulesMap = rulesMap.Clone()
 
-	for _, targetRulesMap := range evnot.bucketRemoteTargetRulesMap[bucketName] {
-		rulesMap.Add(targetRulesMap)
-	}
-
 	// Do not add for an empty rulesMap.
 	if len(rulesMap) == 0 {
 		delete(evnot.bucketRulesMap, bucketName)
@@ -174,29 +168,18 @@ func (evnot *EventNotifier) RemoveNotification(bucketName string) {
 	defer evnot.Unlock()
 
 	delete(evnot.bucketRulesMap, bucketName)
-
-	targetIDSet := event.NewTargetIDSet()
-	for targetID := range evnot.bucketRemoteTargetRulesMap[bucketName] {
-		targetIDSet[targetID] = struct{}{}
-		delete(evnot.bucketRemoteTargetRulesMap[bucketName], targetID)
-	}
-	evnot.targetList.Remove(targetIDSet)
-
-	delete(evnot.bucketRemoteTargetRulesMap, bucketName)
 }
 
-// RemoveAllRemoteTargets - closes and removes all notification targets.
-func (evnot *EventNotifier) RemoveAllRemoteTargets() {
+// RemoveAllBucketTargets - closes and removes all notification targets.
+func (evnot *EventNotifier) RemoveAllBucketTargets() {
 	evnot.Lock()
 	defer evnot.Unlock()
 
-	for _, targetMap := range evnot.bucketRemoteTargetRulesMap {
-		targetIDSet := event.NewTargetIDSet()
-		for k := range targetMap {
-			targetIDSet[k] = struct{}{}
-		}
-		evnot.targetList.Remove(targetIDSet)
+	targetIDSet := event.NewTargetIDSet()
+	for k := range evnot.targetList.TargetMap() {
+		targetIDSet[k] = struct{}{}
 	}
+	evnot.targetList.Remove(targetIDSet)
 }
 
 // Send - sends the event to all registered notification targets
@@ -209,7 +192,8 @@ func (evnot *EventNotifier) Send(args eventArgs) {
 		return
 	}
 
-	evnot.targetList.Send(args.ToEvent(true), targetIDSet, evnot.targetResCh)
+	// If MINIO_API_SYNC_EVENTS is set, send events synchronously.
+	evnot.targetList.Send(args.ToEvent(true), targetIDSet, evnot.targetResCh, globalAPIConfig.isSyncEventsEnabled())
 }
 
 type eventArgs struct {
