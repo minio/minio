@@ -1872,5 +1872,5 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 	}))
 
 	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessNoContent(w)
 }
