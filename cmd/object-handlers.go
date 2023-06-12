@@ -2106,7 +2106,19 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	metadata[xhttp.AmzStorageClass] = sc
+
+	// Remove the snowball headers from metadata from objects
+	// since those are actionable headers and not for storage
+	delete(metadata, xhttp.AmzSnowballExtract)
+	delete(metadata, xhttp.AmzSnowballExtract)
+	delete(metadata, xhttp.MinIOSnowballIgnoreDirs)
+	delete(metadata, xhttp.MinIOSnowballIgnoreErrors)
+	delete(metadata, xhttp.MinIOSnowballPrefix)
+
+	// Use the same storage class as the original uploaded tar file
+	if sc != "" {
+		metadata[xhttp.AmzStorageClass] = sc
+	}
 
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
