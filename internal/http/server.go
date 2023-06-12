@@ -74,8 +74,8 @@ func (srv *Server) GetRequestCount() int {
 	return int(atomic.LoadInt32(&srv.requestCount))
 }
 
-// Start - start HTTP server
-func (srv *Server) Start(ctx context.Context) (err error) {
+// Init - init HTTP server
+func (srv *Server) Init(listenCtx context.Context, listenErrCallback func(listenAddr string, err error)) (serve func() error, err error) {
 	// Take a copy of server fields.
 	var tlsConfig *tls.Config
 	if srv.TLSConfig != nil {
@@ -85,13 +85,22 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 
 	// Create new HTTP listener.
 	var listener *httpListener
-	listener, err = newHTTPListener(
-		ctx,
+	listener, listenErrs := newHTTPListener(
+		listenCtx,
 		srv.Addrs,
 		srv.TCPOptions,
 	)
-	if err != nil {
-		return err
+
+	var interfaceFound bool
+	for i := range listenErrs {
+		if listenErrs[i] != nil {
+			listenErrCallback(srv.Addrs[i], listenErrs[i])
+		} else {
+			interfaceFound = true
+		}
+	}
+	if !interfaceFound {
+		return nil, errors.New("no available interface found")
 	}
 
 	// Wrap given handler to do additional
@@ -118,11 +127,16 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 	srv.listener = listener
 	srv.listenerMutex.Unlock()
 
-	// Start servicing with listener.
+	var l net.Listener = listener
 	if tlsConfig != nil {
-		return srv.Server.Serve(tls.NewListener(listener, tlsConfig))
+		l = tls.NewListener(listener, tlsConfig)
 	}
-	return srv.Server.Serve(listener)
+
+	serve = func() error {
+		return srv.Server.Serve(l)
+	}
+
+	return
 }
 
 // Shutdown - shuts down HTTP server.
