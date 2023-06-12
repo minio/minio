@@ -83,8 +83,9 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	if write {
 		quorum = writeQuorum
 	}
+
 	// List all online disks.
-	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs, quorum)
+	_, modTime, etag := listOnlineDisks(storageDisks, partsMetadata, errs, quorum)
 
 	if write {
 		reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
@@ -98,7 +99,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	}
 
 	// Pick one from the first valid metadata.
-	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, quorum)
+	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, etag, quorum)
 
 	return fi, partsMetadata, err
 }

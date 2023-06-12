@@ -299,7 +299,7 @@ func TestListOnlineDisks(t *testing.T) {
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
+			onlineDisks, modTime, _ := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
@@ -481,7 +481,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
-			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
+			onlineDisks, modTime, _ := listOnlineDisks(erasureDisks, partsMetadata, test.errs, rQuorum)
 			if !modTime.Equal(test.expectedTime) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
@@ -548,7 +548,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to get quorum consistent fileInfo %v", err)
 	}
 
-	erasureDisks, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
+	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
 
 	filteredDisks, errs, _ := disksWithAllParts(ctx, erasureDisks, partsMetadata,
 		errs, fi, bucket, object, madmin.HealDeepScan)
