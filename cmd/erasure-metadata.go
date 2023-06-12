@@ -626,10 +626,10 @@ func getInternalReplicationState(m map[string]string) ReplicationState {
 	for k, v := range m {
 		switch {
 		case equals(k, ReservedMetadataPrefixLower+ReplicationTimestamp):
-			tm, _ := time.Parse(http.TimeFormat, v)
+			tm, _ := time.Parse(time.RFC3339Nano, v)
 			d.ReplicationTimeStamp = tm
 		case equals(k, ReservedMetadataPrefixLower+ReplicaTimestamp):
-			tm, _ := time.Parse(http.TimeFormat, v)
+			tm, _ := time.Parse(time.RFC3339Nano, v)
 			d.ReplicaTimeStamp = tm
 		case equals(k, ReservedMetadataPrefixLower+ReplicaStatus):
 			d.ReplicaStatus = replication.StatusType(v)
