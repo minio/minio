@@ -1121,8 +1121,13 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionMethod: {
-		Code:           "InvalidRequest",
-		Description:    "The encryption method specified is not supported",
+		Code:           "InvalidArgument",
+		Description:    "Server Side Encryption with AWS KMS managed key requires HTTP header x-amz-server-side-encryption : aws:kms",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrIncompatibleEncryptionMethod: {
+		Code:           "InvalidArgument",
+		Description:    "Server Side Encryption with Customer provided key is incompatible with the encryption method specified",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionKeyID: {
@@ -1183,11 +1188,6 @@ var errorCodes = errorCodeMap{
 	ErrInvalidSSECustomerParameters: {
 		Code:           "InvalidArgument",
 		Description:    "The provided encryption parameters did not match the ones used originally.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrIncompatibleEncryptionMethod: {
-		Code:           "InvalidArgument",
-		Description:    "Server side encryption specified with both SSE-C and SSE-S3 headers",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrKMSNotConfigured: {
@@ -2392,7 +2392,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case lifecycle.Error:
 			apiErr = APIError{
-				Code:           "InvalidRequest",
+				Code:           "InvalidArgument",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
