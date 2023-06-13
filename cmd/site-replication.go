@@ -3464,16 +3464,15 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		admClient *madmin.AdminClient
 	)
 
+	if globalDeploymentID == peer.DeploymentID && !peer.SyncState.Empty() {
+		return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("A peer cluster, rather than the local cluster (endpoint=%s, deployment-id=%s) needs to be specified while setting a 'sync' replication mode", peer.Endpoint, peer.DeploymentID))
+	}
+
 	for _, v := range sites.Sites {
 		if peer.DeploymentID == v.DeploymentID {
 			found = true
-			if !peer.SyncState.Empty() {
-				if globalDeploymentID == peer.DeploymentID {
-					return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("invalid sync setting for endpoint %s (deployment id %s)", v.Endpoint, v.DeploymentID))
-				}
-				if peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state is being updated
-					break
-				}
+			if !peer.SyncState.Empty() && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state is being updated
+				break
 			}
 			if peer.Endpoint == v.Endpoint && peer.SyncState.Empty() {
 				return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("Endpoint %s entered for deployment id %s already configured in site replication", v.Endpoint, v.DeploymentID))
