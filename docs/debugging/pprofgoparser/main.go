@@ -33,14 +33,15 @@ import (
 )
 
 var (
-	re             *regexp.Regexp
-	goTime, margin time.Duration
+	re                   *regexp.Regexp
+	goTime, less, margin time.Duration
 )
 
 func init() {
 	re = regexp.MustCompile(`^goroutine [0-9]+ \[[^,]+(, ([0-9]+) minutes)?\]:$`)
 
-	flag.DurationVar(&goTime, "time", 0, "goroutine block age")
+	flag.DurationVar(&less, "less", 0, "goroutine waiting less than the specified time")
+	flag.DurationVar(&goTime, "time", 0, "goroutine waiting for exactly the specified time")
 	flag.DurationVar(&margin, "margin", 0, "margin time")
 }
 
@@ -130,6 +131,9 @@ func main() {
 		fmt.Println("")
 
 		for t, stacks := range r {
+			if less != 0 && t >= less {
+				continue
+			}
 			if goTime == 0 || math.Abs(float64(t)-float64(goTime)) <= float64(margin) {
 				for _, stack := range stacks {
 					fmt.Println(stack)

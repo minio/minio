@@ -28,6 +28,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -499,18 +500,22 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	// Set encryption response headers
-	switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
-	case crypto.S3:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-	case crypto.S3KMS:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-		w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
-		if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+
+	if kind, isEncrypted := crypto.IsEncrypted(objInfo.UserDefined); isEncrypted {
+		switch kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.S3KMS:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
+			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
+				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+			}
+		case crypto.SSEC:
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
-	case crypto.SSEC:
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
@@ -2102,7 +2107,19 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	metadata[xhttp.AmzStorageClass] = sc
+
+	// Remove the snowball headers from metadata from objects
+	// since those are actionable headers and not for storage
+	delete(metadata, xhttp.AmzSnowballExtract)
+	delete(metadata, xhttp.AmzSnowballExtract)
+	delete(metadata, xhttp.MinIOSnowballIgnoreDirs)
+	delete(metadata, xhttp.MinIOSnowballIgnoreErrors)
+	delete(metadata, xhttp.MinIOSnowballPrefix)
+
+	// Use the same storage class as the original uploaded tar file
+	if sc != "" {
+		metadata[xhttp.AmzStorageClass] = sc
+	}
 
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
@@ -2698,7 +2715,8 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Notify object  event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutRetention,
@@ -2804,8 +2822,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Allow getObjectTagging if policy action is set.
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectTaggingAction, bucket, object); s3Error != ErrNone {
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
@@ -2816,10 +2833,19 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Get object tags
 	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Set this such that authorization policies can be applied on the object tags.
+	if tags := ot.String(); tags != "" {
+		r.Header.Set(xhttp.AmzObjectTagging, tags)
+	}
+
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
 
@@ -2838,6 +2864,10 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 			Value: v,
 		})
 	}
+	// Always return in sorted order for tags.
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Key < list[j].Key
+	})
 	otags.TagSet.Tags = list
 
 	writeSuccessResponseXML(w, encodeResponse(otags))

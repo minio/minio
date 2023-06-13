@@ -44,13 +44,13 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.54
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.28.0
+	github.com/minio/console v0.29.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.4.4
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.1.3
-	github.com/minio/minio-go/v7 v7.0.54
+	github.com/minio/madmin-go/v2 v2.2.0
+	github.com/minio/minio-go/v7 v7.0.55-0.20230525060734-b7836f021bfb
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.2
 	github.com/minio/selfupdate v0.6.0
@@ -90,6 +90,7 @@ require (
 	go.uber.org/zap v1.24.0
 	goftp.io/server/v2 v2.0.0
 	golang.org/x/crypto v0.9.0
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/oauth2 v0.8.0
 	golang.org/x/sys v0.8.0
 	golang.org/x/time v0.3.0
@@ -183,7 +184,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.4 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20230523171519-7415469c72f3 // indirect
+	github.com/minio/mc v0.0.0-20230526175537-0fac0e006eae // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect

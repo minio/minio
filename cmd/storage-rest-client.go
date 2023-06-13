@@ -46,10 +46,14 @@ func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if nerr, ok := err.(*rest.NetworkError); ok {
-		return xnet.IsNetworkOrHostDown(nerr.Err, false)
+		if down := xnet.IsNetworkOrHostDown(nerr.Err, false); down {
+			return true
+		}
 	}
 
+	// More corner cases suitable for storage REST API
 	switch {
 	// A peer node can be in shut down phase and proactively
 	// return 503 server closed error,consider it as an offline node
@@ -824,7 +828,6 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 	if healthcheck {
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-		healthClient.ExpectTimeouts = true
 		healthClient.NoMetrics = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)

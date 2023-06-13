@@ -442,6 +442,14 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
+	// This is a special call attempted first to check for SOS-API calls.
+	info, err = veeamSOSAPIHeadObject(ctx, bucket, object, opts)
+	if err == nil {
+		return info, nil
+	}
+	// reset any error to 'nil'
+	err = nil
+
 	if !opts.NoLock {
 		// Lock the object before reading.
 		lk := er.NewNSLock(bucket, object)

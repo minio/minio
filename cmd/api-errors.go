@@ -87,6 +87,7 @@ const (
 	ErrInternalError
 	ErrInvalidAccessKeyID
 	ErrAccessKeyDisabled
+	ErrInvalidArgument
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
@@ -149,6 +150,7 @@ const (
 	ErrMethodNotAllowed
 	ErrInvalidPart
 	ErrInvalidPartOrder
+	ErrMissingPart
 	ErrAuthorizationHeaderMalformed
 	ErrMalformedPOSTRequest
 	ErrPOSTFileRequired
@@ -561,6 +563,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Your account is disabled; please contact your administrator.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
+	ErrInvalidArgument: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid argument",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidBucketName: {
 		Code:           "InvalidBucketName",
 		Description:    "The specified bucket is not valid.",
@@ -684,6 +691,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidPart: {
 		Code:           "InvalidPart",
 		Description:    "One or more of the specified parts could not be found.  The part may not have been uploaded, or the specified entity tag may not match the part's entity tag.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingPart: {
+		Code:           "InvalidRequest",
+		Description:    "You must specify at least one part",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPartOrder: {

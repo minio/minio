@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -180,12 +179,23 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
+	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
+
+	cfg = Config{
+		DisableODirect: disableODirect,
+		GzipObjects:    gzipObjects,
+		RootAccess:     rootAccess,
+	}
+
 	// Check environment variables parameters
 	requestsMax, err := strconv.Atoi(env.Get(EnvAPIRequestsMax, kvs.GetWithDefault(apiRequestsMax, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
 
+	cfg.RequestsMax = requestsMax
 	if requestsMax < 0 {
 		return cfg, errors.New("invalid API max requests value")
 	}
@@ -194,28 +204,33 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+	cfg.RequestsDeadline = requestsDeadline
 
 	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.GetWithDefault(apiClusterDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.ClusterDeadline = clusterDeadline
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
 	if len(corsAllowOrigin) == 0 {
 		corsAllowOrigin = []string{"*"} // defaults to '*'
 	}
+	cfg.CorsAllowOrigin = corsAllowOrigin
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.RemoteTransportDeadline = remoteTransportDeadline
 
 	listQuorum := env.Get(EnvAPIListQuorum, kvs.GetWithDefault(apiListQuorum, DefaultKVS))
 	switch listQuorum {
 	case "strict", "optimal", "reduced", "disk":
 	default:
-		return cfg, fmt.Errorf("invalid value %v for list_quorum", listQuorum)
+		return cfg, fmt.Errorf("invalid value %v for list_quorum: will default to 'strict'", listQuorum)
 	}
+	cfg.ListQuorum = listQuorum
 
 	replicationPriority := env.Get(EnvAPIReplicationPriority, kvs.GetWithDefault(apiReplicationPriority, DefaultKVS))
 	switch replicationPriority {
@@ -223,14 +238,13 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	default:
 		return cfg, fmt.Errorf("invalid value %v for replication_priority", replicationPriority)
 	}
+	cfg.ReplicationPriority = replicationPriority
 
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
-	if transitionWorkers < runtime.GOMAXPROCS(0)/2 {
-		return cfg, config.ErrInvalidTransitionWorkersValue(nil)
-	}
+	cfg.TransitionWorkers = transitionWorkers
 
 	v := env.Get(EnvAPIDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
 	if v == "" {
@@ -241,35 +255,19 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+	cfg.DeleteCleanupInterval = deleteCleanupInterval
 
 	staleUploadsCleanupInterval, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsCleanupInterval, kvs.GetWithDefault(apiStaleUploadsCleanupInterval, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.StaleUploadsCleanupInterval = staleUploadsCleanupInterval
 
 	staleUploadsExpiry, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsExpiry, kvs.GetWithDefault(apiStaleUploadsExpiry, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
-	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
-	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
-	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
-
-	return Config{
-		RequestsMax:                 requestsMax,
-		RequestsDeadline:            requestsDeadline,
-		ClusterDeadline:             clusterDeadline,
-		CorsAllowOrigin:             corsAllowOrigin,
-		RemoteTransportDeadline:     remoteTransportDeadline,
-		ListQuorum:                  listQuorum,
-		ReplicationPriority:         replicationPriority,
-		TransitionWorkers:           transitionWorkers,
-		StaleUploadsCleanupInterval: staleUploadsCleanupInterval,
-		StaleUploadsExpiry:          staleUploadsExpiry,
-		DeleteCleanupInterval:       deleteCleanupInterval,
-		DisableODirect:              disableODirect,
-		GzipObjects:                 gzipObjects,
-		RootAccess:                  rootAccess,
-	}, nil
+	return cfg, nil
 }

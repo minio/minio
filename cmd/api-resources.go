@@ -37,8 +37,8 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 		maxkeys = maxObjectList
 	}
 
-	prefix = trimLeadingSlash(values.Get("prefix"))
-	marker = trimLeadingSlash(values.Get("marker"))
+	prefix = values.Get("prefix")
+	marker = values.Get("marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
 	return
@@ -57,8 +57,8 @@ func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimit
 		maxkeys = maxObjectList
 	}
 
-	prefix = trimLeadingSlash(values.Get("prefix"))
-	marker = trimLeadingSlash(values.Get("key-marker"))
+	prefix = values.Get("prefix")
+	marker = values.Get("key-marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
 	versionIDMarker = values.Get("version-id-marker")
@@ -87,8 +87,8 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 		maxkeys = maxObjectList
 	}
 
-	prefix = trimLeadingSlash(values.Get("prefix"))
-	startAfter = trimLeadingSlash(values.Get("start-after"))
+	prefix = values.Get("prefix")
+	startAfter = values.Get("start-after")
 	delimiter = values.Get("delimiter")
 	fetchOwner = values.Get("fetch-owner") == "true"
 	encodingType = values.Get("encoding-type")
@@ -118,8 +118,8 @@ func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadID
 		maxUploads = maxUploadsList
 	}
 
-	prefix = trimLeadingSlash(values.Get("prefix"))
-	keyMarker = trimLeadingSlash(values.Get("key-marker"))
+	prefix = values.Get("prefix")
+	keyMarker = values.Get("key-marker")
 	uploadIDMarker = values.Get("upload-id-marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")

@@ -236,6 +236,12 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLayer) error {
 	buf, err := readConfig(ctx, objAPI, getSRStateFilePath())
 	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			c.Lock()
+			defer c.Unlock()
+			c.state = srState{}
+			c.enabled = false
+		}
 		return err
 	}
 
@@ -655,7 +661,7 @@ func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.Si
 	for _, peer := range c.state.Peers {
 		info.Sites = append(info.Sites, peer)
 	}
-	sort.SliceStable(info.Sites, func(i, j int) bool {
+	sort.Slice(info.Sites, func(i, j int) bool {
 		return info.Sites[i].Name < info.Sites[j].Name
 	})
 
@@ -2270,6 +2276,17 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 			if errors.Is(err, BucketRemoteTargetNotFound{Bucket: t.SourceBucket}) {
 				continue
 			}
+			return err
+		}
+		targets, terr := globalBucketTargetSys.ListBucketTargets(ctx, t.SourceBucket)
+		if terr != nil {
+			return err
+		}
+		tgtBytes, terr := json.Marshal(&targets)
+		if terr != nil {
+			return err
+		}
+		if _, err = globalBucketMetadataSys.Update(ctx, t.SourceBucket, bucketTargetsFile, tgtBytes); err != nil {
 			return err
 		}
 	}

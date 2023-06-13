@@ -198,7 +198,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 	diskPath := disk.Endpoint().Path
 
 	readDirFn(pathJoin(diskPath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
-		return readDirFn(pathJoin(diskPath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
+		readDirFn(pathJoin(diskPath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
@@ -209,19 +209,20 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 				removeAll(pathJoin(diskPath, minioMetaMultipartBucket, uploadIDPath))
 			}
 			wait()
-			vi, err := disk.StatVol(ctx, pathJoin(minioMetaMultipartBucket, shaDir))
-			if err != nil {
-				return nil
-			}
-			wait = deletedCleanupSleeper.Timer(ctx)
-			if now.Sub(vi.Created) > expiry {
-				// We are not deleting shaDir recursively here, if shaDir is empty
-				// and its older then we can happily delete it.
-				Remove(pathJoin(diskPath, minioMetaMultipartBucket, shaDir))
-			}
-			wait()
 			return nil
 		})
+		vi, err := disk.StatVol(ctx, pathJoin(minioMetaMultipartBucket, shaDir))
+		if err != nil {
+			return nil
+		}
+		wait := deletedCleanupSleeper.Timer(ctx)
+		if now.Sub(vi.Created) > expiry {
+			// We are not deleting shaDir recursively here, if shaDir is empty
+			// and its older then we can happily delete it.
+			Remove(pathJoin(diskPath, minioMetaMultipartBucket, shaDir))
+		}
+		wait()
+		return nil
 	})
 
 	readDirFn(pathJoin(diskPath, minioMetaTmpBucket), func(tmpDir string, typ os.FileMode) error {
@@ -1093,7 +1094,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 		// ensure that part ETag is canonicalized to strip off extraneous quotes
 		part.ETag = canonicalizeETag(part.ETag)
-		expETag := tryDecryptETag(objectEncryptionKey, expPart.ETag, kind != crypto.S3)
+		expETag := tryDecryptETag(objectEncryptionKey, expPart.ETag, kind == crypto.S3)
 		if expETag != part.ETag {
 			invp := InvalidPart{
 				PartNumber: part.PartNumber,
