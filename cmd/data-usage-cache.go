@@ -88,6 +88,20 @@ func (ats *allTierStats) merge(other *allTierStats) {
 	}
 }
 
+func (ats *allTierStats) clone() *allTierStats {
+	if ats == nil {
+		return nil
+	}
+	dst := *ats
+	if dst.Tiers != nil {
+		dst.Tiers = make(map[string]tierStats, len(dst.Tiers))
+		for tier, st := range dst.Tiers {
+			dst.Tiers[tier] = st
+		}
+	}
+	return &dst
+}
+
 func (ats *allTierStats) adminStats(stats map[string]madmin.TierStats) map[string]madmin.TierStats {
 	if ats == nil {
 		return stats
@@ -166,6 +180,25 @@ type replicationAllStats struct {
 type replicationAllStatsV1 struct {
 	Targets     map[string]replicationStats
 	ReplicaSize uint64 `msg:"ReplicaSize,omitempty"`
+}
+
+// clone creates a deep-copy clone.
+func (r *replicationAllStats) clone() *replicationAllStats {
+	if r == nil {
+		return nil
+	}
+
+	// Shallow copy
+	dst := *r
+
+	// Copy individual targets.
+	if dst.Targets != nil {
+		dst.Targets = make(map[string]replicationStats, len(dst.Targets))
+		for k, v := range r.Targets {
+			dst.Targets[k] = v
+		}
+	}
+	return &dst
 }
 
 //msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6
@@ -413,14 +446,11 @@ func (e dataUsageEntry) clone() dataUsageEntry {
 		e.Children = ch
 	}
 	if e.ReplicationStats != nil {
-		// Copy to new struct
-		r := *e.ReplicationStats
-		e.ReplicationStats = &r
+		// Clone ReplicationStats
+		e.ReplicationStats = e.ReplicationStats.clone()
 	}
 	if e.AllTierStats != nil {
-		ats := newAllTierStats()
-		ats.merge(e.AllTierStats)
-		e.AllTierStats = ats
+		e.AllTierStats = e.AllTierStats.clone()
 	}
 	return e
 }

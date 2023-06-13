@@ -373,7 +373,7 @@ func (f *folderScanner) sendUpdate() {
 	}
 	if flat := f.updateCache.sizeRecursive(f.newCache.Info.Name); flat != nil {
 		select {
-		case f.updates <- *flat:
+		case f.updates <- flat.clone():
 		default:
 		}
 		f.lastUpdate = time.Now()
