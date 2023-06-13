@@ -626,17 +626,9 @@ func getInternalReplicationState(m map[string]string) ReplicationState {
 	for k, v := range m {
 		switch {
 		case equals(k, ReservedMetadataPrefixLower+ReplicationTimestamp):
-			tm, _ := time.Parse(time.RFC3339Nano, v)
-			if tm.IsZero() {
-				tm, _ = time.Parse(http.TimeFormat, v)
-			}
-			d.ReplicationTimeStamp = tm
+			d.ReplicaTimeStamp, _ = amztime.ParseReplicationTS(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicaTimestamp):
-			tm, _ := time.Parse(time.RFC3339Nano, v)
-			if tm.IsZero() {
-				tm, _ = time.Parse(http.TimeFormat, v)
-			}
-			d.ReplicaTimeStamp = tm
+			d.ReplicaTimeStamp, _ = amztime.ParseReplicationTS(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicaStatus):
 			d.ReplicaStatus = replication.StatusType(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicationStatus):
