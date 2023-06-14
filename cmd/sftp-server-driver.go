@@ -89,10 +89,11 @@ func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
 
 func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 	ui, ok := globalIAMSys.GetUser(context.Background(), f.AccessKey())
-	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
-		return nil, errNoSuchUser
-	}
-	if !ok && globalIAMSys.LDAPConfig.Enabled() {
+	if !ok {
+		if !globalIAMSys.LDAPConfig.Enabled() {
+			return nil, errNoSuchUser
+		}
+
 		targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
 		if err != nil {
 			return nil, err
@@ -123,7 +124,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		// Set the newly generated credentials, policyName is empty on purpose
 		// LDAP policies are applied automatically using their ldapUser, ldapGroups
 		// mapping.
-		_, err = globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+		_, err = globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, nil, cred, "")
 		if err != nil {
 			return nil, err
 		}

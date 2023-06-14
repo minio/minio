@@ -265,10 +265,11 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 
 func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error) {
 	ui, ok := globalIAMSys.GetUser(context.Background(), ctx.Sess.LoginUser())
-	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
-		return nil, errNoSuchUser
-	}
-	if !ok && globalIAMSys.LDAPConfig.Enabled() {
+	if !ok {
+		if !globalIAMSys.LDAPConfig.Enabled() {
+			return nil, errNoSuchUser
+		}
+
 		targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
 		if err != nil {
 			return nil, err
@@ -302,7 +303,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		// Set the newly generated credentials, policyName is empty on purpose
 		// LDAP policies are applied automatically using their ldapUser, ldapGroups
 		// mapping.
-		_, err = globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+		_, err = globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, nil, cred, "")
 		if err != nil {
 			return nil, err
 		}

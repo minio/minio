@@ -224,6 +224,15 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	return nil
 }
 
+// GetIssuer returns the Issuer for the openid provider from the discovery doc.
+func (r *Config) GetIssuer(ctx context.Context, arn arn.ARN) (string, error) {
+	pCfg, ok := r.arnProviderCfgsMap[arn]
+	if !ok {
+		return "", fmt.Errorf("Role %s does not exist", arn)
+	}
+	return pCfg.DiscoveryDoc.Issuer, nil
+}
+
 func (r *Config) updateUserinfoClaims(ctx context.Context, arn arn.ARN, accessToken string, claims map[string]interface{}) error {
 	pCfg, ok := r.arnProviderCfgsMap[arn]
 	// If claim user info is enabled, get claims from userInfo

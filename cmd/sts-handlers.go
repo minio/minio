@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -288,7 +289,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, nil, cred, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -490,8 +491,23 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		cred.ParentUser = base64.RawURLEncoding.EncodeToString(bs)
 	}
 
+	issuer, err := globalIAMSys.OpenIDConfig.GetIssuer(r.Context(), roleArn)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+			errors.New("Issuer could not be retrieved from the OpenID config"))
+		return
+	}
+
+	ei := &EntityInfo{
+		EntityInfoType: EITFederatedUser,
+		EntitySource: EntitySource{
+			ESType:           ESTypeOIDC,
+			EIExternalServer: issuer,
+		},
+		EntitySourceID: subFromToken,
+	}
 	// Set the newly generated credentials.
-	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, ei, cred, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -665,7 +681,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups
 	// mapping.
-	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, nil, cred, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -830,7 +846,19 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 
 	tmpCredentials.ParentUser = parentUser
 	policyName := certificate.Subject.CommonName
-	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
+	// we use the certificate signature as the "external server" entity source
+	// info.
+	certSignature := fmt.Sprintf("%s:%s", certificate.SignatureAlgorithm.String(),
+		hex.EncodeToString(certificate.Signature))
+	ei := &EntityInfo{
+		EntityInfoType: EITServer,
+		EntitySource: EntitySource{
+			ESType:           ESTypeClientTLSCert,
+			EIExternalServer: certSignature,
+		},
+		EntitySourceID: parentUser,
+	}
+	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, ei, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -954,7 +982,15 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, "")
+	ei := &EntityInfo{
+		EntityInfoType: EITServer,
+		EntitySource: EntitySource{
+			ESType:           ESTypeCustomAuthN,
+			EIExternalServer: authn.GetServer(),
+		},
+		EntitySourceID: res.Success.User,
+	}
+	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, ei, tmpCredentials, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return

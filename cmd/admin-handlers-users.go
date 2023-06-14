@@ -168,6 +168,11 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetUserInfo - GET /minio/admin/v3/user-info
+//
+// GetUserInfo returns information on long term users:
+//
+//	(1) users created by the built-in identity provider,
+//	(2) users authenticated via LDAP
 func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetUserInfo")
 
@@ -1638,6 +1643,8 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 }
 
 // SetPolicyForUserOrGroup - PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
+//
+// TODO(aditya): Remove this once console moves to attach/detach APIs.
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetPolicyForUserOrGroup")
 

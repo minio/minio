@@ -721,7 +721,9 @@ func (sys *IAMSys) notifyForUser(ctx context.Context, accessKey string, isTemp b
 // elsewhere), the AssumeRole case (because the parent user is real and their
 // policy is associated via policy-set API) and the AssumeRoleWithLDAP case
 // (because the policy association is made via policy-set API).
-func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) (time.Time, error) {
+func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string,
+	ei *EntityInfo, cred auth.Credentials, policyName string,
+) (time.Time, error) {
 	if !sys.Initialized() {
 		return time.Time{}, errServerNotInitialized
 	}
@@ -731,7 +733,7 @@ func (sys *IAMSys) SetTempUser(ctx context.Context, accessKey string, cred auth.
 		policyName = ""
 	}
 
-	updatedAt, err := sys.store.SetTempUser(ctx, accessKey, cred, policyName)
+	updatedAt, err := sys.store.SetTempUser(ctx, accessKey, ei, cred, policyName)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -861,7 +863,17 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 		sys.store.LoadUser(ctx, name)
 	}
 
-	return sys.store.GetUserInfo(name)
+	userInfo, err := sys.store.GetUserInfo(name)
+	if err != nil {
+		return userInfo, err
+	}
+	// Handle the case for users present in the system before the enhanced auth
+	// info was stored at the IAM layer.
+	if userInfo.AuthInfo != nil && userInfo.AuthInfo.Type == madmin.LDAPUserAuthType &&
+		userInfo.AuthInfo.AuthServer == "" {
+		userInfo.AuthInfo.AuthServer = sys.LDAPConfig.GetServerAddr()
+	}
+	return userInfo, nil
 }
 
 // QueryPolicyEntities - queries policy associations for builtin users/groups/policies.
@@ -1406,7 +1418,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 			}
 
 			cred.Groups = currGroups
-			if err := sys.store.UpdateUserIdentity(ctx, cred); err != nil {
+			if err := sys.store.UpdateLDAPCredential(ctx, cred); err != nil {
 				// Log and continue error - perhaps it'll work the next time.
 				logger.LogIf(GlobalContext, err)
 			}
@@ -1442,7 +1454,7 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 
 	if !ok {
 		if accessKey == globalActiveCred.AccessKey {
-			return newUserIdentity(globalActiveCred), true
+			return newUserIdentity(nil, globalActiveCred), true
 		}
 	}
 	return u, ok && u.Credentials.IsValid()
@@ -1576,8 +1588,8 @@ func (sys *IAMSys) PolicyDBUpdateBuiltin(ctx context.Context, isAttach bool,
 		return
 	}
 
-	userOrGroup := r.User
 	var isGroup bool
+	userOrGroup := r.User
 	if userOrGroup == "" {
 		isGroup = true
 		userOrGroup = r.Group
@@ -1615,8 +1627,18 @@ func (sys *IAMSys) PolicyDBUpdateBuiltin(ctx context.Context, isAttach bool,
 		}
 	}
 
+	ei := &EntityInfo{
+		EntityInfoType: func() EntityInfoType {
+			if isGroup {
+				return EITGroup
+			}
+			return EITUser
+		}(),
+		EntitySource:   EntitySource{ESType: ESTypeBuiltin},
+		EntitySourceID: userOrGroup,
+	}
 	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, userOrGroup, isGroup,
-		regUser, r.Policies, isAttach)
+		regUser, ei, r.Policies, isAttach)
 	if err != nil {
 		return
 	}
@@ -1655,6 +1677,18 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		return
 	}
 
+	if !sys.LDAPConfig.Enabled() {
+		err = errIAMActionNotAllowed
+		return
+	}
+
+	ei := &EntityInfo{
+		EntitySource: EntitySource{
+			ESType:           ESTypeLDAP,
+			EIExternalServer: sys.LDAPConfig.GetServerAddr(),
+		},
+	}
+
 	var dn string
 	var isGroup bool
 	if r.User != "" {
@@ -1667,6 +1701,8 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 			err = errNoSuchUser
 			return
 		}
+		ei.EntityInfoType = EITFederatedUser
+		ei.EntitySourceID = dn
 		isGroup = false
 	} else {
 		var exists bool
@@ -1678,12 +1714,14 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 			return
 		}
 		dn = r.Group
+		ei.EntityInfoType = EITFederatedGroup
+		ei.EntitySourceID = dn
 		isGroup = true
 	}
 
 	userType := stsUser
 	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
-		userType, r.Policies, isAttach)
+		userType, ei, r.Policies, isAttach)
 	if err != nil {
 		return
 	}

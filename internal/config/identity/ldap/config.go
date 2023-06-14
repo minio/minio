@@ -47,6 +47,11 @@ func (l *Config) Enabled() bool {
 	return l.LDAP.Enabled
 }
 
+// GetServerAddr returns the LDAP server address.
+func (l *Config) GetServerAddr() string {
+	return l.LDAP.ServerAddr
+}
+
 // Clone returns a cloned copy of LDAP config.
 func (l *Config) Clone() Config {
 	if l == nil {

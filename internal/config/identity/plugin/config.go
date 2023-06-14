@@ -418,6 +418,12 @@ func (o *AuthNPlugin) Authenticate(roleArn arn.ARN, token string) (AuthNResponse
 	}
 }
 
+// GetServer returns the server address (with port) used as authentication
+// plugin
+func (o *AuthNPlugin) GetServer() string {
+	return o.args.URL.Host
+}
+
 // GetRoleInfo - returns ARN to policies map.
 func (o *AuthNPlugin) GetRoleInfo() map[arn.ARN]string {
 	return map[arn.ARN]string{

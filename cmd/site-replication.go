@@ -1496,7 +1496,7 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 	}
 
 	// Set these credentials to IAM.
-	if _, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, stsCred.ParentPolicyMapping); err != nil {
+	if _, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, nil, cred, stsCred.ParentPolicyMapping); err != nil {
 		return fmt.Errorf("unable to save STS credential and/or parent policy mapping: %w", err)
 	}
 

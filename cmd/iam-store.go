@@ -1,4 +1,6 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+//go:generate stringer -type=EntityInfoType,ESType -linecomment
+//
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -161,13 +163,19 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 
 // UserIdentity represents a user's secret key and their status
 type UserIdentity struct {
-	Version     int              `json:"version"`
+	Version     int `json:"version"`
+	*EntityInfo `json:"entityInfo,omitempty"`
 	Credentials auth.Credentials `json:"credentials"`
 	UpdatedAt   time.Time        `json:"updatedAt,omitempty"`
 }
 
-func newUserIdentity(cred auth.Credentials) UserIdentity {
-	return UserIdentity{Version: 1, Credentials: cred, UpdatedAt: UTCNow()}
+func newUserIdentity(ei *EntityInfo, cred auth.Credentials) UserIdentity {
+	return UserIdentity{
+		Version:     1,
+		EntityInfo:  ei,
+		Credentials: cred,
+		UpdatedAt:   UTCNow(),
+	}
 }
 
 // GroupInfo contains info about a group
@@ -182,10 +190,94 @@ func newGroupInfo(members []string) GroupInfo {
 	return GroupInfo{Version: 1, Status: statusEnabled, Members: members, UpdatedAt: UTCNow()}
 }
 
+// EntityInfoType specifies the type of entity like user/group, etc
+type EntityInfoType uint8
+
+// Valid values for EntityInfoType. DO NOT edit the line comments - they are
+// used by stringer.
+const (
+	_                                = iota
+	EITUser           EntityInfoType = iota + 1 // user
+	EITGroup                                    // group
+	EITFederatedUser                            // federated-user
+	EITFederatedGroup                           // federated-group
+
+	// Entity type used for entities that are only known to be machines and not
+	// a user, e.g. for client TLS and custom authentication plugin.
+	EITServer // server
+)
+
+// ESType specifies the type of auth
+type ESType uint8
+
+// Valid values for ESType. DO NOT edit the line comments - they are used by
+// stringer.
+const (
+	_                          = iota
+	ESTypeBuiltin       ESType = iota + 1 // builtin
+	ESTypeLDAP                            // ldap
+	ESTypeOIDC                            // oidc
+	ESTypeClientTLSCert                   // client-tls-cert
+	ESTypeCustomAuthN                     // custom-authn
+)
+
+// EntitySource gives info about the source of the entity, such as builtin IDP,
+// ldap server or oidc server.
+type EntitySource struct {
+	ESType
+	EIExternalServer string
+}
+
+// EntityInfo specifies details about an entity that has a mapped policy, such
+// as a user or a group.
+type EntityInfo struct {
+	EntityInfoType
+	EntitySource
+
+	// EntitySourceID represents the unique name of the entity within the scope
+	// of the entity source.
+	EntitySourceID string
+}
+
+// GetUserAuthInfo returns a UserAuthInfo if available and applicable.
+func (ei *EntityInfo) GetUserAuthInfo() *madmin.UserAuthInfo {
+	// Info may not be available.
+	if ei == nil {
+		return nil
+	}
+	// Info may not apply to a user.
+	if ei.EntityInfoType != EITUser && ei.EntityInfoType != EITFederatedUser {
+		return nil
+	}
+
+	var uaType madmin.UserAuthType
+	switch ei.EntitySource.ESType {
+	case ESTypeBuiltin:
+		uaType = madmin.BuiltinUserAuthType
+	case ESTypeLDAP:
+		uaType = madmin.LDAPUserAuthType
+	default:
+		return nil
+	}
+
+	return &madmin.UserAuthInfo{
+		Type:             uaType,
+		AuthServer:       ei.EIExternalServer,
+		AuthServerUserID: ei.EntitySourceID,
+	}
+}
+
 // MappedPolicy represents a policy name mapped to a user or group
 type MappedPolicy struct {
-	Version   int       `json:"version"`
-	Policies  string    `json:"policy"`
+	Version int `json:"version"`
+
+	// List of policies represented as comma separated strings
+	Policies string `json:"policy"`
+
+	// Represent info about the entity being mapped to. This struct is usually
+	// nil, but is set for LDAP user/group policy mapping.
+	*EntityInfo `json:"entityInfo,omitempty"`
+
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 }
 
@@ -914,7 +1006,7 @@ func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err err
 // PolicyDBUpdate - adds or removes given policies to/from the user or group's
 // policy associations.
 func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGroup bool,
-	userType IAMUserType, policies []string, isAttach bool) (updatedAt time.Time,
+	userType IAMUserType, ei *EntityInfo, policies []string, isAttach bool) (updatedAt time.Time,
 	addedOrRemoved, effectivePolicies []string, err error,
 ) {
 	if name == "" {
@@ -950,6 +1042,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	policiesToUpdate := set.CreateStringSet(policies...)
 	var newPolicySet set.StringSet
 	newPolicyMapping := mp
+	newPolicyMapping.EntityInfo = ei
 	if isAttach {
 		// new policies to attach => inputPolicies - existing (set difference)
 		policiesToUpdate = policiesToUpdate.Difference(existingPolicySet)
@@ -1415,47 +1508,93 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 	cache := store.rlock()
 	defer store.runlock()
 
-	if store.getUsersSysType() != MinIOUsersSysType {
-		// If the user has a mapped policy or is a member of a group, we
-		// return that info. Otherwise we return error.
+	userIdentity, userFound := cache.iamUsersMap[name]
+	mappedPolicy, policyMappingFound := cache.iamUserPolicyMap[name]
+
+	switch {
+	case !userFound && !policyMappingFound:
+		return u, errNoSuchUser
+
+	case !userFound && policyMappingFound:
+		// This can happen only for LDAP users currently.
+
+		// If the user has ever logged in successfully, we would have their
+		// groups in a STS credential, so we lookup the groups. FIXME: Currently
+		// we do not handle the case where the group membership may have been
+		// changed in the LDAP directory leading to different memberships info
+		// in STS credentials belonging to this user.
 		var groups []string
+		found := false
+		var foundUser UserIdentity
 		for _, v := range cache.iamUsersMap {
 			if v.Credentials.ParentUser == name {
 				groups = v.Credentials.Groups
+				found = true
+				foundUser = v
 				break
 			}
 		}
-		mappedPolicy, ok := cache.iamUserPolicyMap[name]
-		if !ok {
-			return u, errNoSuchUser
+		authInfo := mappedPolicy.GetUserAuthInfo()
+		// In some cases we can compute UserAuthInfo even if we have not stored
+		// it at the iam-store layer.
+		if authInfo == nil && found {
+			authInfo = &madmin.UserAuthInfo{
+				Type: madmin.LDAPUserAuthType,
+				// The LDAP server cannot be determined at this layer and is
+				// left to the caller.
+				AuthServer: "",
+			}
+
+			// Try to get the LDAP user DN from the STS/Service Account found.
+			cred := foundUser.Credentials
+			jwtClaims, err := auth.ExtractClaims(cred.SessionToken, cred.SecretKey)
+			if err != nil {
+				jwtClaims, err = auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
+			}
+			if err == nil {
+				userDN, ok := jwtClaims.Lookup(ldapUser)
+				if ok {
+					authInfo.AuthServerUserID = userDN
+				}
+			}
 		}
 		return madmin.UserInfo{
+			AuthInfo:   authInfo,
 			PolicyName: mappedPolicy.Policies,
 			MemberOf:   groups,
 			UpdatedAt:  mappedPolicy.UpdatedAt,
 		}, nil
-	}
 
-	ui, found := cache.iamUsersMap[name]
-	if !found {
-		return u, errNoSuchUser
-	}
-	cred := ui.Credentials
-	if cred.IsTemp() || cred.IsServiceAccount() {
-		return u, errIAMActionNotAllowed
-	}
+	default:
+		// same as "case userFound:"
+		cred := userIdentity.Credentials
+		if cred.IsTemp() || cred.IsServiceAccount() {
+			return u, errIAMActionNotAllowed
+		}
 
-	return madmin.UserInfo{
-		PolicyName: cache.iamUserPolicyMap[name].Policies,
-		Status: func() madmin.AccountStatus {
-			if cred.IsValid() {
-				return madmin.AccountEnabled
+		// At this point, the user found must be an internal IDP authenticated
+		// user, and we can compute their UserAuthInfo if we didnt store it (for
+		// users created in older releases).
+		authInfo := userIdentity.GetUserAuthInfo()
+		if authInfo == nil {
+			authInfo = &madmin.UserAuthInfo{
+				Type:             madmin.BuiltinUserAuthType,
+				AuthServerUserID: name,
 			}
-			return madmin.AccountDisabled
-		}(),
-		MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
-		UpdatedAt: cache.iamUserPolicyMap[name].UpdatedAt,
-	}, nil
+		}
+		return madmin.UserInfo{
+			AuthInfo:   authInfo,
+			PolicyName: mappedPolicy.Policies,
+			Status: func() madmin.AccountStatus {
+				if cred.IsValid() {
+					return madmin.AccountEnabled
+				}
+				return madmin.AccountDisabled
+			}(),
+			MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
+			UpdatedAt: mappedPolicy.UpdatedAt,
+		}, nil
+	}
 }
 
 // PolicyMappingNotificationHandler - handles updating a policy mapping from storage.
@@ -1625,7 +1764,7 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 // SetTempUser - saves temporary (STS) credential to storage and cache. If a
 // policy name is given, it is associated with the parent user specified in the
 // credential.
-func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cred auth.Credentials, policyName string) (time.Time, error) {
+func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, ei *EntityInfo, cred auth.Credentials, policyName string) (time.Time, error) {
 	if accessKey == "" || !cred.IsTemp() || cred.IsExpired() || cred.ParentUser == "" {
 		return time.Time{}, errInvalidArgument
 	}
@@ -1651,7 +1790,7 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 		cache.iamUserPolicyMap[cred.ParentUser] = mp
 	}
 
-	u := newUserIdentity(cred)
+	u := newUserIdentity(ei, cred)
 	err := store.saveUserIdentity(ctx, accessKey, stsUser, u, options{ttl: ttl})
 	if err != nil {
 		return time.Time{}, err
@@ -1959,17 +2098,20 @@ func (store *IAMStoreSys) SetUserStatus(ctx context.Context, accessKey string, s
 		return updatedAt, errIAMActionNotAllowed
 	}
 
-	uinfo := newUserIdentity(auth.Credentials{
-		AccessKey: accessKey,
-		SecretKey: cred.SecretKey,
-		Status: func() string {
-			switch string(status) {
-			case string(madmin.AccountEnabled), string(auth.AccountOn):
-				return auth.AccountOn
-			}
-			return auth.AccountOff
-		}(),
-	})
+	uinfo := newUserIdentity(
+		ui.EntityInfo,
+		auth.Credentials{
+			AccessKey: accessKey,
+			SecretKey: cred.SecretKey,
+			Status: func() string {
+				switch string(status) {
+				case string(madmin.AccountEnabled), string(auth.AccountOn):
+					return auth.AccountOn
+				}
+				return auth.AccountOff
+			}(),
+		},
+	)
 
 	if err := store.saveUserIdentity(ctx, accessKey, regUser, uinfo); err != nil {
 		return updatedAt, err
@@ -2006,7 +2148,7 @@ func (store *IAMStoreSys) AddServiceAccount(ctx context.Context, cred auth.Crede
 		return updatedAt, fmt.Errorf("%w: unable to create a service account for another service account", errIAMServiceAccountNotAllowed)
 	}
 
-	u := newUserIdentity(cred)
+	u := newUserIdentity(nil, cred)
 	err = store.saveUserIdentity(ctx, u.Credentials.AccessKey, svcUser, u)
 	if err != nil {
 		return updatedAt, err
@@ -2105,7 +2247,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		return updatedAt, err
 	}
 
-	u := newUserIdentity(cr)
+	u := newUserIdentity(nil, cr)
 	if err := store.saveUserIdentity(ctx, u.Credentials.AccessKey, svcUser, u); err != nil {
 		return updatedAt, err
 	}
@@ -2216,7 +2358,14 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 		return u, errIAMActionNotAllowed
 	}
 
-	u = newUserIdentity(auth.Credentials{
+	ei := &EntityInfo{
+		EntityInfoType: EITUser,
+		EntitySource: EntitySource{
+			ESType: ESTypeBuiltin,
+		},
+		EntitySourceID: accessKey,
+	}
+	u = newUserIdentity(ei, auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: ureq.SecretKey,
 		Status: func() string {
@@ -2253,20 +2402,24 @@ func (store *IAMStoreSys) GetSTSAndServiceAccounts() []auth.Credentials {
 	return res
 }
 
-// UpdateUserIdentity - updates a user credential.
-func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Credentials) error {
+// UpdateLDAPCredential - updates a user credential. Do not use with non-LDAP
+// creds.
+func (store *IAMStoreSys) UpdateLDAPCredential(ctx context.Context, cred auth.Credentials) error {
 	cache := store.lock()
 	defer store.unlock()
 
 	cache.updatedAt = time.Now()
 
-	userType := regUser
-	if cred.IsServiceAccount() {
+	var userType IAMUserType
+	switch {
+	case cred.IsServiceAccount():
 		userType = svcUser
-	} else if cred.IsTemp() {
+	case cred.IsTemp():
 		userType = stsUser
+	default:
+		return errIAMActionNotAllowed
 	}
-	ui := newUserIdentity(cred)
+	ui := newUserIdentity(nil, cred)
 	// Overwrite the user identity here. As store should be
 	// atomic, it shouldn't cause any corruption.
 	if err := store.saveUserIdentity(ctx, cred.AccessKey, userType, ui); err != nil {
