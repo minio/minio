@@ -70,3 +70,13 @@ func ParseHeader(timeStr string) (time.Time, error) {
 	}
 	return time.Time{}, ErrMalformedDate
 }
+
+// ParseReplicationTS parse http.TimeFormat first
+// will try time.RFC3339Nano when parse http.TimeFormat failed
+func ParseReplicationTS(str string) (time.Time, error) {
+	tm, err := time.Parse(http.TimeFormat, str)
+	if tm.IsZero() || err != nil {
+		tm, err = time.Parse(time.RFC3339Nano, str)
+	}
+	return tm, err
+}
