@@ -19,7 +19,10 @@ package wsconn
 
 import (
 	"context"
+	"encoding/binary"
 	"sync"
+
+	"github.com/zeebo/xxh3"
 )
 
 // MuxClient is a stateful
@@ -54,21 +57,16 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	msg := message{
 		Op:      OpRequest,
-		MuxID:   m.MuxID,
 		Handler: h,
-		Seq:     0,
 		Flags:   0,
 		Payload: req,
 	}
 	ch := make(chan Response, 1)
 	m.respWait = ch
-	dst := GetByteBuffer()[:0]
-	dst, err := msg.MarshalMsg(dst)
-	if err != nil {
+	// Send...
+	if err := m.send(msg); err != nil {
 		return nil, err
 	}
-	// Send...
-	m.parent.send(dst)
 
 	// Wait for response or context.
 	select {
@@ -79,23 +77,38 @@ func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	}
 }
 
+func (m *MuxClient) send(msg message) error {
+	dst := GetByteBuffer()[:0]
+	msg.Seq = m.SendSeq
+	msg.MuxID = m.MuxID
+
+	dst, err := msg.MarshalMsg(dst)
+	if err != nil {
+		return err
+	}
+	if msg.Flags&FlagCRCxxh3 != 0 {
+		h := xxh3.Hash(dst)
+		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
+	}
+	return m.parent.send(m.ctx, dst)
+}
+
 // RequestBytes will send a single payload request and stream back results.
-// The
+// req may not be read/writen to after calling.
 func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 	// Try to grab an initial block.
 	msg := message{
 		Op:      OpConnectMux,
 		MuxID:   m.MuxID,
 		Handler: h,
-		Seq:     m.SendSeq,
 		Flags:   FlagEOF,
 		Payload: req,
 	}
 
 	// Send...
-	dst := GetByteBuffer()[:0]
-	dst, err := msg.MarshalMsg(dst)
+	err := m.send(msg)
 	if err != nil {
+		PutByteBuffer(req)
 		out <- Response{err: err}
 		return
 	}
@@ -107,17 +120,12 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 // response will send incoming response to client.
 // may never block.
 // Should return whether the next call would block.
-func (m *MuxClient) response(seq uint32, r Response) (unblock bool) {
+func (m *MuxClient) response(seq uint32, r Response) {
 	// Copy before testing.
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
-		select {
-		case m.respWait <- r:
-		default:
-			PutByteBuffer(r.msg)
-		}
-		m.closeLocked()
+		PutByteBuffer(r.msg)
 		return
 	}
 

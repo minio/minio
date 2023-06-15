@@ -19,9 +19,12 @@ package wsconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sync/atomic"
 
 	"github.com/gobwas/ws"
@@ -55,6 +58,9 @@ type Connection struct {
 
 	// outQueue is the output queue
 	outQueue chan []byte
+
+	// Client or serverside.
+	side ws.State
 }
 
 // State is a connection state.
@@ -63,7 +69,7 @@ type State uint32
 const (
 	// StateUnconnected is the initial state of a connection.
 	// When the first message is sent it will attempt to connect.
-	StateUnconnected State = iota
+	StateUnconnected = iota
 
 	// StateConnecting is the state from StateUnconnected while the connection is attempted to be established.
 	// After this connection will be StateConnected or StateConnectionError.
@@ -119,8 +125,18 @@ func (r *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byt
 	return c.roundtrip(h, req)
 }
 
-func (r *Connection) send(msg []byte) {
-	r.outQueue <- msg
+func (r *Connection) connect() {
+	if atomic.CompareAndSwapUint32((*uint32)(&r.State), StateUnconnected, StateConnecting) {
+	}
+}
+
+func (r *Connection) send(ctx context.Context, msg []byte) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case r.outQueue <- msg:
+		return nil
+	}
 }
 
 func (r *Connection) Handler() http.HandlerFunc {
@@ -130,25 +146,138 @@ func (r *Connection) Handler() http.HandlerFunc {
 			w.WriteHeader(http.StatusUpgradeRequired)
 			return
 		}
+		msg, _, err := wsutil.ReadClientData(conn)
+		if err != nil {
+			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: reading connect: %w", err))
+			return
+		}
+		var m message
+		err = m.parse(msg)
+		if err != nil {
+			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
+			return
+		}
+		if m.Op != OpConnect {
+			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: unexpected op: %v", m.Op))
+			return
+		}
+		var cReq ConnectReq
+		_, err = cReq.UnmarshalMsg(msg)
+		if err != nil {
+			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
+			return
+		}
+		if !atomic.CompareAndSwapUint32((*uint32)(&r.State), StateUnconnected, StateConnected) {
+			// Handle
+		}
+		if r.
+
 		go r.handleMessages(conn)
 	}
 }
 
 func (r *Connection) handleMessages(conn net.Conn) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+	// Read goroutine
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+				debug.PrintStack()
+			}
+			conn.Close()
+		}()
+
+		controlHandler := wsutil.ControlFrameHandler(conn, r.side)
+		readDataInto := func(dst []byte, rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, error) {
+			dst = dst[:0]
+			rd := wsutil.Reader{
+				Source:          conn,
+				State:           r.side,
+				CheckUTF8:       true,
+				SkipHeaderCheck: false,
+				OnIntermediate:  controlHandler,
+			}
+			for {
+				hdr, err := rd.NextFrame()
+				if err != nil {
+					return nil, err
+				}
+				if hdr.OpCode.IsControl() {
+					if err := controlHandler(hdr, &rd); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				if hdr.OpCode&want == 0 {
+					if err := rd.Discard(); err != nil {
+						return nil, err
+					}
+					continue
+				}
+
+				if int64(cap(dst)) < hdr.Length+1 {
+					dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
+				}
+				return readAllInto(dst[:0], &rd)
+			}
 		}
-		conn.Close()
+
+		// Keep reusing the same buffer.
+		var msg []byte
+		for {
+			var m message
+			var err error
+			msg, err = readDataInto(msg, conn, r.side, ws.OpBinary)
+			if err != nil {
+				logger.LogIf(r.ctx, fmt.Errorf("ws read: %w", err))
+				return
+			}
+
+			// Parse the received message
+			err = m.parse(msg)
+			if err != nil {
+				logger.LogIf(r.ctx, fmt.Errorf("ws parse package: %w", err))
+				return
+			}
+		}
 	}()
-	for {
-		msg, op, err := wsutil.ReadClientData(conn)
-		if err != nil {
-			// handle error
+
+	// Write goroutine.
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+				debug.PrintStack()
+			}
+			conn.Close()
+		}()
+		for toSend := range r.outQueue {
+			err := wsutil.WriteMessage(conn, r.side, ws.OpBinary, toSend)
+			if err != nil {
+				logger.LogIf(r.ctx, fmt.Errorf("ws write: %v", err))
+				return
+			}
 		}
-		err = wsutil.WriteServerMessage(conn, op, msg)
+	}()
+}
+
+// readAllInto reads from r and appends to b until an error or EOF and returns the data it read.
+// A successful call returns err == nil, not err == EOF. Because readAllInto is
+// defined to read from src until EOF, it does not treat an EOF from Read
+// as an error to be reported.
+func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
+	for {
+		if len(b) == cap(b) {
+			// Add more capacity (let append pick how much).
+			b = append(b, 0)[:len(b)]
+		}
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
 		if err != nil {
-			// handle error
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			return b, err
 		}
 	}
 }

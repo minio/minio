@@ -17,11 +17,19 @@
 
 package wsconn
 
-import "sync"
+import (
+	"encoding/binary"
+	"fmt"
+	"sync"
 
-//go:generate msgp -unexported -file=$GOFILE
+	"github.com/zeebo/xxh3"
+)
 
 // Op is operation type.
+//
+//go:generate msgp -unexported -file=$GOFILE
+//go:generate stringer -type=Op -output=msg_string.go -trimprefix=Op $GOFILE
+
 type Op uint8
 
 // HandlerID is the ID for the handler of a specific type.
@@ -49,8 +57,8 @@ const (
 )
 
 const (
-	// FlagCRCxxh3 indicates that, the lower 32 bits of xxhash3
-	// of the packet content will be sent after the serialized message.
+	// FlagCRCxxh3 indicates that, the lower 32 bits of xxhash3 of the serialized
+	// message will be sent after the serialized message as little endian.
 	FlagCRCxxh3 = 1 << iota
 
 	// FlagEOF the stream (either direction) is at EOF.
@@ -62,14 +70,38 @@ const (
 	FlagStateless
 )
 
+// This struct cannot be changed and retain backwards compatibility.
+//
 //msgp:tuple message
 type message struct {
 	Op      Op
 	MuxID   uint64
-	Handler HandlerID
 	Seq     uint32
+	Handler HandlerID
 	Flags   uint8
 	Payload []byte
+}
+
+// parse an incoming message
+func (m *message) parse(b []byte) error {
+	if m.Payload == nil {
+		m.Payload = GetByteBuffer()[:0]
+	}
+	h, err := m.UnmarshalMsg(b)
+	if err != nil {
+		return fmt.Errorf("read write: %v", err)
+	}
+	if m.Flags&FlagCRCxxh3 != 0 {
+		if len(h) < 4 {
+			return fmt.Errorf("want crc len 4, got %v", len(h))
+		}
+		got := uint32(xxh3.Hash(b[:len(b)-len(h)]))
+		want := binary.LittleEndian.Uint32(h)
+		if got != want {
+			return fmt.Errorf("crc mismatch: %08x (given) != %08x (bytes)", want, got)
+		}
+	}
+	return nil
 }
 
 var internalByteBuffer = sync.Pool{

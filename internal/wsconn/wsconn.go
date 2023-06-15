@@ -16,3 +16,16 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package wsconn
+
+//go:generate msgp -file=$GOFILE
+
+type ConnectReq struct {
+	ID   [16]byte
+	Host string
+}
+
+type ConnectResp struct {
+	ID             [16]byte
+	Accepted       bool
+	RejectedReason string
+}
