@@ -5169,6 +5169,10 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 	if err := saveSiteResyncMetadata(ctx, rs, objAPI); err != nil {
 		return res, err
 	}
+	select {
+	case globalReplicationPool.resyncer.resyncCancelCh <- struct{}{}:
+	case <-ctx.Done():
+	}
 
 	globalSiteResyncMetrics.updateState(rs)
 
