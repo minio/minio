@@ -1313,7 +1313,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				if errs[i] != nil {
 					fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
 						Key:   objInfo.Name,
-						Error: errs[i],
+						Error: errs[i].Error(),
 					})
 					continue
 				}
