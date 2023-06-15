@@ -312,7 +312,7 @@ func checkPutObjectLockAllowed(ctx context.Context, rq *http.Request, bucket, ob
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
 		rMode, rDate, err := objectlock.ParseObjectLockRetentionHeaders(rq.Header)
-		if err != nil {
+		if err != nil && !(replica && rMode == "" && rDate.IsZero()) {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
 		if retentionPermErr != ErrNone {

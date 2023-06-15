@@ -83,7 +83,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = validateConfig(cfg, subSys); err != nil {
+	if err = validateConfig(ctx, cfg, subSys); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -211,7 +211,12 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 		return
 	}
 
-	if verr := validateConfig(result.Cfg, result.SubSys); verr != nil {
+	tgts, err := config.ParseConfigTargetID(bytes.NewReader(kvBytes))
+	if err != nil {
+		return
+	}
+	ctx = context.WithValue(ctx, config.ContextKeyForTargetFromConfig, tgts)
+	if verr := validateConfig(ctx, result.Cfg, result.SubSys); verr != nil {
 		err = badConfigErr{Err: verr}
 		return
 	}
@@ -353,7 +358,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err = validateConfig(cfg, ""); err != nil {
+	if err = validateConfig(ctx, cfg, ""); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -464,7 +469,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = validateConfig(cfg, ""); err != nil {
+	if err = validateConfig(ctx, cfg, ""); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -541,7 +546,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 // setLoggerWebhookSubnetProxy - Sets the logger webhook's subnet proxy value to
 // one being set for subnet proxy
 func setLoggerWebhookSubnetProxy(subSys string, cfg config.Config) bool {
-	if subSys == config.SubnetSubSys {
+	if subSys == config.SubnetSubSys || subSys == config.LoggerWebhookSubSys {
 		subnetWebhookCfg := cfg[config.LoggerWebhookSubSys][subnet.LoggerWebhookName]
 		loggerWebhookSubnetProxy := subnetWebhookCfg.Get(logger.Proxy)
 		subnetProxy := cfg[config.SubnetSubSys][config.Default].Get(logger.Proxy)

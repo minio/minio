@@ -179,7 +179,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			lifecycleResponse:  []byte(``),
 			errorResponse: APIErrorResponse{
 				Resource: SlashSeparator + bucketName + SlashSeparator,
-				Code:     "InvalidRequest",
+				Code:     "InvalidArgument",
 				Message:  "Filter must have exactly one of Prefix, Tag, or And specified",
 			},
 
@@ -196,7 +196,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			lifecycleResponse:  []byte(``),
 			errorResponse: APIErrorResponse{
 				Resource: SlashSeparator + bucketName + SlashSeparator,
-				Code:     "InvalidRequest",
+				Code:     "InvalidArgument",
 				Message:  "Date must be provided in ISO 8601 format",
 			},
 

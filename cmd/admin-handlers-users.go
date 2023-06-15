@@ -665,6 +665,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if err := createReq.Validate(); err != nil {
+		// Since this validation would happen client side as well, we only send
+		// a generic error message here.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
 	var (
 		targetUser   string
 		targetGroups []string
@@ -677,12 +684,17 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		targetUser = cred.AccessKey
 	}
 
+	description := createReq.Description
+	if description == "" {
+		description = createReq.Comment
+	}
 	opts := newServiceAccountOpts{
-		accessKey:  createReq.AccessKey,
-		secretKey:  createReq.SecretKey,
-		comment:    createReq.Comment,
-		expiration: createReq.Expiration,
-		claims:     make(map[string]interface{}),
+		accessKey:   createReq.AccessKey,
+		secretKey:   createReq.SecretKey,
+		name:        createReq.Name,
+		description: description,
+		expiration:  createReq.Expiration,
+		claims:      make(map[string]interface{}),
 	}
 
 	// Find the user for the request sender (as it may be sent via a service
@@ -835,7 +847,8 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					AccessKey:     newCred.AccessKey,
 					SecretKey:     newCred.SecretKey,
 					Groups:        newCred.Groups,
-					Comment:       newCred.Comment,
+					Name:          newCred.Name,
+					Description:   newCred.Description,
 					Claims:        opts.claims,
 					SessionPolicy: createReq.Policy,
 					Status:        auth.AccountOn,
@@ -910,6 +923,13 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if err := updateReq.Validate(); err != nil {
+		// Since this validation would happen client side as well, we only send
+		// a generic error message here.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
 	var sp *iampolicy.Policy
 	if len(updateReq.NewPolicy) > 0 {
 		sp, err = iampolicy.ParseConfig(bytes.NewReader(updateReq.NewPolicy))
@@ -921,7 +941,8 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 	opts := updateServiceAccountOpts{
 		secretKey:     updateReq.NewSecretKey,
 		status:        updateReq.NewStatus,
-		comment:       updateReq.NewComment,
+		name:          updateReq.NewName,
+		description:   updateReq.NewDescription,
 		expiration:    updateReq.NewExpiration,
 		sessionPolicy: sp,
 	}
@@ -940,7 +961,8 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					AccessKey:     accessKey,
 					SecretKey:     opts.secretKey,
 					Status:        opts.status,
-					Comment:       opts.comment,
+					Name:          opts.name,
+					Description:   opts.description,
 					SessionPolicy: updateReq.NewPolicy,
 					Expiration:    updateReq.NewExpiration,
 				},
@@ -1028,7 +1050,8 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 
 	infoResp := madmin.InfoServiceAccountResp{
 		ParentUser:    svcAccount.ParentUser,
-		Comment:       svcAccount.Comment,
+		Name:          svcAccount.Name,
+		Description:   svcAccount.Description,
 		AccountStatus: svcAccount.Status,
 		ImpliedPolicy: policy == nil,
 		Policy:        string(policyJSON),
@@ -1100,14 +1123,18 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var serviceAccountsNames []string
+	var serviceAccountList []madmin.ServiceAccountInfo
 
 	for _, svc := range serviceAccounts {
-		serviceAccountsNames = append(serviceAccountsNames, svc.AccessKey)
+		expiryTime := svc.Expiration
+		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
+			AccessKey:  svc.AccessKey,
+			Expiration: &expiryTime,
+		})
 	}
 
 	listResp := madmin.ListServiceAccountsResp{
-		Accounts: serviceAccountsNames,
+		Accounts: serviceAccountList,
 	}
 
 	data, err := json.Marshal(listResp)
@@ -1744,7 +1771,7 @@ func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *ht
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/attach
+// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/attach
 func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AttachPolicyBuiltin")
 
@@ -1812,18 +1839,17 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		}
 
 		// Validate that user exists.
-		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
-			if !ok {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
+		if !ok {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				// When LDAP is enabled, warn user that they are using the wrong
+				// API.
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
 				return
 			}
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
 		}
-	}
-
-	userType := regUser
-	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
-		userType = stsUser
 	}
 
 	var existingPolicies []string
@@ -1855,6 +1881,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	existingPolicies = append(existingPolicies, policiesToAttach...)
 	newPolicies := strings.Join(existingPolicies, ",")
 
+	userType := regUser
 	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1875,7 +1902,7 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 	writeResponse(w, http.StatusCreated, nil, mimeNone)
 }
 
-// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/detach
+// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/detach
 func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DetachPolicyBuiltin")
 
@@ -1936,12 +1963,16 @@ func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		}
 
 		// Validate that user exists.
-		if globalIAMSys.GetUsersSysType() == MinIOUsersSysType {
-			_, ok := globalIAMSys.GetUser(ctx, userOrGroup)
-			if !ok {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
+		if !ok {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				// When LDAP is enabled, warn user that they are using the wrong
+				// API.
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
 				return
 			}
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+			return
 		}
 	}
 
@@ -2495,7 +2526,8 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					opts := updateServiceAccountOpts{
 						secretKey:     svcAcctReq.SecretKey,
 						status:        svcAcctReq.Status,
-						comment:       svcAcctReq.Comment,
+						name:          svcAcctReq.Name,
+						description:   svcAcctReq.Description,
 						expiration:    svcAcctReq.Expiration,
 						sessionPolicy: sp,
 					}
@@ -2511,7 +2543,8 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					secretKey:                  svcAcctReq.SecretKey,
 					sessionPolicy:              sp,
 					claims:                     svcAcctReq.Claims,
-					comment:                    svcAcctReq.Comment,
+					name:                       svcAcctReq.Name,
+					description:                svcAcctReq.Description,
 					expiration:                 svcAcctReq.Expiration,
 					allowSiteReplicatorAccount: false,
 				}

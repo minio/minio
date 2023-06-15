@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
@@ -115,6 +116,16 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	var withUpdatedAt bool
+	if updatedAtStr := r.Form.Get("withUpdatedAt"); updatedAtStr != "" {
+		var err error
+		withUpdatedAt, err = strconv.ParseBool(updatedAtStr)
+		if err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidLifecycleQueryParameter), r.URL)
+			return
+		}
+	}
+
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketLifecycleAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
@@ -126,7 +137,7 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
+	config, updatedAt, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -138,6 +149,9 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if withUpdatedAt {
+		w.Header().Set(xhttp.MinIOLifecycleCfgUpdatedAt, updatedAt.Format(iso8601Format))
+	}
 	// Write lifecycle configuration to client.
 	writeSuccessResponseXML(w, configData)
 }

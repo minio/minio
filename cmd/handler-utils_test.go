@@ -26,7 +26,6 @@ import (
 	"net/textproto"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/minio/minio/internal/config"
@@ -92,44 +91,6 @@ func TestIsValidLocationContraint(t *testing.T) {
 		_, actualCode := parseLocationConstraint(testCase.request)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
-		}
-	}
-}
-
-// Test validate form field size.
-func TestValidateFormFieldSize(t *testing.T) {
-	testCases := []struct {
-		header http.Header
-		err    error
-	}{
-		// Empty header returns error as nil,
-		{
-			header: nil,
-			err:    nil,
-		},
-		// Valid header returns error as nil.
-		{
-			header: http.Header{
-				"Content-Type": []string{"image/png"},
-			},
-			err: nil,
-		},
-		// Invalid header value > maxFormFieldSize+1
-		{
-			header: http.Header{
-				"Garbage": []string{strings.Repeat("a", int(maxFormFieldSize)+1)},
-			},
-			err: errSizeUnexpected,
-		},
-	}
-
-	// Run validate form field size check under all test cases.
-	for i, testCase := range testCases {
-		err := validateFormFieldSize(context.Background(), testCase.header)
-		if err != nil {
-			if err.Error() != testCase.err.Error() {
-				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.err, err)
-			}
 		}
 	}
 }

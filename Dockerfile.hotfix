@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.7
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.8
 
 ARG RELEASE
 
@@ -27,9 +27,8 @@ COPY LICENSE /licenses/LICENSE
 RUN \
      microdnf clean all && \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-     microdnf install minisign --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux gzip lsof tar net-tools iproute iputils jq minisign --nodocs && \
      mkdir -p /opt/bin && chmod -R 777 /opt/bin && \
      curl -s -q https://dl.min.io/server/minio/hotfixes/linux-amd64/archive/minio.${RELEASE} -o /opt/bin/minio && \
      curl -s -q https://dl.min.io/server/minio/hotfixes/linux-amd64/archive/minio.${RELEASE}.sha256sum -o /opt/bin/minio.sha256sum && \

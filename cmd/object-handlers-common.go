@@ -328,7 +328,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 	}
 
 	// Set the relevant version ID as part of the response header.
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 		// If version is a deleted marker, set this header as well
 		if objInfo.DeleteMarker && delete { // only returned during delete object
@@ -374,7 +374,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				VersionID: dobj.VersionID,
 			}
 			traceFn := globalLifecycleSys.trace(oi)
-			tags := auditLifecycleTags(lcEvent)
+			// Note: NewerNoncurrentVersions action is performed only scanner today
+			tags := newLifecycleAuditEvent(lcEventSrc_Scanner, lcEvent).Tags()
 
 			// Send audit for the lifecycle delete operation
 			auditLogLifecycle(

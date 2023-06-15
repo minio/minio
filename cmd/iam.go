@@ -532,6 +532,14 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 		return errServerNotInitialized
 	}
 
+	for _, v := range iampolicy.DefaultPolicies {
+		if v.Name == policyName {
+			if err := checkConfig(ctx, globalObjectAPI, getPolicyDocPath(policyName)); err != nil && err == errConfigNotFound {
+				return fmt.Errorf("inbuilt policy `%s` not allowed to be deleted", policyName)
+			}
+		}
+	}
+
 	err := sys.store.DeletePolicy(ctx, policyName)
 	if err != nil {
 		return err
@@ -791,13 +799,13 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 		return nil, errServerNotInitialized
 	}
 
-	if sys.usersSysType != LDAPUsersSysType {
+	if !sys.LDAPConfig.Enabled() {
 		return nil, errIAMActionNotAllowed
 	}
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListLDAPPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -864,7 +872,16 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListPolicyMappings(q)
+		var userPredicate, groupPredicate func(string) bool
+		if sys.LDAPConfig.Enabled() {
+			userPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPUserDN(s)
+			}
+			groupPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPGroupDN(s)
+			}
+		}
+		pe := sys.store.ListPolicyMappings(q, userPredicate, groupPredicate)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -916,7 +933,7 @@ type newServiceAccountOpts struct {
 	sessionPolicy              *iampolicy.Policy
 	accessKey                  string
 	secretKey                  string
-	comment                    string
+	name, description          string
 	expiration                 *time.Time
 	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
@@ -991,7 +1008,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.ParentUser = parentUser
 	cred.Groups = groups
 	cred.Status = string(auth.AccountOn)
-	cred.Comment = opts.comment
+	cred.Name = opts.name
+	cred.Description = opts.description
 
 	if opts.expiration != nil {
 		expirationInUTC := opts.expiration.UTC()
@@ -1011,11 +1029,11 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 }
 
 type updateServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	secretKey     string
-	status        string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy     *iampolicy.Policy
+	secretKey         string
+	status            string
+	name, description string
+	expiration        *time.Time
 }
 
 // UpdateServiceAccount - edit a service account

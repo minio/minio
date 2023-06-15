@@ -47,6 +47,8 @@ spec:
       volumes:
         - name: etc-path
           emptyDir: {}
+        - name: tmp
+          emptyDir: {}
         - name: minio-configuration
           projected:
             sources:
@@ -107,6 +109,8 @@ spec:
           volumeMounts:
             - name: etc-path
               mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -138,6 +142,8 @@ spec:
           volumeMounts:
             - name: etc-path
               mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -169,6 +175,8 @@ spec:
           volumeMounts:
             - name: etc-path
               mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -200,6 +208,8 @@ spec:
           volumeMounts:
             - name: etc-path
               mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}
@@ -231,6 +241,8 @@ spec:
           volumeMounts:
             - name: etc-path
               mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
             - name: minio-configuration
               mountPath: /config
             {{- if .Values.tls.enabled }}

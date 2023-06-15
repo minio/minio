@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/workers"
 	"github.com/zeebo/xxh3"
 )
 
@@ -1031,11 +1032,13 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		}(i, tgt)
 	}
 	wg.Wait()
+
+	replicationStatus = rinfos.ReplicationStatus() // used in defer function
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
 	eventName := event.ObjectReplicationComplete
-	if rinfos.ReplicationStatus() == replication.Failed {
+	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
 	}
 	newReplStatusInternal := rinfos.ReplicationStatusInternal()
@@ -1146,13 +1149,15 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+			logger.LogIf(ctx, fmt.Errorf("unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		}
 		return
 	}
 	defer gr.Close()
 
 	objInfo = gr.ObjInfo
+	// make sure we have the latest metadata for metrics calculation
+	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
 	size, err := objInfo.GetActualSize()
 	if err != nil {
@@ -1168,7 +1173,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	}
 
 	if tgt.Bucket == "" {
-		logger.LogIf(ctx, fmt.Errorf("Unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
+		logger.LogIf(ctx, fmt.Errorf("unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1227,14 +1232,14 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			r, objInfo, putOpts); err != nil {
 			if minio.ToErrorResponse(err).Code != "PreconditionFailed" {
 				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 			}
 		}
 	} else {
 		if _, err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts); err != nil {
 			if minio.ToErrorResponse(err).Code != "PreconditionFailed" {
 				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+				logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 			}
 		}
 	}
@@ -1294,13 +1299,15 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+			logger.LogIf(ctx, fmt.Errorf("unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
 		}
 		return
 	}
 	defer gr.Close()
 
 	objInfo = gr.ObjInfo
+	// make sure we have the latest metadata for metrics calculation
+	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
 	// use latest ObjectInfo to check if previous replication attempt succeeded
 	if objInfo.TargetReplicationStatus(tgt.ARN) == replication.Completed && !ri.ExistingObjResync.Empty() && !ri.ExistingObjResync.mustResyncTarget(tgt.ARN) {
@@ -1456,6 +1463,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 
 func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, object string, r io.Reader, objInfo ObjectInfo, opts minio.PutObjectOptions) (err error) {
 	var uploadedParts []minio.CompletePart
+	// new multipart must not set mtime as it may lead to erroneous cleanups at various intervals.
+	opts.Internal.SourceMTime = time.Time{} // this value is saved properly in CompleteMultipartUpload()
 	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		return err
@@ -1485,7 +1494,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	)
 
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(r, partInfo.ActualSize, "", "", partInfo.ActualSize)
+		hr, err = hash.NewReader(io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
 		if err != nil {
 			return err
 		}
@@ -2299,7 +2308,10 @@ func (s *replicationResyncer) PersistToDisk(ctx context.Context, objectAPI Objec
 	}
 }
 
-const resyncWorkerCnt = 50 // limit of number of bucket resyncs is progress at any given time
+const (
+	resyncWorkerCnt        = 10 // limit of number of bucket resyncs is progress at any given time
+	resyncParallelRoutines = 10 // number of parallel resync ops per bucket
+)
 
 func newresyncer() *replicationResyncer {
 	rs := replicationResyncer{
@@ -2314,6 +2326,36 @@ func newresyncer() *replicationResyncer {
 	return &rs
 }
 
+// mark status of replication resync on remote target for the bucket
+func (s *replicationResyncer) markStatus(status ResyncStatusType, opts resyncOpts) {
+	s.Lock()
+	defer s.Unlock()
+
+	m := s.statusMap[opts.bucket]
+	st := m.TargetsMap[opts.arn]
+	st.LastUpdate = UTCNow()
+	st.ResyncStatus = status
+	m.TargetsMap[opts.arn] = st
+	m.LastUpdate = UTCNow()
+	s.statusMap[opts.bucket] = m
+}
+
+// update replication resync stats for bucket's remote target
+func (s *replicationResyncer) incStats(ts TargetReplicationResyncStatus, opts resyncOpts) {
+	s.Lock()
+	defer s.Unlock()
+	m := s.statusMap[opts.bucket]
+	st := m.TargetsMap[opts.arn]
+	st.Object = ts.Object
+	st.ReplicatedCount += ts.ReplicatedCount
+	st.FailedCount += ts.FailedCount
+	st.ReplicatedSize += ts.ReplicatedSize
+	st.FailedSize += ts.FailedSize
+	m.TargetsMap[opts.arn] = st
+	m.LastUpdate = UTCNow()
+	s.statusMap[opts.bucket] = m
+}
+
 // resyncBucket resyncs all qualifying objects as per replication rules for the target
 // ARN
 func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI ObjectLayer, heal bool, opts resyncOpts) {
@@ -2325,15 +2367,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 
 	resyncStatus := ResyncFailed
 	defer func() {
-		s.Lock()
-		m := s.statusMap[opts.bucket]
-		st := m.TargetsMap[opts.arn]
-		st.LastUpdate = UTCNow()
-		st.ResyncStatus = resyncStatus
-		m.TargetsMap[opts.arn] = st
-		m.LastUpdate = UTCNow()
-		s.statusMap[opts.bucket] = m
-		s.Unlock()
+		s.markStatus(resyncStatus, opts)
 		globalSiteResyncMetrics.incBucket(opts, resyncStatus)
 		s.workerCh <- struct{}{}
 	}()
@@ -2369,15 +2403,9 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}
 	// mark resync status as resync started
 	if !heal {
-		s.Lock()
-		m := s.statusMap[opts.bucket]
-		st := m.TargetsMap[opts.arn]
-		st.ResyncStatus = ResyncStarted
-		m.TargetsMap[opts.arn] = st
-		m.LastUpdate = UTCNow()
-		s.statusMap[opts.bucket] = m
-		s.Unlock()
+		s.markStatus(ResyncStarted, opts)
 	}
+
 	// Walk through all object versions - Walk() is always in ascending order needed to ensure
 	// delete marker replicated to target after object version is first created.
 	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, ObjectOptions{}); err != nil {
@@ -2393,10 +2421,13 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	if st.ResyncStatus == ResyncStarted || st.ResyncStatus == ResyncFailed {
 		lastCheckpoint = st.Object
 	}
+	workers, err := workers.New(resyncParallelRoutines)
 	for obj := range objInfoCh {
 		select {
 		case <-s.resyncCancelCh:
 			resyncStatus = ResyncCanceled
+			return
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -2404,69 +2435,71 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			continue
 		}
 		lastCheckpoint = ""
-
-		roi := getHealReplicateObjectInfo(obj, rcfg)
-		if !roi.ExistingObjResync.mustResync() {
-			continue
-		}
-		traceFn := s.trace(tgt.ResetID, fmt.Sprintf("%s/%s (%s)", opts.bucket, roi.Name, roi.VersionID))
-		if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
-			versionID := ""
-			dmVersionID := ""
-			if roi.VersionPurgeStatus.Empty() {
-				dmVersionID = roi.VersionID
-			} else {
-				versionID = roi.VersionID
+		obj := obj
+		workers.Take()
+		go func() {
+			defer workers.Give()
+			roi := getHealReplicateObjectInfo(obj, rcfg)
+			if !roi.ExistingObjResync.mustResync() {
+				return
 			}
+			traceFn := s.trace(tgt.ResetID, fmt.Sprintf("%s/%s (%s)", opts.bucket, roi.Name, roi.VersionID))
+			if roi.DeleteMarker || !roi.VersionPurgeStatus.Empty() {
+				versionID := ""
+				dmVersionID := ""
+				if roi.VersionPurgeStatus.Empty() {
+					dmVersionID = roi.VersionID
+				} else {
+					versionID = roi.VersionID
+				}
 
-			doi := DeletedObjectReplicationInfo{
-				DeletedObject: DeletedObject{
-					ObjectName:            roi.Name,
-					DeleteMarkerVersionID: dmVersionID,
-					VersionID:             versionID,
-					ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
-					DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
-					DeleteMarker:          roi.DeleteMarker,
+				doi := DeletedObjectReplicationInfo{
+					DeletedObject: DeletedObject{
+						ObjectName:            roi.Name,
+						DeleteMarkerVersionID: dmVersionID,
+						VersionID:             versionID,
+						ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
+						DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
+						DeleteMarker:          roi.DeleteMarker,
+					},
+					Bucket:    roi.Bucket,
+					OpType:    replication.ExistingObjectReplicationType,
+					EventType: ReplicateExistingDelete,
+				}
+				replicateDelete(ctx, doi, objectAPI)
+			} else {
+				roi.OpType = replication.ExistingObjectReplicationType
+				roi.EventType = ReplicateExisting
+				replicateObject(ctx, roi, objectAPI)
+			}
+			_, err = tgt.StatObject(ctx, tgt.Bucket, roi.Name, minio.StatObjectOptions{
+				VersionID: roi.VersionID,
+				Internal: minio.AdvancedGetOptions{
+					ReplicationProxyRequest: "false",
 				},
-				Bucket:    roi.Bucket,
-				OpType:    replication.ExistingObjectReplicationType,
-				EventType: ReplicateExistingDelete,
+			})
+			st := TargetReplicationResyncStatus{
+				Object: roi.Name,
+				Bucket: roi.Bucket,
 			}
-			replicateDelete(ctx, doi, objectAPI)
-		} else {
-			roi.OpType = replication.ExistingObjectReplicationType
-			roi.EventType = ReplicateExisting
-			replicateObject(ctx, roi, objectAPI)
-		}
-		_, err = tgt.StatObject(ctx, tgt.Bucket, roi.Name, minio.StatObjectOptions{
-			VersionID: roi.VersionID,
-			Internal: minio.AdvancedGetOptions{
-				ReplicationProxyRequest: "false",
-			},
-		})
-		s.Lock()
-		m = s.statusMap[opts.bucket]
-		st = m.TargetsMap[opts.arn]
-		st.Object = roi.Name
-		success := true
-		if err != nil {
-			if roi.DeleteMarker && isErrMethodNotAllowed(ErrorRespToObjectError(err, opts.bucket, roi.Name)) {
-				st.ReplicatedCount++
+			success := true
+			if err != nil {
+				if roi.DeleteMarker && isErrMethodNotAllowed(ErrorRespToObjectError(err, opts.bucket, roi.Name)) {
+					st.ReplicatedCount++
+				} else {
+					st.FailedCount++
+					success = false
+				}
 			} else {
-				st.FailedCount++
-				success = false
+				st.ReplicatedCount++
+				st.ReplicatedSize += roi.Size
 			}
-		} else {
-			st.ReplicatedCount++
-			st.ReplicatedSize += roi.Size
-		}
-		m.TargetsMap[opts.arn] = st
-		m.LastUpdate = UTCNow()
-		s.statusMap[opts.bucket] = m
-		s.Unlock()
-		traceFn(err)
-		globalSiteResyncMetrics.updateMetric(roi, success, opts.resyncID)
+			s.incStats(st, opts)
+			traceFn(err)
+			globalSiteResyncMetrics.updateMetric(roi, success, opts.resyncID)
+		}()
 	}
+	workers.Wait()
 	resyncStatus = ResyncCompleted
 }
 
@@ -3098,7 +3131,7 @@ func (p *ReplicationPool) loadStatsFromDisk() (rs map[string]BucketReplicationSt
 
 	data, err := readConfig(p.ctx, p.objLayer, getReplicationStatsPath())
 	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
+		if errors.Is(err, errConfigNotFound) {
 			return rs, nil
 		}
 		return rs, err

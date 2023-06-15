@@ -279,7 +279,7 @@ func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn fun
 	}
 	defer closeRespFn(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return d, err
+		return d, fmt.Errorf("unexpected error returned by %s : status(%s)", u, resp.Status)
 	}
 	dec := json.NewDecoder(resp.Body)
 	if err = dec.Decode(&d); err != nil {

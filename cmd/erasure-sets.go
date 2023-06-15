@@ -221,16 +221,15 @@ func (s *erasureSets) connectDisks() {
 			if disk.IsLocal() && disk.Healing() != nil {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
 			}
-			s.erasureDisksMu.RLock()
+			s.erasureDisksMu.Lock()
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			s.erasureDisksMu.RUnlock()
 			if err != nil {
 				printEndpointError(endpoint, err, false)
 				disk.Close()
+				s.erasureDisksMu.Unlock()
 				return
 			}
 
-			s.erasureDisksMu.Lock()
 			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
 				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
 					err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive: expecting %s, found %s, refusing to use the drive",
@@ -898,14 +897,6 @@ func (s *erasureSets) ListMultipartUploads(ctx context.Context, bucket, prefix, 
 func (s *erasureSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (res *NewMultipartUploadResult, err error) {
 	set := s.getHashedSet(object)
 	return set.NewMultipartUpload(ctx, bucket, object, opts)
-}
-
-// Copies a part of an object from source hashedSet to destination hashedSet.
-func (s *erasureSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
-	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions,
-) (partInfo PartInfo, err error) {
-	destSet := s.getHashedSet(destObject)
-	return destSet.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, NewPutObjReader(srcInfo.Reader), dstOpts)
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.

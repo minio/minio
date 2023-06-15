@@ -236,6 +236,12 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLayer) error {
 	buf, err := readConfig(ctx, objAPI, getSRStateFilePath())
 	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			c.Lock()
+			defer c.Unlock()
+			c.state = srState{}
+			c.enabled = false
+		}
 		return err
 	}
 
@@ -655,7 +661,7 @@ func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.Si
 	for _, peer := range c.state.Peers {
 		info.Sites = append(info.Sites, peer)
 	}
-	sort.SliceStable(info.Sites, func(i, j int) bool {
+	sort.Slice(info.Sites, func(i, j int) bool {
 		return info.Sites[i].Name < info.Sites[j].Name
 	})
 
@@ -1222,7 +1228,8 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 			secretKey:     change.Create.SecretKey,
 			sessionPolicy: sp,
 			claims:        change.Create.Claims,
-			comment:       change.Create.Comment,
+			name:          change.Create.Name,
+			description:   change.Create.Description,
 			expiration:    change.Create.Expiration,
 		}
 		_, _, err = globalIAMSys.NewServiceAccount(ctx, change.Create.Parent, change.Create.Groups, opts)
@@ -1248,7 +1255,8 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		opts := updateServiceAccountOpts{
 			secretKey:     change.Update.SecretKey,
 			status:        change.Update.Status,
-			comment:       change.Update.Comment,
+			name:          change.Update.Name,
+			description:   change.Update.Description,
 			sessionPolicy: sp,
 			expiration:    change.Update.Expiration,
 		}
@@ -1613,12 +1621,10 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			return errSRBackendIssue(err)
 		}
 
-		var opts MakeBucketOptions
-		if meta.objectLockConfig != nil {
-			opts.LockEnabled = meta.objectLockConfig.ObjectLockEnabled == "Enabled"
+		opts := MakeBucketOptions{
+			LockEnabled: meta.ObjectLocking(),
+			CreatedAt:   bucketInfo.Created.UTC(),
 		}
-
-		opts.CreatedAt = bucketInfo.Created.UTC()
 
 		// Now call the MakeBucketHook on existing bucket - this will
 		// create buckets and replication rules on peer clusters.
@@ -1852,7 +1858,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        acc.Credentials.Status,
-						Comment:       acc.Credentials.Comment,
+						Name:          acc.Credentials.Name,
+						Description:   acc.Credentials.Description,
 						Expiration:    &acc.Credentials.Expiration,
 					},
 				},
@@ -2269,6 +2276,17 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 			if errors.Is(err, BucketRemoteTargetNotFound{Bucket: t.SourceBucket}) {
 				continue
 			}
+			return err
+		}
+		targets, terr := globalBucketTargetSys.ListBucketTargets(ctx, t.SourceBucket)
+		if terr != nil {
+			return err
+		}
+		tgtBytes, terr := json.Marshal(&targets)
+		if terr != nil {
+			return err
+		}
+		if _, err = globalBucketMetadataSys.Update(ctx, t.SourceBucket, bucketTargetsFile, tgtBytes); err != nil {
 			return err
 		}
 	}
@@ -4737,7 +4755,8 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 						Claims:        claims,
 						SessionPolicy: json.RawMessage(policyJSON),
 						Status:        creds.Status,
-						Comment:       creds.Comment,
+						Name:          creds.Name,
+						Description:   creds.Description,
 						Expiration:    &creds.Expiration,
 					},
 				},
@@ -5149,6 +5168,10 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 	rs.LastUpdate = UTCNow()
 	if err := saveSiteResyncMetadata(ctx, rs, objAPI); err != nil {
 		return res, err
+	}
+	select {
+	case globalReplicationPool.resyncer.resyncCancelCh <- struct{}{}:
+	case <-ctx.Done():
 	}
 
 	globalSiteResyncMetrics.updateState(rs)

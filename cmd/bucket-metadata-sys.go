@@ -121,6 +121,7 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		meta.NotificationConfigXML = configData
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
+		meta.LifecycleConfigUpdatedAt = updatedAt
 	case bucketSSEConfig:
 		meta.EncryptionConfigXML = configData
 		meta.EncryptionConfigUpdatedAt = updatedAt
@@ -246,18 +247,18 @@ func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Co
 
 // GetLifecycleConfig returns configured lifecycle config
 // The returned object may not be modified.
-func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, time.Time, error) {
 	meta, _, err := sys.GetConfig(GlobalContext, bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
-			return nil, BucketLifecycleNotFound{Bucket: bucket}
+			return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 		}
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if meta.lifecycleConfig == nil {
-		return nil, BucketLifecycleNotFound{Bucket: bucket}
+		return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 	}
-	return meta.lifecycleConfig, nil
+	return meta.lifecycleConfig, meta.LifecycleConfigUpdatedAt, nil
 }
 
 // GetNotificationConfig returns configured notification config
@@ -419,8 +420,8 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 
 	sys.objAPI = objAPI
 
-	// Load bucket metadata sys in background
-	go sys.init(ctx, buckets)
+	// Load bucket metadata sys.
+	sys.init(ctx, buckets)
 	return nil
 }
 

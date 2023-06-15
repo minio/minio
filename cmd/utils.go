@@ -32,7 +32,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
@@ -276,18 +275,6 @@ func isMinAllowedPartSize(size int64) bool {
 // isMaxPartNumber - Check if part ID is greater than the maximum allowed ID.
 func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
-}
-
-func contains(slice interface{}, elem interface{}) bool {
-	v := reflect.ValueOf(slice)
-	if v.Kind() == reflect.Slice {
-		for i := 0; i < v.Len(); i++ {
-			if v.Index(i).Interface() == elem {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // profilerWrapper is created becauses pkg/profiler doesn't
@@ -1260,4 +1247,15 @@ func MockOpenIDTestUserInteraction(ctx context.Context, pro OpenIDClientAppParam
 
 	// fmt.Printf("TOKEN: %s\n", rawIDToken)
 	return rawIDToken, nil
+}
+
+// unwrapAll will unwrap the returned error completely.
+func unwrapAll(err error) error {
+	for {
+		werr := errors.Unwrap(err)
+		if werr == nil {
+			return err
+		}
+		err = werr
+	}
 }

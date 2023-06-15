@@ -76,6 +76,11 @@ import (
 // - The object should be present in all buckets accessed by Veeam products that want to leverage the SOSAPI functionality.
 //
 // - The current protocol version is 1.0.
+type apiEndpoints struct {
+	IAMEndpoint string `xml:"IAMEndpoint"`
+	STSEndpoint string `xml:"STSEndpoint"`
+}
+
 type systemInfo struct {
 	XMLName              xml.Name `xml:"SystemInfo" json:"-"`
 	ProtocolVersion      string   `xml:"ProtocolVersion"`
@@ -85,14 +90,11 @@ type systemInfo struct {
 		UploadSessions bool `xml:"UploadSessions"`
 		IAMSTS         bool `xml:"IAMSTS"`
 	} `mxl:"ProtocolCapabilities"`
-	APIEndpoints struct {
-		IAMEndpoint string `xml:"IAMEndpoint"`
-		STSEndpoint string `xml:"STSEndpoint"`
-	} `xml:"APIEndpoints"`
+	APIEndpoints          *apiEndpoints `xml:"APIEndpoints,omitempty"`
 	SystemRecommendations struct {
-		S3ConcurrentTaskLimit    int `xml:"S3ConcurrentTaskLimit"`
-		S3MultiObjectDeleteLimit int `xml:"S3MultiObjectDeleteLimit"`
-		StorageCurrentTaskLimit  int `xml:"StorageCurrentTaskLimit"`
+		S3ConcurrentTaskLimit    int `xml:"S3ConcurrentTaskLimit,omitempty"`
+		S3MultiObjectDeleteLimit int `xml:"S3MultiObjectDeleteLimit,omitempty"`
+		StorageCurrentTaskLimit  int `xml:"StorageCurrentTaskLimit,omitempty"`
 		KBBlockSize              int `xml:"KbBlockSize"`
 	} `xml:"SystemRecommendations"`
 }
@@ -113,13 +115,22 @@ const (
 	capacityXMLObject = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
 )
 
+func veeamSOSAPIHeadObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+	gr, err := veeamSOSAPIGetObject(ctx, bucket, object, nil, opts)
+	if gr != nil {
+		gr.Close()
+		return gr.ObjInfo, nil
+	}
+	return ObjectInfo{}, err
+}
+
 func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var buf []byte
 	switch object {
 	case systemXMLObject:
 		si := systemInfo{
-			ProtocolVersion: "1.0",
-			ModelName:       "MinIO " + ReleaseTag,
+			ProtocolVersion: `"1.0"`,
+			ModelName:       "\"MinIO " + ReleaseTag + "\"",
 		}
 		si.ProtocolCapabilities.CapacityInfo = true
 

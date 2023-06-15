@@ -159,21 +159,21 @@ mc admin policy create myminio mypolicy mypolicy.json
 To associate the policy with an LDAP user or group, use the full DN of the user or group:
 
 ```sh
-mc admin idp ldap policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+mc idp ldap policy attach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
 
 ```sh
-mc admin idp ldap policy attach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc idp ldap policy attach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 To remove a policy association, use the similar `detach` command:
 
 ```sh
-mc admin idp ldap policy detach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
+mc idp ldap policy detach myminio mypolicy --user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
 
 ```sh
-mc admin idp ldap policy detach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
+mc idp ldap policy detach myminio mypolicy ----group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 

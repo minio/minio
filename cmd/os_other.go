@@ -157,6 +157,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 func globalSync() {
 	// no-op not sure about plan9/solaris support for syscall support
-	defer globalOSMetrics.time(osMetricSync)
+	defer globalOSMetrics.time(osMetricSync)()
 	syscall.Sync()
 }

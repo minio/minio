@@ -196,6 +196,9 @@ type ObjectInfo struct {
 
 	// Inlined
 	Inlined bool
+
+	DataBlocks   int
+	ParityBlocks int
 }
 
 // ArchiveInfo returns any saved zip archive meta information.

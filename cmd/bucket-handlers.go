@@ -21,13 +21,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"net/url"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,8 +39,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/mux"
+	"github.com/valyala/bytebufferpool"
 
 	"github.com/minio/madmin-go/v2"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/auth"
@@ -49,6 +55,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
@@ -60,6 +67,9 @@ const (
 	objectLockConfig        = "object-lock.xml"
 	bucketTaggingConfig     = "tagging.xml"
 	bucketReplicationConfig = "replication.xml"
+
+	xMinIOErrCodeHeader = "x-minio-error-code"
+	xMinIOErrDescHeader = "x-minio-error-desc"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -428,6 +438,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// The max. XML contains 100000 object names (each at most 1024 bytes long) + XML overhead
 	const maxBodySize = 2 * 100000 * 1024
+
+	if r.ContentLength > maxBodySize {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
+		return
+	}
 
 	// Unmarshal list of keys to be deleted.
 	deleteObjectsReq := &DeleteObjectsRequest{}
@@ -887,14 +902,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	bucket := mux.Vars(r)["bucket"]
-
-	// Require Content-Length to be set in the request
-	size := r.ContentLength
-	if size < 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
-		return
-	}
-
 	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
@@ -909,43 +916,151 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary files.
-	reader, err := r.MultipartReader()
+	mp, err := r.MultipartReader()
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
-	// Read multipart data and save in memory and in the disk if needed
-	form, err := reader.ReadForm(maxFormMemory)
-	if err != nil {
+	const mapEntryOverhead = 200
+
+	var (
+		reader        io.Reader
+		fileSize      int64 = -1
+		fileName      string
+		fanOutEntries = make([]minio.PutObjectFanOutEntry, 0, 100)
+	)
+
+	maxParts := 1000
+	// Canonicalize the form values into http.Header.
+	formValues := make(http.Header)
+	for {
+		part, err := mp.NextRawPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+		if maxParts <= 0 {
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+		maxParts--
+
+		name := part.FormName()
+		if name == "" {
+			continue
+		}
+
+		fileName = part.FileName()
+
+		// Multiple values for the same key (one map entry, longer slice) are cheaper
+		// than the same number of values for different keys (many map entries), but
+		// using a consistent per-value cost for overhead is simpler.
+		maxMemoryBytes := 2 * int64(10<<20)
+		maxMemoryBytes -= int64(len(name))
+		maxMemoryBytes -= mapEntryOverhead
+		if maxMemoryBytes < 0 {
+			// We can't actually take this path, since nextPart would already have
+			// rejected the MIME headers for being too large. Check anyway.
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+			writeErrorResponse(ctx, w, apiErr, r.URL)
+			return
+		}
+
+		var b bytes.Buffer
+		if fileName == "" {
+			if http.CanonicalHeaderKey(name) == http.CanonicalHeaderKey("x-minio-fanout-list") {
+				dec := json.NewDecoder(part)
+
+				// while the array contains values
+				for dec.More() {
+					var m minio.PutObjectFanOutEntry
+					if err := dec.Decode(&m); err != nil {
+						part.Close()
+						apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+						apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+						writeErrorResponse(ctx, w, apiErr, r.URL)
+						return
+					}
+					fanOutEntries = append(fanOutEntries, m)
+				}
+				part.Close()
+				continue
+			}
+
+			// value, store as string in memory
+			n, err := io.CopyN(&b, part, maxMemoryBytes+1)
+			part.Close()
+
+			if err != nil && err != io.EOF {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, err)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			maxMemoryBytes -= n
+			if maxMemoryBytes < 0 {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			if n > maxFormFieldSize {
+				apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+				apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, multipart.ErrMessageTooLarge)
+				writeErrorResponse(ctx, w, apiErr, r.URL)
+				return
+			}
+			formValues[http.CanonicalHeaderKey(name)] = append(formValues[http.CanonicalHeaderKey(name)], b.String())
+			continue
+		}
+
+		// In accordance with https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+		// The file or text content.
+		// The file or text content must be the last field in the form.
+		// You cannot upload more than one file at a time.
+		reader = part
+		// we have found the File part of the request we are done processing multipart-form
+		break
+	}
+
+	if _, ok := formValues["Key"]; !ok {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The name of the uploaded key is missing"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
-	// Remove all tmp files created during multipart upload
-	defer form.RemoveAll()
-
-	// Extract all form fields
-	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(ctx, form)
-	if err != nil {
+	if fileName == "" {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The file or text content is missing"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-
-	// Check if file is provided, error out otherwise.
-	if fileBody == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPOSTFileRequired), r.URL)
+	checksum, err := hash.GetContentChecksum(formValues)
+	if err != nil {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, fmt.Errorf("Invalid checksum: %w", err))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-
-	// Close multipart file
-	defer fileBody.Close()
+	if checksum != nil && checksum.Type.Trailing() {
+		// Not officially supported in POST requests.
+		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("Trailing checksums not available for POST operations"))
+		writeErrorResponse(ctx, w, apiErr, r.URL)
+		return
+	}
 
 	formValues.Set("Bucket", bucket)
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
@@ -973,26 +1088,57 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Once signature is validated, check if the user has
-	// explicit permissions for the user.
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     cred.AccessKey,
-		Groups:          cred.Groups,
-		Action:          iampolicy.PutObjectAction,
-		ConditionValues: getConditionValues(r, "", cred),
-		BucketName:      bucket,
-		ObjectName:      object,
-		IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
-		Claims:          cred.Claims,
-	}) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-		return
+	if len(fanOutEntries) > 0 {
+		// Once signature is validated, check if the user has
+		// explicit permissions for the user.
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          iampolicy.PutObjectFanOutAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			BucketName:      bucket,
+			ObjectName:      object,
+			IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	} else {
+		// Once signature is validated, check if the user has
+		// explicit permissions for the user.
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          iampolicy.PutObjectAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			BucketName:      bucket,
+			ObjectName:      object,
+			IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
 	}
 
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues.Get("Policy"))
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
+	}
+
+	hashReader, err := hash.NewReader(reader, fileSize, "", "", fileSize)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if checksum != nil && checksum.Valid() {
+		if err = hashReader.AddChecksumNoTrailer(formValues, false); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Handle policy if it is set.
@@ -1015,15 +1161,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		// should not exceed the maximum single Put size (5 GiB)
 		lengthRange := postPolicyForm.Conditions.ContentLengthRange
 		if lengthRange.Valid {
-			if fileSize < lengthRange.Min {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errDataTooSmall), r.URL)
-				return
-			}
-
-			if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
-				writeErrorResponse(ctx, w, toAPIError(ctx, errDataTooLarge), r.URL)
-				return
-			}
+			hashReader.SetExpectedMin(lengthRange.Min)
+			hashReader.SetExpectedMax(lengthRange.Max)
 		}
 	}
 
@@ -1035,19 +1174,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
 	sseConfig, _ := globalBucketSSEConfigSys.Get(bucket)
-	sseConfig.Apply(r.Header, sse.ApplyOptions{
+	sseConfig.Apply(formValues, sse.ApplyOptions{
 		AutoEncrypt: globalAutoEncryption,
 	})
 
@@ -1058,9 +1191,21 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	fanOutOpts := fanOutOptions{Checksum: checksum}
+
 	if crypto.Requested(formValues) {
 		if crypto.SSECopy.IsRequested(r.Header) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3KMS.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
 			return
 		}
 
@@ -1090,23 +1235,137 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 		}
-		reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+
+		if len(fanOutEntries) == 0 {
+			reader, objectEncryptionKey, err = newEncryptReader(ctx, hashReader, kind, keyID, key, bucket, object, metadata, kmsCtx)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			// do not try to verify encrypted content/
+			hashReader, err = hash.NewReader(reader, -1, "", "", -1)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			if checksum != nil && checksum.Valid() {
+				if err = hashReader.AddChecksumNoTrailer(formValues, true); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+					return
+				}
+			}
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+		} else {
+			fanOutOpts = fanOutOptions{
+				Key:      key,
+				Kind:     kind,
+				KeyID:    keyID,
+				KmsCtx:   kmsCtx,
+				Checksum: checksum,
+			}
+		}
+	}
+
+	if len(fanOutEntries) > 0 {
+		// Fan-out requires no copying, and must be carried from original source
+		// https://en.wikipedia.org/wiki/Copy_protection so the incoming stream
+		// is always going to be in-memory as we cannot re-read from what we
+		// wrote to disk - since that amounts to "copying" from a "copy"
+		// instead of "copying" from source, we need the stream to be seekable
+		// to ensure that we can make fan-out calls concurrently.
+		buf := bytebufferpool.Get()
+		defer bytebufferpool.Put(buf)
+
+		// Maximum allowed fan-out object size.
+		const maxFanOutSize = 16 << 20
+
+		n, err := io.Copy(buf, ioutil.HardLimitReader(pReader, maxFanOutSize))
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		info := ObjectInfo{Size: fileSize}
-		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
+
+		concurrentSize := 100
+		if runtime.GOMAXPROCS(0) < concurrentSize {
+			concurrentSize = runtime.GOMAXPROCS(0)
 		}
-		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
+
+		fanOutResp := make([]minio.PutObjectFanOutResponse, 0, len(fanOutEntries))
+		eventArgsList := make([]eventArgs, 0, len(fanOutEntries))
+		for {
+			var objInfos []ObjectInfo
+			var errs []error
+
+			var done bool
+			if len(fanOutEntries) < concurrentSize {
+				objInfos, errs = fanOutPutObject(ctx, bucket, objectAPI, fanOutEntries, buf.Bytes()[:n], fanOutOpts)
+				done = true
+			} else {
+				objInfos, errs = fanOutPutObject(ctx, bucket, objectAPI, fanOutEntries[:concurrentSize], buf.Bytes()[:n], fanOutOpts)
+				fanOutEntries = fanOutEntries[concurrentSize:]
+			}
+
+			for i, objInfo := range objInfos {
+				if errs[i] != nil {
+					fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
+						Key:   objInfo.Name,
+						Error: errs[i],
+					})
+					continue
+				}
+
+				fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
+					Key:          objInfo.Name,
+					ETag:         getDecryptedETag(formValues, objInfo, false),
+					VersionID:    objInfo.VersionID,
+					LastModified: &objInfo.ModTime,
+				})
+
+				eventArgsList = append(eventArgsList, eventArgs{
+					EventName:    event.ObjectCreatedPost,
+					BucketName:   objInfo.Bucket,
+					Object:       objInfo,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent() + " " + "MinIO-Fan-Out",
+					Host:         handlers.GetSourceIP(r),
+				})
+			}
+
+			if done {
+				break
+			}
 		}
+
+		enc := json.NewEncoder(w)
+		for i, fanOutResp := range fanOutResp {
+			if err = enc.Encode(&fanOutResp); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+
+			// Notify object created events.
+			sendEvent(eventArgsList[i])
+
+			if eventArgsList[i].Object.NumVersions > dataScannerExcessiveVersionsThreshold {
+				// Send events for excessive versions.
+				sendEvent(eventArgs{
+					EventName:    event.ObjectManyVersions,
+					BucketName:   eventArgsList[i].Object.Bucket,
+					Object:       eventArgsList[i].Object,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent() + " " + "MinIO-Fan-Out",
+					Host:         handlers.GetSourceIP(r),
+				})
+			}
+		}
+
+		return
 	}
 
 	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, opts)
@@ -1121,7 +1380,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header()[xhttp.ETag] = []string{`"` + objInfo.ETag + `"`}
 
 	// Set the relevant version ID as part of the response header.
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
@@ -1139,6 +1398,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+
 	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
 		defer sendEvent(eventArgs{
 			EventName:    event.ObjectManyVersions,
@@ -1159,6 +1419,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		redirectURL.RawQuery = v.Encode()
 		writeRedirectSeeOther(w, redirectURL.String())
 		return
+	}
+
+	// Add checksum header.
+	if checksum != nil && checksum.Valid() {
+		hash.AddChecksumHeader(w, checksum.AsMap())
 	}
 
 	// Decide what http response to send depending on success_action_status parameter
@@ -1257,7 +1522,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		errCode := errorCodes.ToAPIErr(s3Error)
+		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
+		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
+		writeErrorResponseHeadersOnly(w, errCode)
 		return
 	}
 
@@ -1398,7 +1666,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 
 	config, err := objectlock.ParseObjectLockConfig(r.Body)
 	if err != nil {
-		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr := errorCodes.ToAPIErr(ErrInvalidArgument)
 		apiErr.Description = err.Error()
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
@@ -1412,7 +1680,11 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 
 	// Deny object locking configuration settings on existing buckets without object lock enabled.
 	if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed), r.URL)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		}
 		return
 	}
 
@@ -1614,5 +1886,5 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 	}))
 
 	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessNoContent(w)
 }

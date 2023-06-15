@@ -178,9 +178,7 @@ func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.Sys
 	defer xhttp.DrainBody(respBody)
 
 	err = gob.NewDecoder(respBody).Decode(&info)
-	cfg := info.Config["time-info"]
-	if cfg != nil {
-		ti := cfg.(madmin.TimeInfo)
+	if ti, ok := info.Config["time-info"].(madmin.TimeInfo); ok {
 		ti.RoundtripDuration = roundtrip
 		info.Config["time-info"] = ti
 	}
@@ -784,7 +782,6 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	// Use a separate client to avoid recursive calls.
 	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.ExpectTimeouts = true
 	healthClient.NoMetrics = true
 
 	// Construct a new health function.

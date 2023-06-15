@@ -44,9 +44,9 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 		m, ok := printOnce[endpoint]
 		if !ok {
 			m = make(map[string]int)
-			m[err.Error()]++
 			printOnce[endpoint] = m
 			if once {
+				m[err.Error()]++
 				logger.LogAlwaysIf(ctx, err)
 				return
 			}
@@ -291,49 +291,46 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 	tries++ // tried already once
 
 	// Wait on each try for an update.
-	ticker := time.NewTicker(150 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
+		// Only log once every 10 iterations, then reset the tries count.
+		verboseLogging = tries >= 10
+		if verboseLogging {
+			tries = 1
+		}
+
+		storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+		if err == nil {
+			return storageDisks, format, nil
+		}
+
+		tries++
+		switch err {
+		case errNotFirstDisk:
+			// Fresh setup, wait for first server to be up.
+			logger.Info("Waiting for the first server to format the drives (elapsed %s)\n", getElapsedTime())
+		case errFirstDiskWait:
+			// Fresh setup, wait for other servers to come up.
+			logger.Info("Waiting for all other servers to be online to format the drives (elapses %s)\n", getElapsedTime())
+		case errErasureReadQuorum:
+			// no quorum available continue to wait for minimum number of servers.
+			logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
+				len(endpoints)/2, getElapsedTime())
+		case errErasureWriteQuorum:
+			// no quorum available continue to wait for minimum number of servers.
+			logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
+				(len(endpoints)/2)+1, getElapsedTime())
+		case errErasureV3ThisEmpty:
+			// need to wait for this error to be healed, so continue.
+		default:
+			// For all other unhandled errors we exit and fail.
+			return nil, nil, err
+		}
+
 		select {
 		case <-ticker.C:
-			// Only log once every 10 iterations, then reset the tries count.
-			verboseLogging = tries >= 10
-			if verboseLogging {
-				tries = 1
-			}
-
-			storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
-			if err != nil {
-				tries++
-				switch err {
-				case errNotFirstDisk:
-					// Fresh setup, wait for first server to be up.
-					logger.Info("Waiting for the first server to format the drives (elapsed %s)\n", getElapsedTime())
-					continue
-				case errFirstDiskWait:
-					// Fresh setup, wait for other servers to come up.
-					logger.Info("Waiting for all other servers to be online to format the drives (elapses %s)\n", getElapsedTime())
-					continue
-				case errErasureReadQuorum:
-					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
-						len(endpoints)/2, getElapsedTime())
-					continue
-				case errErasureWriteQuorum:
-					// no quorum available continue to wait for minimum number of servers.
-					logger.Info("Waiting for a minimum of %d drives to come online (elapsed %s)\n",
-						(len(endpoints)/2)+1, getElapsedTime())
-					continue
-				case errErasureV3ThisEmpty:
-					// need to wait for this error to be healed, so continue.
-					continue
-				default:
-					// For all other unhandled errors we exit and fail.
-					return nil, nil, err
-				}
-			}
-			return storageDisks, format, nil
 		case <-globalOSSignalCh:
 			return nil, nil, fmt.Errorf("Initializing data volumes gracefully stopped")
 		}

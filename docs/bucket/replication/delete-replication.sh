@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 
 if [ -n "$TEST_DEBUG" ]; then
-    set -x
+	set -x
 fi
 
 trap 'catch $LINENO' ERR
 
 # shellcheck disable=SC2120
 catch() {
-    if [ $# -ne 0 ]; then
-	echo "error on line $1"
-	echo "dc1 server logs ========="
-	cat /tmp/dc1.log
-	echo "dc2 server logs ========="
-	cat /tmp/dc2.log
-    fi
+	if [ $# -ne 0 ]; then
+		echo "error on line $1"
+		echo "dc1 server logs ========="
+		cat /tmp/dc1.log
+		echo "dc2 server logs ========="
+		cat /tmp/dc2.log
+	fi
 
-    echo "Cleaning up instances of MinIO"
-    set +e
-    pkill minio
-    pkill mc
-    rm -rf /tmp/xl/
+	echo "Cleaning up instances of MinIO"
+	set +e
+	pkill minio
+	pkill mc
+	rm -rf /tmp/xl/
 }
 
 catch
@@ -39,8 +39,8 @@ unset MINIO_KMS_KES_ENDPOINT
 unset MINIO_KMS_KES_KEY_NAME
 
 if [ ! -f ./mc ]; then
-    wget --quiet -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc && \
-        chmod +x mc
+	wget --quiet -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
+		chmod +x mc
 fi
 
 mkdir -p /tmp/xl/1/ /tmp/xl/2/
@@ -49,8 +49,8 @@ export MINIO_KMS_SECRET_KEY="my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmG
 export MINIO_ROOT_USER="minioadmin"
 export MINIO_ROOT_PASSWORD="minioadmin"
 
-./minio server --address ":9001" /tmp/xl/1/{1...4}/ 2>&1 > /tmp/dc1.log &
-./minio server --address ":9002" /tmp/xl/2/{1...4}/ 2>&1 > /tmp/dc2.log &
+./minio server --address ":9001" /tmp/xl/1/{1...4}/ 2>&1 >/tmp/dc1.log &
+./minio server --address ":9002" /tmp/xl/2/{1...4}/ 2>&1 >/tmp/dc2.log &
 
 sleep 3
 
@@ -79,27 +79,27 @@ versionId="$(mc ls --json --versions myminio1/testbucket/dir/ | tail -n1 | jq -r
 
 aws s3api --endpoint-url http://localhost:9001 --profile minio delete-object --bucket testbucket --key dir/file --version-id "$versionId"
 
-./mc ls -r --versions myminio1/testbucket > /tmp/myminio1.txt
-./mc ls -r --versions myminio2/testbucket > /tmp/myminio2.txt
+./mc ls -r --versions myminio1/testbucket >/tmp/myminio1.txt
+./mc ls -r --versions myminio2/testbucket >/tmp/myminio2.txt
 
 out=$(diff -qpruN /tmp/myminio1.txt /tmp/myminio2.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
-    echo "BUG: expected no missing entries after replication: $out"
-    exit 1
+	echo "BUG: expected no missing entries after replication: $out"
+	exit 1
 fi
 
 ./mc rm myminio1/testbucket/dir/file
 sleep 1s
 
-./mc ls -r --versions myminio1/testbucket > /tmp/myminio1.txt
-./mc ls -r --versions myminio2/testbucket > /tmp/myminio2.txt
+./mc ls -r --versions myminio1/testbucket >/tmp/myminio1.txt
+./mc ls -r --versions myminio2/testbucket >/tmp/myminio2.txt
 
 out=$(diff -qpruN /tmp/myminio1.txt /tmp/myminio2.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
-    echo "BUG: expected no missing entries after replication: $out"
-    exit 1
+	echo "BUG: expected no missing entries after replication: $out"
+	exit 1
 fi
 
 echo "Success"

@@ -108,7 +108,13 @@ type Credentials struct {
 	ParentUser   string                 `xml:"-" json:"parentUser,omitempty"`
 	Groups       []string               `xml:"-" json:"groups,omitempty"`
 	Claims       map[string]interface{} `xml:"-" json:"claims,omitempty"`
-	Comment      string                 `xml:"-" json:"comment,omitempty"`
+	Name         string                 `xml:"-" json:"name,omitempty"`
+	Description  string                 `xml:"-" json:"description,omitempty"`
+
+	// Deprecated: In favor of Description - when reading credentials from
+	// storage the value of this field is placed in the Description field above
+	// if the existing Description from storage is empty.
+	Comment string `xml:"-" json:"comment,omitempty"`
 }
 
 func (cred Credentials) String() string {

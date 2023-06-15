@@ -86,6 +86,7 @@ import (
 //     type: "minio"
 //     bucket: "testbucket1"
 //     endpoint: "https://play.min.io"
+//     path: "on"
 //     credentials:
 //       accessKey: "minioadmin"
 //       secretKey: "minioadmin"
@@ -181,6 +182,10 @@ func (t BatchJobReplicateResourceType) Validate() error {
 	return nil
 }
 
+func (t BatchJobReplicateResourceType) isMinio() bool {
+	return t == BatchJobReplicateResourceMinIO
+}
+
 // Different types of batch jobs..
 const (
 	BatchJobReplicateResourceMinIO BatchJobReplicateResourceType = "minio"
@@ -217,7 +222,13 @@ type BatchJobReplicateTarget struct {
 	Bucket   string                        `yaml:"bucket" json:"bucket"`
 	Prefix   string                        `yaml:"prefix" json:"prefix"`
 	Endpoint string                        `yaml:"endpoint" json:"endpoint"`
+	Path     string                        `yaml:"path" json:"path"`
 	Creds    BatchJobReplicateCredentials  `yaml:"credentials" json:"credentials"`
+}
+
+// ValidPath returns true if path is valid
+func (t BatchJobReplicateTarget) ValidPath() bool {
+	return t.Path == "on" || t.Path == "off" || t.Path == "auto" || t.Path == ""
 }
 
 // BatchJobReplicateSource describes source element of the replication job that is
@@ -227,7 +238,18 @@ type BatchJobReplicateSource struct {
 	Bucket   string                        `yaml:"bucket" json:"bucket"`
 	Prefix   string                        `yaml:"prefix" json:"prefix"`
 	Endpoint string                        `yaml:"endpoint" json:"endpoint"`
+	Path     string                        `yaml:"path" json:"path"`
 	Creds    BatchJobReplicateCredentials  `yaml:"credentials" json:"credentials"`
+}
+
+// ValidPath returns true if path is valid
+func (s BatchJobReplicateSource) ValidPath() bool {
+	switch s.Path {
+	case "on", "off", "auto", "":
+		return true
+	default:
+		return false
+	}
 }
 
 // BatchJobReplicateV1 v1 of batch job replication
@@ -413,7 +435,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 		}
 		defer rd.Close()
 
-		hr, err = hash.NewReader(rd, objInfo.Size, "", "", objInfo.Size)
+		hr, err = hash.NewReader(io.LimitReader(rd, objInfo.Size), objInfo.Size, "", "", objInfo.Size)
 		if err != nil {
 			return err
 		}
@@ -524,9 +546,10 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	cred := r.Source.Creds
 
 	c, err := miniogo.New(u.Host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
-		Secure:    u.Scheme == "https",
-		Transport: getRemoteInstanceTransport,
+		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+		Secure:       u.Scheme == "https",
+		Transport:    getRemoteInstanceTransport,
+		BucketLookup: lookupStyle(r.Source.Path),
 	})
 	if err != nil {
 		return err
@@ -1082,9 +1105,10 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	cred := r.Target.Creds
 
 	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
-		Secure:    u.Scheme == "https",
-		Transport: getRemoteInstanceTransport,
+		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+		Secure:       u.Scheme == "https",
+		Transport:    getRemoteInstanceTransport,
+		BucketLookup: lookupStyle(r.Target.Path),
 	})
 	if err != nil {
 		return err
@@ -1256,6 +1280,13 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		return errInvalidArgument
 	}
 
+	if r.Source.Endpoint != "" && !r.Source.Type.isMinio() && !r.Source.ValidPath() {
+		return errInvalidArgument
+	}
+
+	if r.Target.Endpoint != "" && !r.Target.Type.isMinio() && !r.Target.ValidPath() {
+		return errInvalidArgument
+	}
 	if r.Target.Bucket == "" {
 		return errInvalidArgument
 	}
@@ -1293,11 +1324,14 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	remoteEp := r.Target.Endpoint
 	remoteBkt := r.Target.Bucket
 	cred := r.Target.Creds
+	pathStyle := r.Target.Path
 
 	if r.Source.Endpoint != "" {
 		remoteEp = r.Source.Endpoint
 		cred = r.Source.Creds
 		remoteBkt = r.Source.Bucket
+		pathStyle = r.Source.Path
+
 	}
 
 	u, err := url.Parse(remoteEp)
@@ -1306,9 +1340,10 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	}
 
 	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
-		Secure:    u.Scheme == "https",
-		Transport: getRemoteInstanceTransport,
+		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+		Secure:       u.Scheme == "https",
+		Transport:    getRemoteInstanceTransport,
+		BucketLookup: lookupStyle(pathStyle),
 	})
 	if err != nil {
 		return err
@@ -1873,4 +1908,18 @@ func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int, info
 			}
 		}
 	}
+}
+
+func lookupStyle(s string) miniogo.BucketLookupType {
+	var lookup miniogo.BucketLookupType
+	switch s {
+	case "on":
+		lookup = miniogo.BucketLookupPath
+	case "off":
+		lookup = miniogo.BucketLookupDNS
+	default:
+		lookup = miniogo.BucketLookupAuto
+
+	}
+	return lookup
 }

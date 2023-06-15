@@ -151,10 +151,8 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	}
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	restClient.ExpectTimeouts = true
 	// Use a separate client to avoid recursive calls.
 	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.ExpectTimeouts = true
 	healthClient.NoMetrics = true
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
