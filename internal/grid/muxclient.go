@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsconn
+package grid
 
 import (
 	"context"
@@ -117,7 +117,7 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 	m.respWait = out
 }
 
-// response will send incoming response to client.
+// response will send handleIncoming response to client.
 // may never block.
 // Should return whether the next call would block.
 func (m *MuxClient) response(seq uint32, r Response) {

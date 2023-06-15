@@ -15,17 +15,25 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsconn
+package grid
 
-//go:generate msgp -file=$GOFILE
+import "sync"
 
-type ConnectReq struct {
-	ID   [16]byte
-	Host string
+var internalByteBuffer = sync.Pool{
+	New: func() any { return make([]byte, 0, 4096) },
 }
 
-type ConnectResp struct {
-	ID             [16]byte
-	Accepted       bool
-	RejectedReason string
+// GetByteBuffer can be replaced with a function that returns a small
+// byte buffer.
+// When replacing PutByteBuffer should also be replaced
+// There is no minimum size.
+var GetByteBuffer = func() []byte {
+	return internalByteBuffer.Get().([]byte)
+}
+
+// PutByteBuffer is for returning byte buffers.
+var PutByteBuffer = func(b []byte) {
+	if cap(b) > 1024 && cap(b) < 64<<10 {
+		internalByteBuffer.Put(b)
+	}
 }

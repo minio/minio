@@ -15,10 +15,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsconn
+package grid
 
 import (
+	"fmt"
+	"net/http"
+
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/logger"
 )
 
 // apiVersion is a major version of the entire api.
@@ -46,15 +52,65 @@ type Manager struct {
 	version [handlerLast]uint8
 }
 
-func NewManager(local string, hosts []string) *Manager {
+// NewManager creates a new grid manager
+func NewManager(local string, hosts []string) (*Manager, error) {
+	found := false
 	m := Manager{
 		ID:      uuid.New(),
 		targets: make(map[string]*Connection, len(hosts)),
 	}
 	for _, host := range hosts {
-		m.targets[host] = NewConnection(m.ID, host)
+		if host == local {
+			if found {
+				return nil, fmt.Errorf("grid: local host found multiple times")
+			}
+			found = true
+		}
+		m.targets[host] = NewConnection(m.ID, local, host)
 	}
-	return &m
+	if found {
+		return nil, fmt.Errorf("grid: local host not found")
+	}
+
+	return &m, nil
+}
+
+func (c *Manager) Handler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		conn, _, _, err := ws.UpgradeHTTP(req, w)
+		if err != nil {
+			w.WriteHeader(http.StatusUpgradeRequired)
+			return
+		}
+		msg, _, err := wsutil.ReadClientData(conn)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: reading connect: %w", err))
+			return
+		}
+		var m message
+		err = m.parse(msg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
+			return
+		}
+		if m.Op != OpConnect {
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: unexpected op: %v", m.Op))
+			return
+		}
+		var cReq connectReq
+		_, err = cReq.UnmarshalMsg(msg)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
+			return
+		}
+		remote := c.targets[cReq.Host]
+		if remote == nil {
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: unknown host: %v", cReq.Host))
+			return
+		}
+		remote.handleIncoming()
+	}
 }
 
 // Connection will return the connection for the specified host.

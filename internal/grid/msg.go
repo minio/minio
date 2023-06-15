@@ -15,12 +15,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsconn
+package grid
 
 import (
 	"encoding/binary"
 	"fmt"
-	"sync"
 
 	"github.com/zeebo/xxh3"
 )
@@ -37,6 +36,7 @@ type HandlerID uint16
 
 const (
 	OpConnect Op = iota + 1
+	OpConnectResponse
 
 	// OpRequest is a single request + response.
 	// SeqID is used for Handler ID.
@@ -82,7 +82,7 @@ type message struct {
 	Payload []byte
 }
 
-// parse an incoming message
+// parse an handleIncoming message
 func (m *message) parse(b []byte) error {
 	if m.Payload == nil {
 		m.Payload = GetByteBuffer()[:0]
@@ -104,21 +104,13 @@ func (m *message) parse(b []byte) error {
 	return nil
 }
 
-var internalByteBuffer = sync.Pool{
-	New: func() any { return make([]byte, 0, 4096) },
+type connectReq struct {
+	ID   [16]byte
+	Host string
 }
 
-// GetByteBuffer can be replaced with a function that returns a small
-// byte buffer.
-// When replacing PutByteBuffer should also be replaced
-// There is no minimum size.
-var GetByteBuffer = func() []byte {
-	return internalByteBuffer.Get().([]byte)
-}
-
-// PutByteBuffer is for returning byte buffers.
-var PutByteBuffer = func(b []byte) {
-	if cap(b) > 1024 && cap(b) < 64<<10 {
-		internalByteBuffer.Put(b)
-	}
+type connectResp struct {
+	ID             [16]byte
+	Accepted       bool
+	RejectedReason string
 }

@@ -15,16 +15,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsconn
+package grid
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 
 	"github.com/gobwas/ws"
@@ -32,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/zeebo/xxh3"
 )
 
 // A Connection is a remote connection.
@@ -46,6 +48,7 @@ type Connection struct {
 
 	// Non-atomic
 	Remote string
+	Local  string
 
 	// ID of this server instance.
 	id uuid.UUID
@@ -61,6 +64,10 @@ type Connection struct {
 
 	// Client or serverside.
 	side ws.State
+
+	// connChange will be signaled whenever
+	connChange     *sync.Cond
+	connChangeLock sync.Mutex
 }
 
 // State is a connection state.
@@ -87,112 +94,102 @@ const (
 const defaultOutQueue = 10000
 
 // NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, remote string) *Connection {
-	return &Connection{
+func NewConnection(id uuid.UUID, local, remote string) *Connection {
+	c := Connection{
 		State:    StateUnconnected,
 		Remote:   remote,
+		Local:    local,
 		id:       id,
-		ctx:      context.TODO(),
+		ctx:      context.Background(),
 		active:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
 		outQueue: make(chan []byte, defaultOutQueue),
 	}
+	if c.shouldConnect() {
+		go c.connect()
+	}
+	return &c
 }
 
-func (r *Connection) NewMuxClient(ctx context.Context) *MuxClient {
-	id := atomic.AddUint64(&r.NextID, 1)
-	c := newMuxClient(ctx, id, r)
+// shouldConnect returns a deterministic bool whether the local should initiate the connection.
+func (c *Connection) shouldConnect() bool {
+	// We xor the two hashes, so result isn't order dependent.
+	return xxh3.HashString(c.Local)^xxh3.HashString(c.Remote)&1 == 1
+}
+
+func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
+	id := atomic.AddUint64(&c.NextID, 1)
+	client := newMuxClient(ctx, id, c)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := r.active.LoadOrStore(id, c); !ok {
+		if _, ok := c.active.LoadOrStore(id, client); !ok {
 			break
 		}
-		c.MuxID = atomic.AddUint64(&r.NextID, 1)
+		client.MuxID = atomic.AddUint64(&c.NextID, 1)
 	}
-	return c
+	return client
 }
 
-func (r *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
-	id := atomic.AddUint64(&r.NextID, 1)
-	c := newMuxClient(ctx, id, r)
+func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
+	id := atomic.AddUint64(&c.NextID, 1)
+	client := newMuxClient(ctx, id, c)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := r.active.LoadOrStore(id, c); !ok {
+		if _, ok := c.active.LoadOrStore(id, c); !ok {
 			break
 		}
-		c.MuxID = atomic.AddUint64(&r.NextID, 1)
+		client.MuxID = atomic.AddUint64(&c.NextID, 1)
 	}
-	defer r.active.Delete(c.MuxID)
-	return c.roundtrip(h, req)
+	defer c.active.Delete(client.MuxID)
+	return client.roundtrip(h, req)
 }
 
-func (r *Connection) connect() {
-	if atomic.CompareAndSwapUint32((*uint32)(&r.State), StateUnconnected, StateConnecting) {
+func (c *Connection) connect() {
+	if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateUnconnected, StateConnecting) {
 	}
 }
 
-func (r *Connection) send(ctx context.Context, msg []byte) error {
+func (c *Connection) send(ctx context.Context, msg []byte) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case r.outQueue <- msg:
+	case c.outQueue <- msg:
 		return nil
 	}
 }
 
-func (r *Connection) Handler() http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		conn, _, _, err := ws.UpgradeHTTP(req, w)
-		if err != nil {
-			w.WriteHeader(http.StatusUpgradeRequired)
-			return
-		}
-		msg, _, err := wsutil.ReadClientData(conn)
-		if err != nil {
-			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: reading connect: %w", err))
-			return
-		}
-		var m message
-		err = m.parse(msg)
-		if err != nil {
-			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
-			return
-		}
-		if m.Op != OpConnect {
-			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: unexpected op: %v", m.Op))
-			return
-		}
-		var cReq ConnectReq
-		_, err = cReq.UnmarshalMsg(msg)
-		if err != nil {
-			logger.LogIf(r.ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
-			return
-		}
-		if !atomic.CompareAndSwapUint32((*uint32)(&r.State), StateUnconnected, StateConnected) {
-			// Handle
-		}
-		if r.
-
-		go r.handleMessages(conn)
+func (c *Connection) sendMsg(msg message, conn net.Conn, side ws.State) error {
+	dst := GetByteBuffer()[:0]
+	dst, err := msg.MarshalMsg(dst)
+	if err != nil {
+		return err
 	}
+	if msg.Flags&FlagCRCxxh3 != 0 {
+		h := xxh3.Hash(dst)
+		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
+	}
+	return wsutil.WriteMessage(conn, side, ws.OpBinary, dst)
 }
 
-func (r *Connection) handleMessages(conn net.Conn) {
+func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) {
+}
+
+func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
 			conn.Close()
 		}()
 
-		controlHandler := wsutil.ControlFrameHandler(conn, r.side)
+		controlHandler := wsutil.ControlFrameHandler(conn, c.side)
 		readDataInto := func(dst []byte, rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, error) {
 			dst = dst[:0]
 			rd := wsutil.Reader{
 				Source:          conn,
-				State:           r.side,
+				State:           c.side,
 				CheckUTF8:       true,
 				SkipHeaderCheck: false,
 				OnIntermediate:  controlHandler,
@@ -227,16 +224,16 @@ func (r *Connection) handleMessages(conn net.Conn) {
 		for {
 			var m message
 			var err error
-			msg, err = readDataInto(msg, conn, r.side, ws.OpBinary)
+			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
-				logger.LogIf(r.ctx, fmt.Errorf("ws read: %w", err))
+				logger.LogIf(c.ctx, fmt.Errorf("ws read: %w", err))
 				return
 			}
 
 			// Parse the received message
 			err = m.parse(msg)
 			if err != nil {
-				logger.LogIf(r.ctx, fmt.Errorf("ws parse package: %w", err))
+				logger.LogIf(c.ctx, fmt.Errorf("ws parse package: %w", err))
 				return
 			}
 		}
@@ -246,15 +243,15 @@ func (r *Connection) handleMessages(conn net.Conn) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.LogIf(r.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
 			conn.Close()
 		}()
-		for toSend := range r.outQueue {
-			err := wsutil.WriteMessage(conn, r.side, ws.OpBinary, toSend)
+		for toSend := range c.outQueue {
+			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
 			if err != nil {
-				logger.LogIf(r.ctx, fmt.Errorf("ws write: %v", err))
+				logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
 				return
 			}
 		}
