@@ -108,7 +108,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: tmp
               mountPath: /tmp
             - name: minio-configuration
@@ -141,7 +141,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: tmp
               mountPath: /tmp
             - name: minio-configuration
@@ -174,7 +174,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: tmp
               mountPath: /tmp
             - name: minio-configuration
@@ -207,7 +207,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: tmp
               mountPath: /tmp
             - name: minio-configuration
@@ -240,7 +240,7 @@ spec:
               value: {{ .Values.service.port | quote }}
           volumeMounts:
             - name: etc-path
-              mountPath: /etc/minio
+              mountPath: /etc/minio/mc
             - name: tmp
               mountPath: /tmp
             - name: minio-configuration
