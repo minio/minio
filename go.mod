@@ -45,13 +45,13 @@ require (
 	github.com/minio/cli v1.24.2
 	github.com/minio/console v0.30.0
 	github.com/minio/csvparser v1.0.0
-	github.com/minio/dperf v0.4.4
+	github.com/minio/dperf v0.4.10
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
 	github.com/minio/madmin-go/v2 v2.2.0
 	github.com/minio/minio-go/v7 v7.0.57
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg v1.7.3
+	github.com/minio/pkg v1.7.4
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
