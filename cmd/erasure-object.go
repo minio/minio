@@ -379,6 +379,9 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			if !metaArr[index].IsValid() {
 				continue
 			}
+			if !metaArr[index].Erasure.Equal(fi.Erasure) {
+				continue
+			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
 			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
 			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,

@@ -287,9 +287,6 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 				return true
 			}
 		}
-		if !latestMeta.Equals(meta) {
-			return true
-		}
 	}
 	return false
 }
@@ -393,6 +390,17 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, readQuorum)
 	if err != nil {
 		return result, err
+	}
+
+	for i := range partsMetadata {
+		if !latestMeta.Erasure.Equal(partsMetadata[i].Erasure) {
+			onlineDisks[i] = nil
+			partsMetadata[i] = FileInfo{}
+			errs[i] = errFileCorrupt
+		}
+		if latestMeta.GetDataDir() != partsMetadata[i].GetDataDir() {
+			partsMetadata[i].DataDir = latestMeta.DataDir
+		}
 	}
 
 	// List of disks having all parts as per latest metadata.
@@ -503,7 +511,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// When disk to heal count is greater than parity blocks we should simply error out.
-		err := fmt.Errorf("more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", errs, dataErrs, bucket, object, versionID)
+		err := fmt.Errorf("(%d > %d) more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", disksToHealCount, latestMeta.Erasure.ParityBlocks, errs, dataErrs, bucket, object, versionID)
 		logger.LogIf(ctx, err)
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err

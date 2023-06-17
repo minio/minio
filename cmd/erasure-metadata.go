@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -338,25 +337,12 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	for i, meta := range metaArr {
 		if meta.IsValid() && meta.ModTime.Equal(modTime) {
 			fmt.Fprintf(h, "%v", meta.XLV1)
-			fmt.Fprintf(h, "%v", meta.GetDataDir())
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
+			fmt.Fprintf(h, "%v", meta.Erasure.ParityBlocks)
+			fmt.Fprintf(h, "%v", meta.Erasure.DataBlocks)
 			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
-
-			// ILM transition fields
-			fmt.Fprint(h, meta.TransitionStatus)
-			fmt.Fprint(h, meta.TransitionTier)
-			fmt.Fprint(h, meta.TransitionedObjName)
-			fmt.Fprint(h, meta.TransitionVersionID)
-
-			// Server-side replication fields
-			fmt.Fprintf(h, "%v", meta.MarkDeleted)
-			fmt.Fprint(h, meta.Metadata[string(meta.ReplicationState.ReplicaStatus)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationStatusInternal])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.VersionPurgeStatusInternal])
 
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()

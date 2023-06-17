@@ -106,6 +106,30 @@ type ErasureInfo struct {
 	Checksums []ChecksumInfo `json:"checksum,omitempty"`
 }
 
+func (ei ErasureInfo) Equal(nei ErasureInfo) bool {
+	if ei.Algorithm != nei.Algorithm {
+		return false
+	}
+	if ei.DataBlocks != nei.DataBlocks {
+		return false
+	}
+	if ei.ParityBlocks != nei.ParityBlocks {
+		return false
+	}
+	if ei.BlockSize != nei.BlockSize {
+		return false
+	}
+	if len(ei.Distribution) != len(nei.Distribution) {
+		return false
+	}
+	for i, ecindex := range ei.Distribution {
+		if ecindex != nei.Distribution[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // BitrotAlgorithm specifies a algorithm used for bitrot protection.
 type BitrotAlgorithm uint
 
