@@ -1384,6 +1384,18 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			return
 		}
 	}
+	// if target returns error other than NoSuchKey, defer replication attempt
+	if cerr != nil && minio.ToErrorResponse(cerr).Code != "NoSuchKey" && minio.ToErrorResponse(cerr).Code != "NoSuchVersion" {
+		logger.LogIf(ctx, fmt.Errorf("unable to replicate %s/%s (%s). Target returned %s error on HEAD", bucket, object, objInfo.VersionID, cerr))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			UserAgent:  "Internal: [Replication]",
+			Host:       globalLocalNodeName,
+		})
+		return
+	}
 	rinfo.ReplicationStatus = replication.Completed
 	rinfo.Size = size
 	rinfo.ReplicationAction = rAction
@@ -2094,6 +2106,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 			StorageClass:              objInfo.StorageClass,
 			ReplicationStatusInternal: objInfo.ReplicationStatus,
 			UserTags:                  tags.String(),
+			ReplicationStatus:         replication.StatusType(objInfo.ReplicationStatus),
 		}
 		oi.UserDefined = make(map[string]string, len(objInfo.Metadata))
 		for k, v := range objInfo.Metadata {

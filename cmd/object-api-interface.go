@@ -99,6 +99,8 @@ type ObjectOptions struct {
 	IndexCB func() []byte
 
 	InclFreeVersions bool
+
+	MetadataChg bool // is true if it is a metadata update operation.
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
