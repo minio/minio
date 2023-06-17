@@ -1315,6 +1315,16 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 						Key:   objInfo.Name,
 						Error: errs[i].Error(),
 					})
+
+					eventArgsList = append(eventArgsList, eventArgs{
+						EventName:    event.ObjectCreatedPost,
+						BucketName:   objInfo.Bucket,
+						Object:       ObjectInfo{Name: objInfo.Name},
+						ReqParams:    extractReqParams(r),
+						RespElements: extractRespElements(w),
+						UserAgent:    fmt.Sprintf("%s MinIO-Fan-Out (failed: %v)", r.UserAgent(), errs[i]),
+						Host:         handlers.GetSourceIP(r),
+					})
 					continue
 				}
 
