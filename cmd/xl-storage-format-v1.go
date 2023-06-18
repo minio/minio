@@ -106,6 +106,38 @@ type ErasureInfo struct {
 	Checksums []ChecksumInfo `json:"checksum,omitempty"`
 }
 
+// Equal equates current erasure info with newer erasure info.
+// returns false if one of the following check fails
+// - erasure algorithm is different
+// - data blocks are different
+// - parity blocks are different
+// - block size is different
+// - distribution array size is different
+// - distribution indexes are different
+func (ei ErasureInfo) Equal(nei ErasureInfo) bool {
+	if ei.Algorithm != nei.Algorithm {
+		return false
+	}
+	if ei.DataBlocks != nei.DataBlocks {
+		return false
+	}
+	if ei.ParityBlocks != nei.ParityBlocks {
+		return false
+	}
+	if ei.BlockSize != nei.BlockSize {
+		return false
+	}
+	if len(ei.Distribution) != len(nei.Distribution) {
+		return false
+	}
+	for i, ecindex := range ei.Distribution {
+		if ecindex != nei.Distribution[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // BitrotAlgorithm specifies a algorithm used for bitrot protection.
 type BitrotAlgorithm uint
 

@@ -32,7 +32,9 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -345,7 +347,9 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 
 	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 
-	go monitorLocalDisksAndHeal(ctx, z)
+	if env.Get("_MINIO_AUTO_DISK_HEALING", config.EnableOn) == config.EnableOn {
+		go monitorLocalDisksAndHeal(ctx, z)
+	}
 }
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {

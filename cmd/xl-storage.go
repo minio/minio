@@ -2139,9 +2139,15 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 }
 
 func skipAccessChecks(volume string) (ok bool) {
-	switch volume {
-	case minioMetaTmpBucket, minioMetaBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket:
-		ok = true
+	for _, prefix := range []string{
+		minioMetaTmpBucket,
+		minioMetaBucket,
+		minioMetaMultipartBucket,
+		minioMetaTmpDeletedBucket,
+	} {
+		if strings.HasPrefix(volume, prefix) {
+			return true
+		}
 	}
 	return ok
 }

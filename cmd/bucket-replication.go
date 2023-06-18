@@ -1385,16 +1385,23 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 	}
 	// if target returns error other than NoSuchKey, defer replication attempt
-	if cerr != nil && minio.ToErrorResponse(cerr).Code != "NoSuchKey" && minio.ToErrorResponse(cerr).Code != "NoSuchVersion" {
-		logger.LogIf(ctx, fmt.Errorf("unable to replicate %s/%s (%s). Target returned %s error on HEAD", bucket, object, objInfo.VersionID, cerr))
-		sendEvent(eventArgs{
-			EventName:  event.ObjectReplicationNotTracked,
-			BucketName: bucket,
-			Object:     objInfo,
-			UserAgent:  "Internal: [Replication]",
-			Host:       globalLocalNodeName,
-		})
-		return
+	if cerr != nil {
+		errResp := minio.ToErrorResponse(cerr)
+		switch errResp.Code {
+		case "NoSuchKey", "NoSuchVersion", "SlowDownRead":
+			rAction = replicateAll
+		default:
+			logger.LogIf(ctx, fmt.Errorf("unable to replicate %s/%s (%s). Target (%s) returned %s error on HEAD",
+				bucket, object, objInfo.VersionID, tgt.EndpointURL(), cerr))
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
+			})
+			return
+		}
 	}
 	rinfo.ReplicationStatus = replication.Completed
 	rinfo.Size = size
