@@ -63,7 +63,10 @@ func (rs *rebalanceStats) update(bucket string, fi FileInfo) {
 	}
 
 	rs.NumVersions++
-	onDiskSz := fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	onDiskSz := int64(0)
+	if !fi.Deleted {
+		onDiskSz = fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	}
 	rs.Bytes += uint64(onDiskSz)
 	rs.Bucket = bucket
 	rs.Object = fi.Name
