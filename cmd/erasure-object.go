@@ -108,10 +108,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(storageDisks, metaArr, errs, readQuorum)
+	onlineDisks, modTime, etag := listOnlineDisks(storageDisks, metaArr, errs, readQuorum)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, etag, readQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -347,11 +347,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 
 	var healOnce sync.Once
 
-	// once we have obtained a common FileInfo i.e latest, we should stick
-	// to single dataDir to read the content to avoid reading from some other
-	// dataDir that has stale FileInfo{} to ensure that we fail appropriately
-	// during reads and expect the same dataDir everywhere.
-	dataDir := fi.DataDir
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -380,7 +375,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
-			partPath := pathJoin(object, dataDir, fmt.Sprintf("part.%d", partNumber))
+			partPath := pathJoin(object, metaArr[index].DataDir, fmt.Sprintf("part.%d", partNumber))
 			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 
@@ -664,10 +659,10 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs, readQuorum)
+	onlineDisks, modTime, etag := listOnlineDisks(disks, metaArr, errs, readQuorum)
 
 	// Pick latest valid metadata.
-	fi, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err = pickValidFileInfo(ctx, metaArr, modTime, etag, readQuorum)
 	if err != nil {
 		return fi, nil, nil, err
 	}
@@ -693,7 +688,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			missingBlocks++
 			continue
 		}
-		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) {
+		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(modTime) {
 			continue
 		}
 		metaArr[i] = FileInfo{}
@@ -1794,10 +1789,10 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs, readQuorum)
+	onlineDisks, modTime, etag := listOnlineDisks(disks, metaArr, errs, readQuorum)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, etag, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -1867,10 +1862,10 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs, readQuorum)
+	onlineDisks, modTime, etag := listOnlineDisks(disks, metaArr, errs, readQuorum)
 
 	// Pick latest valid metadata.
-	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, etag, readQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
