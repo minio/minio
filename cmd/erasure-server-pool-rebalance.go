@@ -810,6 +810,9 @@ func (z *erasureServerPools) StartRebalance() {
 		}
 
 		go func(idx int) {
+			for newObjectLayerFn() == nil {
+				time.Sleep(time.Second)
+			}
 			stopfn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBuckets, idx)
 			err := z.rebalanceBuckets(ctx, idx)
 			stopfn(err)
