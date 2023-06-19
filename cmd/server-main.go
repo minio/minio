@@ -246,23 +246,19 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
+	globalNodes = globalEndpoints.GetNodes()
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
 	globalNodeNamesHex = make(map[string]struct{})
-	globalRemoteEndpoints = make(map[string]Endpoint)
-	for _, z := range globalEndpoints {
-		for _, ep := range z.Endpoints {
-			if ep.IsLocal {
-				globalRemoteEndpoints[globalLocalNodeName] = ep
-			} else {
-				globalRemoteEndpoints[ep.Host] = ep
-			}
-			nodeNameSum := sha256.Sum256([]byte(ep.Host))
-			globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
-
+	for _, n := range globalNodes {
+		nodeName := n.Host
+		if n.IsLocal {
+			nodeName = globalLocalNodeName
 		}
+		nodeNameSum := sha256.Sum256([]byte(nodeName))
+		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.

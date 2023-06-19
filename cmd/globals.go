@@ -224,7 +224,10 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
+	// All drives endpoints of this deployment
 	globalEndpoints EndpointServerPools
+	// All nodesof this deployment
+	globalNodes []Node
 
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName    string
@@ -236,8 +239,6 @@ var (
 
 	// The global callhome config
 	globalCallhomeConfig callhome.Config
-
-	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
