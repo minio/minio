@@ -1,12 +1,13 @@
 #!/bin/bash
 
+set -e
 set -x
 
 export CI=1
 
 make || exit -1
 
-killall -9 minio
+killall -9 minio || true
 
 rm -rf /tmp/xl/
 mkdir -p /tmp/xl/1/ /tmp/xl/2/
@@ -44,6 +45,8 @@ sleep 1
 ./mc replicate add myminio2/testbucket --remote-bucket http://minioadmin:minioadmin@localhost:9001/testbucket --priority 1
 
 sleep 1
+
+cp README.md internal.tar
 
 ./mc cp internal.tar myminio1/testbucket/dir/1.tar
 ./mc cp internal.tar myminio2/testbucket/dir/2.tar
