@@ -120,6 +120,105 @@ type bucketS3RXTX struct {
 	s3OutputBytes uint64
 }
 
+type bucketHTTPAPIStats struct {
+	currentS3Requests *HTTPAPIStats
+	totalS3Requests   *HTTPAPIStats
+	totalS34xxErrors  *HTTPAPIStats
+	totalS35xxErrors  *HTTPAPIStats
+	totalS3Canceled   *HTTPAPIStats
+}
+
+type bucketHTTPStats struct {
+	sync.RWMutex
+	httpStats map[string]bucketHTTPAPIStats
+}
+
+func newBucketHTTPStats() *bucketHTTPStats {
+	return &bucketHTTPStats{
+		httpStats: make(map[string]bucketHTTPAPIStats),
+	}
+}
+
+func (bh *bucketHTTPStats) delete(bucket string) {
+	bh.Lock()
+	defer bh.Unlock()
+
+	delete(bh.httpStats, bucket)
+}
+
+func (bh *bucketHTTPStats) updateHTTPStats(bucket, api string, w *xhttp.ResponseRecorder) {
+	if bh == nil {
+		return
+	}
+
+	bh.Lock()
+	defer bh.Unlock()
+
+	hstats, ok := bh.httpStats[bucket]
+	if !ok {
+		hstats = bucketHTTPAPIStats{
+			currentS3Requests: &HTTPAPIStats{},
+			totalS3Requests:   &HTTPAPIStats{},
+			totalS3Canceled:   &HTTPAPIStats{},
+			totalS34xxErrors:  &HTTPAPIStats{},
+			totalS35xxErrors:  &HTTPAPIStats{},
+		}
+	}
+
+	if w == nil { // when response recorder nil, this is an active request
+		hstats.currentS3Requests.Inc(api)
+		bh.httpStats[bucket] = hstats
+		return
+	} // else {
+	hstats.currentS3Requests.Dec(api) // decrement this once we have the response recorder.
+
+	hstats.totalS3Requests.Inc(api)
+	code := w.StatusCode
+
+	switch {
+	case code == 0:
+	case code == 499:
+		// 499 is a good error, shall be counted as canceled.
+		hstats.totalS3Canceled.Inc(api)
+	case code >= http.StatusBadRequest:
+		if code >= http.StatusInternalServerError {
+			hstats.totalS35xxErrors.Inc(api)
+		} else {
+			hstats.totalS34xxErrors.Inc(api)
+		}
+	}
+
+	bh.httpStats[bucket] = hstats
+}
+
+func (bh *bucketHTTPStats) load(bucket string) bucketHTTPAPIStats {
+	if bh == nil {
+		return bucketHTTPAPIStats{
+			currentS3Requests: &HTTPAPIStats{},
+			totalS3Requests:   &HTTPAPIStats{},
+			totalS3Canceled:   &HTTPAPIStats{},
+			totalS34xxErrors:  &HTTPAPIStats{},
+			totalS35xxErrors:  &HTTPAPIStats{},
+		}
+	}
+
+	bh.RLock()
+	defer bh.RUnlock()
+
+	val, ok := bh.httpStats[bucket]
+	if ok {
+		return val
+	}
+
+	return bucketHTTPAPIStats{
+		currentS3Requests: &HTTPAPIStats{},
+		totalS3Requests:   &HTTPAPIStats{},
+		totalS3Canceled:   &HTTPAPIStats{},
+		totalS34xxErrors:  &HTTPAPIStats{},
+		totalS35xxErrors:  &HTTPAPIStats{},
+	}
+}
+
 type bucketConnStats struct {
 	sync.RWMutex
 	stats map[string]*bucketS3RXTX
@@ -225,10 +324,32 @@ func (stats *HTTPAPIStats) Dec(api string) {
 	}
 }
 
+// Get returns the current counter on input API string
+func (stats *HTTPAPIStats) Get(api string) int {
+	if stats == nil {
+		return 0
+	}
+
+	stats.RLock()
+	defer stats.RUnlock()
+
+	val, ok := stats.apiStats[api]
+	if ok {
+		return val
+	}
+
+	return 0
+}
+
 // Load returns the recorded stats.
 func (stats *HTTPAPIStats) Load() map[string]int {
-	stats.Lock()
-	defer stats.Unlock()
+	if stats == nil {
+		return map[string]int{}
+	}
+
+	stats.RLock()
+	defer stats.RUnlock()
+
 	apiStats := make(map[string]int, len(stats.apiStats))
 	for k, v := range stats.apiStats {
 		apiStats[k] = v
