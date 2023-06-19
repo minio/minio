@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 func commonETags(etags []string) (etag string, maxima int) {
