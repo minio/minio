@@ -141,6 +141,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
+
+	// initialize the object layer.
+	setObjectLayer(z)
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err := z.Init(ctx) // Initializes all pools.
@@ -159,6 +163,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	globalLocalDrivesMu.Lock()
 	globalLocalDrives = localDrives
 	defer globalLocalDrivesMu.Unlock()
+
 	return z, nil
 }
 
