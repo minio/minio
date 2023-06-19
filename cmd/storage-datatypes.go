@@ -265,7 +265,10 @@ func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
 	if !fi.TransitionInfoEquals(ofi) {
 		return false
 	}
-	return fi.ModTime.Equal(ofi.ModTime)
+	if !fi.ModTime.Equal(ofi.ModTime) {
+		return false
+	}
+	return fi.Erasure.Equal(ofi.Erasure)
 }
 
 // GetDataDir returns an expected dataDir given FileInfo

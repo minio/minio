@@ -129,7 +129,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 	if err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSlowDown), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 	if bucketName != "" {

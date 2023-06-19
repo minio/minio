@@ -350,6 +350,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
+			fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
 			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
 
 			// ILM transition fields

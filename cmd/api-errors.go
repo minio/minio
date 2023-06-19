@@ -185,7 +185,8 @@ const (
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
 	ErrMaximumExpires
-	ErrSlowDown
+	ErrSlowDownRead
+	ErrSlowDownWrite
 	ErrInvalidPrefixMarker
 	ErrBadRequest
 	ErrKeyTooLongError
@@ -257,9 +258,9 @@ const (
 	ErrInvalidResourceName
 	ErrInvalidLifecycleQueryParameter
 	ErrServerNotInitialized
-	ErrOperationTimedOut
+	ErrRequestTimedout
 	ErrClientDisconnected
-	ErrOperationMaxedOut
+	ErrTooManyRequests
 	ErrInvalidRequest
 	ErrTransitionStorageClassNotFoundError
 	// MinIO storage class error codes
@@ -843,9 +844,14 @@ var errorCodes = errorCodeMap{
 		Description:    "Request is not valid yet",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	ErrSlowDown: {
-		Code:           "SlowDown",
+	ErrSlowDownRead: {
+		Code:           "SlowDownRead",
 		Description:    "Resource requested is unreadable, please reduce your request rate",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSlowDownWrite: {
+		Code:           "SlowDownWrite",
+		Description:    "Resource requested is unwritable, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidPrefixMarker: {
@@ -1416,7 +1422,7 @@ var errorCodes = errorCodeMap{
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrOperationTimedOut: {
+	ErrRequestTimedout: {
 		Code:           "RequestTimeout",
 		Description:    "A timeout occurred while trying to lock a resource, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
@@ -1426,9 +1432,9 @@ var errorCodes = errorCodeMap{
 		Description:    "Client disconnected before response was ready",
 		HTTPStatusCode: 499, // No official code, use nginx value.
 	},
-	ErrOperationMaxedOut: {
-		Code:           "SlowDown",
-		Description:    "A timeout exceeded while waiting to proceed with the request, please reduce your request rate",
+	ErrTooManyRequests: {
+		Code:           "TooManyRequests",
+		Description:    "Deadline exceeded while waiting in incoming queue, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrUnsupportedMetadata: {
@@ -2039,7 +2045,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	}
 
 	// Only return ErrClientDisconnected if the provided context is actually canceled.
-	// This way downstream context.Canceled will still report ErrOperationTimedOut
+	// This way downstream context.Canceled will still report ErrRequestTimedout
 	if contextCanceled(ctx) && errors.Is(ctx.Err(), context.Canceled) {
 		return ErrClientDisconnected
 	}
@@ -2083,9 +2089,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case errInvalidStorageClass:
 		apiErr = ErrInvalidStorageClass
 	case errErasureReadQuorum:
-		apiErr = ErrSlowDown
+		apiErr = ErrSlowDownRead
 	case errErasureWriteQuorum:
-		apiErr = ErrSlowDown
+		apiErr = ErrSlowDownWrite
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters
@@ -2119,10 +2125,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSKeyNotFoundException
 	case errKMSDefaultKeyAlreadyConfigured:
 		apiErr = ErrKMSDefaultKeyAlreadyConfigured
-	case context.Canceled, context.DeadlineExceeded:
-		apiErr = ErrOperationTimedOut
-	case errDiskNotFound:
-		apiErr = ErrSlowDown
+	case context.Canceled:
+		apiErr = ErrClientDisconnected
+	case context.DeadlineExceeded:
+		apiErr = ErrRequestTimedout
 	case objectlock.ErrInvalidRetentionDate:
 		apiErr = ErrInvalidRetentionDate
 	case objectlock.ErrPastObjectLockRetainDate:
@@ -2201,9 +2207,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case InvalidPart:
 		apiErr = ErrInvalidPart
 	case InsufficientWriteQuorum:
-		apiErr = ErrSlowDown
+		apiErr = ErrSlowDownWrite
 	case InsufficientReadQuorum:
-		apiErr = ErrSlowDown
+		apiErr = ErrSlowDownRead
 	case InvalidMarkerPrefixCombination:
 		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
@@ -2297,7 +2303,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
 	case OperationTimedOut:
-		apiErr = ErrOperationTimedOut
+		apiErr = ErrRequestTimedout
 	case BackendDown:
 		apiErr = ErrBackendDown
 	case ObjectNameTooLong:

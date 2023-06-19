@@ -1532,10 +1532,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		errCode := errorCodes.ToAPIErr(s3Error)
-		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
-		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
-		writeErrorResponseHeadersOnly(w, errCode)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
 

@@ -374,6 +374,9 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			if !metaArr[index].IsValid() {
 				continue
 			}
+			if !metaArr[index].Erasure.Equal(fi.Erasure) {
+				continue
+			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
 			partPath := pathJoin(object, metaArr[index].DataDir, fmt.Sprintf("part.%d", partNumber))
 			readers[index] = newBitrotReader(disk, metaArr[index].Data, bucket, partPath, tillOffset,
@@ -1008,12 +1011,23 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	data := r.Reader
 
 	if opts.CheckPrecondFn != nil {
-		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
-			return objInfo, err
+		if !opts.NoLock {
+			ns := er.NewNSLock(bucket, object)
+			lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+			if err != nil {
+				return ObjectInfo{}, err
+			}
+			ctx = lkctx.Context()
+			defer ns.Unlock(lkctx)
+			opts.NoLock = true
 		}
-		if opts.CheckPrecondFn(obj) {
+
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err == nil && opts.CheckPrecondFn(obj) {
 			return objInfo, PreConditionFailed{}
+		}
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return objInfo, err
 		}
 	}
 
