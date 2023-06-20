@@ -681,7 +681,7 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		Scheme: scheme,
 		Host:   globalLocalNodeName,
 	}
-	result := siteReplicationNetperf(c, ctx, duration)
+	result := siteReplicationNetperf(ctx, c, duration)
 	result.Endpoint = u.String()
 	results.NodeResults = append(results.NodeResults, result)
 	return
