@@ -757,6 +757,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						})
 					var failure bool
 					if err != nil {
+						if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+							// object deleted by the application, nothing to do here we move on.
+							continue
+						}
 						logger.LogIf(ctx, err)
 						failure = true
 					}
