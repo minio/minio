@@ -547,7 +547,7 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 
 // SiteReplicationDevNull - everything goes to io.Discard
 // [POST] /minio/admin/v3/site-replication/devnull
-func (s *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
+func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
 	globalNetPerfRX.Connect()
 	defer globalNetPerfRX.Disconnect()
 
