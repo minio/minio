@@ -1153,6 +1153,49 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 }
 
+// SiteReplicationPerfHandler - perform mesh style network throughput test
+func (a adminAPIHandlers) SiteReplicationPerfHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationPerfHandler")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-replication-net-perf")
+	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	defer nsLock.Unlock(lkctx)
+
+	durationStr := r.Form.Get(peerRESTDuration)
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		duration = globalNetPerfMinDuration
+	}
+
+	if duration < globalNetPerfMinDuration {
+		// We need sample size of minimum 10 secs.
+		duration = globalNetPerfMinDuration
+	}
+
+	duration = duration.Round(time.Second)
+
+	results, err := globalSiteReplicationSys.Netperf(ctx, duration)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(results); err != nil {
+		return
+	}
+}
+
 // NetperfHandler - perform mesh style network throughput test
 func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NetperfHandler")

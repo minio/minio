@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/randreader"
 )
 
@@ -337,4 +339,81 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 
 	globalNetPerfRX.Reset()
 	return madmin.NetperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
+}
+
+func siteReplicationNetperf(c *SiteReplicationSys, ctx context.Context, duration time.Duration) madmin.SiteReplicationperfNodeResult {
+	r := &netperfReader{eof: make(chan struct{})}
+	r.buf = make([]byte, 128*humanize.KiByte)
+	rand.Read(r.buf)
+
+	connectionsPerPeer := 16
+
+	clusterInfos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
+	if err != nil {
+		return madmin.SiteReplicationperfNodeResult{}
+	}
+
+	if len(clusterInfos.Sites) > 16 {
+		// For a large cluster it's enough to have 1 connection per peer to saturate the network.
+		connectionsPerPeer = 1
+	}
+
+	errStr := ""
+	var wg sync.WaitGroup
+
+	for _, info := range clusterInfos.Sites {
+		// not self
+		if globalDeploymentID == info.DeploymentID {
+			continue
+		}
+		info := info
+		for i := 0; i < connectionsPerPeer; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cli, err := c.getAdminClient(ctx, info.DeploymentID)
+				if err != nil {
+					return
+				}
+				rp := cli.GetEndpointURL()
+				reqURL := &url.URL{
+					Scheme: rp.Scheme,
+					Host:   rp.Host,
+					Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplicationDevNull,
+				}
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), r)
+				if err != nil {
+					return
+				}
+				client := &http.Client{
+					Timeout:   duration + 10*time.Second,
+					Transport: madmin.DefaultTransport(rp.Scheme == "https"),
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					return
+				}
+				defer xhttp.DrainBody(resp.Body)
+			}()
+		}
+	}
+
+	time.Sleep(duration)
+	close(r.eof)
+	wg.Wait()
+	for {
+		if globalNetPerfRX.ActiveConnections() == 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	rx := float64(globalNetPerfRX.RXSample)
+	delta := globalNetPerfRX.firstToDisconnect.Sub(globalNetPerfRX.lastToConnect)
+	if delta < 0 {
+		rx = 0
+		errStr = "network disconnection issues detected"
+	}
+
+	globalNetPerfRX.Reset()
+	return madmin.SiteReplicationperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }

@@ -647,6 +647,45 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 	return true, nil
 }
 
+func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration) (results madmin.SiteReplicationperfResult, err error) {
+	infos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
+	if err != nil {
+		return results, err
+	}
+	scheme := "http"
+	if globalIsTLS {
+		scheme = "https"
+	}
+	for _, info := range infos.Sites {
+		// not self
+		if globalDeploymentID == info.DeploymentID {
+			continue
+		}
+		// call others
+		cli, err := c.getAdminClient(ctx, info.DeploymentID)
+		if err != nil {
+			continue
+		}
+		result, err := cli.SiteReplicationPerf(ctx, duration)
+		if err == nil {
+			for _, result := range result.NodeResults {
+				if result.Endpoint == "" {
+					result.Endpoint = cli.GetEndpointURL().String()
+				}
+				results.NodeResults = append(results.NodeResults, result)
+			}
+		}
+	}
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   globalLocalNodeName,
+	}
+	result := siteReplicationNetperf(c, ctx, duration)
+	result.Endpoint = u.String()
+	results.NodeResults = append(results.NodeResults, result)
+	return
+}
+
 // GetClusterInfo - returns site replication information.
 func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.SiteReplicationInfo, err error) {
 	c.RLock()
