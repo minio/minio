@@ -691,9 +691,20 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			missingBlocks++
 			continue
 		}
-		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(modTime) {
-			continue
-		}
+
+		// verify metadata is valid, it has similar erasure info
+		// as well as common modtime, if modtime is not possible
+		// verify if it has common "etag" atleast.
+		if metaArr[i].IsValid() && metaArr[i].Erasure.Equal(fi.Erasure) {
+			ok := metaArr[i].ModTime.Equal(modTime)
+			if modTime.IsZero() || modTime.Equal(timeSentinel) {
+				ok = etag != "" && etag == fi.Metadata["etag"]
+			}
+			if ok {
+				continue
+			}
+		} // in all other cases metadata is corrupt, do not read from it.
+
 		metaArr[i] = FileInfo{}
 		onlineDisks[i] = nil
 		missingBlocks++
