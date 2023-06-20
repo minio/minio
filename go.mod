@@ -240,3 +240,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/minio-go/v7 => github.com/poornas/minio-go/v7 v7.0.0-20230626172553-323371271282
