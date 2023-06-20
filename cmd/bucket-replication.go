@@ -170,7 +170,7 @@ func checkRemoteEndpoint(ctx context.Context, epURL *url.URL) error {
 	reqURL := &url.URL{
 		Scheme: epURL.Scheme,
 		Host:   epURL.Host,
-		Path:   healthCheckReadinessPath,
+		Path:   healthCheckPathPrefix + healthCheckReadinessPath,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
