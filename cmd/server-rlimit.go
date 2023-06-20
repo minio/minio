@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/minio/madmin-go/v2/kernel"
+	"github.com/minio/madmin-go/v3/kernel"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sys"
 )

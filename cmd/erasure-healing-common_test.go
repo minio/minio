@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 // Returns the latest updated FileInfo files and error in case of failure.

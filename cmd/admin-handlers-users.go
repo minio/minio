@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
