@@ -239,3 +239,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/madmin-go/v3 => github.com/jiuker/madmin-go/v3 v3.0.0-20230620152144-2e143615649c
