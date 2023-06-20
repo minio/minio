@@ -36,6 +36,7 @@ type MuxClient struct {
 	respMu           sync.Mutex
 	blocked          bool
 	closed           bool
+	stateful         bool
 }
 
 type Response struct {
@@ -154,4 +155,5 @@ func (m *MuxClient) closeLocked() {
 	}
 	close(m.respWait)
 	m.respWait = nil
+	m.closed = true
 }

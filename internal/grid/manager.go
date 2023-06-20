@@ -53,7 +53,7 @@ type Manager struct {
 }
 
 // NewManager creates a new grid manager
-func NewManager(local string, hosts []string) (*Manager, error) {
+func NewManager(tr http.RoundTripper, local string, hosts []string) (*Manager, error) {
 	found := false
 	m := Manager{
 		ID:      uuid.New(),
@@ -66,7 +66,7 @@ func NewManager(local string, hosts []string) (*Manager, error) {
 			}
 			found = true
 		}
-		m.targets[host] = NewConnection(m.ID, local, host)
+		m.targets[host] = NewConnection(m.ID, local, host, tr)
 	}
 	if found {
 		return nil, fmt.Errorf("grid: local host not found")
@@ -109,7 +109,7 @@ func (c *Manager) Handler() http.HandlerFunc {
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: unknown host: %v", cReq.Host))
 			return
 		}
-		remote.handleIncoming()
+		remote.handleIncoming(ctx, conn, cReq)
 	}
 }
 

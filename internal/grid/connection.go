@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
 
@@ -50,8 +52,11 @@ type Connection struct {
 	Remote string
 	Local  string
 
-	// ID of this server instance.
+	// ID of this connection instance.
 	id uuid.UUID
+
+	// Remote uuid, if we have been connected.
+	remoteID *uuid.UUID
 
 	// Context for the server.
 	ctx context.Context
@@ -64,6 +69,9 @@ type Connection struct {
 
 	// Client or serverside.
 	side ws.State
+
+	// Transport for outgoing connections.
+	tr http.RoundTripper
 
 	// connChange will be signaled whenever
 	connChange     *sync.Cond
@@ -94,7 +102,7 @@ const (
 const defaultOutQueue = 10000
 
 // NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, local, remote string) *Connection {
+func NewConnection(id uuid.UUID, local, remote string, tr http.RoundTripper) *Connection {
 	c := Connection{
 		State:    StateUnconnected,
 		Remote:   remote,
@@ -103,8 +111,11 @@ func NewConnection(id uuid.UUID, local, remote string) *Connection {
 		ctx:      context.Background(),
 		active:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
 		outQueue: make(chan []byte, defaultOutQueue),
+		tr:       tr,
+		side:     ws.StateServerSide,
 	}
 	if c.shouldConnect() {
+		c.side = ws.StateClientSide
 		go c.connect()
 	}
 	return &c
@@ -117,11 +128,10 @@ func (c *Connection) shouldConnect() bool {
 }
 
 func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
-	id := atomic.AddUint64(&c.NextID, 1)
-	client := newMuxClient(ctx, id, c)
+	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := c.active.LoadOrStore(id, client); !ok {
+		if _, ok := c.active.LoadOrStore(client.MuxID, client); !ok {
 			break
 		}
 		client.MuxID = atomic.AddUint64(&c.NextID, 1)
@@ -130,17 +140,20 @@ func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 }
 
 func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
-	id := atomic.AddUint64(&c.NextID, 1)
-	client := newMuxClient(ctx, id, c)
-	for {
-		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := c.active.LoadOrStore(id, c); !ok {
-			break
-		}
-		client.MuxID = atomic.AddUint64(&c.NextID, 1)
-	}
+	client := c.NewMuxClient(ctx)
 	defer c.active.Delete(client.MuxID)
 	return client.roundtrip(h, req)
+}
+
+var ErrDone = errors.New("done for now")
+
+// Stateless
+func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb func([]byte) error) error {
+	client := c.NewMuxClient(ctx)
+	client.RequestBytes()
+	defer c.active.Delete(client.MuxID)
+	for {
+	}
 }
 
 func (c *Connection) connect() {
@@ -157,7 +170,20 @@ func (c *Connection) send(ctx context.Context, msg []byte) error {
 	}
 }
 
-func (c *Connection) sendMsg(msg message, conn net.Conn, side ws.State) error {
+// sendMsg will send
+func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSizer) error {
+	if payload != nil {
+		if cap(msg.Payload) < payload.Msgsize() {
+			PutByteBuffer(msg.Payload)
+			msg.Payload = GetByteBuffer()[:0]
+		}
+		var err error
+		msg.Payload, err = payload.MarshalMsg(msg.Payload)
+		if err != nil {
+			return err
+		}
+		defer PutByteBuffer(msg.Payload)
+	}
 	dst := GetByteBuffer()[:0]
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
@@ -167,10 +193,34 @@ func (c *Connection) sendMsg(msg message, conn net.Conn, side ws.State) error {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
-	return wsutil.WriteMessage(conn, side, ws.OpBinary, dst)
+	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
 
-func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) {
+func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) error {
+	if c.shouldConnect() {
+		return errors.New("expected to be client side, not server side")
+	}
+	msg := message{
+		Op: OpConnectResponse,
+	}
+	if c.remoteID != nil && *c.remoteID != req.ID {
+		atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
+		// TODO: Only disconnect stateful clients.
+		c.active.Range(func(key uint64, client *MuxClient) bool {
+			client.close()
+			return true
+		})
+	}
+
+	err := c.sendMsg(conn, msg, &connectResp{
+		ID:       c.id,
+		Accepted: true,
+	})
+	if err == nil {
+		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
+		go c.handleMessages(ctx, conn)
+	}
+	return err
 }
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
@@ -248,11 +298,16 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			conn.Close()
 		}()
-		for toSend := range c.outQueue {
-			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
-			if err != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			case toSend := <-c.outQueue:
+				err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
+				if err != nil {
+					logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
+					return
+				}
 			}
 		}
 	}()
