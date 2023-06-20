@@ -32,7 +32,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	uuid2 "github.com/google/uuid"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config/storageclass"
 )
 

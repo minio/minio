@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sync/errgroup"
 )
@@ -386,11 +386,11 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	// List of disks having latest version of the object xl.meta
 	// (by modtime).
-	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs, readQuorum)
+	onlineDisks, modTime, etag := listOnlineDisks(storageDisks, partsMetadata, errs, readQuorum)
 
 	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, readQuorum)
+	latestMeta, err := pickValidFileInfo(ctx, partsMetadata, modTime, etag, readQuorum)
 	if err != nil {
 		return result, err
 	}
@@ -503,7 +503,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// When disk to heal count is greater than parity blocks we should simply error out.
-		err := fmt.Errorf("more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", errs, dataErrs, bucket, object, versionID)
+		err := fmt.Errorf("(%d > %d) more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", disksToHealCount, latestMeta.Erasure.ParityBlocks, errs, dataErrs, bucket, object, versionID)
 		logger.LogIf(ctx, err)
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
@@ -1012,9 +1012,6 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	notFoundMetaErrs, corruptedMetaErrs, driveNotFoundMetaErrs := danglingErrsCount(errs)
 	notFoundPartsErrs, corruptedPartsErrs, driveNotFoundPartsErrs := danglingErrsCount(ndataErrs)
 
-	if driveNotFoundMetaErrs > 0 || driveNotFoundPartsErrs > 0 {
-		return validMeta, false
-	}
 	for _, m := range metaArr {
 		if m.IsValid() {
 			validMeta = m
@@ -1024,6 +1021,10 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 
 	if !validMeta.IsValid() {
 		// We have no idea what this file is, leave it as is.
+		return validMeta, false
+	}
+
+	if driveNotFoundMetaErrs > 0 || driveNotFoundPartsErrs > 0 {
 		return validMeta, false
 	}
 

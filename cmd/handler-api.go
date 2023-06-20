@@ -317,7 +317,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		case <-deadlineTimer.C:
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return

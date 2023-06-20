@@ -26,8 +26,10 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -35,6 +37,7 @@ import (
 
 var (
 	endpoint, accessKey, secretKey string
+	minModTimeStr                  string
 	bucket, prefix                 string
 	debug                          bool
 	versions                       bool
@@ -57,6 +60,7 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "Prints HTTP network calls to S3 endpoint")
 	flag.BoolVar(&versions, "versions", false, "Verify all versions")
 	flag.BoolVar(&insecure, "insecure", false, "Disable TLS verification")
+	flag.StringVar(&minModTimeStr, "modified-since", "", "Specify a minimum object last modified time, e.g.: 2023-01-02T15:04:05Z")
 	flag.Parse()
 
 	if endpoint == "" {
@@ -73,6 +77,15 @@ func main() {
 
 	if bucket == "" && prefix != "" {
 		log.Fatalln("--prefix is specified without --bucket.")
+	}
+
+	var minModTime time.Time
+	if minModTimeStr != "" {
+		var e error
+		minModTime, e = time.Parse(time.RFC3339, minModTimeStr)
+		if e != nil {
+			log.Fatalln("Unable to parse --modified-since:", e)
+		}
 	}
 
 	u, err := url.Parse(endpoint)
@@ -124,22 +137,33 @@ func main() {
 			WithMetadata: true,
 		}
 
+		objFullPath := func(obj minio.ObjectInfo) (fpath string) {
+			fpath = path.Join(bucket, obj.Key)
+			if versions {
+				fpath += ":" + obj.VersionID
+			}
+			return
+		}
+
 		// List all objects from a bucket-name with a matching prefix.
 		for object := range s3Client.ListObjects(context.Background(), bucket, opts) {
 			if object.Err != nil {
-				log.Println("LIST error:", object.Err)
+				log.Println("FAILED: LIST with error:", object.Err)
+				continue
+			}
+			if !minModTime.IsZero() && object.LastModified.Before(minModTime) {
 				continue
 			}
 			if object.IsDeleteMarker {
-				log.Println("DELETE marker skipping object:", object.Key)
+				log.Println("SKIPPED: DELETE marker object:", objFullPath(object))
 				continue
 			}
 			if _, ok := object.UserMetadata["X-Amz-Server-Side-Encryption-Customer-Algorithm"]; ok {
-				log.Println("Objects encrypted with SSE-C do not have md5sum as ETag:", object.Key)
+				log.Println("SKIPPED: Objects encrypted with SSE-C do not have md5sum as ETag:", objFullPath(object))
 				continue
 			}
 			if v, ok := object.UserMetadata["X-Amz-Server-Side-Encryption"]; ok && v == "aws:kms" {
-				log.Println("Objects encrypted with SSE-KMS do not have md5sum as ETag:", object.Key)
+				log.Println("FAILED: encrypted with SSE-KMS do not have md5sum as ETag:", objFullPath(object))
 				continue
 			}
 			parts := 1
@@ -152,12 +176,12 @@ func main() {
 				if p, err := strconv.Atoi(s[1]); err == nil {
 					parts = p
 				} else {
-					log.Println("ETAG: wrong format:", err)
+					log.Println("FAILED: ETAG of", objFullPath(object), "has a wrong format:", err)
 					continue
 				}
 				multipart = true
 			default:
-				log.Println("Unexpected ETAG format", object.ETag)
+				log.Println("FAILED: Unexpected ETAG", object.ETag, "for object:", objFullPath(object))
 				continue
 			}
 
@@ -170,13 +194,13 @@ func main() {
 				}
 				obj, err := s3Client.GetObject(context.Background(), bucket, object.Key, opts)
 				if err != nil {
-					log.Println("GET", bucket, object.Key, object.VersionID, "=>", err)
+					log.Println("FAILED: GET", objFullPath(object), "=>", err)
 					failedMD5 = true
 					break
 				}
 				h := md5.New()
 				if _, err := io.Copy(h, obj); err != nil {
-					log.Println("MD5 calculation error:", bucket, object.Key, object.VersionID, "=>", err)
+					log.Println("FAILED: MD5 calculation error:", objFullPath(object), "=>", err)
 					failedMD5 = true
 					break
 				}
@@ -184,7 +208,7 @@ func main() {
 			}
 
 			if failedMD5 {
-				log.Println("CORRUPTED object:", bucket, object.Key, object.VersionID)
+				log.Println("CORRUPTED object:", objFullPath(object))
 				continue
 			}
 
@@ -206,9 +230,9 @@ func main() {
 			}
 
 			if corrupted {
-				log.Println("CORRUPTED object:", bucket, object.Key, object.VersionID)
+				log.Println("CORRUPTED object:", objFullPath(object))
 			} else {
-				log.Println("INTACT object:", bucket, object.Key, object.VersionID)
+				log.Println("INTACT object:", objFullPath(object))
 			}
 		}
 	}

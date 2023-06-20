@@ -74,6 +74,9 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
+test-sio-error:
+	@(env bash $(PWD)/docs/bucket/replication/sio-error.sh)
+
 test-replication-2site:
 	@(env bash $(PWD)/docs/bucket/replication/setup_2site_existing_replication.sh)
 
@@ -83,7 +86,7 @@ test-replication-3site:
 test-delete-replication:
 	@(env bash $(PWD)/docs/bucket/replication/delete-replication.sh)
 
-test-replication: install test-replication-2site test-replication-3site test-delete-replication ## verify multi site replication
+test-replication: install test-replication-2site test-replication-3site test-delete-replication test-sio-error ## verify multi site replication
 	@echo "Running tests for replicating three sites"
 
 test-site-replication-ldap: install ## verify automatic site replication

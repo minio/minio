@@ -91,7 +91,7 @@ const (
 func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
 		if header, ok := supportedHeadGetReqParams[strings.ToLower(k)]; ok {
-			w.Header()[header] = v
+			w.Header()[header] = []string{strings.Join(v, ",")}
 		}
 	}
 }
@@ -662,10 +662,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				}
 			}
 		}
-		errCode := errorCodes.ToAPIErr(s3Error)
-		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
-		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
-		writeErrorResponseHeadersOnly(w, errCode)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
 
@@ -700,10 +697,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
-		errCode := errorCodes.ToAPIErr(s3Error)
-		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
-		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
-		writeErrorResponseHeadersOnly(w, errCode)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
 
@@ -1831,6 +1825,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3KMS.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
 		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
 			return
@@ -2101,36 +2105,16 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	// Extract request metadata
-	metadata, err := extractMetadata(ctx, r)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	// Remove the snowball headers from metadata from objects
-	// since those are actionable headers and not for storage
-	delete(metadata, xhttp.AmzSnowballExtract)
-	delete(metadata, xhttp.AmzSnowballExtract)
-	delete(metadata, xhttp.MinIOSnowballIgnoreDirs)
-	delete(metadata, xhttp.MinIOSnowballIgnoreErrors)
-	delete(metadata, xhttp.MinIOSnowballPrefix)
-
-	// Use the same storage class as the original uploaded tar file
-	if sc != "" {
-		metadata[xhttp.AmzStorageClass] = sc
-	}
-
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
 
-		// Copy metadata and make space for a bit more
-		metaCopy := make(map[string]string, len(metadata)+5)
-		for k, v := range metadata {
-			metaCopy[k] = v
+		if sc == "" {
+			sc = storageclass.STANDARD
 		}
-		// Shadow now...
-		metadata := metaCopy
+
+		metadata := map[string]string{
+			xhttp.AmzStorageClass: sc, // save same storage-class as incoming stream.
+		}
 
 		actualSize := size
 		var idxCb func() []byte
@@ -2849,7 +2833,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if opts.VersionID != "" {
+	if opts.VersionID != "" && opts.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
 	}
 
@@ -2942,7 +2926,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		scheduleReplication(ctx, objInfo.Clone(), objAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
@@ -3018,7 +3002,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		scheduleReplication(ctx, oi.Clone(), objAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	if oi.VersionID != "" {
+	if oi.VersionID != "" && oi.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{oi.VersionID}
 	}
 	writeSuccessNoContent(w)

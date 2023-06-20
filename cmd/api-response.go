@@ -945,6 +945,8 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 }
 
 func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
+	w.Header().Set(xMinIOErrCodeHeader, err.Code)
+	w.Header().Set(xMinIOErrDescHeader, "\""+err.Description+"\"")
 	writeResponse(w, err.HTTPStatusCode, nil, mimeNone)
 }
 

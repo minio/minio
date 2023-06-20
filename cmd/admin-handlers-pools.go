@@ -95,7 +95,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 		poolIndices = append(poolIndices, idx)
 	}
 
-	if len(poolIndices) > 0 && globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
+	if len(poolIndices) > 0 && !globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
 		ep := globalEndpoints[poolIndices[0]].Endpoints[0]
 		for nodeIdx, proxyEp := range globalProxyEndpoints {
 			if proxyEp.Endpoint.Host == ep.Host {

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 // Tests if we generate storage info.

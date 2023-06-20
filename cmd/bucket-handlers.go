@@ -41,7 +41,7 @@ import (
 	"github.com/minio/mux"
 	"github.com/valyala/bytebufferpool"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -1199,6 +1199,16 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			return
 		}
 
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3KMS.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
 		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
 			return
@@ -1303,7 +1313,17 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				if errs[i] != nil {
 					fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
 						Key:   objInfo.Name,
-						Error: errs[i],
+						Error: errs[i].Error(),
+					})
+
+					eventArgsList = append(eventArgsList, eventArgs{
+						EventName:    event.ObjectCreatedPost,
+						BucketName:   objInfo.Bucket,
+						Object:       ObjectInfo{Name: objInfo.Name},
+						ReqParams:    extractReqParams(r),
+						RespElements: extractRespElements(w),
+						UserAgent:    fmt.Sprintf("%s MinIO-Fan-Out (failed: %v)", r.UserAgent(), errs[i]),
+						Host:         handlers.GetSourceIP(r),
 					})
 					continue
 				}
@@ -1370,7 +1390,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header()[xhttp.ETag] = []string{`"` + objInfo.ETag + `"`}
 
 	// Set the relevant version ID as part of the response header.
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
@@ -1512,10 +1532,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		errCode := errorCodes.ToAPIErr(s3Error)
-		w.Header().Set(xMinIOErrCodeHeader, errCode.Code)
-		w.Header().Set(xMinIOErrDescHeader, "\""+errCode.Description+"\"")
-		writeErrorResponseHeadersOnly(w, errCode)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
 

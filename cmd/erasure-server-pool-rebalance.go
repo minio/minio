@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -63,7 +63,10 @@ func (rs *rebalanceStats) update(bucket string, fi FileInfo) {
 	}
 
 	rs.NumVersions++
-	onDiskSz := fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	onDiskSz := int64(0)
+	if !fi.Deleted {
+		onDiskSz = fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	}
 	rs.Bytes += uint64(onDiskSz)
 	rs.Bucket = bucket
 	rs.Object = fi.Name
