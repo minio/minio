@@ -1351,7 +1351,7 @@ func getBucketS3Requests5xxErrorsMD() MetricDescription {
 
 func getBucketS3RequestsCanceledMD() MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: bucketMetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      canceledTotal,
 		Help:      "Total number of S3 requests that were canceled from the client while processing on a bucket",
