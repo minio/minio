@@ -328,7 +328,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 	return 0, 0, InvalidRange{}
 }
 
-func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
+func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
 	// with less quorum return error.
 	if quorum < 1 {
 		return FileInfo{}, errErasureReadQuorum
@@ -336,12 +336,21 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
 	for i, meta := range metaArr {
-		if meta.IsValid() && meta.ModTime.Equal(modTime) {
+		if !meta.IsValid() {
+			continue
+		}
+		etagOnly := modTime.Equal(timeSentinel) && (etag != "" && etag == meta.Metadata["etag"])
+		mtimeValid := meta.ModTime.Equal(modTime)
+		if mtimeValid || etagOnly {
 			fmt.Fprintf(h, "%v", meta.XLV1)
-			fmt.Fprintf(h, "%v", meta.GetDataDir())
+			if !etagOnly {
+				// Verify dataDir is same only when mtime is valid and etag is not considered.
+				fmt.Fprintf(h, "%v", meta.GetDataDir())
+			}
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
+			fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
 			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
 
 			// ILM transition fields
@@ -408,8 +417,8 @@ func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
-func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
-	return findFileInfoInQuorum(ctx, metaArr, modTime, quorum)
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
+	return findFileInfoInQuorum(ctx, metaArr, modTime, etag, quorum)
 }
 
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.

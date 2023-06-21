@@ -52,6 +52,7 @@ type apiConfig struct {
 	disableODirect              bool
 	gzipObjects                 bool
 	rootAccess                  bool
+	syncEvents                  bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -166,6 +167,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.disableODirect = cfg.DisableODirect
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
+	t.syncEvents = cfg.SyncEvents
 }
 
 func (t *apiConfig) isDisableODirect() bool {
@@ -317,7 +319,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		case <-deadlineTimer.C:
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
 			globalHTTPStats.addRequestsInQueue(-1)
 			return
@@ -352,4 +354,11 @@ func (t *apiConfig) getTransitionWorkers() int {
 	}
 
 	return t.transitionWorkers
+}
+
+func (t *apiConfig) isSyncEventsEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.syncEvents
 }

@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
@@ -757,6 +757,10 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						})
 					var failure bool
 					if err != nil {
+						if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+							// object deleted by the application, nothing to do here we move on.
+							continue
+						}
 						logger.LogIf(ctx, err)
 						failure = true
 					}

@@ -36,7 +36,7 @@ import (
 
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/cli"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -413,11 +413,8 @@ func bootstrapTrace(msg string) {
 	})
 }
 
-func initServer(ctx context.Context, newObject ObjectLayer) error {
+func initServerConfig(ctx context.Context, newObject ObjectLayer) error {
 	t1 := time.Now()
-
-	// Once the config is fully loaded, initialize the new object layer.
-	setObjectLayer(newObject)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -633,6 +630,12 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	if !globalDisableFreezeOnBoot {
+		// Freeze the services until the bucket notification subsystem gets initialized.
+		bootstrapTrace("freezeServices")
+		freezeServices()
+	}
+
 	bootstrapTrace("newObjectLayer")
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	if err != nil {
@@ -645,31 +648,22 @@ func serverMain(ctx *cli.Context) {
 	bootstrapTrace("newSharedLock")
 	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
 
-	// Enable background operations for erasure coding
+	// Enable background operations on
+	//
+	// - Disk auto healing
+	// - MRF (most recently failed) healing
+	// - Background expiration routine for lifecycle policies
 	bootstrapTrace("initAutoHeal")
 	initAutoHeal(GlobalContext, newObject)
+
 	bootstrapTrace("initHealMRF")
 	initHealMRF(GlobalContext, newObject)
+
 	bootstrapTrace("initBackgroundExpiry")
 	initBackgroundExpiry(GlobalContext, newObject)
 
-	if !globalCLIContext.StrictS3Compat {
-		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
-	}
-
-	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
-			globalActiveCred)
-		logger.Info(color.RedBold(msg))
-	}
-
-	if !globalDisableFreezeOnBoot {
-		// Freeze the services until the bucket notification subsystem gets initialized.
-		freezeServices()
-	}
-
-	bootstrapTrace("initializing the server")
-	if err = initServer(GlobalContext, newObject); err != nil {
+	bootstrapTrace("initServerConfig")
+	if err = initServerConfig(GlobalContext, newObject); err != nil {
 		var cerr config.Err
 		// For any config error, we don't need to drop into safe-mode
 		// instead its a user error and should be fixed by user.
@@ -685,12 +679,22 @@ func serverMain(ctx *cli.Context) {
 		logger.LogIf(GlobalContext, err)
 	}
 
+	if !globalCLIContext.StrictS3Compat {
+		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+	}
+
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+			globalActiveCred)
+		logger.Info(color.RedBold(msg))
+	}
+
 	// Initialize users credentials and policies in background right after config has initialized.
 	go func() {
 		bootstrapTrace("globalIAMSys.Init")
 		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 
-		// Initialize
+		// Initialize Console UI
 		if globalBrowserEnabled {
 			bootstrapTrace("initConsoleServer")
 			srv, err := initConsoleServer()
@@ -721,7 +725,6 @@ func serverMain(ctx *cli.Context) {
 
 	go func() {
 		if !globalDisableFreezeOnBoot {
-			bootstrapTrace("freezeServices")
 			defer unfreezeServices()
 			defer bootstrapTrace("unfreezeServices")
 			t := time.AfterFunc(5*time.Minute, func() {

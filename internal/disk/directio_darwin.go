@@ -1,4 +1,6 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+//go:build darwin
+
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //

@@ -249,7 +249,7 @@ func TestTargetListSend(t *testing.T) {
 	for i, testCase := range testCases {
 		testCase.targetList.Send(Event{}, map[TargetID]struct{}{
 			testCase.targetID: {},
-		}, resCh)
+		}, resCh, false)
 		res := <-resCh
 		expectErr := (res.Err != nil)
 

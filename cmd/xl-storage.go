@@ -39,7 +39,7 @@ import (
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/filepathx"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -2139,9 +2139,15 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 }
 
 func skipAccessChecks(volume string) (ok bool) {
-	switch volume {
-	case minioMetaTmpBucket, minioMetaBucket, minioMetaMultipartBucket, minioMetaTmpDeletedBucket:
-		ok = true
+	for _, prefix := range []string{
+		minioMetaTmpBucket,
+		minioMetaBucket,
+		minioMetaMultipartBucket,
+		minioMetaTmpDeletedBucket,
+	} {
+		if strings.HasPrefix(volume, prefix) {
+			return true
+		}
 	}
 	return ok
 }

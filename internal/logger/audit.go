@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/logger/message/audit"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	xhttp "github.com/minio/minio/internal/http"
 )
 

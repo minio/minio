@@ -51,10 +51,6 @@ func handleSignals() {
 		// send signal to various go-routines that they need to quit.
 		cancelGlobalContext()
 
-		if globalEventNotifier != nil {
-			globalEventNotifier.RemoveAllRemoteTargets()
-		}
-
 		if httpServer := newHTTPServerFn(); httpServer != nil {
 			err = httpServer.Shutdown()
 			if !errors.Is(err, http.ErrServerClosed) {
@@ -69,6 +65,10 @@ func handleSignals() {
 
 		if srv := newConsoleServerFn(); srv != nil {
 			logger.LogIf(context.Background(), srv.Shutdown())
+		}
+
+		if globalEventNotifier != nil {
+			globalEventNotifier.RemoveAllBucketTargets()
 		}
 
 		return (err == nil && oerr == nil)

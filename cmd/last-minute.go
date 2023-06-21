@@ -22,7 +22,7 @@ package cmd
 import (
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 const (

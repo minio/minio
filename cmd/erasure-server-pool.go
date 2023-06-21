@@ -33,7 +33,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -141,6 +141,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
+
+	// initialize the object layer.
+	setObjectLayer(z)
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err := z.Init(ctx) // Initializes all pools.
@@ -159,6 +163,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	globalLocalDrivesMu.Lock()
 	globalLocalDrives = localDrives
 	defer globalLocalDrivesMu.Unlock()
+
 	return z, nil
 }
 
@@ -411,7 +416,9 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			}
 			// do not remove this check as it can lead to inconsistencies
 			// for all callers of bucket replication.
-			opts.VersionID = ""
+			if !opts.MetadataChg {
+				opts.VersionID = ""
+			}
 			pinfo.ObjInfo, pinfo.Err = pool.GetObjectInfo(ctx, bucket, object, opts)
 			poolObjInfos[i] = pinfo
 		}(i, pool, poolOpts[i])
@@ -443,7 +450,7 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			// found a pool
 			return pinfo, nil
 		}
-		if isErrReadQuorum(pinfo.Err) {
+		if isErrReadQuorum(pinfo.Err) && !opts.MetadataChg {
 			// read quorum is returned when the object is visibly
 			// present but its unreadable, we simply ask the writes to
 			// schedule to this pool instead. If there is no quorum
@@ -2268,6 +2275,7 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 		return z.serverPools[0].PutObjectMetadata(ctx, bucket, object, opts)
 	}
 
+	opts.MetadataChg = true
 	// We don't know the size here set 1GiB atleast.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
@@ -2284,6 +2292,8 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 		return z.serverPools[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
+	opts.MetadataChg = true
+
 	// We don't know the size here set 1GiB atleast.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
@@ -2299,6 +2309,8 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
+
+	opts.MetadataChg = true
 
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
