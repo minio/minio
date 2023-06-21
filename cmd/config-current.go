@@ -616,6 +616,9 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 		for n, l := range loggerCfg.AuditKafka {
 			if l.Enabled {
+				if l.TLS.Enable {
+					l.TLS.RootCAs = globalRootCAs
+				}
 				l.LogOnce = logger.LogOnceIf
 				loggerCfg.AuditKafka[n] = l
 			}
