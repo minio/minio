@@ -184,6 +184,7 @@ const (
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
 	ErrUnsupportedMetadata
+	ErrUnsupportedHostHeader
 	ErrMaximumExpires
 	ErrSlowDownRead
 	ErrSlowDownWrite
@@ -1440,6 +1441,11 @@ var errorCodes = errorCodeMap{
 	ErrUnsupportedMetadata: {
 		Code:           "InvalidArgument",
 		Description:    "Your metadata headers are not supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedHostHeader: {
+		Code:           "InvalidArgument",
+		Description:    "Your Host header is malformed.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrObjectTampered: {
