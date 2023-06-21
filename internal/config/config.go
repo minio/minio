@@ -598,13 +598,23 @@ func LookupSite(siteKV KVS, regionKV KVS) (s Site, err error) {
 
 // CheckValidKeys - checks if inputs KVS has the necessary keys,
 // returns error if it find extra or superflous keys.
-func CheckValidKeys(subSys string, kv KVS, validKVS KVS) error {
+func CheckValidKeys(subSys string, kv KVS, validKVS KVS, deprecatedKeys ...string) error {
 	nkv := KVS{}
 	for _, kv := range kv {
 		// Comment is a valid key, its also fully optional
 		// ignore it since it is a valid key for all
 		// sub-systems.
 		if kv.Key == Comment {
+			continue
+		}
+		var skip bool
+		for _, deprecatedKey := range deprecatedKeys {
+			if kv.Key == deprecatedKey {
+				skip = true
+				break
+			}
+		}
+		if skip {
 			continue
 		}
 		if _, ok := validKVS.Lookup(kv.Key); !ok {
