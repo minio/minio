@@ -648,7 +648,7 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 }
 
 // Netperf for site-replication net perf
-func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration) (results madmin.SiteReplicationperfResult, err error) {
+func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration) (results madmin.SiteReplicationPerfResult, err error) {
 	infos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
 		return results, err

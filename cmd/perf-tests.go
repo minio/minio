@@ -341,7 +341,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 	return madmin.NetperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }
 
-func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Duration) madmin.SiteReplicationperfNodeResult {
+func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Duration) madmin.SiteReplicationPerfNodeResult {
 	r := &netperfReader{eof: make(chan struct{})}
 	r.buf = make([]byte, 128*humanize.KiByte)
 	rand.Read(r.buf)
@@ -350,7 +350,7 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 
 	clusterInfos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
-		return madmin.SiteReplicationperfNodeResult{}
+		return madmin.SiteReplicationPerfNodeResult{}
 	}
 
 	if len(clusterInfos.Sites) > 16 {
@@ -385,9 +385,13 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 				if err != nil {
 					return
 				}
+				transport := madmin.DefaultTransport(rp.Scheme == "https")
+				if rp.Scheme == "https" {
+					transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
+				}
 				client := &http.Client{
 					Timeout:   duration + 10*time.Second,
-					Transport: madmin.DefaultTransport(rp.Scheme == "https"),
+					Transport: transport,
 				}
 				resp, err := client.Do(req)
 				if err != nil {
@@ -415,5 +419,5 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 	}
 
 	globalNetPerfRX.Reset()
-	return madmin.SiteReplicationperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
+	return madmin.SiteReplicationPerfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }
