@@ -804,7 +804,7 @@ func (sys *NotificationSys) addNodeErr(nodeInfo madmin.NodeInfo, peerClient *pee
 	addr := peerClient.host.String()
 	reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-	logger.LogIf(ctx, err)
+	logger.LogOnceIf(ctx, err, "add-node-err")
 	nodeInfo.SetAddr(addr)
 	nodeInfo.SetError(err.Error())
 }

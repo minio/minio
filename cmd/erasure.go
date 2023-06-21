@@ -176,7 +176,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 		g.Go(func() error {
 			diskEndpoint := endpoints[index].String()
 			if disks[index] == OfflineDisk {
-				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
+				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline")
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
 					Endpoint: diskEndpoint,
@@ -410,7 +410,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
 				}
-				logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
+				logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-cache-update")
 				updates <- cache.clone()
 				lastSave = cache.Info.LastUpdate
 			case v, ok := <-bucketResults:
@@ -418,7 +418,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 					// Save final state...
 					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
-					logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
+					logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
 					updates <- cache
 					return
 				}

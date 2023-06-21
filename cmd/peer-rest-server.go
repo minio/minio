@@ -480,7 +480,7 @@ func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Requ
 
 	info := madmin.GetSysConfig(ctx, r.Host)
 
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+	logger.LogOnceIf(ctx, gob.NewEncoder(w).Encode(info), "get-sys-config")
 }
 
 // GetSysServicesHandler - returns system services information.

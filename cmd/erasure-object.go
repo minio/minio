@@ -673,7 +673,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	if !fi.Deleted && len(fi.Erasure.Distribution) != len(onlineDisks) {
 		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
 			fi.Erasure.Distribution, onlineDisks, bucket, object, opts.VersionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "get-object-file-info-manually-modified")
 		return fi, nil, nil, toObjectErr(err, bucket, object, opts.VersionID)
 	}
 
@@ -1322,7 +1322,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if errors.Is(err, errFileNotFound) {
 			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "erasure-object-rename")
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
