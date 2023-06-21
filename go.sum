@@ -481,8 +481,10 @@ github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/kes-go v0.1.0 h1:h201DyOYP5sTqajkxFGxmXz/kPbT8HQNX1uh3Yx2PFc=
 github.com/minio/kes-go v0.1.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
-github.com/minio/madmin-go/v3 v3.0.3 h1:UEFkH7ZG1WJ4mDzpI1dargv/1vDXKMrlR5KfRRxTqO4=
-github.com/minio/madmin-go/v3 v3.0.3/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
+github.com/minio/madmin-go/v2 v2.2.1 h1:zyRcXBm013VF6+7wefOpJEU6N2f7/7uFKsOrcn44DpM=
+github.com/minio/madmin-go/v2 v2.2.1/go.mod h1:8bL1RMNkblIENFSgGYjeHrzUx9PxROb7OqfNuMU9ivE=
+github.com/minio/madmin-go/v3 v3.0.4 h1:nINToRlCFRKKINGIvn+RUkYgnQregTEi6xVO6XwSUtA=
+github.com/minio/madmin-go/v3 v3.0.4/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
 github.com/minio/mc v0.0.0-20230620210040-4b06db8e171f h1:YWTPtK2aX2YF+A6FJ9aoTXY0AvyIkDrAS7iSR03rx+Q=
 github.com/minio/mc v0.0.0-20230620210040-4b06db8e171f/go.mod h1:tlEqgLNEvJgXIwgpsrx7wuzmy7wNl+Q0E2ekkBf7DGk=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
@@ -648,6 +650,8 @@ github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR
 github.com/scylladb/termtables v0.0.0-20191203121021-c4c0b6d42ff4/go.mod h1:C1a7PQSMz9NShzorzCiG2fk9+xuCgLkPeCvMHYR2OWg=
 github.com/secure-io/sio-go v0.3.1 h1:dNvY9awjabXTYGsTF1PiCySl9Ltofk9GA3VdWlo7rRc=
 github.com/secure-io/sio-go v0.3.1/go.mod h1:+xbkjDzPjwh4Axd07pRKSNriS9SCiYksWnZqdnfpQxs=
+github.com/shirou/gopsutil v3.21.11+incompatible h1:+1+c1VGhc88SSonWP6foOcLhvnKlUeu/erjjvaPEYiI=
+github.com/shirou/gopsutil v3.21.11+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMTu2PcXUg8+E1lC7eC3UO/RA=
 github.com/shirou/gopsutil/v3 v3.23.5 h1:5SgDCeQ0KW0S4N0znjeM/eFHXXOKyv2dVNgRq/c9P6Y=
 github.com/shirou/gopsutil/v3 v3.23.5/go.mod h1:Ng3Maa27Q2KARVJ0SPZF5NdrQSC3XHKP8IIWrHgMeLY=
 github.com/shoenig/go-m1cpu v0.1.6 h1:nxdKQNcEB6vzgA2E2bvzKIYRuNj7XNJ4S/aRSwKzFtM=
