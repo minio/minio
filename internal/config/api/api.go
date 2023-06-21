@@ -45,6 +45,7 @@ const (
 	apiDisableODirect              = "disable_odirect"
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
+	apiSyncEvents                  = "sync_events"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
@@ -62,6 +63,7 @@ const (
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default "on"
+	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
 )
 
 // Deprecated key and ENVs
@@ -135,6 +137,10 @@ var (
 			Key:   apiRootAccess,
 			Value: "on",
 		},
+		config.KV{
+			Key:   apiSyncEvents,
+			Value: "off",
+		},
 	}
 )
 
@@ -154,6 +160,7 @@ type Config struct {
 	DisableODirect              bool          `json:"disable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
+	SyncEvents                  bool          `json:"sync_events"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -268,6 +275,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
+
+	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
 
 	return cfg, nil
 }
