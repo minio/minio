@@ -411,5 +411,13 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	}
 
 	globalSiteNetPerfRX.Reset()
-	return madmin.SiteNetPerfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
+	return madmin.SiteNetPerfNodeResult{
+		Endpoint:  "",
+		TX:        r.n,
+		TxDurMs:   uint64(duration.Milliseconds()),
+		RX:        uint64(rx),
+		RxDurMs:   uint64(delta.Milliseconds()),
+		Error:     errStr,
+		TotalConn: uint64(connectionsPerPeer + 1),
+	}
 }
