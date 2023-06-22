@@ -1153,9 +1153,9 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 }
 
-// SiteReplicationPerfHandler - perform mesh style network throughput test
-func (a adminAPIHandlers) SiteReplicationPerfHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationPerfHandler")
+// SitePerfHandler -  measures network throughput between site replicated setups
+func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SitePerfHandler")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -1164,7 +1164,7 @@ func (a adminAPIHandlers) SiteReplicationPerfHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-replication-net-perf")
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-net-perf")
 	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)

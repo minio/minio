@@ -288,7 +288,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/object").HandlerFunc(httpTraceHdrs(adminAPI.ObjectSpeedTestHandler))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/drive").HandlerFunc(httpTraceHdrs(adminAPI.DriveSpeedtestHandler))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/net").HandlerFunc(httpTraceHdrs(adminAPI.NetperfHandler))
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/site-replication").HandlerFunc(httpTraceHdrs(adminAPI.SiteReplicationPerfHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/site").HandlerFunc(httpTraceHdrs(adminAPI.SitePerfHandler))
 
 		// HTTP Trace
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/trace").HandlerFunc(gz(http.HandlerFunc(adminAPI.TraceHandler)))

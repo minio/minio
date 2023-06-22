@@ -242,7 +242,7 @@ func (n *netPerfRX) Connect() {
 	n.Lock()
 	defer n.Unlock()
 	n.activeConnections++
-	atomic.StoreUint64(&globalNetPerfRX.RX, 0)
+	atomic.StoreUint64(&n.RX, 0)
 	n.lastToConnect = time.Now()
 }
 
@@ -341,7 +341,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 	return madmin.NetperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }
 
-func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Duration) madmin.SiteReplicationPerfNodeResult {
+func siteNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Duration) madmin.SiteNetPerfNodeResult {
 	r := &netperfReader{eof: make(chan struct{})}
 	r.buf = make([]byte, 128*humanize.KiByte)
 	rand.Read(r.buf)
@@ -350,7 +350,7 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 
 	clusterInfos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
-		return madmin.SiteReplicationPerfNodeResult{}
+		return madmin.SiteNetPerfNodeResult{}
 	}
 
 	if len(clusterInfos.Sites) > 16 {
@@ -362,7 +362,7 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 	var wg sync.WaitGroup
 
 	for _, info := range clusterInfos.Sites {
-		// not self
+		// skip self
 		if globalDeploymentID == info.DeploymentID {
 			continue
 		}
@@ -385,13 +385,9 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 				if err != nil {
 					return
 				}
-				transport := madmin.DefaultTransport(rp.Scheme == "https")
-				if rp.Scheme == "https" {
-					transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
-				}
 				client := &http.Client{
 					Timeout:   duration + 10*time.Second,
-					Transport: transport,
+					Transport: globalRemoteTargetTransport,
 				}
 				resp, err := client.Do(req)
 				if err != nil {
@@ -406,18 +402,18 @@ func siteReplicationNetperf(ctx context.Context, c *SiteReplicationSys, duration
 	close(r.eof)
 	wg.Wait()
 	for {
-		if globalNetPerfRX.ActiveConnections() == 0 {
+		if globalSiteNetPerfRX.ActiveConnections() == 0 {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-	rx := float64(globalNetPerfRX.RXSample)
-	delta := globalNetPerfRX.firstToDisconnect.Sub(globalNetPerfRX.lastToConnect)
+	rx := float64(globalSiteNetPerfRX.RXSample)
+	delta := globalSiteNetPerfRX.firstToDisconnect.Sub(globalSiteNetPerfRX.lastToConnect)
 	if delta < 0 {
 		rx = 0
-		errStr = "network disconnection issues detected"
+		errStr = "detected network disconnections, possibly an unstable network"
 	}
 
-	globalNetPerfRX.Reset()
-	return madmin.SiteReplicationPerfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
+	globalSiteNetPerfRX.Reset()
+	return madmin.SiteNetPerfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }

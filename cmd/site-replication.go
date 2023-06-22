@@ -648,7 +648,7 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 }
 
 // Netperf for site-replication net perf
-func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration) (results madmin.SiteReplicationPerfResult, err error) {
+func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration) (results madmin.SiteNetPerfResult, err error) {
 	infos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
 		return results, err
@@ -658,7 +658,7 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		scheme = "https"
 	}
 	for _, info := range infos.Sites {
-		// not self
+		// skip self
 		if globalDeploymentID == info.DeploymentID {
 			continue
 		}
@@ -681,7 +681,7 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		Scheme: scheme,
 		Host:   globalLocalNodeName,
 	}
-	result := siteReplicationNetperf(ctx, c, duration)
+	result := siteNetperf(ctx, c, duration)
 	result.Endpoint = u.String()
 	results.NodeResults = append(results.NodeResults, result)
 	return
