@@ -575,8 +575,8 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
 	durationStr := r.Form.Get(peerRESTDuration)
 	duration, err := time.ParseDuration(durationStr)
-	if err != nil || duration.Seconds() == 0 {
-		duration = time.Second * 10
+	if duration < globalNetPerfMinDuration {
+		duration = globalNetPerfMinDuration
 	}
 	result := siteNetperf(r.Context(), duration.Round(time.Second))
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
