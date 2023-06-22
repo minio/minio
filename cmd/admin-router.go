@@ -162,11 +162,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			HandlerFunc(gz(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup))).
 			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
 
-		// Attach policies to user or group
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/attach").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachPolicyBuiltin)))
-
-		// Detach policies from user or group
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/detach").HandlerFunc(gz(httpTraceHdrs(adminAPI.DetachPolicyBuiltin)))
+		// Attach/Detach policies to/from user or group
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/builtin/policy/{operation}").HandlerFunc(gz(httpTraceHdrs(adminAPI.AttachDetachPolicyBuiltin)))
 
 		// Remove user IAM
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-user").HandlerFunc(gz(httpTraceHdrs(adminAPI.RemoveUser))).Queries("accessKey", "{accessKey:.*}")

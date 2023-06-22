@@ -150,7 +150,7 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 	}
 
 	// Call IAM subsystem
-	updatedAt, addedOrRemoved, err := globalIAMSys.PolicyDBUpdateLDAP(ctx, isAttach, par)
+	updatedAt, addedOrRemoved, _, err := globalIAMSys.PolicyDBUpdateLDAP(ctx, isAttach, par)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

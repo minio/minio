@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/klauspost/compress/zip"
@@ -1771,24 +1770,40 @@ func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *ht
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// AttachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/attach
-func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
+// AttachDetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/{operation}
+func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AttachPolicyBuiltin")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.UpdatePolicyAssociationAction,
+		iampolicy.AttachPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
-	cred, _, s3Err := validateAdminSignature(ctx, r, "")
-	if s3Err != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
+		// More than maxConfigSize bytes were available
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
 		return
 	}
-	password := cred.SecretKey
 
+	// Ensure body content type is opaque to ensure that request body has not
+	// been interpreted as form data.
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/octet-stream" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+		return
+	}
+
+	operation := mux.Vars(r)["operation"]
+	if operation != "attach" && operation != "detach" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+		return
+	}
+	isAttach := operation == "attach"
+
+	password := cred.SecretKey
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1806,235 +1821,42 @@ func (a adminAPIHandlers) AttachPolicyBuiltin(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	userOrGroup := par.User
-	isGroup := false
-
-	if userOrGroup == "" {
-		userOrGroup = par.Group
-		isGroup = true
-	}
-
-	if isGroup {
-		_, err := globalIAMSys.GetGroupDescription(userOrGroup)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-	} else {
-		ok, _, err := globalIAMSys.IsTempUser(userOrGroup)
-		if err != nil && err != errNoSuchUser {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		if ok {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
-			return
-		}
-
-		// When the user is root credential you are not allowed to
-		// add policies for root user.
-		if userOrGroup == globalActiveCred.AccessKey {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
-			return
-		}
-
-		// Validate that user exists.
-		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
-		if !ok {
+	updatedAt, addedOrRemoved, _, err := globalIAMSys.PolicyDBUpdateBuiltin(ctx, isAttach, par)
+	if err != nil {
+		if err == errNoSuchUser || err == errNoSuchGroup {
 			if globalIAMSys.LDAPConfig.Enabled() {
 				// When LDAP is enabled, warn user that they are using the wrong
-				// API.
+				// API. FIXME: error can be no such group as well - fix errNoSuchUserLDAPWarn
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
 				return
 			}
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
-			return
 		}
-	}
-
-	var existingPolicies []string
-	if isGroup {
-		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
-	} else {
-		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
-	}
-	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	policyMap := make(map[string]bool)
-	for _, p := range existingPolicies {
-		policyMap[p] = true
-	}
-
-	policiesToAttach := par.Policies
-
-	// Check if policy is already attached to user.
-	for _, p := range policiesToAttach {
-		if _, ok := policyMap[p]; ok {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyAlreadyAttached), r.URL)
-			return
-		}
-	}
-
-	existingPolicies = append(existingPolicies, policiesToAttach...)
-	newPolicies := strings.Join(existingPolicies, ",")
-
-	userType := regUser
-	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemPolicyMapping,
-		PolicyMapping: &madmin.SRPolicyMapping{
-			UserOrGroup: userOrGroup,
-			UserType:    int(userType),
-			IsGroup:     isGroup,
-			Policy:      strings.Join(policiesToAttach, ","),
-		},
+	respBody := madmin.PolicyAssociationResp{
 		UpdatedAt: updatedAt,
-	}))
-
-	writeResponse(w, http.StatusCreated, nil, mimeNone)
-}
-
-// DetachPolicyBuiltin - POST /minio/admin/v3/idp/builtin/policy/detach
-func (a adminAPIHandlers) DetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "DetachPolicyBuiltin")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
-	if objectAPI == nil {
-		return
 	}
-
-	cred, _, s3Err := validateAdminSignature(ctx, r, "")
-	if s3Err != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
-		return
-	}
-	password := cred.SecretKey
-
-	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	var par madmin.PolicyAssociationReq
-	if err = json.Unmarshal(reqBytes, &par); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	if err = par.IsValid(); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	userOrGroup := par.User
-	isGroup := false
-
-	if userOrGroup == "" {
-		userOrGroup = par.Group
-		isGroup = true
-	}
-
-	if isGroup {
-		_, err := globalIAMSys.GetGroupDescription(userOrGroup)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
+	if isAttach {
+		respBody.PoliciesAttached = addedOrRemoved
 	} else {
-		ok, _, err := globalIAMSys.IsTempUser(userOrGroup)
-		if err != nil && err != errNoSuchUser {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		if ok {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
-			return
-		}
-
-		// Validate that user exists.
-		_, ok = globalIAMSys.GetUser(ctx, userOrGroup)
-		if !ok {
-			if globalIAMSys.LDAPConfig.Enabled() {
-				// When LDAP is enabled, warn user that they are using the wrong
-				// API.
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
-				return
-			}
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
-			return
-		}
+		respBody.PoliciesDetached = addedOrRemoved
 	}
 
-	userType := regUser
-	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
-		userType = stsUser
-	}
-
-	var existingPolicies []string
-	if isGroup {
-		existingPolicies, err = globalIAMSys.PolicyDBGet(userOrGroup, true)
-	} else {
-		existingPolicies, err = globalIAMSys.GetUserPolicies(userOrGroup)
-	}
+	data, err := json.Marshal(respBody)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	policyMap := make(map[string]bool)
-	for _, p := range existingPolicies {
-		policyMap[p] = true
-	}
-
-	policiesToDetach := par.Policies
-
-	// Check if policy is already attached to user.
-	for _, p := range policiesToDetach {
-		if _, ok := policyMap[p]; ok {
-			delete(policyMap, p)
-		} else {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyNotAttached), r.URL)
-			return
-		}
-	}
-
-	newPoliciesSl := []string{}
-	for p := range policyMap {
-		newPoliciesSl = append(newPoliciesSl, p)
-	}
-
-	newPolicies := strings.Join(newPoliciesSl, ",")
-
-	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, userOrGroup, newPolicies, userType, isGroup)
+	encryptedData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemPolicyMapping,
-		PolicyMapping: &madmin.SRPolicyMapping{
-			UserOrGroup: userOrGroup,
-			UserType:    int(userType),
-			IsGroup:     isGroup,
-			Policy:      newPolicies,
-		},
-		UpdatedAt: updatedAt,
-	}))
-
-	// Return successful JSON response
-	writeSuccessNoContent(w)
+	writeSuccessResponseJSON(w, encryptedData)
 }
 
 const (
