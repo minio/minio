@@ -419,6 +419,6 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		RX:        uint64(rx),
 		RxDurMs:   uint64(delta.Milliseconds()),
 		Error:     errStr,
-		TotalConn: uint64(connectionsPerPeer + 1),
+		TotalConn: uint64(connectionsPerPeer),
 	}
 }
