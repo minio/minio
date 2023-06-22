@@ -174,10 +174,10 @@ FLAGS:
 					}
 					var ei erasureInfo
 					if err := json.Unmarshal(buf.Bytes(), &ei); err == nil && ei.V2Obj != nil {
-						verId := uuid.UUID(header.VersionID).String()
+						verID := uuid.UUID(header.VersionID).String()
 						idx := ei.V2Obj.EcIndex
-						filemap[file][verId] = fmt.Sprintf("%s/shard-%02d-of-%02d", verId, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
-						filemap[file][verId+".json"] = buf.String()
+						filemap[file][verID] = fmt.Sprintf("%s/shard-%02d-of-%02d", verID, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
+						filemap[file][verID+".json"] = buf.String()
 					}
 					return nil
 				})
@@ -654,7 +654,6 @@ func combine(files []string, out string) error {
 		if err != nil {
 			return err
 		}
-		idx := -1
 		meta, err := os.ReadFile(file + ".json")
 		if err != nil {
 			return err
@@ -669,6 +668,7 @@ func combine(files []string, out string) error {
 			}
 		}
 		var ei erasureInfo
+		var idx int
 		if err := json.Unmarshal(meta, &ei); err == nil && ei.V2Obj != nil {
 			if size == 0 {
 				size = ei.V2Obj.Size
