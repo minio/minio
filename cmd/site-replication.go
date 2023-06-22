@@ -659,8 +659,8 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 	var wg sync.WaitGroup
 	var resultsMu sync.RWMutex
 	for _, info := range infos.Sites {
-		// skip self
 		info := info
+		// will call siteNetperf, means call others's adminAPISiteReplicationDevNull
 		if globalDeploymentID == info.DeploymentID {
 			wg.Add(1)
 			go func() {
