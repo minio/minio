@@ -578,6 +578,6 @@ func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http
 	if duration < globalNetPerfMinDuration {
 		duration = globalNetPerfMinDuration
 	}
-	result := siteNetperf(r.Context(), duration.Round(time.Second))
+	result := siteNetperf(r.Context(), duration)
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
