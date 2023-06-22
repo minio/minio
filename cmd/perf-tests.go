@@ -346,8 +346,6 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	r.buf = make([]byte, 128*humanize.KiByte)
 	rand.Read(r.buf)
 
-	connectionsPerPeer := 16
-
 	clusterInfos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
 		return madmin.SiteNetPerfNodeResult{}
