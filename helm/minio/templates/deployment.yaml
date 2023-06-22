@@ -77,7 +77,7 @@ spec:
             - name: minio-user
               mountPath: "/tmp/credentials"
               readOnly: true
-            - name: export
+            - name: {{.Values.exportVolumeName | default "export" }}
               mountPath: {{ .Values.mountPath }}
               {{- if and .Values.persistence.enabled .Values.persistence.subPath }}
               subPath: "{{ .Values.persistence.subPath }}"
