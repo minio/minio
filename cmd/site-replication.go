@@ -677,11 +677,20 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 			}()
 		}
 		wg.Add(1)
-		go func() {
+		go func() (err error) {
 			defer wg.Done()
+			result := madmin.SiteNetPerfNodeResult{}
+			defer func() {
+				if err != nil {
+					result.Error = err.Error()
+				}
+				resultsMu.Lock()
+				results.NodeResults = append(results.NodeResults, result)
+				resultsMu.Unlock()
+			}()
 			cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
 			if err != nil {
-				return
+				return err
 			}
 			rp := cli.GetEndpointURL()
 			reqURL := &url.URL{
@@ -689,9 +698,10 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 				Host:   rp.Host,
 				Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplicationNetPerf,
 			}
+			result.Endpoint = rp.String()
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), nil)
 			if err != nil {
-				return
+				return err
 			}
 			client := &http.Client{
 				Timeout:   duration + 10*time.Second,
@@ -699,18 +709,10 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 			}
 			resp, err := client.Do(req)
 			if err != nil {
-				return
+				return err
 			}
 			defer xhttp.DrainBody(resp.Body)
-			result := madmin.SiteNetPerfNodeResult{}
-			err = gob.NewDecoder(resp.Body).Decode(&result)
-			if err != nil {
-				return
-			}
-			result.Endpoint = rp.String()
-			resultsMu.Lock()
-			results.NodeResults = append(results.NodeResults, result)
-			resultsMu.Unlock()
+			return gob.NewDecoder(resp.Body).Decode(&result)
 		}()
 	}
 	wg.Wait()
