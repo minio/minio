@@ -675,6 +675,7 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 				results.NodeResults = append(results.NodeResults, result)
 				resultsMu.Unlock()
 			}()
+			continue
 		}
 		wg.Add(1)
 		go func() (err error) {
