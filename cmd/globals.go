@@ -224,9 +224,9 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
-	// All drives endpoints of this deployment
+	// All unique drives for this deployment
 	globalEndpoints EndpointServerPools
-	// All nodesof this deployment
+	// All unique nodes for this deployment
 	globalNodes []Node
 
 	// The name of this local node, fetched from arguments
