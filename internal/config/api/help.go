@@ -104,5 +104,11 @@ var (
 			Optional:    true,
 			Type:        "boolean",
 		},
+		config.HelpKV{
+			Key:         apiSyncEvents,
+			Description: "set to enable synchronous bucket notifications" + defaultHelpPostfix(apiSyncEvents),
+			Optional:    true,
+			Type:        "boolean",
+		},
 	}
 )

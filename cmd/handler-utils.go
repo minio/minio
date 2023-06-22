@@ -269,8 +269,25 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+		if err != nil {
+			defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
+
+			apiErr := errorCodes.ToAPIErr(ErrUnsupportedHostHeader)
+			apiErr.Description = fmt.Sprintf("%s: %v", apiErr.Description, err)
+
+			writeErrorResponse(r.Context(), w, apiErr, r.URL)
+			return
+		}
+
+		bucket, _ := path2BucketObject(resource)
+
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
+
+		if bucket != "" && bucket != minioReservedBucket {
+			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
+		}
 
 		f.ServeHTTP(w, r)
 
@@ -299,16 +316,10 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
 
-			resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
-			if err != nil {
-				logger.LogIf(r.Context(), fmt.Errorf("Unable to get the actual resource in the incoming request: %v", err))
-				return
-			}
-
-			bucket, _ := path2BucketObject(resource)
 			if bucket != "" && bucket != minioReservedBucket {
 				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
 				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
+				globalBucketHTTPStats.updateHTTPStats(bucket, api, tc.ResponseRecorder)
 			}
 		}
 	}
