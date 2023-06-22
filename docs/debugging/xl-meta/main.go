@@ -27,11 +27,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/klauspost/compress/zip"
 	"github.com/klauspost/filepathx"
+	"github.com/klauspost/reedsolomon"
 	"github.com/minio/cli"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -74,10 +78,21 @@ FLAGS:
 			Usage: "export inline data",
 			Name:  "export",
 		},
+		cli.BoolFlag{
+			Usage: "combine inline data",
+			Name:  "combine",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
 		ndjson := c.Bool("ndjson")
+		if c.Bool("data") && c.Bool("combine") {
+			return errors.New("cannot combine --data and --combine")
+		}
+		// file / version / file
+		filemap := make(map[string]map[string]string)
+		// versionID ->
+		combineFiles := make(map[string][]string)
 		decode := func(r io.Reader, file string) ([]byte, error) {
 			b, err := io.ReadAll(r)
 			if err != nil {
@@ -87,7 +102,7 @@ FLAGS:
 			if err != nil {
 				return nil, err
 			}
-
+			filemap[file] = make(map[string]string)
 			buf := bytes.NewBuffer(nil)
 			var data xlMetaInlineData
 			switch minor {
@@ -149,6 +164,21 @@ FLAGS:
 						Header:   b,
 						Metadata: buf.Bytes(),
 					}
+					type erasureInfo struct {
+						V2Obj *struct {
+							EcDist  []int
+							EcIndex int
+							EcM     int
+							EcN     int
+						}
+					}
+					var ei erasureInfo
+					if err := json.Unmarshal(buf.Bytes(), &ei); err == nil && ei.V2Obj != nil {
+						verId := uuid.UUID(header.VersionID).String()
+						idx := ei.V2Obj.EcIndex
+						filemap[file][verId] = fmt.Sprintf("%s/shard-%02d-of-%02d", verId, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
+						filemap[file][verId+".json"] = buf.String()
+					}
 					return nil
 				})
 				if err != nil {
@@ -173,22 +203,39 @@ FLAGS:
 				buf = bytes.NewBuffer(b)
 			}
 			if c.Bool("export") {
-				file := strings.Map(func(r rune) rune {
-					switch {
-					case r >= 'a' && r <= 'z':
-						return r
-					case r >= 'A' && r <= 'Z':
-						return r
-					case r >= '0' && r <= '9':
-						return r
-					case strings.ContainsAny(string(r), "+=-_()!@."):
-						return r
-					default:
-						return '_'
-					}
-				}, file)
+				file := file
+				if !c.Bool("combine") {
+					file = strings.Map(func(r rune) rune {
+						switch {
+						case r >= 'a' && r <= 'z':
+							return r
+						case r >= 'A' && r <= 'Z':
+							return r
+						case r >= '0' && r <= '9':
+							return r
+						case strings.ContainsAny(string(r), "+=-_()!@."):
+							return r
+						default:
+							return '_'
+						}
+					}, file)
+				}
 				err := data.files(func(name string, data []byte) {
-					err = os.WriteFile(fmt.Sprintf("%s-%s.data", file, name), data, os.ModePerm)
+					fn := fmt.Sprintf("%s-%s.data", file, name)
+					if c.Bool("combine") {
+						f := filemap[file][name]
+						if f != "" {
+							fn = f + ".data"
+							os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+							err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
+							combineFiles[name] = append(combineFiles[name], fn)
+							if err != nil {
+								fmt.Println("ERR:", err)
+							}
+							_ = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+						}
+					}
+					err = os.WriteFile(fn, data, os.ModePerm)
 					if err != nil {
 						fmt.Println(err)
 					}
@@ -311,6 +358,13 @@ FLAGS:
 		fmt.Println("")
 		if multiple {
 			fmt.Println("}")
+		}
+		if len(combineFiles) > 0 {
+			for k, v := range combineFiles {
+				if err := combine(v, k); err != nil {
+					fmt.Println("ERROR:", err)
+				}
+			}
 		}
 
 		return nil
@@ -586,4 +640,155 @@ func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, err error) {
 		Flags:     z.Flags,
 	}
 	return json.Marshal(tmp)
+}
+
+func combine(files []string, out string) error {
+	sort.Strings(files)
+	var size, shards, data, parity int
+	mapped := make([]byte, size)
+	filled := make([]byte, size)
+	parityData := make(map[int]map[int][]byte)
+	fmt.Printf("Attempting to combine version %q.\n", out)
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		idx := -1
+		meta, err := os.ReadFile(file + ".json")
+		if err != nil {
+			return err
+		}
+		type erasureInfo struct {
+			V2Obj *struct {
+				EcDist  []int
+				EcIndex int
+				EcM     int
+				EcN     int
+				Size    int
+			}
+		}
+		var ei erasureInfo
+		if err := json.Unmarshal(meta, &ei); err == nil && ei.V2Obj != nil {
+			if size == 0 {
+				size = ei.V2Obj.Size
+				mapped = make([]byte, size)
+				filled = make([]byte, size)
+			}
+			data = ei.V2Obj.EcM
+			parity = ei.V2Obj.EcN
+			if shards == 0 {
+				shards = data + parity
+			}
+			idx = ei.V2Obj.EcIndex - 1
+			fmt.Println("Read shard", ei.V2Obj.EcIndex, "Data shards", data, "Parity", parity, fmt.Sprintf("(%s)", file))
+			if ei.V2Obj.Size != size {
+				return fmt.Errorf("size mismatch. Meta size: %d", ei.V2Obj.Size)
+			}
+		} else {
+			return err
+		}
+		if len(b) < 32 {
+			return fmt.Errorf("file %s too short", file)
+		}
+		// Trim hash. Fine for inline data, since only one block.
+		b = b[32:]
+
+		set := parityData[data]
+		if set == nil {
+			set = make(map[int][]byte)
+		}
+		set[idx] = b
+		parityData[data] = set
+
+		// Combine
+		start := len(b) * idx
+		if start >= len(mapped) {
+			continue
+		}
+		copy(mapped[start:], b)
+		for j := range b {
+			if j+start >= len(filled) {
+				break
+			}
+			filled[j+start] = 1
+		}
+	}
+
+	lastValid := 0
+	missing := 0
+	for i := range filled {
+		if filled[i] == 1 {
+			lastValid = i
+		} else {
+			missing++
+		}
+	}
+	if missing > 0 && len(parityData) > 0 {
+		fmt.Println("Attempting to reconstruct using parity sets:")
+		for k, v := range parityData {
+			if missing == 0 {
+				break
+			}
+			fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", len(v))
+			rs, err := reedsolomon.New(k, shards-k)
+			if err != nil {
+				return err
+			}
+			split, err := rs.Split(mapped)
+			if err != nil {
+				return err
+			}
+			splitFilled, err := rs.Split(filled)
+			if err != nil {
+				return err
+			}
+			ok := len(splitFilled)
+			for i, sh := range splitFilled {
+				for _, v := range sh {
+					if v == 0 {
+						split[i] = nil
+						ok--
+						break
+					}
+				}
+			}
+			hasParity := 0
+			for idx, sh := range v {
+				split[idx] = sh
+				if sh != nil {
+					hasParity++
+				}
+			}
+			fmt.Printf("Have %d complete remapped data shards and %d complete parity shards. ", ok, hasParity)
+
+			if err := rs.ReconstructData(split); err == nil {
+				fmt.Println("Could reconstruct completely")
+				for i, data := range split[:k] {
+					start := i * len(data)
+					copy(mapped[start:], data)
+				}
+				lastValid = size - 1
+				missing = 0
+			} else {
+				fmt.Println("Could NOT reconstruct:", err)
+			}
+		}
+	}
+	if lastValid == 0 {
+		return errors.New("no valid data found")
+	}
+	if missing > 0 {
+		out += ".truncated"
+	} else {
+		out += ".complete"
+	}
+	fmt.Println(missing, "bytes missing. Truncating", len(filled)-lastValid-1, "from end.")
+	mapped = mapped[:lastValid+1]
+	err := os.WriteFile(out, mapped, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Wrote output to", out)
+	return nil
 }
