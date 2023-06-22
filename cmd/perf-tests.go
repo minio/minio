@@ -367,8 +367,8 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 			continue
 		}
 		info := info
+		wg.Add(connectionsPerPeer)
 		for i := 0; i < connectionsPerPeer; i++ {
-			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
