@@ -26,6 +26,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	xhttp "github.com/minio/minio/internal/http"
+	"net/http"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -653,37 +655,57 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 	if err != nil {
 		return results, err
 	}
+	var wg sync.WaitGroup
 	scheme := "http"
 	if globalIsTLS {
 		scheme = "https"
 	}
 	for _, info := range infos.Sites {
 		// skip self
+		info := info
 		if globalDeploymentID == info.DeploymentID {
 			continue
 		}
-		// call others
-		cli, err := c.getAdminClient(ctx, info.DeploymentID)
-		if err != nil {
-			continue
-		}
-		result, err := cli.SiteReplicationPerf(ctx, duration)
-		if err == nil {
-			for _, result := range result.NodeResults {
-				if result.Endpoint == "" {
-					result.Endpoint = cli.GetEndpointURL().String()
-				}
-				results.NodeResults = append(results.NodeResults, result)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
+			if err != nil {
+				return
 			}
+			rp := cli.GetEndpointURL()
+			reqURL := &url.URL{
+				Scheme: rp.Scheme,
+				Host:   rp.Host,
+				Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplicationNetPerf,
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), nil)
+			if err != nil {
+				return
+			}
+			client := &http.Client{
+				Timeout:   duration + 10*time.Second,
+				Transport: globalRemoteTargetTransport,
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				return
+			}
+			defer xhttp.DrainBody(resp.Body)
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		u := &url.URL{
+			Scheme: scheme,
+			Host:   globalLocalNodeName,
 		}
-	}
-	u := &url.URL{
-		Scheme: scheme,
-		Host:   globalLocalNodeName,
-	}
-	result := siteNetperf(ctx, c, duration)
-	result.Endpoint = u.String()
-	results.NodeResults = append(results.NodeResults, result)
+		result := siteNetperf(ctx, duration)
+		result.Endpoint = u.String()
+		results.NodeResults = append(results.NodeResults, result)
+	}()
+	wg.Wait()
 	return
 }
 

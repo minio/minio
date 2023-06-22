@@ -32,6 +32,7 @@ const (
 	adminAPIVersion                = madmin.AdminAPIVersion
 	adminAPIVersionPrefix          = SlashSeparator + adminAPIVersion
 	adminAPISiteReplicationDevNull = "/site-replication/devnull"
+	adminAPISiteReplicationNetPerf = "/site-replication/netperf"
 )
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
@@ -265,6 +266,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/metainfo").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationMetaInfo)))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/status").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationStatus)))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationDevNull).HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationDevNull)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationNetPerf).HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationNetPerf)))
 
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/join").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerJoin)))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/site-replication/peer/bucket-ops").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerBucketOps))).Queries("bucket", "{bucket:.*}").Queries("operation", "{operation:.*}")

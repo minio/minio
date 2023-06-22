@@ -341,7 +341,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 	return madmin.NetperfNodeResult{Endpoint: "", TX: r.n / uint64(duration.Seconds()), RX: uint64(rx / delta.Seconds()), Error: errStr}
 }
 
-func siteNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Duration) madmin.SiteNetPerfNodeResult {
+func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerfNodeResult {
 	r := &netperfReader{eof: make(chan struct{})}
 	r.buf = make([]byte, 128*humanize.KiByte)
 	rand.Read(r.buf)
@@ -371,7 +371,7 @@ func siteNetperf(ctx context.Context, c *SiteReplicationSys, duration time.Durat
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				cli, err := c.getAdminClient(ctx, info.DeploymentID)
+				cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
 				if err != nil {
 					return
 				}

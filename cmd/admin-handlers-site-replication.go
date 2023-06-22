@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -567,4 +568,16 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 			break
 		}
 	}
+}
+
+// SiteReplicationNetPerf - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/netperf
+func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
+	durationStr := r.Form.Get(peerRESTDuration)
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil || duration.Seconds() == 0 {
+		duration = time.Second * 10
+	}
+	result := siteNetperf(r.Context(), duration.Round(time.Second))
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
