@@ -756,7 +756,7 @@ func combine(files []string, out string) error {
 			hasParity := 0
 			for idx, sh := range v {
 				split[idx] = sh
-				if sh != nil {
+				if idx >= k && len(v) > 0 {
 					hasParity++
 				}
 			}
