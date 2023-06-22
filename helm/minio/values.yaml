@@ -49,6 +49,9 @@ extraArgs: []
 ## Additional volumes to minio container
 extraVolumes: []
 
+## If you add additional volumes and you want to mount one of the those volumes to the export directory then update the exportVolumeName to match the custom volume
+exportVolumeName: export
+
 ## Additional volumeMounts to minio container
 extraVolumeMounts: []
 
