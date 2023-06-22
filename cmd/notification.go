@@ -453,6 +453,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
 	globalBucketConnStats.delete(bucketName)
+	globalBucketHTTPStats.delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}

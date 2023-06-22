@@ -419,7 +419,9 @@ func (p poolMeta) save(ctx context.Context, pools []*erasureSets) error {
 	// Saves on all pools to make sure decommissioning of first pool is allowed.
 	for i, eset := range pools {
 		if err = saveConfig(ctx, eset, poolMetaName, buf); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
+			if !errors.Is(err, context.Canceled) {
+				logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
+			}
 			return err
 		}
 	}
@@ -720,18 +722,21 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			// to create the appropriate stack.
 			versionsSorter(fivs.Versions).reverse()
 
-			var decommissionedCount int
+			var decommissioned, expired int
 			for _, version := range fivs.Versions {
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bi.Name, version.Name, version) {
-					decommissionedCount++
+					expired++
+					decommissioned++
 					continue
 				}
 
 				// any object with only single DEL marker we don't need
-				// to decommission, just skip it.
-				if version.Deleted && len(fivs.Versions) == 1 {
-					decommissionedCount++
+				// to decommission, just skip it, this also includes
+				// any other versions that have already expired.
+				remainingVersions := len(fivs.Versions) - expired
+				if version.Deleted && remainingVersions == 1 {
+					decommissioned++
 					continue
 				}
 
@@ -756,11 +761,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							SkipDecommissioned: true, // make sure we skip the decommissioned pool
 						})
 					var failure bool
-					if err != nil {
-						if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-							// object deleted by the application, nothing to do here we move on.
-							continue
-						}
+					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						logger.LogIf(ctx, err)
 						failure = true
 					}
@@ -769,7 +770,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					z.poolMetaMutex.Unlock()
 					if !failure {
 						// Success keep a count.
-						decommissionedCount++
+						decommissioned++
 					}
 					continue
 				}
@@ -844,11 +845,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				if failure {
 					break // break out on first error
 				}
-				decommissionedCount++
+				decommissioned++
 			}
 
 			// if all versions were decommissioned, then we can delete the object versions.
-			if decommissionedCount == len(fivs.Versions) {
+			if decommissioned == len(fivs.Versions) {
 				stopFn := globalDecommissionMetrics.log(decomMetricDecommissionRemoveObject, idx, bi.Name, entry.name)
 				_, err := set.DeleteObject(ctx,
 					bi.Name,
