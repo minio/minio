@@ -353,10 +353,8 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		return madmin.SiteNetPerfNodeResult{}
 	}
 
-	if len(clusterInfos.Sites) > 16 {
-		// For a large cluster it's enough to have 1 connection per peer to saturate the network.
-		connectionsPerPeer = 1
-	}
+	// Scale the number of connections from 32 -> 4 from small to large clusters.
+	connectionsPerPeer := 3 + (29+len(clusterInfos.Sites)-1)/len(clusterInfos.Sites)
 
 	errStr := ""
 	var wg sync.WaitGroup
