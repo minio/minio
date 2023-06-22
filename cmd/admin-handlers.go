@@ -1164,13 +1164,13 @@ func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	//nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-net-perf")
-	//lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
-	//if err != nil {
-	//	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
-	//	return
-	//}
-	//defer nsLock.Unlock(lkctx)
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-net-perf")
+	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	defer nsLock.Unlock(lkctx)
 
 	durationStr := r.Form.Get(peerRESTDuration)
 	duration, err := time.ParseDuration(durationStr)
