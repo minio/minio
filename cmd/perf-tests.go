@@ -405,7 +405,8 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	}
 	rx := float64(globalSiteNetPerfRX.RXSample)
 	delta := globalSiteNetPerfRX.firstToDisconnect.Sub(globalSiteNetPerfRX.lastToConnect)
-	if delta < 0 {
+	// If the first disconnected before the last connected, we likely had a network issue.
+	if delta <= 0 {
 		rx = 0
 		errStr = "detected network disconnections, possibly an unstable network"
 	}
