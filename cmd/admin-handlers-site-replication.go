@@ -574,7 +574,7 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 // [POST] /minio/admin/v3/site-replication/netperf
 func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
 	durationStr := r.Form.Get(peerRESTDuration)
-	duration, err := time.ParseDuration(durationStr)
+	duration, _ := time.ParseDuration(durationStr)
 	if duration < globalNetPerfMinDuration {
 		duration = globalNetPerfMinDuration
 	}
