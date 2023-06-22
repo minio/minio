@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -565,6 +566,11 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 			}
 		}
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+			}
 			break
 		}
 	}
