@@ -176,14 +176,11 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	// remove this since we have removed this already.
-	kvs.Delete(apiReadyDeadline)
-	kvs.Delete("extend_list_cache_life")
-	kvs.Delete(apiReplicationWorkers)
-	kvs.Delete(apiReplicationFailedWorkers)
-
-	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
-		return cfg, err
+	deprecatedKeys := []string{
+		apiReadyDeadline,
+		"extend_list_cache_life",
+		apiReplicationWorkers,
+		apiReplicationFailedWorkers,
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
@@ -194,6 +191,16 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		DisableODirect: disableODirect,
 		GzipObjects:    gzipObjects,
 		RootAccess:     rootAccess,
+	}
+
+	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+	if len(corsAllowOrigin) == 0 {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	}
+	cfg.CorsAllowOrigin = corsAllowOrigin
+
+	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
+		return cfg, err
 	}
 
 	// Check environment variables parameters
@@ -218,12 +225,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 	cfg.ClusterDeadline = clusterDeadline
-
-	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 {
-		corsAllowOrigin = []string{"*"} // defaults to '*'
-	}
-	cfg.CorsAllowOrigin = corsAllowOrigin
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {

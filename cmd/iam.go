@@ -813,7 +813,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 	}
 }
 
-// IsTempUser - returns if given key is a temporary user.
+// IsTempUser - returns if given key is a temporary user and parent user.
 func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {
 		return false, "", errServerNotInitialized
@@ -887,15 +887,6 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-// GetUserPolicies - get policies attached to a user.
-func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
-	if !sys.Initialized() {
-		return p, errServerNotInitialized
-	}
-
-	return sys.store.GetUserPolicies(name)
 }
 
 // SetUserStatus - sets current user status, supports disabled or enabled.
@@ -1582,13 +1573,93 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	return updatedAt, nil
 }
 
+// PolicyDBUpdateBuiltin - adds or removes policies from a user or a group
+// verified to be an internal IDP user.
+func (sys *IAMSys) PolicyDBUpdateBuiltin(ctx context.Context, isAttach bool,
+	r madmin.PolicyAssociationReq,
+) (updatedAt time.Time, addedOrRemoved, effectivePolicies []string, err error) {
+	if !sys.Initialized() {
+		err = errServerNotInitialized
+		return
+	}
+
+	userOrGroup := r.User
+	var isGroup bool
+	if userOrGroup == "" {
+		isGroup = true
+		userOrGroup = r.Group
+	}
+
+	if isGroup {
+		_, err = sys.GetGroupDescription(userOrGroup)
+		if err != nil {
+			return
+		}
+	} else {
+		var isTemp bool
+		isTemp, _, err = sys.IsTempUser(userOrGroup)
+		if err != nil && err != errNoSuchUser {
+			return
+		}
+		if isTemp {
+			err = errIAMActionNotAllowed
+			return
+		}
+
+		// When the user is root credential you are not allowed to
+		// add policies for root user.
+		if userOrGroup == globalActiveCred.AccessKey {
+			err = errIAMActionNotAllowed
+			return
+		}
+
+		// Validate that user exists.
+		var userExists bool
+		_, userExists = sys.GetUser(ctx, userOrGroup)
+		if !userExists {
+			err = errNoSuchUser
+			return
+		}
+	}
+
+	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, userOrGroup, isGroup,
+		regUser, r.Policies, isAttach)
+	if err != nil {
+		return
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(userOrGroup, regUser, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: userOrGroup,
+			UserType:    int(regUser),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(effectivePolicies, ","),
+		},
+		UpdatedAt: updatedAt,
+	}))
+
+	return
+}
+
 // PolicyDBUpdateLDAP - adds or removes policies from a user or a group verified
 // to be in the LDAP directory.
 func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	r madmin.PolicyAssociationReq,
-) (updatedAt time.Time, addedOrRemoved []string, err error) {
+) (updatedAt time.Time, addedOrRemoved, effectivePolicies []string, err error) {
 	if !sys.Initialized() {
-		return updatedAt, nil, errServerNotInitialized
+		err = errServerNotInitialized
+		return
 	}
 
 	var dn string
@@ -1597,28 +1668,31 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return updatedAt, nil, err
+			return
 		}
 		if dn == "" {
-			return updatedAt, nil, errNoSuchUser
+			err = errNoSuchUser
+			return
 		}
 		isGroup = false
 	} else {
-		if exists, err := sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+		var exists bool
+		if exists, err = sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
 			logger.LogIf(ctx, err)
-			return updatedAt, nil, err
+			return
 		} else if !exists {
-			return updatedAt, nil, errNoSuchGroup
+			err = errNoSuchGroup
+			return
 		}
 		dn = r.Group
 		isGroup = true
 	}
 
 	userType := stsUser
-	updatedAt, addedOrRemoved, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
+	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
 		userType, r.Policies, isAttach)
 	if err != nil {
-		return updatedAt, nil, err
+		return
 	}
 
 	// Notify all other MinIO peers to reload policy
@@ -1631,7 +1705,18 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 	}
 
-	return updatedAt, addedOrRemoved, nil
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: dn,
+			UserType:    int(userType),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(effectivePolicies, ","),
+		},
+		UpdatedAt: updatedAt,
+	}))
+
+	return
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is

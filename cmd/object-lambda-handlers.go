@@ -47,7 +47,7 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 	}
 
 	duration := time.Until(cred.Expiration)
-	if cred.Expiration.IsZero() || duration > time.Hour {
+	if duration > time.Hour || duration < time.Hour {
 		// Always limit to 1 hour.
 		duration = time.Hour
 	}

@@ -52,6 +52,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         UserDNSearchBaseDN,
