@@ -131,7 +131,7 @@ func LookupConfig(s config.Config, httpSettings xhttp.ConnSettings, closeRespFn 
 	getCfg := func(cfgParam string) string {
 		// As parameters are already validated, we skip checking
 		// if the config param was found.
-		val, _ := s.ResolveConfigParam(config.PolicyPluginSubSys, config.Default, cfgParam)
+		val, _, _ := s.ResolveConfigParam(config.PolicyPluginSubSys, config.Default, cfgParam, false)
 		return val
 	}
 

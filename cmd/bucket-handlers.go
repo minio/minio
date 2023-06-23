@@ -654,6 +654,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		if deleteResult.errInfo.Code != "" {
 			deleteErrors = append(deleteErrors, deleteResult.errInfo)
 		} else {
+			// All deletes on directory objects was with `nullVersionID`.
+			// Remove it from response.
+			if isDirObject(deleteResult.delInfo.ObjectName) && deleteResult.delInfo.VersionID == nullVersionID {
+				deleteResult.delInfo.VersionID = ""
+			}
 			deletedObjects = append(deletedObjects, deleteResult.delInfo)
 		}
 	}
@@ -669,6 +674,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending) {
+			// copy so we can re-add null ID.
+			dobj := dobj
+			if isDirObject(dobj.ObjectName) && dobj.VersionID == "" {
+				dobj.VersionID = nullVersionID
+			}
 			dv := DeletedObjectReplicationInfo{
 				DeletedObject: dobj,
 				Bucket:        bucket,

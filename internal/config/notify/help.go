@@ -43,6 +43,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.WebhookQueueDir,
@@ -191,6 +192,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.KafkaSASLMechanism,
@@ -287,6 +289,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.MqttQoS,
@@ -438,6 +441,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.NATSToken,
@@ -445,6 +449,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.NATSTLS,
@@ -621,6 +626,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -654,6 +660,7 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         target.RedisQueueDir,

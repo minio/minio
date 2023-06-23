@@ -359,6 +359,9 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
+		for i := range endpointList {
+			endpointList[i].SetPool(0)
+		}
 		endpointServerPools = append(endpointServerPools, PoolEndpoints{
 			Legacy:       true,
 			SetCount:     len(setArgs),

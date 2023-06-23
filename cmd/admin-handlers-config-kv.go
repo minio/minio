@@ -241,6 +241,8 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 // 1. `subsys:target` -> request for config of a single subsystem and target pair.
 // 2. `subsys:` -> request for config of a single subsystem and the default target.
 // 3. `subsys` -> request for config of all targets for the given subsystem.
+//
+// This is a reporting API and config secrets are redacted in the response.
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigKV")
 
@@ -268,7 +270,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	subSysConfigs, err := cfg.GetSubsysInfo(subSys, target)
+	subSysConfigs, err := cfg.GetSubsysInfo(subSys, target, true)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -490,7 +492,9 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 }
 
 // GetConfigHandler - GET /minio/admin/v3/config
-// Get config.json of this minio setup.
+//
+// This endpoint is mainly for exporting and backing up the configuration.
+// Secrets are not redacted.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfig")
 
@@ -507,7 +511,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	hkvs := config.HelpSubSysMap[""]
 	for _, hkv := range hkvs {
 		// We ignore the error below, as we cannot get one.
-		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key, "")
+		cfgSubsysItems, _ := cfg.GetSubsysInfo(hkv.Key, "", false)
 
 		for _, item := range cfgSubsysItems {
 			off := item.Config.Get(config.Enable) == config.EnableOff
