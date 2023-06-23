@@ -230,7 +230,7 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 		getCfgVal := func(cfgParam string) string {
 			// As parameters are already validated, we skip checking
 			// if the config param was found.
-			val, _ := s.ResolveConfigParam(config.IdentityOpenIDSubSys, cfgName, cfgParam)
+			val, _, _ := s.ResolveConfigParam(config.IdentityOpenIDSubSys, cfgName, cfgParam, false)
 			return val
 		}
 
@@ -416,7 +416,7 @@ func (r *Config) GetConfigInfo(s config.Config, cfgName string) ([]madmin.IDPCfg
 		return nil, ErrProviderConfigNotFound
 	}
 
-	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityOpenIDSubSys, cfgName)
+	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityOpenIDSubSys, cfgName, true)
 	if err != nil {
 		return nil, err
 	}

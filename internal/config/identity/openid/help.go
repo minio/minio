@@ -47,6 +47,7 @@ var (
 			Description: `secret for the unique public identifier for apps` + defaultHelpPostfix(ClientSecret),
 			Sensitive:   true,
 			Type:        "string",
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         RolePolicy,

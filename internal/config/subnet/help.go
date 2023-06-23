@@ -39,6 +39,7 @@ var (
 			Description: "Subnet api key for the cluster" + defaultHelpPostfix(config.APIKey),
 			Optional:    true,
 			Sensitive:   true,
+			Secret:      true,
 		},
 		config.HelpKV{
 			Key:         config.Proxy,
