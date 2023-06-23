@@ -605,7 +605,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		return
 	}
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN), "replication-target-offline-delete"+tgt.ARN))
+		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN), "replication-target-offline-delete"+tgt.ARN)
 		sendEvent(eventArgs{
 			BucketName: dobj.Bucket,
 			Object: ObjectInfo{
