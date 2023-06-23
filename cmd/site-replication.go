@@ -663,17 +663,24 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		// will call siteNetperf, means call others's adminAPISiteReplicationDevNull
 		if globalDeploymentID == info.DeploymentID {
 			wg.Add(1)
-			go func() {
+			go func() (err error) {
 				defer wg.Done()
+				result := &madmin.SiteNetPerfNodeResult{}
+				defer func() {
+					if err != nil {
+						result.Error = err.Error()
+					}
+					resultsMu.Lock()
+					results.NodeResults = append(results.NodeResults, *result)
+					resultsMu.Unlock()
+				}()
 				cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
 				if err != nil {
-					return
+					return err
 				}
-				result := siteNetperf(ctx, duration)
+				*result = siteNetperf(ctx, duration)
 				result.Endpoint = cli.GetEndpointURL().String()
-				resultsMu.Lock()
-				results.NodeResults = append(results.NodeResults, result)
-				resultsMu.Unlock()
+				return nil
 			}()
 			continue
 		}

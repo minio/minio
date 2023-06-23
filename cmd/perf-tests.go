@@ -348,7 +348,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 
 	clusterInfos, err := globalSiteReplicationSys.GetClusterInfo(ctx)
 	if err != nil {
-		return madmin.SiteNetPerfNodeResult{}
+		return madmin.SiteNetPerfNodeResult{Error: err.Error()}
 	}
 
 	// Scale the number of connections from 32 -> 4 from small to large clusters.
@@ -398,7 +398,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	close(r.eof)
 	wg.Wait()
 	for {
-		if globalSiteNetPerfRX.ActiveConnections() == 0 {
+		if globalSiteNetPerfRX.ActiveConnections() == 0 || contextCanceled(ctx) {
 			break
 		}
 		time.Sleep(time.Second)
