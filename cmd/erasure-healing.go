@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,6 +65,68 @@ func (fi FileInfo) AcceptableDelta(maxTime time.Time, delta time.Duration) bool 
 // DataShardFixed - data shard fixed?
 func (fi FileInfo) DataShardFixed() bool {
 	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
+}
+
+func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(string, metaCacheEntry) error) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	disks, _ := er.getOnlineDisksWithHealing()
+	if len(disks) == 0 {
+		return errors.New("listAndHeal: No non-healing drives found")
+	}
+
+	// How to resolve partial results.
+	resolver := metadataResolutionParams{
+		dirQuorum: 1,
+		objQuorum: 1,
+		bucket:    bucket,
+		strict:    false, // Allow less strict matching.
+	}
+
+	path := baseDirFromPrefix(prefix)
+	filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
+	if path == prefix {
+		filterPrefix = ""
+	}
+
+	lopts := listPathRawOptions{
+		disks:          disks,
+		bucket:         bucket,
+		path:           path,
+		filterPrefix:   filterPrefix,
+		recursive:      true,
+		forwardTo:      "",
+		minDisks:       1,
+		reportNotFound: false,
+		agreed: func(entry metaCacheEntry) {
+			if err := healEntry(bucket, entry); err != nil {
+				logger.LogIf(ctx, err)
+				cancel()
+			}
+		},
+		partial: func(entries metaCacheEntries, _ []error) {
+			entry, ok := entries.resolve(&resolver)
+			if !ok {
+				// check if we can get one entry atleast
+				// proceed to heal nonetheless.
+				entry, _ = entries.firstFound()
+			}
+
+			if err := healEntry(bucket, *entry); err != nil {
+				logger.LogIf(ctx, err)
+				cancel()
+				return
+			}
+		},
+		finished: nil,
+	}
+
+	if err := listPathRaw(ctx, lopts); err != nil {
+		return fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts)
+	}
+
+	return nil
 }
 
 // HealBucket heals a bucket if it doesn't exist on one of the disks, additionally

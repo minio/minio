@@ -1349,7 +1349,14 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if versionsDisparity {
-			listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)
+			globalMRFState.addPartialOp(partialOperation{
+				bucket:      bucket,
+				object:      object,
+				queued:      time.Now(),
+				allVersions: true,
+				setIndex:    er.setIndex,
+				poolIndex:   er.poolIndex,
+			})
 		}
 	}
 
