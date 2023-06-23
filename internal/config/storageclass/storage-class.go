@@ -281,9 +281,11 @@ func DefaultParityBlocks(drive int) int {
 func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg = Config{}
 
-	kvs.Delete("dma")
+	deprecatedKeys := []string{
+		"dma",
+	}
 
-	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
+	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
 		return Config{}, err
 	}
 
