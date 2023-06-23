@@ -84,7 +84,7 @@ remote_arn=$(./mc replicate ls sitea/bucket --json | jq -r .rule.Destination.Buc
 sleep 1
 
 ./mc replicate resync start sitea/bucket/ --remote-bucket "${remote_arn}"
-sleep 10s ## sleep for 10s idea is that we give 100ms per object.
+sleep 20s ## sleep for 20s idea is that we give 200ms per object.
 
 count=$(./mc replicate resync status sitea/bucket --remote-bucket "${remote_arn}" --json | jq .resyncInfo.target[].replicationCount)
 
