@@ -461,22 +461,34 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 	if !update {
 		z.poolMeta = meta
 	} else {
-		meta = poolMeta{} // to update write poolMeta fresh.
+		newMeta := poolMeta{} // to update write poolMeta fresh.
 		// looks like new pool was added we need to update,
 		// or this is a fresh installation (or an existing
 		// installation with pool removed)
-		meta.Version = poolMetaVersion
+		newMeta.Version = poolMetaVersion
 		for idx, pool := range z.serverPools {
-			meta.Pools = append(meta.Pools, PoolStatus{
+			var skip bool
+			for _, currentPool := range meta.Pools {
+				// Preserve any current pool status.
+				if currentPool.CmdLine == pool.endpoints.CmdLine {
+					newMeta.Pools = append(newMeta.Pools, currentPool)
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+			newMeta.Pools = append(newMeta.Pools, PoolStatus{
 				CmdLine:    pool.endpoints.CmdLine,
 				ID:         idx,
 				LastUpdate: UTCNow(),
 			})
 		}
-		if err = meta.save(ctx, z.serverPools); err != nil {
+		if err = newMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
-		z.poolMeta = meta
+		z.poolMeta = newMeta
 	}
 
 	pools := meta.returnResumablePools()
@@ -1103,7 +1115,9 @@ func (z *erasureServerPools) Decommission(ctx context.Context, indices ...int) e
 	}
 
 	for _, idx := range indices {
-		go z.doDecommissionInRoutine(ctx, idx)
+		// decommission all pools serially one after
+		// the other.
+		z.doDecommissionInRoutine(ctx, idx)
 	}
 
 	// Successfully started decommissioning.
