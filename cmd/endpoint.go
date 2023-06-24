@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/mountinfo"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
+	"golang.org/x/exp/slices"
 )
 
 // EndpointType - enum for endpoint type.
@@ -58,9 +59,17 @@ type ProxyEndpoint struct {
 	Transport http.RoundTripper
 }
 
+// Node holds information about a node in this cluster
+type Node struct {
+	*url.URL
+	Pools   []int
+	IsLocal bool
+}
+
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
+	Pool    int
 	IsLocal bool
 }
 
@@ -95,6 +104,11 @@ func (endpoint *Endpoint) UpdateIsLocal() (err error) {
 		}
 	}
 	return nil
+}
+
+// SetPool sets a specific pool number to this node
+func (endpoint *Endpoint) SetPool(i int) {
+	endpoint.Pool = i
 }
 
 // NewEndpoint - returns new endpoint based on given arguments.
@@ -208,6 +222,35 @@ type PoolEndpoints struct {
 
 // EndpointServerPools - list of list of endpoints
 type EndpointServerPools []PoolEndpoints
+
+// GetNodes returns a sorted list of nodes in this cluster
+func (l EndpointServerPools) GetNodes() (nodes []Node) {
+	nodesMap := make(map[string]Node)
+	for _, pool := range l {
+		for _, ep := range pool.Endpoints {
+			node, ok := nodesMap[ep.Host]
+			if !ok {
+				node.IsLocal = ep.IsLocal
+				node.URL = &url.URL{
+					Scheme: ep.Scheme,
+					Host:   ep.Host,
+				}
+			}
+			if !slices.Contains(node.Pools, ep.Pool) {
+				node.Pools = append(node.Pools, ep.Pool)
+			}
+			nodesMap[ep.Host] = node
+		}
+	}
+	nodes = make([]Node, 0, len(nodesMap))
+	for _, v := range nodesMap {
+		nodes = append(nodes, v)
+	}
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].Host < nodes[j].Host
+	})
+	return
+}
 
 // GetPoolIdx return pool index
 func (l EndpointServerPools) GetPoolIdx(pool string) int {
@@ -768,6 +811,8 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 			return nil, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single node setup")
 		}
 
+		endpoint.SetPool(0)
+
 		var endpoints Endpoints
 		endpoints = append(endpoints, endpoint)
 		setupType = ErasureSDSetupType
@@ -781,7 +826,7 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 		return poolEndpoints, setupType, nil
 	}
 
-	for i, args := range poolArgs {
+	for poolIdx, args := range poolArgs {
 		var endpoints Endpoints
 		for _, iargs := range args {
 			// Convert args to endpoints
@@ -795,6 +840,10 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 				return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 			}
 
+			for i := range eps {
+				eps[i].SetPool(poolIdx)
+			}
+
 			endpoints = append(endpoints, eps...)
 		}
 
@@ -802,7 +851,7 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 			return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
 		}
 
-		poolEndpoints[i] = endpoints
+		poolEndpoints[poolIdx] = endpoints
 	}
 
 	for _, endpoints := range poolEndpoints {
@@ -960,7 +1009,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 
 	_, serverAddrPort := mustSplitHostPort(serverAddr)
 
-	// For single arg, return FS setup.
+	// For single arg, return single drive setup.
 	if len(args) == 1 && len(args[0]) == 1 {
 		var endpoint Endpoint
 		endpoint, err = NewEndpoint(args[0][0])
