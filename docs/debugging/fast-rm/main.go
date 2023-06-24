@@ -48,7 +48,9 @@ func isDirEmpty(dirname string) (bool, error) {
 	return len(names) == 0, nil
 }
 
+// dir is clean and never has a trailing slash
 func recursiveDeleteIfEmpty(dir string) {
+	// /mnt/minio1/bucketname/dir
 	if strings.Count(dir, "/") < 4 {
 		return
 	}
@@ -74,24 +76,40 @@ func removeObjectAndEmptyParents(filename string, base string) {
 	recursiveDeleteIfEmpty(filepath.Dir(filename))
 }
 
+func removeExpiredXLMeta(xlMetaPath, base string) {
+	pathToRemove := filepath.Dir(xlMetaPath)
+	if verbose {
+		log.Println("removing", pathToRemove)
+	}
+	if !dryRun {
+		removeObjectAndEmptyParents(pathToRemove, base)
+	}
+}
+
+var (
+	waitFactor      int
+	basePath        string
+	dryRun, verbose bool
+	olderThan       time.Duration
+)
+
 func mainAction(c *cli.Context) error {
 
-	waitFactor := c.Int("wait-factor")
+	var err error
 
-	basePath := c.String("base-path")
+	waitFactor = c.Int("wait-factor")
+	basePath = c.String("base-path")
 	if basePath == "" || !strings.HasSuffix(basePath, "/") {
 		log.Fatal("--base-path should not be empty and should finish with a trailing slash")
 	}
-
-	fake := c.Bool("dry-run")
-	verbose := c.Bool("verbose")
-
-	dur, err := time.ParseDuration(c.String("older-than"))
+	dryRun = c.Bool("dry-run")
+	verbose = c.Bool("verbose")
+	olderThan, err = time.ParseDuration(c.String("older-than"))
 	if err != nil {
 		log.Fatal("Unable to parse --older-than flag:", err)
 	}
 
-	refModTime := time.Now().UTC().Add(-dur).UnixNano()
+	refModTime := time.Now().UTC().Add(-olderThan).UnixNano()
 
 	calculateNewestVersion := func(r io.Reader) (int64, error) {
 		b, err := io.ReadAll(r)
@@ -143,7 +161,7 @@ func mainAction(c *cli.Context) error {
 		log.Fatalln("specify at least one disk mount")
 	}
 
-	// Validation
+	// Validation of all arguments
 	for _, arg := range c.Args() {
 		if !strings.HasPrefix(arg, basePath) {
 			log.Fatal("passed arguments should start with /mnt/")
@@ -169,29 +187,28 @@ func mainAction(c *cli.Context) error {
 
 				now := time.Now()
 
-				f, err := os.Open(path)
-				if err != nil {
-					return nil
-				}
-				defer f.Close()
+				// Get xl.meta disk modtime
+				latestModTime := info.ModTime().UnixNano()
 
-				latestModTime, err := calculateNewestVersion(f)
-				if err != nil {
-					return nil
+				if latestModTime > refModTime {
+					// Parse xl.meta content and check if all versions
+					// are older than the specified --older-than argument
+					f, e := os.Open(path)
+					if e != nil {
+						return nil
+					}
+					latestModTime, e = calculateNewestVersion(f)
+					f.Close()
+					if e != nil {
+						return nil
+					}
 				}
 
 				if latestModTime < refModTime {
-					f.Close()
-					objToRemove := filepath.Dir(path)
-					if verbose {
-						log.Println("removing", objToRemove)
-					}
-					if !fake {
-						removeObjectAndEmptyParents(objToRemove, arg)
-						if waitFactor > 0 {
-							// Slow down
-							time.Sleep(time.Duration(waitFactor) * time.Since(now))
-						}
+					removeExpiredXLMeta(path, arg)
+					if waitFactor > 0 {
+						// Slow down
+						time.Sleep(time.Duration(waitFactor) * time.Since(now))
 					}
 				}
 				return nil
