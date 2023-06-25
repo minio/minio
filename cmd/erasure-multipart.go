@@ -1249,7 +1249,14 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	if !opts.Speedtest && versionsDisparity {
-		listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)
+		globalMRFState.addPartialOp(partialOperation{
+			bucket:      bucket,
+			object:      object,
+			queued:      time.Now(),
+			allVersions: true,
+			setIndex:    er.setIndex,
+			poolIndex:   er.poolIndex,
+		})
 	}
 
 	// Check if there is any offline disk and add it to the MRF list
