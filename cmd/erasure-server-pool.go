@@ -950,7 +950,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		if !isMinioMetaBucketName(bucket) {
 			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
 			if err != nil {
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, "erasure-write-quorum")
 				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
 			}
 			if !avail {
@@ -1342,7 +1342,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-list-objects-path"+bucket)
 		}
 		return loi, err
 	}
@@ -1735,7 +1735,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 	for _, pool := range z.serverPools {
 		result, err := pool.HealFormat(ctx, dryRun)
 		if err != nil && !errors.Is(err, errNoHealRequired) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-heal-format")
 			continue
 		}
 		// Count errNoHealRequired across all serverPools,

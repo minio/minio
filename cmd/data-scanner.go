@@ -1194,7 +1194,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			return false
 		}
 		// Assume it is still there.
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "non-transition-expiry")
 		return false
 	}
 

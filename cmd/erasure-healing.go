@@ -567,7 +567,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// When disk to heal count is greater than parity blocks we should simply error out.
 		err := fmt.Errorf("(%d > %d) more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", disksToHealCount, latestMeta.Erasure.ParityBlocks, errs, dataErrs, bucket, object, versionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "heal-object-count-gt-parity")
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
 	}
@@ -591,7 +591,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(availableDisks) {
 		err := fmt.Errorf("unexpected file distribution (%v) from available disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
 			latestMeta.Erasure.Distribution, availableDisks, bucket, object, versionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "heal-object-available-disks")
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
 	}
@@ -601,7 +601,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(outDatedDisks) {
 		err := fmt.Errorf("unexpected file distribution (%v) from outdated disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
 			latestMeta.Erasure.Distribution, outDatedDisks, bucket, object, versionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "heal-object-outdated-disks")
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
 	}
@@ -611,7 +611,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(partsMetadata) {
 		err := fmt.Errorf("unexpected file distribution (%v) from metadata entries (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
 			latestMeta.Erasure.Distribution, len(partsMetadata), bucket, object, versionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "heal-object-metadata-entries")
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
 	}
