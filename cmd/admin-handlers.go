@@ -2103,7 +2103,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		}
 	}
 
-	// collect all realtime metrics execpt disk
+	// collect all realtime metrics except disk
 	// disk metrics are already included under drive info of each server
 	getRealtimeMetrics := func() *madmin.RealtimeMetrics {
 		var m madmin.RealtimeMetrics
