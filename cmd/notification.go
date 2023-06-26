@@ -453,6 +453,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
 	globalBucketConnStats.delete(bucketName)
+	globalBucketHTTPStats.delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}
@@ -803,7 +804,7 @@ func (sys *NotificationSys) addNodeErr(nodeInfo madmin.NodeInfo, peerClient *pee
 	addr := peerClient.host.String()
 	reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-	logger.LogIf(ctx, err)
+	logger.LogOnceIf(ctx, err, "add-node-err"+addr)
 	nodeInfo.SetAddr(addr)
 	nodeInfo.SetError(err.Error())
 }
@@ -1032,7 +1033,6 @@ func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int)
 
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
-	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
 	remote, all := newPeerRestClients(endpoints)
 	return &NotificationSys{
 		peerClients:    remote,

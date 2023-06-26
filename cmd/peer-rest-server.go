@@ -480,7 +480,7 @@ func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Requ
 
 	info := madmin.GetSysConfig(ctx, r.Host)
 
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+	logger.LogOnceIf(ctx, gob.NewEncoder(w).Encode(info), "get-sys-config")
 }
 
 // GetSysServicesHandler - returns system services information.
@@ -533,6 +533,7 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
 	globalBucketConnStats.delete(bucketName)
+	globalBucketHTTPStats.delete(bucketName)
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}

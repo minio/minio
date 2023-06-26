@@ -941,7 +941,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), lcEvt.Action)
 		}
 	}
-	defer globalScannerMetrics.timeILM(lcEvt.Action)
+	defer globalScannerMetrics.timeILM(lcEvt.Action)()
 
 	switch lcEvt.Action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
@@ -1194,7 +1194,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			return false
 		}
 		// Assume it is still there.
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "non-transition-expiry")
 		return false
 	}
 

@@ -419,7 +419,9 @@ func (p poolMeta) save(ctx context.Context, pools []*erasureSets) error {
 	// Saves on all pools to make sure decommissioning of first pool is allowed.
 	for i, eset := range pools {
 		if err = saveConfig(ctx, eset, poolMetaName, buf); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
+			if !errors.Is(err, context.Canceled) {
+				logger.LogIf(ctx, fmt.Errorf("saving pool.bin for pool index %d failed with: %v", i, err))
+			}
 			return err
 		}
 	}
@@ -459,22 +461,34 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 	if !update {
 		z.poolMeta = meta
 	} else {
-		meta = poolMeta{} // to update write poolMeta fresh.
+		newMeta := poolMeta{} // to update write poolMeta fresh.
 		// looks like new pool was added we need to update,
 		// or this is a fresh installation (or an existing
 		// installation with pool removed)
-		meta.Version = poolMetaVersion
+		newMeta.Version = poolMetaVersion
 		for idx, pool := range z.serverPools {
-			meta.Pools = append(meta.Pools, PoolStatus{
+			var skip bool
+			for _, currentPool := range meta.Pools {
+				// Preserve any current pool status.
+				if currentPool.CmdLine == pool.endpoints.CmdLine {
+					newMeta.Pools = append(newMeta.Pools, currentPool)
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+			newMeta.Pools = append(newMeta.Pools, PoolStatus{
 				CmdLine:    pool.endpoints.CmdLine,
 				ID:         idx,
 				LastUpdate: UTCNow(),
 			})
 		}
-		if err = meta.save(ctx, z.serverPools); err != nil {
+		if err = newMeta.save(ctx, z.serverPools); err != nil {
 			return err
 		}
-		z.poolMeta = meta
+		z.poolMeta = newMeta
 	}
 
 	pools := meta.returnResumablePools()
@@ -720,18 +734,21 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			// to create the appropriate stack.
 			versionsSorter(fivs.Versions).reverse()
 
-			var decommissionedCount int
+			var decommissioned, expired int
 			for _, version := range fivs.Versions {
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bi.Name, version.Name, version) {
-					decommissionedCount++
+					expired++
+					decommissioned++
 					continue
 				}
 
 				// any object with only single DEL marker we don't need
-				// to decommission, just skip it.
-				if version.Deleted && len(fivs.Versions) == 1 {
-					decommissionedCount++
+				// to decommission, just skip it, this also includes
+				// any other versions that have already expired.
+				remainingVersions := len(fivs.Versions) - expired
+				if version.Deleted && remainingVersions == 1 {
+					decommissioned++
 					continue
 				}
 
@@ -756,7 +773,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							SkipDecommissioned: true, // make sure we skip the decommissioned pool
 						})
 					var failure bool
-					if err != nil {
+					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						logger.LogIf(ctx, err)
 						failure = true
 					}
@@ -765,7 +782,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					z.poolMetaMutex.Unlock()
 					if !failure {
 						// Success keep a count.
-						decommissionedCount++
+						decommissioned++
 					}
 					continue
 				}
@@ -840,11 +857,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				if failure {
 					break // break out on first error
 				}
-				decommissionedCount++
+				decommissioned++
 			}
 
 			// if all versions were decommissioned, then we can delete the object versions.
-			if decommissionedCount == len(fivs.Versions) {
+			if decommissioned == len(fivs.Versions) {
 				stopFn := globalDecommissionMetrics.log(decomMetricDecommissionRemoveObject, idx, bi.Name, entry.name)
 				_, err := set.DeleteObject(ctx,
 					bi.Name,
@@ -1097,9 +1114,13 @@ func (z *erasureServerPools) Decommission(ctx context.Context, indices ...int) e
 		return err
 	}
 
-	for _, idx := range indices {
-		go z.doDecommissionInRoutine(ctx, idx)
-	}
+	go func() {
+		for _, idx := range indices {
+			// decommission all pools serially one after
+			// the other.
+			z.doDecommissionInRoutine(ctx, idx)
+		}
+	}()
 
 	// Successfully started decommissioning.
 	return nil

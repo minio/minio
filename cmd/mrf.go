@@ -32,17 +32,19 @@ const (
 // partialOperation is a successful upload/delete of an object
 // but not written in all disks (having quorum)
 type partialOperation struct {
-	bucket    string
-	object    string
-	versionID string
-	queued    time.Time
+	bucket              string
+	object              string
+	versionID           string
+	allVersions         bool
+	setIndex, poolIndex int
+	queued              time.Time
 }
 
 // mrfState sncapsulates all the information
 // related to the global background MRF.
 type mrfState struct {
-	ctx       context.Context
-	objectAPI ObjectLayer
+	ctx   context.Context
+	pools *erasureServerPools
 
 	mu   sync.Mutex
 	opCh chan partialOperation
@@ -55,9 +57,12 @@ func (m *mrfState) init(ctx context.Context, objAPI ObjectLayer) {
 
 	m.ctx = ctx
 	m.opCh = make(chan partialOperation, mrfOpsQueueSize)
-	m.objectAPI = objAPI
 
-	go globalMRFState.healRoutine()
+	var ok bool
+	m.pools, ok = objAPI.(*erasureServerPools)
+	if ok {
+		go m.healRoutine()
+	}
 }
 
 // Add a partial S3 operation (put/delete) when one or more disks are offline.
@@ -101,7 +106,11 @@ func (m *mrfState) healRoutine() {
 			if u.object == "" {
 				healBucket(u.bucket, madmin.HealNormalScan)
 			} else {
-				healObject(u.bucket, u.object, u.versionID, madmin.HealNormalScan)
+				if u.allVersions {
+					m.pools.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, healObjectVersionsDisparity)
+				} else {
+					healObject(u.bucket, u.object, u.versionID, madmin.HealNormalScan)
+				}
 			}
 
 			wait()

@@ -45,6 +45,7 @@ const (
 	apiDisableODirect              = "disable_odirect"
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
+	apiSyncEvents                  = "sync_events"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
@@ -62,6 +63,7 @@ const (
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default "on"
+	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
 )
 
 // Deprecated key and ENVs
@@ -135,6 +137,10 @@ var (
 			Key:   apiRootAccess,
 			Value: "on",
 		},
+		config.KV{
+			Key:   apiSyncEvents,
+			Value: "off",
+		},
 	}
 )
 
@@ -154,6 +160,7 @@ type Config struct {
 	DisableODirect              bool          `json:"disable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
+	SyncEvents                  bool          `json:"sync_events"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -169,14 +176,11 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	// remove this since we have removed this already.
-	kvs.Delete(apiReadyDeadline)
-	kvs.Delete("extend_list_cache_life")
-	kvs.Delete(apiReplicationWorkers)
-	kvs.Delete(apiReplicationFailedWorkers)
-
-	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
-		return cfg, err
+	deprecatedKeys := []string{
+		apiReadyDeadline,
+		"extend_list_cache_life",
+		apiReplicationWorkers,
+		apiReplicationFailedWorkers,
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
@@ -187,6 +191,16 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		DisableODirect: disableODirect,
 		GzipObjects:    gzipObjects,
 		RootAccess:     rootAccess,
+	}
+
+	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+	if len(corsAllowOrigin) == 0 {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	}
+	cfg.CorsAllowOrigin = corsAllowOrigin
+
+	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
+		return cfg, err
 	}
 
 	// Check environment variables parameters
@@ -211,12 +225,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 	cfg.ClusterDeadline = clusterDeadline
-
-	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 {
-		corsAllowOrigin = []string{"*"} // defaults to '*'
-	}
-	cfg.CorsAllowOrigin = corsAllowOrigin
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
@@ -268,6 +276,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
+
+	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
 
 	return cfg, nil
 }

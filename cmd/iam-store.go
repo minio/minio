@@ -914,11 +914,12 @@ func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err err
 // PolicyDBUpdate - adds or removes given policies to/from the user or group's
 // policy associations.
 func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGroup bool,
-	userType IAMUserType, policies []string, isAttach bool) (updatedAt time.Time, addedOrRemoved []string,
-	err error,
+	userType IAMUserType, policies []string, isAttach bool) (updatedAt time.Time,
+	addedOrRemoved, effectivePolicies []string, err error,
 ) {
 	if name == "" {
-		return updatedAt, nil, errInvalidArgument
+		err = errInvalidArgument
+		return
 	}
 
 	cache := store.lock()
@@ -932,11 +933,13 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := cache.iamGroupsMap[name]
 			if !ok {
-				return updatedAt, nil, errNoSuchGroup
+				err = errNoSuchGroup
+				return
 			}
 
 			if g.Status == statusDisabled {
-				return updatedAt, nil, errGroupDisabled
+				err = errGroupDisabled
+				return
 			}
 		}
 		mp = cache.iamGroupPolicyMap[name]
@@ -945,6 +948,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	// Compute net policy change effect and updated policy mapping
 	existingPolicySet := mp.policySet()
 	policiesToUpdate := set.CreateStringSet(policies...)
+	var newPolicySet set.StringSet
 	newPolicyMapping := mp
 	if isAttach {
 		// new policies to attach => inputPolicies - existing (set difference)
@@ -952,26 +956,29 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		// validate that new policies to add are defined.
 		for _, p := range policiesToUpdate.ToSlice() {
 			if _, found := cache.iamPolicyDocsMap[p]; !found {
-				return updatedAt, nil, errNoSuchPolicy
+				err = errNoSuchPolicy
+				return
 			}
 		}
-		newPolicyMapping.Policies = strings.Join(existingPolicySet.Union(policiesToUpdate).ToSlice(), ",")
+		newPolicySet = existingPolicySet.Union(policiesToUpdate)
 	} else {
 		// policies to detach => inputPolicies ∩ existing (intersection)
 		policiesToUpdate = policiesToUpdate.Intersection(existingPolicySet)
-		newPolicyMapping.Policies = strings.Join(existingPolicySet.Difference(policiesToUpdate).ToSlice(), ",")
+		newPolicySet = existingPolicySet.Difference(policiesToUpdate)
 	}
-	newPolicyMapping.UpdatedAt = UTCNow()
-
 	// We return an error if the requested policy update will have no effect.
 	if policiesToUpdate.IsEmpty() {
-		return updatedAt, nil, errNoPolicyToAttachOrDetach
+		err = errNoPolicyToAttachOrDetach
+		return
 	}
 
+	newPolicies := newPolicySet.ToSlice()
+	newPolicyMapping.Policies = strings.Join(newPolicies, ",")
+	newPolicyMapping.UpdatedAt = UTCNow()
 	addedOrRemoved = policiesToUpdate.ToSlice()
 
-	if err := store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
-		return updatedAt, addedOrRemoved, err
+	if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
+		return
 	}
 	if !isGroup {
 		cache.iamUserPolicyMap[name] = newPolicyMapping
@@ -979,7 +986,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		cache.iamGroupPolicyMap[name] = newPolicyMapping
 	}
 	cache.updatedAt = UTCNow()
-	return cache.updatedAt, addedOrRemoved, nil
+	return cache.updatedAt, addedOrRemoved, newPolicies, nil
 }
 
 // PolicyDBSet - update the policy mapping for the given user or group in
@@ -1449,23 +1456,6 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 		MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
 		UpdatedAt: cache.iamUserPolicyMap[name].UpdatedAt,
 	}, nil
-}
-
-// GetUserPolicies - returns the policies attached to a user.
-func (store *IAMStoreSys) GetUserPolicies(name string) ([]string, error) {
-	if name == "" {
-		return nil, errInvalidArgument
-	}
-
-	cache := store.rlock()
-	defer store.runlock()
-
-	if cache.iamUserPolicyMap[name].Policies == "" {
-		return []string{}, nil
-	}
-
-	policies := cache.iamUserPolicyMap[name].toSlice()
-	return policies, nil
 }
 
 // PolicyMappingNotificationHandler - handles updating a policy mapping from storage.

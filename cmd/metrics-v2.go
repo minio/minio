@@ -483,7 +483,7 @@ func getUsageLastScanActivityMD() MetricDescription {
 		Namespace: minioMetricNamespace,
 		Subsystem: usageSubsystem,
 		Name:      lastActivityTime,
-		Help:      "Time elapsed (in nano seconds) since last scan activity. This is set to 0 until first scan cycle",
+		Help:      "Time elapsed (in nano seconds) since last scan activity.",
 		Type:      gaugeMetric,
 	}
 }
@@ -703,7 +703,7 @@ func getS3RequestsInQueueMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      waitingTotal,
-		Help:      "Number of S3 requests in the waiting queue",
+		Help:      "Total number of S3 requests in the waiting queue",
 		Type:      gaugeMetric,
 	}
 }
@@ -713,7 +713,7 @@ func getIncomingS3RequestsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      incomingTotal,
-		Help:      "Volatile number of total incoming S3 requests",
+		Help:      "Total number of incoming S3 requests",
 		Type:      gaugeMetric,
 	}
 }
@@ -723,7 +723,7 @@ func getS3RequestsTotalMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      total,
-		Help:      "Total number S3 requests",
+		Help:      "Total number of S3 requests",
 		Type:      counterMetric,
 	}
 }
@@ -733,7 +733,7 @@ func getS3RequestsErrorsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      errorsTotal,
-		Help:      "Total number S3 requests with (4xx and 5xx) errors",
+		Help:      "Total number of S3 requests with (4xx and 5xx) errors",
 		Type:      counterMetric,
 	}
 }
@@ -743,7 +743,7 @@ func getS3Requests4xxErrorsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      "4xx_" + errorsTotal,
-		Help:      "Total number S3 requests with (4xx) errors",
+		Help:      "Total number of S3 requests with (4xx) errors",
 		Type:      counterMetric,
 	}
 }
@@ -753,7 +753,7 @@ func getS3Requests5xxErrorsMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      "5xx_" + errorsTotal,
-		Help:      "Total number S3 requests with (5xx) errors",
+		Help:      "Total number of S3 requests with (5xx) errors",
 		Type:      counterMetric,
 	}
 }
@@ -763,7 +763,7 @@ func getS3RequestsCanceledMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsSubsystem,
 		Name:      canceledTotal,
-		Help:      "Total number S3 requests that were canceled from the client while processing",
+		Help:      "Total number of S3 requests that were canceled by the client",
 		Type:      counterMetric,
 	}
 }
@@ -773,7 +773,7 @@ func getS3RejectedAuthRequestsTotalMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      authTotal,
-		Help:      "Total number S3 requests rejected for auth failure",
+		Help:      "Total number of S3 requests rejected for auth failure",
 		Type:      counterMetric,
 	}
 }
@@ -783,7 +783,7 @@ func getS3RejectedHeaderRequestsTotalMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      headerTotal,
-		Help:      "Total number S3 requests rejected for invalid header",
+		Help:      "Total number of S3 requests rejected for invalid header",
 		Type:      counterMetric,
 	}
 }
@@ -793,7 +793,7 @@ func getS3RejectedTimestampRequestsTotalMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      timestampTotal,
-		Help:      "Total number S3 requests rejected for invalid timestamp",
+		Help:      "Total number of S3 requests rejected for invalid timestamp",
 		Type:      counterMetric,
 	}
 }
@@ -803,7 +803,7 @@ func getS3RejectedInvalidRequestsTotalMD() MetricDescription {
 		Namespace: s3MetricNamespace,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      invalidTotal,
-		Help:      "Total number S3 invalid requests",
+		Help:      "Total number of invalid S3 requests",
 		Type:      counterMetric,
 	}
 }
@@ -913,7 +913,7 @@ func getHealLastActivityTimeMD() MetricDescription {
 		Namespace: healMetricNamespace,
 		Subsystem: timeSubsystem,
 		Name:      lastActivityTime,
-		Help:      "Time elapsed (in nano seconds) since last self healing activity. This is set to -1 until initial self heal activity",
+		Help:      "Time elapsed (in nano seconds) since last self healing activity.",
 		Type:      gaugeMetric,
 	}
 }
@@ -1309,6 +1309,56 @@ func getExpiryPendingTasksMD() MetricDescription {
 	}
 }
 
+func getBucketS3RequestsInFlightMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      inflightTotal,
+		Help:      "Total number of S3 requests currently in flight on a bucket",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketS3RequestsTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      total,
+		Help:      "Total number of S3 requests on a bucket",
+		Type:      counterMetric,
+	}
+}
+
+func getBucketS3Requests4xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "4xx_" + errorsTotal,
+		Help:      "Total number of S3 requests with (4xx) errors on a bucket",
+		Type:      counterMetric,
+	}
+}
+
+func getBucketS3Requests5xxErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      "5xx_" + errorsTotal,
+		Help:      "Total number of S3 requests with (5xx) errors on a bucket",
+		Type:      counterMetric,
+	}
+}
+
+func getBucketS3RequestsCanceledMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: requestsSubsystem,
+		Name:      canceledTotal,
+		Help:      "Total number of S3 requests that were canceled from the client while processing on a bucket",
+		Type:      counterMetric,
+	}
+}
+
 func getILMNodeMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
@@ -1456,7 +1506,7 @@ func getIAMNodeMetrics() *MetricsGroup {
 					Namespace: nodeMetricNamespace,
 					Subsystem: iamSubsystem,
 					Name:      "since_last_sync_millis",
-					Help:      "Time (in milliseconds) since last successful IAM data sync. This is set to 0 until the first sync after server start.",
+					Help:      "Time (in milliseconds) since last successful IAM data sync.",
 					Type:      gaugeMetric,
 				},
 				Value: float64(sinceLastSyncMillis),
@@ -2069,6 +2119,47 @@ func getBucketUsageMetrics() *MetricsGroup {
 					Description:    getBucketTrafficSentBytes(),
 					Value:          float64(sentBytes),
 					VariableLabels: map[string]string{"bucket": bucket},
+				})
+			}
+
+			httpStats := globalBucketHTTPStats.load(bucket)
+			for k, v := range httpStats.currentS3Requests.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsInFlightMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS3Requests.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsTotalMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS3Canceled.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsCanceledMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS34xxErrors.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3Requests4xxErrorsMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS35xxErrors.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3Requests5xxErrorsMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
 			}
 

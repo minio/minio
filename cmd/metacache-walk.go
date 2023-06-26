@@ -149,7 +149,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if err != nil {
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, "metacache-walk-scan-dir")
 			}
 			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
 				return errFileNotFound
@@ -211,7 +211,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// while being concurrently listed at the same time in
 					// such scenarios the 'xl.meta' might get truncated
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-						logger.LogIf(ctx, err)
+						logger.LogOnceIf(ctx, err, "metacache-walk-read-metadata")
 					}
 					continue
 				}

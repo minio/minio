@@ -673,7 +673,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	if !fi.Deleted && len(fi.Erasure.Distribution) != len(onlineDisks) {
 		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
 			fi.Erasure.Distribution, onlineDisks, bucket, object, opts.VersionID)
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "get-object-file-info-manually-modified")
 		return fi, nil, nil, toObjectErr(err, bucket, object, opts.VersionID)
 	}
 
@@ -691,9 +691,20 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			missingBlocks++
 			continue
 		}
-		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(modTime) {
-			continue
-		}
+
+		// verify metadata is valid, it has similar erasure info
+		// as well as common modtime, if modtime is not possible
+		// verify if it has common "etag" atleast.
+		if metaArr[i].IsValid() && metaArr[i].Erasure.Equal(fi.Erasure) {
+			ok := metaArr[i].ModTime.Equal(modTime)
+			if modTime.IsZero() || modTime.Equal(timeSentinel) {
+				ok = etag != "" && etag == fi.Metadata["etag"]
+			}
+			if ok {
+				continue
+			}
+		} // in all other cases metadata is corrupt, do not read from it.
+
 		metaArr[i] = FileInfo{}
 		onlineDisks[i] = nil
 		missingBlocks++
@@ -1311,7 +1322,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if errors.Is(err, errFileNotFound) {
 			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "erasure-object-rename"+bucket+object)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1338,7 +1349,14 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if versionsDisparity {
-			listAndHeal(ctx, bucket, object, &er, healObjectVersionsDisparity)
+			globalMRFState.addPartialOp(partialOperation{
+				bucket:      bucket,
+				object:      object,
+				queued:      time.Now(),
+				allVersions: true,
+				setIndex:    er.setIndex,
+				poolIndex:   er.poolIndex,
+			})
 		}
 	}
 
