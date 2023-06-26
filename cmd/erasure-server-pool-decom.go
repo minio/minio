@@ -62,10 +62,10 @@ type PoolDecommissionInfo struct {
 	Object string `json:"-" msg:"obj"`
 
 	// Verbose information
-	ItemsDecommissioned     int64 `json:"-" msg:"id"`
-	ItemsDecommissionFailed int64 `json:"-" msg:"idf"`
-	BytesDone               int64 `json:"-" msg:"bd"`
-	BytesFailed             int64 `json:"-" msg:"bf"`
+	ItemsDecommissioned     int64 `json:"objectsDecommissioned" msg:"id"`
+	ItemsDecommissionFailed int64 `json:"objectsDecommissionedFailed" msg:"idf"`
+	BytesDone               int64 `json:"bytesDecommissioned" msg:"bd"`
+	BytesFailed             int64 `json:"bytesDecommissionedFailed" msg:"bf"`
 }
 
 // bucketPop should be called when a bucket is done decommissioning.
@@ -814,7 +814,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						failure = false
 						break
 					}
-					stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
 					gr, err := set.GetObjectNInfo(ctx,
 						bi.Name,
 						encodeDirObject(version.Name),
