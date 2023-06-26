@@ -736,10 +736,12 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 			var decommissioned, expired int
 			for _, version := range fivs.Versions {
+				stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bi.Name, version.Name, version) {
 					expired++
 					decommissioned++
+					stopFn(errors.New("ILM expired object/version will be skipped"))
 					continue
 				}
 
@@ -749,6 +751,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				remainingVersions := len(fivs.Versions) - expired
 				if version.Deleted && remainingVersions == 1 {
 					decommissioned++
+					stopFn(errors.New("DELETE marked object with no other non-current versions will be skipped"))
 					continue
 				}
 
@@ -773,7 +776,13 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							SkipDecommissioned: true, // make sure we skip the decommissioned pool
 						})
 					var failure bool
-					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+					if err != nil {
+						if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+							err = nil
+						}
+					}
+					stopFn(err)
+					if err != nil {
 						logger.LogIf(ctx, err)
 						failure = true
 					}
@@ -791,7 +800,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				// gr.Close() is ensured by decommissionObject().
 				for try := 0; try < 3; try++ {
 					if version.IsRemote() {
-						stopFn := globalDecommissionMetrics.log(decomMetricDecommissionObject, idx, bi.Name, version.Name, version.VersionID)
 						if err := z.DecomTieredObject(ctx, bi.Name, version.Name, version, ObjectOptions{
 							VersionID:   versionID,
 							MTime:       version.ModTime,
