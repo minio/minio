@@ -36,7 +36,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/signer"
@@ -877,7 +876,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 
 	// Create an madmin client with user creds
 	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
-		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: s.secure,
 	})
 	if err != nil {
@@ -1072,7 +1071,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 
 	// Create an madmin client with user creds
 	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
-		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: s.secure,
 	})
 	if err != nil {

@@ -38,7 +38,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
@@ -311,7 +310,7 @@ func (r BatchJobReplicateV1) Notify(ctx context.Context, body io.Reader) error {
 }
 
 // ReplicateFromSource - this is not implemented yet where source is 'remote' and target is local.
-func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api ObjectLayer, core *minio.Core, srcObjInfo ObjectInfo, retry bool) error {
+func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api ObjectLayer, core *miniogo.Core, srcObjInfo ObjectInfo, retry bool) error {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
 	srcObject := srcObjInfo.Name
@@ -360,7 +359,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 		}
 		return r.copyWithMultipartfromSource(ctx, api, core, srcObjInfo, opts, partsCount)
 	}
-	gopts := minio.GetObjectOptions{
+	gopts := miniogo.GetObjectOptions{
 		VersionID: srcObjInfo.VersionID,
 	}
 	if err := gopts.SetMatchETag(srcObjInfo.ETag); err != nil {
@@ -381,7 +380,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	return err
 }
 
-func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, api ObjectLayer, c *minio.Core, srcObjInfo ObjectInfo, opts ObjectOptions, partsCount int) (err error) {
+func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, api ObjectLayer, c *miniogo.Core, srcObjInfo ObjectInfo, opts ObjectOptions, partsCount int) (err error) {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
 	srcObject := srcObjInfo.Name
@@ -422,7 +421,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 	)
 
 	for i := 0; i < partsCount; i++ {
-		gopts := minio.GetObjectOptions{
+		gopts := miniogo.GetObjectOptions{
 			VersionID:  srcObjInfo.VersionID,
 			PartNumber: i + 1,
 		}
@@ -556,7 +555,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	}
 
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
-	core := &minio.Core{Client: c}
+	core := &miniogo.Core{Client: c}
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_REPLICATION_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
@@ -577,7 +576,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 		minioSrc := r.Source.Type == BatchJobReplicateResourceMinIO
 		ctx, cancel := context.WithCancel(ctx)
-		objInfoCh := c.ListObjects(ctx, r.Source.Bucket, minio.ListObjectsOptions{
+		objInfoCh := c.ListObjects(ctx, r.Source.Bucket, miniogo.ListObjectsOptions{
 			Prefix:       r.Source.Prefix,
 			WithVersions: minioSrc,
 			Recursive:    true,
@@ -589,7 +588,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		for obj := range objInfoCh {
 			oi := toObjectInfo(r.Source.Bucket, obj.Key, obj)
 			if !minioSrc {
-				oi2, err := c.StatObject(ctx, r.Source.Bucket, obj.Key, minio.StatObjectOptions{})
+				oi2, err := c.StatObject(ctx, r.Source.Bucket, obj.Key, miniogo.StatObjectOptions{})
 				if err == nil {
 					oi = toObjectInfo(r.Source.Bucket, obj.Key, oi2)
 				} else {
@@ -671,7 +670,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 }
 
 // toObjectInfo converts minio.ObjectInfo to ObjectInfo
-func toObjectInfo(bucket, object string, objInfo minio.ObjectInfo) ObjectInfo {
+func toObjectInfo(bucket, object string, objInfo miniogo.ObjectInfo) ObjectInfo {
 	tags, _ := tags.MapToObjectTags(objInfo.UserTags)
 	oi := ObjectInfo{
 		Bucket:                    bucket,
