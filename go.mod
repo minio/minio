@@ -3,7 +3,6 @@ module github.com/minio/minio
 go 1.19
 
 require (
-	aead.dev/mem v0.2.0
 	cloud.google.com/go/storage v1.31.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Shopify/sarama v1.38.1
@@ -98,6 +97,7 @@ require (
 )
 
 require (
+	aead.dev/mem v0.2.0 // indirect
 	aead.dev/minisign v0.2.0 // indirect
 	cloud.google.com/go v0.110.4 // indirect
 	cloud.google.com/go/compute v1.20.1 // indirect
@@ -241,4 +241,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/minio/madmin-go/v3 v3.0.3 => github.com/shtripat/madmin-go/v3 v3.0.0-20230627103626-8485906f4a89
+replace github.com/minio/madmin-go/v3 v3.0.4 => github.com/shtripat/madmin-go/v3 v3.0.0-20230627103626-8485906f4a89

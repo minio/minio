@@ -45,7 +45,6 @@ import (
 	"syscall"
 	"time"
 
-	"aead.dev/mem"
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/kes-go"
@@ -2590,27 +2589,37 @@ func fetchKMSStatusV2() []madmin.KMS {
 		return []madmin.KMS{}
 	}
 
-	client := getKesClient()
+	kesClient := getKesClient()
 	stats := []madmin.KMS{}
 
 	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 	for _, endpoint := range stat.Endpoints {
+		client := kes.Client{
+			Endpoints:  []string{endpoint},
+			HTTPClient: kesClient.HTTPClient,
+		}
 		// 1. Get stats for the KES instance
-		stat, err := getStatus(client, endpoint)
+		state, err := client.Status(context.Background())
 		if err != nil {
-			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline)})
+			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
 			continue
 		}
+		stat := madmin.KMS{Status: string(madmin.ItemOnline), Endpoint: endpoint, Version: state.Version}
 
 		// 2. Generate a new key using the KMS.
-		key, err := generateKey(env.Get(kms.EnvKESKeyName, ""), kmsContext, client, endpoint)
+		ctx, err := kmsContext.MarshalText()
+		if err != nil {
+			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
+			continue
+		}
+		key, err := client.GenerateKey(context.Background(), env.Get(kms.EnvKESKeyName, ""), ctx)
 		if err != nil {
 			stat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
 			stat.Encrypt = "success"
 		}
 		// 3. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := decryptKey(key.KeyID, key.Ciphertext, kmsContext, client, endpoint)
+		decryptedKey, err := client.Decrypt(context.Background(), env.Get(kms.EnvKESKeyName, ""), key.Ciphertext, ctx)
 		switch {
 		case err != nil:
 			stat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
@@ -2625,126 +2634,8 @@ func fetchKMSStatusV2() []madmin.KMS {
 	return stats
 }
 
-// KESStatus represents response from /v1/status of KES endpoint
-type KESStatus struct {
-	Version string        `json:"version"`
-	OS      string        `json:"os"`
-	Arch    string        `json:"arch"`
-	UpTime  time.Duration `json:"uptime"`
-
-	CPUs       int    `json:"num_cpu"`
-	UsableCPUs int    `json:"num_cpu_used"`
-	HeapAlloc  uint64 `json:"mem_heap_used"`
-	StackAlloc uint64 `json:"mem_stack_used"`
-}
-
-// getStatus gets status details for a KES endpoint
-func getStatus(client *kes.Client, endpoint string) (madmin.KMS, error) {
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint+"/v1/status", nil)
-	if err != nil {
-		logger.Fatal(err, fmt.Sprintf("Failed to create http request for endpoint: %s", endpoint))
-		return madmin.KMS{}, err
-	}
-	resp, err := client.HTTPClient.Do(request)
-	if err != nil {
-		return madmin.KMS{}, err
-	}
-
-	var response KESStatus
-	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
-		return madmin.KMS{}, err
-	}
-	return madmin.KMS{Status: string(madmin.ItemOnline), Endpoint: endpoint, Version: response.Version}, nil
-}
-
-// generateKey generates a sample key
-func generateKey(keyID string, cryptoCtx kms.Context, client *kes.Client, endpoint string) (kms.DEK, error) {
-	ctxBytes, err := cryptoCtx.MarshalText()
-	if err != nil {
-		return kms.DEK{}, err
-	}
-
-	type Request struct {
-		Context []byte `json:"context,omitempty"` // A context is optional
-	}
-	type Response struct {
-		Plaintext  []byte `json:"plaintext"`
-		Ciphertext []byte `json:"ciphertext"`
-	}
-
-	body, err := json.Marshal(Request{
-		Context: ctxBytes,
-	})
-	if err != nil {
-		return kms.DEK{}, err
-	}
-
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint+"/v1/key/generate", bytes.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	if err != nil {
-		return kms.DEK{}, err
-	}
-	resp, err := client.HTTPClient.Do(request)
-	if err != nil {
-		return kms.DEK{}, err
-	}
-	defer resp.Body.Close()
-
-	var response Response
-	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
-		return kms.DEK{}, err
-	}
-
-	return kms.DEK{
-		KeyID:      keyID,
-		Plaintext:  response.Plaintext,
-		Ciphertext: response.Ciphertext,
-	}, nil
-}
-
-// decryptKey decrypts a given cipher
-func decryptKey(keyID string, ciphertext []byte, ctx kms.Context, client *kes.Client, endpoint string) ([]byte, error) {
-	ctxBytes, err := ctx.MarshalText()
-	if err != nil {
-		return nil, err
-	}
-
-	type Request struct {
-		Ciphertext []byte `json:"ciphertext"`
-		Context    []byte `json:"context,omitempty"` // A context is optional
-	}
-	type Response struct {
-		Plaintext []byte `json:"plaintext"`
-	}
-	body, err := json.Marshal(Request{
-		Ciphertext: ciphertext,
-		Context:    ctxBytes,
-	})
-	if err != nil {
-		return nil, err
-	}
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint+"/v1/key/decrypt", bytes.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.HTTPClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var response Response
-	if err = json.NewDecoder(mem.LimitReader(resp.Body, 1*mem.MiB)).Decode(&response); err != nil {
-		return nil, err
-	}
-	return response.Plaintext, nil
-}
-
 // getKesClient returns an http client for KES
-// func getKesClient() http.Client {
 func getKesClient() *kes.Client {
-	//var client http.Client
 	var client *kes.Client
 	rootCAs, err := certs.GetRootCAs(env.Get(kms.EnvKESServerCA, globalCertsCADir.Get()))
 	if err != nil {
