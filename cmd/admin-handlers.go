@@ -2103,6 +2103,27 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		}
 	}
 
+	// collect all realtime metrics except disk
+	// disk metrics are already included under drive info of each server
+	getRealtimeMetrics := func() *madmin.RealtimeMetrics {
+		var m madmin.RealtimeMetrics
+		var types madmin.MetricType = madmin.MetricsAll &^ madmin.MetricsDisk
+		mLocal := collectLocalMetrics(types, collectMetricsOpts{})
+		m.Merge(&mLocal)
+		cctx, cancel := context.WithTimeout(healthCtx, time.Second/2)
+		mRemote := collectRemoteMetrics(cctx, types, collectMetricsOpts{})
+		cancel()
+		m.Merge(&mRemote)
+		for idx, host := range m.Hosts {
+			m.Hosts[idx] = anonAddr(host)
+		}
+		for host, metrics := range m.ByHost {
+			m.ByHost[anonAddr(host)] = metrics
+			delete(m.ByHost, host)
+		}
+		return &m
+	}
+
 	anonymizeCmdLine := func(cmdLine string) string {
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
@@ -2280,6 +2301,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 				TLS:          &tls,
 				IsKubernetes: &isK8s,
 				IsDocker:     &isDocker,
+				Metrics:      getRealtimeMetrics(),
 			}
 			partialWrite(healthInfo)
 		}
