@@ -18,9 +18,12 @@ cd .github/workflows/mint
 docker-compose -f minio-${MODE}.yaml up -d
 sleep 5m
 
-docker run --rm --net=host \
+# Stop two nodes, one of each pool, to check that all S3 calls work while quorum is still there
+[ "${MODE}" == "pools" ] && docker-compose -f minio-${MODE}.yaml stop minio{2,6}
+
+docker run --rm --net=mint_default \
 	--name="mint-${MODE}-${JOB_NAME}" \
-	-e SERVER_ENDPOINT="127.0.0.1:9000" \
+	-e SERVER_ENDPOINT="nginx:9000" \
 	-e ACCESS_KEY="${ACCESS_KEY}" \
 	-e SECRET_KEY="${SECRET_KEY}" \
 	-e ENABLE_HTTPS=0 \
