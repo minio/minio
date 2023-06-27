@@ -49,6 +49,7 @@ import (
 	"aead.dev/mem"
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zip"
+	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
