@@ -251,15 +251,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
-	globalNodeNamesHex = make(map[string]struct{})
-	for _, n := range globalNodes {
-		nodeName := n.Host
-		if n.IsLocal {
-			nodeName = globalLocalNodeName
-		}
-		nodeNameSum := sha256.Sum256([]byte(nodeName))
-		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
-	}
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
@@ -640,6 +631,15 @@ func serverMain(ctx *cli.Context) {
 
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
+
+	for _, n := range globalNodes {
+		nodeName := n.Host
+		if n.IsLocal {
+			nodeName = globalLocalNodeName
+		}
+		nodeNameSum := sha256.Sum256([]byte(nodeName + globalDeploymentID))
+		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
+	}
 
 	bootstrapTrace("newSharedLock")
 	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
