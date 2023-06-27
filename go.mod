@@ -241,4 +241,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/minio/madmin-go/v3 v3.0.3 => github.com/shtripat/madmin-go/v3 v3.0.0-20230627044413-e5cb847b0c94
+replace github.com/minio/madmin-go/v3 v3.0.3 => github.com/shtripat/madmin-go/v3 v3.0.0-20230627103626-8485906f4a89
