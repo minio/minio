@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -459,12 +459,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+
 	// Read compression metadata preserved in the init multipart for the decision.
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 	// Compress only if the compression is enabled during initial multipart.
 	var idxCb func() []byte
 	if isCompressed {
-		wantEncryption := crypto.Requested(r.Header)
+		wantEncryption := crypto.Requested(r.Header) || isEncrypted
 		s2c, cb := newS2CompressReader(reader, actualPartSize, wantEncryption)
 		idxCb = cb
 		defer s2c.Close()
@@ -488,7 +490,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader)
 
-	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
 	if isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
@@ -558,7 +559,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if isEncrypted {
-		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.S3.IsRequested(r.Header))
+		sseS3 := crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(mi.UserDefined)
+		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, sseS3)
 	}
 
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
