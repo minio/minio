@@ -1956,7 +1956,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	domain := globalDomainNames
 	services := madmin.Services{
 		KMS:           fetchKMSStatus(),
-		KMSV2:         fetchKMSStatusV2(),
+		KMSV2:         fetchKMSStatusV2(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -2577,11 +2577,11 @@ func fetchKMSStatus() madmin.KMS {
 }
 
 // fetchKMSStatusV2 fetches KMS-related status information for all instances
-func fetchKMSStatusV2() []madmin.KMS {
+func fetchKMSStatusV2(ctx context.Context) []madmin.KMS {
 	if GlobalKMS == nil {
 		return []madmin.KMS{}
 	}
-	stat, err := GlobalKMS.Stat(context.Background())
+	stat, err := GlobalKMS.Stat(ctx)
 	if err != nil {
 		return []madmin.KMS{}
 	}
@@ -2599,7 +2599,7 @@ func fetchKMSStatusV2() []madmin.KMS {
 			HTTPClient: kesClient.HTTPClient,
 		}
 		// 1. Get stats for the KES instance
-		state, err := client.Status(context.Background())
+		state, err := client.Status(ctx)
 		if err != nil {
 			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
 			continue
@@ -2607,19 +2607,19 @@ func fetchKMSStatusV2() []madmin.KMS {
 		stat := madmin.KMS{Status: string(madmin.ItemOnline), Endpoint: endpoint, Version: state.Version}
 
 		// 2. Generate a new key using the KMS.
-		ctx, err := kmsContext.MarshalText()
+		kmsCtx, err := kmsContext.MarshalText()
 		if err != nil {
 			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
 			continue
 		}
-		key, err := client.GenerateKey(context.Background(), env.Get(kms.EnvKESKeyName, ""), ctx)
+		key, err := client.GenerateKey(ctx, env.Get(kms.EnvKESKeyName, ""), kmsCtx)
 		if err != nil {
 			stat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
 			stat.Encrypt = "success"
 		}
 		// 3. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := client.Decrypt(context.Background(), env.Get(kms.EnvKESKeyName, ""), key.Ciphertext, ctx)
+		decryptedKey, err := client.Decrypt(ctx, env.Get(kms.EnvKESKeyName, ""), key.Ciphertext, kmsCtx)
 		switch {
 		case err != nil:
 			stat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
