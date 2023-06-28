@@ -1,0 +1,57 @@
+FROM alpine:3.18.2
+
+RUN apk update && apk upgrade
+RUN apk add su-exec minisign bash bash-completion curl --no-cache
+
+ENV TIMEZONE Europe/Moscow
+ENV MINIO_ACCESS_KEY_FILE access_key
+ENV MINIO_SECRET_KEY_FILE secret_key
+ENV MINIO_ROOT_USER_FILE access_key
+ENV MINIO_ROOT_PASSWORD_FILE secret_key
+ENV MINIO_KMS_SECRET_KEY_FILE kms_master_key
+ENV MINIO_UPDATE_MINISIGN_PUBKEY ""
+ENV MINIO_CONFIG_ENV_FILE config.env
+ENV MINIO_BROWSER on
+ENV PATH=/opt/bin:$PATH
+
+ENV MINIO_ROOT_USER "MINIO_ROOT_USER"
+ENV MINIO_ROOT_PASSWORD "MINIO_ROOT_PASSWORD"
+ENV MINIO_SITE_REGION "AWS_REGION"
+ENV MINIO_SITE_NAME "MINIO_SITE_NAME"
+
+LABEL NAME="MinIO"
+LABEL MAINTAINER="Nikolay Galko <nikolay.galko@gmail.com>, Aurelien PERRIER <a.perrier89@gmail.com>"
+LABEL VERSION=1.0
+LABEL RELEASE=true
+LABEL SUMMARY="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service."
+
+ARG TARGETARCH="amd64"
+ARG RELEASE="RELEASE.2023-06-23T20-26-00Z"
+
+COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+
+RUN mkdir -p /opt/bin && \
+    chmod -R 777 /opt/bin
+
+# Downloading Minio
+ADD https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.${RELEASE} /opt/bin/minio
+ADD https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.${RELEASE}.sha256sum /opt/bin/minio.sha256sum
+ADD https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.${RELEASE}.minisig /opt/bin/minio.minisig
+ADD https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc /opt/bin/mc
+
+RUN chmod +x /opt/bin/minio && \
+    chmod +x /usr/bin/docker-entrypoint.sh && \
+    chmod +x /usr/bin/verify-minio.sh && \
+    /usr/bin/verify-minio.sh
+
+RUN addgroup minio && \
+    adduser -s /bin/false -G minio -S -D minio
+
+EXPOSE 9000
+
+ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+
+VOLUME ["/data"]
+
+CMD ["minio"]
