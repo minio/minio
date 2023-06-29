@@ -24,3 +24,5 @@ docker buildx build --push --no-cache \
 docker buildx prune -f
 
 sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+
+bash docker-alpine-buildx.sh
