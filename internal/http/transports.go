@@ -78,7 +78,6 @@ func (s ConnSettings) getDefaultTransport() *http.Transport {
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Minute, // Conservative timeout is the default (for MinIO internode)
 		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       &tlsClientConfig,
 		ForceAttemptHTTP2:     s.EnableHTTP2,
 		// Go net/http automatically unzip if content-type is
@@ -117,7 +116,6 @@ func (s ConnSettings) NewInternodeHTTPTransport() func() http.RoundTripper {
 
 	// Settings specific to internode requests.
 	tr.TLSHandshakeTimeout = 15 * time.Second
-	tr.ExpectContinueTimeout = 15 * time.Second
 
 	return func() http.RoundTripper {
 		return tr
@@ -167,12 +165,12 @@ func (s ConnSettings) NewHTTPTransportWithClientCerts(ctx context.Context, clien
 
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
-func (s ConnSettings) NewRemoteTargetHTTPTransport() func() *http.Transport {
+func (s ConnSettings) NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	tr := s.getDefaultTransport()
 
-	tr.TLSHandshakeTimeout = 5 * time.Second
-	tr.ExpectContinueTimeout = 5 * time.Second
+	tr.TLSHandshakeTimeout = 10 * time.Second
 	tr.ResponseHeaderTimeout = 0
+	tr.TLSClientConfig.InsecureSkipVerify = insecure
 
 	return func() *http.Transport {
 		return tr

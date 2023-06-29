@@ -34,6 +34,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var globalRemoteFTPClientTransport = NewRemoteTargetHTTPTransport(true)()
+
 // minioLogger use an instance of this to log in a standard format
 type minioLogger struct{}
 
