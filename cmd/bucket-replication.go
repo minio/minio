@@ -49,7 +49,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/workers"
+	"github.com/minio/pkg/v2/workers"
 	"github.com/zeebo/xxh3"
 )
 

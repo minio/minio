@@ -25,7 +25,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )

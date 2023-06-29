@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/v2/certs"
 	"github.com/rs/dnscache"
 )
 

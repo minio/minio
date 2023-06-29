@@ -2,6 +2,10 @@ module github.com/minio/minio
 
 go 1.19
 
+replace github.com/minio/pkg/v2 => github.com/donatello/pkg/v2 v2.0.0-20230629195245-5d9d0e106eee
+
+replace github.com/minio/console => github.com/donatello/console v0.12.6-0.20230629200317-868d58670982
+
 require (
 	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -48,11 +52,11 @@ require (
 	github.com/minio/dperf v0.4.10
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.2.1
 	github.com/minio/madmin-go/v3 v3.0.4
 	github.com/minio/minio-go/v7 v7.0.58
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.5
+	github.com/minio/pkg/v2 v2.0.0
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
@@ -77,7 +81,6 @@ require (
 	github.com/rs/cors v1.9.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.5
 	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.8

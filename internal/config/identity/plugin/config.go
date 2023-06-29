@@ -34,8 +34,8 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // Authentication Plugin config and env variables

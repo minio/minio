@@ -29,13 +29,12 @@ import (
 	"github.com/lithammer/shortuuid/v4"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
-
 	"github.com/minio/minio/internal/auth"
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
+	policy "github.com/minio/pkg/v2/policy"
 )
 
 func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Request) (levent.Event, error) {

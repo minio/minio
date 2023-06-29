@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/logger/message/log"
+	"github.com/minio/pkg/v2/logger/message/log"
 	"github.com/tinylib/msgp/msgp"
 )
 

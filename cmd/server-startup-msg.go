@@ -28,7 +28,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	color "github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // generates format string depending on the string length and padding.

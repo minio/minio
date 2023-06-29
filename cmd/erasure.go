@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.

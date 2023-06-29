@@ -26,8 +26,8 @@ import (
 
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // Authorization Plugin config and env variables
@@ -179,7 +179,7 @@ func New(args Args) *AuthZPlugin {
 }
 
 // IsAllowed - checks given policy args is allowed to continue the REST API.
-func (o *AuthZPlugin) IsAllowed(args iampolicy.Args) (bool, error) {
+func (o *AuthZPlugin) IsAllowed(args policy.Args) (bool, error) {
 	if o == nil {
 		return false, nil
 	}

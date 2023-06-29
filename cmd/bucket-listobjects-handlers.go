@@ -25,8 +25,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-
-	"github.com/minio/pkg/bucket/policy"
+	policy "github.com/minio/pkg/v2/policy"
 )
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode

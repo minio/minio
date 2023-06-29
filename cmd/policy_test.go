@@ -23,39 +23,40 @@ import (
 
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/pkg/bucket/policy"
-	"github.com/minio/pkg/bucket/policy/condition"
+	bktpolicy "github.com/minio/pkg/v2/policy"
+	policy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy/condition"
 )
 
 func TestPolicySysIsAllowed(t *testing.T) {
-	p := &policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement("",
+	p := &policy.BucketPolicy{
+		Version: bktpolicy.DefaultVersion,
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetBucketLocationAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "")),
+				policy.NewResourceSet(policy.NewResource("mybucket")),
 				condition.NewFunctions(),
 			),
-			policy.NewStatement("",
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.PutObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
+				policy.NewResourceSet(policy.NewResource("mybucket/myobject*")),
 				condition.NewFunctions(),
 			),
 		},
 	}
 
-	anonGetBucketLocationArgs := policy.Args{
+	anonGetBucketLocationArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetBucketLocationAction,
 		BucketName:      "mybucket",
 		ConditionValues: map[string][]string{},
 	}
 
-	anonPutObjectActionArgs := policy.Args{
+	anonPutObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName: "Q3AM3UQ867SPQQA43P2F",
 		Action:      policy.PutObjectAction,
 		BucketName:  "mybucket",
@@ -66,7 +67,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		ObjectName: "myobject",
 	}
 
-	anonGetObjectActionArgs := policy.Args{
+	anonGetObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetObjectAction,
 		BucketName:      "mybucket",
@@ -74,7 +75,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		ObjectName:      "myobject",
 	}
 
-	getBucketLocationArgs := policy.Args{
+	getBucketLocationArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetBucketLocationAction,
 		BucketName:      "mybucket",
@@ -82,7 +83,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		IsOwner:         true,
 	}
 
-	putObjectActionArgs := policy.Args{
+	putObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName: "Q3AM3UQ867SPQQA43P2F",
 		Action:      policy.PutObjectAction,
 		BucketName:  "mybucket",
@@ -94,7 +95,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		ObjectName: "myobject",
 	}
 
-	getObjectActionArgs := policy.Args{
+	getObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetObjectAction,
 		BucketName:      "mybucket",
@@ -103,7 +104,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		ObjectName:      "myobject",
 	}
 
-	yourbucketAnonGetObjectActionArgs := policy.Args{
+	yourbucketAnonGetObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetObjectAction,
 		BucketName:      "yourbucket",
@@ -111,7 +112,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 		ObjectName:      "yourobject",
 	}
 
-	yourbucketGetObjectActionArgs := policy.Args{
+	yourbucketGetObjectActionArgs := policy.BucketPolicyArgs{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
 		Action:          policy.GetObjectAction,
 		BucketName:      "yourbucket",
@@ -121,7 +122,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 	}
 
 	testCases := []struct {
-		args           policy.Args
+		args           policy.BucketPolicyArgs
 		expectedResult bool
 	}{
 		{anonGetBucketLocationArgs, true},
@@ -148,34 +149,34 @@ func getReadOnlyStatement(bucketName, prefix string) []miniogopolicy.Statement {
 		{
 			Effect:    string(policy.Allow),
 			Principal: miniogopolicy.User{AWS: set.CreateStringSet("*")},
-			Resources: set.CreateStringSet(policy.NewResource(bucketName, "").String()),
+			Resources: set.CreateStringSet(policy.NewResource(bucketName).String()),
 			Actions:   set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
 		},
 		{
 			Effect:    string(policy.Allow),
 			Principal: miniogopolicy.User{AWS: set.CreateStringSet("*")},
-			Resources: set.CreateStringSet(policy.NewResource(bucketName, prefix).String()),
+			Resources: set.CreateStringSet(policy.NewResource(bucketName + "/" + prefix).String()),
 			Actions:   set.CreateStringSet("s3:GetObject"),
 		},
 	}
 }
 
 func TestPolicyToBucketAccessPolicy(t *testing.T) {
-	case1Policy := &policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement("",
+	case1Policy := &policy.BucketPolicy{
+		Version: bktpolicy.DefaultVersion,
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "")),
+				policy.NewResourceSet(policy.NewResource("mybucket")),
 				condition.NewFunctions(),
 			),
-			policy.NewStatement("",
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
+				policy.NewResourceSet(policy.NewResource("mybucket/myobject*")),
 				condition.NewFunctions(),
 			),
 		},
@@ -183,12 +184,12 @@ func TestPolicyToBucketAccessPolicy(t *testing.T) {
 
 	case1Result := &miniogopolicy.BucketAccessPolicy{
 		Version:    policy.DefaultVersion,
-		Statements: getReadOnlyStatement("mybucket", "/myobject*"),
+		Statements: getReadOnlyStatement("mybucket", "myobject*"),
 	}
 
-	case2Policy := &policy.Policy{
+	case2Policy := &policy.BucketPolicy{
 		Version:    policy.DefaultVersion,
-		Statements: []policy.Statement{},
+		Statements: []policy.BPStatement{},
 	}
 
 	case2Result := &miniogopolicy.BucketAccessPolicy{
@@ -196,21 +197,21 @@ func TestPolicyToBucketAccessPolicy(t *testing.T) {
 		Statements: []miniogopolicy.Statement{},
 	}
 
-	case3Policy := &policy.Policy{
+	case3Policy := &policy.BucketPolicy{
 		Version: "12-10-2012",
-		Statements: []policy.Statement{
-			policy.NewStatement("",
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.PutObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
+				policy.NewResourceSet(policy.NewResource("mybucket/myobject*")),
 				condition.NewFunctions(),
 			),
 		},
 	}
 
 	testCases := []struct {
-		bucketPolicy   *policy.Policy
+		bucketPolicy   *policy.BucketPolicy
 		expectedResult *miniogopolicy.BucketAccessPolicy
 		expectErr      bool
 	}{
@@ -238,24 +239,24 @@ func TestPolicyToBucketAccessPolicy(t *testing.T) {
 func TestBucketAccessPolicyToPolicy(t *testing.T) {
 	case1PolicyInfo := &miniogopolicy.BucketAccessPolicy{
 		Version:    policy.DefaultVersion,
-		Statements: getReadOnlyStatement("mybucket", "/myobject*"),
+		Statements: getReadOnlyStatement("mybucket", "myobject*"),
 	}
 
-	case1Result := &policy.Policy{
+	case1Result := &policy.BucketPolicy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement("",
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "")),
+				policy.NewResourceSet(policy.NewResource("mybucket")),
 				condition.NewFunctions(),
 			),
-			policy.NewStatement("",
+			policy.NewBPStatement("",
 				policy.Allow,
-				policy.NewPrincipal("*"),
+				bktpolicy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
+				policy.NewResourceSet(policy.NewResource("mybucket/myobject*")),
 				condition.NewFunctions(),
 			),
 		},
@@ -266,19 +267,19 @@ func TestBucketAccessPolicyToPolicy(t *testing.T) {
 		Statements: []miniogopolicy.Statement{},
 	}
 
-	case2Result := &policy.Policy{
+	case2Result := &policy.BucketPolicy{
 		Version:    policy.DefaultVersion,
-		Statements: []policy.Statement{},
+		Statements: []policy.BPStatement{},
 	}
 
 	case3PolicyInfo := &miniogopolicy.BucketAccessPolicy{
 		Version:    "12-10-2012",
-		Statements: getReadOnlyStatement("mybucket", "/myobject*"),
+		Statements: getReadOnlyStatement("mybucket", "myobject*"),
 	}
 
 	testCases := []struct {
 		policyInfo     *miniogopolicy.BucketAccessPolicy
-		expectedResult *policy.Policy
+		expectedResult *policy.BucketPolicy
 		expectErr      bool
 	}{
 		{case1PolicyInfo, case1Result, false},

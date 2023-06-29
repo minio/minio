@@ -34,9 +34,9 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/env"
-	"github.com/minio/pkg/workers"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v2/workers"
 )
 
 // PoolDecommissionInfo currently decommissioning information

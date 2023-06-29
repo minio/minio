@@ -23,7 +23,7 @@ import (
 
 	"github.com/minio/madmin-go/v3/kernel"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sys"
+	"github.com/minio/pkg/v2/sys"
 )
 
 func oldLinux() bool {

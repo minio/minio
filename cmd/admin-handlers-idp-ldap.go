@@ -25,7 +25,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 // ListLDAPPolicyMappingEntities lists users/groups mapped to given/all policies.

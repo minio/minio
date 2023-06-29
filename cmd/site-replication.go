@@ -42,8 +42,8 @@ import (
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/logger"
-	bktpolicy "github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
+	policy "github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -1406,7 +1406,7 @@ func (c *SiteReplicationSys) PeerBucketVersioningHandler(ctx context.Context, bu
 }
 
 // PeerBucketPolicyHandler - copies/deletes policy to local cluster.
-func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket string, policy *bktpolicy.Policy, updatedAt time.Time) error {
+func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket string, policy *policy.BucketPolicy, updatedAt time.Time) error {
 	// skip overwrite if local update is newer than peer update.
 	if !updatedAt.IsZero() {
 		if _, updateTm, err := globalBucketMetadataSys.GetPolicyConfig(bucket); err == nil && updateTm.After(updatedAt) {
@@ -2797,7 +2797,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		for b, slc := range bucketStats {
 			tagSet := set.NewStringSet()
 			olockConfigSet := set.NewStringSet()
-			policies := make([]*bktpolicy.Policy, numSites)
+			policies := make([]*policy.BucketPolicy, numSites)
 			replCfgs := make([]*sreplication.Config, numSites)
 			quotaCfgs := make([]*madmin.BucketQuota, numSites)
 			sseCfgSet := set.NewStringSet()
@@ -2847,7 +2847,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					}
 				}
 				if len(s.Policy) > 0 {
-					plcy, err := bktpolicy.ParseConfig(bytes.NewReader(s.Policy), b)
+					plcy, err := policy.ParseBucketPolicyConfig(bytes.NewReader(s.Policy), b)
 					if err != nil {
 						continue
 					}
@@ -3098,7 +3098,7 @@ func isBktQuotaCfgReplicated(total int, quotaCfgs []*madmin.BucketQuota) bool {
 
 // isBktPolicyReplicated returns true if count of replicated bucket policies matches total
 // number of sites and bucket policies are identical.
-func isBktPolicyReplicated(total int, policies []*bktpolicy.Policy) bool {
+func isBktPolicyReplicated(total int, policies []*policy.BucketPolicy) bool {
 	numPolicies := 0
 	for _, p := range policies {
 		if p == nil {
@@ -3110,7 +3110,7 @@ func isBktPolicyReplicated(total int, policies []*bktpolicy.Policy) bool {
 		return false
 	}
 	// check if policies match between sites
-	var prev *bktpolicy.Policy
+	var prev *policy.BucketPolicy
 	for i, p := range policies {
 		if p == nil {
 			continue

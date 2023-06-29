@@ -33,12 +33,12 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/ldap"
+	"github.com/minio/pkg/v2/ldap"
+	"github.com/minio/pkg/v2/policy"
 )
 
 func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -223,7 +223,7 @@ func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http
 	ctx := newContext(r, w, "ListIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -277,7 +277,7 @@ func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "GetIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -338,7 +338,7 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}

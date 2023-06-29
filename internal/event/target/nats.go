@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 )

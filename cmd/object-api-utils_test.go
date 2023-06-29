@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/pkg/trie"
+	"github.com/minio/pkg/v2/trie"
 )
 
 // Wrapper

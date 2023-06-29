@@ -41,8 +41,7 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	policy "github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -60,7 +59,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -114,7 +113,7 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -153,7 +152,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	update := r.Form.Get("update") == "true"
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SetBucketTargetAction)
 	if objectAPI == nil {
 		return
 	}
@@ -297,7 +296,7 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 	arnType := vars["type"]
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.GetBucketTargetAction)
 	if objectAPI == nil {
 		return
 	}
@@ -332,7 +331,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 	arn := vars["arn"]
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SetBucketTargetAction)
 	if objectAPI == nil {
 		return
 	}
@@ -373,7 +372,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 
 	bucket := pathClean(r.Form.Get("bucket"))
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportBucketMetadataAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ExportBucketMetadataAction)
 	if objectAPI == nil {
 		return
 	}
@@ -657,7 +656,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ImportBucketMetadataAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ImportBucketMetadataAction)
 	if objectAPI == nil {
 		return
 	}
@@ -865,7 +864,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 
-			bucketPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyBytes), bucket)
+			bucketPolicy, err := policy.ParseBucketPolicyConfig(bytes.NewReader(bucketPolicyBytes), bucket)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, err)
 				continue
@@ -1075,7 +1074,7 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ReplicationDiff)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ReplicationDiff)
 	if objectAPI == nil {
 		return
 	}

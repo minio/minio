@@ -47,8 +47,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/trie"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/trie"
+	"github.com/minio/pkg/v2/wildcard"
 	"golang.org/x/exp/slices"
 )
 

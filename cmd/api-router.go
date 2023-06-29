@@ -27,7 +27,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/wildcard"
 	"github.com/rs/cors"
 )
 

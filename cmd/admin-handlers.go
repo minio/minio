@@ -54,9 +54,9 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/logger/message/log"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/logger/message/log"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/secure-io/sio-go"
 )
 
@@ -82,7 +82,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -255,11 +255,11 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	var objectAPI ObjectLayer
 	switch serviceSig {
 	case serviceRestart:
-		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceRestartAdminAction)
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceRestartAdminAction)
 	case serviceStop:
-		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceStopAdminAction)
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceStopAdminAction)
 	case serviceFreeze, serviceUnFreeze:
-		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceFreezeAdminAction)
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceFreezeAdminAction)
 	}
 	if objectAPI == nil {
 		return
@@ -339,7 +339,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.StorageInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -380,7 +380,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -491,7 +491,7 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DataUsageInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DataUsageInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -576,7 +576,7 @@ func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Requ
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ForceUnlockAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ForceUnlockAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -613,7 +613,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.TopLocksAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.TopLocksAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -666,7 +666,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.ProfilingAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -753,7 +753,7 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.ProfilingAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -850,7 +850,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.ProfilingAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -950,7 +950,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1136,7 +1136,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1159,7 +1159,7 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1211,7 +1211,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1381,7 +1381,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1502,7 +1502,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.TraceAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -1575,7 +1575,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConsoleLogAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ConsoleLogAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1657,7 +1657,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 	ctx := newContext(r, w, "KMSCreateKey")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSCreateKeyAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSCreateKeyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1679,7 +1679,7 @@ func (a adminAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Reques
 	ctx := newContext(r, w, "KMSStatus")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSKeyStatusAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1718,7 +1718,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSKeyStatusAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -2315,7 +2315,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "HealthInfo")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -2424,7 +2424,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ServerInfoAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.ServerInfoAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -2654,7 +2654,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	ctx := newContext(r, w, "InspectData")
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.InspectDataAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, policy.InspectDataAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
