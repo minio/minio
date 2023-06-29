@@ -1356,7 +1356,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			endpoint := storage.Endpoint()
 
-			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage)}
+			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage, true)}
 			server.storage.SetDiskID(storage.diskID)
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()

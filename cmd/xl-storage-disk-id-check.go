@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 )
@@ -130,13 +131,16 @@ func (e *lockedLastMinuteLatency) total() AccElem {
 	return e.lastMinuteLatency.getTotal()
 }
 
-func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
+func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDiskIDCheck {
 	xl := xlStorageDiskIDCheck{
 		storage: storage,
 		health:  newDiskHealthTracker(),
 	}
 	for i := range xl.apiLatencies[:] {
 		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
+	}
+	if healthCheck {
+		go xl.monitorDiskWritable()
 	}
 	return &xl
 }
@@ -818,6 +822,61 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 			atomic.StoreInt32(&p.health.status, diskHealthOK)
 			return
 		}
+	}
+}
+
+// monitorDiskStatus should be called once when a drive has been marked offline.
+// Once the disk has been deemed ok, it will return to online status.
+func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
+	// We check every 2 minutes if the disk is writable and we can read back.
+	t := time.NewTicker(2 * time.Minute)
+	defer t.Stop()
+	fn := mustGetUUID()
+
+	// Be just above directio size.
+	toWrite := []byte{xioutil.DirectioAlignSize + 1: 42}
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for range t.C {
+		if atomic.LoadInt32(&p.health.status) != diskHealthOK {
+			continue
+		}
+		goOffline := func(err error) {
+			if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
+				logger.LogAlwaysIf(context.Background(), fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
+				go p.monitorDiskStatus()
+			}
+		}
+		// Offset checks a bit.
+		time.Sleep(time.Duration(rng.Int63n(int64(1 * time.Second))))
+		done := make(chan struct{})
+		started := time.Now()
+		go func() {
+			select {
+			// Reuse the same trigger
+			// If it triggers again, it took too long.
+			case <-t.C:
+				spent := time.Since(started)
+				goOffline(fmt.Errorf("unable to write+read for %v", spent.Round(time.Millisecond)))
+			case <-done:
+			}
+		}()
+		func() {
+			defer close(done)
+			err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, toWrite)
+			if err != nil {
+				if osErrToFileErr(err) == errFaultyDisk {
+					goOffline(fmt.Errorf("unable to write: %w", err))
+				}
+				return
+			}
+			b, err := p.storage.ReadAll(context.Background(), minioMetaTmpBucket, fn)
+			if err != nil || len(b) != len(toWrite) {
+				if osErrToFileErr(err) == errFaultyDisk {
+					goOffline(fmt.Errorf("unable to read: %w", err))
+				}
+				return
+			}
+		}()
 	}
 }
 

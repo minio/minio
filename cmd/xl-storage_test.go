@@ -130,7 +130,7 @@ func newXLStorageTestSetup(tb testing.TB) (*xlStorageDiskIDCheck, string, error)
 		return nil, "", err
 	}
 
-	disk := newXLStorageDiskIDCheck(storage)
+	disk := newXLStorageDiskIDCheck(storage, false)
 	disk.SetDiskID("da017d62-70e3-45f1-8a1a-587707e69ad1")
 	return disk, diskPath, nil
 }
