@@ -129,10 +129,29 @@ func startSFTPServer(c *cli.Context) {
 	// certificate details and handles authentication of ServerConns.
 	config := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				targetUser, targetGroups, err := globalIAMSys.LDAPConfig.Bind(c.User(), string(pass))
+				if err != nil {
+					return nil, err
+				}
+				ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, false, targetGroups...)
+				if len(ldapPolicies) == 0 {
+					return nil, errAuthentication
+				}
+				return &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						ldapUser:  targetUser,
+						ldapUserN: c.User(),
+					},
+					Extensions: make(map[string]string),
+				}, nil
+			}
+
 			ui, ok := globalIAMSys.GetUser(context.Background(), c.User())
 			if !ok {
 				return nil, errNoSuchUser
 			}
+
 			if subtle.ConstantTimeCompare([]byte(ui.Credentials.SecretKey), pass) == 1 {
 				return &ssh.Permissions{
 					CriticalOptions: map[string]string{
