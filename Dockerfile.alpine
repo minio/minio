@@ -20,7 +20,8 @@ ENV MINIO_SITE_REGION "AWS_REGION"
 ENV MINIO_SITE_NAME "MINIO_SITE_NAME"
 
 LABEL NAME="MinIO"
-LABEL MAINTAINER="Nikolay Galko <nikolay.galko@gmail.com>, Aurelien PERRIER <a.perrier89@gmail.com>"
+LABEL MAINTAINER="Aurelien PERRIER <a.perrier89@gmail.com>"
+LABEL ALPINE_MAINTAINER="Nikolay Galko <nikolay.galko@gmail.com>"
 LABEL VERSION=1.0
 LABEL RELEASE=true
 LABEL SUMMARY="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service."
