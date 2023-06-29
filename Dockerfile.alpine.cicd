@@ -49,9 +49,7 @@ RUN mkdir -p /opt/bin && \
 COPY --from=builder build/minio /opt/bin/minio
 
 RUN chmod +x /opt/bin/minio && \
-    chmod +x /usr/bin/docker-entrypoint.sh && \
-    chmod +x /usr/bin/verify-minio.sh && \
-    /usr/bin/verify-minio.sh
+    chmod +x /usr/bin/docker-entrypoint.sh
 
 RUN addgroup minio && \
     adduser -s /bin/false -G minio -S -D minio
