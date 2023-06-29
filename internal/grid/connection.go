@@ -23,11 +23,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -71,11 +74,13 @@ type Connection struct {
 	side ws.State
 
 	// Transport for outgoing connections.
-	tr http.RoundTripper
+	dialer ContextDialer
+	header http.Header
+
+	connWg sync.WaitGroup
 
 	// connChange will be signaled whenever
-	connChange     *sync.Cond
-	connChangeLock sync.Mutex
+	connChange *sync.Cond
 }
 
 // State is a connection state.
@@ -99,20 +104,30 @@ const (
 	StateConnectionError
 )
 
-const defaultOutQueue = 10000
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+const (
+	defaultOutQueue    = 10000
+	readBufferSize     = 4 << 10
+	writeBufferSize    = 4 << 10
+	defaultDialTimeout = time.Second
+)
 
 // NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, local, remote string, tr http.RoundTripper) *Connection {
+func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer) *Connection {
 	c := Connection{
-		State:    StateUnconnected,
-		Remote:   remote,
-		Local:    local,
-		id:       id,
-		ctx:      context.Background(),
-		active:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
-		outQueue: make(chan []byte, defaultOutQueue),
-		tr:       tr,
-		side:     ws.StateServerSide,
+		State:      StateUnconnected,
+		Remote:     remote,
+		Local:      local,
+		id:         id,
+		ctx:        context.Background(),
+		active:     xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		outQueue:   make(chan []byte, defaultOutQueue),
+		dialer:     dial,
+		side:       ws.StateServerSide,
+		connChange: &sync.Cond{L: &sync.Mutex{}},
 	}
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
@@ -156,11 +171,6 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 	}
 }
 
-func (c *Connection) connect() {
-	if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateUnconnected, StateConnecting) {
-	}
-}
-
 func (c *Connection) send(ctx context.Context, msg []byte) error {
 	select {
 	case <-ctx.Done():
@@ -196,6 +206,108 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
 
+func (c *Connection) connect() {
+	atomic.StoreUint32((*uint32)(&c.State), StateConnecting)
+	c.connChange.Signal()
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
+		toDial = strings.Replace(toDial, "https://", "wss://", 1)
+		dialer := ws.DefaultDialer
+		dialer.ReadBufferSize = readBufferSize
+		dialer.WriteBufferSize = writeBufferSize
+		dialer.Timeout = defaultDialTimeout
+		if c.dialer != nil {
+			dialer.NetDial = c.dialer.DialContext
+		}
+		if len(c.header) > 0 {
+			dialer.Header = ws.HandshakeHeaderHTTP(c.header)
+		}
+		dialStarted := time.Now()
+		conn, br, _, err := dialer.Dial(c.ctx, toDial)
+		if br != nil {
+			ws.PutReader(br)
+		}
+		retry := func(err error) {
+			sleep := defaultDialTimeout + time.Duration(rng.Int63n(int64(defaultDialTimeout)))
+			next := dialStarted.Add(sleep)
+			sleep = time.Until(next).Round(time.Millisecond)
+			if sleep < 0 {
+				sleep = 0
+			}
+			logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %v Sleeping %v", toDial, err, sleep))
+			atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
+			c.connChange.Signal()
+			time.Sleep(sleep)
+		}
+		if err != nil {
+			retry(err)
+			continue
+		}
+		m := message{
+			Op: OpConnect,
+		}
+		req := connectReq{
+			Host: c.Remote,
+			ID:   c.id,
+		}
+		err = c.sendMsg(conn, m, &req)
+		if err != nil {
+			retry(err)
+			continue
+		}
+		var r connectResp
+		err = c.receive(conn, &r)
+		if err != nil {
+			retry(err)
+			continue
+		}
+		if !r.Accepted {
+			retry(fmt.Errorf("connection rejected: %s", r.RejectedReason))
+			continue
+		}
+		remoteUUID := uuid.UUID(r.ID)
+		if c.remoteID != nil && remoteUUID != *c.remoteID {
+			// TODO: Only disconnect stateful clients.
+			c.active.Range(func(key uint64, client *MuxClient) bool {
+				client.close()
+				return true
+			})
+		}
+		c.remoteID = &remoteUUID
+		c.handleMessages(c.ctx, conn)
+		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
+		c.connChange.Signal()
+		for {
+			c.connChange.Wait()
+			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				// Reconnect
+				break
+			}
+		}
+	}
+}
+
+func (c *Connection) receive(conn net.Conn, r receiver) error {
+	b, op, err := wsutil.ReadData(conn, ws.StateClientSide)
+	if err != nil {
+		return err
+	}
+	if op != ws.OpBinary {
+		return fmt.Errorf("unexpected connect response type %v", op)
+	}
+	var m message
+	err = m.parse(b)
+	if err != nil {
+		return err
+	}
+	if m.Op != r.Op() {
+		return fmt.Errorf("unexpected response OP, want %v, got %v", r.Op(), m.Op)
+	}
+	_, err = r.UnmarshalMsg(m.Payload)
+	return err
+}
+
 func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) error {
 	if c.shouldConnect() {
 		return errors.New("expected to be client side, not server side")
@@ -205,6 +317,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	}
 	if c.remoteID != nil && *c.remoteID != req.ID {
 		atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
+		c.connChange.Signal()
 		// TODO: Only disconnect stateful clients.
 		c.active.Range(func(key uint64, client *MuxClient) bool {
 			client.close()
@@ -217,21 +330,27 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		Accepted: true,
 	})
 	if err == nil {
+		c.connWg.Wait()
 		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
-		go c.handleMessages(ctx, conn)
+		c.connChange.Signal()
+		c.handleMessages(ctx, conn)
 	}
 	return err
 }
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
+	c.connWg.Add(2)
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
+			atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
+			c.connChange.Signal()
 			conn.Close()
+			c.connWg.Done()
 		}()
 
 		controlHandler := wsutil.ControlFrameHandler(conn, c.side)
@@ -272,6 +391,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		// Keep reusing the same buffer.
 		var msg []byte
 		for {
+			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				return
+			}
+
 			var m message
 			var err error
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
@@ -286,6 +409,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIf(c.ctx, fmt.Errorf("ws parse package: %w", err))
 				return
 			}
+			// TODO: Do something with the msg.
 		}
 	}()
 
@@ -296,13 +420,19 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
+			atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
 			conn.Close()
+			c.connWg.Done()
 		}()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case toSend := <-c.outQueue:
+				if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+					return
+				}
+
 				err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
 				if err != nil {
 					logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))

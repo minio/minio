@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
 
@@ -104,13 +105,26 @@ func (m *message) parse(b []byte) error {
 	return nil
 }
 
+type receiver interface {
+	msgp.Unmarshaler
+	Op() Op
+}
+
 type connectReq struct {
 	ID   [16]byte
 	Host string
+}
+
+func (_ connectReq) Op() Op {
+	return OpConnect
 }
 
 type connectResp struct {
 	ID             [16]byte
 	Accepted       bool
 	RejectedReason string
+}
+
+func (_ connectResp) Op() Op {
+	return OpConnectResponse
 }

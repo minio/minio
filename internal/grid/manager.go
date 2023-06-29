@@ -46,14 +46,14 @@ type Manager struct {
 	stateless [handlerLast]StatelessHandler
 
 	// Handlers
-	streams [handlerLast]*StatelessHandler
+	streams [handlerLast]StatefulHandler
 
 	// versions of each handler
 	version [handlerLast]uint8
 }
 
 // NewManager creates a new grid manager
-func NewManager(tr http.RoundTripper, local string, hosts []string) (*Manager, error) {
+func NewManager(dialer ContextDialer, local string, hosts []string) (*Manager, error) {
 	found := false
 	m := Manager{
 		ID:      uuid.New(),
@@ -66,7 +66,7 @@ func NewManager(tr http.RoundTripper, local string, hosts []string) (*Manager, e
 			}
 			found = true
 		}
-		m.targets[host] = NewConnection(m.ID, local, host, tr)
+		m.targets[host] = NewConnection(m.ID, local, host, dialer)
 	}
 	if found {
 		return nil, fmt.Errorf("grid: local host not found")
@@ -109,7 +109,7 @@ func (c *Manager) Handler() http.HandlerFunc {
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: unknown host: %v", cReq.Host))
 			return
 		}
-		remote.handleIncoming(ctx, conn, cReq)
+		logger.LogIf(ctx, remote.handleIncoming(ctx, conn, cReq))
 	}
 }
 
@@ -144,7 +144,7 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) erro
 	if m.stateless[idx] != nil || m.streams[idx] != nil {
 		return ErrHandlerAlreadyExists
 	}
-	m.stateless[idx] = h
+	m.streams[idx] = h
 	m.version[idx] = id.Version()
 	return nil
 }
