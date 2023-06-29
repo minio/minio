@@ -65,6 +65,8 @@ const (
 	DeleteRestoredAction
 	// DeleteRestoredVersionAction deletes a particular version that was temporarily restored
 	DeleteRestoredVersionAction
+	// DeleteAllVersionsAction deletes all versions when an object expires
+	DeleteAllVersionsAction
 
 	// ActionCount must be the last action and shouldn't be used as a regular action.
 	ActionCount
@@ -78,6 +80,11 @@ func (a Action) DeleteRestored() bool {
 // DeleteVersioned - Returns true if action demands delete on a versioned object
 func (a Action) DeleteVersioned() bool {
 	return a == DeleteVersionAction || a == DeleteRestoredVersionAction
+}
+
+// DeleteAll - Returns true if the action demands deleting all versions of an object
+func (a Action) DeleteAll() bool {
+	return a == DeleteAllVersionsAction
 }
 
 // Delete - Returns true if action demands delete on all objects (including restored)
@@ -324,6 +331,23 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	for _, rule := range lc.FilterRules(obj) {
+		if obj.IsLatest && rule.Expiration.DeleteAll.val {
+			if !rule.Expiration.IsDaysNull() {
+				// Specifying the Days tag will automatically perform all versions cleanup
+				// once the latest object is old enough to satisfy the age criteria.
+				// This is a MinIO only extension.
+				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
+					events = append(events, Event{
+						Action: DeleteAllVersionsAction,
+						RuleID: rule.ID,
+						Due:    expectedExpiry,
+					})
+					// No other conflicting actions apply to an all version expired object.
+					break
+				}
+			}
+		}
+
 		if obj.ExpiredObjectDeleteMarker() {
 			if rule.Expiration.DeleteMarker.val {
 				// Indicates whether MinIO will remove a delete marker with no noncurrent versions.

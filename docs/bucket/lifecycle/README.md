@@ -129,8 +129,30 @@ of objects under the prefix `user-uploads/` as soon as there are more than `N` n
     ]
 }
 ```
-
 Note: This rule has an implicit zero NoncurrentDays, which makes the expiry of those 'extra' noncurrent versions immediate.
+
+#### 3.2.b Automatic removal of all versions (MinIO only extension)
+
+This is available only on MinIO as an extension to the Expiration feature. The following rule makes it possible to remove all versions of an object under 
+the prefix `user-uploads/` as soon as the latest object satisfies the expiration criteria.
+
+```
+{
+    "Rules": [
+        {
+            "ID": "Purge all versions of an expired object",
+            "Status": "Enabled",
+            "Filter": {
+                "Prefix": "users-uploads/"
+            },
+            "Expiration": {
+                "Days": 7,
+                "ExpiredObjectAllVersions": true
+            }
+        }
+    ]
+}
+```
 
 ### 3.3 Automatic removal of delete markers with no other versions
 
