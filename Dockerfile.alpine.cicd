@@ -39,7 +39,6 @@ LABEL SUMMARY="MinIO is a High Performance Object Storage, API compatible with A
 ARG TARGETARCH="amd64"
 ARG RELEASE="RELEASE.2023-06-23T20-26-00Z"
 
-COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
 
 RUN mkdir -p /opt/bin && \
