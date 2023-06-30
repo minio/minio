@@ -41,14 +41,14 @@ require (
 	github.com/klauspost/reedsolomon v1.11.7
 	github.com/lib/pq v1.10.9
 	github.com/lithammer/shortuuid/v4 v4.0.0
+	github.com/lrita/numa v1.0.2
 	github.com/miekg/dns v1.1.55
 	github.com/minio/cli v1.24.2
 	github.com/minio/console v0.30.1-0.20230623034122-b7b0271ec78c
 	github.com/minio/csvparser v1.0.0
-	github.com/minio/dperf v0.4.10
+	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.2.1
 	github.com/minio/madmin-go/v3 v3.0.4
 	github.com/minio/minio-go/v7 v7.0.58
 	github.com/minio/mux v1.9.0
@@ -77,7 +77,6 @@ require (
 	github.com/rs/cors v1.9.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.5
 	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.8
@@ -117,14 +116,14 @@ require (
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/containerd/console v1.0.4-0.20230313162750-1ae8d489ac81 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/eapache/go-resiliency v1.3.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230111030713-bf00bc1b83b6 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/frankban/quicktest v1.14.3 // indirect
+	github.com/frankban/quicktest v1.14.4 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.6.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.4 // indirect
@@ -155,6 +154,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
+	github.com/intel-go/cpuid v0.0.0-20220614022739-219e067757cb // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect

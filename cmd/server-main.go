@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/lrita/numa"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
@@ -128,6 +130,13 @@ var ServerFlags = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:  "sftp",
 		Usage: "enable and configure an SFTP server",
+	},
+	cli.IntFlag{
+		Name:   "numa-cpunode",
+		Value:  -1,
+		Usage:  "execute on a specific CPU node, defaults to all CPU nodes",
+		EnvVar: "MINIO_NUMA_CPUNODE",
+		Hidden: true,
 	},
 }
 
@@ -495,7 +504,33 @@ func getServerListenAddrs() []string {
 }
 
 // serverMain handler called for 'minio server' command.
-func serverMain(ctx *cli.Context) {
+func serverMain(ctx *cli.Context) error {
+	if ctx.Int("numa-cpunode") > -1 {
+		cpuNode := ctx.Int("numa-cpunode")
+		cpumask, err := numa.NodeToCPUMask(cpuNode)
+		if err != nil {
+			return err
+		}
+
+		if err = numa.SetSchedAffinity(0, cpumask); err != nil {
+			return err
+		}
+
+		if v := os.Getenv("_MINIO_AVOID_RESPAWN"); v == "" {
+			// Use the original binary location. This works with symlinks such that if
+			// the file it points to has been changed we will use the updated symlink.
+			argv0, err := exec.LookPath(os.Args[0])
+			if err != nil {
+				return err
+			}
+
+			// Invokes the execve system call.
+			// Re-uses the same pid. This preserves the pid over multiple server-respawns.
+			os.Setenv("_MINIO_AVOID_RESPAWN", "1")
+			return syscall.Exec(argv0, os.Args, os.Environ())
+		}
+	}
+
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go handleSignals()
