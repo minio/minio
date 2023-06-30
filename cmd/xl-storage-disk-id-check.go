@@ -840,6 +840,10 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
 		if atomic.LoadInt32(&p.health.status) != diskHealthOK {
 			continue
 		}
+		if time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess))) < 5*time.Second {
+			// We recently saw a success - no need to check.
+			continue
+		}
 		goOffline := func(err error) {
 			if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
 				logger.LogAlwaysIf(context.Background(), fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
