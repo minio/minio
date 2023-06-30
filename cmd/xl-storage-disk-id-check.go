@@ -83,6 +83,8 @@ type xlStorageDiskIDCheck struct {
 	storage      *xlStorage
 	health       *diskHealthTracker
 	metricsCache timedValue
+	diskCtx      context.Context
+	cancel       context.CancelFunc
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
@@ -136,11 +138,12 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		storage: storage,
 		health:  newDiskHealthTracker(),
 	}
+	xl.diskCtx, xl.cancel = context.WithCancel(context.TODO())
 	for i := range xl.apiLatencies[:] {
 		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
 	}
 	if healthCheck {
-		go xl.monitorDiskWritable()
+		go xl.monitorDiskWritable(xl.diskCtx)
 	}
 	return &xl
 }
@@ -199,6 +202,7 @@ func (p *xlStorageDiskIDCheck) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 }
 
 func (p *xlStorageDiskIDCheck) Close() error {
+	p.cancel()
 	return p.storage.Close()
 }
 
@@ -827,7 +831,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 
 // monitorDiskStatus should be called once when a drive has been marked offline.
 // Once the disk has been deemed ok, it will return to online status.
-func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
+func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 	const (
 		// We check every 15 seconds if the disk is writable and we can read back.
 		checkEvery = 15 * time.Second
@@ -848,6 +852,9 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for range t.C {
+		if contextCanceled(ctx) {
+			break
+		}
 		if atomic.LoadInt32(&p.health.status) != diskHealthOK {
 			continue
 		}
@@ -857,7 +864,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
 		}
 		goOffline := func(err error) {
 			if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
-				logger.LogAlwaysIf(context.Background(), fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
+				logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
 				go p.monitorDiskStatus()
 			}
 		}
@@ -881,7 +888,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
 		}()
 		func() {
 			defer close(done)
-			err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, toWrite)
+			err := p.storage.WriteAll(ctx, minioMetaTmpBucket, fn, toWrite)
 			if err != nil {
 				if osErrToFileErr(err) == errFaultyDisk {
 					goOffline(fmt.Errorf("unable to write: %w", err))

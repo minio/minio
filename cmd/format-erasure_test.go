@@ -38,7 +38,7 @@ func TestFixFormatV3(t *testing.T) {
 	}
 	endpoints := mustGetNewEndpoints(erasureDirs...)
 
-	storageDisks, errs := initStorageDisksWithErrors(endpoints, true)
+	storageDisks, errs := initStorageDisksWithErrors(endpoints, false)
 	for _, err := range errs {
 		if err != nil && err != errDiskNotFound {
 			t.Fatal(err)
@@ -559,7 +559,7 @@ func benchmarkInitStorageDisksN(b *testing.B, nDisks int) {
 	b.RunParallel(func(pb *testing.PB) {
 		endpoints := endpoints
 		for pb.Next() {
-			initStorageDisksWithErrors(endpoints, true)
+			initStorageDisksWithErrors(endpoints, false)
 		}
 	})
 }
