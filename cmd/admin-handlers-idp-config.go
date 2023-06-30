@@ -206,9 +206,9 @@ func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.
 
 // UpdateIdentityProviderCfg: updates an existing IDP config for openid/ldap.
 //
-// PATCH <admin-prefix>/idp-cfg/openid/dex1 -> update named config `dex1`
+// POST <admin-prefix>/idp-cfg/openid/dex1 -> update named config `dex1`
 //
-// PATCH <admin-prefix>/idp-cfg/openid/_ -> update (default) named config `_`
+// POST <admin-prefix>/idp-cfg/openid/_ -> update (default) named config `_`
 func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "UpdateIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
