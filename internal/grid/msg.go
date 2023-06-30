@@ -50,10 +50,18 @@ const (
 
 	// OpConnectMux will connect a new mux with optional payload.
 	OpConnectMux
+
+	// OpDisconnectMux should disconnect a mux
 	OpDisconnectMux
-	OpMsg
-	OpUnblock
-	OpError
+
+	// OpMuxMsg contains a message to a Mux
+	OpMuxMsg
+
+	// OpUnblock contains a message that a mux is unblocked.
+	OpUnblockMux
+
+	// An error...
+	OpMuxError
 	OpDisconnect
 )
 

@@ -18,6 +18,7 @@
 package grid
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -64,6 +65,27 @@ func (h HandlerID) ID() uint8 {
 	return uint8(h & handlerIDMask)
 }
 
-type StatelessHandler func(payload []byte) ([]byte, error)
+type (
+	// SingleHandler is handlers for one to one requests.
+	SingleHandler func(payload []byte) ([]byte, error)
 
-type StatefulHandler func(request <-chan []byte, resp chan<- Response)
+	// StatelessHandler is handlers for one to many requests,
+	// where responses may be dropped.
+	StatelessHandler func(ctx context.Context, payload []byte, resp chan<- Response) error
+
+	// StatefulHandler handles fully bidirectional streams.
+	StatefulHandler func(ctx context.Context, request <-chan []byte, resp chan<- Response)
+)
+
+type handlers struct {
+	single    [handlerLast]SingleHandler
+	stateless [handlerLast]StatelessHandler
+	streams   [handlerLast]StatefulHandler
+}
+
+func (h *handlers) hasAny(id HandlerID) bool {
+	if !id.valid() {
+		return false
+	}
+	return h.single[id] != nil || h.stateless[id] != nil || h.streams[id] != nil
+}

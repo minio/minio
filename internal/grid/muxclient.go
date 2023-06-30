@@ -40,8 +40,8 @@ type MuxClient struct {
 }
 
 type Response struct {
-	msg []byte
-	err error
+	Msg []byte
+	Err error
 }
 
 func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxClient {
@@ -72,7 +72,7 @@ func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	// Wait for response or context.
 	select {
 	case v := <-ch:
-		return v.msg, v.err
+		return v.Msg, v.Err
 	case <-m.ctx.Done():
 		return nil, m.ctx.Err()
 	}
@@ -110,7 +110,7 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 	err := m.send(msg)
 	if err != nil {
 		PutByteBuffer(req)
-		out <- Response{err: err}
+		out <- Response{Err: err}
 		return
 	}
 
@@ -126,20 +126,27 @@ func (m *MuxClient) response(seq uint32, r Response) {
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
-		PutByteBuffer(r.msg)
+		PutByteBuffer(r.Msg)
 		return
 	}
 
 	if seq != m.RecvSeq {
-		m.respWait <- Response{err: ErrIncorrectSequence}
-		PutByteBuffer(r.msg)
+		select {
+		case m.respWait <- Response{Err: ErrIncorrectSequence}:
+		default:
+			go func() {
+				m.respWait <- Response{Err: ErrIncorrectSequence}
+			}()
+		}
+		PutByteBuffer(r.Msg)
 		return
 	}
 	m.RecvSeq++
 	select {
 	case m.respWait <- r:
 	default:
-		PutByteBuffer(r.msg)
+		// Disconnect stateful.
+		PutByteBuffer(r.Msg)
 	}
 }
 

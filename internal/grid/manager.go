@@ -42,11 +42,8 @@ type Manager struct {
 	// Immutable after creation, so no locks.
 	targets map[string]*Connection
 
-	// Handlers
-	stateless [handlerLast]StatelessHandler
-
-	// Handlers
-	streams [handlerLast]StatefulHandler
+	// serverside handlers.
+	handlers handlers
 
 	// versions of each handler
 	version [handlerLast]uint8

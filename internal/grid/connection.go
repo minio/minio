@@ -65,7 +65,12 @@ type Connection struct {
 	ctx context.Context
 
 	// Active mux connections.
-	active *xsync.MapOf[uint64, *MuxClient]
+	outgoing *xsync.MapOf[uint64, *MuxClient]
+
+	// Incoming stateless requests
+	statefulCtx *xsync.MapOf[uint64, context.CancelFunc]
+	// Incoming streams
+	streamCtx *xsync.MapOf[uint64, context.CancelFunc]
 
 	// outQueue is the output queue
 	outQueue chan []byte
@@ -123,7 +128,9 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer) *Conn
 		Local:      local,
 		id:         id,
 		ctx:        context.Background(),
-		active:     xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		outgoing:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		statefulCtx:   xsync.NewIntegerMapOfPresized[uint64, context.CancelFunc](1000),
+		streamCtx:   xsync.NewIntegerMapOfPresized[uint64, context.CancelFunc](1000),
 		outQueue:   make(chan []byte, defaultOutQueue),
 		dialer:     dial,
 		side:       ws.StateServerSide,
@@ -146,7 +153,7 @@ func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := c.active.LoadOrStore(client.MuxID, client); !ok {
+		if _, ok := c.outgoing.LoadOrStore(client.MuxID, client); !ok {
 			break
 		}
 		client.MuxID = atomic.AddUint64(&c.NextID, 1)
@@ -156,19 +163,41 @@ func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 
 func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
 	client := c.NewMuxClient(ctx)
-	defer c.active.Delete(client.MuxID)
+	defer c.outgoing.Delete(client.MuxID)
 	return client.roundtrip(h, req)
 }
 
 var ErrDone = errors.New("done for now")
 
-// Stateless
+var ErrRemoteRestart = errors.New("remote restarted")
+
+// Stateless connects to the remote handler and return all packets sent back.
+// If the remote is restarted or reports EOF the function will return ErrRemoteRestart and io.EOF respectively.
+// If cb returns an error it is returned. If ErrDone is returned on cb nil will be returned.
 func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb func([]byte) error) error {
 	client := c.NewMuxClient(ctx)
-	client.RequestBytes()
-	defer c.active.Delete(client.MuxID)
-	for {
+	resp := make(chan Response, 10)
+	client.RequestBytes(h, req, resp)
+
+	defer c.outgoing.Delete(client.MuxID)
+	for r := range resp {
+		if r.Err != nil && !errors.Is(r.Err, io.EOF) {
+			return r.Err
+		}
+		if len(r.Msg) > 0 {
+			err := cb(r.Msg)
+			if err != nil {
+				if errors.Is(err, ErrDone) {
+					break
+				}
+				return err
+			}
+		}
+		if errors.Is(r.Err, io.EOF) {
+			break
+		}
 	}
+	return nil
 }
 
 func (c *Connection) send(ctx context.Context, msg []byte) error {
@@ -178,6 +207,31 @@ func (c *Connection) send(ctx context.Context, msg []byte) error {
 	case c.outQueue <- msg:
 		return nil
 	}
+}
+
+func (c *Connection) queueMsg(msg message, payload msgp.MarshalSizer) error {
+	if payload != nil {
+		if cap(msg.Payload) < payload.Msgsize() {
+			PutByteBuffer(msg.Payload)
+			msg.Payload = GetByteBuffer()[:0]
+		}
+		var err error
+		msg.Payload, err = payload.MarshalMsg(msg.Payload)
+		if err != nil {
+			return err
+		}
+		defer PutByteBuffer(msg.Payload)
+	}
+	dst := GetByteBuffer()[:0]
+	dst, err := msg.MarshalMsg(dst)
+	if err != nil {
+		return err
+	}
+	if msg.Flags&FlagCRCxxh3 != 0 {
+		h := xxh3.Hash(dst)
+		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
+	}
+	return c.send(context.Background(), dst)
 }
 
 // sendMsg will send
@@ -210,6 +264,7 @@ func (c *Connection) connect() {
 	atomic.StoreUint32((*uint32)(&c.State), StateConnecting)
 	c.connChange.Signal()
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Runs until the server is shut down.
 	for {
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
@@ -269,7 +324,7 @@ func (c *Connection) connect() {
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil && remoteUUID != *c.remoteID {
 			// TODO: Only disconnect stateful clients.
-			c.active.Range(func(key uint64, client *MuxClient) bool {
+			c.outgoing.Range(func(key uint64, client *MuxClient) bool {
 				client.close()
 				return true
 			})
@@ -315,11 +370,13 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	msg := message{
 		Op: OpConnectResponse,
 	}
+
 	if c.remoteID != nil && *c.remoteID != req.ID {
 		atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
 		c.connChange.Signal()
-		// TODO: Only disconnect stateful clients.
-		c.active.Range(func(key uint64, client *MuxClient) bool {
+		// Remote ID changed.
+		// Close all active requests.
+		c.outgoing.Range(func(key uint64, client *MuxClient) bool {
 			client.close()
 			return true
 		})
@@ -408,6 +465,25 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if err != nil {
 				logger.LogIf(c.ctx, fmt.Errorf("ws parse package: %w", err))
 				return
+			}
+			switch m.Op {
+			case OpMuxMsg:
+				v, ok := c.outgoing.Load(m.MuxID)
+				if !ok {
+					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					PutByteBuffer(m.Payload)
+					continue
+				}
+				var err error
+				if m.Flags&FlagEOF != 0 {
+					err = io.EOF
+				}
+				v.response(m.Seq, Response{
+					Msg: m.Payload,
+					Err: err,
+				})
+			case OpConnectMux:
+				c.
 			}
 			// TODO: Do something with the msg.
 		}
