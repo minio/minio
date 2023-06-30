@@ -85,6 +85,40 @@ spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
+      initContainers:
+        { { - if .Values.policies } }
+        - name: minio-make-policy
+          image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
+          { { - if .Values.makePolicyJob.securityContext.enabled } }
+          securityContext:
+            runAsUser: { { .Values.makePolicyJob.securityContext.runAsUser } }
+            runAsGroup: { { .Values.makePolicyJob.securityContext.runAsGroup } }
+          { { - end } }
+          imagePullPolicy: { { .Values.mcImage.pullPolicy } }
+          { { - if .Values.makePolicyJob.exitCommand } }
+          command: [ "/bin/sh", "-c" ]
+          args: [ "/bin/sh /config/add-policy; EV=$?; {{ .Values.makePolicyJob.exitCommand }} && exit $EV" ]
+          { { - else } }
+          command: [ "/bin/sh", "/config/add-policy" ]
+          { { - end } }
+          env:
+            - name: MINIO_ENDPOINT
+              value: { { template "minio.fullname" . } }
+            - name: MINIO_PORT
+              value: { { .Values.service.port | quote } }
+          volumeMounts:
+            - name: etc-path
+              mountPath: /etc/minio/mc
+            - name: tmp
+              mountPath: /tmp
+            - name: minio-configuration
+              mountPath: /config
+            { { - if .Values.tls.enabled } }
+            - name: cert-secret-volume-mc
+              mountPath: { { .Values.configPathmc } }certs
+            {{- end }}
+          resources: { { - toYaml .Values.makePolicyJob.resources | nindent 12 } }
+        { { - end } }
       containers:
         {{- if .Values.buckets }}
         - name: minio-make-bucket
@@ -119,39 +153,6 @@ spec:
             {{- end }}
           resources: {{- toYaml .Values.makeBucketJob.resources | nindent 12 }}
         {{- end }}
-        { { - if .Values.policies } }
-        - name: minio-make-policy
-          image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
-          { { - if .Values.makePolicyJob.securityContext.enabled } }
-          securityContext:
-            runAsUser: { { .Values.makePolicyJob.securityContext.runAsUser } }
-            runAsGroup: { { .Values.makePolicyJob.securityContext.runAsGroup } }
-          { { - end } }
-          imagePullPolicy: { { .Values.mcImage.pullPolicy } }
-          { { - if .Values.makePolicyJob.exitCommand } }
-          command: [ "/bin/sh", "-c" ]
-          args: [ "/bin/sh /config/add-policy; EV=$?; {{ .Values.makePolicyJob.exitCommand }} && exit $EV" ]
-          { { - else } }
-          command: [ "/bin/sh", "/config/add-policy" ]
-          { { - end } }
-          env:
-            - name: MINIO_ENDPOINT
-              value: { { template "minio.fullname" . } }
-            - name: MINIO_PORT
-              value: { { .Values.service.port | quote } }
-          volumeMounts:
-            - name: etc-path
-              mountPath: /etc/minio/mc
-            - name: tmp
-              mountPath: /tmp
-            - name: minio-configuration
-              mountPath: /config
-            { { - if .Values.tls.enabled } }
-            - name: cert-secret-volume-mc
-              mountPath: { { .Values.configPathmc } }certs
-            {{- end }}
-          resources: { { - toYaml .Values.makePolicyJob.resources | nindent 12 } }
-        { { - end } }
         {{- if .Values.users }}
         - name: minio-make-user
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
