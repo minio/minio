@@ -35,8 +35,11 @@ import (
 // CheckPreconditionFn returns true if precondition check failed.
 type CheckPreconditionFn func(o ObjectInfo) bool
 
-// EvalMetadataFn validates input objInfo and returns an updated metadata
-type EvalMetadataFn func(o *ObjectInfo) error
+// EvalMetadataFn validates input objInfo and GetObjectInfo error and returns an updated metadata and replication decision if any
+type EvalMetadataFn func(o *ObjectInfo, gerr error) (ReplicateDecision, error)
+
+// EvalRetentionBypassFn validates input objInfo and GetObjectInfo error and returns an error if retention bypass is not allowed.
+type EvalRetentionBypassFn func(o ObjectInfo, gerr error) error
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
@@ -100,7 +103,8 @@ type ObjectOptions struct {
 
 	InclFreeVersions bool
 
-	MetadataChg bool // is true if it is a metadata update operation.
+	MetadataChg           bool                  // is true if it is a metadata update operation.
+	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
@@ -180,6 +184,16 @@ func (o *ObjectOptions) PutReplicationState() (r ReplicationState) {
 	r.ReplicationStatusInternal = rstatus
 	r.Targets = replicationStatusesMap(rstatus)
 	return
+}
+
+// SetEvalMetadataFn sets the metadata evaluation function
+func (o *ObjectOptions) SetEvalMetadataFn(f EvalMetadataFn) {
+	o.EvalMetadataFn = f
+}
+
+// SetEvalRetentionBypassFn sets the retention bypass function
+func (o *ObjectOptions) SetEvalRetentionBypassFn(f EvalRetentionBypassFn) {
+	o.EvalRetentionBypassFn = f
 }
 
 // ObjectLayer implements primitives for object API layer.
