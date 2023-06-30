@@ -664,14 +664,14 @@ func newCustomDialContext() dialContext {
 
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
-func NewRemoteTargetHTTPTransport() func() *http.Transport {
+func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	return xhttp.ConnSettings{
 		DialContext: newCustomDialContext(),
 		DNSCache:    globalDNSCache,
 		RootCAs:     globalRootCAs,
 		TCPOptions:  globalTCPOptions,
 		EnableHTTP2: false,
-	}.NewRemoteTargetHTTPTransport()
+	}.NewRemoteTargetHTTPTransport(insecure)
 }
 
 // Load the json (typically from disk file).

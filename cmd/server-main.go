@@ -256,7 +256,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = NewInternodeHTTPTransport()()
-	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
+	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,

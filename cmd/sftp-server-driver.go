@@ -143,7 +143,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		return minio.New(f.endpoint, &minio.Options{
 			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 			Secure:    globalIsTLS,
-			Transport: globalRemoteTargetTransport,
+			Transport: globalRemoteFTPClientTransport,
 		})
 	}
 
@@ -157,7 +157,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 	return minio.New(f.endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: globalRemoteTargetTransport,
+		Transport: globalRemoteFTPClientTransport,
 	})
 }
 
