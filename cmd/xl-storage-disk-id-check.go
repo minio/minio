@@ -828,19 +828,30 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus() {
 // monitorDiskStatus should be called once when a drive has been marked offline.
 // Once the disk has been deemed ok, it will return to online status.
 func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
-	// We check every 2 minutes if the disk is writable and we can read back.
-	t := time.NewTicker(2 * time.Minute)
+	const (
+		// We check every 15 seconds if the disk is writable and we can read back.
+		checkEvery = 15 * time.Second
+
+		// Disk has 2 minutes to complete write+read.
+		timeoutOperation = 2 * time.Minute
+
+		// If the disk has completed an operation successfully within last 5 seconds, don't check it.
+		skipIfSuccessBefore = 5 * time.Second
+	)
+
+	t := time.NewTicker(checkEvery)
 	defer t.Stop()
 	fn := mustGetUUID()
 
 	// Be just above directio size.
 	toWrite := []byte{xioutil.DirectioAlignSize + 1: 42}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	for range t.C {
 		if atomic.LoadInt32(&p.health.status) != diskHealthOK {
 			continue
 		}
-		if time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess))) < 5*time.Second {
+		if time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess))) < skipIfSuccessBefore {
 			// We recently saw a success - no need to check.
 			continue
 		}
@@ -855,13 +866,17 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable() {
 		done := make(chan struct{})
 		started := time.Now()
 		go func() {
+			timeout := time.NewTimer(timeoutOperation)
 			select {
 			// Reuse the same trigger
 			// If it triggers again, it took too long.
-			case <-t.C:
+			case <-timeout.C:
 				spent := time.Since(started)
 				goOffline(fmt.Errorf("unable to write+read for %v", spent.Round(time.Millisecond)))
 			case <-done:
+				if !timeout.Stop() {
+					<-timeout.C
+				}
 			}
 		}()
 		func() {
