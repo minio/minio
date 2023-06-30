@@ -85,8 +85,8 @@ spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
+      { { - if .Values.policies } }
       initContainers:
-        { { - if .Values.policies } }
         - name: minio-make-policy
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           { { - if .Values.makePolicyJob.securityContext.enabled } }
@@ -118,7 +118,7 @@ spec:
               mountPath: { { .Values.configPathmc } }certs
             {{- end }}
           resources: { { - toYaml .Values.makePolicyJob.resources | nindent 12 } }
-        { { - end } }
+      { { - end } }
       containers:
         {{- if .Values.buckets }}
         - name: minio-make-bucket
