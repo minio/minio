@@ -162,7 +162,6 @@ func loadFormatCache(ctx context.Context, drives []string) ([]*formatCacheV2, bo
 			logger.LogIf(ctx, err)
 			return nil, migrating, err
 		}
-		defer f.Close()
 		format, err := formatMetaCacheV1(f)
 		if err != nil {
 			continue
@@ -172,6 +171,8 @@ func loadFormatCache(ctx context.Context, drives []string) ([]*formatCacheV2, bo
 			migrating = true
 		}
 		formats[i] = formatV2
+
+		f.Close()
 	}
 	return formats, migrating, nil
 }
