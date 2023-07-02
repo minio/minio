@@ -557,8 +557,13 @@ func ToS3ETag(etag string) string {
 
 // GetDefaultConnSettings returns default HTTP connection settings.
 func GetDefaultConnSettings() xhttp.ConnSettings {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	return xhttp.ConnSettings{
-		DNSCache:    globalDNSCache,
+		LookupHost:  lookupHost,
 		DialTimeout: rest.DefaultTimeout,
 		RootCAs:     globalRootCAs,
 		TCPOptions:  globalTCPOptions,
@@ -568,8 +573,13 @@ func GetDefaultConnSettings() xhttp.ConnSettings {
 // NewInternodeHTTPTransport returns a transport for internode MinIO
 // connections.
 func NewInternodeHTTPTransport() func() http.RoundTripper {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	return xhttp.ConnSettings{
-		DNSCache:         globalDNSCache,
+		LookupHost:       lookupHost,
 		DialTimeout:      rest.DefaultTimeout,
 		RootCAs:          globalRootCAs,
 		CipherSuites:     fips.TLSCiphers(),
@@ -582,8 +592,13 @@ func NewInternodeHTTPTransport() func() http.RoundTripper {
 // NewCustomHTTPProxyTransport is used only for proxied requests, specifically
 // only supports HTTP/1.1
 func NewCustomHTTPProxyTransport() func() *http.Transport {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	return xhttp.ConnSettings{
-		DNSCache:         globalDNSCache,
+		LookupHost:       lookupHost,
 		DialTimeout:      rest.DefaultTimeout,
 		RootCAs:          globalRootCAs,
 		CipherSuites:     fips.TLSCiphers(),
@@ -596,8 +611,13 @@ func NewCustomHTTPProxyTransport() func() *http.Transport {
 // NewHTTPTransportWithClientCerts returns a new http configuration
 // used while communicating with the cloud backends.
 func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	s := xhttp.ConnSettings{
-		DNSCache:    globalDNSCache,
+		LookupHost:  lookupHost,
 		DialTimeout: defaultDialTimeout,
 		RootCAs:     globalRootCAs,
 		TCPOptions:  globalTCPOptions,
@@ -609,8 +629,7 @@ func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transpo
 		defer cancel()
 		transport, err := s.NewHTTPTransportWithClientCerts(ctx, clientCert, clientKey)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to load client key and cert, please check your endpoint configuration: %s",
-				err.Error()))
+			logger.LogIf(ctx, fmt.Errorf("Unable to load client key and cert, please check your client certificate configuration: %w", err))
 		}
 		return transport
 	}
@@ -629,9 +648,14 @@ const defaultDialTimeout = 5 * time.Second
 
 // NewHTTPTransportWithTimeout allows setting a timeout.
 func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	return xhttp.ConnSettings{
 		DialContext: newCustomDialContext(),
-		DNSCache:    globalDNSCache,
+		LookupHost:  lookupHost,
 		DialTimeout: defaultDialTimeout,
 		RootCAs:     globalRootCAs,
 		TCPOptions:  globalTCPOptions,
@@ -639,10 +663,8 @@ func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	}.NewHTTPTransportWithTimeout(timeout)
 }
 
-type dialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-
 // newCustomDialContext setups a custom dialer for any external communication and proxies.
-func newCustomDialContext() dialContext {
+func newCustomDialContext() xhttp.DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout:   15 * time.Second,
@@ -665,9 +687,14 @@ func newCustomDialContext() dialContext {
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = nil
+	}
+
 	return xhttp.ConnSettings{
 		DialContext: newCustomDialContext(),
-		DNSCache:    globalDNSCache,
+		LookupHost:  lookupHost,
 		RootCAs:     globalRootCAs,
 		TCPOptions:  globalTCPOptions,
 		EnableHTTP2: false,
