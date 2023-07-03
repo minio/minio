@@ -66,7 +66,6 @@ import (
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
-	"github.com/rs/dnscache"
 )
 
 // serverDebugLog will enable debug printing
@@ -96,16 +95,6 @@ func init() {
 
 	initGlobalContext()
 
-	options := dnscache.ResolverRefreshOptions{
-		ClearUnused: true,
-		// We always must persist on failure to effectively utilize
-		// dnscache package. First lookup when the lookup is not persisted
-		// will always provide the correct errors, however if the DNS
-		// has indeed resolved atleast once we must simply use
-		// older value and wait for the refresh window instead.
-		PersistOnFailure: true,
-	}
-
 	t, _ := minioVersionToReleaseTime(Version)
 	if !t.IsZero() {
 		globalVersionUnix = uint64(t.Unix())
@@ -115,13 +104,14 @@ func init() {
 
 	// Call to refresh will refresh names in cache.
 	go func() {
-		// baremetal setups set DNS refresh window to 30 minutes.
-		t := time.NewTicker(30 * time.Minute)
+		// Baremetal setups set DNS refresh window to 10 minutes.
+		t := time.NewTicker(10 * time.Minute)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
-				globalDNSCache.RefreshWithOptions(options)
+				globalDNSCache.Refresh()
+
 			case <-GlobalContext.Done():
 				return
 			}
