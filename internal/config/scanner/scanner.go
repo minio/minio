@@ -85,14 +85,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
-	// Stick to loading deprecated config/env if they are already set
-	if kvs.Get(Delay) != "" && kvs.Get(MaxWait) != "" && kvs.Get(Cycle) != "" {
-		return lookupDeprecatedScannerConfig(kvs)
+	// Stick to loading deprecated config/env if they are already set, and the Speed value
+	// has not been changed from its "default" value, if it has been changed honor new settings.
+	if kvs.GetWithDefault(Speed, DefaultKVS) == "default" {
+		if kvs.Get(Delay) != "" && kvs.Get(MaxWait) != "" {
+			return lookupDeprecatedScannerConfig(kvs)
+		}
 	}
 
 	switch speed := env.Get(EnvSpeed, kvs.GetWithDefault(Speed, DefaultKVS)); speed {
 	case "fastest":
-		cfg.Delay, cfg.MaxWait, cfg.Cycle = 0, 0, 0
+		cfg.Delay, cfg.MaxWait, cfg.Cycle = 0, 0, time.Second
 	case "fast":
 		cfg.Delay, cfg.MaxWait, cfg.Cycle = 1, 100*time.Millisecond, time.Minute
 	case "default":
