@@ -21,13 +21,11 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"net"
 	"net/http"
 	"syscall"
 	"time"
 
 	"github.com/minio/pkg/certs"
-	"github.com/rs/dnscache"
 )
 
 // tlsClientSessionCacheSize is the cache size for client sessions.
@@ -35,11 +33,8 @@ var tlsClientSessionCacheSize = 100
 
 // ConnSettings - contains connection settings.
 type ConnSettings struct {
-	// If this is non-nil, DNSCache and DialTimeout are ignored.
-	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-
-	// Dial settings, used if DialContext is nil.
-	DNSCache    *dnscache.Resolver
+	DialContext DialContext // Custom dialContext, DialTimeout is ignored if this is already setup.
+	LookupHost  LookupHost  // Custom lookupHost, is nil on containerized deployments.
 	DialTimeout time.Duration
 
 	// TLS Settings
@@ -57,7 +52,7 @@ type ConnSettings struct {
 func (s ConnSettings) getDefaultTransport() *http.Transport {
 	dialContext := s.DialContext
 	if dialContext == nil {
-		dialContext = DialContextWithDNSCache(s.DNSCache, NewInternodeDialContext(s.DialTimeout, s.TCPOptions))
+		dialContext = DialContextWithLookupHost(s.LookupHost, NewInternodeDialContext(s.DialTimeout, s.TCPOptions))
 	}
 
 	tlsClientConfig := tls.Config{
