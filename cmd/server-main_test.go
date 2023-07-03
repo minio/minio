@@ -35,7 +35,7 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	obj, err := newObjectLayer(ctx, mustGetPoolEndpoints(disks...))
+	obj, err := newObjectLayer(ctx, mustGetPoolEndpoints(0, disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
@@ -55,7 +55,7 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	obj, err = newObjectLayer(ctx, mustGetPoolEndpoints(disks...))
+	obj, err = newObjectLayer(ctx, mustGetPoolEndpoints(0, disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
