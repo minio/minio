@@ -253,11 +253,7 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 			return false, err
 		}
 		ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-		if len(ldapPolicies) == 0 {
-			// no policy associated reject it.
-			return false, nil
-		}
-		return true, nil
+		return len(ldapPolicies) > 0, nil
 	}
 
 	ui, ok := globalIAMSys.GetUser(context.Background(), username)
@@ -326,7 +322,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		return minio.New(driver.endpoint, &minio.Options{
 			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 			Secure:    globalIsTLS,
-			Transport: globalRemoteTargetTransport,
+			Transport: globalRemoteFTPClientTransport,
 		})
 	}
 
@@ -340,7 +336,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 	return minio.New(driver.endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: globalRemoteTargetTransport,
+		Transport: globalRemoteFTPClientTransport,
 	})
 }
 
@@ -362,12 +358,20 @@ func (driver *ftpDriver) DeleteDir(ctx *ftp.Context, path string) (err error) {
 	cctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if prefix == "" {
+		// if all objects are not deleted yet this call may fail.
+		return clnt.RemoveBucket(cctx, bucket)
+	}
+
 	objectsCh := make(chan minio.ObjectInfo)
 
 	// Send object names that are needed to be removed to objectsCh
 	go func() {
 		defer close(objectsCh)
-		opts := minio.ListObjectsOptions{Prefix: prefix, Recursive: true}
+		opts := minio.ListObjectsOptions{
+			Prefix:    prefix,
+			Recursive: true,
+		}
 		for object := range clnt.ListObjects(cctx, bucket, opts) {
 			if object.Err != nil {
 				return
@@ -425,6 +429,10 @@ func (driver *ftpDriver) MakeDir(ctx *ftp.Context, path string) (err error) {
 	clnt, err := driver.getMinIOClient(ctx)
 	if err != nil {
 		return err
+	}
+
+	if prefix == "" {
+		return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
 	}
 
 	dirPath := buildMinioDir(prefix)

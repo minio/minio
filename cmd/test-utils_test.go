@@ -191,7 +191,7 @@ func prepareFS(ctx context.Context) (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		return nil, "", err
 	}
@@ -211,7 +211,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -331,7 +331,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	testServer.Obj = objLayer
 	testServer.rawDiskPaths = disks
-	testServer.Disks = mustGetPoolEndpoints(disks...)
+	testServer.Disks = mustGetPoolEndpoints(0, disks...)
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
@@ -1932,7 +1932,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of drives for Erasure setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(erasureDisks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, erasureDisks...))
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
@@ -2172,8 +2172,8 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	return certOut.Bytes(), keyOut.Bytes(), nil
 }
 
-func mustGetPoolEndpoints(args ...string) EndpointServerPools {
-	endpoints := mustGetNewEndpoints(args...)
+func mustGetPoolEndpoints(poolIdx int, args ...string) EndpointServerPools {
+	endpoints := mustGetNewEndpoints(poolIdx, args...)
 	drivesPerSet := len(args)
 	setCount := 1
 	if len(args) >= 16 {
@@ -2188,8 +2188,11 @@ func mustGetPoolEndpoints(args ...string) EndpointServerPools {
 	}}
 }
 
-func mustGetNewEndpoints(args ...string) (endpoints Endpoints) {
+func mustGetNewEndpoints(poolIdx int, args ...string) (endpoints Endpoints) {
 	endpoints, err := NewEndpoints(args...)
+	for i := range endpoints {
+		endpoints[i].Pool = poolIdx
+	}
 	logger.FatalIf(err, "unable to create new endpoint list")
 	return endpoints
 }

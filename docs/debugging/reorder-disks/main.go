@@ -162,7 +162,6 @@ func getDiskLocation(f format) (string, error) {
 }
 
 func main() {
-
 	var node, args string
 
 	flag.StringVar(&node, "local-node-name", "", "the name of the local node")

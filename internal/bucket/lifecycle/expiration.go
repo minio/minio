@@ -100,6 +100,11 @@ func (eDate ExpirationDate) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 
 // ExpireDeleteMarker represents value of ExpiredObjectDeleteMarker field in Expiration XML element.
 type ExpireDeleteMarker struct {
+	Boolean
+}
+
+// Boolean signifies a boolean XML struct with custom marshaling
+type Boolean struct {
 	val bool
 	set bool
 }
@@ -110,12 +115,16 @@ type Expiration struct {
 	Days         ExpirationDays     `xml:"Days,omitempty"`
 	Date         ExpirationDate     `xml:"Date,omitempty"`
 	DeleteMarker ExpireDeleteMarker `xml:"ExpiredObjectDeleteMarker"`
+	// Indicates whether MinIO will remove all versions. If set to true, all versions will be deleted;
+	// if set to false the policy takes no action. This action uses the Days/Date to expire objects.
+	// This check is verified for latest version of the object.
+	DeleteAll Boolean `xml:"ExpiredObjectAllVersions"`
 
 	set bool
 }
 
 // MarshalXML encodes delete marker boolean into an XML form.
-func (b ExpireDeleteMarker) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
+func (b Boolean) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
 	if !b.set {
 		return nil
 	}
@@ -123,7 +132,7 @@ func (b ExpireDeleteMarker) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 }
 
 // UnmarshalXML decodes delete marker boolean from the XML form.
-func (b *ExpireDeleteMarker) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
+func (b *Boolean) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
 	var exp bool
 	err := d.DecodeElement(&exp, &startElement)
 	if err != nil {

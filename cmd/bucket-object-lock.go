@@ -83,12 +83,6 @@ func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locke
 // governance bypass headers are set and user has governance bypass permissions.
 // Objects in "Compliance" mode can be overwritten only if retention date is past.
 func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucket string, object ObjectToDelete, oi ObjectInfo, gerr error) APIErrorCode {
-	opts, err := getOpts(ctx, r, bucket, object.ObjectName)
-	if err != nil {
-		return toAPIErrorCode(ctx, err)
-	}
-
-	opts.VersionID = object.VersionID
 	if gerr != nil { // error from GetObjectInfo
 		if _, ok := gerr.(MethodNotAllowed); ok {
 			// This happens usually for a delete marker

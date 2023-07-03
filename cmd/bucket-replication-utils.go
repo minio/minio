@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -512,7 +512,10 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 				ObjectName: oi.Name,
 				VersionID:  oi.VersionID,
 			},
-		}, oi, ObjectOptions{VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name)}, nil)
+		}, oi, ObjectOptions{
+			Versioned:        globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name),
+			VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name),
+		}, nil)
 	} else {
 		dsc = mustReplicate(GlobalContext, oi.Bucket, oi.Name, getMustReplicateOptions(ObjectInfo{
 			UserDefined: oi.UserDefined,

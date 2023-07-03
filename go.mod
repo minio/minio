@@ -45,10 +45,10 @@ require (
 	github.com/minio/cli v1.24.2
 	github.com/minio/console v0.30.1-0.20230623034122-b7b0271ec78c
 	github.com/minio/csvparser v1.0.0
+	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.4.10
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v2 v2.2.1
 	github.com/minio/madmin-go/v3 v3.0.4
 	github.com/minio/minio-go/v7 v7.0.58
 	github.com/minio/mux v1.9.0
@@ -75,9 +75,7 @@ require (
 	github.com/prometheus/procfs v0.11.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rs/cors v1.9.0
-	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.5
 	github.com/tidwall/gjson v1.14.4
 	github.com/tinylib/msgp v1.1.8

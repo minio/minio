@@ -29,8 +29,8 @@ func prepareErasurePools() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, err := newErasureServerPools(context.Background(), pools)

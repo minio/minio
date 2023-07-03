@@ -97,18 +97,15 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, false, targetGroups...)
-		if len(ldapPolicies) == 0 {
-			return nil, errAuthentication
-		}
 		expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
 		if err != nil {
 			return nil, err
 		}
 		claims := make(map[string]interface{})
 		claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-		claims[ldapUser] = targetUser
-		claims[ldapUserN] = f.AccessKey()
+		for k, v := range f.permissions.CriticalOptions {
+			claims[k] = v
+		}
 
 		cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
 		if err != nil {
@@ -146,7 +143,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		return minio.New(f.endpoint, &minio.Options{
 			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 			Secure:    globalIsTLS,
-			Transport: globalRemoteTargetTransport,
+			Transport: globalRemoteFTPClientTransport,
 		})
 	}
 
@@ -160,11 +157,14 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 	return minio.New(f.endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: globalRemoteTargetTransport,
+		Transport: globalRemoteFTPClientTransport,
 	})
 }
 
 func (f *sftpDriver) AccessKey() string {
+	if _, ok := f.permissions.CriticalOptions["accessKey"]; !ok {
+		return f.permissions.CriticalOptions[ldapUserN]
+	}
 	return f.permissions.CriticalOptions["accessKey"]
 }
 
@@ -270,12 +270,20 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 		cctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		if prefix == "" {
+			// if all objects are not deleted yet this call may fail.
+			return clnt.RemoveBucket(cctx, bucket)
+		}
+
 		objectsCh := make(chan minio.ObjectInfo)
 
 		// Send object names that are needed to be removed to objectsCh
 		go func() {
 			defer close(objectsCh)
-			opts := minio.ListObjectsOptions{Prefix: prefix, Recursive: true}
+			opts := minio.ListObjectsOptions{
+				Prefix:    prefix,
+				Recursive: true,
+			}
 			for object := range clnt.ListObjects(cctx, bucket, opts) {
 				if object.Err != nil {
 					return
@@ -303,6 +311,10 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 		bucket, prefix := path2BucketObject(r.Filepath)
 		if bucket == "" {
 			return errors.New("bucket name cannot be empty")
+		}
+
+		if prefix == "" {
+			return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
 		}
 
 		dirPath := buildMinioDir(prefix)
