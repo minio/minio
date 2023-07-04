@@ -21,13 +21,11 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"net"
 	"net/http"
 	"syscall"
 	"time"
 
 	"github.com/minio/pkg/certs"
-	"github.com/rs/dnscache"
 )
 
 // tlsClientSessionCacheSize is the cache size for client sessions.
@@ -35,11 +33,8 @@ var tlsClientSessionCacheSize = 100
 
 // ConnSettings - contains connection settings.
 type ConnSettings struct {
-	// If this is non-nil, DNSCache and DialTimeout are ignored.
-	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-
-	// Dial settings, used if DialContext is nil.
-	DNSCache    *dnscache.Resolver
+	DialContext DialContext // Custom dialContext, DialTimeout is ignored if this is already setup.
+	LookupHost  LookupHost  // Custom lookupHost, is nil on containerized deployments.
 	DialTimeout time.Duration
 
 	// TLS Settings
@@ -57,7 +52,7 @@ type ConnSettings struct {
 func (s ConnSettings) getDefaultTransport() *http.Transport {
 	dialContext := s.DialContext
 	if dialContext == nil {
-		dialContext = DialContextWithDNSCache(s.DNSCache, NewInternodeDialContext(s.DialTimeout, s.TCPOptions))
+		dialContext = DialContextWithLookupHost(s.LookupHost, NewInternodeDialContext(s.DialTimeout, s.TCPOptions))
 	}
 
 	tlsClientConfig := tls.Config{
@@ -78,7 +73,6 @@ func (s ConnSettings) getDefaultTransport() *http.Transport {
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Minute, // Conservative timeout is the default (for MinIO internode)
 		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       &tlsClientConfig,
 		ForceAttemptHTTP2:     s.EnableHTTP2,
 		// Go net/http automatically unzip if content-type is
@@ -117,7 +111,6 @@ func (s ConnSettings) NewInternodeHTTPTransport() func() http.RoundTripper {
 
 	// Settings specific to internode requests.
 	tr.TLSHandshakeTimeout = 15 * time.Second
-	tr.ExpectContinueTimeout = 15 * time.Second
 
 	return func() http.RoundTripper {
 		return tr
@@ -167,12 +160,12 @@ func (s ConnSettings) NewHTTPTransportWithClientCerts(ctx context.Context, clien
 
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
-func (s ConnSettings) NewRemoteTargetHTTPTransport() func() *http.Transport {
+func (s ConnSettings) NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	tr := s.getDefaultTransport()
 
-	tr.TLSHandshakeTimeout = 5 * time.Second
-	tr.ExpectContinueTimeout = 5 * time.Second
+	tr.TLSHandshakeTimeout = 10 * time.Second
 	tr.ResponseHeaderTimeout = 0
+	tr.TLSClientConfig.InsecureSkipVerify = insecure
 
 	return func() *http.Transport {
 		return tr

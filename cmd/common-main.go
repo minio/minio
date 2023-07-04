@@ -66,7 +66,6 @@ import (
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
-	"github.com/rs/dnscache"
 )
 
 // serverDebugLog will enable debug printing
@@ -96,11 +95,6 @@ func init() {
 
 	initGlobalContext()
 
-	options := dnscache.ResolverRefreshOptions{
-		ClearUnused:      true,
-		PersistOnFailure: false,
-	}
-
 	t, _ := minioVersionToReleaseTime(Version)
 	if !t.IsZero() {
 		globalVersionUnix = uint64(t.Unix())
@@ -108,24 +102,16 @@ func init() {
 
 	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
-	containers := IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile()
-
-	// Call to refresh will refresh names in cache. If you pass true, it will also
-	// remove cached names not looked up since the last call to Refresh. It is a good idea
-	// to call this method on a regular interval.
+	// Call to refresh will refresh names in cache.
 	go func() {
-		var t *time.Ticker
-		if containers {
-			// k8s DNS TTL is 30s (Attempt a refresh only after)
-			t = time.NewTicker(30 * time.Second)
-		} else {
-			t = time.NewTicker(10 * time.Minute)
-		}
+		// Baremetal setups set DNS refresh window to 10 minutes.
+		t := time.NewTicker(10 * time.Minute)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
-				globalDNSCache.RefreshWithOptions(options)
+				globalDNSCache.Refresh()
+
 			case <-GlobalContext.Done():
 				return
 			}
