@@ -31,6 +31,12 @@ import (
 //
 // Reference: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
 
+type arnPrefix string
+
+const (
+	arnPrefixArn arnPrefix = "arn"
+)
+
 type arnPartition string
 
 const (
@@ -65,7 +71,7 @@ var validResourceIDRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_/\.-]*$`)
 // NewIAMRoleARN - returns an ARN for a role in MinIO.
 func NewIAMRoleARN(resourceID, serverRegion string) (ARN, error) {
 	if !validResourceIDRegex.MatchString(resourceID) {
-		return ARN{}, fmt.Errorf("Invalid resource ID: %s", resourceID)
+		return ARN{}, fmt.Errorf("invalid resource ID: %s", resourceID)
 	}
 	return ARN{
 		Partition:    arnPartitionMinio,
@@ -80,7 +86,7 @@ func NewIAMRoleARN(resourceID, serverRegion string) (ARN, error) {
 func (arn ARN) String() string {
 	return strings.Join(
 		[]string{
-			"arn",
+			string(arnPrefixArn),
 			string(arn.Partition),
 			string(arn.Service),
 			arn.Region,
@@ -94,19 +100,18 @@ func (arn ARN) String() string {
 // Parse - parses an ARN string into a type.
 func Parse(arnStr string) (arn ARN, err error) {
 	ps := strings.Split(arnStr, ":")
-	if len(ps) != 6 ||
-		ps[0] != "arn" {
-		err = fmt.Errorf("Invalid ARN string format")
+	if len(ps) != 6 || ps[0] != string(arnPrefixArn) {
+		err = fmt.Errorf("invalid ARN string format")
 		return
 	}
 
 	if ps[1] != string(arnPartitionMinio) {
-		err = fmt.Errorf("Invalid ARN - bad partition field")
+		err = fmt.Errorf("invalid ARN - bad partition field")
 		return
 	}
 
 	if ps[2] != string(arnServiceIAM) {
-		err = fmt.Errorf("Invalid ARN - bad service field")
+		err = fmt.Errorf("invalid ARN - bad service field")
 		return
 	}
 
@@ -114,23 +119,23 @@ func Parse(arnStr string) (arn ARN, err error) {
 	// the ARN would not match any configured ARNs in the server.
 
 	if ps[4] != "" {
-		err = fmt.Errorf("Invalid ARN - unsupported account-id field")
+		err = fmt.Errorf("invalid ARN - unsupported account-id field")
 		return
 	}
 
 	res := strings.SplitN(ps[5], "/", 2)
 	if len(res) != 2 {
-		err = fmt.Errorf("Invalid ARN - resource does not contain a \"/\"")
+		err = fmt.Errorf("invalid ARN - resource does not contain a \"/\"")
 		return
 	}
 
 	if res[0] != string(arnResourceTypeRole) {
-		err = fmt.Errorf("Invalid ARN: resource type is invalid.")
+		err = fmt.Errorf("invalid ARN: resource type is invalid")
 		return
 	}
 
 	if !validResourceIDRegex.MatchString(res[1]) {
-		err = fmt.Errorf("Invalid resource ID: %s", res[1])
+		err = fmt.Errorf("invalid resource ID: %s", res[1])
 		return
 	}
 
