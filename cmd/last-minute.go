@@ -164,6 +164,14 @@ func (l *lastMinuteLatency) addSize(t time.Duration, sz int64) {
 	l.LastSec = sec
 }
 
+// Add  a new duration data
+func (l *lastMinuteLatency) addAll(sec int64, a AccElem) {
+	l.forwardTo(sec)
+	winIdx := sec % 60
+	l.Totals[winIdx].merge(a)
+	l.LastSec = sec
+}
+
 // Merge all recorded latencies of last minute into one
 func (l *lastMinuteLatency) getTotal() AccElem {
 	var res AccElem
