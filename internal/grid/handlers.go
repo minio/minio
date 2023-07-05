@@ -65,22 +65,45 @@ func (h HandlerID) ID() uint8 {
 	return uint8(h & handlerIDMask)
 }
 
+// TODO: Add type safe handlers and clients.
 type (
-	// SingleHandler is handlers for one to one requests.
-	SingleHandler func(payload []byte) ([]byte, error)
+	// SingleHandlerFn is handlers for one to one requests.
+	SingleHandlerFn func(payload []byte) ([]byte, error)
+
+	// StatelessHandlerFn must handle incoming stateless request.
+	StatelessHandlerFn func(ctx context.Context, payload []byte, resp chan<- Response) error
 
 	// StatelessHandler is handlers for one to many requests,
 	// where responses may be dropped.
-	StatelessHandler func(ctx context.Context, payload []byte, resp chan<- Response) error
+	StatelessHandler struct {
+		Handle StatelessHandlerFn
+		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
+		OutCapacity int
+	}
 
+	StatefulHandlerFn func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- Response)
 	// StatefulHandler handles fully bidirectional streams.
-	StatefulHandler func(ctx context.Context, request <-chan []byte, resp chan<- Response)
+
+	StatefulHandler struct {
+		// Handle an incoming request. Initial payload is sent.
+		// Additional input packets (if any) are streamed to request.
+		// Upstream will block when request channel is full.
+		// Response packets can be sent at any time.
+		// Any non-nil error sent as response means no more responses are sent.
+		Handle StatefulHandlerFn
+
+		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
+		OutCapacity int
+
+		// InCapacity is the output capacity. If <= 0 capacity will be 1.
+		InCapacity int
+	}
 )
 
 type handlers struct {
-	single    [handlerLast]SingleHandler
-	stateless [handlerLast]StatelessHandler
-	streams   [handlerLast]StatefulHandler
+	single    [handlerLast]SingleHandlerFn
+	stateless [handlerLast]*StatelessHandler
+	streams   [handlerLast]*StatefulHandler
 }
 
 func (h *handlers) hasAny(id HandlerID) bool {

@@ -51,17 +51,28 @@ const (
 	// OpConnectMux will connect a new mux with optional payload.
 	OpConnectMux
 
+	// OpMuxConnectError is an  error while connecting a mux.
+	OpMuxConnectError
+
 	// OpDisconnectMux should disconnect a mux
 	OpDisconnectMux
 
-	// OpMuxMsg contains a message to a Mux
-	OpMuxMsg
+	// OpMuxClientMsg contains a message to a client Mux
+	OpMuxClientMsg
 
-	// OpUnblock contains a message that a mux is unblocked.
+	// OpMuxServerMsg contains a message to a server Mux
+	OpMuxServerMsg
+
+	// OpMuxServerErr contains an error message from a server Mux
+	OpMuxServerErr
+
+	// OpUnblockMux contains a message that a mux is unblocked
 	OpUnblockMux
 
-	// An error...
-	OpMuxError
+	// OpAckMux acknowledges a mux was created.
+	OpAckMux
+
+	// OpDisconnect instructs that remote wants to disconnect
 	OpDisconnect
 )
 
@@ -83,10 +94,10 @@ const (
 //
 //msgp:tuple message
 type message struct {
-	Op      Op
 	MuxID   uint64
 	Seq     uint32
 	Handler HandlerID
+	Op      Op
 	Flags   uint8
 	Payload []byte
 }
@@ -113,8 +124,25 @@ func (m *message) parse(b []byte) error {
 	return nil
 }
 
+func (m *message) setPayload(s sender) error {
+	if len(m.Payload) > 0 {
+		m.Payload = m.Payload[:0]
+	} else {
+		m.Payload = GetByteBuffer()[:0]
+	}
+	m.Op = s.Op()
+	var err error
+	m.Payload, err = s.MarshalMsg(m.Payload)
+	return err
+}
+
 type receiver interface {
 	msgp.Unmarshaler
+	Op() Op
+}
+
+type sender interface {
+	msgp.MarshalSizer
 	Op() Op
 }
 
@@ -135,4 +163,21 @@ type connectResp struct {
 
 func (_ connectResp) Op() Op {
 	return OpConnectResponse
+}
+
+type muxConnectError struct {
+	Error string
+}
+
+func (_ muxConnectError) Op() Op {
+	return OpMuxConnectError
+}
+
+type muxMsg struct {
+	B     []byte `msg:"b,allownil"`
+	Error string `msg:"e"`
+}
+
+func (_ muxMsg) Op() Op {
+	return OpMuxConnectError
 }

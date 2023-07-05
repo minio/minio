@@ -19,14 +19,164 @@ package grid
 
 import (
 	"context"
+	"errors"
+	"io"
+	"sync"
+
+	"github.com/minio/minio/internal/logger"
 )
 
-type MuxServer struct {
+type muxServer struct {
 	ID               uint64
 	SendSeq, RecvSeq uint32
 	Resp             chan []byte
 	ctx              context.Context
 	cancel           context.CancelFunc
-	outBound         func(msg message) error
-	inBound          chan message
+	outbound         func(msg message) error
+	inbound          chan []byte
+	parent           *Connection
+	sendMu           sync.Mutex
+	outBlock         chan struct{}
+}
+
+func newMuxStateless(ctx context.Context, msg message, c *Connection, handler StatelessHandler) *muxServer {
+	ctx, cancel := context.WithCancel(ctx)
+	m := muxServer{
+		ID:      msg.MuxID,
+		RecvSeq: msg.Seq,
+		ctx:     ctx,
+		cancel:  cancel,
+		parent:  c,
+	}
+	go func() {
+	}()
+
+	return &m
+}
+
+func newMuxStream(ctx context.Context, msg message, c *Connection, handler StatefulHandler) *muxServer {
+	ctx, cancel := context.WithCancel(ctx)
+	receive := make(chan []byte)
+	send := make(chan Response)
+	inboundCap, outboundCap := handler.InCapacity, handler.OutCapacity
+	if inboundCap <= 0 {
+		inboundCap = 1
+	}
+	if outboundCap <= 0 {
+		outboundCap = 1
+	}
+
+	m := muxServer{
+		ID:       msg.MuxID,
+		RecvSeq:  msg.Seq,
+		SendSeq:  msg.Seq,
+		ctx:      ctx,
+		cancel:   cancel,
+		parent:   c,
+		inbound:  make(chan []byte, inboundCap),
+		outBlock: make(chan struct{}, outboundCap),
+	}
+	for i := 0; i < outboundCap; i++ {
+		m.outBlock <- struct{}{}
+	}
+	go func() {
+		defer m.close()
+		handler.Handle(ctx, msg.Payload, receive, send)
+	}()
+	go func() {
+		defer m.parent.deleteMux(true, m.ID)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			// Process outgoing message.
+			case send, ok := <-send:
+				if !ok {
+					send.Err = io.EOF
+				}
+				<-m.outBlock
+				msg := message{
+					MuxID: m.ID,
+				}
+				eof := errors.Is(send.Err, io.EOF)
+				if send.Err != nil && !eof {
+					msg.Flags |= FlagEOF
+					msg.Op = OpMuxServerErr
+					msg.Payload = []byte(send.Err.Error())
+					m.send(msg)
+					return
+				}
+				msg.Op = OpMuxServerMsg
+				msg.Payload = send.Msg
+				if eof {
+					msg.Op = OpMuxServerErr
+					m.send(msg)
+					return
+				}
+				m.send(msg)
+			}
+		}
+	}()
+
+	return &m
+}
+
+func (m *muxServer) message(msg message) {
+	if m.inbound == nil {
+		// Shouldn't be sending. Maybe log...
+		return
+	}
+	wantSeq := m.RecvSeq + 1
+	if msg.Seq != wantSeq {
+		m.disconnect("receive sequence number mismatch")
+	}
+	m.RecvSeq++
+	select {
+	case <-m.ctx.Done():
+	case m.inbound <- msg.Payload:
+		m.send(message{Op: OpUnblockMux, MuxID: m.ID})
+	default:
+		go func() {
+			select {
+			case <-m.ctx.Done():
+			case m.inbound <- msg.Payload:
+				m.send(message{Op: OpUnblockMux, MuxID: m.ID})
+			}
+		}()
+	}
+}
+
+func (m *muxServer) unblockSend() {
+	select {
+	case m.outBlock <- struct{}{}:
+	default:
+		logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+	}
+}
+
+func (m *muxServer) disconnect(msg string) {
+	if msg != "" {
+		m.send(message{Op: OpMuxServerErr, MuxID: m.ID, Payload: []byte(msg)})
+	} else {
+		m.send(message{Op: OpDisconnectMux, MuxID: m.ID})
+	}
+	m.parent.deleteMux(true, m.ID)
+}
+
+func (m *muxServer) send(msg message) {
+	m.sendMu.Lock()
+	defer m.sendMu.Unlock()
+	m.SendSeq++
+	msg.Seq = m.SendSeq
+	if m.inbound == nil {
+		logger.LogIf(m.ctx, m.parent.queueMsg(msg, nil))
+	}
+}
+
+func (m *muxServer) close() {
+	m.cancel()
+	if m.inbound != nil {
+		close(m.inbound)
+		m.inbound = nil
+	}
 }

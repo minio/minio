@@ -67,10 +67,8 @@ type Connection struct {
 	// Active mux connections.
 	outgoing *xsync.MapOf[uint64, *MuxClient]
 
-	// Incoming stateless requests
-	statefulCtx *xsync.MapOf[uint64, context.CancelFunc]
 	// Incoming streams
-	streamCtx *xsync.MapOf[uint64, context.CancelFunc]
+	inStream *xsync.MapOf[uint64, *muxServer]
 
 	// outQueue is the output queue
 	outQueue chan []byte
@@ -86,6 +84,8 @@ type Connection struct {
 
 	// connChange will be signaled whenever
 	connChange *sync.Cond
+
+	handlers *handlers
 }
 
 // State is a connection state.
@@ -121,7 +121,7 @@ const (
 )
 
 // NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer) *Connection {
+func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handlers *handlers) *Connection {
 	c := Connection{
 		State:      StateUnconnected,
 		Remote:     remote,
@@ -129,12 +129,12 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer) *Conn
 		id:         id,
 		ctx:        context.Background(),
 		outgoing:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
-		statefulCtx:   xsync.NewIntegerMapOfPresized[uint64, context.CancelFunc](1000),
-		streamCtx:   xsync.NewIntegerMapOfPresized[uint64, context.CancelFunc](1000),
+		inStream:   xsync.NewIntegerMapOfPresized[uint64, *muxServer](1000),
 		outQueue:   make(chan []byte, defaultOutQueue),
 		dialer:     dial,
 		side:       ws.StateServerSide,
 		connChange: &sync.Cond{L: &sync.Mutex{}},
+		handlers:   handlers,
 	}
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
@@ -209,19 +209,23 @@ func (c *Connection) send(ctx context.Context, msg []byte) error {
 	}
 }
 
-func (c *Connection) queueMsg(msg message, payload msgp.MarshalSizer) error {
+// queueMsg queues a message, with an optional payload.
+// sender should not reference msg.Payload
+func (c *Connection) queueMsg(msg message, payload sender) error {
 	if payload != nil {
 		if cap(msg.Payload) < payload.Msgsize() {
-			PutByteBuffer(msg.Payload)
+			old := msg.Payload
 			msg.Payload = GetByteBuffer()[:0]
+			PutByteBuffer(old)
 		}
 		var err error
-		msg.Payload, err = payload.MarshalMsg(msg.Payload)
+		msg.Payload, err = payload.MarshalMsg(msg.Payload[:0])
+		msg.Op = payload.Op()
 		if err != nil {
 			return err
 		}
-		defer PutByteBuffer(msg.Payload)
 	}
+	defer PutByteBuffer(msg.Payload)
 	dst := GetByteBuffer()[:0]
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
@@ -467,7 +471,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				return
 			}
 			switch m.Op {
-			case OpMuxMsg:
+			case OpMuxServerMsg:
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
@@ -482,10 +486,62 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					Msg: m.Payload,
 					Err: err,
 				})
+			case OpMuxClientMsg:
+				v, ok := c.inStream.Load(m.MuxID)
+				if !ok {
+					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					PutByteBuffer(m.Payload)
+					continue
+				}
+				v.inbound <- m.Payload
+				if m.Flags&FlagEOF != 0 {
+					close(v.inbound)
+				}
 			case OpConnectMux:
-				c.
+				if !m.Handler.valid() {
+					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
+					continue
+				}
+				// Singleshot message
+				if m.Flags&FlagEOF != 0 {
+					handler := c.handlers.single[m.Handler]
+					if handler == nil {
+						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+						continue
+					}
+					go func(m message) {
+						var r muxMsg
+						b, err := handler(m.Payload)
+						r.B = b
+						if err != nil {
+							r.Error = err.Error()
+						}
+						logger.LogIf(ctx, c.queueMsg(m, &r))
+					}(m)
+					continue
+				}
+				// Stateless stream:
+				if m.Flags&FlagStateless != 0 {
+					handler := c.handlers.stateless[m.Handler]
+					if handler == nil {
+						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+						continue
+					}
+					// TODO: Create mux
+				} else {
+					// Stream:
+					handler := c.handlers.streams[m.Handler]
+					if handler == nil {
+						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+						continue
+					}
+
+					// Start a new server handler if none exists.
+					_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
+						return newMuxStream(ctx, m, c, *handler)
+					})
+				}
 			}
-			// TODO: Do something with the msg.
 		}
 	}()
 
@@ -517,6 +573,22 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 		}
 	}()
+}
+
+func (c *Connection) deleteMux(incoming bool, muxID uint64) {
+	if incoming {
+		v, loaded := c.inStream.LoadAndDelete(muxID)
+		if loaded && v != nil {
+			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: muxID}, nil))
+			v.close()
+		}
+	} else {
+		v, loaded := c.outgoing.LoadAndDelete(muxID)
+		if loaded && v != nil {
+			v.close()
+			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: muxID}, nil))
+		}
+	}
 }
 
 // readAllInto reads from r and appends to b until an error or EOF and returns the data it read.
