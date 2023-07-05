@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	jwtg "github.com/golang-jwt/jwt/v4"
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/config"
@@ -260,7 +259,7 @@ func TestExpCorrect(t *testing.T) {
 		t.Error(err)
 	}
 	// Build simple toke with updated expiration claim
-	token := jwtg.NewWithClaims(jwtg.SigningMethodHS256, claimsMap)
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS256, claimsMap)
 	tokenString, err := token.SignedString(signKey)
 	if err != nil {
 		t.Error(err)

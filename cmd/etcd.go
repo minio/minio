@@ -77,7 +77,7 @@ func readKeyEtcd(ctx context.Context, client *etcd.Client, key string) ([]byte, 
 	defer cancel()
 	resp, err := client.Get(timeoutCtx, key)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "etcd-retrieve-keys")
 		return nil, etcdErrToErr(err, client.Endpoints())
 	}
 	if resp.Count == 0 {

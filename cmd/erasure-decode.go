@@ -317,7 +317,7 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = e.DecodeDataAndParityBlocks(ctx, bufs); err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-heal-decode")
 			return err
 		}
 
@@ -328,7 +328,7 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = w.Write(ctx, bufs); err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-heal-write")
 			return err
 		}
 	}

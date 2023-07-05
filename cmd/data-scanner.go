@@ -1187,6 +1187,9 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		opts.Versioned = globalBucketVersioningSys.PrefixEnabled(obj.Bucket, obj.Name)
 		opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(obj.Bucket, obj.Name)
 	}
+	if lcEvent.Action.DeleteAll() {
+		opts.DeletePrefix = true
+	}
 
 	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
 	if err != nil {
@@ -1194,7 +1197,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			return false
 		}
 		// Assume it is still there.
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, "non-transition-expiry")
 		return false
 	}
 

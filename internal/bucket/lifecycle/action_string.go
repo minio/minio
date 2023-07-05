@@ -15,12 +15,13 @@ func _() {
 	_ = x[TransitionVersionAction-4]
 	_ = x[DeleteRestoredAction-5]
 	_ = x[DeleteRestoredVersionAction-6]
-	_ = x[ActionCount-7]
+	_ = x[DeleteAllVersionsAction-7]
+	_ = x[ActionCount-8]
 }
 
-const _Action_name = "NoneActionDeleteActionDeleteVersionActionTransitionActionTransitionVersionActionDeleteRestoredActionDeleteRestoredVersionActionActionCount"
+const _Action_name = "NoneActionDeleteActionDeleteVersionActionTransitionActionTransitionVersionActionDeleteRestoredActionDeleteRestoredVersionActionDeleteAllVersionsActionActionCount"
 
-var _Action_index = [...]uint8{0, 10, 22, 41, 57, 80, 100, 127, 138}
+var _Action_index = [...]uint8{0, 10, 22, 41, 57, 80, 100, 127, 150, 161}
 
 func (i Action) String() string {
 	if i < 0 || i >= Action(len(_Action_index)-1) {

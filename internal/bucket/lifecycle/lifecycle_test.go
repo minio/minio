@@ -388,6 +388,15 @@ func TestEval(t *testing.T) {
 			isExpiredDelMarker: true,
 			expectedAction:     DeleteVersionAction,
 		},
+		// Should delete expired object right away with 1 day expiration
+		{
+			inputConfig:        `<BucketLifecycleConfiguration><Rule><Expiration><Days>1</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:         "foodir/fooobject",
+			objectModTime:      time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isExpiredDelMarker: true,
+			expectedAction:     DeleteAllVersionsAction,
+		},
+
 		// Should not delete expired marker if its time has not come yet
 		{
 			inputConfig:        `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,

@@ -2177,7 +2177,9 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 		}
 	}
 
-	if !userExists {
+	// If root user has no STS/Service Accounts, userExists would be false here,
+	// so we handle this exception.
+	if !userExists && globalActiveCred.AccessKey != accessKey {
 		return nil, errNoSuchUser
 	}
 

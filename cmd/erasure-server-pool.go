@@ -950,7 +950,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		if !isMinioMetaBucketName(bucket) {
 			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
 			if err != nil {
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, "erasure-write-quorum")
 				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
 			}
 			if !avail {
@@ -993,12 +993,9 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return objInfo, err
 	}
 
-	if opts.DeletePrefix {
-		err := z.deletePrefix(ctx, bucket, object)
-		return ObjectInfo{}, err
+	if !opts.DeletePrefix { // DeletePrefix handles dir object encoding differently.
+		object = encodeDirObject(object)
 	}
-
-	object = encodeDirObject(object)
 
 	// Acquire a write lock before deleting the object.
 	lk := z.NewNSLock(bucket, object)
@@ -1008,6 +1005,10 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	}
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx)
+
+	if opts.DeletePrefix {
+		return ObjectInfo{}, z.deletePrefix(ctx, bucket, object)
+	}
 
 	gopts := opts
 	gopts.NoLock = true
@@ -1342,7 +1343,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-list-objects-path"+bucket)
 		}
 		return loi, err
 	}
@@ -1735,7 +1736,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 	for _, pool := range z.serverPools {
 		result, err := pool.HealFormat(ctx, dryRun)
 		if err != nil && !errors.Is(err, errNoHealRequired) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "erasure-heal-format")
 			continue
 		}
 		// Count errNoHealRequired across all serverPools,
@@ -1905,68 +1906,6 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string) error
 
-func listAndHeal(ctx context.Context, bucket, prefix string, set *erasureObjects, healEntry func(string, metaCacheEntry) error) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	disks, _ := set.getOnlineDisksWithHealing()
-	if len(disks) == 0 {
-		return errors.New("listAndHeal: No non-healing drives found")
-	}
-
-	// How to resolve partial results.
-	resolver := metadataResolutionParams{
-		dirQuorum: 1,
-		objQuorum: 1,
-		bucket:    bucket,
-		strict:    false, // Allow less strict matching.
-	}
-
-	path := baseDirFromPrefix(prefix)
-	filterPrefix := strings.Trim(strings.TrimPrefix(prefix, path), slashSeparator)
-	if path == prefix {
-		filterPrefix = ""
-	}
-
-	lopts := listPathRawOptions{
-		disks:          disks,
-		bucket:         bucket,
-		path:           path,
-		filterPrefix:   filterPrefix,
-		recursive:      true,
-		forwardTo:      "",
-		minDisks:       1,
-		reportNotFound: false,
-		agreed: func(entry metaCacheEntry) {
-			if err := healEntry(bucket, entry); err != nil {
-				logger.LogIf(ctx, err)
-				cancel()
-			}
-		},
-		partial: func(entries metaCacheEntries, _ []error) {
-			entry, ok := entries.resolve(&resolver)
-			if !ok {
-				// check if we can get one entry atleast
-				// proceed to heal nonetheless.
-				entry, _ = entries.firstFound()
-			}
-
-			if err := healEntry(bucket, *entry); err != nil {
-				logger.LogIf(ctx, err)
-				cancel()
-				return
-			}
-		},
-		finished: nil,
-	}
-
-	if err := listPathRaw(ctx, lopts); err != nil {
-		return fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts)
-	}
-
-	return nil
-}
-
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObjectFn HealObjectFn) error {
 	healEntry := func(bucket string, entry metaCacheEntry) error {
 		if entry.isDir() {
@@ -2024,7 +1963,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
 
-				errs[idx] = listAndHeal(ctx, bucket, prefix, set, healEntry)
+				errs[idx] = set.listAndHeal(bucket, prefix, healEntry)
 			}(idx, set)
 		}
 		wg.Wait()
