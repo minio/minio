@@ -125,12 +125,12 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 	t := time.Now().Unix()
 	e.init.Do(func() {
 		e.cached.Store(&AccElem{})
-		atomic.StoreInt64(&e.LastSec, t)
+		atomic.StoreInt64(&e.cachedSec, t)
 	})
 	acc := e.cached.Load()
-	if lastT := atomic.LoadInt64(&e.LastSec); lastT != t {
+	if lastT := atomic.LoadInt64(&e.cachedSec); lastT != t {
 		// Check if lastT was changed by someone else.
-		if atomic.CompareAndSwapInt64(&e.LastSec, lastT, t) {
+		if atomic.CompareAndSwapInt64(&e.cachedSec, lastT, t) {
 			// Now we swap in a new.
 			newAcc := &AccElem{}
 			old := e.cached.Swap(newAcc)
