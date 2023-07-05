@@ -19,6 +19,7 @@ package hash
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -37,14 +38,15 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.MD5HexString() != "e2fc714c4727ee9395f324cd2e7f331f" {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
+	md5sum := r.MD5Current()
+	if hex.EncodeToString(md5sum) != "e2fc714c4727ee9395f324cd2e7f331f" {
+		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(md5sum))
 	}
 	if r.SHA256HexString() != "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589" {
 		t.Errorf("Expected sha256hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
 	}
-	if r.MD5Base64String() != "4vxxTEcn7pOV8yTNLn8zHw==" {
-		t.Errorf("Expected md5base64 \"4vxxTEcn7pOV8yTNLn8zHw==\", got \"%s\"", r.MD5Base64String())
+	if base64.StdEncoding.EncodeToString(md5sum) != "4vxxTEcn7pOV8yTNLn8zHw==" {
+		t.Errorf("Expected md5base64 \"4vxxTEcn7pOV8yTNLn8zHw==\", got \"%s\"", base64.StdEncoding.EncodeToString(md5sum))
 	}
 	if r.Size() != 4 {
 		t.Errorf("Expected size 4, got %d", r.Size())
@@ -55,9 +57,6 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	expectedMD5, err := hex.DecodeString("e2fc714c4727ee9395f324cd2e7f331f")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !bytes.Equal(r.MD5(), expectedMD5) {
-		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
 	}
 	if !bytes.Equal(r.MD5Current(), expectedMD5) {
 		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5Current()))
