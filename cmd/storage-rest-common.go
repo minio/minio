@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,20 +18,21 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v49" // Added RenameData() to return versions
+	storageRESTVersion       = "v50" // Added DiskInfoMetrics API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTMethodHealth      = "/health"
-	storageRESTMethodDiskInfo    = "/diskinfo"
-	storageRESTMethodNSScanner   = "/nsscanner"
-	storageRESTMethodMakeVol     = "/makevol"
-	storageRESTMethodMakeVolBulk = "/makevolbulk"
-	storageRESTMethodStatVol     = "/statvol"
-	storageRESTMethodDeleteVol   = "/deletevol"
-	storageRESTMethodListVols    = "/listvols"
+	storageRESTMethodHealth          = "/health"
+	storageRESTMethodDiskInfo        = "/diskinfo"
+	storageRESTMethodDiskInfoMetrics = "/diskinfometrics"
+	storageRESTMethodNSScanner       = "/nsscanner"
+	storageRESTMethodMakeVol         = "/makevol"
+	storageRESTMethodMakeVolBulk     = "/makevolbulk"
+	storageRESTMethodStatVol         = "/statvol"
+	storageRESTMethodDeleteVol       = "/deletevol"
+	storageRESTMethodListVols        = "/listvols"
 
 	storageRESTMethodAppendFile     = "/appendfile"
 	storageRESTMethodCreateFile     = "/createfile"

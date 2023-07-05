@@ -68,6 +68,7 @@ const (
 	storageMetricReadMultiple
 	storageMetricDeleteAbandonedParts
 	storageMetricDiskInfo
+	storageMetricDiskInfoMetrics
 
 	// .... add more
 
@@ -254,12 +255,17 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 	return errDiskNotFound
 }
 
-func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (p *xlStorageDiskIDCheck) diskInfoMetrics(ctx context.Context, metrics bool) (info DiskInfo, err error) {
 	if contextCanceled(ctx) {
 		return DiskInfo{}, ctx.Err()
 	}
 
-	si := p.updateStorageMetrics(storageMetricDiskInfo)
+	var si func(err *error)
+	if metrics {
+		si = p.updateStorageMetrics(storageMetricDiskInfoMetrics)
+	} else {
+		si = p.updateStorageMetrics(storageMetricDiskInfo)
+	}
 	defer si(&err)
 
 	info, err = p.storage.DiskInfo(ctx)
@@ -267,7 +273,10 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 		return info, err
 	}
 
-	info.Metrics = p.getMetrics()
+	if metrics {
+		info.Metrics = p.getMetrics()
+	}
+
 	// check cached diskID against backend
 	// only if its non-empty.
 	if p.diskID != "" {
@@ -282,6 +291,14 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	}
 
 	return info, nil
+}
+
+func (p *xlStorageDiskIDCheck) DiskInfoMetrics(ctx context.Context) (info DiskInfo, err error) {
+	return p.diskInfoMetrics(ctx, true)
+}
+
+func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	return p.diskInfoMetrics(ctx, false)
 }
 
 func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {

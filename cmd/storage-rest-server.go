@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -160,6 +160,18 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 // HealthHandler handler checks if disk is stale
 func (s *storageRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsValid(w, r)
+}
+
+// DiskInfoMetricsHandler - returns disk info.
+func (s *storageRESTServer) DiskInfoMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsAuthValid(w, r) {
+		return
+	}
+	info, err := s.storage.DiskInfoMetrics(r.Context())
+	if err != nil {
+		info.Error = err.Error()
+	}
+	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
 // DiskInfoHandler - returns disk info.
@@ -1363,6 +1375,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfoMetrics).HandlerFunc(httpTraceHdrs(server.DiskInfoMetricsHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodNSScanner).HandlerFunc(httpTraceHdrs(server.NSScannerHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(httpTraceHdrs(server.MakeVolBulkHandler))

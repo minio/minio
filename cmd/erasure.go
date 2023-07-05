@@ -183,7 +183,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				}
 				return nil
 			}
-			info, err := disks[index].DiskInfo(context.TODO())
+			info, err := disks[index].DiskInfoMetrics(context.TODO())
 			di := madmin.Disk{
 				Endpoint:       diskEndpoint,
 				DrivePath:      info.MountPath,

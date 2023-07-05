@@ -65,6 +65,7 @@ type StorageAPI interface {
 	// returns 'nil' once healing is complete or if the disk
 	// has never been replaced.
 	Healing() *healingTracker
+	DiskInfoMetrics(ctx context.Context) (info DiskInfo, err error)
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
 	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error)
 
@@ -167,6 +168,10 @@ func (p *unrecognizedDisk) GetDiskID() (string, error) {
 }
 
 func (p *unrecognizedDisk) SetDiskID(id string) {
+}
+
+func (p *unrecognizedDisk) DiskInfoMetrics(ctx context.Context) (info DiskInfo, err error) {
+	return info, errDiskNotFound
 }
 
 func (p *unrecognizedDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -269,6 +269,22 @@ func (client *storageRESTClient) GetDiskID() (string, error) {
 
 func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
+}
+
+// DiskInfoMetrics - fetch disk information for a remote disk, along with metrics.
+func (client *storageRESTClient) DiskInfoMetrics(ctx context.Context) (info DiskInfo, err error) {
+	respBody, err := client.call(ctx, storageRESTMethodDiskInfoMetrics, nil, nil, -1)
+	if err != nil {
+		return info, err
+	}
+	defer xhttp.DrainBody(respBody)
+	if err = msgp.Decode(respBody, &info); err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
 }
 
 // DiskInfo - fetch disk information for a remote disk.

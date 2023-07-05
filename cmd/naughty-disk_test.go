@@ -116,6 +116,13 @@ func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updat
 	return d.disk.NSScanner(ctx, cache, updates, scanMode)
 }
 
+func (d *naughtyDisk) DiskInfoMetrics(ctx context.Context) (info DiskInfo, err error) {
+	if err := d.calcError(); err != nil {
+		return info, err
+	}
+	return d.disk.DiskInfoMetrics(ctx)
+}
+
 func (d *naughtyDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return info, err

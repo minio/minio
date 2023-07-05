@@ -610,6 +610,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	return dataUsageInfo, nil
 }
 
+// DiskInfoMetrics is a stub that returns DiskInfo() this API must never be directly
+// called, caller always calls *xlStorageDiskIDCheck.DiskInfoMetrics(...)
+func (s *xlStorage) DiskInfoMetrics(_ context.Context) (info DiskInfo, err error) {
+	return s.DiskInfo(context.TODO())
+}
+
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
