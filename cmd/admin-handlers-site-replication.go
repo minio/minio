@@ -558,7 +558,7 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 	for {
 		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
 		atomic.AddUint64(&globalSiteNetPerfRX.RX, uint64(n))
-		if err != nil && err != io.EOF {
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF{
 			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
