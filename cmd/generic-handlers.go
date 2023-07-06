@@ -71,7 +71,7 @@ const (
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(key, ReservedMetadataPrefix) {
 			return true
 		}
 	}
@@ -87,7 +87,7 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 		length := len(key) + len(header.Get(key))
 		size += length
 		for _, prefix := range userMetadataKeyPrefixes {
-			if strings.HasPrefix(strings.ToLower(key), prefix) {
+			if stringsHasPrefixFold(key, prefix) {
 				usersize += length
 				break
 			}

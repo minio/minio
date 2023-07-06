@@ -527,6 +527,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 	metadataArray := make([]*xlMetaV2, len(disks))
 	metaFileInfos := make([]FileInfo, len(metadataArray))
 	metadataShallowVersions := make([][]xlMetaV2ShallowVersion, len(disks))
+	var v2bufs [][]byte
+	if !readData {
+		v2bufs = make([][]byte, len(disks))
+	}
 
 	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.meta` in parallel across disks.
@@ -539,6 +543,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 			rf, err := disks[index].ReadXL(ctx, bucket, object, readData)
 			if err != nil {
 				return err
+			}
+			if !readData {
+				// Save the buffer so we can reuse it.
+				v2bufs[index] = rf.Buf
 			}
 
 			var xl xlMetaV2
@@ -622,6 +630,11 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
 		metaFileInfos[index].DiskMTime = diskMTime
+	}
+	if !readData {
+		for i := range v2bufs[:] {
+			metaDataPoolPut(v2bufs[i])
+		}
 	}
 
 	// Return all the metadata.

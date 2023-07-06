@@ -227,7 +227,8 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 		rw.CloseWithError(waitForHTTPStream(respBody, rw))
 	}()
 
-	ms := msgp.NewReader(rr)
+	ms := msgpNewReader(rr)
+	defer readMsgpReaderPool.Put(rr)
 	for {
 		// Read whether it is an update.
 		upd, err := ms.ReadBool()
@@ -774,6 +775,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
 	mr := msgp.NewReader(pr)
+	defer readMsgpReaderPool.Put(mr)
 	for {
 		var file ReadMultipleResp
 		if err := file.DecodeMsg(mr); err != nil {

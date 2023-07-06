@@ -153,7 +153,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 			continue
 		}
 
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			// values to client.
 			continue
@@ -166,7 +166,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 		var isSet bool
 		for _, userMetadataPrefix := range userMetadataKeyPrefixes {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(userMetadataPrefix)) {
+			if !stringsHasPrefixFold(k, userMetadataPrefix) {
 				continue
 			}
 			w.Header()[strings.ToLower(k)] = []string{v}

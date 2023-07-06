@@ -685,7 +685,8 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	}
 
 	versions := make([]FileInfoVersions, totalVersions)
-	decoder := msgp.NewReader(r.Body)
+	decoder := msgpNewReader(r.Body)
+	defer readMsgpReaderPool.Put(decoder)
 	for i := 0; i < totalVersions; i++ {
 		dst := &versions[i]
 		if err := dst.DecodeMsg(decoder); err != nil {
