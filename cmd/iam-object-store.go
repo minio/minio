@@ -76,9 +76,18 @@ func (iamOS *IAMObjectStore) getUsersSysType() UsersSysType {
 	return iamOS.usersSysType
 }
 
-func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
+func jsonify(item interface{}) ([]byte, error) {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	data, err := json.Marshal(item)
+	return json.Marshal(item)
+}
+
+func unjsonify(b []byte, item interface{}) error {
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	return json.Unmarshal(b, item)
+}
+
+func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
+	data, err := jsonify(item)
 	if err != nil {
 		return err
 	}
@@ -136,8 +145,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 	if err != nil {
 		return err
 	}
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	return json.Unmarshal(data, item)
+	return unjsonify(data, item)
 }
 
 func (iamOS *IAMObjectStore) deleteIAMConfig(ctx context.Context, path string) error {

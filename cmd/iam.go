@@ -1223,35 +1223,8 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, n
 }
 
 // CreateUser - create new user credentials and policy, if user already exists
-// they shall be rewritten with new inputs.
-func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (updatedAt time.Time, err error) {
-	if !sys.Initialized() {
-		return updatedAt, errServerNotInitialized
-	}
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
-	if !auth.IsAccessKeyValid(accessKey) {
-		return updatedAt, auth.ErrInvalidAccessKeyLength
-	}
-
-	if !auth.IsSecretKeyValid(ureq.SecretKey) {
-		return updatedAt, auth.ErrInvalidSecretKeyLength
-	}
-
-	updatedAt, err = sys.store.AddUser(ctx, accessKey, ureq)
-	if err != nil {
-		return updatedAt, err
-	}
-
-	sys.notifyForUser(ctx, accessKey, false)
-	return updatedAt, nil
-}
-
-// SetUserSecretKey - sets user secret key
-func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secretKey string) error {
+// they shall be rewritten with new inputs. Applies to builtin IDP only.
+func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (err error) {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -1264,11 +1237,31 @@ func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secre
 		return auth.ErrInvalidAccessKeyLength
 	}
 
-	if !auth.IsSecretKeyValid(secretKey) {
+	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	return sys.store.UpdateUserSecretKey(ctx, accessKey, secretKey)
+	var u UserIdentity
+	u, err = sys.store.AddUser(ctx, accessKey, ureq)
+	if err != nil {
+		return err
+	}
+
+	sys.notifyForUser(ctx, accessKey, false)
+	if globalSiteReplicationSys.isEnabled() {
+		crjson, _ := jsonify(u)
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:        accessKey,
+				IsDeleteReq:      false,
+				UserIdentityJSON: json.RawMessage(crjson),
+			},
+			UpdatedAt: u.UpdatedAt,
+		}))
+	}
+
+	return nil
 }
 
 // purgeExpiredCredentialsForExternalSSO - validates if local credentials are still valid

@@ -288,24 +288,26 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
-	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
 
 	// Call hook for site replication.
-	if cred.ParentUser != globalActiveCred.AccessKey {
-		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSTSAcc,
-			STSCredential: &madmin.SRSTSCredential{
-				AccessKey:    cred.AccessKey,
-				SecretKey:    cred.SecretKey,
-				SessionToken: cred.SessionToken,
-				ParentUser:   cred.ParentUser,
-			},
-			UpdatedAt: updatedAt,
-		}))
+	if cred.ParentUser != globalActiveCred.AccessKey && globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, cred.AccessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx,
+			globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        cred.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
+				},
+				UpdatedAt: ui.UpdatedAt,
+			}))
 	}
 
 	assumeRoleResponse := &AssumeRoleResponse{
@@ -489,24 +491,27 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Set the newly generated credentials.
-	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemSTSAcc,
-		STSCredential: &madmin.SRSTSCredential{
-			AccessKey:           cred.AccessKey,
-			SecretKey:           cred.SecretKey,
-			SessionToken:        cred.SessionToken,
-			ParentUser:          cred.ParentUser,
-			ParentPolicyMapping: policyName,
-		},
-		UpdatedAt: updatedAt,
-	}))
+	if globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, cred.AccessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx,
+			globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        cred.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
+				},
+				UpdatedAt: ui.UpdatedAt,
+			}))
+	}
 
 	var encodedSuccessResponse []byte
 	switch action {
@@ -660,23 +665,27 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups
 	// mapping.
-	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
+	_, err = globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemSTSAcc,
-		STSCredential: &madmin.SRSTSCredential{
-			AccessKey:    cred.AccessKey,
-			SecretKey:    cred.SecretKey,
-			SessionToken: cred.SessionToken,
-			ParentUser:   cred.ParentUser,
-		},
-		UpdatedAt: updatedAt,
-	}))
+	if globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, cred.AccessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx,
+			globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        cred.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
+				},
+				UpdatedAt: ui.UpdatedAt,
+			}))
+	}
 
 	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
 		Result: LDAPIdentityResult{
@@ -821,24 +830,27 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 
 	tmpCredentials.ParentUser = parentUser
 	policyName := certificate.Subject.CommonName
-	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
+	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemSTSAcc,
-		STSCredential: &madmin.SRSTSCredential{
-			AccessKey:           tmpCredentials.AccessKey,
-			SecretKey:           tmpCredentials.SecretKey,
-			SessionToken:        tmpCredentials.SessionToken,
-			ParentUser:          tmpCredentials.ParentUser,
-			ParentPolicyMapping: policyName,
-		},
-		UpdatedAt: updatedAt,
-	}))
+	if globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, tmpCredentials.AccessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx,
+			globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        tmpCredentials.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
+				},
+				UpdatedAt: ui.UpdatedAt,
+			}))
+	}
 
 	response := new(AssumeRoleWithCertificateResponse)
 	response.Result.Credentials = tmpCredentials
@@ -942,23 +954,27 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, "")
+	_, err = globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, "")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemSTSAcc,
-		STSCredential: &madmin.SRSTSCredential{
-			AccessKey:    tmpCredentials.AccessKey,
-			SecretKey:    tmpCredentials.SecretKey,
-			SessionToken: tmpCredentials.SessionToken,
-			ParentUser:   tmpCredentials.ParentUser,
-		},
-		UpdatedAt: updatedAt,
-	}))
+	if globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, tmpCredentials.AccessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx,
+			globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        tmpCredentials.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
+				},
+				UpdatedAt: ui.UpdatedAt,
+			}))
+	}
 
 	response := new(AssumeRoleWithCustomTokenResponse)
 	response.Result.Credentials = tmpCredentials

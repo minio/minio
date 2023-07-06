@@ -302,22 +302,26 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		// Set the newly generated credentials, policyName is empty on purpose
 		// LDAP policies are applied automatically using their ldapUser, ldapGroups
 		// mapping.
-		updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+		_, err = globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
 		if err != nil {
 			return nil, err
 		}
 
 		// Call hook for site replication.
-		logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSTSAcc,
-			STSCredential: &madmin.SRSTSCredential{
-				AccessKey:    cred.AccessKey,
-				SecretKey:    cred.SecretKey,
-				SessionToken: cred.SessionToken,
-				ParentUser:   cred.ParentUser,
-			},
-			UpdatedAt: updatedAt,
-		}))
+		if globalSiteReplicationSys.isEnabled() {
+			ui, _ := globalIAMSys.GetUser(context.Background(), cred.AccessKey)
+			enc, _ := jsonify(ui)
+			logger.LogIf(context.Background(),
+				globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+					Type: madmin.SRIAMItemCredential,
+					CredentialInfo: &madmin.SRCredInfo{
+						AccessKey:        cred.AccessKey,
+						IAMUserType:      int(stsUser),
+						UserIdentityJSON: enc,
+					},
+					UpdatedAt: ui.UpdatedAt,
+				}))
+		}
 
 		return minio.New(driver.endpoint, &minio.Options{
 			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
