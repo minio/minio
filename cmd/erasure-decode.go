@@ -322,9 +322,9 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		w := parallelWriter{
+			healing:     true,
 			writers:     writers,
 			writeQuorum: 1,
-			errs:        make([]error, len(writers)),
 		}
 
 		if err = w.Write(ctx, bufs); err != nil {

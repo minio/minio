@@ -31,49 +31,108 @@ import (
 type parallelWriter struct {
 	writers     []io.Writer
 	writeQuorum int
-	errs        []error
+	healing     bool
 }
 
 // Write writes data to writers in parallel.
 func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 	var wg sync.WaitGroup
 
+	doneCh := make(chan int, len(p.writers))
+	defer close(doneCh)
+
+	if !p.healing {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var ints []int
+			for {
+				select {
+				case i := <-doneCh:
+					ints = append(ints, i)
+				}
+
+				// We have enough success >= p.writeQuorum, we have success.
+				if len(ints) >= p.writeQuorum {
+					for i := range p.writers {
+						var success bool
+						for _, v := range ints {
+							if v == i {
+								success = true
+								break
+							}
+						}
+						if success {
+							continue
+						}
+						if p.writers[i] != nil {
+							bw, ok := p.writers[i].(*streamingBitrotWriter)
+							if ok {
+								bw.CloseSlow()
+							}
+						}
+					}
+					return
+				}
+			}
+		}()
+	}
+
 	for i := range p.writers {
 		if p.writers[i] == nil {
-			p.errs[i] = errDiskNotFound
 			continue
 		}
-		if p.errs[i] != nil {
+		bw, ok := p.writers[i].(*streamingBitrotWriter)
+		if ok && bw.IsClosed() {
 			continue
 		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			var n int
-			n, p.errs[i] = p.writers[i].Write(blocks[i])
-			if p.errs[i] == nil {
-				if n != len(blocks[i]) {
-					p.errs[i] = io.ErrShortWrite
-					p.writers[i] = nil
+			n, err := p.writers[i].Write(blocks[i])
+			if err == nil && n != len(blocks[i]) {
+				err = io.ErrShortWrite
+			}
+			if err != nil {
+				bw, ok := p.writers[i].(*streamingBitrotWriter)
+				if ok {
+					bw.CloseSlow()
 				}
-			} else {
-				p.writers[i] = nil
+				return
+			}
+			if !p.healing {
+				select {
+				case doneCh <- i:
+				default:
+				}
 			}
 		}(i)
 	}
 	wg.Wait()
 
+	errs := make([]error, len(p.writers))
+	for i := range p.writers {
+		if p.writers[i] == nil {
+			errs[i] = errDiskNotFound
+		}
+		bw, ok := p.writers[i].(*streamingBitrotWriter)
+		if ok && bw.IsClosed() {
+			errs[i] = errDiskNotFound
+		}
+	}
+
 	// If nilCount >= p.writeQuorum, we return nil. This is because HealFile() uses
 	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
 	// i.e if we do no return here in such a case, reduceWriteQuorumErrs() would
 	// return a quorum error to HealFile().
-	nilCount := countErrs(p.errs, nil)
+	nilCount := countErrs(errs, nil)
 	if nilCount >= p.writeQuorum {
 		return nil
 	}
 
-	writeErr := reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
-	return fmt.Errorf("%w (offline-disks=%d/%d)", writeErr, countErrs(p.errs, errDiskNotFound), len(p.writers))
+	writeErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, p.writeQuorum)
+	return fmt.Errorf("%w (offline-disks=%d/%d)", writeErr, countErrs(errs, errDiskNotFound), len(p.writers))
 }
 
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.
@@ -81,7 +140,6 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer
 	writer := &parallelWriter{
 		writers:     writers,
 		writeQuorum: quorum,
-		errs:        make([]error, len(writers)),
 	}
 
 	for {

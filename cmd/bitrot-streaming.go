@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -21,11 +21,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
@@ -34,6 +36,7 @@ import (
 
 // Calculates bitrot in chunks and writes the hash into the stream.
 type streamingBitrotWriter struct {
+	closed       int32
 	iow          io.WriteCloser
 	closeWithErr func(err error) error
 	h            hash.Hash
@@ -63,6 +66,15 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 		b.closeWithErr(err)
 	}
 	return n, err
+}
+
+func (b *streamingBitrotWriter) IsClosed() bool {
+	return atomic.LoadInt32(&b.closed) == 1
+}
+
+func (b *streamingBitrotWriter) CloseSlow() {
+	atomic.StoreInt32(&b.closed, 1)
+	b.closeWithErr(errors.New("too slow a drive"))
 }
 
 func (b *streamingBitrotWriter) Close() error {
@@ -97,13 +109,13 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 	bw := &streamingBitrotWriter{iow: w, closeWithErr: w.CloseWithError, h: h, shardSize: shardSize, canClose: &sync.WaitGroup{}}
 	bw.canClose.Add(1)
 	go func() {
+		defer bw.canClose.Done()
 		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
 		if length != -1 {
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
 		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
-		bw.canClose.Done()
 	}()
 	return bw
 }
