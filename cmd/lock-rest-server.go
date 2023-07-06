@@ -73,7 +73,7 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 
 func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
 	dec := msgpNewReader(io.LimitReader(r.Body, 1000*humanize.KiByte))
-	defer readMsgpReaderPool.Put(dec)
+	defer readMsgpReaderPoolPut(dec)
 	err = args.DecodeMsg(dec)
 	return args, err
 }

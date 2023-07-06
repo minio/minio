@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/tinylib/msgp/msgp"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -120,7 +119,8 @@ func (jd *tierDiskJournal) WalkEntries(ctx context.Context, fn walkFn) {
 		return
 	}
 	defer ro.Close()
-	mr := msgp.NewReader(ro)
+	mr := msgpNewReader(ro)
+	defer readMsgpReaderPoolPut(mr)
 
 	done := false
 	for {

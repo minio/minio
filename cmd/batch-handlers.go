@@ -520,7 +520,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		if len(r.Flags.Filter.Metadata) > 0 {
 			for _, kv := range r.Flags.Filter.Metadata {
 				for k, v := range oi.UserDefined {
-					if !strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") && !isStandardHeader(k) {
+					if !stringsHasPrefixFold(k, "x-amz-meta-") && !isStandardHeader(k) {
 						continue
 					}
 					// We only need to match x-amz-meta or standardHeaders
@@ -1075,7 +1075,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		if len(r.Flags.Filter.Metadata) > 0 {
 			for _, kv := range r.Flags.Filter.Metadata {
 				for k, v := range info.Metadata {
-					if !strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") && !isStandardHeader(k) {
+					if !stringsHasPrefixFold(k, "x-amz-meta-") && !isStandardHeader(k) {
 						continue
 					}
 					// We only need to match x-amz-meta or standardHeaders
