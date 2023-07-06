@@ -47,8 +47,7 @@ curl http://minio1:9001/minio/health/cluster
 HTTP/1.1 503 Service Unavailable
 Accept-Ranges: bytes
 Content-Length: 0
-Content-Security-Policy: block-all-mixed-content
-Server: MinIO/GOGET.GOGET
+Server: MinIO
 Vary: Origin
 X-Amz-Bucket-Region: us-east-1
 X-Minio-Write-Quorum: 3
@@ -66,8 +65,7 @@ curl http://minio1:9001/minio/health/cluster/read
 HTTP/1.1 503 Service Unavailable
 Accept-Ranges: bytes
 Content-Length: 0
-Content-Security-Policy: block-all-mixed-content
-Server: MinIO/GOGET.GOGET
+Server: MinIO
 Vary: Origin
 X-Amz-Bucket-Region: us-east-1
 X-Minio-Write-Quorum: 3
@@ -85,8 +83,7 @@ curl http://minio1:9001/minio/health/cluster?maintenance=true
 HTTP/1.1 412 Precondition Failed
 Accept-Ranges: bytes
 Content-Length: 0
-Content-Security-Policy: block-all-mixed-content
-Server: MinIO/GOGET.GOGET
+Server: MinIO
 Vary: Origin
 X-Amz-Bucket-Region: us-east-1
 X-Amz-Request-Id: 16239D63820C6E76

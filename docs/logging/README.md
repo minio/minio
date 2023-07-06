@@ -111,7 +111,6 @@ NOTE:
   "responseHeader": {
     "Accept-Ranges": "bytes",
     "Content-Length": "0",
-    "Content-Security-Policy": "block-all-mixed-content",
     "ETag": "4939450d1beec11e10a91ee7700bb593",
     "Server": "MinIO",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
