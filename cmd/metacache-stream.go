@@ -261,7 +261,7 @@ func newMetacacheReader(r io.Reader) *metacacheReader {
 		closer: func() {
 			dec.Reset(nil)
 			s2DecPool.Put(dec)
-			readMsgpReaderPool.Put(mr)
+			readMsgpReaderPoolPut(mr)
 		},
 		creator: func() error {
 			v, err := mr.ReadByte()

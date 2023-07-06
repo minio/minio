@@ -228,7 +228,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	}()
 
 	ms := msgpNewReader(rr)
-	defer readMsgpReaderPool.Put(rr)
+	defer readMsgpReaderPoolPut(ms)
 	for {
 		// Read whether it is an update.
 		upd, err := ms.ReadBool()
@@ -499,14 +499,22 @@ var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader
 
 // mspNewReader returns a *Reader that reads from the provided reader.
 // The reader will be buffered.
+// Return with readMsgpReaderPoolPut when done.
 func msgpNewReader(r io.Reader) *msgp.Reader {
 	p := readMsgpReaderPool.Get().(*msgp.Reader)
 	if p.R == nil {
-		p.R = xbufio.NewReaderSize(r, 8<<10)
+		p.R = xbufio.NewReaderSize(r, 4<<10)
 	} else {
 		p.R.Reset(r)
 	}
 	return p
+}
+
+// readMsgpReaderPoolPut can be used to reuse a *msgp.Reader.
+func readMsgpReaderPoolPut(r *msgp.Reader) {
+	if r != nil {
+		readMsgpReaderPool.Put(r)
+	}
 }
 
 func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
@@ -523,7 +531,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	defer xhttp.DrainBody(respBody)
 
 	dec := msgpNewReader(respBody)
-	defer readMsgpReaderPool.Put(dec)
+	defer readMsgpReaderPoolPut(dec)
 
 	err = fi.DecodeMsg(dec)
 	return fi, err
@@ -542,7 +550,7 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 	defer xhttp.DrainBody(respBody)
 
 	dec := msgpNewReader(respBody)
-	defer readMsgpReaderPool.Put(dec)
+	defer readMsgpReaderPoolPut(dec)
 
 	err = rf.DecodeMsg(dec)
 	return rf, err
@@ -736,7 +744,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		return stat, err
 	}
 	rd := msgpNewReader(respReader)
-	defer readMsgpReaderPool.Put(rd)
+	defer readMsgpReaderPoolPut(rd)
 	for {
 		var st StatInfo
 		err = st.DecodeMsg(rd)
@@ -775,7 +783,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
 	mr := msgp.NewReader(pr)
-	defer readMsgpReaderPool.Put(mr)
+	defer readMsgpReaderPoolPut(mr)
 	for {
 		var file ReadMultipleResp
 		if err := file.DecodeMsg(mr); err != nil {

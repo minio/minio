@@ -120,7 +120,7 @@ func (jd *tierDiskJournal) WalkEntries(ctx context.Context, fn walkFn) {
 	}
 	defer ro.Close()
 	mr := msgpNewReader(ro)
-	defer readMsgpReaderPool.Put(mr)
+	defer readMsgpReaderPoolPut(mr)
 
 	done := false
 	for {
