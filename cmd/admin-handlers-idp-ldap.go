@@ -45,9 +45,7 @@ import (
 //
 // When all query parameters are omitted, returns mappings for all policies.
 func (a adminAPIHandlers) ListLDAPPolicyMappingEntities(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListLDAPPolicyMappingEntities")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	// Check authorization.
 
@@ -94,9 +92,7 @@ func (a adminAPIHandlers) ListLDAPPolicyMappingEntities(w http.ResponseWriter, r
 //
 // POST <admin-prefix>/idp/ldap/policy/{operation}
 func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AttachDetachPolicyLDAP")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	// Check authorization.
 

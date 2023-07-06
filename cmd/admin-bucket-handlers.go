@@ -56,9 +56,7 @@ const (
 // specified in the quota configuration will be applied by default
 // to enforce total quota for the specified bucket.
 func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "PutBucketQuotaConfig")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
@@ -110,9 +108,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 
 // GetBucketQuotaConfigHandler - gets bucket quota configuration
 func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketQuotaConfig")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
@@ -145,9 +141,8 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 
 // SetRemoteTargetHandler - sets a remote target for bucket
 func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetBucketTarget")
+	ctx := r.Context()
 
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
 	update := r.Form.Get("update") == "true"
@@ -289,9 +284,8 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 // ListRemoteTargetsHandler - lists remote target(s) for a bucket or gets a target
 // for a particular ARN type
 func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListBucketTargets")
+	ctx := r.Context()
 
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
 	arnType := vars["type"]
@@ -324,9 +318,8 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 
 // RemoveRemoteTargetHandler - removes a remote target for bucket with specified ARN
 func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveBucketTarget")
+	ctx := r.Context()
 
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := pathClean(vars["bucket"])
 	arn := vars["arn"]
@@ -368,8 +361,7 @@ func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *ht
 
 // ExportBucketMetadataHandler - exports all bucket metadata as a zipped file
 func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ExportBucketMetadata")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	bucket := pathClean(r.Form.Get("bucket"))
 	// Get current object layer instance.
@@ -652,9 +644,7 @@ func (i *importMetaReport) SetStatus(bucket, fname string, err error) {
 // 2. Replication config - is omitted from import as remote target credentials are not available from exported data for security reasons.
 // 3. lifecycle config - if transition rules are present, tier name needs to have been defined.
 func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ImportBucketMetadata")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ImportBucketMetadataAction)
@@ -1069,8 +1059,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 // ReplicationDiffHandler - POST returns info on unreplicated versions for a remote target ARN
 // to the connected HTTP client.
 func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ReplicationDiff")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
