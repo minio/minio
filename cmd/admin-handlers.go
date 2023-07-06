@@ -1164,6 +1164,11 @@ func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !globalSiteReplicationSys.isEnabled() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-net-perf")
 	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
