@@ -632,7 +632,7 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		metaFileInfos[index].DiskMTime = diskMTime
 	}
 	if !readData {
-		for i := range v2bufs[:] {
+		for i := range v2bufs {
 			metaDataPoolPut(v2bufs[i])
 		}
 	}
