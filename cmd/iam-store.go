@@ -2186,8 +2186,24 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 	return serviceAccounts, nil
 }
 
+// StoreUserIdentity saves the given user identity - CAUTION: this is meant to
+// be called by site replication only.
+func (store *IAMStoreSys) StoreUserIdentity(ctx context.Context, accessKey string, userType IAMUserType,
+	u UserIdentity, opts ...options,
+) error {
+	cache := store.lock()
+	defer store.unlock()
+
+	if err := store.saveUserIdentity(ctx, accessKey, userType, u, opts...); err != nil {
+		return err
+	}
+	return cache.updateUserWithClaims(accessKey, u)
+}
+
 // AddUser - adds/updates long term user account to storage.
-func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (updatedAt time.Time, err error) {
+func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (
+	u UserIdentity, err error,
+) {
 	cache := store.lock()
 	defer store.unlock()
 
@@ -2197,10 +2213,10 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 
 	// It is not possible to update an STS account.
 	if ok && ui.Credentials.IsTemp() {
-		return updatedAt, errIAMActionNotAllowed
+		return u, errIAMActionNotAllowed
 	}
 
-	u := newUserIdentity(auth.Credentials{
+	u = newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: ureq.SecretKey,
 		Status: func() string {
@@ -2213,34 +2229,13 @@ func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq ma
 	})
 
 	if err := store.saveUserIdentity(ctx, accessKey, regUser, u); err != nil {
-		return updatedAt, err
+		return u, err
 	}
 	if err := cache.updateUserWithClaims(accessKey, u); err != nil {
-		return updatedAt, err
+		return u, err
 	}
 
-	return u.UpdatedAt, nil
-}
-
-// UpdateUserSecretKey - sets user secret key to storage.
-func (store *IAMStoreSys) UpdateUserSecretKey(ctx context.Context, accessKey, secretKey string) error {
-	cache := store.lock()
-	defer store.unlock()
-
-	cache.updatedAt = time.Now()
-
-	ui, ok := cache.iamUsersMap[accessKey]
-	if !ok {
-		return errNoSuchUser
-	}
-	cred := ui.Credentials
-	cred.SecretKey = secretKey
-	u := newUserIdentity(cred)
-	if err := store.saveUserIdentity(ctx, accessKey, regUser, u); err != nil {
-		return err
-	}
-
-	return cache.updateUserWithClaims(accessKey, u)
+	return u, nil
 }
 
 // GetSTSAndServiceAccounts - returns all STS and Service account credentials.

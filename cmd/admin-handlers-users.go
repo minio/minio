@@ -73,14 +73,16 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemIAMUser,
-		IAMUser: &madmin.SRIAMUser{
-			AccessKey:   accessKey,
-			IsDeleteReq: true,
-		},
-		UpdatedAt: UTCNow(),
-	}))
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx,
+		madmin.SRIAMItem{
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:   accessKey,
+				IAMUserType: int(regUser),
+				IsDeleteReq: true,
+			},
+			UpdatedAt: UTCNow(),
+		}))
 }
 
 // ListBucketUsers - GET /minio/admin/v3/list-users?bucket={bucket}
@@ -415,23 +417,25 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	updatedAt, err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status))
+	_, err := globalIAMSys.SetUserStatus(ctx, accessKey, madmin.AccountStatus(status))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemIAMUser,
-		IAMUser: &madmin.SRIAMUser{
-			AccessKey:   accessKey,
-			IsDeleteReq: false,
-			UserReq: &madmin.AddOrUpdateUserReq{
-				Status: madmin.AccountStatus(status),
+	if globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, accessKey)
+		enc, _ := jsonify(ui)
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:        accessKey,
+				IAMUserType:      int(regUser),
+				UserIdentityJSON: enc,
 			},
-		},
-		UpdatedAt: updatedAt,
-	}))
+			UpdatedAt: ui.UpdatedAt,
+		}))
+	}
 }
 
 // AddUser - PUT /minio/admin/v3/add-user?accessKey=<access_key>
@@ -524,21 +528,11 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedAt, err := globalIAMSys.CreateUser(ctx, accessKey, ureq)
+	err = globalIAMSys.CreateUser(ctx, accessKey, ureq)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-		Type: madmin.SRIAMItemIAMUser,
-		IAMUser: &madmin.SRIAMUser{
-			AccessKey:   accessKey,
-			IsDeleteReq: false,
-			UserReq:     &ureq,
-		},
-		UpdatedAt: updatedAt,
-	}))
 }
 
 // TemporaryAccountInfo - GET /minio/admin/v3/temporary-account-info
@@ -807,7 +801,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	opts.sessionPolicy = sp
-	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
+	newCred, _, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -835,26 +829,19 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 	writeSuccessResponseJSON(w, encryptedData)
 
-	// Call hook for cluster-replication if the service account is not for a
+	// Call hook for cluster-replication if the service account is not for the
 	// root user.
-	if newCred.ParentUser != globalActiveCred.AccessKey {
+	if newCred.ParentUser != globalActiveCred.AccessKey && globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, newCred.AccessKey)
+		enc, _ := jsonify(ui)
 		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSvcAcc,
-			SvcAccChange: &madmin.SRSvcAccChange{
-				Create: &madmin.SRSvcAccCreate{
-					Parent:        newCred.ParentUser,
-					AccessKey:     newCred.AccessKey,
-					SecretKey:     newCred.SecretKey,
-					Groups:        newCred.Groups,
-					Name:          newCred.Name,
-					Description:   newCred.Description,
-					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
-					Status:        auth.AccountOn,
-					Expiration:    createReq.Expiration,
-				},
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:        newCred.AccessKey,
+				IAMUserType:      int(svcUser),
+				UserIdentityJSON: enc,
 			},
-			UpdatedAt: updatedAt,
+			UpdatedAt: ui.UpdatedAt,
 		}))
 	}
 }
@@ -945,28 +932,24 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		expiration:    updateReq.NewExpiration,
 		sessionPolicy: sp,
 	}
-	updatedAt, err := globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
+	_, err = globalIAMSys.UpdateServiceAccount(ctx, accessKey, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Call site replication hook - non-root user accounts are replicated.
-	if svcAccount.ParentUser != globalActiveCred.AccessKey {
+	if svcAccount.ParentUser != globalActiveCred.AccessKey && globalSiteReplicationSys.isEnabled() {
+		ui, _ := globalIAMSys.GetUser(ctx, accessKey)
+		enc, _ := jsonify(ui)
 		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSvcAcc,
-			SvcAccChange: &madmin.SRSvcAccChange{
-				Update: &madmin.SRSvcAccUpdate{
-					AccessKey:     accessKey,
-					SecretKey:     opts.secretKey,
-					Status:        opts.status,
-					Name:          opts.name,
-					Description:   opts.description,
-					SessionPolicy: updateReq.NewPolicy,
-					Expiration:    updateReq.NewExpiration,
-				},
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:        accessKey,
+				IAMUserType:      int(svcUser),
+				UserIdentityJSON: enc,
 			},
-			UpdatedAt: updatedAt,
+			UpdatedAt: ui.UpdatedAt,
 		}))
 	}
 
@@ -1209,13 +1192,13 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	}
 
 	// Call site replication hook - non-root user accounts are replicated.
-	if svcAccount.ParentUser != "" && svcAccount.ParentUser != globalActiveCred.AccessKey {
+	if svcAccount.ParentUser != globalActiveCred.AccessKey && globalSiteReplicationSys.isEnabled() {
 		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSvcAcc,
-			SvcAccChange: &madmin.SRSvcAccChange{
-				Delete: &madmin.SRSvcAccDelete{
-					AccessKey: serviceAccount,
-				},
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:   serviceAccount,
+				IAMUserType: int(svcUser),
+				IsDeleteReq: true,
 			},
 			UpdatedAt: UTCNow(),
 		}))
@@ -2242,7 +2225,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAccessDenied, err, allUsersFile, accessKey), r.URL)
 					return
 				}
-				if _, err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
+				if err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
 					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, toAdminAPIErrCode(ctx, err), err, allUsersFile, accessKey), r.URL)
 					return
 				}

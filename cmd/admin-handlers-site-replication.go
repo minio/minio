@@ -182,16 +182,20 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 				err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, policy, item.UpdatedAt)
 			}
 		}
-	case madmin.SRIAMItemSvcAcc:
-		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, item.SvcAccChange, item.UpdatedAt)
 	case madmin.SRIAMItemPolicyMapping:
 		err = globalSiteReplicationSys.PeerPolicyMappingHandler(ctx, item.PolicyMapping, item.UpdatedAt)
+	case madmin.SRIAMItemGroupInfo:
+		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo, item.UpdatedAt)
+	case madmin.SRIAMItemCredential:
+		err = globalSiteReplicationSys.PeerCredInfoChangeHandler(ctx, item.CredentialInfo, item.UpdatedAt)
+
+	// The following cases would be DEPRECATED by the previous case above.
+	case madmin.SRIAMItemSvcAcc:
+		err = globalSiteReplicationSys.PeerSvcAccChangeHandler(ctx, item.SvcAccChange, item.UpdatedAt)
 	case madmin.SRIAMItemSTSAcc:
 		err = globalSiteReplicationSys.PeerSTSAccHandler(ctx, item.STSCredential, item.UpdatedAt)
 	case madmin.SRIAMItemIAMUser:
 		err = globalSiteReplicationSys.PeerIAMUserChangeHandler(ctx, item.IAMUser, item.UpdatedAt)
-	case madmin.SRIAMItemGroupInfo:
-		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)

@@ -1156,8 +1156,8 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 }
 
 // IAMChangeHook - called when IAM items need to be replicated to peer clusters.
-// This includes named policy creation, policy mapping changes and service
-// account changes.
+// This includes named policy/user/group/STS account creation, policy mapping
+// changes and service account changes.
 //
 // All policies are replicated.
 //
@@ -1222,7 +1222,7 @@ func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, chang
 	}
 	// skip overwrite of local update if peer sent stale info
 	if !updatedAt.IsZero() {
-		if ui, err := globalIAMSys.GetUserInfo(ctx, change.AccessKey); err == nil && ui.UpdatedAt.After(updatedAt) {
+		if ui, ok := globalIAMSys.GetUser(ctx, change.AccessKey); ok && ui.UpdatedAt.After(updatedAt) {
 			return nil
 		}
 	}
@@ -1240,7 +1240,7 @@ func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, chang
 			// only changing the account status.
 			_, err = globalIAMSys.SetUserStatus(ctx, change.AccessKey, userReq.Status)
 		} else {
-			_, err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
+			err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
 		}
 	}
 	if err != nil {
@@ -1276,6 +1276,72 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			}
 		}
 	}
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
+// PeerCredInfoChangeHandler - copies credential updates via UserIdentity.
+func (c *SiteReplicationSys) PeerCredInfoChangeHandler(ctx context.Context, change *madmin.SRCredInfo,
+	updatedAt time.Time,
+) (err error) {
+	if change == nil {
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+
+	var u UserIdentity
+	if !change.IsDeleteReq {
+		err = unjsonify(change.UserIdentityJSON, &u)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+	}
+
+	switch IAMUserType(change.IAMUserType) {
+	case regUser:
+		if !updatedAt.IsZero() {
+			if ui, ok := globalIAMSys.GetUser(ctx, change.AccessKey); ok && ui.UpdatedAt.After(updatedAt) {
+				return nil
+			}
+		}
+		if change.IsDeleteReq {
+			err = globalIAMSys.DeleteUser(ctx, change.AccessKey, true)
+		} else {
+			err = globalIAMSys.store.StoreUserIdentity(ctx, change.AccessKey, regUser, u)
+		}
+
+	case stsUser:
+		if change.IsDeleteReq {
+			// STS accounts only expire, never explicitly deleted.
+			return errSRInvalidRequest(errInvalidArgument)
+		}
+		if !updatedAt.IsZero() {
+			if ui, _, err := globalIAMSys.getTempAccount(ctx, change.AccessKey); err == nil &&
+				ui.UpdatedAt.After(updatedAt) {
+				return nil
+			}
+		}
+		ttl := int64(u.Credentials.Expiration.Sub(UTCNow()).Seconds())
+		err = globalIAMSys.store.StoreUserIdentity(ctx, change.AccessKey, stsUser, u, options{ttl: ttl})
+
+	case svcUser:
+		if !updatedAt.IsZero() {
+			if sa, _, err := globalIAMSys.getServiceAccount(ctx, change.AccessKey); err == nil &&
+				sa.UpdatedAt.After(updatedAt) {
+				return nil
+			}
+		}
+		if change.IsDeleteReq {
+			err = globalIAMSys.DeleteServiceAccount(ctx, change.AccessKey, true)
+		} else {
+			err = globalIAMSys.store.StoreUserIdentity(ctx, change.AccessKey, svcUser, u)
+		}
+
+	default:
+		return errSRInvalidRequest(errInvalidArgument)
+	}
+
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -1823,15 +1889,13 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 		}
 
 		for _, acc := range userAccounts {
+			enc, _ := jsonify(acc)
 			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemIAMUser,
-				IAMUser: &madmin.SRIAMUser{
-					AccessKey:   acc.Credentials.AccessKey,
-					IsDeleteReq: false,
-					UserReq: &madmin.AddOrUpdateUserReq{
-						SecretKey: acc.Credentials.SecretKey,
-						Status:    madmin.AccountStatus(acc.Credentials.Status),
-					},
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        acc.Credentials.AccessKey,
+					IAMUserType:      int(regUser),
+					UserIdentityJSON: enc,
 				},
 				UpdatedAt: acc.UpdatedAt,
 			}); err != nil {
@@ -1909,39 +1973,13 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 				continue
 			}
 
-			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, acc.Credentials.AccessKey)
-			if err != nil {
-				return errSRBackendIssue(err)
-			}
-
-			_, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
-			if err != nil {
-				return errSRBackendIssue(err)
-			}
-
-			var policyJSON []byte
-			if policy != nil {
-				policyJSON, err = json.Marshal(policy)
-				if err != nil {
-					return wrapSRErr(err)
-				}
-			}
-
+			enc, _ := jsonify(acc)
 			err = c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemSvcAcc,
-				SvcAccChange: &madmin.SRSvcAccChange{
-					Create: &madmin.SRSvcAccCreate{
-						Parent:        acc.Credentials.ParentUser,
-						AccessKey:     user,
-						SecretKey:     acc.Credentials.SecretKey,
-						Groups:        acc.Credentials.Groups,
-						Claims:        claims,
-						SessionPolicy: json.RawMessage(policyJSON),
-						Status:        acc.Credentials.Status,
-						Name:          acc.Credentials.Name,
-						Description:   acc.Credentials.Description,
-						Expiration:    &acc.Credentials.Expiration,
-					},
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        user,
+					IAMUserType:      int(svcUser),
+					UserIdentityJSON: enc,
 				},
 				UpdatedAt: acc.UpdatedAt,
 			})
@@ -4801,43 +4839,14 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 		creds := u.Credentials
+		enc, _ := jsonify(u)
 		if creds.IsServiceAccount() {
-			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, creds.AccessKey)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
-				continue
-			}
-
-			_, policy, err := globalIAMSys.GetServiceAccount(ctx, creds.AccessKey)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
-				continue
-			}
-
-			var policyJSON []byte
-			if policy != nil {
-				policyJSON, err = json.Marshal(policy)
-				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
-					continue
-				}
-			}
-
 			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemSvcAcc,
-				SvcAccChange: &madmin.SRSvcAccChange{
-					Create: &madmin.SRSvcAccCreate{
-						Parent:        creds.ParentUser,
-						AccessKey:     creds.AccessKey,
-						SecretKey:     creds.SecretKey,
-						Groups:        creds.Groups,
-						Claims:        claims,
-						SessionPolicy: json.RawMessage(policyJSON),
-						Status:        creds.Status,
-						Name:          creds.Name,
-						Description:   creds.Description,
-						Expiration:    &creds.Expiration,
-					},
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        creds.AccessKey,
+					IAMUserType:      int(svcUser),
+					UserIdentityJSON: enc,
 				},
 				UpdatedAt: lastUpdate,
 			}); err != nil {
@@ -4846,29 +4855,13 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 		if creds.IsTemp() && !creds.IsExpired() {
-			var parentPolicy string
-			u, err := globalIAMSys.GetUserInfo(ctx, creds.ParentUser)
-			if err != nil {
-				// Parent may be "virtual" (for ldap, oidc, client tls auth,
-				// custom auth plugin), so in such cases we apply no parent
-				// policy. The session token will contain info about policy to
-				// be applied.
-				if !errors.Is(err, errNoSuchUser) {
-					logger.LogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
-					continue
-				}
-			} else {
-				parentPolicy = u.PolicyName
-			}
 			// Call hook for site replication.
 			if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-				Type: madmin.SRIAMItemSTSAcc,
-				STSCredential: &madmin.SRSTSCredential{
-					AccessKey:           creds.AccessKey,
-					SecretKey:           creds.SecretKey,
-					SessionToken:        creds.SessionToken,
-					ParentUser:          creds.ParentUser,
-					ParentPolicyMapping: parentPolicy,
+				Type: madmin.SRIAMItemCredential,
+				CredentialInfo: &madmin.SRCredInfo{
+					AccessKey:        creds.AccessKey,
+					IAMUserType:      int(stsUser),
+					UserIdentityJSON: enc,
 				},
 				UpdatedAt: lastUpdate,
 			}); err != nil {
@@ -4877,14 +4870,11 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			continue
 		}
 		if err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
-			Type: madmin.SRIAMItemIAMUser,
-			IAMUser: &madmin.SRIAMUser{
-				AccessKey:   user,
-				IsDeleteReq: false,
-				UserReq: &madmin.AddOrUpdateUserReq{
-					SecretKey: creds.SecretKey,
-					Status:    latestUserStat.userInfo.Status,
-				},
+			Type: madmin.SRIAMItemCredential,
+			CredentialInfo: &madmin.SRCredInfo{
+				AccessKey:        creds.AccessKey,
+				IAMUserType:      int(regUser),
+				UserIdentityJSON: enc,
 			},
 			UpdatedAt: lastUpdate,
 		}); err != nil {
