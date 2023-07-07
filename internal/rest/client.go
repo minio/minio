@@ -126,16 +126,15 @@ func removeEmptyPort(host string) string {
 }
 
 // Copied from http.NewRequest but implemented to ensure we re-use `url.URL` instance.
-func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
-	u.Host = removeEmptyPort(u.Host)
 	// The host's colon:port should be normalized. See Issue 14836.
 	req := &http.Request{
 		Method:     http.MethodPost,
-		URL:        u,
+		URL:        &u,
 		Proto:      "HTTP/1.1",
 		ProtoMajor: 1,
 		ProtoMinor: 1,
@@ -288,22 +287,19 @@ func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
 
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	urlStr := c.url.String()
 	if !c.IsOnline() {
-		return nil, &NetworkError{c.LastError()}
+		return nil, &NetworkError{Err: c.LastError()}
 	}
 
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: err}}
-	}
-
+	// Shallow copy. We don't modify the *UserInfo, if set.
+	// All other fields are copied.
+	u := *c.url
 	u.Path = path.Join(u.Path, method)
 	u.RawQuery = values.Encode()
 
 	req, err := c.newRequest(ctx, u, body)
 	if err != nil {
-		return nil, &NetworkError{err}
+		return nil, &NetworkError{Err: err}
 	}
 	if length > 0 {
 		req.ContentLength = length
@@ -379,14 +375,26 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+	connected := int32(online)
+	urlStr := uu.String()
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		// Mark offline, with no reconnection attempts.
+		connected = int32(offline)
+		err = &url.Error{URL: urlStr, Err: err}
+	}
+	u.Host = removeEmptyPort(u.Host)
+
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
 	return &Client{
 		httpClient:               &http.Client{Transport: tr},
-		url:                      url,
+		url:                      u,
+		lastErr:                  err,
+		lastErrTime:              time.Now(),
 		newAuthToken:             newAuthToken,
-		connected:                online,
+		connected:                connected,
 		lastConn:                 time.Now().UnixNano(),
 		MaxErrResponseSize:       4096,
 		HealthCheckReconnectUnit: 200 * time.Millisecond,
