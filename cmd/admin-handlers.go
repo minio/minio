@@ -1951,7 +1951,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	domain := globalDomainNames
 	services := madmin.Services{
 		KMS:           fetchKMSStatus(),
-		KMSV2:         fetchKMSStatusV2(ctx),
+		KMSStatus:     fetchKMSStatusV2(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
