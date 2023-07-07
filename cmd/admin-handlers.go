@@ -2896,6 +2896,36 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 	sb.WriteString("\n")
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes()))
+
+	// save MinIO start script to inspect command
+	var scrb bytes.Buffer
+	scrb.WriteString(`#!/usr/bin/env bash
+
+function main() {
+	for file in $(ls -1); do
+		dest_file=$(echo "$file" | cut -d ":" -f1)
+		mv "$file" "$dest_file"
+	done
+
+	# Read content of inspect-input.txt
+	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
+
+	# Start MinIO instance using the options
+	START_CMD="CI=on MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server ${MINIO_OPTS} &"
+	echo
+	echo "Starting MinIO instance: ${START_CMD}"
+	echo
+	eval "$START_CMD"
+	MINIO_SRVR_PID="$!"
+	echo "MinIO Server PID: ${MINIO_SRVR_PID}"
+	echo
+	echo "Waiting for MinIO instance to get ready!"
+	sleep 10
+}
+
+main "$@"`,
+	)
+	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes()))
 }
 
 func getSubnetAdminPublicKey() []byte {
