@@ -156,7 +156,7 @@ func TestShuffleDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(disks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestEvalDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(disks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)

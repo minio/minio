@@ -268,7 +268,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		newEvent.S3.Object.ContentType = args.Object.ContentType
 		newEvent.S3.Object.UserMetadata = make(map[string]string, len(args.Object.UserDefined))
 		for k, v := range args.Object.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if stringsHasPrefixFold(strings.ToLower(k), ReservedMetadataPrefixLower) {
 				continue
 			}
 			newEvent.S3.Object.UserMetadata[k] = v

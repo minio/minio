@@ -679,7 +679,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 func getCopyObjMetadata(oi ObjectInfo, sc string) map[string]string {
 	meta := make(map[string]string, len(oi.UserDefined))
 	for k, v := range oi.UserDefined {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			continue
 		}
 
@@ -744,7 +744,7 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			continue
 		}
 		if isStandardHeader(k) {
@@ -909,7 +909,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	for k, v := range oi1.UserDefined {
 		var found bool
 		for _, prefix := range compareKeys {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(k, prefix) {
 				continue
 			}
 			found = true
@@ -924,7 +924,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	for k, v := range oi2.Metadata {
 		var found bool
 		for _, prefix := range compareKeys {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(k, prefix) {
 				continue
 			}
 			found = true

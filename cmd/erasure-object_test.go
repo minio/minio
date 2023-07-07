@@ -1076,7 +1076,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("disk%d", i)))
 	}
 
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		t.Fatal(err)

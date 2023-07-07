@@ -1261,7 +1261,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		for k, v := range srcInfo.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				encMetadata[k] = v
 			}
 		}
@@ -2298,6 +2298,14 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	replica := r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String()
+	if replica {
+		if s3Error := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); s3Error != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+			return
+		}
+	}
+
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
 		if err != nil && err != dns.ErrNotImplemented {
@@ -2311,10 +2319,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	var (
-		goi  ObjectInfo
-		gerr error
-	)
+
+	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	if rcfg.LockEnabled && opts.DeletePrefix {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
+		return
+	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -2327,7 +2337,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	// the null version's remote object to delete if
 	// transitioned.
 	goiOpts := os.GetOpts()
-	goi, gerr = getObjectInfo(ctx, bucket, object, goiOpts)
+	goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts)
 	if gerr == nil {
 		os.SetTransitionState(goi.TransitionedObject)
 	}
@@ -2338,17 +2348,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			VersionID:  opts.VersionID,
 		},
 	}, goi, opts, gerr)
+
+	vID := opts.VersionID
 	if dsc.ReplicateAny() {
 		opts.SetDeleteReplicationState(dsc, opts.VersionID)
 	}
-
-	vID := opts.VersionID
-	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-		// check if replica has permission to be deleted.
-		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
-			return
-		}
+	if replica {
 		opts.SetReplicaStatus(replication.Replica)
 		if opts.VersionPurgeStatus().Empty() {
 			// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
@@ -2357,22 +2362,16 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	apiErr := ErrNone
-	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
-		if opts.DeletePrefix {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
+	if vID != "" {
+		apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
+			ObjectV: ObjectV{
+				ObjectName: object,
+				VersionID:  vID,
+			},
+		}, goi, gerr)
+		if apiErr != ErrNone && apiErr != ErrNoSuchKey {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL)
 			return
-		}
-		if vID != "" {
-			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
-				ObjectV: ObjectV{
-					ObjectName: object,
-					VersionID:  vID,
-				},
-			}, goi, gerr)
-			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL)
-				return
-			}
 		}
 	}
 

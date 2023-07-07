@@ -121,13 +121,27 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 // IsDocker - returns if the environment minio is running in docker or
 // not. The check is a simple file existence check.
 //
-// https://github.com/moby/moby/blob/master/daemon/initlayer/setup_unix.go#L25
+// https://github.com/moby/moby/blob/master/daemon/initlayer/setup_unix.go
+// https://github.com/containers/podman/blob/master/libpod/runtime.go
 //
-//	"/.dockerenv":      "file",
+//	"/.dockerenv":        "file",
+//	"/run/.containerenv": "file",
 func IsDocker() bool {
-	_, err := os.Stat("/.dockerenv")
+	var err error
+	for _, envfile := range []string{
+		"/.dockerenv",
+		"/run/.containerenv",
+	} {
+		_, err = os.Stat(envfile)
+		if err == nil {
+			return true
+		}
+	}
 	if osIsNotExist(err) {
-		return false
+		// if none of the files are present we may be running inside
+		// CRI-O, Containerd etc..
+		// Fallback to our container specific ENVs if they are set.
+		return env.IsSet("MINIO_ACCESS_KEY_FILE")
 	}
 
 	// Log error, as we will not propagate it to caller
@@ -523,7 +537,7 @@ const (
 	defaultMinisignPubkey = "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
 )
 
-func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo string, mode string, reader []byte) (err error) {
+func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader []byte) (err error) {
 	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
 		return errors.New("update already in progress")
 	}

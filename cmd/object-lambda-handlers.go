@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/klauspost/compress/gzhttp"
@@ -182,7 +181,7 @@ func StatusCode(text string) int {
 func fwdHeadersToS3(h http.Header, w http.ResponseWriter) {
 	const trim = "x-amz-fwd-header-"
 	for k, v := range h {
-		if strings.HasPrefix(strings.ToLower(k), trim) {
+		if stringsHasPrefixFold(k, trim) {
 			w.Header()[k[len(trim):]] = v
 		}
 	}

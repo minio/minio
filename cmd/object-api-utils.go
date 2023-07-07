@@ -402,7 +402,7 @@ func extractETag(metadata map[string]string) string {
 // to do case insensitive checks.
 func HasPrefix(s string, prefix string) bool {
 	if runtime.GOOS == globalWindowsOSName {
-		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
+		return stringsHasPrefixFold(s, prefix)
 	}
 	return strings.HasPrefix(s, prefix)
 }

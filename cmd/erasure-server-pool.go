@@ -993,12 +993,9 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return objInfo, err
 	}
 
-	if opts.DeletePrefix {
-		err := z.deletePrefix(ctx, bucket, object)
-		return ObjectInfo{}, err
+	if !opts.DeletePrefix { // DeletePrefix handles dir object encoding differently.
+		object = encodeDirObject(object)
 	}
-
-	object = encodeDirObject(object)
 
 	// Acquire a write lock before deleting the object.
 	lk := z.NewNSLock(bucket, object)
@@ -1008,6 +1005,10 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	}
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx)
+
+	if opts.DeletePrefix {
+		return ObjectInfo{}, z.deletePrefix(ctx, bucket, object)
+	}
 
 	gopts := opts
 	gopts.NoLock = true

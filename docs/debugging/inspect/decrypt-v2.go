@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -23,7 +23,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/minio/madmin-go/v2/estream"
+	"github.com/minio/madmin-go/v3/estream"
 )
 
 func extractInspectV2(pk []byte, r io.Reader, w io.Writer) error {

@@ -584,7 +584,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -776,8 +776,8 @@ func TestHealCorrectQuorum(t *testing.T) {
 
 	defer removeRoots(fsDirs)
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, _, err := initObjectLayer(ctx, pools)
@@ -907,8 +907,8 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 
 	defer removeRoots(fsDirs)
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, _, err := initObjectLayer(ctx, pools)
@@ -1088,7 +1088,7 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1231,7 +1231,7 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1388,7 +1388,7 @@ func TestHealObjectErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1486,7 +1486,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1582,7 +1582,7 @@ func TestHealLastDataShard(t *testing.T) {
 
 			defer removeRoots(fsDirs)
 
-			obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+			obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -184,7 +184,7 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 
 	for key := range v {
 		for _, prefix := range userMetadataKeyPrefixes {
-			if !strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(key, prefix) {
 				continue
 			}
 			value, ok := nv[http.CanonicalHeaderKey(key)]

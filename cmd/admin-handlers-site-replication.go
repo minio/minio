@@ -20,16 +20,19 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/mux"
-
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -542,4 +545,45 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 		return
 	}
 	writeSuccessResponseJSON(w, body)
+}
+
+// SiteReplicationDevNull - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/devnull
+func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
+	globalSiteNetPerfRX.Connect()
+	defer globalSiteNetPerfRX.Disconnect()
+
+	connectTime := time.Now()
+	ctx := newContext(r, w, "SiteReplicationDevNull")
+	for {
+		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		atomic.AddUint64(&globalSiteNetPerfRX.RX, uint64(n))
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
+			// would mean the network is not stable. Logging here will help in debugging network issues.
+			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
+				logger.LogIf(ctx, err)
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+			}
+			break
+		}
+	}
+}
+
+// SiteReplicationNetPerf - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/netperf
+func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
+	durationStr := r.Form.Get(peerRESTDuration)
+	duration, _ := time.ParseDuration(durationStr)
+	if duration < globalNetPerfMinDuration {
+		duration = globalNetPerfMinDuration
+	}
+	result := siteNetperf(r.Context(), duration)
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }

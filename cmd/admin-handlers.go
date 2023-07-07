@@ -1153,6 +1153,54 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 }
 
+// SitePerfHandler -  measures network throughput between site replicated setups
+func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SitePerfHandler")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if !globalSiteReplicationSys.isEnabled() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "site-net-perf")
+	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	defer nsLock.Unlock(lkctx)
+
+	durationStr := r.Form.Get(peerRESTDuration)
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		duration = globalNetPerfMinDuration
+	}
+
+	if duration < globalNetPerfMinDuration {
+		// We need sample size of minimum 10 secs.
+		duration = globalNetPerfMinDuration
+	}
+
+	duration = duration.Round(time.Second)
+
+	results, err := globalSiteReplicationSys.Netperf(ctx, duration)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(results); err != nil {
+		return
+	}
+}
+
 // NetperfHandler - perform mesh style network throughput test
 func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NetperfHandler")
@@ -2103,6 +2151,27 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		}
 	}
 
+	// collect all realtime metrics except disk
+	// disk metrics are already included under drive info of each server
+	getRealtimeMetrics := func() *madmin.RealtimeMetrics {
+		var m madmin.RealtimeMetrics
+		var types madmin.MetricType = madmin.MetricsAll &^ madmin.MetricsDisk
+		mLocal := collectLocalMetrics(types, collectMetricsOpts{})
+		m.Merge(&mLocal)
+		cctx, cancel := context.WithTimeout(healthCtx, time.Second/2)
+		mRemote := collectRemoteMetrics(cctx, types, collectMetricsOpts{})
+		cancel()
+		m.Merge(&mRemote)
+		for idx, host := range m.Hosts {
+			m.Hosts[idx] = anonAddr(host)
+		}
+		for host, metrics := range m.ByHost {
+			m.ByHost[anonAddr(host)] = metrics
+			delete(m.ByHost, host)
+		}
+		return &m
+	}
+
 	anonymizeCmdLine := func(cmdLine string) string {
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
@@ -2280,6 +2349,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 				TLS:          &tls,
 				IsKubernetes: &isK8s,
 				IsDocker:     &isDocker,
+				Metrics:      getRealtimeMetrics(),
 			}
 			partialWrite(healthInfo)
 		}

@@ -1887,7 +1887,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 
 // Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(0, disk))
 	if err != nil {
 		t.Fatal(err)
 	}
