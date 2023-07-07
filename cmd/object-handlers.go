@@ -1261,7 +1261,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		for k, v := range srcInfo.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				encMetadata[k] = v
 			}
 		}

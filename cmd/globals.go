@@ -370,6 +370,7 @@ var (
 	// Used for collecting stats for netperf
 	globalNetPerfMinDuration     = time.Second * 10
 	globalNetPerfRX              netPerfRX
+	globalSiteNetPerfRX          netPerfRX
 	globalObjectPerfBucket       = "minio-perf-test-tmp-bucket"
 	globalObjectPerfUserMetadata = "X-Amz-Meta-Minio-Object-Perf" // Clients can set this to bypass S3 API service freeze. Used by object pref tests.
 

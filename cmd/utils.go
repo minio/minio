@@ -1286,3 +1286,9 @@ func unwrapAll(err error) error {
 		err = werr
 	}
 }
+
+// stringsHasPrefixFold tests whether the string s begins with prefix ignoring case.
+func stringsHasPrefixFold(s, prefix string) bool {
+	// Test match with case first.
+	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
+}

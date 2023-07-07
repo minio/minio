@@ -62,8 +62,9 @@ func getCanonicalHeaders(signedHeaders http.Header) string {
 	var headers []string
 	vals := make(http.Header)
 	for k, vv := range signedHeaders {
-		headers = append(headers, strings.ToLower(k))
-		vals[strings.ToLower(k)] = vv
+		k = strings.ToLower(k)
+		headers = append(headers, k)
+		vals[k] = vv
 	}
 	sort.Strings(headers)
 
