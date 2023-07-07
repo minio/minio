@@ -23,7 +23,6 @@ import (
 	crand "crypto/rand"
 	"crypto/rsa"
 	"crypto/subtle"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -42,12 +41,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -57,8 +54,6 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/env"
 	iampolicy "github.com/minio/pkg/iam/policy"
 	"github.com/minio/pkg/logger/message/log"
 	xnet "github.com/minio/pkg/net"
@@ -2581,128 +2576,21 @@ func fetchKMSStatusV2(ctx context.Context) []madmin.KMS {
 	if GlobalKMS == nil {
 		return []madmin.KMS{}
 	}
-	stat, err := GlobalKMS.Stat(ctx)
-	if err != nil {
-		return []madmin.KMS{}
-	}
-	if len(stat.Endpoints) == 0 {
-		return []madmin.KMS{}
-	}
 
-	kesClient := getKesClient()
+	results := GlobalKMS.Verify(ctx)
+
 	stats := []madmin.KMS{}
-
-	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-	for _, endpoint := range stat.Endpoints {
-		client := kes.Client{
-			Endpoints:  []string{endpoint},
-			HTTPClient: kesClient.HTTPClient,
-		}
-		// 1. Get stats for the KES instance
-		state, err := client.Status(ctx)
-		if err != nil {
-			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
-			continue
-		}
-		stat := madmin.KMS{Status: string(madmin.ItemOnline), Endpoint: endpoint, Version: state.Version}
-
-		// 2. Generate a new key using the KMS.
-		kmsCtx, err := kmsContext.MarshalText()
-		if err != nil {
-			stats = append(stats, madmin.KMS{Status: string(madmin.ItemOffline), Endpoint: endpoint})
-			continue
-		}
-		key, err := client.GenerateKey(ctx, env.Get(kms.EnvKESKeyName, ""), kmsCtx)
-		if err != nil {
-			stat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-		} else {
-			stat.Encrypt = "success"
-		}
-		// 3. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := client.Decrypt(ctx, env.Get(kms.EnvKESKeyName, ""), key.Ciphertext, kmsCtx)
-		switch {
-		case err != nil:
-			stat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-		case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
-			stat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-		default:
-			stat.Decrypt = "success"
-		}
-		stats = append(stats, stat)
+	for _, result := range results {
+		stats = append(stats, madmin.KMS{
+			Status:   result.Status,
+			Endpoint: result.Endpoint,
+			Encrypt:  result.Encrypt,
+			Decrypt:  result.Decrypt,
+			Version:  result.Version,
+		})
 	}
 
 	return stats
-}
-
-// getKesClient returns an http client for KES
-func getKesClient() *kes.Client {
-	var client *kes.Client
-	rootCAs, err := certs.GetRootCAs(env.Get(kms.EnvKESServerCA, globalCertsCADir.Get()))
-	if err != nil {
-		logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(kms.EnvKESServerCA, globalCertsCADir.Get())))
-	}
-	if env.IsSet(kms.EnvKESAPIKey) {
-		key, err := kes.ParseAPIKey(env.Get(kms.EnvKESAPIKey, ""))
-		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(kms.EnvKESAPIKey, "")))
-		}
-		cert, err := kes.GenerateCertificate(key)
-		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Failed to generate certificate from KES API key %q", env.Get(kms.EnvKESAPIKey, "")))
-		}
-		client = kes.NewClientWithConfig("", &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			Certificates:       []tls.Certificate{cert},
-			RootCAs:            rootCAs,
-			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-		})
-	} else {
-		loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
-			// Manually load the certificate and private key into memory.
-			// We need to check whether the private key is encrypted, and
-			// if so, decrypt it using the user-provided password.
-			certBytes, err := os.ReadFile(certFile)
-			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("unable to load KES client certificate as specified by the shell environment: %v", err)
-			}
-			keyBytes, err := os.ReadFile(keyFile)
-			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("unable to load KES client private key as specified by the shell environment: %v", err)
-			}
-			privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
-			if len(rest) != 0 {
-				return tls.Certificate{}, errors.New("unable to load KES client private key as specified by the shell environment: private key contains additional data")
-			}
-			if x509.IsEncryptedPEMBlock(privateKeyPEM) {
-				keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(kms.EnvKESClientPassword, "")))
-				if err != nil {
-					return tls.Certificate{}, fmt.Errorf("unable to decrypt KES client private key as specified by the shell environment: %v", err)
-				}
-				keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
-			}
-			certificate, err := tls.X509KeyPair(certBytes, keyBytes)
-			if err != nil {
-				return tls.Certificate{}, fmt.Errorf("unable to load KES client certificate as specified by the shell environment: %v", err)
-			}
-			return certificate, nil
-		}
-
-		reloadCertEvents := make(chan tls.Certificate, 1)
-		certificate, err := certs.NewCertificate(env.Get(kms.EnvKESClientCert, ""), env.Get(kms.EnvKESClientKey, ""), loadX509KeyPair)
-		if err != nil {
-			logger.Fatal(err, "Failed to load KES client certificate")
-		}
-		certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
-		certificate.Notify(reloadCertEvents)
-
-		client = kes.NewClientWithConfig("", &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			Certificates:       []tls.Certificate{certificate.Get()},
-			RootCAs:            rootCAs,
-			ClientSessionCache: tls.NewLRUClientSessionCache(tlsClientSessionCacheSize),
-		})
-	}
-	return client
 }
 
 // fetchLoggerDetails return log info
