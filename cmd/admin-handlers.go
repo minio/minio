@@ -297,15 +297,12 @@ type ServerProperties struct {
 	SQSARN       []string `json:"sqsARN"`
 }
 
-// ServerConnStats holds transferred bytes from/to the server
-type ServerConnStats struct {
-	TotalInputBytes  uint64 `json:"transferred"`
-	TotalOutputBytes uint64 `json:"received"`
-	Throughput       uint64 `json:"throughput,omitempty"`
-	S3InputBytes     uint64 `json:"transferredS3"`
-	S3OutputBytes    uint64 `json:"receivedS3"`
-	AdminInputBytes  uint64 `json:"transferredAdmin"`
-	AdminOutputBytes uint64 `json:"receivedAdmin"`
+// serverConnStats holds transferred bytes from/to the server
+type serverConnStats struct {
+	internodeInputBytes  uint64
+	internodeOutputBytes uint64
+	s3InputBytes         uint64
+	s3OutputBytes        uint64
 }
 
 // ServerHTTPAPIStats holds total number of HTTP operations from/to the server,

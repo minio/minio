@@ -322,7 +322,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of bytes sent to the other peer nodes by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
-		float64(connStats.TotalOutputBytes),
+		float64(connStats.internodeOutputBytes),
 	)
 
 	ch <- prometheus.MustNewConstMetric(
@@ -331,7 +331,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of internode bytes received by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
-		float64(connStats.TotalInputBytes),
+		float64(connStats.internodeInputBytes),
 	)
 
 	// Network Sent/Received Bytes (Outbound)
@@ -341,7 +341,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of s3 bytes sent by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
-		float64(connStats.S3OutputBytes),
+		float64(connStats.s3OutputBytes),
 	)
 
 	ch <- prometheus.MustNewConstMetric(
@@ -350,7 +350,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of s3 bytes received by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
-		float64(connStats.S3InputBytes),
+		float64(connStats.s3InputBytes),
 	)
 }
 

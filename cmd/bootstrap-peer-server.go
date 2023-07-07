@@ -153,14 +153,18 @@ func (b *bootstrapRESTServer) VerifyHandler(w http.ResponseWriter, r *http.Reque
 
 // registerBootstrapRESTHandlers - register bootstrap rest router.
 func registerBootstrapRESTHandlers(router *mux.Router) {
+	h := func(f http.HandlerFunc) http.HandlerFunc {
+		return collectInternodeStats(httpTraceHdrs(f))
+	}
+
 	server := &bootstrapRESTServer{}
 	subrouter := router.PathPrefix(bootstrapRESTPrefix).Subrouter()
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodHealth).HandlerFunc(
-		httpTraceHdrs(server.HealthHandler))
+		h(server.HealthHandler))
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodVerify).HandlerFunc(
-		httpTraceHdrs(server.VerifyHandler))
+		h(server.VerifyHandler))
 }
 
 // client to talk to bootstrap NEndpoints.
