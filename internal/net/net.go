@@ -115,8 +115,10 @@ dummy0:       0       0    0    0    0     0          0         0        0      
 			}
 		}
 	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	return ret, nil
-	//}
 }
 
 func fastParseNumber(s string) uint64 {
