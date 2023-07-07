@@ -483,8 +483,6 @@ github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/kes-go v0.1.0 h1:h201DyOYP5sTqajkxFGxmXz/kPbT8HQNX1uh3Yx2PFc=
 github.com/minio/kes-go v0.1.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
-github.com/minio/madmin-go/v3 v3.0.5 h1:ynWTsnszHnQVJWRL2OE4ysCvCNG0uHgdTvJpdLazf9c=
-github.com/minio/madmin-go/v3 v3.0.5/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
 github.com/minio/mc v0.0.0-20230706154612-72958227ad65 h1:27INveRWSp7yAEy4szNp15DOA2dyOwnxTGt/p0JuTh4=
 github.com/minio/mc v0.0.0-20230706154612-72958227ad65/go.mod h1:41ndsUBIAA/dRjOQ/0KY4d8vI70gDiKeMo1zusOQRWk=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
@@ -654,6 +652,8 @@ github.com/shoenig/go-m1cpu v0.1.6 h1:nxdKQNcEB6vzgA2E2bvzKIYRuNj7XNJ4S/aRSwKzFt
 github.com/shoenig/go-m1cpu v0.1.6/go.mod h1:1JJMcUBvfNwpq05QDQVAnx3gUHr9IYF7GNg9SUEw2VQ=
 github.com/shoenig/test v0.6.4 h1:kVTaSd7WLz5WZ2IaoM0RSzRsUD+m8wRR+5qvntpn4LU=
 github.com/shoenig/test v0.6.4/go.mod h1:byHiCGXqrVaflBLAMq/srcZIHynQPQgeyvkvXnjqq0k=
+github.com/shtripat/madmin-go/v3 v3.0.0-20230627103626-8485906f4a89 h1:g9LnVZYHY3t+NH/JC5lWdQH6qPwDC5v3qBhLcRrRKic=
+github.com/shtripat/madmin-go/v3 v3.0.0-20230627103626-8485906f4a89/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
