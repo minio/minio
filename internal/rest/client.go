@@ -131,7 +131,6 @@ func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*ht
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
-	// The host's colon:port should be normalized. See Issue 14836.
 	req := &http.Request{
 		Method:     http.MethodPost,
 		URL:        &u,
@@ -384,6 +383,7 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 		connected = int32(offline)
 		err = &url.Error{URL: urlStr, Err: err}
 	}
+	// The host's colon:port should be normalized. See Issue 14836.
 	u.Host = removeEmptyPort(u.Host)
 
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
