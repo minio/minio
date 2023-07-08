@@ -26,93 +26,69 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// ConnStats - Network statistics
+// connStats - Network statistics
 // Count total input/output transferred bytes during
 // the server's life.
-type ConnStats struct {
-	totalInputBytes  uint64
-	totalOutputBytes uint64
-	s3InputBytes     uint64
-	s3OutputBytes    uint64
-	adminInputBytes  uint64
-	adminOutputBytes uint64
+type connStats struct {
+	internodeInputBytes  uint64
+	internodeOutputBytes uint64
+	s3InputBytes         uint64
+	s3OutputBytes        uint64
 }
 
 // Increase internode total input bytes
-func (s *ConnStats) incInputBytes(n int64) {
-	atomic.AddUint64(&s.totalInputBytes, uint64(n))
+func (s *connStats) incInternodeInputBytes(n int64) {
+	atomic.AddUint64(&s.internodeInputBytes, uint64(n))
 }
 
 // Increase internode total output bytes
-func (s *ConnStats) incOutputBytes(n int64) {
-	atomic.AddUint64(&s.totalOutputBytes, uint64(n))
+func (s *connStats) incInternodeOutputBytes(n int64) {
+	atomic.AddUint64(&s.internodeOutputBytes, uint64(n))
 }
 
 // Return internode total input bytes
-func (s *ConnStats) getTotalInputBytes() uint64 {
-	return atomic.LoadUint64(&s.totalInputBytes)
+func (s *connStats) getInternodeInputBytes() uint64 {
+	return atomic.LoadUint64(&s.internodeInputBytes)
 }
 
 // Return total output bytes
-func (s *ConnStats) getTotalOutputBytes() uint64 {
-	return atomic.LoadUint64(&s.totalOutputBytes)
+func (s *connStats) getInternodeOutputBytes() uint64 {
+	return atomic.LoadUint64(&s.internodeOutputBytes)
 }
 
 // Increase S3 total input bytes
-func (s *ConnStats) incS3InputBytes(n int64) {
+func (s *connStats) incS3InputBytes(n int64) {
 	atomic.AddUint64(&s.s3InputBytes, uint64(n))
 }
 
 // Increase S3 total output bytes
-func (s *ConnStats) incS3OutputBytes(n int64) {
+func (s *connStats) incS3OutputBytes(n int64) {
 	atomic.AddUint64(&s.s3OutputBytes, uint64(n))
 }
 
 // Return S3 total input bytes
-func (s *ConnStats) getS3InputBytes() uint64 {
+func (s *connStats) getS3InputBytes() uint64 {
 	return atomic.LoadUint64(&s.s3InputBytes)
 }
 
 // Return S3 total output bytes
-func (s *ConnStats) getS3OutputBytes() uint64 {
+func (s *connStats) getS3OutputBytes() uint64 {
 	return atomic.LoadUint64(&s.s3OutputBytes)
 }
 
-// Increase Admin total input bytes
-func (s *ConnStats) incAdminInputBytes(n int64) {
-	atomic.AddUint64(&s.adminInputBytes, uint64(n))
-}
-
-// Increase Admin total output bytes
-func (s *ConnStats) incAdminOutputBytes(n int64) {
-	atomic.AddUint64(&s.adminOutputBytes, uint64(n))
-}
-
-// Return Admin total input bytes
-func (s *ConnStats) getAdminInputBytes() uint64 {
-	return atomic.LoadUint64(&s.adminInputBytes)
-}
-
-// Return Admin total output bytes
-func (s *ConnStats) getAdminOutputBytes() uint64 {
-	return atomic.LoadUint64(&s.adminOutputBytes)
-}
-
 // Return connection stats (total input/output bytes and total s3 input/output bytes)
-func (s *ConnStats) toServerConnStats() ServerConnStats {
-	return ServerConnStats{
-		TotalInputBytes:  s.getTotalInputBytes(),  // Traffic internode received
-		TotalOutputBytes: s.getTotalOutputBytes(), // Traffic internode sent
-		S3InputBytes:     s.getS3InputBytes(),     // Traffic S3 received
-		S3OutputBytes:    s.getS3OutputBytes(),    // Traffic S3 sent
-		AdminInputBytes:  s.getAdminInputBytes(),  // Traffic admin calls received
-		AdminOutputBytes: s.getAdminOutputBytes(), // Traffic admin calls sent
+func (s *connStats) toServerConnStats() serverConnStats {
+	return serverConnStats{
+		internodeInputBytes:  s.getInternodeInputBytes(),  // Traffic internode received
+		internodeOutputBytes: s.getInternodeOutputBytes(), // Traffic internode sent
+		s3InputBytes:         s.getS3InputBytes(),         // Traffic S3 received
+		s3OutputBytes:        s.getS3OutputBytes(),        // Traffic S3 sent
 	}
 }
 
 // Prepare new ConnStats structure
-func newConnStats() *ConnStats {
-	return &ConnStats{}
+func newConnStats() *connStats {
+	return &connStats{}
 }
 
 type bucketS3RXTX struct {
