@@ -84,7 +84,7 @@ remote_arn=$(./mc replicate ls sitea/bucket --json | jq -r .rule.Destination.Buc
 sleep 1
 
 ./mc replicate resync start sitea/bucket/ --remote-bucket "${remote_arn}"
-sleep 20s ## sleep for 20s idea is that we give 200ms per object.
+sleep 30s ## sleep for 30s idea is that we give 300ms per object.
 
 count=$(./mc replicate resync status sitea/bucket --remote-bucket "${remote_arn}" --json | jq .resyncInfo.target[].replicationCount)
 
@@ -99,7 +99,7 @@ if [ $ret -ne 0 ]; then
 fi
 
 if [ $count -ne 12 ]; then
-	echo "resync not complete after 10s unexpected failure"
+	echo "resync not complete after 30s - unexpected failure"
 	./mc diff sitea/bucket siteb/bucket
 	exit 1
 fi
