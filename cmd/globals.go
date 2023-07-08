@@ -393,6 +393,10 @@ var (
 	// Is _MINIO_DISABLE_API_FREEZE_ON_BOOT set?
 	globalDisableFreezeOnBoot bool
 
+	// Find out which NIC the instance is running on based on Endpoint
+	globalInternodeInterface     string
+	globalInternodeInterfaceOnce sync.Once
+
 	// Add new variable global values here.
 )
 
