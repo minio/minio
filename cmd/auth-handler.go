@@ -595,8 +595,8 @@ func isSupportedS3AuthType(aType authType) bool {
 	return ok
 }
 
-// setAuthHandler to validate authorization header for the incoming request.
-func setAuthHandler(h http.Handler) http.Handler {
+// setAuthMiddleware to validate authorization header for the incoming request.
+func setAuthMiddleware(h http.Handler) http.Handler {
 	// handler for validating incoming authorization headers.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)

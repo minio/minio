@@ -2070,11 +2070,11 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
-		muxRouter.Use(globalHandlers...)
+		muxRouter.Use(globalMiddlewares...)
 		return muxRouter
 	}
 	registerAPIRouter(muxRouter)
-	muxRouter.Use(globalHandlers...)
+	muxRouter.Use(globalMiddlewares...)
 	return muxRouter
 }
 
