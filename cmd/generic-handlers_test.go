@@ -155,7 +155,7 @@ func TestSSETLSHandler(t *testing.T) {
 		r.Header = test.Header
 		r.URL = test.URL
 
-		h := setRequestValidityHandler(okHandler)
+		h := setRequestValidityMiddleware(okHandler)
 		h.ServeHTTP(w, r)
 
 		switch {
