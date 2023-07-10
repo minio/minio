@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"net/url"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -73,11 +74,16 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	if types.Contains(madmin.MetricNet) {
 		m.ByNet = map[string]madmin.NetMetrics{}
 		netStats, _ := net.GetInterfaceNetStats(getGlobalInternodeInterface())
-		m.ByNet[globalLocalNodeName] = madmin.NetMetrics{
+		endpoint := url.URL{
+			Scheme: "http",
+			Host:   globalLocalNodeName,
+		}
+		if globalIsTLS {
+			endpoint.Scheme = "https"
+		}
+		m.ByNet[endpoint.String()] = madmin.NetMetrics{
 			CollectedAt:   UTCNow(),
 			InterfaceName: getGlobalInternodeInterface(),
-			EndPoint:      globalLocalNodeName,
-			Host:          globalMinioHost,
 			NetStats:      netStats,
 		}
 	}
