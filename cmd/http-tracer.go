@@ -77,7 +77,7 @@ func httpTracerMiddleware(h http.Handler) http.Handler {
 
 		// Create tracing data structure and associate it to the request context
 		tc := mcontext.TraceCtxt{
-			AmzReqID:         r.Header.Get(xhttp.AmzRequestID),
+			AmzReqID:         w.Header().Get(xhttp.AmzRequestID),
 			RequestRecorder:  reqRecorder,
 			ResponseRecorder: respRecorder,
 		}
