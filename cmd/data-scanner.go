@@ -944,7 +944,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	defer globalScannerMetrics.timeILM(lcEvt.Action)()
 
 	switch lcEvt.Action {
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction, lifecycle.DeleteAllVersionsAction:
 		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), 0
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), size
@@ -1133,6 +1133,12 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 		return event
 	}
 
+	if obj.IsLatest && event.Action == lifecycle.DeleteAllVersionsAction {
+		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
+			return lifecycle.Event{Action: lifecycle.NoneAction}
+		}
+	}
+
 	switch event.Action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
@@ -1232,7 +1238,8 @@ func applyExpiryRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) bool
 func applyLifecycleAction(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) (success bool) {
 	switch action := event.Action; action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction,
-		lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+		lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction,
+		lifecycle.DeleteAllVersionsAction:
 		success = applyExpiryRule(event, src, obj)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 		success = applyTransitionRule(event, src, obj)
