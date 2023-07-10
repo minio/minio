@@ -1,5 +1,4 @@
 name: Helm Chart Linting
-description: Installs helm tooling and validates helm charts
 
 on:
   push:
