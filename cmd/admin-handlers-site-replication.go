@@ -549,12 +549,14 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 
 // SiteReplicationDevNull - everything goes to io.Discard
 // [POST] /minio/admin/v3/site-replication/devnull
-func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationDevNull")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
 	globalSiteNetPerfRX.Connect()
 	defer globalSiteNetPerfRX.Disconnect()
 
 	connectTime := time.Now()
-	ctx := newContext(r, w, "SiteReplicationDevNull")
 	for {
 		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
 		atomic.AddUint64(&globalSiteNetPerfRX.RX, uint64(n))
@@ -578,7 +580,10 @@ func (a *adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http
 
 // SiteReplicationNetPerf - everything goes to io.Discard
 // [POST] /minio/admin/v3/site-replication/netperf
-func (a *adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SiteReplicationNetPerf")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
 	durationStr := r.Form.Get(peerRESTDuration)
 	duration, _ := time.ParseDuration(durationStr)
 	if duration < globalNetPerfMinDuration {
