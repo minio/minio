@@ -19,11 +19,11 @@ package cmd
 
 import (
 	"context"
-	"github.com/minio/minio/internal/net"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/disk"
+	"github.com/minio/minio/internal/net"
 )
 
 type collectMetricsOpts struct {
@@ -73,8 +73,6 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	if types.Contains(madmin.MetricNet) {
 		m.ByNet = map[string]madmin.NetMetrics{}
 		netStats, _ := net.GetInterfaceNetStats(getGlobalInternodeInterface())
-		netStats.RxBytes = geta()
-		netStats.TxBytes = geta()
 		m.ByNet[globalLocalNodeName] = madmin.NetMetrics{
 			CollectedAt:   UTCNow(),
 			InterfaceName: getGlobalInternodeInterface(),
@@ -90,13 +88,6 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	m.Hosts = append(m.Hosts, globalMinioAddr)
 
 	return m
-}
-
-var a = uint64(0)
-
-func geta() uint64 {
-	a++
-	return a
 }
 
 func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskMetric {
