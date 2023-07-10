@@ -305,7 +305,9 @@ func (kms secretKey) DecryptAll(_ context.Context, keyID string, ciphertexts [][
 
 // Verify verifies all KMS endpoints and returns details
 func (kms secretKey) Verify(cxt context.Context) []VerifyResult {
-	return []VerifyResult{}
+	return []VerifyResult{
+		{Endpoint: "self"},
+	}
 }
 
 type encryptedKey struct {

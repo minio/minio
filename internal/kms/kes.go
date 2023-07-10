@@ -489,7 +489,6 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 			results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
 			continue
 		}
-		result := VerifyResult{Status: "online", Endpoint: endpoint, Version: state.Version}
 
 		// 2. Generate a new key using the KMS.
 		kmsCtx, err := kmsContext.MarshalText()
@@ -497,6 +496,7 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 			results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
 			continue
 		}
+		result := VerifyResult{Status: "online", Endpoint: endpoint, Version: state.Version}
 		key, err := client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
 		if err != nil {
 			result.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
