@@ -1,9 +1,9 @@
 name: Helm Chart Linting
 
 on:
-  push:
+  pull_request:
     branches:
-      - master
+    - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
