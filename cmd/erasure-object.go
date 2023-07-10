@@ -1657,6 +1657,22 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			return objInfo, gerr
 		}
 	}
+	if opts.EvalMetadataFn != nil {
+		dsc, err := opts.EvalMetadataFn(&goi, err)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		if dsc.ReplicateAny() {
+			opts.SetDeleteReplicationState(dsc, opts.VersionID)
+			goi.replicationDecision = opts.DeleteReplication.ReplicateDecisionStr
+		}
+	}
+
+	if opts.EvalRetentionBypassFn != nil {
+		if err := opts.EvalRetentionBypassFn(goi, gerr); err != nil {
+			return ObjectInfo{}, err
+		}
+	}
 
 	if opts.Expiration.Expire {
 		if gerr == nil {
@@ -1765,7 +1781,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if err = er.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
 			return objInfo, toObjectErr(err, bucket, object)
 		}
-		return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+		oi := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
+		oi.replicationDecision = goi.replicationDecision
+		return oi, nil
 	}
 
 	// Delete the object version on all disks.
@@ -1855,7 +1873,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	objInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if opts.EvalMetadataFn != nil {
-		if err := opts.EvalMetadataFn(&objInfo); err != nil {
+		if _, err := opts.EvalMetadataFn(&objInfo, err); err != nil {
 			return ObjectInfo{}, err
 		}
 	}

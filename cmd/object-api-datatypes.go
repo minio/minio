@@ -185,6 +185,7 @@ type ObjectInfo struct {
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
 
+	replicationDecision string // internal representation of replication decision for use by DeleteObject handler
 	// The total count of all versions of this object
 	NumVersions int
 	//  The modtime of the successor object version if any
