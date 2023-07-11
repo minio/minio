@@ -168,9 +168,9 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 }
 
 func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
-	//if !globalIsDistErasure {
-	//	return
-	//}
+	if !globalIsDistErasure {
+		return
+	}
 	all := globalNotificationSys.GetMetrics(ctx, types, opts)
 	for _, remote := range all {
 		m.Merge(&remote)
