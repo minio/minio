@@ -158,7 +158,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update").HandlerFunc(adminMiddleware(adminAPI.ServerUpdateHandler, traceAllFlag)).Queries("updateURL", "{updateURL:.*}")
 
 		// Info operations
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/info").HandlerFunc(adminMiddleware(adminAPI.ServerInfoHandler, traceAllFlag))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/info").HandlerFunc(adminMiddleware(adminAPI.ServerInfoHandler, traceAllFlag, noObjLayerFlag))
 		adminRouter.Methods(http.MethodGet, http.MethodPost).Path(adminVersion + "/inspect-data").HandlerFunc(adminMiddleware(adminAPI.InspectDataHandler, noGZFlag, traceAllFlag))
 
 		// StorageInfo operations
@@ -191,11 +191,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		}
 
 		// Profiling operations - deprecated API
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/profiling/start").HandlerFunc(adminMiddleware(adminAPI.StartProfilingHandler, traceAllFlag)).
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/profiling/start").HandlerFunc(adminMiddleware(adminAPI.StartProfilingHandler, traceAllFlag, noObjLayerFlag)).
 			Queries("profilerType", "{profilerType:.*}")
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/profiling/download").HandlerFunc(adminMiddleware(adminAPI.DownloadProfilingHandler, traceAllFlag))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/profiling/download").HandlerFunc(adminMiddleware(adminAPI.DownloadProfilingHandler, traceAllFlag, noObjLayerFlag))
 		// Profiling operations
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/profile").HandlerFunc(adminMiddleware(adminAPI.ProfileHandler, traceAllFlag))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/profile").HandlerFunc(adminMiddleware(adminAPI.ProfileHandler, traceAllFlag, noObjLayerFlag))
 
 		// Config KV operations.
 		if enableConfigOps {
@@ -362,8 +362,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/info").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationInfo))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/metainfo").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationMetaInfo))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/status").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationStatus))
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationDevNull).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationDevNull))
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationNetPerf).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationNetPerf))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationDevNull).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationDevNull, noObjLayerFlag))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationNetPerf).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationNetPerf, noObjLayerFlag))
 
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/join").HandlerFunc(adminMiddleware(adminAPI.SRPeerJoin))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/site-replication/peer/bucket-ops").HandlerFunc(adminMiddleware(adminAPI.SRPeerBucketOps)).Queries("bucket", "{bucket:.*}").Queries("operation", "{operation:.*}")
@@ -390,7 +390,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/site").HandlerFunc(adminMiddleware(adminAPI.SitePerfHandler, noGZFlag))
 
 		// HTTP Trace
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/trace").HandlerFunc(adminMiddleware(adminAPI.TraceHandler))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/trace").HandlerFunc(adminMiddleware(adminAPI.TraceHandler, noObjLayerFlag))
 
 		// Console Logs
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/log").HandlerFunc(adminMiddleware(adminAPI.ConsoleLogHandler, traceAllFlag))

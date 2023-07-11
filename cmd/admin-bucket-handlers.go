@@ -1121,8 +1121,7 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 
 // ReplicationMRFHandler - POST returns info on entries in the MRF backlog for a node or all nodes
 func (a adminAPIHandlers) ReplicationMRFHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ReplicationMRF")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
