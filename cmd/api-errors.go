@@ -138,6 +138,8 @@ const (
 	ErrReplicationDenyEditError
 	ErrRemoteTargetDenyAddError
 	ErrReplicationNoExistingObjects
+	ErrReplicationValidationError
+	ErrReplicationPermissionCheckError
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
@@ -1013,6 +1015,16 @@ var errorCodes = errorCodeMap{
 	ErrReplicationBucketNeedsVersioningError: {
 		Code:           "InvalidRequest",
 		Description:    "Versioning must be 'Enabled' on the bucket to add a replication target",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationValidationError: {
+		Code:           "InvalidRequest",
+		Description:    "Replication validation failed on target",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationPermissionCheckError: {
+		Code:           "ReplicationPermissionCheck",
+		Description:    "X-Minio-Source-Replication-Check cannot be specified in request. Request cannot be completed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNoSuchObjectLockConfiguration: {

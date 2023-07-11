@@ -199,6 +199,8 @@ const (
 	MinIOSourceProxyRequest = "X-Minio-Source-Proxy-Request"
 	// Header indicates that this request is a replication request to create a REPLICA
 	MinIOSourceReplicationRequest = "X-Minio-Source-Replication-Request"
+	// Header checks replication permissions without actually completing replication
+	MinIOSourceReplicationCheck = "X-Minio-Source-Replication-Check"
 	// Header indicates replication reset status.
 	MinIOReplicationResetStatus = "X-Minio-Replication-Reset-Status"
 	// Header indicating target cluster can receive delete marker replication requests because object has been replicated
