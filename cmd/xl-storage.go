@@ -2168,7 +2168,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			logger.LogOnceIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				srcVolume, srcPath,
 				dstVolume, dstPath,
-				err), "xl-storage-rename-data"+srcVolume+dstVolume)
+				err), "xl-storage-rename-data-"+srcVolume+"-"+dstVolume)
 		}
 		if err == nil && s.globalSync {
 			globalSync()
