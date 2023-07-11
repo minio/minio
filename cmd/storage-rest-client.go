@@ -23,7 +23,6 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -733,7 +732,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTGlob, fmt.Sprint(glob))
+	values.Set(storageRESTGlob, strconv.FormatBool(glob))
 	respBody, err := client.call(ctx, storageRESTMethodStatInfoFile, values, nil, -1)
 	if err != nil {
 		return stat, err
