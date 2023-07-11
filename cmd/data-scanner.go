@@ -206,7 +206,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
 			logger.LogIf(ctx, err)
-			res := map[string]string{"cycle": fmt.Sprint(cycleInfo.current)}
+			res := map[string]string{"cycle": strconv.FormatUint(cycleInfo.current, 10)}
 			if err != nil {
 				res["error"] = err.Error()
 			}
@@ -813,11 +813,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			f.newCache.deleteRecursive(thisHash)
 			f.newCache.replaceHashed(thisHash, folder.parent, *flat)
 			total := map[string]string{
-				"objects": fmt.Sprint(flat.Objects),
-				"size":    fmt.Sprint(flat.Size),
+				"objects": strconv.FormatUint(flat.Objects, 10),
+				"size":    strconv.FormatInt(flat.Size, 10),
 			}
 			if flat.Versions > 0 {
-				total["versions"] = fmt.Sprint(flat.Versions)
+				total["versions"] = strconv.FormatUint(flat.Versions, 10)
 			}
 			stop(total)
 		}
