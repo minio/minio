@@ -477,8 +477,9 @@ func getGlobalInternodeInterface(interfs ...string) string {
 		}
 
 		ifs, err := net.Interfaces()
-		logger.FatalIf(err, "Unable to get IP addresses of this host")
-
+		if err != nil {
+			globalInternodeInterface = ip
+		}
 		for _, interf := range ifs {
 			addrs, err := interf.Addrs()
 			if err == nil {

@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"net/url"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -72,19 +71,15 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		m.Aggregated.SiteResync = globalSiteResyncMetrics.report(opts.depID)
 	}
 	if types.Contains(madmin.MetricNet) {
-		m.ByNet = map[string]madmin.NetMetrics{}
-		netStats, _ := net.GetInterfaceNetStats(getGlobalInternodeInterface())
-		endpoint := url.URL{
-			Scheme: "http",
-			Host:   globalLocalNodeName,
-		}
-		if globalIsTLS {
-			endpoint.Scheme = "https"
-		}
-		m.ByNet[endpoint.String()] = madmin.NetMetrics{
+		m.Aggregated.Net = &madmin.NetMetrics{
 			CollectedAt:   UTCNow(),
 			InterfaceName: getGlobalInternodeInterface(),
-			NetStats:      netStats,
+		}
+		netStats, err := net.GetInterfaceNetStats(getGlobalInternodeInterface())
+		if err != nil {
+			m.Errors = append(m.Errors, err.Error())
+		} else {
+			m.Aggregated.Net.NetStats = netStats
 		}
 	}
 	// Add types...
@@ -173,9 +168,9 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 }
 
 func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
-	if !globalIsDistErasure {
-		return
-	}
+	//if !globalIsDistErasure {
+	//	return
+	//}
 	all := globalNotificationSys.GetMetrics(ctx, types, opts)
 	for _, remote := range all {
 		m.Merge(&remote)
