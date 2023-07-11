@@ -14,9 +14,6 @@ concurrency:
 permissions:
   contents: read
 
-permissions:
-  contents: read
-
 jobs:
   release:
     runs-on: ubuntu-latest
