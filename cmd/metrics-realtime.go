@@ -73,9 +73,9 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	if types.Contains(madmin.MetricNet) {
 		m.Aggregated.Net = &madmin.NetMetrics{
 			CollectedAt:   UTCNow(),
-			InterfaceName: getGlobalInternodeInterface(),
+			InterfaceName: globalInternodeInterface,
 		}
-		netStats, err := net.GetInterfaceNetStats(getGlobalInternodeInterface())
+		netStats, err := net.GetInterfaceNetStats(globalInternodeInterface)
 		if err != nil {
 			m.Errors = append(m.Errors, err.Error())
 		} else {
