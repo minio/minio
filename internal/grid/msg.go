@@ -33,7 +33,7 @@ import (
 type Op uint8
 
 // HandlerID is the ID for the handler of a specific type.
-type HandlerID uint16
+type HandlerID uint8
 
 const (
 	OpConnect Op = iota + 1
@@ -66,7 +66,8 @@ const (
 	// OpMuxServerErr contains an error message from a server Mux
 	OpMuxServerErr
 
-	// OpUnblockMux contains a message that a mux is unblocked
+	// OpUnblockMux contains a message that a mux is unblocked.
+	// Only Stateful streams has flow control.
 	OpUnblockMux
 
 	// OpAckMux acknowledges a mux was created.

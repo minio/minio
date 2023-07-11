@@ -86,6 +86,8 @@ type Connection struct {
 	connChange *sync.Cond
 
 	handlers *handlers
+
+	auth AuthFn
 }
 
 // State is a connection state.
@@ -118,10 +120,13 @@ const (
 	readBufferSize     = 4 << 10
 	writeBufferSize    = 4 << 10
 	defaultDialTimeout = time.Second
+
+	// GridRoutePath is the remote path to connect to.
+	GridRoutePath = "/minio/grid/v1"
 )
 
 // NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handlers *handlers) *Connection {
+func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handlers *handlers, auth AuthFn) *Connection {
 	c := Connection{
 		State:      StateUnconnected,
 		Remote:     remote,
@@ -135,7 +140,10 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handl
 		side:       ws.StateServerSide,
 		connChange: &sync.Cond{L: &sync.Mutex{}},
 		handlers:   handlers,
+		auth:       auth,
 	}
+
+	c.header.Set("Authorization", "Bearer "+auth(remote+GridRoutePath))
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
 		go c.connect()
@@ -272,6 +280,8 @@ func (c *Connection) connect() {
 	for {
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
+		toDial = toDial + GridRoutePath
+
 		dialer := ws.DefaultDialer
 		dialer.ReadBufferSize = readBufferSize
 		dialer.WriteBufferSize = writeBufferSize
@@ -496,6 +506,22 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				v.inbound <- m.Payload
 				if m.Flags&FlagEOF != 0 {
 					close(v.inbound)
+				}
+			case OpUnblockMux:
+				PutByteBuffer(m.Payload)
+				m.Payload = nil
+				if v, ok := c.inStream.Load(m.MuxID); ok {
+					v.unblockSend()
+					continue
+				}
+				logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+				continue
+			case OpDisconnectMux:
+				PutByteBuffer(m.Payload)
+				m.Payload = nil
+				if v, ok := c.inStream.Load(m.MuxID); ok {
+					v.close()
+					continue
 				}
 			case OpConnectMux:
 				if !m.Handler.valid() {

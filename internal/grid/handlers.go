@@ -25,44 +25,24 @@ import (
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
-	HandlerPing
+	HandlerPingV1
 
 	// Add more above.
 	// If all handlers are used, the type of Handler can be changed.
+	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
 	handlerLast
-)
-
-const (
-	handlerVerShift = 8
-	handlerIDMask   = (1 << handlerVerShift) - 1
 )
 
 func init() {
 	// Static check if we exceed 255 handler ids.
-	if handlerLast > handlerIDMask {
-		panic(fmt.Sprintf("out of handler IDs. %d > %d", handlerLast, handlerIDMask))
+	// Extend the type to uint16 when hit.
+	if handlerLast > 255 {
+		panic(fmt.Sprintf("out of handler IDs. %d > %d", handlerLast, 255))
 	}
 }
 
 func (h HandlerID) valid() bool {
-	id := HandlerID(h.ID())
-	return id != handlerInvalid && id < handlerLast
-}
-
-// WithVersion sets a version on the handler that must be satisfied.
-// If unset, initial version 0 is used.
-func (h HandlerID) WithVersion(n uint8) HandlerID {
-	return (h & handlerIDMask) | (HandlerID(n) << handlerVerShift)
-}
-
-// Version returns the version.
-func (h HandlerID) Version() uint8 {
-	return uint8(h >> handlerVerShift)
-}
-
-// ID returns the id without version.
-func (h HandlerID) ID() uint8 {
-	return uint8(h & handlerIDMask)
+	return h != handlerInvalid && h < handlerLast
 }
 
 // TODO: Add type safe handlers and clients.

@@ -44,13 +44,10 @@ type Manager struct {
 
 	// serverside handlers.
 	handlers handlers
-
-	// versions of each handler
-	version [handlerLast]uint8
 }
 
 // NewManager creates a new grid manager
-func NewManager(dialer ContextDialer, local string, hosts []string) (*Manager, error) {
+func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn) (*Manager, error) {
 	found := false
 	m := Manager{
 		ID:      uuid.New(),
@@ -63,7 +60,7 @@ func NewManager(dialer ContextDialer, local string, hosts []string) (*Manager, e
 			}
 			found = true
 		}
-		m.targets[host] = NewConnection(m.ID, local, host, dialer)
+		m.targets[host] = NewConnection(m.ID, local, host, dialer, &m.handlers, auth)
 	}
 	if found {
 		return nil, fmt.Errorf("grid: local host not found")
@@ -110,24 +107,40 @@ func (c *Manager) Handler() http.HandlerFunc {
 	}
 }
 
+// AuthFn should provide an authentication string for the given aud.
+type AuthFn func(aud string) string
+
 // Connection will return the connection for the specified host.
 // If the host does not exist nil will be returned.
 func (m *Manager) Connection(host string) *Connection {
 	return m.targets[host]
 }
 
-// RegisterStateless will register a stateless handler that serves
+// RegisterSingle will register a stateless handler that serves
 // []byte -> ([]byte, error) requests.
+func (m *Manager) RegisterSingle(id HandlerID, h SingleHandlerFn) error {
+	if !id.valid() {
+		return ErrUnknownHandler
+	}
+	if m.handlers.hasAny(id) {
+		return ErrHandlerAlreadyExists
+	}
+
+	m.handlers.single[id] = h
+	return nil
+}
+
+// RegisterStateless will register a stateless handler that serves
+// []byte -> stream of ([]byte, error) requests.
 func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	idx := id.ID()
-	if m.stateless[idx] != nil || m.streams[idx] != nil {
+	if m.handlers.hasAny(id) {
 		return ErrHandlerAlreadyExists
 	}
-	m.stateless[idx] = h
-	m.version[idx] = id.Version()
+
+	m.handlers.stateless[id] = &h
 	return nil
 }
 
@@ -137,11 +150,9 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) erro
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	idx := id.ID()
-	if m.stateless[idx] != nil || m.streams[idx] != nil {
+	if m.handlers.hasAny(id) {
 		return ErrHandlerAlreadyExists
 	}
-	m.streams[idx] = h
-	m.version[idx] = id.Version()
+	m.handlers.streams[id] = &h
 	return nil
 }
