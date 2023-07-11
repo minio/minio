@@ -519,10 +519,10 @@ func updateObjectMetadataWithZipInfo(ctx context.Context, objectAPI ObjectLayer,
 	popts := ObjectOptions{
 		MTime:     srcInfo.ModTime,
 		VersionID: srcInfo.VersionID,
-		EvalMetadataFn: func(oi *ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
 			oi.UserDefined[archiveTypeMetadataKey] = at
 			oi.UserDefined[archiveInfoMetadataKey] = zipInfoStr
-			return nil
+			return dsc, nil
 		},
 	}
 
