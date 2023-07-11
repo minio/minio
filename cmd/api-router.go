@@ -464,6 +464,9 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketReplicationMetrics
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsHandler))))).Queries("replication-metrics", "")
+		// ValidateBucketReplicationCreds
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("checkbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")
 
 		// Register rejected bucket APIs
 		for _, r := range rejectedBucketAPIs {

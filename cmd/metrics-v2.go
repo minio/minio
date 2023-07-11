@@ -964,7 +964,7 @@ func getS3TTFBDistributionMD() MetricDescription {
 		Subsystem: timeSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of the time to first byte across API calls",
-		Type:      histogramMetric,
+		Type:      gaugeMetric,
 	}
 }
 
@@ -2018,20 +2018,20 @@ func getNetworkMetrics() *MetricsGroup {
 			})
 			metrics = append(metrics, Metric{
 				Description: getInterNodeSentBytesMD(),
-				Value:       float64(connStats.TotalOutputBytes),
+				Value:       float64(connStats.internodeOutputBytes),
 			})
 			metrics = append(metrics, Metric{
 				Description: getInterNodeReceivedBytesMD(),
-				Value:       float64(connStats.TotalInputBytes),
+				Value:       float64(connStats.internodeInputBytes),
 			})
 		}
 		metrics = append(metrics, Metric{
 			Description: getS3SentBytesMD(),
-			Value:       float64(connStats.S3OutputBytes),
+			Value:       float64(connStats.s3OutputBytes),
 		})
 		metrics = append(metrics, Metric{
 			Description: getS3ReceivedBytesMD(),
-			Value:       float64(connStats.S3InputBytes),
+			Value:       float64(connStats.s3InputBytes),
 		})
 		return
 	})

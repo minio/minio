@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,28 +106,57 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	return m.(DiskMetrics)
 }
 
+// lockedLastMinuteLatency accumulates totals lockless for each second.
 type lockedLastMinuteLatency struct {
-	sync.Mutex
+	cachedSec int64
+	cached    atomic.Pointer[AccElem]
+	mu        sync.Mutex
+	init      sync.Once
 	lastMinuteLatency
 }
 
 func (e *lockedLastMinuteLatency) add(value time.Duration) {
-	e.Lock()
-	defer e.Unlock()
-	e.lastMinuteLatency.add(value)
+	e.addSize(value, 0)
 }
 
 // addSize will add a duration and size.
 func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
-	e.Lock()
-	defer e.Unlock()
-	e.lastMinuteLatency.addSize(value, sz)
+	// alloc on every call, so we have a clean entry to swap in.
+	t := time.Now().Unix()
+	e.init.Do(func() {
+		e.cached.Store(&AccElem{})
+		atomic.StoreInt64(&e.cachedSec, t)
+	})
+	acc := e.cached.Load()
+	if lastT := atomic.LoadInt64(&e.cachedSec); lastT != t {
+		// Check if lastT was changed by someone else.
+		if atomic.CompareAndSwapInt64(&e.cachedSec, lastT, t) {
+			// Now we swap in a new.
+			newAcc := &AccElem{}
+			old := e.cached.Swap(newAcc)
+			var a AccElem
+			a.Size = atomic.LoadInt64(&old.Size)
+			a.Total = atomic.LoadInt64(&old.Total)
+			a.N = atomic.LoadInt64(&old.N)
+			e.mu.Lock()
+			e.lastMinuteLatency.addAll(t-1, a)
+			e.mu.Unlock()
+			acc = newAcc
+		} else {
+			// We may be able to grab the new accumulator by yielding.
+			runtime.Gosched()
+			acc = e.cached.Load()
+		}
+	}
+	atomic.AddInt64(&acc.N, 1)
+	atomic.AddInt64(&acc.Total, int64(value))
+	atomic.AddInt64(&acc.Size, sz)
 }
 
 // total returns the total call count and latency for the last minute.
 func (e *lockedLastMinuteLatency) total() AccElem {
-	e.Lock()
-	defer e.Unlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	return e.lastMinuteLatency.getTotal()
 }
 
@@ -599,12 +629,20 @@ const (
 // for local and (incoming) remote disk ops respectively.
 var diskMaxConcurrent = 512
 
+// diskStartChecking is a threshold above which we will start to check
+// the state of disks.
+var diskStartChecking = 32
+
 func init() {
 	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "512")
 	diskMaxConcurrent, _ = strconv.Atoi(s)
 	if diskMaxConcurrent <= 0 {
 		logger.Info("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s)
 		diskMaxConcurrent = 512
+	}
+	diskStartChecking = 16 + diskMaxConcurrent/8
+	if diskStartChecking > diskMaxConcurrent {
+		diskStartChecking = diskMaxConcurrent
 	}
 }
 
@@ -678,8 +716,8 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	}
 
 	// Return early if disk is faulty already.
-	if atomic.LoadInt32(&p.health.status) == diskHealthFaulty {
-		return ctx, done, errFaultyDisk
+	if err := p.checkHealth(ctx); err != nil {
+		return ctx, done, err
 	}
 
 	// Verify if the disk is not stale
@@ -762,7 +800,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 		return errFaultyDisk
 	}
 	// Check if there are tokens.
-	if len(p.health.tokens) > 0 {
+	if diskMaxConcurrent-len(p.health.tokens) < diskStartChecking {
 		return nil
 	}
 

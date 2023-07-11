@@ -56,7 +56,6 @@ import (
 	ioutilx "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/message/audit"
-	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/certs"
@@ -156,6 +155,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = InvalidUploadID{}
 	case "EntityTooSmall":
 		err = PartTooSmall{}
+	case "ReplicationPermissionCheck":
+		err = ReplicationPermissionCheck{}
 	}
 
 	if minioErr.StatusCode == http.StatusMethodNotAllowed {
@@ -855,14 +856,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		VersionID:    strings.TrimSpace(r.Form.Get(xhttp.VersionID)),
 	}
 
-	ctx := context.WithValue(r.Context(),
-		mcontext.ContextTraceKey,
-		&mcontext.TraceCtxt{
-			AmzReqID: reqID,
-		},
-	)
-
-	return logger.SetReqInfo(ctx, reqInfo)
+	return logger.SetReqInfo(r.Context(), reqInfo)
 }
 
 // Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)
@@ -1285,4 +1279,10 @@ func unwrapAll(err error) error {
 		}
 		err = werr
 	}
+}
+
+// stringsHasPrefixFold tests whether the string s begins with prefix ignoring case.
+func stringsHasPrefixFold(s, prefix string) bool {
+	// Test match with case first.
+	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
 }

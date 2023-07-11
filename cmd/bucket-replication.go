@@ -634,13 +634,20 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				IsReplicationReadyForDeleteMarker: true,
 			},
 		})
-		if isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
-			if dobj.VersionID == "" {
+		switch {
+		case isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+			// delete marker already replicated
+			if dobj.VersionID == "" && rinfo.VersionPurgeStatus.Empty() {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
-		}
-		if !isErrObjectNotFound(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)) {
+		case isErrObjectNotFound(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+			// version being purged is already not found on target.
+			if !rinfo.VersionPurgeStatus.Empty() {
+				rinfo.VersionPurgeStatus = Complete
+				return
+			}
+		default:
 			// mark delete marker replication as failed if target cluster not ready to receive
 			// this request yet (object version not replicated yet)
 			if err != nil && !toi.ReplicationReady {
@@ -649,7 +656,6 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 			}
 		}
 	}
-
 	rmErr := tgt.RemoveObject(ctx, tgt.Bucket, dobj.ObjectName, minio.RemoveObjectOptions{
 		VersionID: versionID,
 		Internal: minio.AdvancedRemoveOptions{
@@ -679,7 +685,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 func getCopyObjMetadata(oi ObjectInfo, sc string) map[string]string {
 	meta := make(map[string]string, len(oi.UserDefined))
 	for k, v := range oi.UserDefined {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			continue
 		}
 
@@ -744,7 +750,7 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			continue
 		}
 		if isStandardHeader(k) {
@@ -909,7 +915,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	for k, v := range oi1.UserDefined {
 		var found bool
 		for _, prefix := range compareKeys {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(k, prefix) {
 				continue
 			}
 			found = true
@@ -924,7 +930,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	for k, v := range oi2.Metadata {
 		var found bool
 		for _, prefix := range compareKeys {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(k, prefix) {
 				continue
 			}
 			found = true
@@ -1048,7 +1054,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		popts := ObjectOptions{
 			MTime:     objInfo.ModTime,
 			VersionID: objInfo.VersionID,
-			EvalMetadataFn: func(oi *ObjectInfo) error {
+			EvalMetadataFn: func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = newReplStatusInternal
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[xhttp.AmzBucketReplicationStatus] = string(rinfos.ReplicationStatus())
@@ -1060,7 +1066,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 				if objInfo.UserTags != "" {
 					oi.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 				}
-				return nil
+				return dsc, nil
 			},
 		}
 
@@ -2478,7 +2484,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 						ObjectName:            roi.Name,
 						DeleteMarkerVersionID: dmVersionID,
 						VersionID:             versionID,
-						ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
+						ReplicationState:      roi.getReplicationState(),
 						DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
 						DeleteMarker:          roi.DeleteMarker,
 					},
@@ -2895,7 +2901,7 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 				ObjectName:            roi.Name,
 				DeleteMarkerVersionID: dmVersionID,
 				VersionID:             versionID,
-				ReplicationState:      roi.getReplicationState(roi.Dsc.String(), versionID, true),
+				ReplicationState:      roi.getReplicationState(),
 				DeleteMarkerMTime:     DeleteMarkerMTime{roi.ModTime},
 				DeleteMarker:          roi.DeleteMarker,
 			},

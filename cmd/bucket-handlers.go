@@ -20,7 +20,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -578,8 +580,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 		}
 		if object.VersionID != "" && hasLockEnabled {
-			if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
-				apiErr := errorCodes.ToAPIErr(apiErrCode)
+			if err := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); err != nil {
+				apiErr := toAPIError(ctx, err)
 				deleteResults[index].errInfo = DeleteError{
 					Code:      apiErr.Code,
 					Message:   apiErr.Description,
@@ -1290,14 +1292,19 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		buf := bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 
+		md5w := md5.New()
+
 		// Maximum allowed fan-out object size.
 		const maxFanOutSize = 16 << 20
 
-		n, err := io.Copy(buf, ioutil.HardLimitReader(pReader, maxFanOutSize))
+		n, err := io.Copy(io.MultiWriter(buf, md5w), ioutil.HardLimitReader(pReader, maxFanOutSize))
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+
+		// Set the correct hex md5sum for the fan-out stream.
+		fanOutOpts.MD5Hex = hex.EncodeToString(md5w.Sum(nil))
 
 		concurrentSize := 100
 		if runtime.GOMAXPROCS(0) < concurrentSize {

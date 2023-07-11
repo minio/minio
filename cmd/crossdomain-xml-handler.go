@@ -30,7 +30,7 @@ const crossDomainXMLEntity = "/crossdomain.xml"
 // When clients request content hosted on a particular source domain and that content make requests
 // directed towards a domain other than its own, the remote domain needs to host a cross-domain
 // policy file that grants access to the source domain, allowing the client to continue the transaction.
-func setCrossDomainPolicy(h http.Handler) http.Handler {
+func setCrossDomainPolicyMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Look for 'crossdomain.xml' in the incoming request.
 		if r.URL.Path == crossDomainXMLEntity {

@@ -184,7 +184,7 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 
 	for key := range v {
 		for _, prefix := range userMetadataKeyPrefixes {
-			if !strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
+			if !stringsHasPrefixFold(key, prefix) {
 				continue
 			}
 			value, ok := nv[http.CanonicalHeaderKey(key)]
@@ -267,6 +267,20 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 	return strings.Join(newEncs, ",")
 }
 
+func collectInternodeStats(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f.ServeHTTP(w, r)
+
+		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
+		if !ok || tc == nil {
+			return
+		}
+
+		globalConnStats.incInternodeInputBytes(int64(tc.RequestRecorder.Size()))
+		globalConnStats.incInternodeOutputBytes(int64(tc.ResponseRecorder.Size()))
+	}
+}
+
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
@@ -297,21 +311,6 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if tc != nil {
-			if strings.HasPrefix(r.URL.Path, storageRESTPrefix) ||
-				strings.HasPrefix(r.URL.Path, peerRESTPrefix) ||
-				strings.HasPrefix(r.URL.Path, peerS3Prefix) ||
-				strings.HasPrefix(r.URL.Path, lockRESTPrefix) {
-				globalConnStats.incInputBytes(int64(tc.RequestRecorder.Size()))
-				globalConnStats.incOutputBytes(int64(tc.ResponseRecorder.Size()))
-				return
-			}
-
-			if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-				globalConnStats.incAdminInputBytes(int64(tc.RequestRecorder.Size()))
-				globalConnStats.incAdminOutputBytes(int64(tc.ResponseRecorder.Size()))
-				return
-			}
-
 			globalHTTPStats.updateStats(api, tc.ResponseRecorder)
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))

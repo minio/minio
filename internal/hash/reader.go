@@ -53,10 +53,31 @@ type Reader struct {
 	// Content checksum
 	contentHash   Checksum
 	contentHasher hash.Hash
+	disableMD5    bool
 
 	trailer http.Header
 
 	sha256 hash.Hash
+}
+
+// Options are optional arguments to NewReaderWithOpts, Options
+// simply converts positional arguments to NewReader() into a
+// more flexible way to provide optional inputs. This is currently
+// used by the FanOut API call mostly to disable expensive md5sum
+// calculation repeatedly under hash.Reader.
+type Options struct {
+	MD5Hex     string
+	SHA256Hex  string
+	Size       int64
+	ActualSize int64
+	DisableMD5 bool
+}
+
+// NewReaderWithOpts is like NewReader but takes `Options` as argument, allowing
+// callers to indicate if they want to disable md5sum checksum.
+func NewReaderWithOpts(src io.Reader, opts Options) (*Reader, error) {
+	// return hard limited reader
+	return newReader(src, opts.Size, opts.MD5Hex, opts.SHA256Hex, opts.ActualSize, opts.DisableMD5)
 }
 
 // NewReader returns a new Reader that wraps src and computes
@@ -75,11 +96,10 @@ type Reader struct {
 // NewReader enforces S3 compatibility strictly by ensuring caller
 // does not send more content than specified size.
 func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
-	// return hard limited reader
-	return newReader(src, size, md5Hex, sha256Hex, actualSize)
+	return newReader(src, size, md5Hex, sha256Hex, actualSize, false)
 }
 
-func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, disableMD5 bool) (*Reader, error) {
 	MD5, err := hex.DecodeString(md5Hex)
 	if err != nil {
 		return nil, BadDigest{ // TODO(aead): Return an error that indicates that an invalid ETag has been specified
@@ -131,13 +151,19 @@ func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 
 	if size >= 0 {
 		r := ioutil.HardLimitReader(src, size)
-		if _, ok := src.(etag.Tagger); !ok {
-			src = etag.NewReader(r, MD5)
+		if !disableMD5 {
+			if _, ok := src.(etag.Tagger); !ok {
+				src = etag.NewReader(r, MD5)
+			} else {
+				src = etag.Wrap(r, src)
+			}
 		} else {
-			src = etag.Wrap(r, src)
+			src = r
 		}
 	} else if _, ok := src.(etag.Tagger); !ok {
-		src = etag.NewReader(src, MD5)
+		if !disableMD5 {
+			src = etag.NewReader(src, MD5)
+		}
 	}
 	var h hash.Hash
 	if len(SHA256) != 0 {
@@ -150,6 +176,7 @@ func newReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		checksum:      MD5,
 		contentSHA256: SHA256,
 		sha256:        h,
+		disableMD5:    disableMD5,
 	}, nil
 }
 
@@ -296,21 +323,15 @@ func (r *Reader) ETag() etag.ETag {
 	return nil
 }
 
-// MD5 returns the MD5 checksum set as reference value.
-//
-// It corresponds to the checksum that is expected and
-// not the actual MD5 checksum of the content.
-// Therefore, refer to MD5Current.
-func (r *Reader) MD5() []byte {
-	return r.checksum
-}
-
 // MD5Current returns the MD5 checksum of the content
 // that has been read so far.
 //
 // Calling MD5Current again after reading more data may
 // result in a different checksum.
 func (r *Reader) MD5Current() []byte {
+	if r.disableMD5 {
+		return r.checksum
+	}
 	return r.ETag()[:]
 }
 
@@ -320,16 +341,6 @@ func (r *Reader) MD5Current() []byte {
 // not the actual SHA256 checksum of the content.
 func (r *Reader) SHA256() []byte {
 	return r.contentSHA256
-}
-
-// MD5HexString returns a hex representation of the MD5.
-func (r *Reader) MD5HexString() string {
-	return hex.EncodeToString(r.checksum)
-}
-
-// MD5Base64String returns a hex representation of the MD5.
-func (r *Reader) MD5Base64String() string {
-	return base64.StdEncoding.EncodeToString(r.checksum)
 }
 
 // SHA256HexString returns a hex representation of the SHA256.

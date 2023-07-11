@@ -15,7 +15,7 @@ fi
 
 export CI=true
 
-(minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null) &
+(minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/tmp/decom.log) &
 pid=$!
 
 sleep 2
@@ -29,7 +29,7 @@ export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 ./mc admin policy create myminio/ lake ./docs/distributed/rw.json
 
 ./mc admin policy attach myminio/ rw --user=minio123
-./mc admin policy attach myminio/ lake,rw --user=minio12345
+./mc admin policy attach myminio/ lake --user=minio12345
 
 ./mc mb -l myminio/versioned
 

@@ -36,7 +36,6 @@ RUN \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.sha256sum -o /opt/bin/minio.sha256sum && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.minisig -o /opt/bin/minio.minisig && \
      curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o /opt/bin/mc && \
-     gzip /opt/bin/mc && \
      microdnf clean all && \
      chmod +x /opt/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \

@@ -28,9 +28,11 @@ import (
 )
 
 const (
-	adminPathPrefix       = minioReservedBucketPath + "/admin"
-	adminAPIVersion       = madmin.AdminAPIVersion
-	adminAPIVersionPrefix = SlashSeparator + adminAPIVersion
+	adminPathPrefix                = minioReservedBucketPath + "/admin"
+	adminAPIVersion                = madmin.AdminAPIVersion
+	adminAPIVersionPrefix          = SlashSeparator + adminAPIVersion
+	adminAPISiteReplicationDevNull = "/site-replication/devnull"
+	adminAPISiteReplicationNetPerf = "/site-replication/netperf"
 )
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
@@ -260,6 +262,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/info").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationInfo)))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/metainfo").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationMetaInfo)))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/status").HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationStatus)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationDevNull).HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationDevNull)))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationNetPerf).HandlerFunc(gz(httpTraceHdrs(adminAPI.SiteReplicationNetPerf)))
 
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/join").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerJoin)))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/site-replication/peer/bucket-ops").HandlerFunc(gz(httpTraceHdrs(adminAPI.SRPeerBucketOps))).Queries("bucket", "{bucket:.*}").Queries("operation", "{operation:.*}")
@@ -279,10 +283,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 				Queries("paths", "{paths:.*}").HandlerFunc(gz(httpTraceHdrs(adminAPI.ForceUnlockHandler)))
 		}
 
-		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest").HandlerFunc(httpTraceHdrs(adminAPI.SpeedTestHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest").HandlerFunc(httpTraceHdrs(adminAPI.ObjectSpeedTestHandler))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/object").HandlerFunc(httpTraceHdrs(adminAPI.ObjectSpeedTestHandler))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/drive").HandlerFunc(httpTraceHdrs(adminAPI.DriveSpeedtestHandler))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/net").HandlerFunc(httpTraceHdrs(adminAPI.NetperfHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/site").HandlerFunc(httpTraceHdrs(adminAPI.SitePerfHandler))
 
 		// HTTP Trace
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/trace").HandlerFunc(gz(http.HandlerFunc(adminAPI.TraceHandler)))

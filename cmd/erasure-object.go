@@ -527,6 +527,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 	metadataArray := make([]*xlMetaV2, len(disks))
 	metaFileInfos := make([]FileInfo, len(metadataArray))
 	metadataShallowVersions := make([][]xlMetaV2ShallowVersion, len(disks))
+	var v2bufs [][]byte
+	if !readData {
+		v2bufs = make([][]byte, len(disks))
+	}
 
 	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.meta` in parallel across disks.
@@ -539,6 +543,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 			rf, err := disks[index].ReadXL(ctx, bucket, object, readData)
 			if err != nil {
 				return err
+			}
+			if !readData {
+				// Save the buffer so we can reuse it.
+				v2bufs[index] = rf.Buf
 			}
 
 			var xl xlMetaV2
@@ -622,6 +630,11 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
 		metaFileInfos[index].DiskMTime = diskMTime
+	}
+	if !readData {
+		for i := range v2bufs {
+			metaDataPoolPut(v2bufs[i])
+		}
 	}
 
 	// Return all the metadata.
@@ -1644,6 +1657,22 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			return objInfo, gerr
 		}
 	}
+	if opts.EvalMetadataFn != nil {
+		dsc, err := opts.EvalMetadataFn(&goi, err)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		if dsc.ReplicateAny() {
+			opts.SetDeleteReplicationState(dsc, opts.VersionID)
+			goi.replicationDecision = opts.DeleteReplication.ReplicateDecisionStr
+		}
+	}
+
+	if opts.EvalRetentionBypassFn != nil {
+		if err := opts.EvalRetentionBypassFn(goi, gerr); err != nil {
+			return ObjectInfo{}, err
+		}
+	}
 
 	if opts.Expiration.Expire {
 		if gerr == nil {
@@ -1752,7 +1781,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if err = er.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
 			return objInfo, toObjectErr(err, bucket, object)
 		}
-		return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+		oi := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
+		oi.replicationDecision = goi.replicationDecision
+		return oi, nil
 	}
 
 	// Delete the object version on all disks.
@@ -1842,7 +1873,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	objInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 	if opts.EvalMetadataFn != nil {
-		if err := opts.EvalMetadataFn(&objInfo); err != nil {
+		if _, err := opts.EvalMetadataFn(&objInfo, err); err != nil {
 			return ObjectInfo{}, err
 		}
 	}

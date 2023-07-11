@@ -92,7 +92,7 @@ func (a Action) Delete() bool {
 	if a.DeleteRestored() {
 		return true
 	}
-	return a == DeleteVersionAction || a == DeleteAction
+	return a == DeleteVersionAction || a == DeleteAction || a == DeleteAllVersionsAction
 }
 
 // Lifecycle - Configuration for bucket lifecycle.
