@@ -97,7 +97,7 @@ type localDisk struct {
 func getMajorMinor(path string) (string, error) {
 	var stat syscall.Stat_t
 	if err := syscall.Stat(path, &stat); err != nil {
-		return "", fmt.Errorf("unable to stat `%s`: %w", err)
+		return "", fmt.Errorf("unable to stat `%s`: %w", path, err)
 	}
 
 	major := (stat.Dev & 0x00000000000fff00) >> 8
