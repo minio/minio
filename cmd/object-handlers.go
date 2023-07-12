@@ -1707,6 +1707,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to write data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
+		return
+	}
+
 	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -2295,6 +2301,11 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to delete data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
 		return
 	}
 

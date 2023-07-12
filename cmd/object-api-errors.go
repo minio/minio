@@ -735,3 +735,15 @@ func isErrInvalidRange(err error) bool {
 	_, ok := err.(InvalidRange)
 	return ok
 }
+
+// ReplicationPermissionCheck - Check if error type is ReplicationPermissionCheck.
+type ReplicationPermissionCheck struct{}
+
+func (e ReplicationPermissionCheck) Error() string {
+	return "Replication permission validation requests cannot be completed"
+}
+
+func isReplicationPermissionCheck(err error) bool {
+	_, ok := err.(ReplicationPermissionCheck)
+	return ok
+}
