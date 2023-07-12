@@ -278,6 +278,11 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
+	if objInfo.Size == 0 {
+		// Zero byte objects don't even need to further initialize pipes etc.
+		return NewGetObjectReaderFromReader(bytes.NewReader(nil), objInfo, opts)
+	}
+
 	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
 		return nil, err
@@ -1335,7 +1340,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if errors.Is(err, errFileNotFound) {
 			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
-		logger.LogOnceIf(ctx, err, "erasure-object-rename"+bucket+object)
+		logger.LogOnceIf(ctx, err, "erasure-object-rename-"+bucket+"-"+object)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 

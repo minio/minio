@@ -1343,7 +1343,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {
-			logger.LogOnceIf(ctx, err, "erasure-list-objects-path"+bucket)
+			logger.LogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
 		}
 		return loi, err
 	}
