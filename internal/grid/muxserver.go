@@ -22,12 +22,15 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/minio/minio/internal/logger"
 )
 
 type muxServer struct {
 	ID               uint64
+	LastPing         int64
 	SendSeq, RecvSeq uint32
 	Resp             chan []byte
 	ctx              context.Context
@@ -42,11 +45,12 @@ type muxServer struct {
 func newMuxStateless(ctx context.Context, msg message, c *Connection, handler StatelessHandler) *muxServer {
 	ctx, cancel := context.WithCancel(ctx)
 	m := muxServer{
-		ID:      msg.MuxID,
-		RecvSeq: msg.Seq,
-		ctx:     ctx,
-		cancel:  cancel,
-		parent:  c,
+		ID:       msg.MuxID,
+		RecvSeq:  msg.Seq,
+		ctx:      ctx,
+		cancel:   cancel,
+		parent:   c,
+		LastPing: time.Now().Unix(),
 	}
 	go func() {
 	}()
@@ -75,6 +79,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 		parent:   c,
 		inbound:  make(chan []byte, inboundCap),
 		outBlock: make(chan struct{}, outboundCap),
+		LastPing: time.Now().Unix(),
 	}
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
@@ -151,6 +156,17 @@ func (m *muxServer) unblockSend() {
 	case m.outBlock <- struct{}{}:
 	default:
 		logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+	}
+}
+
+func (m *muxServer) ping() pongMsg {
+	select {
+	case <-m.ctx.Done():
+		err := m.ctx.Err().Error()
+		return pongMsg{Err: &err}
+	default:
+		atomic.StoreInt64(&m.LastPing, time.Now().Unix())
+		return pongMsg{}
 	}
 }
 

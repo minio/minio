@@ -10,22 +10,24 @@ func _() {
 	var x [1]struct{}
 	_ = x[OpConnect-1]
 	_ = x[OpConnectResponse-2]
-	_ = x[OpRequest-3]
-	_ = x[OpResponse-4]
-	_ = x[OpConnectMux-5]
-	_ = x[OpMuxConnectError-6]
-	_ = x[OpDisconnectMux-7]
-	_ = x[OpMuxClientMsg-8]
-	_ = x[OpMuxServerMsg-9]
-	_ = x[OpMuxServerErr-10]
-	_ = x[OpUnblockMux-11]
-	_ = x[OpAckMux-12]
-	_ = x[OpDisconnect-13]
+	_ = x[OpPing-3]
+	_ = x[OpPong-4]
+	_ = x[OpRequest-5]
+	_ = x[OpResponse-6]
+	_ = x[OpConnectMux-7]
+	_ = x[OpMuxConnectError-8]
+	_ = x[OpDisconnectMux-9]
+	_ = x[OpMuxClientMsg-10]
+	_ = x[OpMuxServerMsg-11]
+	_ = x[OpMuxServerErr-12]
+	_ = x[OpUnblockMux-13]
+	_ = x[OpAckMux-14]
+	_ = x[OpDisconnect-15]
 }
 
-const _Op_name = "ConnectConnectResponseRequestResponseConnectMuxMuxConnectErrorDisconnectMuxMuxClientMsgMuxServerMsgMuxServerErrUnblockMuxAckMuxDisconnect"
+const _Op_name = "ConnectConnectResponsePingPongRequestResponseConnectMuxMuxConnectErrorDisconnectMuxMuxClientMsgMuxServerMsgMuxServerErrUnblockMuxAckMuxDisconnect"
 
-var _Op_index = [...]uint8{0, 7, 22, 29, 37, 47, 62, 75, 87, 99, 111, 121, 127, 137}
+var _Op_index = [...]uint8{0, 7, 22, 26, 30, 37, 45, 55, 70, 83, 95, 107, 119, 129, 135, 145}
 
 func (i Op) String() string {
 	i -= 1

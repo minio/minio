@@ -39,6 +39,14 @@ const (
 	OpConnect Op = iota + 1
 	OpConnectResponse
 
+	// OpPing is a ping request.
+	// If a mux id is specified that mux is pinged.
+	// Clients sends ping requests.
+	OpPing
+
+	// OpPong is a OpPing response returned by the server.
+	OpPong
+
 	// OpRequest is a single request + response.
 	// SeqID is used for Handler ID.
 	// MuxID is returned in response.
@@ -181,4 +189,13 @@ type muxMsg struct {
 
 func (_ muxMsg) Op() Op {
 	return OpMuxConnectError
+}
+
+type pongMsg struct {
+	NotFound bool    `msg:"f"`
+	Err      *string `msg:"e,allownil"`
+}
+
+func (_ pongMsg) Op() Op {
+	return OpPong
 }

@@ -313,6 +313,7 @@ func (c *Connection) connect() {
 			retry(err)
 			continue
 		}
+		// Send connect message.
 		m := message{
 			Op: OpConnect,
 		}
@@ -325,6 +326,7 @@ func (c *Connection) connect() {
 			retry(err)
 			continue
 		}
+		// Wait for response
 		var r connectResp
 		err = c.receive(conn, &r)
 		if err != nil {
@@ -337,11 +339,16 @@ func (c *Connection) connect() {
 		}
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil && remoteUUID != *c.remoteID {
-			// TODO: Only disconnect stateful clients.
 			c.outgoing.Range(func(key uint64, client *MuxClient) bool {
 				client.close()
 				return true
 			})
+			c.inStream.Range(func(key uint64, value *muxServer) bool {
+				value.close()
+				return true
+			})
+			c.inStream.Clear()
+			c.outgoing.Clear()
 		}
 		c.remoteID = &remoteUUID
 		c.handleMessages(c.ctx, conn)
@@ -523,6 +530,19 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					v.close()
 					continue
 				}
+			case OpPing:
+				if m.MuxID == 0 {
+					logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
+					continue
+				}
+				if v, ok := c.inStream.Load(m.MuxID); ok {
+					pong := v.ping()
+					logger.LogIf(ctx, c.queueMsg(m, &pong))
+				} else {
+					pong := pongMsg{NotFound: true}
+					logger.LogIf(ctx, c.queueMsg(m, &pong))
+				}
+				continue
 			case OpConnectMux:
 				if !m.Handler.valid() {
 					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
@@ -553,7 +573,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
 						continue
 					}
-					// TODO: Create mux
+					_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
+						return newMuxStateless(ctx, m, c, *handler)
+					})
 				} else {
 					// Stream:
 					handler := c.handlers.streams[m.Handler]
@@ -567,6 +589,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 						return newMuxStream(ctx, m, c, *handler)
 					})
 				}
+				// Acknowledge Mux created.
+				m.Op = OpAckMux
+				PutByteBuffer(m.Payload)
+				m.Payload = nil
+				logger.LogIf(ctx, c.queueMsg(m, nil))
+				continue
 			}
 		}
 	}()

@@ -20,7 +20,11 @@ package grid
 import (
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/zeebo/xxh3"
 )
@@ -29,6 +33,7 @@ import (
 type MuxClient struct {
 	MuxID            uint64
 	SendSeq, RecvSeq uint32
+	LastPong         int64
 	Resp             chan []byte
 	ctx              context.Context
 	parent           *Connection
@@ -46,10 +51,11 @@ type Response struct {
 
 func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxClient {
 	return &MuxClient{
-		MuxID:  muxID,
-		Resp:   make(chan []byte, 1),
-		ctx:    ctx,
-		parent: parent,
+		MuxID:    muxID,
+		Resp:     make(chan []byte, 1),
+		ctx:      ctx,
+		parent:   parent,
+		LastPong: time.Now().Unix(),
 	}
 }
 
@@ -141,6 +147,7 @@ func (m *MuxClient) response(seq uint32, r Response) {
 		PutByteBuffer(r.Msg)
 		return
 	}
+	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
 	m.RecvSeq++
 	select {
 	case m.respWait <- r:
@@ -148,6 +155,26 @@ func (m *MuxClient) response(seq uint32, r Response) {
 		// Disconnect stateful.
 		PutByteBuffer(r.Msg)
 	}
+}
+
+func (m *MuxClient) pong(msg pongMsg) {
+	if msg.NotFound || msg.Err != nil {
+		m.respMu.Lock()
+		defer m.respMu.Unlock()
+		err := errors.New("remote terminated call")
+		if msg.Err != nil {
+			err = fmt.Errorf("remove pong failed: %v", &msg.Err)
+		}
+		if !m.closed {
+			select {
+			case m.respWait <- Response{Err: err}:
+			default:
+			}
+		}
+		m.closeLocked()
+		return
+	}
+	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
 }
 
 func (m *MuxClient) close() {
