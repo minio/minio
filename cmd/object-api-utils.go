@@ -1166,7 +1166,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	var total uint64
 	var nDisks int
 	for _, disk := range di {
-		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 {
 			// Disk offline, no inodes or something else is wrong.
 			continue
 		}
@@ -1175,15 +1175,19 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 		available += disk.Total - disk.Used
 	}
 
-	if nDisks < len(di)/2 {
+	if nDisks < len(di)/2 || nDisks <= 0 {
 		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", (len(di)/2)+1, nDisks)
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.
 	perDisk := size / int64(nDisks)
 	for _, disk := range di {
-		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 {
 			continue
+		}
+		if disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
+			// We have an inode count, but not enough inodes.
+			return false, nil
 		}
 		if int64(disk.Free) <= perDisk {
 			return false, nil

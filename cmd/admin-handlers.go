@@ -1242,11 +1242,6 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// SpeedtestHandler - Deprecated. See ObjectSpeedTestHandler
-func (a adminAPIHandlers) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
-	a.ObjectSpeedTestHandler(w, r)
-}
-
 // ObjectSpeedTestHandler - reports maximum speed of a cluster by performing PUT and
 // GET operations on the server, supports auto tuning by default by automatically
 // increasing concurrency and stopping when we have reached the limits on the
@@ -1416,6 +1411,7 @@ func validateObjPerfOptions(ctx context.Context, storageInfo madmin.StorageInfo,
 // NetSpeedtestHandler - reports maximum network throughput
 func (a adminAPIHandlers) NetSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "NetSpeedtestHandler")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 }
@@ -1545,6 +1541,7 @@ func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err err
 // The handler sends http trace to the connected HTTP client.
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")

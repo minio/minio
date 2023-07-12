@@ -155,6 +155,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = InvalidUploadID{}
 	case "EntityTooSmall":
 		err = PartTooSmall{}
+	case "ReplicationPermissionCheck":
+		err = ReplicationPermissionCheck{}
 	}
 
 	if minioErr.StatusCode == http.StatusMethodNotAllowed {
