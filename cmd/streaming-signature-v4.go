@@ -513,7 +513,7 @@ func (cr *s3ChunkedReader) readTrailers() error {
 	wantSig := cr.getTrailerChunkSignature()
 	if !compareSignatureV4(string(sig), wantSig) {
 		if cr.debug {
-			fmt.Printf("signature, want: %q, got %q\nSignature buffer: %q\n", wantSig, string(sig), string(valueBuffer.Bytes()))
+			fmt.Printf("signature, want: %q, got %q\nSignature buffer: %q\n", wantSig, string(sig), valueBuffer.String())
 		}
 		return errSignatureMismatch
 	}
