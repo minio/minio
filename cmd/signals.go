@@ -46,21 +46,17 @@ func handleSignals() {
 	}
 
 	stopProcess := func() bool {
-		var err, oerr error
-
 		// send signal to various go-routines that they need to quit.
 		cancelGlobalContext()
 
 		if httpServer := newHTTPServerFn(); httpServer != nil {
-			err = httpServer.Shutdown()
-			if !errors.Is(err, http.ErrServerClosed) {
+			if err := httpServer.Shutdown(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.LogIf(context.Background(), err)
 			}
 		}
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
-			oerr = objAPI.Shutdown(context.Background())
-			logger.LogIf(context.Background(), oerr)
+			logger.LogIf(context.Background(), objAPI.Shutdown(context.Background()))
 		}
 
 		if srv := newConsoleServerFn(); srv != nil {
@@ -71,7 +67,7 @@ func handleSignals() {
 			globalEventNotifier.RemoveAllBucketTargets()
 		}
 
-		return (err == nil && oerr == nil)
+		return true
 	}
 
 	for {
