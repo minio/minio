@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -29,6 +29,7 @@ import (
 	pathutil "path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -504,17 +505,17 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		doneSz := globalScannerMetrics.timeSize(scannerMetricReadMetadata)
 		buf, err := s.readMetadata(ctx, item.Path)
 		doneSz(len(buf))
-		res["metasize"] = fmt.Sprint(len(buf))
+		res["metasize"] = strconv.Itoa(len(buf))
 		if err != nil {
 			res["err"] = err.Error()
 			return sizeSummary{}, errSkipFile
 		}
-		defer metaDataPoolPut(buf)
 
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		metaDataPoolPut(buf)
 		if err != nil {
 			res["err"] = err.Error()
 			return sizeSummary{}, errSkipFile
@@ -563,7 +564,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		// apply tier sweep action on free versions
 		if len(fivs.FreeVersions) > 0 {
-			res["free-versions"] = fmt.Sprint(len(fivs.FreeVersions))
+			res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
 		}
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
@@ -575,13 +576,13 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// These are rather expensive. Skip if nobody listens.
 		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
 			if sizeS.versions > 0 {
-				res["versions"] = fmt.Sprint()
+				res["versions"] = strconv.FormatUint(sizeS.versions, 10)
 			}
-			res["size"] = fmt.Sprint(sizeS.totalSize)
+			res["size"] = strconv.FormatInt(sizeS.totalSize, 10)
 			if len(sizeS.tiers) > 0 {
 				for name, tier := range sizeS.tiers {
-					res["size-"+name] = fmt.Sprint(tier.TotalSize)
-					res["versions-"+name] = fmt.Sprint(tier.NumVersions)
+					res["size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
+					res["versions-"+name] = strconv.Itoa(tier.NumVersions)
 				}
 			}
 			if sizeS.failedCount > 0 {
@@ -591,7 +592,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				res["repl-pending"] = fmt.Sprintf("%d versions, %d bytes", sizeS.pendingCount, sizeS.pendingSize)
 			}
 			for tgt, st := range sizeS.replTargetStats {
-				res["repl-size-"+tgt] = fmt.Sprint(st.replicatedSize)
+				res["repl-size-"+tgt] = strconv.FormatInt(st.replicatedSize, 10)
 				if st.failedCount > 0 {
 					res["repl-failed-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.failedCount, st.failedSize)
 				}
@@ -2167,7 +2168,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			logger.LogOnceIf(ctx, fmt.Errorf("srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				srcVolume, srcPath,
 				dstVolume, dstPath,
-				err), "xl-storage-rename-data"+srcVolume+dstVolume)
+				err), "xl-storage-rename-data-"+srcVolume+"-"+dstVolume)
 		}
 		if err == nil && s.globalSync {
 			globalSync()
@@ -2273,12 +2274,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			xlMetaLegacy := &xlMetaV1Object{}
 			json := jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(dstBuf, xlMetaLegacy); err != nil {
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, "read-data-unmarshal-"+dstFilePath)
 				// Data appears corrupt. Drop data.
 			} else {
 				xlMetaLegacy.DataDir = legacyDataDir
 				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
-					logger.LogIf(ctx, err)
+					logger.LogOnceIf(ctx, err, "read-data-add-legacy-"+dstFilePath)
 				}
 				legacyPreserved = true
 			}

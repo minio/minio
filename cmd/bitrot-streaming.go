@@ -167,7 +167,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 				if !IsErr(err, ignoredErrs...) {
 					logger.LogOnceIf(GlobalContext,
 						fmt.Errorf("Reading erasure shards at (%s: %s/%s) returned '%w', will attempt to reconstruct if we have quorum",
-							b.disk, b.volume, b.filePath, err), "bitrot-read-file-stream"+b.volume+b.filePath)
+							b.disk, b.volume, b.filePath, err), "bitrot-read-file-stream-"+b.volume+"-"+b.filePath)
 				}
 			}
 		} else {

@@ -82,24 +82,24 @@ func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locke
 // For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
 // governance bypass headers are set and user has governance bypass permissions.
 // Objects in "Compliance" mode can be overwritten only if retention date is past.
-func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucket string, object ObjectToDelete, oi ObjectInfo, gerr error) APIErrorCode {
+func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucket string, object ObjectToDelete, oi ObjectInfo, gerr error) error {
 	if gerr != nil { // error from GetObjectInfo
 		if _, ok := gerr.(MethodNotAllowed); ok {
 			// This happens usually for a delete marker
 			if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 				// Delete marker should be present and valid.
-				return ErrNone
+				return nil
 			}
 		}
 		if isErrObjectNotFound(gerr) || isErrVersionNotFound(gerr) {
-			return ErrNone
+			return nil
 		}
-		return toAPIErrorCode(ctx, gerr)
+		return gerr
 	}
 
 	lhold := objectlock.GetObjectLegalHoldMeta(oi.UserDefined)
 	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
-		return ErrObjectLocked
+		return ObjectLocked{}
 	}
 
 	ret := objectlock.GetObjectRetentionMeta(oi.UserDefined)
@@ -115,13 +115,13 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 			t, err := objectlock.UTCNowNTP()
 			if err != nil {
 				logger.LogIf(ctx, err)
-				return ErrObjectLocked
+				return ObjectLocked{}
 			}
 
 			if !ret.RetainUntilDate.Before(t) {
-				return ErrObjectLocked
+				return ObjectLocked{}
 			}
-			return ErrNone
+			return nil
 		case objectlock.RetGovernance:
 			// In governance mode, users can't overwrite or delete an object
 			// version or alter its lock settings unless they have special
@@ -141,22 +141,22 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 				t, err := objectlock.UTCNowNTP()
 				if err != nil {
 					logger.LogIf(ctx, err)
-					return ErrObjectLocked
+					return ObjectLocked{}
 				}
 
 				if !ret.RetainUntilDate.Before(t) {
-					return ErrObjectLocked
+					return ObjectLocked{}
 				}
-				return ErrNone
+				return nil
 			}
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html#object-lock-retention-modes
 			// If you try to delete objects protected by governance mode and have s3:BypassGovernanceRetention, the operation will succeed.
 			if checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName) != ErrNone {
-				return ErrAccessDenied
+				return errAuthentication
 			}
 		}
 	}
-	return ErrNone
+	return nil
 }
 
 // enforceRetentionBypassForPut enforces whether an existing object under governance can be overwritten

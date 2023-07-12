@@ -65,7 +65,7 @@ func getOpName(name string) (op string) {
 
 // If trace is enabled, execute the request if it is traced by other handlers
 // otherwise, generate a trace event with request information but no response.
-func httpTracer(h http.Handler) http.Handler {
+func httpTracerMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Setup a http request response recorder - this is needed for
 		// http stats requests and audit if enabled.
@@ -77,7 +77,7 @@ func httpTracer(h http.Handler) http.Handler {
 
 		// Create tracing data structure and associate it to the request context
 		tc := mcontext.TraceCtxt{
-			AmzReqID:         r.Header.Get(xhttp.AmzRequestID),
+			AmzReqID:         w.Header().Get(xhttp.AmzRequestID),
 			RequestRecorder:  reqRecorder,
 			ResponseRecorder: respRecorder,
 		}

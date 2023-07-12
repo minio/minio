@@ -37,7 +37,7 @@ import (
 	"github.com/minio/pkg/ldap"
 )
 
-func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
+func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
@@ -201,7 +201,7 @@ func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "AddIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	a.addOrUpdateIDPHandler(ctx, w, r, false)
+	addOrUpdateIDPHandler(ctx, w, r, false)
 }
 
 // UpdateIdentityProviderCfg: updates an existing IDP config for openid/ldap.
@@ -213,7 +213,7 @@ func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *ht
 	ctx := newContext(r, w, "UpdateIdentityProviderCfg")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	a.addOrUpdateIDPHandler(ctx, w, r, true)
+	addOrUpdateIDPHandler(ctx, w, r, true)
 }
 
 // ListIdentityProviderCfg:
