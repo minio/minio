@@ -350,8 +350,11 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
-			fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
-			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
+
+			if !meta.Deleted && meta.Size != 0 {
+				fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
+				fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
+			}
 
 			// ILM transition fields
 			fmt.Fprint(h, meta.TransitionStatus)
@@ -499,7 +502,8 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = -1
 			continue
 		}
-		if metadata.Deleted {
+		// Delete marker or zero byte objects take highest parity.
+		if metadata.Deleted || metadata.Size == 0 {
 			parities[index] = len(partsMetadata) / 2
 		} else {
 			parities[index] = metadata.Erasure.ParityBlocks

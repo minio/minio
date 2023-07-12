@@ -278,6 +278,11 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
+	if objInfo.Size == 0 {
+		// Zero byte objects don't even need to further initialize pipes etc.
+		return NewGetObjectReaderFromReader(bytes.NewReader(nil), objInfo, opts)
+	}
+
 	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
 		return nil, err
