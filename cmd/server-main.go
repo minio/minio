@@ -475,11 +475,8 @@ func getGlobalInternodeInterface(interfs ...string) string {
 		if host != "" {
 			ip = host
 		}
-
-		ifs, err := net.Interfaces()
-		if err != nil {
-			globalInternodeInterface = ip
-		}
+		globalInternodeInterface = ip
+		ifs, _ := net.Interfaces()
 		for _, interf := range ifs {
 			addrs, err := interf.Addrs()
 			if err == nil {
