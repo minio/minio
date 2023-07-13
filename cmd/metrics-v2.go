@@ -1664,8 +1664,9 @@ func getMinioHealingMetrics() *MetricsGroup {
 }
 
 func getFailedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0, 1)
-	for k, v := range seq.gethealFailedItemsMap() {
+	items := seq.gethealFailedItemsMap()
+	m = make([]Metric, 0, len(items))
+	for k, v := range items {
 		s := strings.Split(k, ",")
 		m = append(m, Metric{
 			Description: getHealObjectsFailTotalMD(),
