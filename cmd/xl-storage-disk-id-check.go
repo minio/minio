@@ -875,8 +875,6 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 		go func() {
 			timeout := time.NewTimer(timeoutOperation)
 			select {
-			// Reuse the same trigger
-			// If it triggers again, it took too long.
 			case <-timeout.C:
 				spent := time.Since(started)
 				goOffline(fmt.Errorf("unable to write+read for %v", spent.Round(time.Millisecond)))
