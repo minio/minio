@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -42,7 +43,7 @@ var (
 )
 
 const (
-	serverShutdownPoll = 500 * time.Millisecond
+	shutdownPollIntervalMax = 500 * time.Millisecond
 
 	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
 	DefaultShutdownTimeout = 5 * time.Second
@@ -161,14 +162,32 @@ func (srv *Server) Shutdown() error {
 		return err
 	}
 
+	pollIntervalBase := time.Millisecond
+	nextPollInterval := func() time.Duration {
+		// Add 10% jitter.
+		interval := pollIntervalBase + time.Duration(rand.Intn(int(pollIntervalBase/10)))
+		// Double and clamp for next time.
+		pollIntervalBase *= 2
+		if pollIntervalBase > shutdownPollIntervalMax {
+			pollIntervalBase = shutdownPollIntervalMax
+		}
+		return interval
+	}
+
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
 	shutdownTimer := time.NewTimer(shutdownTimeout)
-	ticker := time.NewTicker(serverShutdownPoll)
-	defer ticker.Stop()
+	defer shutdownTimer.Stop()
+
+	timer := time.NewTimer(nextPollInterval())
+	defer timer.Stop()
 	for {
 		select {
 		case <-shutdownTimer.C:
+			if atomic.LoadInt32(&srv.requestCount) <= 0 {
+				return nil
+			}
+
 			// Write all running goroutines.
 			tmp, err := os.CreateTemp("", "minio-goroutines-*.txt")
 			if err == nil {
@@ -177,10 +196,11 @@ func (srv *Server) Shutdown() error {
 				return errors.New("timed out. some connections are still active. goroutines written to " + tmp.Name())
 			}
 			return errors.New("timed out. some connections are still active")
-		case <-ticker.C:
+		case <-timer.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
 				return nil
 			}
+			timer.Reset(nextPollInterval())
 		}
 	}
 }

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -97,7 +96,7 @@ type localDisk struct {
 func getMajorMinor(path string) (string, error) {
 	var stat syscall.Stat_t
 	if err := syscall.Stat(path, &stat); err != nil {
-		return "", fmt.Errorf("unable to stat `%s`: %w", err)
+		return "", fmt.Errorf("unable to stat `%s`: %w", path, err)
 	}
 
 	major := (stat.Dev & 0x00000000000fff00) >> 8
@@ -137,7 +136,7 @@ func filterLocalDisks(node, args string) ([]localDisk, error) {
 }
 
 func getFormatJSON(path string) (format, error) {
-	formatJSON, err := ioutil.ReadFile(filepath.Join(path, ".minio.sys/format.json"))
+	formatJSON, err := os.ReadFile(filepath.Join(path, ".minio.sys/format.json"))
 	if err != nil {
 		return format{}, err
 	}

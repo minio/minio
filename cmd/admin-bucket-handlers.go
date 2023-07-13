@@ -1129,3 +1129,63 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 		}
 	}
 }
+
+// ReplicationMRFHandler - POST returns info on entries in the MRF backlog for a node or all nodes
+func (a adminAPIHandlers) ReplicationMRFHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ReplicationMRF")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ReplicationDiff)
+	if objectAPI == nil {
+		return
+	}
+
+	// Check if bucket exists.
+	if bucket != "" {
+		if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+	}
+
+	q := r.Form
+	node := q.Get("node")
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	mrfCh, err := globalNotificationSys.GetReplicationMRF(ctx, bucket, node)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	enc := json.NewEncoder(w)
+	for {
+		select {
+		case entry, ok := <-mrfCh:
+			if !ok {
+				return
+			}
+			if err := enc.Encode(entry); err != nil {
+				return
+			}
+			if len(mrfCh) == 0 {
+				// Flush if nothing is queued
+				w.(http.Flusher).Flush()
+			}
+		case <-keepAliveTicker.C:
+			if len(mrfCh) > 0 {
+				continue
+			}
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
+}

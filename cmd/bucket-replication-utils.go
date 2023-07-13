@@ -785,9 +785,10 @@ const (
 
 // MRFReplicateEntry mrf entry to save to disk
 type MRFReplicateEntry struct {
-	Bucket    string `json:"bucket" msg:"b"`
-	Object    string `json:"object" msg:"o"`
-	versionID string `json:"-"`
+	Bucket     string `json:"bucket" msg:"b"`
+	Object     string `json:"object" msg:"o"`
+	versionID  string `json:"-"`
+	RetryCount int    `json:"retryCount" msg:"rc"`
 }
 
 // MRFReplicateEntries has the map of MRF entries to save to disk
@@ -799,9 +800,10 @@ type MRFReplicateEntries struct {
 // ToMRFEntry returns the relevant info needed by MRF
 func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	return MRFReplicateEntry{
-		Bucket:    ri.Bucket,
-		Object:    ri.Name,
-		versionID: ri.VersionID,
+		Bucket:     ri.Bucket,
+		Object:     ri.Name,
+		versionID:  ri.VersionID,
+		RetryCount: int(ri.RetryCount),
 	}
 }
 

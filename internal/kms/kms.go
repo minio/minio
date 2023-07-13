@@ -67,6 +67,18 @@ type KMS interface {
 	// by the key ID. The contexts must match the context value
 	// used to generate the ciphertexts.
 	DecryptAll(ctx context.Context, keyID string, ciphertext [][]byte, context []Context) ([][]byte, error)
+
+	// Verify verifies all KMS endpoints and returns the details
+	Verify(cxt context.Context) []VerifyResult
+}
+
+// VerifyResult describes the verification result details a KMS endpoint
+type VerifyResult struct {
+	Endpoint string
+	Decrypt  string
+	Encrypt  string
+	Version  string
+	Status   string
 }
 
 // Status describes the current state of a KMS.
