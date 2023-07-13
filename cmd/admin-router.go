@@ -226,6 +226,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// ReplicationDiff - MinIO extension API
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/replication/diff").HandlerFunc(
 			gz(httpTraceHdrs(adminAPI.ReplicationDiffHandler))).Queries("bucket", "{bucket:.*}")
+		// ReplicationMRFHandler - MinIO extension API
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/replication/mrf").HandlerFunc(
+			gz(httpTraceHdrs(adminAPI.ReplicationMRFHandler))).Queries("bucket", "{bucket:.*}")
 
 		// Batch job operations
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/start-job").HandlerFunc(

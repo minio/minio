@@ -454,7 +454,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 					w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
 					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 				}
-				QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+				QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -489,7 +489,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			}
 		}
 
-		QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+		QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -715,7 +715,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 			}
-			QueueReplicationHeal(ctx, bucket, objInfo)
+			QueueReplicationHeal(ctx, bucket, objInfo, 0)
 			// do an additional verification whether object exists when object is deletemarker and request
 			// is from replication
 			if opts.CheckDMReplicationReady {
@@ -746,7 +746,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				}
 			}
 		}
-		QueueReplicationHeal(ctx, bucket, objInfo)
+		QueueReplicationHeal(ctx, bucket, objInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit

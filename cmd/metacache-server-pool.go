@@ -402,7 +402,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 				}
 			}
 
-			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
+			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication, 0)
 		}
 	}
 }
