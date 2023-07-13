@@ -35,9 +35,7 @@ var (
 )
 
 func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "StartDecommission")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
 	if objectAPI == nil {
@@ -113,9 +111,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 }
 
 func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "CancelDecommission")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
 	if objectAPI == nil {
@@ -161,9 +157,7 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 }
 
 func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "StatusPool")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
 	if objectAPI == nil {
@@ -204,9 +198,7 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListPools")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
 	if objectAPI == nil {
@@ -239,8 +231,7 @@ func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RebalanceStart")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
 	if objectAPI == nil {
@@ -311,8 +302,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 }
 
 func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RebalanceStatus")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
 	if objectAPI == nil {
@@ -352,8 +342,7 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 }
 
 func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RebalanceStop")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
 	if objectAPI == nil {
