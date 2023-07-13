@@ -248,6 +248,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 	globalNodes = globalEndpoints.GetNodes()
 
+	// Initialize, see which NIC the service is running on, and save it as global
+	_ = getGlobalInternodeInterface(ctx.String("interface"))
+
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
@@ -459,6 +462,33 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 	}
 
 	return nil
+}
+
+func getGlobalInternodeInterface(interfs ...string) string {
+	globalInternodeInterfaceOnce.Do(func() {
+		if len(interfs) != 0 && strings.TrimSpace(interfs[0]) != "" {
+			globalInternodeInterface = interfs[0]
+			return
+		}
+		ip := "127.0.0.1"
+		host, _ := mustSplitHostPort(globalMinioAddr)
+		if host != "" {
+			ip = host
+		}
+		globalInternodeInterface = ip
+		ifs, _ := net.Interfaces()
+		for _, interf := range ifs {
+			addrs, err := interf.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					if strings.SplitN(addr.String(), "/", 2)[0] == ip {
+						globalInternodeInterface = interf.Name
+					}
+				}
+			}
+		}
+	})
+	return globalInternodeInterface
 }
 
 // Return the list of address that MinIO server needs to listen on:
