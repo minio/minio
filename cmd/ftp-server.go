@@ -23,11 +23,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/minio/cli"
-	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/pkg/sftp"
 	ftp "goftp.io/server/v2"
@@ -117,7 +117,7 @@ func startSFTPServer(c *cli.Context) {
 		logger.Fatal(fmt.Errorf("invalid arguments passed, private key file is mandatory for --sftp='ssh-private-key=path/to/id_ecdsa'"), "unable to start SFTP server")
 	}
 
-	privateBytes, err := ioutil.ReadFile(sshPrivateKey)
+	privateBytes, err := os.ReadFile(sshPrivateKey)
 	if err != nil {
 		logger.Fatal(fmt.Errorf("invalid arguments passed, private key file is not accessible: %v", err), "unable to start SFTP server")
 	}
