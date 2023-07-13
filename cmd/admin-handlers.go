@@ -1868,8 +1868,6 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 }
 
 func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) madmin.InfoMessage {
-	kmsStat := fetchKMSStatus()
-
 	ldap := madmin.LDAP{}
 	if globalIAMSys.LDAPConfig.Enabled() {
 		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
@@ -1949,7 +1947,8 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		KMS:           kmsStat,
+		KMS:           fetchKMSStatus(),
+		KMSStatus:     fetchKMSStatusV2(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -2567,6 +2566,28 @@ func fetchKMSStatus() madmin.KMS {
 		kmsStat.Decrypt = "success"
 	}
 	return kmsStat
+}
+
+// fetchKMSStatusV2 fetches KMS-related status information for all instances
+func fetchKMSStatusV2(ctx context.Context) []madmin.KMS {
+	if GlobalKMS == nil {
+		return []madmin.KMS{}
+	}
+
+	results := GlobalKMS.Verify(ctx)
+
+	stats := []madmin.KMS{}
+	for _, result := range results {
+		stats = append(stats, madmin.KMS{
+			Status:   result.Status,
+			Endpoint: result.Endpoint,
+			Encrypt:  result.Encrypt,
+			Decrypt:  result.Decrypt,
+			Version:  result.Version,
+		})
+	}
+
+	return stats
 }
 
 // fetchLoggerDetails return log info
