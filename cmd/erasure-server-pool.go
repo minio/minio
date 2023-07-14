@@ -242,6 +242,14 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 	return nil
 }
 
+// Return the disks belonging to the poolIdx, and setIdx.
+func (z *erasureServerPools) GetDisks(poolIdx, setIdx int) ([]StorageAPI, error) {
+	if poolIdx < len(z.serverPools) && setIdx < len(z.serverPools[poolIdx].sets) {
+		return z.serverPools[poolIdx].sets[setIdx].getDisks(), nil
+	}
+	return nil, fmt.Errorf("Matching pool %s, set %s not found", humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1))
+}
+
 // Return the count of disks in each pool
 func (z *erasureServerPools) SetDriveCounts() []int {
 	setDriveCounts := make([]int, len(z.serverPools))
@@ -629,11 +637,6 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
-
-	// Scanner latest allBuckets first.
-	sort.Slice(allBuckets, func(i, j int) bool {
-		return allBuckets[i].Created.After(allBuckets[j].Created)
-	})
 
 	// Collect for each set in serverPools.
 	for _, z := range z.serverPools {
