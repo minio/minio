@@ -2669,7 +2669,9 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 	defer cancel()
 
 	for index := range buckets {
-		meta, err := loadBucketResyncMetadata(ctx, buckets[index].Name, objAPI)
+		bucket := buckets[index].Name
+
+		meta, err := loadBucketResyncMetadata(ctx, bucket, objAPI)
 		if err != nil {
 			if !errors.Is(err, errVolumeNotFound) {
 				logger.LogIf(ctx, err)
@@ -2678,18 +2680,10 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 		}
 
 		p.resyncer.Lock()
-		p.resyncer.statusMap[buckets[index].Name] = meta
+		p.resyncer.statusMap[bucket] = meta
 		p.resyncer.Unlock()
-	}
-	for index := range buckets {
-		bucket := buckets[index].Name
-		var tgts map[string]TargetReplicationResyncStatus
-		p.resyncer.RLock()
-		m, ok := p.resyncer.statusMap[bucket]
-		if ok {
-			tgts = m.cloneTgtStats()
-		}
-		p.resyncer.RUnlock()
+
+		tgts := meta.cloneTgtStats()
 		for arn, st := range tgts {
 			switch st.ResyncStatus {
 			case ResyncFailed, ResyncStarted, ResyncPending:

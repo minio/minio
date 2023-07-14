@@ -658,6 +658,7 @@ func serverMain(ctx *cli.Context) {
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
+	bootstrapTrace("newObjectLayer (initialized)")
 
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
@@ -719,6 +720,7 @@ func serverMain(ctx *cli.Context) {
 	go func() {
 		bootstrapTrace("globalIAMSys.Init")
 		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+		bootstrapTrace("globalIAMSys.Initialized")
 
 		// Initialize Console UI
 		if globalBrowserEnabled {
@@ -816,23 +818,26 @@ func serverMain(ctx *cli.Context) {
 		// Initialize bucket metadata sub-system.
 		bootstrapTrace("globalBucketMetadataSys.Init")
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
+		bootstrapTrace("globalBucketMetadataSys.Initialized")
 
 		// initialize replication resync state.
-		bootstrapTrace("go initResync")
-		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+		bootstrapTrace("initResync")
+		globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Initialize site replication manager after bucket metadata
 		bootstrapTrace("globalSiteReplicationSys.Init")
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
+		bootstrapTrace("globalSiteReplicationSys.Initialized")
 
 		// Initialize quota manager.
 		bootstrapTrace("globalBucketQuotaSys.Init")
 		globalBucketQuotaSys.Init(newObject)
+		bootstrapTrace("globalBucketQuotaSys.Initialized")
 
 		// Populate existing buckets to the etcd backend
 		if globalDNSConfig != nil {
 			// Background this operation.
-			bootstrapTrace("initFederatorBackend")
+			bootstrapTrace("go initFederatorBackend")
 			go initFederatorBackend(buckets, newObject)
 		}
 
