@@ -194,7 +194,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 || len(corsAllowOrigin) == 1 && corsAllowOrigin[0] == "" {
+	if len(corsAllowOrigin) == 1 && corsAllowOrigin[0] == "" {
 		corsAllowOrigin = []string{"*"} // defaults to '*'
 	}
 	cfg.CorsAllowOrigin = corsAllowOrigin
