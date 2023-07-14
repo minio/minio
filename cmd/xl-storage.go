@@ -547,6 +547,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
+			if oi.DeleteMarker {
+				sizeS.deleteMarkers++
+			}
 			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
 			}
