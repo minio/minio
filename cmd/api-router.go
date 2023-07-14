@@ -24,8 +24,6 @@ import (
 
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/minio/console/restapi"
-	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/api"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -551,6 +549,6 @@ func corsHandler(handler http.Handler) http.Handler {
 		AllowedHeaders:   commonS3Headers,
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
-		AllowedOrigins:   api.GetCorsAllowOrigin(config.KVS{}),
+		AllowedOrigins:   globalAPIConfig.getCorsAllowOrigins(),
 	}).Handler(handler)
 }

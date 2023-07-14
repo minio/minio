@@ -193,7 +193,11 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		RootAccess:     rootAccess,
 	}
 
-	cfg.CorsAllowOrigin = GetCorsAllowOrigin(kvs)
+	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+	if len(corsAllowOrigin) == 0 || len(corsAllowOrigin) == 1 && corsAllowOrigin[0] == "" {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	}
+	cfg.CorsAllowOrigin = corsAllowOrigin
 
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
 		return cfg, err
@@ -276,12 +280,4 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
 
 	return cfg, nil
-}
-
-func GetCorsAllowOrigin(kvs config.KVS) []string {
-	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 || len(corsAllowOrigin) == 1 && corsAllowOrigin[0] == "" {
-		corsAllowOrigin = []string{"*"} // defaults to '*'
-	}
-	return corsAllowOrigin
 }
