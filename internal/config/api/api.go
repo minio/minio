@@ -193,9 +193,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		RootAccess:     rootAccess,
 	}
 
-	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 {
+	var corsAllowOrigin []string
+	corsList := env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin))
+	if corsList == "" {
 		corsAllowOrigin = []string{"*"} // defaults to '*'
+	} else {
+		corsAllowOrigin = strings.Split(corsList, ",")
+		for _, cors := range corsAllowOrigin {
+			if cors == "" {
+				return cfg, errors.New("invalid cors value")
+			}
+		}
 	}
 	cfg.CorsAllowOrigin = corsAllowOrigin
 
