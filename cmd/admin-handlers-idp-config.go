@@ -198,8 +198,7 @@ func handleCreateUpdateValidation(s config.Config, subSys, cfgTarget string, isU
 //
 // PUT <admin-prefix>/idp-cfg/openid/_ -> create (default) named config `_`
 func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AddIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	addOrUpdateIDPHandler(ctx, w, r, false)
 }
@@ -210,8 +209,7 @@ func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.
 //
 // POST <admin-prefix>/idp-cfg/openid/_ -> update (default) named config `_`
 func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "UpdateIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	addOrUpdateIDPHandler(ctx, w, r, true)
 }
@@ -220,8 +218,7 @@ func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *ht
 //
 // GET <admin-prefix>/idp-cfg/openid -> lists openid provider configs.
 func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
@@ -274,8 +271,7 @@ func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http
 //
 // GET <admin-prefix>/idp-cfg/openid/dex_test
 func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
@@ -334,9 +330,7 @@ func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.
 //
 // DELETE <admin-prefix>/idp-cfg/openid/dex_test
 func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "DeleteIdentityProviderCfg")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {

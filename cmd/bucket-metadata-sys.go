@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -489,6 +488,8 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 	const bucketMetadataRefresh = 15 * time.Minute
 
+	sleeper := newDynamicSleeper(2, 150*time.Millisecond, false)
+
 	t := time.NewTimer(bucketMetadataRefresh)
 	defer t.Stop()
 	for {
@@ -512,13 +513,16 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 			sys.RemoveStaleBuckets(diskBuckets)
 
 			for _, bucket := range buckets {
+				wait := sleeper.Timer(ctx)
+
 				err := sys.loadBucketMetadata(ctx, bucket)
 				if err != nil {
 					logger.LogIf(ctx, err)
+					wait() // wait to proceed to next entry.
 					continue
 				}
-				// Check if there is a spare procs, wait 100ms instead
-				waitForLowIO(runtime.GOMAXPROCS(0), 100*time.Millisecond, currentHTTPIO)
+
+				wait() // wait to proceed to next entry.
 			}
 
 			t.Reset(bucketMetadataRefresh)

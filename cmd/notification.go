@@ -807,7 +807,7 @@ func (sys *NotificationSys) addNodeErr(nodeInfo madmin.NodeInfo, peerClient *pee
 	addr := peerClient.host.String()
 	reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-	logger.LogOnceIf(ctx, err, "add-node-err"+addr)
+	logger.LogOnceIf(ctx, err, "add-node-err-"+addr)
 	nodeInfo.SetAddr(addr)
 	nodeInfo.SetError(err.Error())
 }
@@ -1386,4 +1386,84 @@ func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTie
 		merged.merge(stat)
 	}
 	return merged
+}
+
+// GetReplicationMRF - Get replication MRF from all peers.
+func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node string) (mrfCh chan madmin.ReplicationMRF, err error) {
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	peerChannels := make([]<-chan madmin.ReplicationMRF, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		host := client.host.String()
+		if host != node && node != "all" {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			peerChannels[index], err = sys.peerClients[index].GetReplicationMRF(ctx, bucket)
+			return err
+		}, index)
+	}
+	mrfCh = make(chan madmin.ReplicationMRF, 4000)
+	var wg sync.WaitGroup
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			if sys.peerClients[index] != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+					sys.peerClients[index].host.String())
+				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+			} else {
+				logger.LogOnceIf(ctx, err, "peer-offline")
+			}
+			continue
+		}
+		wg.Add(1)
+		go func(ctx context.Context, peerChannel <-chan madmin.ReplicationMRF, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				select {
+				case m, ok := <-peerChannel:
+					if !ok {
+						return
+					}
+					select {
+					case <-ctx.Done():
+						return
+					case mrfCh <- m:
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(ctx, peerChannels[index], &wg)
+	}
+	wg.Add(1)
+	go func(ch chan madmin.ReplicationMRF) error {
+		defer wg.Done()
+		if node != "all" && node != globalLocalNodeName {
+			return nil
+		}
+		mCh, err := globalReplicationPool.getMRF(ctx, bucket)
+		if err != nil {
+			return err
+		}
+		for e := range mCh {
+			select {
+			case <-ctx.Done():
+				return err
+			default:
+				mrfCh <- e
+			}
+		}
+		return nil
+	}(mrfCh)
+	go func(wg *sync.WaitGroup) {
+		wg.Wait()
+		defer close(mrfCh)
+	}(&wg)
+	return mrfCh, nil
 }

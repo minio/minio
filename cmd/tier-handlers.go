@@ -26,7 +26,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config/storageclass"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
@@ -71,9 +70,7 @@ var (
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AddTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
@@ -129,9 +126,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
@@ -149,9 +144,7 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "EditTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
@@ -195,9 +188,7 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
 	if objAPI == nil {
@@ -226,9 +217,7 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "VerifyTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {
@@ -246,9 +235,7 @@ func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "TierStats")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
 	if objAPI == nil {

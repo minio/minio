@@ -1313,6 +1313,31 @@ func (s *peerRESTServer) DriveSpeedTestHandler(w http.ResponseWriter, r *http.Re
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
+// GetReplicationMRFHandler - returns replication MRF for bucket
+func (s *peerRESTServer) GetReplicationMRFHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	ctx := newContext(r, w, "GetReplicationMRF")
+	re, err := globalReplicationPool.getMRF(ctx, bucketName)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	enc := gob.NewEncoder(w)
+
+	for m := range re {
+		if err := enc.Encode(m); err != nil {
+			s.writeErrorResponse(w, errors.New("Encoding mrf failed: "+err.Error()))
+			return
+		}
+	}
+}
+
 // DevNull - everything goes to io.Discard
 func (s *peerRESTServer) DevNull(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1393,6 +1418,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadUser).HandlerFunc(h(server.LoadUserHandler)).Queries(restQueries(peerRESTUser, peerRESTUserTemp)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadServiceAccount).HandlerFunc(h(server.LoadServiceAccountHandler)).Queries(restQueries(peerRESTUser)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadGroup).HandlerFunc(h(server.LoadGroupHandler)).Queries(restQueries(peerRESTGroup)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetReplicationMRF).HandlerFunc(httpTraceHdrs(server.GetReplicationMRFHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(h(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(h(server.DownloadProfilingDataHandler))

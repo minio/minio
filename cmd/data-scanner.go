@@ -403,7 +403,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			abandonedChildren = f.oldCache.findChildrenCopy(thisHash)
 		}
 
-		// If there are lifecycle rules for the prefix, remove the filter.
+		// If there are lifecycle rules for the prefix.
 		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 		var activeLifeCycle *lifecycle.Lifecycle
 		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix) {
@@ -412,7 +412,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 		}
-		// If there are replication rules for the prefix, remove the filter.
+		// If there are replication rules for the prefix.
 		var replicationCfg replicationConfig
 		if !f.oldCache.Info.replication.Empty() && f.oldCache.Info.replication.Config.HasActiveRules(prefix, true) {
 			replicationCfg = f.oldCache.Info.replication
@@ -1044,7 +1044,7 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		if time.Now().UTC().Before(lifecycle.ExpectedExpiryTime(obj.SuccessorModTime, event.NoncurrentDays)) {
 			// add this version back to remaining versions for
 			// subsequent lifecycle policy applications
-			fivs = append(fivs, fi)
+			objectInfos = append(objectInfos, obj)
 			continue
 		}
 
@@ -1260,7 +1260,7 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 	if i.replication.Config == nil {
 		return
 	}
-	roi := queueReplicationHeal(ctx, oi.Bucket, oi, i.replication)
+	roi := queueReplicationHeal(ctx, oi.Bucket, oi, i.replication, 0)
 	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		return
 	}
