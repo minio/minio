@@ -1207,6 +1207,23 @@ func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// GetPeerBucketMetrics gets the metrics to be federated across peers.
+func (s *peerRESTServer) GetPeerBucketMetrics(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	enc := gob.NewEncoder(w)
+
+	for m := range ReportMetrics(r.Context(), bucketPeerMetricsGroups) {
+		if err := enc.Encode(m); err != nil {
+			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
+			return
+		}
+	}
+}
+
 func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("invalid request"))
@@ -1431,6 +1448,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetMetacacheListing).HandlerFunc(h(server.GetMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(h(server.UpdateMetacacheListingHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(h(server.GetPeerMetrics))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerBucketMetrics).HandlerFunc(h(server.GetPeerBucketMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadTransitionTierConfig).HandlerFunc(h(server.LoadTransitionTierConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedTest).HandlerFunc(h(server.SpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDriveSpeedTest).HandlerFunc(h(server.DriveSpeedTestHandler))

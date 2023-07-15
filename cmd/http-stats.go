@@ -127,6 +127,14 @@ func (bh *bucketHTTPStats) updateHTTPStats(bucket, api string, w *xhttp.Response
 		return
 	}
 
+	if w != nil {
+		// Increment the prometheus http request response histogram with API, Bucket
+		bucketHTTPRequestsDuration.With(prometheus.Labels{
+			"api":    api,
+			"bucket": bucket,
+		}).Observe(w.TimeToFirstByte.Seconds())
+	}
+
 	bh.Lock()
 	defer bh.Unlock()
 

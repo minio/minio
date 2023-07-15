@@ -839,6 +839,33 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	return ch, nil
 }
 
+func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan Metric, error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetPeerBucketMetrics, nil, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var metric Metric
+			if err := dec.Decode(&metric); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
+		}
+	}(ch)
+	return ch, nil
+}
+
 func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, error) {
 	values := make(url.Values)
 	values.Set(peerRESTSize, strconv.Itoa(opts.objectSize))

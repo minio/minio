@@ -500,7 +500,7 @@
       "targets": [
         {
           "exemplar": true,
-	  "expr": "max(sum(minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}) by (instance,server))",
+	  "expr": "max(minio_cluster_usage_total_bytes{job=\"$scrape_jobs\"} by (instance,server))",
           "interval": "",
           "legendFormat": "Usage",
           "refId": "A",
@@ -564,7 +564,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "max by (range) (sum (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"}) by (range))",
+          "expr": "max by (range) (minio_cluster_objects_size_distribution{job=\"$scrape_jobs\"} by (range))",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -1492,7 +1492,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "topk(1, sum(minio_bucket_usage_object_total{job=\"$scrape_jobs\"}) by (instance))",
+          "expr": "topk(1, minio_cluster_usage_object_total{job=\"$scrape_jobs\"} by (instance))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",

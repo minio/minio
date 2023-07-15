@@ -1,10 +1,11 @@
-# How to monitor MinIO server with Prometheus [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# How to monitor MinIO server with Prometheus? [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-[Prometheus](https://prometheus.io) is a cloud-native monitoring platform.
+[Prometheus](https://prometheus.io) is a cloud-native monitoring platform. Prometheus offers a multi-dimensional data model with time series data identified by metric name and key/value pairs. The data collection happens via a pull model over HTTP/HTTPS. Users looking to monitor their MinIO instances can point Prometheus configuration to scrape data from following endpoints. 
 
-Prometheus offers a multi-dimensional data model with time series data identified by metric name and key/value pairs. The data collection happens via a pull model over HTTP/HTTPS.
+- MinIO exports Prometheus compatible data by default as an authorized endpoint at `/minio/v2/metrics/cluster`. 
+- MinIO exports Prometheus compatible data by default which is bucket centric as an authorized endpoint at `/minio/v2/metrics/bucket`.
 
-MinIO exports Prometheus compatible data by default as an authorized endpoint at `/minio/v2/metrics/cluster`. Users looking to monitor their MinIO instances can point Prometheus configuration to scrape data from this endpoint. This document explains how to setup Prometheus and configure it to scrape data from MinIO servers.
+This document explains how to setup Prometheus and configure it to scrape data from MinIO servers.
 
 ## Prerequisites
 
@@ -52,6 +53,8 @@ The Prometheus endpoint in MinIO requires authentication by default. Prometheus 
 
 The command will generate the `scrape_configs` section of the prometheus.yml as follows:
 
+##### Cluster
+
 ```yaml
 scrape_configs:
 - job_name: minio-job
@@ -60,6 +63,18 @@ scrape_configs:
   scheme: http
   static_configs:
   - targets: ['localhost:9000']
+```
+
+##### Bucket centric
+
+```
+- job_name: minio-job-bucket
+  bearer_token: <secret>
+  metrics_path: /minio/v2/metrics/bucket
+  scheme: http
+  static_configs:
+  - targets: ['localhost:9000']
+
 ```
 
 #### 3.2 Public Prometheus config
@@ -73,6 +88,17 @@ This can be collected from any server once per collection.
 scrape_configs:
 - job_name: minio-job
   metrics_path: /minio/v2/metrics/cluster
+  scheme: http
+  static_configs:
+  - targets: ['localhost:9000']
+```
+
+#### Bucket centric
+
+```yaml
+scrape_configs:
+- job_name: minio-job-bucket
+  metrics_path: /minio/v2/metrics/bucket
   scheme: http
   static_configs:
   - targets: ['localhost:9000']
@@ -109,17 +135,19 @@ Prometheus sets the `Host` header to `domain:port` as part of HTTP operations ag
 
 ### 6. Configure Grafana
 
-After Prometheus is configured, you can use Grafana to visualize MinIO metrics.
-Refer the [document here to setup Grafana with MinIO prometheus metrics](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/grafana/README.md).
+After Prometheus is configured, you can use Grafana to visualize MinIO metrics. Refer the [document here to setup Grafana with MinIO prometheus metrics](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/grafana/README.md).
 
 ## List of metrics exposed by MinIO
 
-MinIO server exposes the following metrics on `/minio/v2/metrics/cluster` endpoint. All of these can be accessed via Prometheus dashboard. A sample list of exposed metrics along with their definition is available in the demo server at
+- MinIO exports Prometheus compatible data by default as an authorized endpoint at `/minio/v2/metrics/cluster`. 
+- MinIO exports Prometheus compatible data by default which is bucket centric as an authorized endpoint at `/minio/v2/metrics/bucket`.
+
+All of these can be accessed via Prometheus dashboard. A sample list of exposed metrics along with their definition is available on our public demo server at
 
 ```sh
 curl https://play.min.io/minio/v2/metrics/cluster
 ```
 
-### List of metrics reported
+### List of metrics reported Cluster and Bucket level
 
 [The list of metrics reported can be here](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/list.md)

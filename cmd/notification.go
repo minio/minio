@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -121,11 +121,11 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.DeletePolicy(policyName)
 		}, idx, *client.host)
 	}
@@ -136,11 +136,11 @@ func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerEr
 func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.LoadPolicy(policyName)
 		}, idx, *client.host)
 	}
@@ -151,11 +151,11 @@ func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr 
 func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, userType IAMUserType, isGroup bool) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.LoadPolicyMapping(userOrGroup, userType, isGroup)
 		}, idx, *client.host)
 	}
@@ -166,11 +166,11 @@ func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, userType IAMUs
 func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.DeleteUser(accessKey)
 		}, idx, *client.host)
 	}
@@ -181,11 +181,11 @@ func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
 func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.LoadUser(accessKey, temp)
 		}, idx, *client.host)
 	}
@@ -196,11 +196,13 @@ func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []Notification
 func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
-		ng.Go(GlobalContext, func() error { return client.LoadGroup(group) }, idx, *client.host)
+		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			return client.LoadGroup(group)
+		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
@@ -209,11 +211,11 @@ func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.DeleteServiceAccount(accessKey)
 		}, idx, *client.host)
 	}
@@ -224,11 +226,11 @@ func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []Notificatio
 func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			return client.LoadServiceAccount(accessKey)
 		}, idx, *client.host)
 	}
@@ -240,12 +242,12 @@ func (sys *NotificationSys) BackgroundHealStatus() ([]madmin.BgHealState, []Noti
 	ng := WithNPeers(len(sys.peerClients))
 	states := make([]madmin.BgHealState, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		idx := idx
 		client := client
 		ng.Go(GlobalContext, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
 			st, err := client.BackgroundHealStatus()
 			if err != nil {
 				return err
@@ -1101,6 +1103,65 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 	return consolidatedReport
 }
 
+// GetBucketMetrics - gets the cluster level bucket metrics from all nodes excluding self.
+func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric {
+	if sys == nil {
+		return nil
+	}
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	for index := range sys.peerClients {
+		index := index
+		g.Go(func() error {
+			if sys.peerClients[index] == nil {
+				return errPeerNotReachable
+			}
+			var err error
+			peerChannels[index], err = sys.peerClients[index].GetPeerBucketMetrics(ctx)
+			return err
+		}, index)
+	}
+
+	ch := make(chan Metric)
+	var wg sync.WaitGroup
+	for index, err := range g.Wait() {
+		if err != nil {
+			if sys.peerClients[index] != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+					sys.peerClients[index].host.String())
+				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+			} else {
+				logger.LogOnceIf(ctx, err, "peer-offline")
+			}
+			continue
+		}
+		wg.Add(1)
+		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				select {
+				case m, ok := <-peerChannel:
+					if !ok {
+						return
+					}
+					select {
+					case ch <- m:
+					case <-ctx.Done():
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(ctx, peerChannels[index], &wg)
+	}
+	go func(wg *sync.WaitGroup, ch chan Metric) {
+		wg.Wait()
+		close(ch)
+	}(&wg, ch)
+	return ch
+}
+
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
 func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric {
 	if sys == nil {
@@ -1109,11 +1170,11 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	peerChannels := make([]<-chan Metric, len(sys.peerClients))
 	for index := range sys.peerClients {
-		if sys.peerClients[index] == nil {
-			continue
-		}
 		index := index
 		g.Go(func() error {
+			if sys.peerClients[index] == nil {
+				return errPeerNotReachable
+			}
 			var err error
 			peerChannels[index], err = sys.peerClients[index].GetPeerMetrics(ctx)
 			return err
@@ -1142,7 +1203,11 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 					if !ok {
 						return
 					}
-					ch <- m
+					select {
+					case ch <- m:
+					case <-ctx.Done():
+						return
+					}
 				case <-ctx.Done():
 					return
 				}

@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v31" // Add replication MRF
+	peerRESTVersion = "v32" // Add bucket peer metrics
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -65,6 +65,7 @@ const (
 	peerRESTMethodGetMetacacheListing         = "/getmetacache"
 	peerRESTMethodUpdateMetacacheListing      = "/updatemetacache"
 	peerRESTMethodGetPeerMetrics              = "/peermetrics"
+	peerRESTMethodGetPeerBucketMetrics        = "/peerbucketmetrics"
 	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
 	peerRESTMethodSpeedTest                   = "/speedtest"
 	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
