@@ -46,6 +46,8 @@ var (
 	errAccessKeyDisabled  = errors.New("The access key you provided is disabled")
 	errAuthentication     = errors.New("Authentication failed, check your access credentials")
 	errNoAuthToken        = errors.New("JWT token missing")
+	errSkewedAuthTime     = errors.New("Skewed authenticationdate/time")
+	errMalformedAuth      = errors.New("Malformed authentication input")
 )
 
 // cachedAuthenticateNode will cache authenticateNode results for given values up to ttl.
