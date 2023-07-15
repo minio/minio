@@ -523,14 +523,9 @@ func corsHandler(handler http.Handler) http.Handler {
 		"x-amz*",
 		"*",
 	}
-
-	return cors.New(cors.Options{
+	opts := cors.Options{
 		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := globalAPIConfig.getCorsAllowOrigins()
-			if len(allowedOrigins) == 0 {
-				allowedOrigins = []string{"*"}
-			}
-			for _, allowedOrigin := range allowedOrigins {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
 				if wildcard.MatchSimple(allowedOrigin, origin) {
 					return true
 				}
@@ -549,6 +544,13 @@ func corsHandler(handler http.Handler) http.Handler {
 		AllowedHeaders:   commonS3Headers,
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
-		AllowedOrigins:   globalAPIConfig.getCorsAllowOrigins(),
-	}).Handler(handler)
+	}
+	for _, origin := range globalAPIConfig.getCorsAllowOrigins() {
+		if origin == "*" {
+			opts.AllowOriginFunc = nil
+			opts.AllowedOrigins = globalAPIConfig.getCorsAllowOrigins()
+			break
+		}
+	}
+	return cors.New(opts).Handler(handler)
 }
