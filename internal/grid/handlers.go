@@ -25,7 +25,8 @@ import (
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
-	HandlerPingV1
+	handlerTest
+	handlerTest2
 
 	// Add more above.
 	// If all handlers are used, the type of Handler can be changed.
@@ -45,13 +46,23 @@ func (h HandlerID) valid() bool {
 	return h != handlerInvalid && h < handlerLast
 }
 
+// RemoteErr is a remote error type.
+// Any error seen on a remote will be returned like this.
+type RemoteErr string
+
+func (r RemoteErr) Error() string {
+	return string(r)
+}
+
 // TODO: Add type safe handlers and clients.
 type (
 	// SingleHandlerFn is handlers for one to one requests.
-	SingleHandlerFn func(payload []byte) ([]byte, error)
+	// A non-nil error value will be returned as RemoteErr(msg) to client.
+	SingleHandlerFn func(payload []byte) ([]byte, *RemoteErr)
 
 	// StatelessHandlerFn must handle incoming stateless request.
-	StatelessHandlerFn func(ctx context.Context, payload []byte, resp chan<- Response) error
+	// A non-nil error value will be returned as RemoteErr(msg) to client.
+	StatelessHandlerFn func(ctx context.Context, payload []byte, resp chan<- ServerResponse) *RemoteErr
 
 	// StatelessHandler is handlers for one to many requests,
 	// where responses may be dropped.
@@ -61,7 +72,7 @@ type (
 		OutCapacity int
 	}
 
-	StatefulHandlerFn func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- Response)
+	StreamHandlerFn func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse)
 	// StatefulHandler handles fully bidirectional streams.
 
 	StatefulHandler struct {
@@ -70,7 +81,7 @@ type (
 		// Upstream will block when request channel is full.
 		// Response packets can be sent at any time.
 		// Any non-nil error sent as response means no more responses are sent.
-		Handle StatefulHandlerFn
+		Handle StreamHandlerFn
 
 		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
 		OutCapacity int

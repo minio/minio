@@ -44,6 +44,8 @@ type Manager struct {
 
 	// serverside handlers.
 	handlers handlers
+
+	local string
 }
 
 // NewManager creates a new grid manager
@@ -52,6 +54,7 @@ func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn)
 	m := Manager{
 		ID:      uuid.New(),
 		targets: make(map[string]*Connection, len(hosts)),
+		local:   local,
 	}
 	for _, host := range hosts {
 		if host == local {
@@ -59,10 +62,12 @@ func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn)
 				return nil, fmt.Errorf("grid: local host found multiple times")
 			}
 			found = true
+			// No connection to local.
+			continue
 		}
 		m.targets[host] = NewConnection(m.ID, local, host, dialer, &m.handlers, auth)
 	}
-	if found {
+	if !found {
 		return nil, fmt.Errorf("grid: local host not found")
 	}
 
@@ -71,38 +76,66 @@ func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn)
 
 func (c *Manager) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		if debugPrint {
+			fmt.Printf("grid: Got a %s request for: %v\n", req.Method, req.URL)
+		}
 		ctx := req.Context()
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
 			w.WriteHeader(http.StatusUpgradeRequired)
 			return
 		}
+		defer conn.Close()
+		if debugPrint {
+			fmt.Printf("grid: Upgraded request: %v\n", req.URL)
+		}
+
 		msg, _, err := wsutil.ReadClientData(conn)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("handleMessages: reading connect: %w", err))
+			logger.LogIf(ctx, fmt.Errorf("grid: reading connect: %w", err))
 			return
 		}
+		if debugPrint {
+			fmt.Printf("%s handler: Got message, length %v\n", c.local, len(msg))
+		}
+
 		var m message
 		err = m.parse(msg)
 		if err != nil {
+			if debugPrint {
+				fmt.Println("parse err:", err)
+			}
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
 			return
 		}
 		if m.Op != OpConnect {
-			logger.LogIf(ctx, fmt.Errorf("handleMessages: unexpected op: %v", m.Op))
+			if debugPrint {
+				fmt.Println("op err:", m.Op)
+			}
+			logger.LogIf(ctx, fmt.Errorf("handler: unexpected op: %v", m.Op))
 			return
 		}
 		var cReq connectReq
-		_, err = cReq.UnmarshalMsg(msg)
+		_, err = cReq.UnmarshalMsg(m.Payload)
 		if err != nil {
+			if debugPrint {
+				fmt.Println("handler: creq err:", err)
+			}
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
 			return
 		}
 		remote := c.targets[cReq.Host]
 		if remote == nil {
-			logger.LogIf(ctx, fmt.Errorf("handleMessages: unknown host: %v", cReq.Host))
+			if debugPrint {
+				fmt.Printf("%s: handler: unknown host: %v. Have %v\n", c.local, cReq.Host, c.targets)
+			}
+			logger.LogIf(ctx, fmt.Errorf("handler: unknown host: %v", cReq.Host))
 			return
 		}
+		if debugPrint {
+			fmt.Printf("handler: Got Connect Req %+v\n", cReq)
+		}
+
 		logger.LogIf(ctx, remote.handleIncoming(ctx, conn, cReq))
 	}
 }

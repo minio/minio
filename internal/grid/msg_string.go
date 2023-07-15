@@ -12,22 +12,19 @@ func _() {
 	_ = x[OpConnectResponse-2]
 	_ = x[OpPing-3]
 	_ = x[OpPong-4]
-	_ = x[OpRequest-5]
-	_ = x[OpResponse-6]
-	_ = x[OpConnectMux-7]
-	_ = x[OpMuxConnectError-8]
-	_ = x[OpDisconnectMux-9]
-	_ = x[OpMuxClientMsg-10]
-	_ = x[OpMuxServerMsg-11]
-	_ = x[OpMuxServerErr-12]
-	_ = x[OpUnblockMux-13]
-	_ = x[OpAckMux-14]
-	_ = x[OpDisconnect-15]
+	_ = x[OpConnectMux-5]
+	_ = x[OpMuxConnectError-6]
+	_ = x[OpDisconnectMux-7]
+	_ = x[OpMuxClientMsg-8]
+	_ = x[OpMuxServerMsg-9]
+	_ = x[OpUnblockMux-10]
+	_ = x[OpAckMux-11]
+	_ = x[OpDisconnect-12]
 }
 
-const _Op_name = "ConnectConnectResponsePingPongRequestResponseConnectMuxMuxConnectErrorDisconnectMuxMuxClientMsgMuxServerMsgMuxServerErrUnblockMuxAckMuxDisconnect"
+const _Op_name = "ConnectConnectResponsePingPongConnectMuxMuxConnectErrorDisconnectMuxMuxClientMsgMuxServerMsgUnblockMuxAckMuxDisconnect"
 
-var _Op_index = [...]uint8{0, 7, 22, 26, 30, 37, 45, 55, 70, 83, 95, 107, 119, 129, 135, 145}
+var _Op_index = [...]uint8{0, 7, 22, 26, 30, 40, 55, 68, 80, 92, 102, 108, 118}
 
 func (i Op) String() string {
 	i -= 1

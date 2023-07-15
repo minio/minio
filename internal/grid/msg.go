@@ -47,15 +47,6 @@ const (
 	// OpPong is a OpPing response returned by the server.
 	OpPong
 
-	// OpRequest is a single request + response.
-	// SeqID is used for Handler ID.
-	// MuxID is returned in response.
-	OpRequest
-
-	// OpResponse is a single response from a request.
-	// MuxID will match a response.
-	OpResponse
-
 	// OpConnectMux will connect a new mux with optional payload.
 	OpConnectMux
 
@@ -70,9 +61,6 @@ const (
 
 	// OpMuxServerMsg contains a message to a server Mux
 	OpMuxServerMsg
-
-	// OpMuxServerErr contains an error message from a server Mux
-	OpMuxServerErr
 
 	// OpUnblockMux contains a message that a mux is unblocked.
 	// Only Stateful streams has flow control.
@@ -97,6 +85,10 @@ const (
 	// This will retain clients across reconnections or
 	// if sequence numbers are unexpected.
 	FlagStateless
+
+	// FlagPayloadIsErr can be used by individual ops to signify that
+	// The payload is a string error converted to byte slice.
+	FlagPayloadIsErr
 )
 
 // This struct cannot be changed and retain backwards compatibility.
@@ -179,15 +171,6 @@ type muxConnectError struct {
 }
 
 func (_ muxConnectError) Op() Op {
-	return OpMuxConnectError
-}
-
-type muxMsg struct {
-	B     []byte `msg:"b,allownil"`
-	Error string `msg:"e"`
-}
-
-func (_ muxMsg) Op() Op {
 	return OpMuxConnectError
 }
 

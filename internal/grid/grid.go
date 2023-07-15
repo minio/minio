@@ -20,6 +20,10 @@ package grid
 
 import "sync"
 
+const (
+	debugPrint = false
+)
+
 var internalByteBuffer = sync.Pool{
 	New: func() any { return make([]byte, 0, 4096) },
 }

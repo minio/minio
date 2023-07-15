@@ -127,7 +127,7 @@ const (
 
 // NewConnection will create an unconnected connection to a remote.
 func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handlers *handlers, auth AuthFn) *Connection {
-	c := Connection{
+	c := &Connection{
 		State:      StateUnconnected,
 		Remote:     remote,
 		Local:      local,
@@ -141,27 +141,40 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handl
 		connChange: &sync.Cond{L: &sync.Mutex{}},
 		handlers:   handlers,
 		auth:       auth,
+		header:     make(http.Header, 1),
 	}
 
+	if local == remote {
+		panic("equal hosts")
+	}
 	c.header.Set("Authorization", "Bearer "+auth(remote+GridRoutePath))
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
 		go c.connect()
 	}
-	return &c
+	if debugPrint {
+		fmt.Println(c.Local, "->", c.Remote, "Should local connect:", c.shouldConnect(), "side:", c.side)
+	}
+	return c
 }
 
 // shouldConnect returns a deterministic bool whether the local should initiate the connection.
 func (c *Connection) shouldConnect() bool {
 	// We xor the two hashes, so result isn't order dependent.
-	return xxh3.HashString(c.Local)^xxh3.HashString(c.Remote)&1 == 1
+	h0 := xxh3.HashString(c.Local)
+	h1 := xxh3.HashString(c.Remote)
+	if h0 == h1 {
+		// Tiebreak on unlikely tie.
+		return c.Local < c.Remote
+	}
+	return h0 < h1
 }
 
 func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := c.outgoing.LoadOrStore(client.MuxID, client); !ok {
+		if _, ok := c.outgoing.LoadOrStore(client.MuxID, client); client.MuxID == 0 || !ok {
 			break
 		}
 		client.MuxID = atomic.AddUint64(&c.NextID, 1)
@@ -180,8 +193,9 @@ var ErrDone = errors.New("done for now")
 var ErrRemoteRestart = errors.New("remote restarted")
 
 // Stateless connects to the remote handler and return all packets sent back.
-// If the remote is restarted or reports EOF the function will return ErrRemoteRestart and io.EOF respectively.
-// If cb returns an error it is returned. If ErrDone is returned on cb nil will be returned.
+// If the remote is restarted will return ErrRemoteRestart.
+// If nil will be returned remote call sent EOF or ErrDone is returned by the callback.
+// If ErrDone is returned on cb nil will be returned.
 func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb func([]byte) error) error {
 	client := c.NewMuxClient(ctx)
 	resp := make(chan Response, 10)
@@ -189,7 +203,7 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 
 	defer c.outgoing.Delete(client.MuxID)
 	for r := range resp {
-		if r.Err != nil && !errors.Is(r.Err, io.EOF) {
+		if r.Err != nil {
 			return r.Err
 		}
 		if len(r.Msg) > 0 {
@@ -200,9 +214,6 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 				}
 				return err
 			}
-		}
-		if errors.Is(r.Err, io.EOF) {
-			break
 		}
 	}
 	return nil
@@ -269,6 +280,9 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
+	if debugPrint {
+		fmt.Println(c.Local, "sendMsg: Sending", len(dst), "bytes. Side:", c.side)
+	}
 	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
 
@@ -293,11 +307,17 @@ func (c *Connection) connect() {
 			dialer.Header = ws.HandshakeHeaderHTTP(c.header)
 		}
 		dialStarted := time.Now()
+		if debugPrint {
+			fmt.Println(c.Local, "Connecting to ", toDial)
+		}
 		conn, br, _, err := dialer.Dial(c.ctx, toDial)
 		if br != nil {
 			ws.PutReader(br)
 		}
 		retry := func(err error) {
+			if debugPrint {
+				fmt.Printf("%v Connecting to %v: %v. Retrying.\n", c.Local, toDial, err)
+			}
 			sleep := defaultDialTimeout + time.Duration(rng.Int63n(int64(defaultDialTimeout)))
 			next := dialStarted.Add(sleep)
 			sleep = time.Until(next).Round(time.Millisecond)
@@ -318,7 +338,7 @@ func (c *Connection) connect() {
 			Op: OpConnect,
 		}
 		req := connectReq{
-			Host: c.Remote,
+			Host: c.Local,
 			ID:   c.id,
 		}
 		err = c.sendMsg(conn, m, &req)
@@ -330,8 +350,14 @@ func (c *Connection) connect() {
 		var r connectResp
 		err = c.receive(conn, &r)
 		if err != nil {
+			if debugPrint {
+				fmt.Println(c.Local, "receive err:", err, "side:", c.side)
+			}
 			retry(err)
 			continue
+		}
+		if debugPrint {
+			fmt.Println(c.Local, "Got connectResp:", r)
 		}
 		if !r.Accepted {
 			retry(fmt.Errorf("connection rejected: %s", r.RejectedReason))
@@ -351,12 +377,17 @@ func (c *Connection) connect() {
 			c.outgoing.Clear()
 		}
 		c.remoteID = &remoteUUID
-		c.handleMessages(c.ctx, conn)
+		if debugPrint {
+			fmt.Println(c.Local, "Connected Waiting for Messages")
+		}
+		go c.handleMessages(c.ctx, conn)
 		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
 		c.connChange.Signal()
 		for {
+			c.connChange.L.Lock()
 			c.connChange.Wait()
 			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				fmt.Println(c.Local, "Disconnected")
 				// Reconnect
 				break
 			}
@@ -364,8 +395,12 @@ func (c *Connection) connect() {
 	}
 }
 
+func (c *Connection) RequestStream(ctx context.Context, h HandlerID, req []byte, out chan<- Response) {
+	// TODO
+}
+
 func (c *Connection) receive(conn net.Conn, r receiver) error {
-	b, op, err := wsutil.ReadData(conn, ws.StateClientSide)
+	b, op, err := wsutil.ReadData(conn, c.side)
 	if err != nil {
 		return err
 	}
@@ -385,7 +420,17 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 }
 
 func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) error {
+	if req.Host != c.Remote {
+		err := fmt.Errorf("expected remote '%s', got '%s'", c.Remote, req.Host)
+		if debugPrint {
+			fmt.Println(err)
+		}
+		return err
+	}
 	if c.shouldConnect() {
+		if debugPrint {
+			fmt.Println("expected to be client side, not server side")
+		}
 		return errors.New("expected to be client side, not server side")
 	}
 	msg := message{
@@ -402,11 +447,14 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 			return true
 		})
 	}
-
-	err := c.sendMsg(conn, msg, &connectResp{
+	resp := connectResp{
 		ID:       c.id,
 		Accepted: true,
-	})
+	}
+	err := c.sendMsg(conn, msg, &resp)
+	if debugPrint {
+		fmt.Printf("grid: Queued Response %+v Side: %v\n", resp, c.side)
+	}
 	if err == nil {
 		c.connWg.Wait()
 		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
@@ -487,22 +535,35 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIf(c.ctx, fmt.Errorf("ws parse package: %w", err))
 				return
 			}
+			if debugPrint {
+				fmt.Printf("%s Got msg: %+v\n", c.Local, m)
+			}
 			switch m.Op {
 			case OpMuxServerMsg:
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
-					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					if m.Flags&FlagEOF == 0 {
+						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					}
 					PutByteBuffer(m.Payload)
 					continue
 				}
-				var err error
-				if m.Flags&FlagEOF != 0 {
-					err = io.EOF
+				if m.Flags&FlagPayloadIsErr != 0 {
+					v.response(m.Seq, Response{
+						Msg: nil,
+						Err: RemoteErr(m.Payload),
+					})
+					PutByteBuffer(m.Payload)
+				} else {
+					v.response(m.Seq, Response{
+						Msg: m.Payload,
+						Err: nil,
+					})
 				}
-				v.response(m.Seq, Response{
-					Msg: m.Payload,
-					Err: err,
-				})
+				if m.Flags&FlagEOF != 0 {
+					v.close()
+					c.outgoing.Delete(m.MuxID)
+				}
 			case OpMuxClientMsg:
 				v, ok := c.inStream.Load(m.MuxID)
 				if !ok {
@@ -556,13 +617,18 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 						continue
 					}
 					go func(m message) {
-						var r muxMsg
+						m.Op = OpMuxServerMsg
 						b, err := handler(m.Payload)
-						r.B = b
 						if err != nil {
-							r.Error = err.Error()
+							m.Flags |= FlagPayloadIsErr
+							m.Payload = []byte(*err)
+						} else {
+							m.Payload = b
+							if debugPrint {
+								fmt.Println("returning payload:", string(b))
+							}
 						}
-						logger.LogIf(ctx, c.queueMsg(m, &r))
+						logger.LogIf(c.ctx, c.queueMsg(m, nil))
 					}(m)
 					continue
 				}
@@ -600,33 +666,34 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	}()
 
 	// Write goroutine.
-	go func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
-				debug.PrintStack()
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+			debug.PrintStack()
+		}
+		atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
+		conn.Close()
+		c.connWg.Done()
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case toSend := <-c.outQueue:
+			if debugPrint {
+				fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
 			}
-			atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
-			conn.Close()
-			c.connWg.Done()
-		}()
-		for {
-			select {
-			case <-ctx.Done():
+			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
 				return
-			case toSend := <-c.outQueue:
-				if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
-					return
-				}
+			}
 
-				err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
-				if err != nil {
-					logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
-					return
-				}
+			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
+			if err != nil {
+				logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
+				return
 			}
 		}
-	}()
+	}
 }
 
 func (c *Connection) deleteMux(incoming bool, muxID uint64) {

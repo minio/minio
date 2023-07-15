@@ -20,7 +20,6 @@ package grid
 import (
 	"context"
 	"errors"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,7 +60,7 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 func newMuxStream(ctx context.Context, msg message, c *Connection, handler StatefulHandler) *muxServer {
 	ctx, cancel := context.WithCancel(ctx)
 	receive := make(chan []byte)
-	send := make(chan Response)
+	send := make(chan ServerResponse)
 	inboundCap, outboundCap := handler.InCapacity, handler.OutCapacity
 	if inboundCap <= 0 {
 		inboundCap = 1
@@ -96,29 +95,26 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 				return
 			// Process outgoing message.
 			case send, ok := <-send:
-				if !ok {
-					send.Err = io.EOF
-				}
 				<-m.outBlock
 				msg := message{
 					MuxID: m.ID,
 				}
-				eof := errors.Is(send.Err, io.EOF)
-				if send.Err != nil && !eof {
-					msg.Flags |= FlagEOF
-					msg.Op = OpMuxServerErr
-					msg.Payload = []byte(send.Err.Error())
+				if send.Err != nil {
+					msg.Flags |= FlagEOF | FlagPayloadIsErr
+					msg.Op = OpMuxServerMsg
+					msg.Payload = []byte(*send.Err)
 					m.send(msg)
 					return
+				}
+				if !ok {
+					msg.Flags |= FlagEOF
 				}
 				msg.Op = OpMuxServerMsg
 				msg.Payload = send.Msg
-				if eof {
-					msg.Op = OpMuxServerErr
-					m.send(msg)
+				m.send(msg)
+				if !ok {
 					return
 				}
-				m.send(msg)
 			}
 		}
 	}()
@@ -172,7 +168,7 @@ func (m *muxServer) ping() pongMsg {
 
 func (m *muxServer) disconnect(msg string) {
 	if msg != "" {
-		m.send(message{Op: OpMuxServerErr, MuxID: m.ID, Payload: []byte(msg)})
+		m.send(message{Op: OpMuxServerMsg, MuxID: m.ID, Flags: FlagPayloadIsErr | FlagEOF, Payload: []byte(msg)})
 	} else {
 		m.send(message{Op: OpDisconnectMux, MuxID: m.ID})
 	}

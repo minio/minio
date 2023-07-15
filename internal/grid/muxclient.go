@@ -34,6 +34,7 @@ type MuxClient struct {
 	MuxID            uint64
 	SendSeq, RecvSeq uint32
 	LastPong         int64
+	BaseFlags        uint8
 	Resp             chan []byte
 	ctx              context.Context
 	parent           *Connection
@@ -42,6 +43,11 @@ type MuxClient struct {
 	blocked          bool
 	closed           bool
 	stateful         bool
+}
+
+type ServerResponse struct {
+	Msg []byte
+	Err *RemoteErr
 }
 
 type Response struct {
@@ -63,9 +69,10 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 // This cannot be used concurrently.
 func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	msg := message{
-		Op:      OpRequest,
+		Op:      OpConnectMux,
+		MuxID:   m.MuxID,
 		Handler: h,
-		Flags:   0,
+		Flags:   m.BaseFlags | FlagEOF,
 		Payload: req,
 	}
 	ch := make(chan Response, 1)
@@ -84,10 +91,12 @@ func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	}
 }
 
+// send the message. msg.Seq and msg.MuxID will be set
 func (m *MuxClient) send(msg message) error {
 	dst := GetByteBuffer()[:0]
 	msg.Seq = m.SendSeq
 	msg.MuxID = m.MuxID
+	msg.Flags |= m.BaseFlags
 
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
@@ -106,9 +115,30 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 	// Try to grab an initial block.
 	msg := message{
 		Op:      OpConnectMux,
-		MuxID:   m.MuxID,
 		Handler: h,
 		Flags:   FlagEOF,
+		Payload: req,
+	}
+
+	// Send...
+	err := m.send(msg)
+	if err != nil {
+		PutByteBuffer(req)
+		out <- Response{Err: err}
+		return
+	}
+
+	// Route directly to output.
+	m.respWait = out
+}
+
+// RequestBytes will send a single payload request and stream back results.
+// req may not be read/writen to after calling.
+func (m *MuxClient) RequestStream(h HandlerID, req []byte, out chan<- Response) {
+	// Try to grab an initial block.
+	msg := message{
+		Op:      OpConnectMux,
+		Handler: h,
 		Payload: req,
 	}
 
