@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/disk"
+	"github.com/minio/minio/internal/net"
 )
 
 type collectMetricsOpts struct {
@@ -68,6 +69,18 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	}
 	if types.Contains(madmin.MetricsSiteResync) {
 		m.Aggregated.SiteResync = globalSiteResyncMetrics.report(opts.depID)
+	}
+	if types.Contains(madmin.MetricNet) {
+		m.Aggregated.Net = &madmin.NetMetrics{
+			CollectedAt:   UTCNow(),
+			InterfaceName: globalInternodeInterface,
+		}
+		netStats, err := net.GetInterfaceNetStats(globalInternodeInterface)
+		if err != nil {
+			m.Errors = append(m.Errors, err.Error())
+		} else {
+			m.Aggregated.Net.NetStats = netStats
+		}
 	}
 	// Add types...
 

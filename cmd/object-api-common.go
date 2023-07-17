@@ -62,7 +62,7 @@ func newStorageAPI(endpoint Endpoint, healthCheck bool) (storage StorageAPI, err
 		if err != nil {
 			return nil, err
 		}
-		return newXLStorageDiskIDCheck(storage), nil
+		return newXLStorageDiskIDCheck(storage, healthCheck), nil
 	}
 
 	return newStorageRESTClient(endpoint, healthCheck), nil

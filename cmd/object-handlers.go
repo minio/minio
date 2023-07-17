@@ -454,7 +454,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 					w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
 					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 				}
-				QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+				QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -489,7 +489,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			}
 		}
 
-		QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+		QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -715,7 +715,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 			}
-			QueueReplicationHeal(ctx, bucket, objInfo)
+			QueueReplicationHeal(ctx, bucket, objInfo, 0)
 			// do an additional verification whether object exists when object is deletemarker and request
 			// is from replication
 			if opts.CheckDMReplicationReady {
@@ -746,7 +746,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				}
 			}
 		}
-		QueueReplicationHeal(ctx, bucket, objInfo)
+		QueueReplicationHeal(ctx, bucket, objInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -1707,6 +1707,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to write data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
+		return
+	}
+
 	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -2297,6 +2303,11 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to delete data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
+		return
+	}
 
 	replica := r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String()
 	if replica {
@@ -2326,33 +2337,29 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
-
 	os := newObjSweeper(bucket, object).WithVersion(opts.VersionID).WithVersioning(opts.Versioned, opts.VersionSuspended)
-	// Mutations of objects on versioning suspended buckets
-	// affect its null version. Through opts below we select
-	// the null version's remote object to delete if
-	// transitioned.
-	goiOpts := os.GetOpts()
-	goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts)
-	if gerr == nil {
-		os.SetTransitionState(goi.TransitionedObject)
-	}
 
-	dsc := checkReplicateDelete(ctx, bucket, ObjectToDelete{
-		ObjectV: ObjectV{
-			ObjectName: object,
-			VersionID:  opts.VersionID,
-		},
-	}, goi, opts, gerr)
+	opts.SetEvalMetadataFn(func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
+		if replica { // no need to check replication on receiver
+			return dsc, nil
+		}
+		dsc = checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			ObjectV: ObjectV{
+				ObjectName: object,
+				VersionID:  opts.VersionID,
+			},
+		}, *oi, opts, gerr)
+		// Mutations of objects on versioning suspended buckets
+		// affect its null version. Through opts below we select
+		// the null version's remote object to delete if
+		// transitioned.
+		if gerr == nil {
+			os.SetTransitionState(oi.TransitionedObject)
+		}
+		return dsc, nil
+	})
 
 	vID := opts.VersionID
-	if dsc.ReplicateAny() {
-		opts.SetDeleteReplicationState(dsc, opts.VersionID)
-	}
 	if replica {
 		opts.SetReplicaStatus(replication.Replica)
 		if opts.VersionPurgeStatus().Empty() {
@@ -2360,25 +2367,21 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			vID = ""
 		}
 	}
-
-	apiErr := ErrNone
-	if vID != "" {
-		apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
-			ObjectV: ObjectV{
-				ObjectName: object,
-				VersionID:  vID,
-			},
-		}, goi, gerr)
-		if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL)
-			return
+	opts.SetEvalRetentionBypassFn(func(goi ObjectInfo, gerr error) (err error) {
+		err = nil
+		if vID != "" {
+			err := enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
+				ObjectV: ObjectV{
+					ObjectName: object,
+					VersionID:  vID,
+				},
+			}, goi, gerr)
+			if err != nil && !isErrObjectNotFound(err) {
+				return err
+			}
 		}
-	}
-
-	if apiErr == ErrNoSuchKey {
-		writeSuccessNoContent(w)
 		return
-	}
+	})
 
 	deleteObject := objectAPI.DeleteObject
 	if api.CacheAPI() != nil {
@@ -2393,6 +2396,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if isErrObjectNotFound(err) {
+			writeSuccessNoContent(w)
+			return
+		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
 	}
 
 	if objInfo.Name == "" {
@@ -2419,7 +2428,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	if dsc.ReplicateAny() {
+	if objInfo.ReplicationStatus == replication.Pending || objInfo.VersionPurgeStatus == Pending {
 		dmVersionID := ""
 		versionID := ""
 		if objInfo.DeleteMarker {
@@ -2434,7 +2443,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				DeleteMarkerVersionID: dmVersionID,
 				DeleteMarkerMTime:     DeleteMarkerMTime{objInfo.ModTime},
 				DeleteMarker:          objInfo.DeleteMarker,
-				ReplicationState:      objInfo.getReplicationState(dsc.String(), opts.VersionID, false),
+				ReplicationState:      objInfo.getReplicationState(),
 			},
 			Bucket:    bucket,
 			EventType: ReplicateIncomingDelete,
@@ -2505,7 +2514,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 	popts := ObjectOptions{
 		MTime:     opts.MTime,
 		VersionID: opts.VersionID,
-		EvalMetadataFn: func(oi *ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo, gerr error) (ReplicateDecision, error) {
 			oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
 			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp] = UTCNow().Format(time.RFC3339Nano)
 
@@ -2514,7 +2523,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 			}
-			return nil
+			return dsc, nil
 		},
 	}
 
@@ -2666,9 +2675,9 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	popts := ObjectOptions{
 		MTime:     opts.MTime,
 		VersionID: opts.VersionID,
-		EvalMetadataFn: func(oi *ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
 			if err := enforceRetentionBypassForPut(ctx, r, *oi, objRetention, cred, owner); err != nil {
-				return err
+				return dsc, err
 			}
 			if objRetention.Mode.Valid() {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
@@ -2678,12 +2687,12 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
 			}
 			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = UTCNow().Format(time.RFC3339Nano)
-			dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(*oi, replication.MetadataReplicationType, opts))
+			dsc = mustReplicate(ctx, bucket, object, getMustReplicateOptions(*oi, replication.MetadataReplicationType, opts))
 			if dsc.ReplicateAny() {
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 			}
-			return nil
+			return dsc, nil
 		},
 	}
 

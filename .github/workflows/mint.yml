@@ -3,7 +3,7 @@ name: Mint Tests
 on:
   pull_request:
     branches:
-    - master
+      - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -37,8 +37,7 @@ jobs:
 
       - name: build-minio
         run: |
-          make install
-          docker build . -t "minio/minio:${{ steps.vars.outputs.sha_short }}"
+          TAG="minio/minio:${{ steps.vars.outputs.sha_short }}" make docker
 
       - name: compress and encrypt
         run: |
@@ -51,7 +50,16 @@ jobs:
       - name: standalone erasure
         run: |
           ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "erasure" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
+      - name: The job must cleanup
+        if: ${{ always() }}
+        run: |
+          export JOB_NAME=${{ steps.vars.outputs.sha_short }}
+          for mode in $(echo compress-encrypt pools erasure); do
+             docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml down || true
+             docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml rm || true
+          done
           docker rmi -f minio/minio:${{ steps.vars.outputs.sha_short }}
-
-
-
+          docker system prune -f || true
+          docker volume prune -f || true
+          docker volume rm $(docker volume ls -q -f dangling=true) || true

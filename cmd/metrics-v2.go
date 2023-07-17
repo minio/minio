@@ -964,7 +964,7 @@ func getS3TTFBDistributionMD() MetricDescription {
 		Subsystem: timeSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of the time to first byte across API calls",
-		Type:      histogramMetric,
+		Type:      gaugeMetric,
 	}
 }
 
@@ -1664,8 +1664,9 @@ func getMinioHealingMetrics() *MetricsGroup {
 }
 
 func getFailedItems(seq *healSequence) (m []Metric) {
-	m = make([]Metric, 0, 1)
-	for k, v := range seq.gethealFailedItemsMap() {
+	items := seq.gethealFailedItemsMap()
+	m = make([]Metric, 0, len(items))
+	for k, v := range items {
 		s := strings.Split(k, ",")
 		m = append(m, Metric{
 			Description: getHealObjectsFailTotalMD(),
@@ -1990,6 +1991,67 @@ func getHTTPMetrics() *MetricsGroup {
 				VariableLabels: map[string]string{"api": api},
 			})
 		}
+
+		for bucket, inOut := range globalBucketConnStats.getS3InOutBytes() {
+			recvBytes := inOut.In
+			if recvBytes > 0 {
+				metrics = append(metrics, Metric{
+					Description:    getBucketTrafficReceivedBytes(),
+					Value:          float64(recvBytes),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+			}
+			sentBytes := inOut.Out
+			if sentBytes > 0 {
+				metrics = append(metrics, Metric{
+					Description:    getBucketTrafficSentBytes(),
+					Value:          float64(sentBytes),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+			}
+
+			httpStats := globalBucketHTTPStats.load(bucket)
+			for k, v := range httpStats.currentS3Requests.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsInFlightMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS3Requests.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsTotalMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS3Canceled.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3RequestsCanceledMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS34xxErrors.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3Requests4xxErrorsMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+
+			for k, v := range httpStats.totalS35xxErrors.Load() {
+				metrics = append(metrics, Metric{
+					Description:    getBucketS3Requests5xxErrorsMD(),
+					Value:          float64(v),
+					VariableLabels: map[string]string{"bucket": bucket, "api": k},
+				})
+			}
+		}
+
 		return
 	})
 	return mg
@@ -2018,20 +2080,20 @@ func getNetworkMetrics() *MetricsGroup {
 			})
 			metrics = append(metrics, Metric{
 				Description: getInterNodeSentBytesMD(),
-				Value:       float64(connStats.TotalOutputBytes),
+				Value:       float64(connStats.internodeOutputBytes),
 			})
 			metrics = append(metrics, Metric{
 				Description: getInterNodeReceivedBytesMD(),
-				Value:       float64(connStats.TotalInputBytes),
+				Value:       float64(connStats.internodeInputBytes),
 			})
 		}
 		metrics = append(metrics, Metric{
 			Description: getS3SentBytesMD(),
-			Value:       float64(connStats.S3OutputBytes),
+			Value:       float64(connStats.s3OutputBytes),
 		})
 		metrics = append(metrics, Metric{
 			Description: getS3ReceivedBytesMD(),
-			Value:       float64(connStats.S3InputBytes),
+			Value:       float64(connStats.s3InputBytes),
 		})
 		return
 	})
@@ -2101,65 +2163,6 @@ func getBucketUsageMetrics() *MetricsGroup {
 					Description:    getBucketUsageQuotaTotalBytesMD(),
 					Value:          float64(quota.Quota),
 					VariableLabels: map[string]string{"bucket": bucket},
-				})
-			}
-
-			recvBytes := globalBucketConnStats.getS3InputBytes(bucket)
-			if recvBytes > 0 {
-				metrics = append(metrics, Metric{
-					Description:    getBucketTrafficReceivedBytes(),
-					Value:          float64(recvBytes),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
-			}
-
-			sentBytes := globalBucketConnStats.getS3OutputBytes(bucket)
-			if sentBytes > 0 {
-				metrics = append(metrics, Metric{
-					Description:    getBucketTrafficSentBytes(),
-					Value:          float64(sentBytes),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
-			}
-
-			httpStats := globalBucketHTTPStats.load(bucket)
-			for k, v := range httpStats.currentS3Requests.Load() {
-				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsInFlightMD(),
-					Value:          float64(v),
-					VariableLabels: map[string]string{"bucket": bucket, "api": k},
-				})
-			}
-
-			for k, v := range httpStats.totalS3Requests.Load() {
-				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsTotalMD(),
-					Value:          float64(v),
-					VariableLabels: map[string]string{"bucket": bucket, "api": k},
-				})
-			}
-
-			for k, v := range httpStats.totalS3Canceled.Load() {
-				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsCanceledMD(),
-					Value:          float64(v),
-					VariableLabels: map[string]string{"bucket": bucket, "api": k},
-				})
-			}
-
-			for k, v := range httpStats.totalS34xxErrors.Load() {
-				metrics = append(metrics, Metric{
-					Description:    getBucketS3Requests4xxErrorsMD(),
-					Value:          float64(v),
-					VariableLabels: map[string]string{"bucket": bucket, "api": k},
-				})
-			}
-
-			for k, v := range httpStats.totalS35xxErrors.Load() {
-				metrics = append(metrics, Metric{
-					Description:    getBucketS3Requests5xxErrorsMD(),
-					Value:          float64(v),
-					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
 			}
 

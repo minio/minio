@@ -1463,9 +1463,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}
 // input to list only active batch jobs of 'jobType'
 func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListBatchJobs")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListBatchJobsAction)
 	if objectAPI == nil {
@@ -1515,9 +1513,7 @@ var errNoSuchJob = errors.New("no such job")
 
 // DescribeBatchJob returns the currently active batch job definition
 func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "DescribeBatchJob")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DescribeBatchJobAction)
 	if objectAPI == nil {
@@ -1552,9 +1548,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 
 // StarBatchJob queue a new job for execution
 func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "StartBatchJob")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, creds := validateAdminReq(ctx, w, r, iampolicy.StartBatchJobAction)
 	if objectAPI == nil {
@@ -1608,9 +1602,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 
 // CancelBatchJob cancels a job in progress
 func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "CancelBatchJob")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.CancelBatchJobAction)
 	if objectAPI == nil {

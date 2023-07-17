@@ -536,12 +536,18 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 	}
 }
 
+func (ri *ReplicateObjectInfo) getReplicationState() ReplicationState {
+	rs := ri.ObjectInfo.getReplicationState()
+	rs.ReplicateDecisionStr = ri.Dsc.String()
+	return rs
+}
+
 // vID here represents the versionID client specified in request - need to distinguish between delete marker and delete marker deletion
-func (o *ObjectInfo) getReplicationState(dsc string, vID string, heal bool) ReplicationState {
+func (o *ObjectInfo) getReplicationState() ReplicationState {
 	rs := ReplicationState{
 		ReplicationStatusInternal:  o.ReplicationStatusInternal,
 		VersionPurgeStatusInternal: o.VersionPurgeStatusInternal,
-		ReplicateDecisionStr:       dsc,
+		ReplicateDecisionStr:       o.replicationDecision,
 		Targets:                    make(map[string]replication.StatusType),
 		PurgeTargets:               make(map[string]VersionPurgeStatusType),
 		ResetStatusesMap:           make(map[string]string),
@@ -779,9 +785,10 @@ const (
 
 // MRFReplicateEntry mrf entry to save to disk
 type MRFReplicateEntry struct {
-	Bucket    string `json:"bucket" msg:"b"`
-	Object    string `json:"object" msg:"o"`
-	versionID string `json:"-"`
+	Bucket     string `json:"bucket" msg:"b"`
+	Object     string `json:"object" msg:"o"`
+	versionID  string `json:"-"`
+	RetryCount int    `json:"retryCount" msg:"rc"`
 }
 
 // MRFReplicateEntries has the map of MRF entries to save to disk
@@ -793,9 +800,10 @@ type MRFReplicateEntries struct {
 // ToMRFEntry returns the relevant info needed by MRF
 func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	return MRFReplicateEntry{
-		Bucket:    ri.Bucket,
-		Object:    ri.Name,
-		versionID: ri.VersionID,
+		Bucket:     ri.Bucket,
+		Object:     ri.Name,
+		versionID:  ri.VersionID,
+		RetryCount: int(ri.RetryCount),
 	}
 }
 

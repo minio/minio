@@ -37,7 +37,7 @@ import (
 	"github.com/minio/pkg/ldap"
 )
 
-func (a adminAPIHandlers) addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
+func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
@@ -198,10 +198,9 @@ func handleCreateUpdateValidation(s config.Config, subSys, cfgTarget string, isU
 //
 // PUT <admin-prefix>/idp-cfg/openid/_ -> create (default) named config `_`
 func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AddIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
-	a.addOrUpdateIDPHandler(ctx, w, r, false)
+	addOrUpdateIDPHandler(ctx, w, r, false)
 }
 
 // UpdateIdentityProviderCfg: updates an existing IDP config for openid/ldap.
@@ -210,18 +209,16 @@ func (a adminAPIHandlers) AddIdentityProviderCfg(w http.ResponseWriter, r *http.
 //
 // POST <admin-prefix>/idp-cfg/openid/_ -> update (default) named config `_`
 func (a adminAPIHandlers) UpdateIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "UpdateIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
-	a.addOrUpdateIDPHandler(ctx, w, r, true)
+	addOrUpdateIDPHandler(ctx, w, r, true)
 }
 
 // ListIdentityProviderCfg:
 //
 // GET <admin-prefix>/idp-cfg/openid -> lists openid provider configs.
 func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
@@ -274,8 +271,7 @@ func (a adminAPIHandlers) ListIdentityProviderCfg(w http.ResponseWriter, r *http
 //
 // GET <admin-prefix>/idp-cfg/openid/dex_test
 func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetIdentityProviderCfg")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
@@ -334,9 +330,7 @@ func (a adminAPIHandlers) GetIdentityProviderCfg(w http.ResponseWriter, r *http.
 //
 // DELETE <admin-prefix>/idp-cfg/openid/dex_test
 func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "DeleteIdentityProviderCfg")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {

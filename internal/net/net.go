@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,28 +15,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package net
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
+	"fmt"
 
-	"github.com/minio/mux"
+	"github.com/prometheus/procfs"
 )
 
-// Test cross domain xml handler.
-func TestCrossXMLHandler(t *testing.T) {
-	// Server initialization.
-	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
-	handler := setCrossDomainPolicyMiddleware(router)
-	srv := httptest.NewServer(handler)
-
-	resp, err := http.Get(srv.URL + crossDomainXMLEntity)
+// GetInterfaceNetStats - get procfs.NetDevLine by interfaceName
+func GetInterfaceNetStats(interf string) (procfs.NetDevLine, error) {
+	proc, err := procfs.Self()
 	if err != nil {
-		t.Fatal(err)
+		return procfs.NetDevLine{}, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatal("Unexpected http status received", resp.Status)
+	netDev, err := proc.NetDev()
+	if err != nil {
+		return procfs.NetDevLine{}, err
 	}
+	ndl, ok := netDev[interf]
+	if !ok {
+		return procfs.NetDevLine{}, fmt.Errorf("%v interface not found", interf)
+	}
+	return ndl, nil
 }
