@@ -18,6 +18,8 @@
 package net
 
 import (
+	"fmt"
+
 	"github.com/prometheus/procfs"
 )
 
@@ -31,5 +33,9 @@ func GetInterfaceNetStats(interf string) (procfs.NetDevLine, error) {
 	if err != nil {
 		return procfs.NetDevLine{}, err
 	}
-	return netDev[interf], nil
+	ndl, ok := netDev[interf]
+	if !ok {
+		return procfs.NetDevLine{}, fmt.Errorf("%v interface not found", interf)
+	}
+	return ndl, nil
 }
