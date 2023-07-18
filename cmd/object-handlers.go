@@ -202,13 +202,11 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	gopts.NoLock = true // We already have a lock, we can live with it.
 	objInfo, err := getObjectInfo(ctx, bucket, object, gopts)
 	if err != nil {
-		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if objInfo.VersionID != "" && objInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
-			}
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if objInfo.VersionID != "" && objInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -439,7 +437,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
 				return
 			}
-			if globalBucketVersioningSys.PrefixEnabled(bucket, object) && gr != nil {
+			if gr != nil {
 				if !gr.ObjInfo.VersionPurgeStatus.Empty() {
 					// Shows the replication status of a permanent delete of a version
 					w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(gr.ObjInfo.VersionPurgeStatus)}
@@ -702,31 +700,31 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if err != nil && !proxy.Proxy {
-		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-			switch {
-			case !objInfo.VersionPurgeStatus.Empty():
-				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
-			case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
-				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
-			}
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if objInfo.VersionID != "" && objInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
-			}
-			QueueReplicationHeal(ctx, bucket, objInfo, 0)
-			// do an additional verification whether object exists when object is deletemarker and request
-			// is from replication
-			if opts.CheckDMReplicationReady {
-				topts := opts
-				topts.VersionID = ""
-				goi, gerr := getObjectInfo(ctx, bucket, object, topts)
-				if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
-					w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
-				}
+		switch {
+		case !objInfo.VersionPurgeStatus.Empty():
+			w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
+		case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
+			w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
+		}
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if objInfo.VersionID != "" && objInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+		}
+
+		QueueReplicationHeal(ctx, bucket, objInfo, 0)
+		// do an additional verification whether object exists when object is deletemarker and request
+		// is from replication
+		if opts.CheckDMReplicationReady {
+			topts := opts
+			topts.VersionID = ""
+			goi, gerr := getObjectInfo(ctx, bucket, object, topts)
+			if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
+				w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
 			}
 		}
+
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -1116,14 +1114,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if isErrPreconditionFailed(err) {
 			return
 		}
-		if globalBucketVersioningSys.PrefixEnabled(srcBucket, srcObject) && gr != nil {
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
-			}
+
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if gr != nil && gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 		}
+
 		// Update context bucket & object names for correct S3 XML error response
 		reqInfo := logger.GetReqInfo(ctx)
 		reqInfo.BucketName = srcBucket
