@@ -45,11 +45,15 @@ import (
 // There is no distinction externally whether the connection was initiated from
 // this server or from the remote.
 type Connection struct {
-	// State of the connection (atomic)
-	State State
-
 	// NextID is the next ID that can be used (atomic).
 	NextID uint64
+
+	// LastPong is last pong time (atomic)
+	// Only valid when StateConnected.
+	LastPong int64
+
+	// State of the connection (atomic)
+	State State
 
 	// Non-atomic
 	Remote string
@@ -82,7 +86,8 @@ type Connection struct {
 
 	connWg sync.WaitGroup
 
-	// connChange will be signaled whenever
+	// connChange will be signaled whenever State has been updated, or at regular intervals.
+	// Holding the lock allows safe reads of State, and guarantees that changes will be detected.
 	connChange *sync.Cond
 
 	handlers *handlers
@@ -287,8 +292,7 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 }
 
 func (c *Connection) connect() {
-	atomic.StoreUint32((*uint32)(&c.State), StateConnecting)
-	c.connChange.Signal()
+	c.updateState(StateConnecting)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Runs until the server is shut down.
 	for {
@@ -325,8 +329,7 @@ func (c *Connection) connect() {
 				sleep = 0
 			}
 			logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %v Sleeping %v", toDial, err, sleep))
-			atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
-			c.connChange.Signal()
+			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
 		}
 		if err != nil {
@@ -381,12 +384,13 @@ func (c *Connection) connect() {
 			fmt.Println(c.Local, "Connected Waiting for Messages")
 		}
 		go c.handleMessages(c.ctx, conn)
-		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
-		c.connChange.Signal()
+		c.updateState(StateConnected)
 		for {
 			c.connChange.L.Lock()
 			c.connChange.Wait()
-			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+			newState := c.State
+			c.connChange.L.Unlock()
+			if newState != StateConnected {
 				fmt.Println(c.Local, "Disconnected")
 				// Reconnect
 				break
@@ -395,8 +399,76 @@ func (c *Connection) connect() {
 	}
 }
 
-func (c *Connection) RequestStream(ctx context.Context, h HandlerID, req []byte, out chan<- Response) {
-	// TODO
+type Stream struct {
+	// Responses from the remote server.
+	// Channel will be closed
+	Responses <-chan Response
+
+	// Requests sent to the server.
+	// If the handler is defined with 0 incoming capacity this will be nil.
+	Requests chan<- []byte
+}
+
+// NewStream creates a
+func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
+	if !h.valid() {
+		return nil, ErrUnknownHandler
+	}
+	handler := c.handlers.streams[h]
+	if handler == nil {
+		return nil, ErrUnknownHandler
+	}
+
+	var requests chan []byte
+	var responses chan Response
+	if handler.InCapacity > 0 {
+		requests = make(chan []byte, handler.InCapacity)
+	}
+	if handler.OutCapacity > 0 {
+		responses = make(chan Response, handler.OutCapacity)
+	} else {
+		responses = make(chan Response, 1)
+	}
+
+	cl := c.NewMuxClient(ctx)
+	if err := cl.RequestStream(h, payload, requests, responses); err != nil {
+		return nil, err
+	}
+	return &Stream{Responses: responses, Requests: requests}, nil
+}
+
+// WaitForConnect will block until a connection has been established or
+// the context is canceled, in which case the context error is returned.
+func (c *Connection) WaitForConnect(ctx context.Context) error {
+	if atomic.LoadUint32((*uint32)(&c.State)) == StateConnected {
+		// Happy path.
+		return nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	changed := make(chan struct{}, 1)
+	go func() {
+		defer close(changed)
+		c.connChange.L.Lock()
+		c.connChange.Wait()
+		c.connChange.L.Unlock()
+		select {
+		case changed <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+			if atomic.LoadUint32((*uint32)(&c.State)) == StateConnected {
+				return nil
+			}
+		}
+	}
 }
 
 func (c *Connection) receive(conn net.Conn, r receiver) error {
@@ -438,8 +510,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	}
 
 	if c.remoteID != nil && *c.remoteID != req.ID {
-		atomic.StoreUint32((*uint32)(&c.State), StateConnectionError)
-		c.connChange.Signal()
+		c.updateState(StateConnectionError)
 		// Remote ID changed.
 		// Close all active requests.
 		c.outgoing.Range(func(key uint64, client *MuxClient) bool {
@@ -447,6 +518,8 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 			return true
 		})
 	}
+	rid := uuid.UUID(req.ID)
+	c.remoteID = &rid
 	resp := connectResp{
 		ID:       c.id,
 		Accepted: true,
@@ -457,11 +530,18 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	}
 	if err == nil {
 		c.connWg.Wait()
-		atomic.StoreUint32((*uint32)(&c.State), StateConnected)
-		c.connChange.Signal()
+		c.updateState(StateConnected)
 		c.handleMessages(ctx, conn)
 	}
 	return err
+}
+
+func (c *Connection) updateState(s State) {
+	c.connChange.L.Lock()
+	c.connChange.L.Unlock()
+	// We may have reads that aren't locked, so update atomically.
+	atomic.StoreUint32((*uint32)(&c.State), uint32(s))
+	c.connChange.Broadcast()
 }
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
@@ -473,8 +553,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
-			atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
-			c.connChange.Signal()
+			c.connChange.L.Lock()
+			if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
+				c.connChange.Broadcast()
+			}
+			c.connChange.L.Unlock()
 			conn.Close()
 			c.connWg.Done()
 		}()
@@ -540,6 +623,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			switch m.Op {
 			case OpMuxServerMsg:
+				if debugPrint {
+					fmt.Printf("%s Got mux msg: %+v\n", c.Local, m)
+				}
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					if m.Flags&FlagEOF == 0 {
@@ -567,22 +653,42 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			case OpMuxClientMsg:
 				v, ok := c.inStream.Load(m.MuxID)
 				if !ok {
+					if debugPrint {
+						fmt.Println(c.Local, "OpMuxClientMsg: Unknown Mux:", m.MuxID)
+					}
 					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
 					PutByteBuffer(m.Payload)
 					continue
 				}
-				v.inbound <- m.Payload
+				v.message(m)
 				if m.Flags&FlagEOF != 0 {
-					close(v.inbound)
+					v.close()
+					c.inStream.Delete(m.MuxID)
 				}
-			case OpUnblockMux:
+			case OpUnblockSrvMux:
 				PutByteBuffer(m.Payload)
 				m.Payload = nil
 				if v, ok := c.inStream.Load(m.MuxID); ok {
 					v.unblockSend()
 					continue
 				}
+				if debugPrint {
+					fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
+				}
 				logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+				continue
+			case OpUnblockClMux:
+				PutByteBuffer(m.Payload)
+				m.Payload = nil
+				v, ok := c.outgoing.Load(m.MuxID)
+				if !ok {
+					if debugPrint {
+						fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
+					}
+					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					continue
+				}
+				v.unblockSend()
 				continue
 			case OpDisconnectMux:
 				PutByteBuffer(m.Payload)
@@ -604,32 +710,46 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					logger.LogIf(ctx, c.queueMsg(m, &pong))
 				}
 				continue
-			case OpConnectMux:
+			case OpPong:
+				// Broadcast when we get a pong.
+				// TODO: Add automatic pings.
+				c.connChange.Broadcast()
+				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+
+			case OpRequest:
 				if !m.Handler.valid() {
 					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
 					continue
 				}
 				// Singleshot message
-				if m.Flags&FlagEOF != 0 {
-					handler := c.handlers.single[m.Handler]
-					if handler == nil {
-						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
-						continue
-					}
-					go func(m message) {
-						m.Op = OpMuxServerMsg
-						b, err := handler(m.Payload)
-						if err != nil {
-							m.Flags |= FlagPayloadIsErr
-							m.Payload = []byte(*err)
-						} else {
-							m.Payload = b
-							if debugPrint {
-								fmt.Println("returning payload:", string(b))
-							}
+				handler := c.handlers.single[m.Handler]
+				if handler == nil {
+					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+					continue
+				}
+				go func(m message) {
+					m.Op = OpMuxServerMsg
+					b, err := handler(m.Payload)
+					if err != nil {
+						m.Flags |= FlagPayloadIsErr
+						m.Payload = []byte(*err)
+					} else {
+						m.Payload = b
+						if debugPrint {
+							fmt.Println("returning payload:", string(b))
 						}
-						logger.LogIf(c.ctx, c.queueMsg(m, nil))
-					}(m)
+					}
+					logger.LogIf(c.ctx, c.queueMsg(m, nil))
+				}(m)
+				continue
+			case OpAckMux:
+				if debugPrint {
+					fmt.Println(c.Local, "Mux", m.MuxID, "Acknowledged")
+				}
+				// TODO: Unblock now.
+			case OpConnectMux:
+				if !m.Handler.valid() {
+					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
 					continue
 				}
 				// Stateless stream:
@@ -654,6 +774,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
 						return newMuxStream(ctx, m, c, *handler)
 					})
+					if debugPrint {
+						fmt.Println("connected stream mux:", m.MuxID)
+					}
 				}
 				// Acknowledge Mux created.
 				m.Op = OpAckMux

@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -188,9 +189,10 @@ func TestStreamRoundtrip(t *testing.T) {
 
 	// 1: Echo
 	register := func(manager *Manager) {
-		errFatal(local.RegisterStreamingHandler(HandlerID(1), StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(HandlerID(1), StatefulHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse) {
 				for in := range request {
+					t.Log("1:Got request", string(in))
 					resp <- ServerResponse{
 						Msg: append(payload, in...),
 						Err: nil,
@@ -201,9 +203,10 @@ func TestStreamRoundtrip(t *testing.T) {
 			InCapacity:  1,
 		}))
 		// 2: Return as error
-		errFatal(local.RegisterStreamingHandler(HandlerID(2), StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(HandlerID(2), StatefulHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse) {
 				for in := range request {
+					t.Log("2: Got err request", string(in))
 					err := RemoteErr(append(payload, in...))
 					resp <- ServerResponse{
 						Err: &err,
@@ -226,19 +229,26 @@ func TestStreamRoundtrip(t *testing.T) {
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
 
-	start := time.Now()
-	resp, err := remoteConn.RequestStream(context.Background(), HandlerID(1), []byte(testPayload))
+	err = remoteConn.WaitForConnect(context.Background())
 	errFatal(err)
-	if string(resp) != testPayload {
-		t.Errorf("want %q, got %q", testPayload, string(resp))
-	}
-	t.Log("Roundtrip:", time.Since(start))
 
-	start = time.Now()
-	resp, err = remoteConn.Single(context.Background(), HandlerID(2), []byte(testPayload))
-	t.Log("Roundtrip:", time.Since(start))
-	if err != RemoteErr(testPayload) {
-		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+	start := time.Now()
+	stream, err := remoteConn.NewStream(context.Background(), HandlerID(1), []byte(testPayload))
+	errFatal(err)
+	var n int
+	stream.Requests <- []byte(strconv.Itoa(n))
+	for resp := range stream.Responses {
+		t.Logf("got resp: %+v", resp)
+		errFatal(resp.Err)
+		if string(resp.Msg) != testPayload+strconv.Itoa(n) {
+			t.Errorf("want %q, got %q", testPayload+strconv.Itoa(n), string(resp.Msg))
+		}
+		if n == 10 {
+			close(stream.Requests)
+			break
+		}
+		n++
+		stream.Requests <- []byte(strconv.Itoa(n))
 	}
-	t.Log("Roundtrip:", time.Since(start))
+	t.Log("10 Roundtrips:", time.Since(start))
 }

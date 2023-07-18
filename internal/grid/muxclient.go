@@ -69,7 +69,7 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 // This cannot be used concurrently.
 func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	msg := message{
-		Op:      OpConnectMux,
+		Op:      OpRequest,
 		MuxID:   m.MuxID,
 		Handler: h,
 		Flags:   m.BaseFlags | FlagEOF,
@@ -97,6 +97,7 @@ func (m *MuxClient) send(msg message) error {
 	msg.Seq = m.SendSeq
 	msg.MuxID = m.MuxID
 	msg.Flags |= m.BaseFlags
+	m.SendSeq++
 
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
@@ -132,33 +133,71 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 	m.respWait = out
 }
 
-// RequestBytes will send a single payload request and stream back results.
-// req may not be read/writen to after calling.
-func (m *MuxClient) RequestStream(h HandlerID, req []byte, out chan<- Response) {
+// RequestStream will send a single payload request and stream back results.
+// 'requests' can be nil, in which case only req is sent as input.
+// It will however take less resources.
+func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan<- Response) error {
 	// Try to grab an initial block.
 	msg := message{
 		Op:      OpConnectMux,
 		Handler: h,
-		Payload: req,
+		Payload: payload,
+	}
+	if requests == nil {
+		msg.Flags |= FlagEOF
 	}
 
 	// Send...
 	err := m.send(msg)
 	if err != nil {
-		PutByteBuffer(req)
-		out <- Response{Err: err}
-		return
+		return err
 	}
-
+	if debugPrint {
+		fmt.Println("Connecting to", m.parent.Remote)
+	}
+	if requests != nil {
+		go func() {
+			msg := message{
+				Op:    OpMuxClientMsg,
+				MuxID: m.MuxID,
+				Seq:   1,
+			}
+			var errState bool
+			for req := range requests {
+				if errState {
+					continue
+				}
+				msg.Payload = req
+				err := m.send(msg)
+				if err != nil {
+					PutByteBuffer(req)
+					responses <- Response{Err: err}
+					return
+				}
+				msg.Seq++
+			}
+			msg.Payload = nil
+			msg.Flags |= FlagEOF
+			err := m.send(msg)
+			if err != nil {
+				responses <- Response{Err: err}
+				return
+			}
+		}()
+	}
 	// Route directly to output.
-	m.respWait = out
+	m.respWait = responses
+
+	return nil
 }
 
 // response will send handleIncoming response to client.
 // may never block.
 // Should return whether the next call would block.
 func (m *MuxClient) response(seq uint32, r Response) {
-	// Copy before testing.
+	if debugPrint {
+		fmt.Printf("mux %d: got msg seqid %d, payload lenght: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
+	}
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
@@ -187,6 +226,17 @@ func (m *MuxClient) response(seq uint32, r Response) {
 	}
 }
 
+func (m *MuxClient) unblockSend() {
+	// TODO:
+	/*
+		select {
+		case m.outBlock <- struct{}{}:
+		default:
+			logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+		}
+	*/
+}
+
 func (m *MuxClient) pong(msg pongMsg) {
 	if msg.NotFound || msg.Err != nil {
 		m.respMu.Lock()
@@ -208,6 +258,9 @@ func (m *MuxClient) pong(msg pongMsg) {
 }
 
 func (m *MuxClient) close() {
+	if debugPrint {
+		fmt.Println("closing mux", m.MuxID)
+	}
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	m.closeLocked()

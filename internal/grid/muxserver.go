@@ -20,6 +20,7 @@ package grid
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,6 +53,7 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 		LastPing: time.Now().Unix(),
 	}
 	go func() {
+		// TODO: Handle
 	}()
 
 	return &m
@@ -59,12 +61,8 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 
 func newMuxStream(ctx context.Context, msg message, c *Connection, handler StatefulHandler) *muxServer {
 	ctx, cancel := context.WithCancel(ctx)
-	receive := make(chan []byte)
 	send := make(chan ServerResponse)
 	inboundCap, outboundCap := handler.InCapacity, handler.OutCapacity
-	if inboundCap <= 0 {
-		inboundCap = 1
-	}
 	if outboundCap <= 0 {
 		outboundCap = 1
 	}
@@ -76,16 +74,19 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 		ctx:      ctx,
 		cancel:   cancel,
 		parent:   c,
-		inbound:  make(chan []byte, inboundCap),
+		inbound:  nil,
 		outBlock: make(chan struct{}, outboundCap),
 		LastPing: time.Now().Unix(),
+	}
+	if inboundCap > 0 {
+		m.inbound = make(chan []byte, inboundCap)
 	}
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
 	}
 	go func() {
 		defer m.close()
-		handler.Handle(ctx, msg.Payload, receive, send)
+		handler.Handle(ctx, msg.Payload, m.inbound, send)
 	}()
 	go func() {
 		defer m.parent.deleteMux(true, m.ID)
@@ -123,25 +124,38 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 }
 
 func (m *muxServer) message(msg message) {
+	if debugPrint {
+		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
+	}
 	if m.inbound == nil {
-		// Shouldn't be sending. Maybe log...
+		m.disconnect("did not expect inbound message")
 		return
 	}
 	wantSeq := m.RecvSeq + 1
 	if msg.Seq != wantSeq {
 		m.disconnect("receive sequence number mismatch")
+		return
 	}
+
 	m.RecvSeq++
+	if msg.Flags&FlagEOF != 0 {
+		m.close()
+		PutByteBuffer(msg.Payload)
+		return
+	}
 	select {
 	case <-m.ctx.Done():
 	case m.inbound <- msg.Payload:
-		m.send(message{Op: OpUnblockMux, MuxID: m.ID})
+		if debugPrint {
+			fmt.Printf("muxServer: Sent seq %d to handler\n", msg.Seq)
+		}
+		m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
 	default:
 		go func() {
 			select {
 			case <-m.ctx.Done():
 			case m.inbound <- msg.Payload:
-				m.send(message{Op: OpUnblockMux, MuxID: m.ID})
+				m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
 			}
 		}()
 	}
@@ -167,11 +181,15 @@ func (m *muxServer) ping() pongMsg {
 }
 
 func (m *muxServer) disconnect(msg string) {
+	if debugPrint {
+		fmt.Println("Mux", m.ID, "disconnecting. Reason:", msg)
+	}
 	if msg != "" {
 		m.send(message{Op: OpMuxServerMsg, MuxID: m.ID, Flags: FlagPayloadIsErr | FlagEOF, Payload: []byte(msg)})
 	} else {
 		m.send(message{Op: OpDisconnectMux, MuxID: m.ID})
 	}
+	m.close()
 	m.parent.deleteMux(true, m.ID)
 }
 
@@ -179,10 +197,12 @@ func (m *muxServer) send(msg message) {
 	m.sendMu.Lock()
 	defer m.sendMu.Unlock()
 	m.SendSeq++
+	msg.MuxID = m.ID
 	msg.Seq = m.SendSeq
-	if m.inbound == nil {
-		logger.LogIf(m.ctx, m.parent.queueMsg(msg, nil))
+	if debugPrint {
+		fmt.Printf("Mux %d, Sending %+v\n", m.ID, msg)
 	}
+	logger.LogIf(m.ctx, m.parent.queueMsg(msg, nil))
 }
 
 func (m *muxServer) close() {

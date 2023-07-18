@@ -62,12 +62,20 @@ const (
 	// OpMuxServerMsg contains a message to a server Mux
 	OpMuxServerMsg
 
-	// OpUnblockMux contains a message that a mux is unblocked.
+	// OpUnblockSrvMux contains a message that a server mux is unblocked with one.
 	// Only Stateful streams has flow control.
-	OpUnblockMux
+	OpUnblockSrvMux
+
+	// OpUnblockClMux contains a message that a client mux is unblocked with one.
+	// Only Stateful streams has flow control.
+	OpUnblockClMux
 
 	// OpAckMux acknowledges a mux was created.
 	OpAckMux
+
+	// OpRequest is a single request + response.
+	// MuxID is returned in response.
+	OpRequest
 
 	// OpDisconnect instructs that remote wants to disconnect
 	OpDisconnect

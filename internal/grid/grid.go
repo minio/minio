@@ -21,7 +21,7 @@ package grid
 import "sync"
 
 const (
-	debugPrint = false
+	debugPrint = true
 )
 
 var internalByteBuffer = sync.Pool{

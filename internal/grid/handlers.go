@@ -72,7 +72,7 @@ type (
 		OutCapacity int
 	}
 
-	StreamHandlerFn func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse)
+	StreamHandlerFn func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- ServerResponse)
 	// StatefulHandler handles fully bidirectional streams.
 
 	StatefulHandler struct {
@@ -86,7 +86,8 @@ type (
 		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
 		OutCapacity int
 
-		// InCapacity is the output capacity. If <= 0 capacity will be 1.
+		// InCapacity is the output capacity.
+		// If == 0 no input is expected
 		InCapacity int
 	}
 )
