@@ -845,6 +845,7 @@ type scannerItem struct {
 type sizeSummary struct {
 	totalSize       int64
 	versions        uint64
+	deleteMarkers   uint64
 	replicatedSize  int64
 	pendingSize     int64
 	failedSize      int64

@@ -484,8 +484,8 @@ github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/kes-go v0.1.0 h1:h201DyOYP5sTqajkxFGxmXz/kPbT8HQNX1uh3Yx2PFc=
 github.com/minio/kes-go v0.1.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
-github.com/minio/madmin-go/v3 v3.0.7 h1:nuRwrqarFrkzbUiA36H/HKAcuNr8J9TjKlWRlua7lNo=
-github.com/minio/madmin-go/v3 v3.0.7/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
+github.com/minio/madmin-go/v3 v3.0.8-0.20230717144230-b697fb223a25 h1:4zQOJq6tbY6MDXbdPw5tuajM9rQroJ7eIRGs5mxr40w=
+github.com/minio/madmin-go/v3 v3.0.8-0.20230717144230-b697fb223a25/go.mod h1:lPrMoc1aeiIWmmrxBthkDqzMPQwC/Lu9ByuyM2wenJk=
 github.com/minio/mc v0.0.0-20230713161043-15ea1125e377 h1:jcIt177m3jJCrDEAZFhgUcq+PdMnpfsF8QrFNSbG0nU=
 github.com/minio/mc v0.0.0-20230713161043-15ea1125e377/go.mod h1:eXUhMFdo6O9d0axon9FVNaEtCDPMJdZW7K7jyYQRR5Q=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
