@@ -161,28 +161,29 @@ const (
 type MetricName string
 
 const (
-	authTotal      MetricName = "auth_total"
-	canceledTotal  MetricName = "canceled_total"
-	errorsTotal    MetricName = "errors_total"
-	headerTotal    MetricName = "header_total"
-	healTotal      MetricName = "heal_total"
-	hitsTotal      MetricName = "hits_total"
-	inflightTotal  MetricName = "inflight_total"
-	invalidTotal   MetricName = "invalid_total"
-	limitTotal     MetricName = "limit_total"
-	missedTotal    MetricName = "missed_total"
-	waitingTotal   MetricName = "waiting_total"
-	incomingTotal  MetricName = "incoming_total"
-	objectTotal    MetricName = "object_total"
-	versionTotal   MetricName = "version_total"
-	offlineTotal   MetricName = "offline_total"
-	onlineTotal    MetricName = "online_total"
-	openTotal      MetricName = "open_total"
-	readTotal      MetricName = "read_total"
-	timestampTotal MetricName = "timestamp_total"
-	writeTotal     MetricName = "write_total"
-	total          MetricName = "total"
-	freeInodes     MetricName = "free_inodes"
+	authTotal         MetricName = "auth_total"
+	canceledTotal     MetricName = "canceled_total"
+	errorsTotal       MetricName = "errors_total"
+	headerTotal       MetricName = "header_total"
+	healTotal         MetricName = "heal_total"
+	hitsTotal         MetricName = "hits_total"
+	inflightTotal     MetricName = "inflight_total"
+	invalidTotal      MetricName = "invalid_total"
+	limitTotal        MetricName = "limit_total"
+	missedTotal       MetricName = "missed_total"
+	waitingTotal      MetricName = "waiting_total"
+	incomingTotal     MetricName = "incoming_total"
+	objectTotal       MetricName = "object_total"
+	versionTotal      MetricName = "version_total"
+	deleteMarkerTotal MetricName = "deletemarker_total"
+	offlineTotal      MetricName = "offline_total"
+	onlineTotal       MetricName = "online_total"
+	openTotal         MetricName = "open_total"
+	readTotal         MetricName = "read_total"
+	timestampTotal    MetricName = "timestamp_total"
+	writeTotal        MetricName = "write_total"
+	total             MetricName = "total"
+	freeInodes        MetricName = "free_inodes"
 
 	failedCount     MetricName = "failed_count"
 	failedBytes     MetricName = "failed_bytes"
@@ -584,6 +585,16 @@ func getClusterUsageVersionsTotalMD() MetricDescription {
 	}
 }
 
+func getClusterUsageDeleteMarkersTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      deleteMarkerTotal,
+		Help:      "Total number of delete markers in a cluster",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageObjectsTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -600,6 +611,16 @@ func getBucketUsageVersionsTotalMD() MetricDescription {
 		Subsystem: usageSubsystem,
 		Name:      versionTotal,
 		Help:      "Total number of versions (includes delete marker)",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageDeleteMarkersTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      deleteMarkerTotal,
+		Help:      "Total number of delete markers",
 		Type:      gaugeMetric,
 	}
 }
@@ -2263,10 +2284,11 @@ func getClusterUsageMetrics() *MetricsGroup {
 		})
 
 		var (
-			clusterSize          uint64
-			clusterBuckets       uint64
-			clusterObjectsCount  uint64
-			clusterVersionsCount uint64
+			clusterSize               uint64
+			clusterBuckets            uint64
+			clusterObjectsCount       uint64
+			clusterVersionsCount      uint64
+			clusterDeleteMarkersCount uint64
 		)
 
 		clusterObjectSizesHistogram := map[string]uint64{}
@@ -2276,6 +2298,7 @@ func getClusterUsageMetrics() *MetricsGroup {
 			clusterSize += usage.Size
 			clusterObjectsCount += usage.ObjectsCount
 			clusterVersionsCount += usage.VersionsCount
+			clusterDeleteMarkersCount += usage.DeleteMarkersCount
 			for k, v := range usage.ObjectSizesHistogram {
 				v1, ok := clusterObjectSizesHistogram[k]
 				if !ok {
@@ -2309,6 +2332,11 @@ func getClusterUsageMetrics() *MetricsGroup {
 		metrics = append(metrics, Metric{
 			Description: getClusterUsageVersionsTotalMD(),
 			Value:       float64(clusterVersionsCount),
+		})
+
+		metrics = append(metrics, Metric{
+			Description: getClusterUsageDeleteMarkersTotalMD(),
+			Value:       float64(clusterDeleteMarkersCount),
 		})
 
 		metrics = append(metrics, Metric{
@@ -2382,6 +2410,12 @@ func getBucketUsageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:    getBucketUsageVersionsTotalMD(),
 				Value:          float64(usage.VersionsCount),
+				VariableLabels: map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
+				Description:    getBucketUsageDeleteMarkersTotalMD(),
+				Value:          float64(usage.DeleteMarkersCount),
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 

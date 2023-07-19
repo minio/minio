@@ -24,6 +24,7 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_cluster_usage_object_total`            | Total number of objects in a cluster                                                                            |
 | `minio_cluster_usage_total_bytes`             | Total cluster usage in bytes                                                                                    |
 | `minio_cluster_usage_version_total`           | Total number of versions (includes delete marker) in a cluster                                                  |
+| `minio_cluster_usage_deletemarker_total`      | Total number of delete markers in a cluster                                                                     |
 | `minio_cluster_usage_total_bytes`             | Total cluster usage in bytes                                                                                    |
 | `minio_cluster_buckets_total`                 | Total number of buckets in the cluster                                                                          |
 | `minio_cluster_disk_offline_total`            | Total drives offline.                                                                                           |
@@ -125,6 +126,7 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_bucket_traffic_sent_bytes`                 | Total number of S3 bytes sent for this bucket.                                  |
 | `minio_bucket_usage_object_total`                 | Total number of objects.                                                        |
 | `minio_bucket_usage_version_total`                | Total number of versions (includes delete marker)                               |
+| `minio_bucket_usage_deletemarker_total`           | Total number of delete markers.                                                 |
 | `minio_bucket_usage_total_bytes`                  | Total bucket size in bytes.                                                     |
 | `minio_bucket_requests_4xx_errors_total`          | Total number of S3 requests with (4xx) errors on a bucket.                      |
 | `minio_bucket_requests_5xx_errors_total`          | Total number of S3 requests with (5xx) errors on a bucket.                      |
