@@ -214,6 +214,9 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	for disk := range opts.disks {
 		values.Set(peerRESTDisk, disk)
 	}
+	for host := range opts.hosts {
+		values.Set(peerRESTHost, host)
+	}
 	values.Set(peerRESTJobID, opts.jobID)
 	values.Set(peerRESTDepID, opts.depID)
 

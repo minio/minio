@@ -98,6 +98,7 @@ const (
 	peerRESTStorageClass   = "storage-class"
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
+	peerRESTHost           = "host"
 	peerRESTJobID          = "job-id"
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"

@@ -453,6 +453,12 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 	for _, disk := range r.Form[peerRESTDisk] {
 		diskMap[disk] = struct{}{}
 	}
+
+	hostMap := make(map[string]struct{})
+	for _, host := range r.Form[peerRESTHost] {
+		hostMap[host] = struct{}{}
+	}
+
 	jobID := r.Form.Get(peerRESTJobID)
 	depID := r.Form.Get(peerRESTDepID)
 
@@ -461,6 +467,7 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 
 	info := collectLocalMetrics(types, collectMetricsOpts{
 		disks: diskMap,
+		hosts: hostMap,
 		jobID: jobID,
 		depID: depID,
 	})
