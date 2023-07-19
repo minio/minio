@@ -42,17 +42,12 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	byHostName := globalMinioAddr
 	if len(opts.hosts) > 0 {
 		matched := false
-		servers := globalNotificationSys.ServerInfo()
 		server := getLocalServerProperty(globalEndpoints, &http.Request{
 			Host: globalLocalNodeName,
 		})
-		servers = append(servers, server)
-		for _, server := range servers {
-			if _, ok := opts.hosts[server.Endpoint]; ok {
-				byHostName = server.Endpoint
-				matched = true
-				break
-			}
+		if _, ok := opts.hosts[server.Endpoint]; ok {
+			byHostName = server.Endpoint
+			matched = true
 		}
 		if !matched {
 			return
