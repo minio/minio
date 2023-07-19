@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -38,8 +39,14 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		return
 	}
 
+	byHostName := globalMinioAddr
 	if len(opts.hosts) > 0 {
-		if _, ok := opts.hosts[globalMinioAddr]; !ok {
+		server := getLocalServerProperty(globalEndpoints, &http.Request{
+			Host: globalLocalNodeName,
+		})
+		if _, ok := opts.hosts[server.Endpoint]; ok {
+			byHostName = server.Endpoint
+		} else {
 			return
 		}
 	}
@@ -85,8 +92,8 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
-	m.ByHost = map[string]madmin.Metrics{globalMinioAddr: m.Aggregated}
-	m.Hosts = append(m.Hosts, globalMinioAddr)
+	m.ByHost = map[string]madmin.Metrics{byHostName: m.Aggregated}
+	m.Hosts = append(m.Hosts, byHostName)
 
 	return m
 }
