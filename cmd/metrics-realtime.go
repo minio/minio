@@ -41,15 +41,12 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 
 	byHostName := globalMinioAddr
 	if len(opts.hosts) > 0 {
-		matched := false
 		server := getLocalServerProperty(globalEndpoints, &http.Request{
 			Host: globalLocalNodeName,
 		})
 		if _, ok := opts.hosts[server.Endpoint]; ok {
 			byHostName = server.Endpoint
-			matched = true
-		}
-		if !matched {
+		} else {
 			return
 		}
 	}
