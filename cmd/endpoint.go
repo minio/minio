@@ -69,8 +69,9 @@ type Node struct {
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
-	Pool    int
 	IsLocal bool
+
+	PoolIdx, SetIdx, DiskIdx int
 }
 
 func (endpoint Endpoint) String() string {
@@ -106,9 +107,19 @@ func (endpoint *Endpoint) UpdateIsLocal() (err error) {
 	return nil
 }
 
-// SetPool sets a specific pool number to this node
-func (endpoint *Endpoint) SetPool(i int) {
-	endpoint.Pool = i
+// SetPoolIndex sets a specific pool number to this node
+func (endpoint *Endpoint) SetPoolIndex(i int) {
+	endpoint.PoolIdx = i
+}
+
+// SetSetIndex sets a specific set number to this node
+func (endpoint *Endpoint) SetSetIndex(i int) {
+	endpoint.SetIdx = i
+}
+
+// SetDiskIndex sets a specific disk number to this node
+func (endpoint *Endpoint) SetDiskIndex(i int) {
+	endpoint.DiskIdx = i
 }
 
 // NewEndpoint - returns new endpoint based on given arguments.
@@ -205,6 +216,9 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	return Endpoint{
 		URL:     u,
 		IsLocal: isLocal,
+		PoolIdx: -1,
+		SetIdx:  -1,
+		DiskIdx: -1,
 	}, nil
 }
 
@@ -236,8 +250,8 @@ func (l EndpointServerPools) GetNodes() (nodes []Node) {
 					Host:   ep.Host,
 				}
 			}
-			if !slices.Contains(node.Pools, ep.Pool) {
-				node.Pools = append(node.Pools, ep.Pool)
+			if !slices.Contains(node.Pools, ep.PoolIdx) {
+				node.Pools = append(node.Pools, ep.PoolIdx)
 			}
 			nodesMap[ep.Host] = node
 		}
@@ -811,7 +825,9 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 			return nil, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single node setup")
 		}
 
-		endpoint.SetPool(0)
+		endpoint.SetPoolIndex(0)
+		endpoint.SetSetIndex(0)
+		endpoint.SetDiskIndex(0)
 
 		var endpoints Endpoints
 		endpoints = append(endpoints, endpoint)
@@ -828,7 +844,7 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 
 	for poolIdx, args := range poolArgs {
 		var endpoints Endpoints
-		for _, iargs := range args {
+		for setIdx, iargs := range args {
 			// Convert args to endpoints
 			eps, err := NewEndpoints(iargs...)
 			if err != nil {
@@ -840,8 +856,10 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 				return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 			}
 
-			for i := range eps {
-				eps[i].SetPool(poolIdx)
+			for diskIdx := range eps {
+				eps[diskIdx].SetPoolIndex(poolIdx)
+				eps[diskIdx].SetSetIndex(setIdx)
+				eps[diskIdx].SetDiskIndex(diskIdx)
 			}
 
 			endpoints = append(endpoints, eps...)
@@ -1022,6 +1040,11 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		if endpoint.Type() != PathEndpointType {
 			return endpoints, setupType, config.ErrInvalidEndpoint(nil).Msg("use path style endpoint for single node setup")
 		}
+
+		endpoint.SetPoolIndex(0)
+		endpoint.SetSetIndex(0)
+		endpoint.SetDiskIndex(0)
+
 		endpoints = append(endpoints, endpoint)
 		setupType = ErasureSDSetupType
 
@@ -1033,7 +1056,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		return endpoints, setupType, nil
 	}
 
-	for _, iargs := range args {
+	for setIdx, iargs := range args {
 		// Convert args to endpoints
 		eps, err := NewEndpoints(iargs...)
 		if err != nil {
@@ -1043,6 +1066,11 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(eps); err != nil {
 			return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
+		}
+
+		for diskIdx := range eps {
+			eps[diskIdx].SetSetIndex(setIdx)
+			eps[diskIdx].SetDiskIndex(diskIdx)
 		}
 
 		endpoints = append(endpoints, eps...)
