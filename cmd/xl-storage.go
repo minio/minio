@@ -485,11 +485,16 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		return cache, errServerNotInitialized
 	}
 
-	cache.Info.updates = updates
-
 	poolIdx, setIdx, _ := s.GetDiskLoc()
 
-	dataUsageInfo, err := scanDataFolder(ctx, poolIdx, setIdx, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
+	disks, err := objAPI.GetDisks(poolIdx, setIdx)
+	if err != nil {
+		return cache, err
+	}
+
+	cache.Info.updates = updates
+
+	dataUsageInfo, err := scanDataFolder(ctx, disks, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFile) &&
 			!strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFileV1) {
@@ -542,6 +547,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
+			if oi.DeleteMarker {
+				sizeS.deleteMarkers++
+			}
 			if oi.VersionID != "" && sz == oi.Size {
 				sizeS.versions++
 			}

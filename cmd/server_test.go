@@ -219,7 +219,7 @@ func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *check) {
 func (s *TestSuiteCommon) TestCors(c *check) {
 	expectedMap := http.Header{}
 	expectedMap.Set("Access-Control-Allow-Credentials", "true")
-	expectedMap.Set("Access-Control-Allow-Origin", "http://foobar.com")
+	expectedMap.Set("Access-Control-Allow-Origin", "*")
 	expectedMap["Access-Control-Expose-Headers"] = []string{
 		"Date",
 		"Etag",

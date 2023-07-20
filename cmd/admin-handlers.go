@@ -1806,6 +1806,7 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 				dataUsageInfo := cache.dui(dataUsageRoot, nil)
 				erasureSet.ObjectsCount = dataUsageInfo.ObjectsTotalCount
 				erasureSet.VersionsCount = dataUsageInfo.VersionsTotalCount
+				erasureSet.DeleteMarkersCount = dataUsageInfo.DeleteMarkersTotalCount
 				erasureSet.Usage = dataUsageInfo.ObjectsTotalSize
 			}
 		}
@@ -1855,6 +1856,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
 	versions := madmin.Versions{}
+	deleteMarkers := madmin.DeleteMarkers{}
 	usage := madmin.Usage{}
 
 	objectAPI := newObjectLayerFn()
@@ -1867,10 +1869,12 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
 			versions = madmin.Versions{Count: dataUsageInfo.VersionsTotalCount}
+			deleteMarkers = madmin.DeleteMarkers{Count: dataUsageInfo.DeleteMarkersTotalCount}
 			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 		} else {
 			buckets = madmin.Buckets{Error: err.Error()}
 			objects = madmin.Objects{Error: err.Error()}
+			deleteMarkers = madmin.DeleteMarkers{Error: err.Error()}
 			usage = madmin.Usage{Error: err.Error()}
 		}
 
@@ -1909,19 +1913,20 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	}
 
 	return madmin.InfoMessage{
-		Mode:         string(mode),
-		Domain:       domain,
-		Region:       globalSite.Region,
-		SQSARN:       globalEventNotifier.GetARNList(false),
-		DeploymentID: globalDeploymentID,
-		Buckets:      buckets,
-		Objects:      objects,
-		Versions:     versions,
-		Usage:        usage,
-		Services:     services,
-		Backend:      backend,
-		Servers:      servers,
-		Pools:        poolsInfo,
+		Mode:          string(mode),
+		Domain:        domain,
+		Region:        globalSite.Region,
+		SQSARN:        globalEventNotifier.GetARNList(false),
+		DeploymentID:  globalDeploymentID,
+		Buckets:       buckets,
+		Objects:       objects,
+		Versions:      versions,
+		DeleteMarkers: deleteMarkers,
+		Usage:         usage,
+		Services:      services,
+		Backend:       backend,
+		Servers:       servers,
+		Pools:         poolsInfo,
 	}
 }
 
@@ -2860,6 +2865,36 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 	sb.WriteString("\n")
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes()))
+
+	// save MinIO start script to inspect command
+	var scrb bytes.Buffer
+	scrb.WriteString(`#!/usr/bin/env bash
+
+function main() {
+	for file in $(ls -1); do
+		dest_file=$(echo "$file" | cut -d ":" -f1)
+		mv "$file" "$dest_file"
+	done
+
+	# Read content of inspect-input.txt
+	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
+
+	# Start MinIO instance using the options
+	START_CMD="CI=on MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server ${MINIO_OPTS} &"
+	echo
+	echo "Starting MinIO instance: ${START_CMD}"
+	echo
+	eval "$START_CMD"
+	MINIO_SRVR_PID="$!"
+	echo "MinIO Server PID: ${MINIO_SRVR_PID}"
+	echo
+	echo "Waiting for MinIO instance to get ready!"
+	sleep 10
+}
+
+main "$@"`,
+	)
+	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes()))
 }
 
 func getSubnetAdminPublicKey() []byte {
