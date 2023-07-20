@@ -476,8 +476,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 	}
 
-	vcfg, _ := globalBucketVersioningSys.Get(cache.Info.Name)
-
 	// return initialized object layer
 	objAPI := newObjectLayerFn()
 	// object layer not initialized, return.
@@ -541,8 +539,6 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			return sizeSummary{}, errSkipFile
 		}
 
-		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
-
 		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
@@ -550,7 +546,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			if oi.DeleteMarker {
 				sizeS.deleteMarkers++
 			}
-			if oi.VersionID != "" && sz == oi.Size {
+			if sz == oi.Size {
 				sizeS.versions++
 			}
 			sizeS.totalSize += sz
@@ -575,7 +571,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
 		}
 		for _, freeVersion := range fivs.FreeVersions {
-			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
+			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), true)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
 			item.applyTierObjSweep(ctx, objAPI, oi)
 			done()
