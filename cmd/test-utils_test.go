@@ -2173,13 +2173,13 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 }
 
 func mustGetPoolEndpoints(poolIdx int, args ...string) EndpointServerPools {
-	endpoints := mustGetNewEndpoints(poolIdx, args...)
 	drivesPerSet := len(args)
 	setCount := 1
 	if len(args) >= 16 {
 		drivesPerSet = 16
 		setCount = len(args) / 16
 	}
+	endpoints := mustGetNewEndpoints(poolIdx, drivesPerSet, args...)
 	return []PoolEndpoints{{
 		SetCount:     setCount,
 		DrivesPerSet: drivesPerSet,
@@ -2188,12 +2188,16 @@ func mustGetPoolEndpoints(poolIdx int, args ...string) EndpointServerPools {
 	}}
 }
 
-func mustGetNewEndpoints(poolIdx int, args ...string) (endpoints Endpoints) {
+func mustGetNewEndpoints(poolIdx int, drivesPerSet int, args ...string) (endpoints Endpoints) {
 	endpoints, err := NewEndpoints(args...)
-	for i := range endpoints {
-		endpoints[i].Pool = poolIdx
+	if err != nil {
+		panic(err)
 	}
-	logger.FatalIf(err, "unable to create new endpoint list")
+	for i := range endpoints {
+		endpoints[i].SetPoolIndex(poolIdx)
+		endpoints[i].SetSetIndex(i / drivesPerSet)
+		endpoints[i].SetDiskIndex(i % drivesPerSet)
+	}
 	return endpoints
 }
 

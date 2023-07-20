@@ -174,33 +174,32 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 	for index := range disks {
 		index := index
 		g.Go(func() error {
-			diskEndpoint := endpoints[index].String()
+			di := madmin.Disk{
+				Endpoint:  endpoints[index].String(),
+				PoolIndex: endpoints[index].PoolIdx,
+				SetIndex:  endpoints[index].SetIdx,
+				DiskIndex: endpoints[index].DiskIdx,
+			}
 			if disks[index] == OfflineDisk {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline-"+diskEndpoint)
-				disksInfo[index] = madmin.Disk{
-					State:    diskErrToDriveState(errDiskNotFound),
-					Endpoint: diskEndpoint,
-				}
+				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline-"+di.Endpoint)
+				di.State = diskErrToDriveState(errDiskNotFound)
+				disksInfo[index] = di
 				return nil
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
-			di := madmin.Disk{
-				Endpoint:       diskEndpoint,
-				DrivePath:      info.MountPath,
-				TotalSpace:     info.Total,
-				UsedSpace:      info.Used,
-				AvailableSpace: info.Free,
-				UUID:           info.ID,
-				Major:          info.Major,
-				Minor:          info.Minor,
-				RootDisk:       info.RootDisk,
-				Healing:        info.Healing,
-				Scanning:       info.Scanning,
-				State:          diskErrToDriveState(err),
-				FreeInodes:     info.FreeInodes,
-				UsedInodes:     info.UsedInodes,
-			}
-			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
+			di.DrivePath = info.MountPath
+			di.TotalSpace = info.Total
+			di.UsedSpace = info.Used
+			di.AvailableSpace = info.Free
+			di.UUID = info.ID
+			di.Major = info.Major
+			di.Minor = info.Minor
+			di.RootDisk = info.RootDisk
+			di.Healing = info.Healing
+			di.Scanning = info.Scanning
+			di.State = diskErrToDriveState(err)
+			di.FreeInodes = info.FreeInodes
+			di.UsedInodes = info.UsedInodes
 			if info.Healing {
 				if hi := disks[index].Healing(); hi != nil {
 					hd := hi.toHealingDisk()
