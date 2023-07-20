@@ -26,18 +26,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/s3select/csv"
 	"github.com/minio/minio/internal/s3select/json"
 	"github.com/minio/minio/internal/s3select/parquet"
 	"github.com/minio/minio/internal/s3select/simdj"
 	"github.com/minio/minio/internal/s3select/sql"
+	"github.com/minio/pkg/env"
 	"github.com/minio/simdjson-go"
 	"github.com/pierrec/lz4"
 )
@@ -72,6 +73,12 @@ const (
 const (
 	maxRecordSize = 1 << 20 // 1 MiB
 )
+
+var parquetSupport bool
+
+func init() {
+	parquetSupport = env.Get("MINIO_API_SELECT_PARQUET", config.EnableOff) == config.EnableOn
+}
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
@@ -439,7 +446,7 @@ func (s3Select *S3Select) Open(rsc io.ReadSeekCloser) error {
 
 		return nil
 	case parquetFormat:
-		if !strings.EqualFold(os.Getenv("MINIO_API_SELECT_PARQUET"), "on") {
+		if !parquetSupport {
 			return errors.New("parquet format parsing not enabled on server")
 		}
 		if offset != 0 || length != -1 {

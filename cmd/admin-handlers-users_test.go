@@ -27,7 +27,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -40,6 +39,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -121,7 +121,7 @@ var iamTestSuites = func() []*TestSuiteIAM {
 }()
 
 const (
-	EnvTestEtcdBackend = "ETCD_SERVER"
+	EnvTestEtcdBackend = "_MINIO_ETCD_TEST_SERVER"
 )
 
 func (s *TestSuiteIAM) setUpEtcd(c *check, etcdServer string) {
@@ -144,7 +144,7 @@ func (s *TestSuiteIAM) setUpEtcd(c *check, etcdServer string) {
 func (s *TestSuiteIAM) SetUpSuite(c *check) {
 	// If etcd backend is specified and etcd server is not present, the test
 	// is skipped.
-	etcdServer := os.Getenv(EnvTestEtcdBackend)
+	etcdServer := env.Get(EnvTestEtcdBackend, "")
 	if s.withEtcdBackend && etcdServer == "" {
 		c.Skip("Skipping etcd backend IAM test as no etcd server is configured.")
 	}
@@ -983,9 +983,9 @@ func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
-	pluginEndpoint := os.Getenv("POLICY_PLUGIN_ENDPOINT")
+	pluginEndpoint := env.Get("_MINIO_POLICY_PLUGIN_ENDPOINT", "")
 	if pluginEndpoint == "" {
-		c.Skip("POLICY_PLUGIN_ENDPOINT not given - skipping.")
+		c.Skip("_MINIO_POLICY_PLUGIN_ENDPOINT not given - skipping.")
 	}
 
 	configCmds := []string{

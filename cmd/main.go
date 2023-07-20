@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/words"
 )
@@ -191,7 +192,7 @@ func Main(args []string) {
 	// Set the minio app name.
 	appName := filepath.Base(args[0])
 
-	if os.Getenv("_MINIO_DEBUG_NO_EXIT") != "" {
+	if env.Get("_MINIO_DEBUG_NO_EXIT", "") != "" {
 		freeze := func(_ int) {
 			// Infinite blocking op
 			<-make(chan struct{})

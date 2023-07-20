@@ -1684,7 +1684,11 @@ func TestCSVRanges(t *testing.T) {
 }
 
 func TestParquetInput(t *testing.T) {
-	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
+	saved := parquetSupport
+	defer func() {
+		parquetSupport = saved
+	}()
+	parquetSupport = true
 
 	testTable := []struct {
 		requestXML     []byte
@@ -1785,7 +1789,11 @@ func TestParquetInput(t *testing.T) {
 }
 
 func TestParquetInputSchema(t *testing.T) {
-	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
+	saved := parquetSupport
+	defer func() {
+		parquetSupport = saved
+	}()
+	parquetSupport = true
 
 	testTable := []struct {
 		requestXML []byte
@@ -1887,7 +1895,11 @@ func TestParquetInputSchema(t *testing.T) {
 }
 
 func TestParquetInputSchemaCSV(t *testing.T) {
-	t.Setenv("MINIO_API_SELECT_PARQUET", "on")
+	saved := parquetSupport
+	defer func() {
+		parquetSupport = saved
+	}()
+	parquetSupport = true
 
 	testTable := []struct {
 		requestXML []byte

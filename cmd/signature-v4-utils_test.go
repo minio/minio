@@ -339,3 +339,72 @@ func TestGetContentSha256Cksum(t *testing.T) {
 		}
 	}
 }
+
+// Test TestCheckMetaHeaders tests the logic of checkMetaHeaders() function
+func TestCheckMetaHeaders(t *testing.T) {
+	signedHeadersMap := map[string][]string{
+		"X-Amz-Meta-Test":      {"test"},
+		"X-Amz-Meta-Extension": {"png"},
+		"X-Amz-Meta-Name":      {"imagepng"},
+	}
+	expectedMetaTest := "test"
+	expectedMetaExtension := "png"
+	expectedMetaName := "imagepng"
+	r, err := http.NewRequest(http.MethodPut, "http://play.min.io:9000", nil)
+	if err != nil {
+		t.Fatal("Unable to create http.Request :", err)
+	}
+
+	// Creating input http header.
+	inputHeader := r.Header
+	inputHeader.Set("X-Amz-Meta-Test", expectedMetaTest)
+	inputHeader.Set("X-Amz-Meta-Extension", expectedMetaExtension)
+	inputHeader.Set("X-Amz-Meta-Name", expectedMetaName)
+	// calling the function being tested.
+	errCode := checkMetaHeaders(signedHeadersMap, r)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
+	// Add new metadata in inputHeader
+	inputHeader.Set("X-Amz-Meta-Clone", "fail")
+	// calling the function being tested.
+	errCode = checkMetaHeaders(signedHeadersMap, r)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+
+	// Delete extra metadata from header to don't affect other test
+	inputHeader.Del("X-Amz-Meta-Clone")
+	// calling the function being tested.
+	errCode = checkMetaHeaders(signedHeadersMap, r)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
+	// Creating input url values
+	r, err = http.NewRequest(http.MethodPut, "http://play.min.io:9000?x-amz-meta-test=test&x-amz-meta-extension=png&x-amz-meta-name=imagepng", nil)
+	if err != nil {
+		t.Fatal("Unable to create http.Request :", err)
+	}
+
+	r.ParseForm()
+	// calling the function being tested.
+	errCode = checkMetaHeaders(signedHeadersMap, r)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
+	// Add extra metadata in url values
+	r, err = http.NewRequest(http.MethodPut, "http://play.min.io:9000?x-amz-meta-test=test&x-amz-meta-extension=png&x-amz-meta-name=imagepng&x-amz-meta-clone=fail", nil)
+	if err != nil {
+		t.Fatal("Unable to create http.Request :", err)
+	}
+
+	r.ParseForm()
+	// calling the function being tested.
+	errCode = checkMetaHeaders(signedHeadersMap, r)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+}
