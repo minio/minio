@@ -98,6 +98,14 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			objsReturned++
 		}
 	}
+	send := func(entry metaCacheEntry) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case out <- entry:
+		}
+		return nil
+	}
 
 	// Fast exit track to check if we are listing an object with
 	// a trailing slash, this will avoid to list the object content.
@@ -109,11 +117,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// if baseDir is already a directory object, consider it
 			// as part of the list call, this is AWS S3 specific
 			// behavior.
-			out <- metaCacheEntry{
+			objReturned(metadata)
+			if err := send(metaCacheEntry{
 				name:     opts.BaseDir,
 				metadata: metadata,
+			}); err != nil {
+				return err
 			}
-			objReturned(metadata)
 		} else {
 			st, sterr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
 			if sterr == nil && st.Mode().IsRegular() {
@@ -143,19 +153,19 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			return nil
 		}
 
-		s.walkMu.Lock()
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
-		s.walkMu.Unlock()
 		if err != nil {
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
 				logger.LogOnceIf(ctx, err, "metacache-walk-scan-dir")
 			}
 			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
-				return errFileNotFound
+				err = errFileNotFound
+			} else {
+				err = nil
 			}
-			// Forward some errors?
-			return nil
+			diskHealthCheckOK(ctx, err)
+			return err
 		}
 		diskHealthCheckOK(ctx, err)
 		if len(entries) == 0 {
@@ -202,9 +212,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				s.walkReadMu.Lock()
 				meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, current, entry))
-				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					// It is totally possible that xl.meta was overwritten
@@ -221,15 +229,15 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = decodeDirObject(meta.name)
 
 				objReturned(meta.metadata)
-				out <- meta
+				if err := send(meta); err != nil {
+					return err
+				}
 				return nil
 			}
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
-				s.walkReadMu.Lock()
 				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, current, entry))
-				s.walkReadMu.Unlock()
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
@@ -240,9 +248,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoinBuf(&sb, current, meta.name)
+				if err := send(meta); err != nil {
+					return err
+				}
 				objReturned(meta.metadata)
-
-				out <- meta
 				return nil
 			}
 			// Skip all other files.
@@ -295,9 +304,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
 			}
 
-			s.walkReadMu.Lock()
 			meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFile))
-			s.walkReadMu.Unlock()
 			diskHealthCheckOK(ctx, err)
 			switch {
 			case err == nil:
@@ -306,16 +313,18 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
 				objReturned(meta.metadata)
-
-				out <- meta
+				if err := send(meta); err != nil {
+					return err
+				}
 			case osIsNotExist(err), isSysErrIsDir(err):
 				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFileV1))
 				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
 					objReturned(meta.metadata)
-
-					out <- meta
+					if err := send(meta); err != nil {
+						return err
+					}
 					continue
 				}
 
