@@ -273,7 +273,8 @@ policies: []
 ## example.
 # - name: writeexamplepolicy
 #   statements:
-#     - resources:
+#     - effect: Allow  # this is the default
+#       resources:
 #         - 'arn:aws:s3:::example*/*'
 #       actions:
 #         - "s3:AbortMultipartUpload"
