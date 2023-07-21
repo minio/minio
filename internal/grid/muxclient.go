@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio/internal/logger"
 	"github.com/zeebo/xxh3"
 )
 
@@ -191,6 +192,25 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	return nil
 }
 
+// checkSeq will check if sequence number is correct and increment it by 1.
+func (m *MuxClient) checkSeq(seq uint32) (ok bool) {
+	if seq != m.RecvSeq {
+		if debugPrint {
+			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
+		}
+		select {
+		case m.respWait <- Response{Err: ErrIncorrectSequence}:
+		default:
+			go func() {
+				m.respWait <- Response{Err: ErrIncorrectSequence}
+			}()
+		}
+		return false
+	}
+	m.RecvSeq++
+	return true
+}
+
 // response will send handleIncoming response to client.
 // may never block.
 // Should return whether the next call would block.
@@ -205,28 +225,31 @@ func (m *MuxClient) response(seq uint32, r Response) {
 		return
 	}
 
-	if seq != m.RecvSeq {
-		select {
-		case m.respWait <- Response{Err: ErrIncorrectSequence}:
-		default:
-			go func() {
-				m.respWait <- Response{Err: ErrIncorrectSequence}
-			}()
-		}
+	if !m.checkSeq(seq) {
 		PutByteBuffer(r.Msg)
 		return
 	}
 	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
-	m.RecvSeq++
 	select {
 	case m.respWait <- r:
+		logger.LogIf(m.ctx, m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
 	default:
 		// Disconnect stateful.
 		PutByteBuffer(r.Msg)
 	}
 }
 
-func (m *MuxClient) unblockSend() {
+func (m *MuxClient) ack(seq uint32) {
+	if !m.checkSeq(seq) {
+		return
+	}
+	// TODO:
+}
+
+func (m *MuxClient) unblockSend(seq uint32) {
+	if !m.checkSeq(seq) {
+		return
+	}
 	// TODO:
 	/*
 		select {

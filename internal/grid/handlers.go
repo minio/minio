@@ -20,6 +20,8 @@ package grid
 import (
 	"context"
 	"fmt"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 const (
@@ -103,4 +105,79 @@ func (h *handlers) hasAny(id HandlerID) bool {
 		return false
 	}
 	return h.single[id] != nil || h.stateless[id] != nil || h.streams[id] != nil
+}
+
+type Msgp interface {
+	comparable
+	msgp.Unmarshaler
+	msgp.MarshalSizer
+}
+
+type SingleHandler[Req, Resp Msgp] struct {
+	newReq    func() Req
+	newResp   func() Resp
+	id        HandlerID
+	reqReuse  func(req Req)
+	respReuse func(req Resp)
+}
+
+// NewSingleMsgpHandler creates a typed handler that can provide Marshal/Unmarshal.
+// Use Register to register a server handler
+func NewSingleMsgpHandler[Req, Resp Msgp](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
+	return &SingleHandler[Req, Resp]{id: h, newReq: newReq, newResp: newResp}
+}
+
+func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr)) error {
+	return m.RegisterSingle(h.id, func(payload []byte) ([]byte, *RemoteErr) {
+		req := h.newReq()
+		_, err := req.UnmarshalMsg(payload)
+		if err != nil {
+			PutByteBuffer(payload)
+			r := RemoteErr(err.Error())
+			return nil, &r
+		}
+		resp, rerr := handle(req)
+		if rerr != nil {
+			PutByteBuffer(payload)
+			return nil, rerr
+		}
+		if h.reqReuse != nil {
+			h.reqReuse(req)
+		}
+		payload, err = resp.MarshalMsg(payload[:0])
+		if h.respReuse != nil {
+			h.respReuse(resp)
+		}
+		if err != nil {
+			PutByteBuffer(payload)
+			r := RemoteErr(err.Error())
+			return nil, &r
+		}
+		return payload, nil
+	})
+}
+
+// SetReqReuse allows setting a request reuse function.
+func (h *SingleHandler[Req, Resp]) SetReqReuse(fn func(req Req)) {
+	h.reqReuse = fn
+}
+
+// SetRespReuse allows setting a request reuse function.
+func (h *SingleHandler[Req, Resp]) SetRespReuse(fn func(resp Resp)) {
+	h.respReuse = fn
+}
+
+func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (dst Resp, err error) {
+	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
+	if err != nil {
+		return dst, err
+	}
+	res, err := c.Single(ctx, h.id, payload)
+	if err != nil {
+		return dst, err
+	}
+	dst = h.newResp()
+	_, err = dst.UnmarshalMsg(res)
+	PutByteBuffer(res)
+	return dst, err
 }

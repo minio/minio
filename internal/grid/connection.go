@@ -688,7 +688,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
 					continue
 				}
-				v.unblockSend()
+				v.unblockSend(m.Seq)
 				continue
 			case OpDisconnectMux:
 				PutByteBuffer(m.Payload)
@@ -698,6 +698,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					continue
 				}
 			case OpPing:
+				PutByteBuffer(m.Payload)
 				if m.MuxID == 0 {
 					logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
 					continue
@@ -711,11 +712,16 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 				continue
 			case OpPong:
+				var pong pongMsg
+				_, err := pong.UnmarshalMsg(m.Payload)
+				PutByteBuffer(m.Payload)
+				logger.LogIf(ctx, err)
 				// Broadcast when we get a pong.
 				// TODO: Add automatic pings.
-				c.connChange.Broadcast()
-				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
-
+				if m.MuxID == 0 {
+					c.connChange.Broadcast()
+					atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+				}
 			case OpRequest:
 				if !m.Handler.valid() {
 					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
@@ -743,10 +749,18 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}(m)
 				continue
 			case OpAckMux:
+				v, ok := c.outgoing.Load(m.MuxID)
+				if !ok {
+					if m.Flags&FlagEOF == 0 {
+						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					}
+					PutByteBuffer(m.Payload)
+					continue
+				}
 				if debugPrint {
 					fmt.Println(c.Local, "Mux", m.MuxID, "Acknowledged")
 				}
-				// TODO: Unblock now.
+				v.ack(m.Seq)
 			case OpConnectMux:
 				if !m.Handler.valid() {
 					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
@@ -780,7 +794,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 				// Acknowledge Mux created.
 				m.Op = OpAckMux
-				PutByteBuffer(m.Payload)
 				m.Payload = nil
 				logger.LogIf(ctx, c.queueMsg(m, nil))
 				continue

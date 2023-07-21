@@ -46,7 +46,7 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 	ctx, cancel := context.WithCancel(ctx)
 	m := muxServer{
 		ID:       msg.MuxID,
-		RecvSeq:  msg.Seq,
+		RecvSeq:  msg.Seq + 1,
 		ctx:      ctx,
 		cancel:   cancel,
 		parent:   c,
@@ -69,7 +69,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 
 	m := muxServer{
 		ID:       msg.MuxID,
-		RecvSeq:  msg.Seq,
+		RecvSeq:  msg.Seq + 1,
 		SendSeq:  msg.Seq,
 		ctx:      ctx,
 		cancel:   cancel,
@@ -123,6 +123,19 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 	return &m
 }
 
+// checkSeq will check if sequence number is correct and increment it by 1.
+func (m *muxServer) checkSeq(seq uint32) (ok bool) {
+	if seq != m.RecvSeq {
+		if debugPrint {
+			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
+		}
+		m.disconnect(fmt.Sprintf("receive sequence number mismatch. want %d, got %d", m.RecvSeq, seq))
+		return false
+	}
+	m.RecvSeq++
+	return true
+}
+
 func (m *muxServer) message(msg message) {
 	if debugPrint {
 		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
@@ -131,9 +144,7 @@ func (m *muxServer) message(msg message) {
 		m.disconnect("did not expect inbound message")
 		return
 	}
-	wantSeq := m.RecvSeq + 1
-	if msg.Seq != wantSeq {
-		m.disconnect("receive sequence number mismatch")
+	if !m.checkSeq(msg.Seq) {
 		return
 	}
 
@@ -152,6 +163,7 @@ func (m *muxServer) message(msg message) {
 		m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
 	default:
 		go func() {
+			fmt.Printf("muxServer: Seq %d blocked, waiting\n", msg.Seq)
 			select {
 			case <-m.ctx.Done():
 			case m.inbound <- msg.Payload:
