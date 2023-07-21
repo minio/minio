@@ -56,9 +56,15 @@ type storageRESTServer struct {
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
-	if errors.Is(err, errDiskStale) {
+	err = unwrapAll(err)
+	switch err {
+	case errDiskStale:
 		w.WriteHeader(http.StatusPreconditionFailed)
-	} else {
+	case errFileNotFound, errFileVersionNotFound:
+		w.WriteHeader(http.StatusNotFound)
+	case errInvalidAccessKeyID, errAccessKeyDisabled, errNoAuthToken, errMalformedAuth, errAuthentication, errSkewedAuthTime:
+		w.WriteHeader(http.StatusUnauthorized)
+	default:
 		w.WriteHeader(http.StatusForbidden)
 	}
 	w.Write([]byte(err.Error()))
@@ -74,7 +80,7 @@ func storageServerRequestValidate(r *http.Request) error {
 		if err == jwtreq.ErrNoTokenInRequest {
 			return errNoAuthToken
 		}
-		return err
+		return errMalformedAuth
 	}
 
 	claims := xjwt.NewStandardClaims()
@@ -94,7 +100,7 @@ func storageServerRequestValidate(r *http.Request) error {
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
-		return err
+		return errMalformedAuth
 	}
 	utcNow := UTCNow()
 	delta := requestTime.Sub(utcNow)
@@ -102,7 +108,7 @@ func storageServerRequestValidate(r *http.Request) error {
 		delta *= -1
 	}
 	if delta > DefaultSkewTime {
-		return fmt.Errorf("client time %v is too apart with server time %v", requestTime, utcNow)
+		return errSkewedAuthTime
 	}
 
 	return nil
@@ -1361,7 +1367,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			endpoint := storage.Endpoint()
 
-			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage)}
+			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage, true)}
 			server.storage.SetDiskID(storage.diskID)
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()

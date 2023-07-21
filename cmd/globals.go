@@ -393,6 +393,10 @@ var (
 	// Is _MINIO_DISABLE_API_FREEZE_ON_BOOT set?
 	globalDisableFreezeOnBoot bool
 
+	// Contains NIC interface name used for internode communication
+	globalInternodeInterface     string
+	globalInternodeInterfaceOnce sync.Once
+
 	// Add new variable global values here.
 )
 

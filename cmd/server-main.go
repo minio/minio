@@ -252,6 +252,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
 
+	// Initialize, see which NIC the service is running on, and save it as global value
+	setGlobalInternodeInterface(ctx.String("interface"))
+
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
@@ -461,6 +464,41 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 	return nil
 }
 
+func setGlobalInternodeInterface(interfaceName string) {
+	globalInternodeInterfaceOnce.Do(func() {
+		if interfaceName != "" {
+			globalInternodeInterface = interfaceName
+			return
+		}
+		ip := "127.0.0.1"
+		host, _ := mustSplitHostPort(globalLocalNodeName)
+		if host != "" {
+			if net.ParseIP(host) != nil {
+				ip = host
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+
+				haddrs, err := globalDNSCache.LookupHost(ctx, host)
+				if err == nil {
+					ip = haddrs[0]
+				}
+			}
+		}
+		ifs, _ := net.Interfaces()
+		for _, interf := range ifs {
+			addrs, err := interf.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					if strings.SplitN(addr.String(), "/", 2)[0] == ip {
+						globalInternodeInterface = interf.Name
+					}
+				}
+			}
+		}
+	})
+}
+
 // Return the list of address that MinIO server needs to listen on:
 //   - Returning 127.0.0.1 is necessary so Console will be able to send
 //     requests to the local S3 API.
@@ -628,6 +666,7 @@ func serverMain(ctx *cli.Context) {
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
+	bootstrapTrace("newObjectLayer (initialized)")
 
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
@@ -689,6 +728,7 @@ func serverMain(ctx *cli.Context) {
 	go func() {
 		bootstrapTrace("globalIAMSys.Init")
 		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+		bootstrapTrace("globalIAMSys.Initialized")
 
 		// Initialize Console UI
 		if globalBrowserEnabled {
@@ -786,23 +826,26 @@ func serverMain(ctx *cli.Context) {
 		// Initialize bucket metadata sub-system.
 		bootstrapTrace("globalBucketMetadataSys.Init")
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
+		bootstrapTrace("globalBucketMetadataSys.Initialized")
 
 		// initialize replication resync state.
-		bootstrapTrace("go initResync")
-		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+		bootstrapTrace("initResync")
+		globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Initialize site replication manager after bucket metadata
 		bootstrapTrace("globalSiteReplicationSys.Init")
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
+		bootstrapTrace("globalSiteReplicationSys.Initialized")
 
 		// Initialize quota manager.
 		bootstrapTrace("globalBucketQuotaSys.Init")
 		globalBucketQuotaSys.Init(newObject)
+		bootstrapTrace("globalBucketQuotaSys.Initialized")
 
 		// Populate existing buckets to the etcd backend
 		if globalDNSConfig != nil {
 			// Background this operation.
-			bootstrapTrace("initFederatorBackend")
+			bootstrapTrace("go initFederatorBackend")
 			go initFederatorBackend(buckets, newObject)
 		}
 

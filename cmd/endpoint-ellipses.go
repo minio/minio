@@ -360,7 +360,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		for i := range endpointList {
-			endpointList[i].SetPool(0)
+			endpointList[i].SetPoolIndex(0)
 		}
 		endpointServerPools = append(endpointServerPools, PoolEndpoints{
 			Legacy:       true,

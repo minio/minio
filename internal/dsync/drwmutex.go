@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/env"
 )
 
 // Indicator if logging is enabled.
@@ -41,10 +41,10 @@ var lockRetryBackOff func(*rand.Rand, uint) time.Duration
 
 func init() {
 	// Check for MINIO_DSYNC_TRACE env variable, if set logging will be enabled for failed REST operations.
-	dsyncLog = os.Getenv("_MINIO_DSYNC_TRACE") == "1"
+	dsyncLog = env.Get("_MINIO_DSYNC_TRACE", "0") == "1"
 
 	lockRetryMinInterval = 250 * time.Millisecond
-	if lri := os.Getenv("_MINIO_LOCK_RETRY_INTERVAL"); lri != "" {
+	if lri := env.Get("_MINIO_LOCK_RETRY_INTERVAL", ""); lri != "" {
 		v, err := strconv.Atoi(lri)
 		if err != nil {
 			panic(err)

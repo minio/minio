@@ -233,7 +233,12 @@ func TestListOnlineDisks(t *testing.T) {
 	object := "object"
 	data := bytes.Repeat([]byte("a"), smallFileThreshold*16)
 	z := obj.(*erasureServerPools)
-	erasureDisks := z.serverPools[0].sets[0].getDisks()
+
+	erasureDisks, err := z.GetDisks(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for i, test := range testCases {
 		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
@@ -405,7 +410,12 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	object := "object"
 	data := bytes.Repeat([]byte("a"), smallFileThreshold/2)
 	z := obj.(*erasureServerPools)
-	erasureDisks := z.serverPools[0].sets[0].getDisks()
+
+	erasureDisks, err := z.GetDisks(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for i, test := range testCases {
 		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {

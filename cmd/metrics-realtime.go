@@ -19,10 +19,12 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/disk"
+	"github.com/minio/minio/internal/net"
 )
 
 type collectMetricsOpts struct {
@@ -37,8 +39,14 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		return
 	}
 
+	byHostName := globalMinioAddr
 	if len(opts.hosts) > 0 {
-		if _, ok := opts.hosts[globalMinioAddr]; !ok {
+		server := getLocalServerProperty(globalEndpoints, &http.Request{
+			Host: globalLocalNodeName,
+		})
+		if _, ok := opts.hosts[server.Endpoint]; ok {
+			byHostName = server.Endpoint
+		} else {
 			return
 		}
 	}
@@ -69,11 +77,23 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	if types.Contains(madmin.MetricsSiteResync) {
 		m.Aggregated.SiteResync = globalSiteResyncMetrics.report(opts.depID)
 	}
+	if types.Contains(madmin.MetricNet) {
+		m.Aggregated.Net = &madmin.NetMetrics{
+			CollectedAt:   UTCNow(),
+			InterfaceName: globalInternodeInterface,
+		}
+		netStats, err := net.GetInterfaceNetStats(globalInternodeInterface)
+		if err != nil {
+			m.Errors = append(m.Errors, err.Error())
+		} else {
+			m.Aggregated.Net.NetStats = netStats
+		}
+	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
-	m.ByHost = map[string]madmin.Metrics{globalMinioAddr: m.Aggregated}
-	m.Hosts = append(m.Hosts, globalMinioAddr)
+	m.ByHost = map[string]madmin.Metrics{byHostName: m.Aggregated}
+	m.Hosts = append(m.Hosts, byHostName)
 
 	return m
 }
