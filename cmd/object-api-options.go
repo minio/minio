@@ -108,21 +108,11 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}
 	}
 
-	deletePrefix := false
-	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
-		if b, err := strconv.ParseBool(d); err == nil {
-			deletePrefix = b
-		} else {
-			return opts, err
-		}
-	}
-
 	// default case of passing encryption headers to backend
 	opts, err = getDefaultOpts(r.Header, false, nil)
 	if err != nil {
 		return opts, err
 	}
-	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
@@ -157,7 +147,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 			}
 		}
 	}
-
+	opts.Tagging = r.Header.Get(xhttp.AmzTagDirective) == accessDirective
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
 	return opts, nil
@@ -168,6 +158,17 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	if err != nil {
 		return opts, err
 	}
+
+	deletePrefix := false
+	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
+		if b, err := strconv.ParseBool(d); err == nil {
+			deletePrefix = b
+		} else {
+			return opts, err
+		}
+	}
+
+	opts.DeletePrefix = deletePrefix
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	// Objects matching prefixes should not leave delete markers,
 	// dramatically reduces namespace pollution while keeping the
