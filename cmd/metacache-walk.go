@@ -99,6 +99,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 	}
 	send := func(entry metaCacheEntry) error {
+		objReturned(entry.metadata)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -117,7 +118,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// if baseDir is already a directory object, consider it
 			// as part of the list call, this is AWS S3 specific
 			// behavior.
-			objReturned(metadata)
 			if err := send(metaCacheEntry{
 				name:     opts.BaseDir,
 				metadata: metadata,
@@ -153,7 +153,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			return nil
 		}
 
+		if s.walkMu != nil {
+			s.walkMu.Lock()
+		}
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
+		if s.walkMu != nil {
+			s.walkMu.Unlock()
+		}
 		if err != nil {
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
@@ -212,7 +218,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
+				if s.walkReadMu != nil {
+					s.walkReadMu.Lock()
+				}
 				meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, current, entry))
+				if s.walkReadMu != nil {
+					s.walkReadMu.Unlock()
+				}
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					// It is totally possible that xl.meta was overwritten
@@ -227,8 +239,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoinBuf(&sb, current, meta.name)
 				meta.name = decodeDirObject(meta.name)
-
-				objReturned(meta.metadata)
 				if err := send(meta); err != nil {
 					return err
 				}
@@ -251,7 +261,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if err := send(meta); err != nil {
 					return err
 				}
-				objReturned(meta.metadata)
 				return nil
 			}
 			// Skip all other files.
@@ -304,7 +313,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
 			}
 
+			if s.walkReadMu != nil {
+				s.walkReadMu.Lock()
+			}
 			meta.metadata, err = s.readMetadata(ctx, pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFile))
+			if s.walkReadMu != nil {
+				s.walkReadMu.Unlock()
+			}
 			diskHealthCheckOK(ctx, err)
 			switch {
 			case err == nil:
@@ -312,7 +327,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if isDirObj {
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
-				objReturned(meta.metadata)
 				if err := send(meta); err != nil {
 					return err
 				}
@@ -321,7 +335,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				diskHealthCheckOK(ctx, err)
 				if err == nil {
 					// It was an object
-					objReturned(meta.metadata)
 					if err := send(meta); err != nil {
 						return err
 					}
