@@ -121,6 +121,13 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 		EnvVar: "MINIO_INTERFACE",
 	},
+	cli.DurationFlag{
+		Name:   "dns-cache-ttl",
+		Usage:  "custom DNS cache TTL for baremetal setups",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_DNS_CACHE_TTL",
+	},
 	cli.StringSliceFlag{
 		Name:  "ftp",
 		Usage: "enable and configure an FTP(Secure) server",
