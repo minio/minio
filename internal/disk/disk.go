@@ -23,15 +23,20 @@ package disk
 // Files - total inodes available
 // Ffree - free inodes available
 // FSType - file system type
+// Major - major dev id
+// Minor - minor dev id
+// Devname - device name
 type Info struct {
-	Total  uint64
-	Free   uint64
-	Used   uint64
-	Files  uint64
-	Ffree  uint64
-	FSType string
-	Major  uint32
-	Minor  uint32
+	Total      uint64
+	Free       uint64
+	Used       uint64
+	Files      uint64
+	Ffree      uint64
+	FSType     string
+	Major      uint32
+	Minor      uint32
+	Name       string
+	Rotational *bool
 }
 
 // DevID is the drive major and minor ids

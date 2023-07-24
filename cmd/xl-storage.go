@@ -115,8 +115,8 @@ type xlStorage struct {
 	formatData []byte
 
 	// mutex to prevent concurrent read operations overloading walks.
-	walkMu     sync.Mutex
-	walkReadMu sync.Mutex
+	walkMu     *sync.Mutex
+	walkReadMu *sync.Mutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -216,18 +216,17 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return nil, err
 	}
 
+	info, err := disk.GetInfo(path)
+	if err != nil {
+		return nil, err
+	}
+
 	var rootDisk bool
 	if !globalIsCICD && !globalIsErasureSD {
 		if globalRootDiskThreshold > 0 {
 			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
-			// this disk is a root disk.
-			info, err := disk.GetInfo(path)
-			if err != nil {
-				return nil, err
-			}
-
-			// treat those disks with size less than or equal to the
-			// threshold as rootDisks.
+			// this disk is a root disk. treat those disks with
+			// size less than or equal to the threshold as rootDisks.
 			rootDisk = info.Total <= globalRootDiskThreshold
 		} else {
 			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
@@ -245,6 +244,12 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		poolIndex:  -1,
 		setIndex:   -1,
 		diskIndex:  -1,
+	}
+
+	// We stagger listings only on HDDs.
+	if info.Rotational == nil || *info.Rotational {
+		s.walkMu = &sync.Mutex{}
+		s.walkReadMu = &sync.Mutex{}
 	}
 
 	if cleanUp {
