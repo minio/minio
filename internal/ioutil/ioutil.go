@@ -106,8 +106,6 @@ func (d *DeadlineWorker) Run(work func() error) error {
 
 	c := make(chan ioret, 1)
 	t := time.NewTimer(d.timeout)
-	defer t.Stop()
-
 	go func() {
 		c <- ioret{0, work()}
 		close(c)
@@ -115,6 +113,9 @@ func (d *DeadlineWorker) Run(work func() error) error {
 
 	select {
 	case r := <-c:
+		if !t.Stop() {
+			<-t.C
+		}
 		d.err = r.err
 		return r.err
 	case <-t.C:
@@ -138,8 +139,6 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 
 	c := make(chan ioret, 1)
 	t := time.NewTimer(w.timeout)
-	defer t.Stop()
-
 	go func() {
 		n, err := w.WriteCloser.Write(buf)
 		c <- ioret{n, err}
@@ -148,6 +147,9 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 
 	select {
 	case r := <-c:
+		if !t.Stop() {
+			<-t.C
+		}
 		w.err = r.err
 		return r.n, r.err
 	case <-t.C:
