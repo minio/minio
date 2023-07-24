@@ -1863,12 +1863,12 @@ func getCacheMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		metrics = make([]Metric, 0, 20)
 		cacheObjLayer := newCachedObjectLayerFn()
 		// Service not initialized yet
 		if cacheObjLayer == nil {
 			return
 		}
+		metrics = make([]Metric, 0, 20)
 		metrics = append(metrics, Metric{
 			Description: getCacheHitsTotalMD(),
 			Value:       float64(cacheObjLayer.CacheStats().getHits()),
