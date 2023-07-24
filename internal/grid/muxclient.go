@@ -44,9 +44,10 @@ type MuxClient struct {
 	blocked          bool
 	closed           bool
 	stateful         bool
+	deadline         time.Duration
 }
 
-type ServerResponse struct {
+type serverResponse struct {
 	Msg []byte
 	Err *RemoteErr
 }
@@ -70,11 +71,12 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 // This cannot be used concurrently.
 func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	msg := message{
-		Op:      OpRequest,
-		MuxID:   m.MuxID,
-		Handler: h,
-		Flags:   m.BaseFlags | FlagEOF,
-		Payload: req,
+		Op:         OpRequest,
+		MuxID:      m.MuxID,
+		Handler:    h,
+		Flags:      m.BaseFlags | FlagEOF,
+		Payload:    req,
+		DeadlineMS: uint32(m.deadline.Milliseconds()),
 	}
 	ch := make(chan Response, 1)
 	m.respWait = ch
@@ -111,16 +113,18 @@ func (m *MuxClient) send(msg message) error {
 	return m.parent.send(m.ctx, dst)
 }
 
-// RequestBytes will send a single payload request and stream back results.
+// RequestStateless will send a single payload request and stream back results.
 // req may not be read/writen to after calling.
-func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
+func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
 	// Try to grab an initial block.
 	msg := message{
-		Op:      OpConnectMux,
-		Handler: h,
-		Flags:   FlagEOF,
-		Payload: req,
+		Op:         OpConnectMux,
+		Handler:    h,
+		Flags:      FlagEOF,
+		Payload:    req,
+		DeadlineMS: uint32(m.deadline.Milliseconds()),
 	}
+	msg.setZeroPayloadFlag()
 
 	// Send...
 	err := m.send(msg)
@@ -140,10 +144,12 @@ func (m *MuxClient) RequestBytes(h HandlerID, req []byte, out chan<- Response) {
 func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan<- Response) error {
 	// Try to grab an initial block.
 	msg := message{
-		Op:      OpConnectMux,
-		Handler: h,
-		Payload: payload,
+		Op:         OpConnectMux,
+		Handler:    h,
+		Payload:    payload,
+		DeadlineMS: uint32(m.deadline.Milliseconds()),
 	}
+	msg.setZeroPayloadFlag()
 	if requests == nil {
 		msg.Flags |= FlagEOF
 	}
@@ -168,6 +174,7 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 				if errState {
 					continue
 				}
+				msg.setZeroPayloadFlag()
 				msg.Payload = req
 				err := m.send(msg)
 				if err != nil {
@@ -177,8 +184,9 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 				}
 				msg.Seq++
 			}
+			// Done send EOF
 			msg.Payload = nil
-			msg.Flags |= FlagEOF
+			msg.Flags = FlagEOF
 			err := m.send(msg)
 			if err != nil {
 				responses <- Response{Err: err}

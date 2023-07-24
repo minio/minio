@@ -43,10 +43,17 @@ type muxServer struct {
 }
 
 func newMuxStateless(ctx context.Context, msg message, c *Connection, handler StatelessHandler) *muxServer {
-	ctx, cancel := context.WithCancel(ctx)
+	var cancel context.CancelFunc
+	ctx = setCaller(ctx, c.remote)
+	if msg.DeadlineMS > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
 	m := muxServer{
 		ID:       msg.MuxID,
 		RecvSeq:  msg.Seq + 1,
+		SendSeq:  msg.Seq,
 		ctx:      ctx,
 		cancel:   cancel,
 		parent:   c,
@@ -60,8 +67,14 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 }
 
 func newMuxStream(ctx context.Context, msg message, c *Connection, handler StatefulHandler) *muxServer {
-	ctx, cancel := context.WithCancel(ctx)
-	send := make(chan ServerResponse)
+	var cancel context.CancelFunc
+	ctx = setCaller(ctx, c.remote)
+	if msg.DeadlineMS > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	send := make(chan []byte)
 	inboundCap, outboundCap := handler.InCapacity, handler.OutCapacity
 	if outboundCap <= 0 {
 		outboundCap = 1
@@ -84,38 +97,43 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
 	}
+	var handlerErr *RemoteErr
 	go func() {
-		defer m.close()
-		handler.Handle(ctx, msg.Payload, m.inbound, send)
+		defer func() {
+			if r := recover(); r != nil {
+				logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
+				err := RemoteErr(fmt.Sprintf("panic: %v", r))
+				handlerErr = &err
+			}
+			m.close()
+			close(send)
+		}()
+		// handlerErr is guarded by 'send' channel.
+		handlerErr = handler.Handle(ctx, msg.Payload, m.inbound, send)
 	}()
 	go func() {
 		defer m.parent.deleteMux(true, m.ID)
 		for {
-			select {
-			case <-ctx.Done():
-				return
 			// Process outgoing message.
-			case send, ok := <-send:
-				<-m.outBlock
-				msg := message{
-					MuxID: m.ID,
+			payload, ok := <-send
+			<-m.outBlock
+			msg := message{
+				MuxID: m.ID,
+			}
+			msg.Op = OpMuxServerMsg
+			if !ok {
+				msg.Flags |= FlagEOF
+				if handlerErr != nil {
+					msg.Flags |= FlagPayloadIsErr
+					msg.Payload = []byte(*handlerErr)
 				}
-				if send.Err != nil {
-					msg.Flags |= FlagEOF | FlagPayloadIsErr
-					msg.Op = OpMuxServerMsg
-					msg.Payload = []byte(*send.Err)
-					m.send(msg)
-					return
-				}
-				if !ok {
-					msg.Flags |= FlagEOF
-				}
-				msg.Op = OpMuxServerMsg
-				msg.Payload = send.Msg
 				m.send(msg)
-				if !ok {
-					return
-				}
+				return
+			}
+			msg.Payload = payload
+			m.send(msg)
+			if !ok {
+				return
 			}
 		}
 	}()

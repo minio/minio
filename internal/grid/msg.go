@@ -97,18 +97,23 @@ const (
 	// FlagPayloadIsErr can be used by individual ops to signify that
 	// The payload is a string error converted to byte slice.
 	FlagPayloadIsErr
+
+	// FlagPayloadIsZero means that payload is 0-length slice and not nil.
+	FlagPayloadIsZero
 )
 
 // This struct cannot be changed and retain backwards compatibility.
+// If changed, endpoint version must be bumped.
 //
 //msgp:tuple message
 type message struct {
-	MuxID   uint64
-	Seq     uint32
-	Handler HandlerID
-	Op      Op
-	Flags   uint8
-	Payload []byte
+	MuxID      uint64    // Mux to receive message if any.
+	Seq        uint32    // Sequence number.
+	DeadlineMS uint32    // If non-zero, milliseconds until deadline (max 1193h2m47.295s, ~49 days)
+	Handler    HandlerID // ID of handler if invoking a remote handler.
+	Op         Op        // Operation. Other fields change based on this value.
+	Flags      uint8     // Optional flags.
+	Payload    []byte    // Optional payload.
 }
 
 // parse an handleIncoming message
@@ -119,6 +124,10 @@ func (m *message) parse(b []byte) error {
 	h, err := m.UnmarshalMsg(b)
 	if err != nil {
 		return fmt.Errorf("read write: %v", err)
+	}
+	if len(m.Payload) == 0 && m.Flags&FlagPayloadIsZero == 0 {
+		PutByteBuffer(m.Payload)
+		m.Payload = nil
 	}
 	if m.Flags&FlagCRCxxh3 != 0 {
 		if len(h) < 4 {
@@ -136,13 +145,22 @@ func (m *message) parse(b []byte) error {
 func (m *message) setPayload(s sender) error {
 	if len(m.Payload) > 0 {
 		m.Payload = m.Payload[:0]
-	} else {
+	} else if cap(m.Payload) == 0 {
 		m.Payload = GetByteBuffer()[:0]
 	}
 	m.Op = s.Op()
 	var err error
 	m.Payload, err = s.MarshalMsg(m.Payload)
 	return err
+}
+
+// setZeroPayloadFlag will clear or set the FlagPayloadIsZero if
+// m.Payload is length 0, but not nil.
+func (m *message) setZeroPayloadFlag() {
+	m.Flags &^= FlagPayloadIsZero
+	if len(m.Payload) == 0 && m.Payload != nil {
+		m.Flags |= FlagPayloadIsZero
+	}
 }
 
 type receiver interface {

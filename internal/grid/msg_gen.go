@@ -399,8 +399,8 @@ func (z *message) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 6 {
-		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
+	if zb0001 != 7 {
+		err = msgp.ArrayError{Wanted: 7, Got: zb0001}
 		return
 	}
 	z.MuxID, err = dc.ReadUint64()
@@ -411,6 +411,11 @@ func (z *message) DecodeMsg(dc *msgp.Reader) (err error) {
 	z.Seq, err = dc.ReadUint32()
 	if err != nil {
 		err = msgp.WrapError(err, "Seq")
+		return
+	}
+	z.DeadlineMS, err = dc.ReadUint32()
+	if err != nil {
+		err = msgp.WrapError(err, "DeadlineMS")
 		return
 	}
 	{
@@ -446,8 +451,8 @@ func (z *message) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *message) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 6
-	err = en.Append(0x96)
+	// array header, size 7
+	err = en.Append(0x97)
 	if err != nil {
 		return
 	}
@@ -459,6 +464,11 @@ func (z *message) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteUint32(z.Seq)
 	if err != nil {
 		err = msgp.WrapError(err, "Seq")
+		return
+	}
+	err = en.WriteUint32(z.DeadlineMS)
+	if err != nil {
+		err = msgp.WrapError(err, "DeadlineMS")
 		return
 	}
 	err = en.WriteUint8(uint8(z.Handler))
@@ -487,10 +497,11 @@ func (z *message) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *message) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 6
-	o = append(o, 0x96)
+	// array header, size 7
+	o = append(o, 0x97)
 	o = msgp.AppendUint64(o, z.MuxID)
 	o = msgp.AppendUint32(o, z.Seq)
+	o = msgp.AppendUint32(o, z.DeadlineMS)
 	o = msgp.AppendUint8(o, uint8(z.Handler))
 	o = msgp.AppendUint8(o, uint8(z.Op))
 	o = msgp.AppendUint8(o, z.Flags)
@@ -506,8 +517,8 @@ func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 6 {
-		err = msgp.ArrayError{Wanted: 6, Got: zb0001}
+	if zb0001 != 7 {
+		err = msgp.ArrayError{Wanted: 7, Got: zb0001}
 		return
 	}
 	z.MuxID, bts, err = msgp.ReadUint64Bytes(bts)
@@ -518,6 +529,11 @@ func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.Seq, bts, err = msgp.ReadUint32Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Seq")
+		return
+	}
+	z.DeadlineMS, bts, err = msgp.ReadUint32Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "DeadlineMS")
 		return
 	}
 	{
@@ -554,7 +570,7 @@ func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *message) Msgsize() (s int) {
-	s = 1 + msgp.Uint64Size + msgp.Uint32Size + msgp.Uint8Size + msgp.Uint8Size + msgp.Uint8Size + msgp.BytesPrefixSize + len(z.Payload)
+	s = 1 + msgp.Uint64Size + msgp.Uint32Size + msgp.Uint32Size + msgp.Uint8Size + msgp.Uint8Size + msgp.Uint8Size + msgp.BytesPrefixSize + len(z.Payload)
 	return
 }
 

@@ -56,27 +56,46 @@ func (r RemoteErr) Error() string {
 	return string(r)
 }
 
+// Is returns if the string representation matches.
+func (r *RemoteErr) Is(other *RemoteErr) bool {
+	if r == nil || other == nil {
+		return r == other
+	}
+	return *r == *other
+}
+
 // TODO: Add type safe handlers and clients.
 type (
 	// SingleHandlerFn is handlers for one to one requests.
 	// A non-nil error value will be returned as RemoteErr(msg) to client.
+	// No client information or cancellation (deadline) is available.
+	// Include this in payload if needed.
 	SingleHandlerFn func(payload []byte) ([]byte, *RemoteErr)
 
 	// StatelessHandlerFn must handle incoming stateless request.
 	// A non-nil error value will be returned as RemoteErr(msg) to client.
-	StatelessHandlerFn func(ctx context.Context, payload []byte, resp chan<- ServerResponse) *RemoteErr
+	StatelessHandlerFn func(ctx context.Context, payload []byte, resp chan<- []byte) *RemoteErr
 
 	// StatelessHandler is handlers for one to many requests,
 	// where responses may be dropped.
+	// Stateless requests provide no incoming stream and there is no flow control
+	// on outgoing messages.
 	StatelessHandler struct {
 		Handle StatelessHandlerFn
-		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
+		// OutCapacity is the output capacity on the caller.
+		// If <= 0 capacity will be 1.
 		OutCapacity int
 	}
 
-	StreamHandlerFn func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- ServerResponse)
-	// StatefulHandler handles fully bidirectional streams.
+	// StreamHandlerFn must process a request with an optional initial payload.
+	// It must keep consuming from 'in' until it returns.
+	// 'in' and 'out' are independent.
+	// The handler should never close out.
+	// Buffers received from 'in'  can be recycled with PutByteBuffer.
+	StreamHandlerFn func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr
 
+	// StatefulHandler handles fully bidirectional streams,
+	// There is flow control in both directions.
 	StatefulHandler struct {
 		// Handle an incoming request. Initial payload is sent.
 		// Additional input packets (if any) are streamed to request.
@@ -107,13 +126,13 @@ func (h *handlers) hasAny(id HandlerID) bool {
 	return h.single[id] != nil || h.stateless[id] != nil || h.streams[id] != nil
 }
 
-type Msgp interface {
-	comparable
+// RoundTripper provides an interface for type roundtrip serialization.
+type RoundTripper interface {
 	msgp.Unmarshaler
-	msgp.MarshalSizer
+	msgp.Marshaler
 }
 
-type SingleHandler[Req, Resp Msgp] struct {
+type SingleHandler[Req, Resp RoundTripper] struct {
 	newReq    func() Req
 	newResp   func() Resp
 	id        HandlerID
@@ -121,12 +140,14 @@ type SingleHandler[Req, Resp Msgp] struct {
 	respReuse func(req Resp)
 }
 
-// NewSingleMsgpHandler creates a typed handler that can provide Marshal/Unmarshal.
-// Use Register to register a server handler
-func NewSingleMsgpHandler[Req, Resp Msgp](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
+// NewSingleRTHandler creates a typed handler that can provide Marshal/Unmarshal.
+// Use Register to register a server handler.
+// Use Call to initiate a clientside call.
+func NewSingleRTHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
 	return &SingleHandler[Req, Resp]{id: h, newReq: newReq, newResp: newResp}
 }
 
+// Register a handler for a Req -> Resp roundtrip.
 func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr)) error {
 	return m.RegisterSingle(h.id, func(payload []byte) ([]byte, *RemoteErr) {
 		req := h.newReq()
@@ -167,6 +188,7 @@ func (h *SingleHandler[Req, Resp]) SetRespReuse(fn func(resp Resp)) {
 	h.respReuse = fn
 }
 
+// Call the remove with the request and
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (dst Resp, err error) {
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {
@@ -180,4 +202,21 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req 
 	_, err = dst.UnmarshalMsg(res)
 	PutByteBuffer(res)
 	return dst, err
+}
+
+// RemoteClient contains information about the caller.
+type RemoteClient struct {
+	Name string
+}
+
+type ctxCallerKey = struct{}
+
+// GetCaller returns caller information from contexts provided to handlers.
+func GetCaller(ctx context.Context) *RemoteClient {
+	val, _ := ctx.Value(ctxCallerKey{}).(*RemoteClient)
+	return val
+}
+
+func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
+	return context.WithValue(ctx, ctxCallerKey{}, cl)
 }

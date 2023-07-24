@@ -181,7 +181,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(err)
 
 	// 1: Echo
-	h1 := NewSingleMsgpHandler[*testRequest, *testResponse](HandlerID(1), func() *testRequest {
+	h1 := NewSingleRTHandler[*testRequest, *testResponse](HandlerID(1), func() *testRequest {
 		return &testRequest{}
 	}, func() *testResponse {
 		return &testResponse{}
@@ -195,7 +195,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		}, nil
 	}
 	// Return error
-	h2 := NewSingleMsgpHandler[*testRequest, *testResponse](HandlerID(2), func() *testRequest {
+	h2 := NewSingleRTHandler[*testRequest, *testResponse](HandlerID(2), func() *testRequest {
 		return &testRequest{}
 	}, func() *testResponse {
 		return &testResponse{}
@@ -284,32 +284,29 @@ func TestStreamRoundtrip(t *testing.T) {
 	// 1: Echo
 	register := func(manager *Manager) {
 		errFatal(manager.RegisterStreamingHandler(HandlerID(1), StatefulHandler{
-			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse) {
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				for in := range request {
 					// t.Log("1: Got request", in)
 					b := append([]byte{}, payload...)
 					b = append(b, in...)
-					resp <- ServerResponse{
-						Msg: b,
-						Err: nil,
-					}
+					resp <- b
 					// t.Log("1: Responded Waiting for next incoming", in)
 				}
 				t.Log("Handler done")
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  1,
 		}))
 		// 2: Return as error
 		errFatal(manager.RegisterStreamingHandler(HandlerID(2), StatefulHandler{
-			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- ServerResponse) {
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				for in := range request {
 					t.Log("2: Got err request", string(in))
 					err := RemoteErr(append(payload, in...))
-					resp <- ServerResponse{
-						Err: &err,
-					}
+					return &err
 				}
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  1,

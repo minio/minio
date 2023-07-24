@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -92,7 +93,8 @@ type Connection struct {
 
 	handlers *handlers
 
-	auth AuthFn
+	remote *RemoteClient
+	auth   AuthFn
 }
 
 // State is a connection state.
@@ -114,6 +116,10 @@ const (
 	// StateConnectionError is the state once a connection attempt has been made, and it failed.
 	// The connection will remain in this stat until the connection has been successfully re-established.
 	StateConnectionError
+
+	// MaxDeadline is the maximum deadline allowed,
+	// Approx 49 days.
+	MaxDeadline = time.Duration(math.MaxUint32) * time.Millisecond
 )
 
 type ContextDialer interface {
@@ -147,6 +153,7 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handl
 		handlers:   handlers,
 		auth:       auth,
 		header:     make(http.Header, 1),
+		remote:     &RemoteClient{Name: remote},
 	}
 
 	if local == remote {
@@ -175,8 +182,14 @@ func (c *Connection) shouldConnect() bool {
 	return h0 < h1
 }
 
-func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
+func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
 	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
+	if dl, ok := ctx.Deadline(); ok {
+		client.deadline = getDeadline(time.Until(dl))
+		if client.deadline == 0 {
+			return nil, context.DeadlineExceeded
+		}
+	}
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
 		if _, ok := c.outgoing.LoadOrStore(client.MuxID, client); client.MuxID == 0 || !ok {
@@ -184,11 +197,14 @@ func (c *Connection) NewMuxClient(ctx context.Context) *MuxClient {
 		}
 		client.MuxID = atomic.AddUint64(&c.NextID, 1)
 	}
-	return client
+	return client, nil
 }
 
 func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
-	client := c.NewMuxClient(ctx)
+	client, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer c.outgoing.Delete(client.MuxID)
 	return client.roundtrip(h, req)
 }
@@ -202,11 +218,14 @@ var ErrRemoteRestart = errors.New("remote restarted")
 // If nil will be returned remote call sent EOF or ErrDone is returned by the callback.
 // If ErrDone is returned on cb nil will be returned.
 func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb func([]byte) error) error {
-	client := c.NewMuxClient(ctx)
-	resp := make(chan Response, 10)
-	client.RequestBytes(h, req, resp)
-
+	client, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return err
+	}
 	defer c.outgoing.Delete(client.MuxID)
+	resp := make(chan Response, 10)
+	client.RequestStateless(h, req, resp)
+
 	for r := range resp {
 		if r.Err != nil {
 			return r.Err
@@ -430,7 +449,11 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 		responses = make(chan Response, 1)
 	}
 
-	cl := c.NewMuxClient(ctx)
+	cl, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := cl.RequestStream(h, payload, requests, responses); err != nil {
 		return nil, err
 	}
@@ -734,13 +757,25 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					continue
 				}
 				go func(m message) {
+					var start time.Time
+					if m.DeadlineMS > 0 {
+						start = time.Now()
+					}
 					m.Op = OpMuxServerMsg
 					b, err := handler(m.Payload)
+					// TODO: Maybe recycle m.Payload - should be free here.
+					if m.DeadlineMS > 0 && time.Since(start).Milliseconds() > int64(m.DeadlineMS) {
+						// No need to return result
+						PutByteBuffer(b)
+						return
+					}
 					if err != nil {
 						m.Flags |= FlagPayloadIsErr
 						m.Payload = []byte(*err)
 					} else {
 						m.Payload = b
+						m.setZeroPayloadFlag()
+
 						if debugPrint {
 							fmt.Println("returning payload:", string(b))
 						}
@@ -867,4 +902,15 @@ func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
 			return b, err
 		}
 	}
+}
+
+// getDeadline will truncate the deadline so it is at least 1ms and at most MaxDeadline.
+func getDeadline(d time.Duration) time.Duration {
+	if d < time.Millisecond {
+		return 0
+	}
+	if d > MaxDeadline {
+		return MaxDeadline
+	}
+	return d
 }
