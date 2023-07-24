@@ -1,50 +1,34 @@
 linters-settings:
-  golint:
-    min-confidence: 0
+  gofumpt:
+    simplify: true
 
   misspell:
     locale: US
 
+  staticcheck:
+    checks: ['all', '-ST1005', '-ST1000', '-SA4000', '-SA9004', '-SA1019', '-SA1008', '-U1000', '-ST1016']
+
 linters:
   disable-all: true
   enable:
-    - typecheck
-    - goimports
-    - misspell
-    - govet
-    - revive
-    - ineffassign
-    - gosimple
-    - deadcode
-    - structcheck
-    - gomodguard
-    - gofmt
-    - unused
-    - structcheck
-    - unconvert
-    - varcheck
+    - durationcheck
     - gocritic
+    - gofmt
     - gofumpt
-
-linters-settings:
-  gofumpt:
-    lang-version: "1.17"
-
-    # Choose whether or not to use the extra rules that are disabled
-    # by default
-    extra-rules: false
+    - goimports
+    - gomodguard
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - tenv
+    - typecheck
+    - unconvert
+    - unused
 
 issues:
   exclude-use-default: false
   exclude:
-      - should have a package comment
-      - error strings should not be capitalized or end with punctuation or a newline
-      # todo fix these when we get enough time.
-      - "singleCaseSwitch: should rewrite switch statement to if statement"
-      - "unlambda: replace"
-      - "captLocal:"
-      - "ifElseChain:"
-      - "elseif:"
-
-service:
-  golangci-lint-version: 1.43.0 # use the fixed version to not introduce new linters unexpectedly
+    - should have a package comment
+    - error strings should not be capitalized or end with punctuation or a newline
