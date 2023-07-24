@@ -102,22 +102,6 @@ func init() {
 
 	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
-	// Call to refresh will refresh names in cache.
-	go func() {
-		// Baremetal setups set DNS refresh window to 10 minutes.
-		t := time.NewTicker(10 * time.Minute)
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				globalDNSCache.Refresh()
-
-			case <-GlobalContext.Done():
-				return
-			}
-		}
-	}()
-
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
@@ -443,6 +427,28 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
+
+	// Check if we have configured a custom DNS cache TTL.
+	dnsTTL := ctx.Duration("dns-cache-ttl")
+	if dnsTTL <= 0 {
+		dnsTTL = 10 * time.Minute
+	}
+
+	// Call to refresh will refresh names in cache.
+	go func() {
+		// Baremetal setups set DNS refresh window up to dnsTTL duration.
+		t := time.NewTicker(dnsTTL)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				globalDNSCache.Refresh()
+
+			case <-GlobalContext.Done():
+				return
+			}
+		}
+	}()
 }
 
 type envKV struct {
