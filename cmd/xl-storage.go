@@ -247,7 +247,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	}
 
 	// We stagger listings only on HDDs.
-	if info.Rotational != nil && *info.Rotational {
+	if info.Rotational == nil || *info.Rotational {
 		s.walkMu = &sync.Mutex{}
 		s.walkReadMu = &sync.Mutex{}
 	}
