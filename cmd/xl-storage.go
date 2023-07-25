@@ -1443,8 +1443,8 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			// Check the data path if there is a part with data.
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(path, fi.DataDir, partPath)
-			_, err = s.StatInfoFile(ctx, volume, dataPath, false)
-			if err != nil {
+			_, lerr := Lstat(pathJoin(volumeDir, dataPath))
+			if lerr != nil {
 				// Set the inline header, our inlined data is fine.
 				fi.SetInlineData()
 				return fi, nil
@@ -2723,7 +2723,11 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		}
 		st, _ := Lstat(filePath)
 		if st == nil {
-			continue
+			// Stat a volume entry.
+			if verr := Access(volumeDir); verr != nil {
+				return stat, convertAccessError(verr, errVolumeAccessDenied)
+			}
+			return stat, errPathNotFound
 		}
 		name, err := filepath.Rel(volumeDir, filePath)
 		if err != nil {
