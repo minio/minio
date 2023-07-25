@@ -210,13 +210,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 		}
 	}
 
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {

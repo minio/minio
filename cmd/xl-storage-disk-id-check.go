@@ -345,7 +345,8 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	}
 	defer done(&err)
 
-	return p.storage.DeleteVol(ctx, volume, forceDelete)
+	w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+	return w.Run(func() error { return p.storage.DeleteVol(ctx, volume, forceDelete) })
 }
 
 func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) (s []string, err error) {
