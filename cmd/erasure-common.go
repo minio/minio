@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -188,18 +189,21 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 		dataArray = append(dataArray, toAdd)
 	}
 
+	ignoredErrs := []error{
+		errFileNotFound,
+		errVolumeNotFound,
+		errFileVersionNotFound,
+		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
+		io.EOF,              // some times we would read without locks, ignore these errors
+	}
+	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
+
 	errs := g.Wait()
 	for index, err := range errs {
 		if err == nil {
 			continue
 		}
-		if !IsErr(err, []error{
-			errFileNotFound,
-			errVolumeNotFound,
-			errFileVersionNotFound,
-			errDiskNotFound,
-			errUnformattedDisk,
-		}...) {
+		if !IsErr(err, ignoredErrs...) {
 			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], req.Bucket, req.Prefix, err),
 				disks[index].String())

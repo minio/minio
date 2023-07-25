@@ -260,7 +260,7 @@ func (sys *S3PeerSys) MakeBucket(ctx context.Context, bucket string, opts MakeBu
 				perPoolErrs = append(perPoolErrs, errs[i])
 			}
 		}
-		if poolErr := reduceReadQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil {
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil {
 			return toObjectErr(poolErr, bucket)
 		}
 	}
@@ -303,7 +303,7 @@ func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts Dele
 				perPoolErrs = append(perPoolErrs, errs[i])
 			}
 		}
-		if poolErr := reduceReadQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil && poolErr != errVolumeNotFound {
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil && poolErr != errVolumeNotFound {
 			// re-create successful deletes, since we are return an error.
 			sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
 			return toObjectErr(poolErr, bucket)
