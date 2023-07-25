@@ -80,6 +80,50 @@ type DeadlineWriter struct {
 	err     error
 }
 
+// DeadlineWorker implements the deadline/timeout resiliency pattern.
+type DeadlineWorker struct {
+	timeout time.Duration
+	err     error
+}
+
+// NewDeadlineWorker constructs a new DeadlineWorker with the given timeout.
+func NewDeadlineWorker(timeout time.Duration) *DeadlineWorker {
+	return &DeadlineWorker{
+		timeout: timeout,
+	}
+}
+
+// Run runs the given function, passing it a stopper channel. If the deadline passes before
+// the function finishes executing, Run returns ErrTimeOut to the caller and closes the stopper
+// channel so that the work function can attempt to exit gracefully. It does not (and cannot)
+// simply kill the running function, so if it doesn't respect the stopper channel then it may
+// keep running after the deadline passes. If the function finishes before the deadline, then
+// the return value of the function is returned from Run.
+func (d *DeadlineWorker) Run(work func() error) error {
+	if d.err != nil {
+		return d.err
+	}
+
+	c := make(chan ioret, 1)
+	t := time.NewTimer(d.timeout)
+	go func() {
+		c <- ioret{0, work()}
+		close(c)
+	}()
+
+	select {
+	case r := <-c:
+		if !t.Stop() {
+			<-t.C
+		}
+		d.err = r.err
+		return r.err
+	case <-t.C:
+		d.err = context.Canceled
+		return context.Canceled
+	}
+}
+
 // NewDeadlineWriter wraps a writer to make it respect given deadline
 // value per Write(). If there is a blocking write, the returned Writer
 // will return whenever the timer hits (the return values are n=0
@@ -95,8 +139,6 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 
 	c := make(chan ioret, 1)
 	t := time.NewTimer(w.timeout)
-	defer t.Stop()
-
 	go func() {
 		n, err := w.WriteCloser.Write(buf)
 		c <- ioret{n, err}
@@ -105,9 +147,13 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 
 	select {
 	case r := <-c:
+		if !t.Stop() {
+			<-t.C
+		}
 		w.err = r.err
 		return r.n, r.err
 	case <-t.C:
+		w.WriteCloser.Close()
 		w.err = context.Canceled
 		return 0, context.Canceled
 	}

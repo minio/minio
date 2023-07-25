@@ -571,10 +571,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		errFileNameTooLong,
 		errVolumeNotFound,
 		errFileVersionNotFound,
-		errDiskNotFound,
 		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
 		io.EOF,              // some times we would read without locks, ignore these errors
 	}
+	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
 
 	errs := g.Wait()
 	for index, err := range errs {
