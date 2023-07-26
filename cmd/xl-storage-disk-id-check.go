@@ -673,7 +673,7 @@ func init() {
 	if d != "" {
 		timeoutOperation, _ := time.ParseDuration(d)
 		if timeoutOperation < time.Second {
-			logger.Info("invalid _MINIO_DISK_MAX_TIMEOUT value: %s, minimum can be 1s, defaulting to '2 minutes'", d)
+			logger.Info("invalid _MINIO_DISK_MAX_TIMEOUT value: %s, minimum allowed is 1s, defaulting to '2 minutes'", d)
 		} else {
 			diskMaxTimeout = timeoutOperation
 		}
@@ -916,13 +916,19 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 	// if disk max timeout is smaller than checkEvery window
 	// reduce checks by a second.
 	if diskMaxTimeout <= checkEvery {
-		checkEvery -= time.Second
+		checkEvery = diskMaxTimeout - time.Second
+		if checkEvery <= 0 {
+			checkEvery = diskMaxTimeout
+		}
 	}
 
 	// if disk max timeout is smaller than skipIfSuccessBefore window
 	// reduce the skipIfSuccessBefore by a second.
 	if diskMaxTimeout <= skipIfSuccessBefore {
-		skipIfSuccessBefore -= time.Second
+		skipIfSuccessBefore = diskMaxTimeout - time.Second
+		if skipIfSuccessBefore <= 0 {
+			skipIfSuccessBefore = diskMaxTimeout
+		}
 	}
 
 	t := time.NewTicker(checkEvery)
