@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -95,6 +96,12 @@ func bgFormatErasureCleanupTmp(diskPath string) {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			err))
+	}
+
+	// Delete all temporary files created for DirectIO write check
+	files, _ := filepath.Glob(filepath.Join(diskPath, ".writable-check-*.tmp"))
+	for _, file := range files {
+		removeAll(file)
 	}
 
 	// Remove the entire folder in case there are leftovers that didn't get cleaned up before restart.
