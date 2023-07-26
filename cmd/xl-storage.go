@@ -1049,7 +1049,8 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 			errs[i] = ctx.Err()
 			continue
 		}
-		if err := s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...); err != nil {
+		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		if err := w.Run(func() error { return s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...) }); err != nil {
 			errs[i] = err
 		}
 		diskHealthCheckOK(ctx, errs[i])
@@ -2660,15 +2661,16 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		}
 		var data []byte
 		var mt time.Time
-		var err error
 		fullPath := pathJoin(volumeDir, req.Prefix, f)
-		if req.MetadataOnly {
-			data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
-		} else {
-			data, mt, err = s.readAllData(ctx, volumeDir, fullPath)
-		}
-
-		if err != nil {
+		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		if err := w.Run(func() (err error) {
+			if req.MetadataOnly {
+				data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
+			} else {
+				data, mt, err = s.readAllData(ctx, volumeDir, fullPath)
+			}
+			return err
+		}); err != nil {
 			if !IsErr(err, errFileNotFound, errVolumeNotFound) {
 				r.Exists = true
 				r.Error = err.Error()
