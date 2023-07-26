@@ -110,7 +110,7 @@ func (m *MuxClient) send(msg message) error {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
-	return m.parent.send(m.ctx, dst)
+	return m.parent.send(dst)
 }
 
 // RequestStateless will send a single payload request and stream back results.
@@ -170,27 +170,42 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 				Seq:   1,
 			}
 			var errState bool
-			for req := range requests {
-				if errState {
-					continue
-				}
-				msg.setZeroPayloadFlag()
-				msg.Payload = req
-				err := m.send(msg)
-				if err != nil {
-					PutByteBuffer(req)
-					responses <- Response{Err: err}
+			for {
+				select {
+				case <-m.ctx.Done():
+					if debugPrint {
+						fmt.Println("Client sending disconnect to mux", m.MuxID)
+					}
+					logger.LogIf(m.ctx, m.send(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+					responses <- Response{Err: m.ctx.Err()}
+					m.close()
 					return
+				case req, ok := <-requests:
+					if !ok {
+						// Done send EOF
+						msg.Payload = nil
+						msg.Flags = FlagEOF
+						err := m.send(msg)
+						if err != nil {
+							responses <- Response{Err: err}
+							m.close()
+						}
+						return
+					}
+					if errState {
+						continue
+					}
+					msg.setZeroPayloadFlag()
+					msg.Payload = req
+					err := m.send(msg)
+					if err != nil {
+						PutByteBuffer(req)
+						responses <- Response{Err: err}
+						m.close()
+						return
+					}
+					msg.Seq++
 				}
-				msg.Seq++
-			}
-			// Done send EOF
-			msg.Payload = nil
-			msg.Flags = FlagEOF
-			err := m.send(msg)
-			if err != nil {
-				responses <- Response{Err: err}
-				return
 			}
 		}()
 	}
@@ -244,6 +259,27 @@ func (m *MuxClient) response(seq uint32, r Response) {
 	default:
 		// Disconnect stateful.
 		PutByteBuffer(r.Msg)
+	}
+}
+
+// error is a message from the server to disconnect.
+func (m *MuxClient) error(err RemoteErr) {
+	if debugPrint {
+		fmt.Printf("mux %d: got disconnect err:%v\n", m.MuxID, string(err))
+	}
+	m.respMu.Lock()
+	defer m.respMu.Unlock()
+	if m.closed {
+		return
+	}
+	select {
+	case m.respWait <- Response{Err: &err}:
+		m.closeLocked()
+	default:
+		go func() {
+			m.respWait <- Response{Err: &err}
+			m.close()
+		}()
 	}
 }
 

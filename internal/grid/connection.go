@@ -131,9 +131,6 @@ const (
 	readBufferSize     = 4 << 10
 	writeBufferSize    = 4 << 10
 	defaultDialTimeout = time.Second
-
-	// GridRoutePath is the remote path to connect to.
-	GridRoutePath = "/minio/grid/v1"
 )
 
 // NewConnection will create an unconnected connection to a remote.
@@ -159,7 +156,7 @@ func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handl
 	if local == remote {
 		panic("equal hosts")
 	}
-	c.header.Set("Authorization", "Bearer "+auth(remote+GridRoutePath))
+	c.header.Set("Authorization", "Bearer "+auth(remote+RoutePath))
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
 		go c.connect()
@@ -243,10 +240,10 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 	return nil
 }
 
-func (c *Connection) send(ctx context.Context, msg []byte) error {
+func (c *Connection) send(msg []byte) error {
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-c.ctx.Done():
+		return c.ctx.Err()
 	case c.outQueue <- msg:
 		return nil
 	}
@@ -278,7 +275,7 @@ func (c *Connection) queueMsg(msg message, payload sender) error {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
-	return c.send(context.Background(), dst)
+	return c.send(dst)
 }
 
 // sendMsg will send
@@ -317,7 +314,7 @@ func (c *Connection) connect() {
 	for {
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
-		toDial = toDial + GridRoutePath
+		toDial = toDial + RoutePath
 
 		dialer := ws.DefaultDialer
 		dialer.ReadBufferSize = readBufferSize
@@ -418,17 +415,7 @@ func (c *Connection) connect() {
 	}
 }
 
-type Stream struct {
-	// Responses from the remote server.
-	// Channel will be closed
-	Responses <-chan Response
-
-	// Requests sent to the server.
-	// If the handler is defined with 0 incoming capacity this will be nil.
-	Requests chan<- []byte
-}
-
-// NewStream creates a
+// NewStream creates a new stream
 func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -652,7 +639,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					}
 					PutByteBuffer(m.Payload)
 					continue
@@ -679,7 +666,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if debugPrint {
 						fmt.Println(c.Local, "OpMuxClientMsg: Unknown Mux:", m.MuxID)
 					}
-					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					PutByteBuffer(m.Payload)
 					continue
 				}
@@ -698,7 +685,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				if debugPrint {
 					fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
 				}
-				logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+				logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 				continue
 			case OpUnblockClMux:
 				PutByteBuffer(m.Payload)
@@ -708,18 +695,31 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if debugPrint {
 						fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
 					}
-					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					continue
 				}
 				v.unblockSend(m.Seq)
 				continue
-			case OpDisconnectMux:
+			case OpDisconnectServerMux:
+				if debugPrint {
+					fmt.Println(c.Local, "Disconnect server mux:", m.MuxID)
+				}
 				PutByteBuffer(m.Payload)
 				m.Payload = nil
 				if v, ok := c.inStream.Load(m.MuxID); ok {
 					v.close()
 					continue
 				}
+			case OpDisconnectClientMux:
+				if v, ok := c.outgoing.Load(m.MuxID); ok {
+					if m.Flags&FlagPayloadIsErr != 0 {
+						v.error(RemoteErr(m.Payload))
+					} else {
+						v.error("remote disconnected")
+					}
+					continue
+				}
+				PutByteBuffer(m.Payload)
 			case OpPing:
 				PutByteBuffer(m.Payload)
 				if m.MuxID == 0 {
@@ -787,7 +787,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: m.MuxID}, nil))
+						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					}
 					PutByteBuffer(m.Payload)
 					continue
@@ -871,46 +871,21 @@ func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 	if incoming {
 		v, loaded := c.inStream.LoadAndDelete(muxID)
 		if loaded && v != nil {
-			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: muxID}, nil))
+			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: muxID}, nil))
 			v.close()
 		}
 	} else {
 		v, loaded := c.outgoing.LoadAndDelete(muxID)
 		if loaded && v != nil {
 			v.close()
-			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectMux, MuxID: muxID}, nil))
+			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: muxID}, nil))
 		}
 	}
 }
 
-// readAllInto reads from r and appends to b until an error or EOF and returns the data it read.
-// A successful call returns err == nil, not err == EOF. Because readAllInto is
-// defined to read from src until EOF, it does not treat an EOF from Read
-// as an error to be reported.
-func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
-	for {
-		if len(b) == cap(b) {
-			// Add more capacity (let append pick how much).
-			b = append(b, 0)[:len(b)]
-		}
-		n, err := r.Read(b[len(b):cap(b)])
-		b = b[:len(b)+n]
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			return b, err
-		}
+func (c *Connection) Stats() ConnectionStats {
+	return ConnectionStats{
+		IncomingStreams: c.inStream.Size(),
+		OutgoingStreams: c.outgoing.Size(),
 	}
-}
-
-// getDeadline will truncate the deadline so it is at least 1ms and at most MaxDeadline.
-func getDeadline(d time.Duration) time.Duration {
-	if d < time.Millisecond {
-		return 0
-	}
-	if d > MaxDeadline {
-		return MaxDeadline
-	}
-	return d
 }

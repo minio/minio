@@ -53,8 +53,11 @@ const (
 	// OpMuxConnectError is an  error while connecting a mux.
 	OpMuxConnectError
 
-	// OpDisconnectMux should disconnect a mux
-	OpDisconnectMux
+	// OpDisconnectClientMux instructs a client to disconnect a mux
+	OpDisconnectClientMux
+
+	// OpDisconnectServerMux instructs a server to disconnect (cancel) a server mux
+	OpDisconnectServerMux
 
 	// OpMuxClientMsg contains a message to a client Mux
 	OpMuxClientMsg

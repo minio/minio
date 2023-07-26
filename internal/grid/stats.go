@@ -17,11 +17,7 @@
 
 package grid
 
-import (
-	"net"
-	"net/http"
-)
-
-type WS interface {
-	UpgradeHTTP(r *http.Request, w http.ResponseWriter) net.Conn
+type ConnectionStats struct {
+	OutgoingStreams int
+	IncomingStreams int
 }

@@ -27,11 +27,16 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-// apiVersion is a major version of the entire api.
-// Bumping this should only be done when overall,
-// incompatible changes are made, not when adding a new handler
-// or changing an existin handler.
-const apiVersion = 1
+const (
+	// apiVersion is a major version of the entire api.
+	// Bumping this should only be done when overall,
+	// incompatible changes are made, not when adding a new handler
+	// or changing an existing handler.
+	apiVersion = "v1"
+
+	// RoutePath is the remote path to connect to.
+	RoutePath = "/minio/grid/" + apiVersion
+)
 
 // Manager will
 type Manager struct {
@@ -155,7 +160,7 @@ func (m *Manager) RegisterSingle(id HandlerID, h SingleHandlerFn) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	if m.handlers.hasAny(id) {
+	if m.handlers.hasAny(id) && !id.isTestHandler() {
 		return ErrHandlerAlreadyExists
 	}
 
@@ -169,7 +174,7 @@ func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	if m.handlers.hasAny(id) {
+	if m.handlers.hasAny(id) && !id.isTestHandler() {
 		return ErrHandlerAlreadyExists
 	}
 
@@ -183,9 +188,13 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) erro
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	if m.handlers.hasAny(id) {
+	if m.handlers.hasAny(id) && !id.isTestHandler() {
 		return ErrHandlerAlreadyExists
 	}
 	m.handlers.streams[id] = &h
 	return nil
+}
+
+func (m *Manager) HostName() string {
+	return m.local
 }

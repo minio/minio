@@ -18,10 +18,17 @@
 // Package grid provides single-connection two-way grid communication.
 package grid
 
-import "sync"
+import (
+	"errors"
+	"io"
+	"sync"
+	"time"
+
+	"github.com/gobwas/ws/wsutil"
+)
 
 const (
-	debugPrint = true
+	debugPrint = false
 )
 
 var internalByteBuffer = sync.Pool{
@@ -41,4 +48,36 @@ var PutByteBuffer = func(b []byte) {
 	if cap(b) > 1024 && cap(b) < 64<<10 {
 		internalByteBuffer.Put(b)
 	}
+}
+
+// readAllInto reads from r and appends to b until an error or EOF and returns the data it read.
+// A successful call returns err == nil, not err == EOF. Because readAllInto is
+// defined to read from src until EOF, it does not treat an EOF from Read
+// as an error to be reported.
+func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
+	for {
+		if len(b) == cap(b) {
+			// Add more capacity (let append pick how much).
+			b = append(b, 0)[:len(b)]
+		}
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			return b, err
+		}
+	}
+}
+
+// getDeadline will truncate the deadline so it is at least 1ms and at most MaxDeadline.
+func getDeadline(d time.Duration) time.Duration {
+	if d < time.Millisecond {
+		return 0
+	}
+	if d > MaxDeadline {
+		return MaxDeadline
+	}
+	return d
 }

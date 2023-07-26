@@ -27,12 +27,12 @@ import (
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
-	handlerTest
-	handlerTest2
 
-	// Add more above.
+	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
 	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
+	handlerTest
+	handlerTest2
 	handlerLast
 )
 
@@ -46,6 +46,10 @@ func init() {
 
 func (h HandlerID) valid() bool {
 	return h != handlerInvalid && h < handlerLast
+}
+
+func (h HandlerID) isTestHandler() bool {
+	return h >= handlerTest && h <= handlerTest2
 }
 
 // RemoteErr is a remote error type.

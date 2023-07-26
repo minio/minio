@@ -115,7 +115,13 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 		defer m.parent.deleteMux(true, m.ID)
 		for {
 			// Process outgoing message.
-			payload, ok := <-send
+			var payload []byte
+			var ok bool
+			select {
+			case payload, ok = <-send:
+			case <-ctx.Done():
+				return
+			}
 			<-m.outBlock
 			msg := message{
 				MuxID: m.ID,
@@ -217,7 +223,7 @@ func (m *muxServer) disconnect(msg string) {
 	if msg != "" {
 		m.send(message{Op: OpMuxServerMsg, MuxID: m.ID, Flags: FlagPayloadIsErr | FlagEOF, Payload: []byte(msg)})
 	} else {
-		m.send(message{Op: OpDisconnectMux, MuxID: m.ID})
+		m.send(message{Op: OpDisconnectClientMux, MuxID: m.ID})
 	}
 	m.close()
 	m.parent.deleteMux(true, m.ID)
