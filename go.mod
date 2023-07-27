@@ -60,7 +60,7 @@ require (
 	github.com/minio/xxml v0.0.3
 	github.com/minio/zipindex v0.3.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/nats-io/nats-server/v2 v2.7.4
+	github.com/nats-io/nats-server/v2 v2.9.20
 	github.com/nats-io/nats.go v1.27.1
 	github.com/nats-io/stan.go v0.10.4
 	github.com/ncw/directio v1.0.5
@@ -191,7 +191,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
-	github.com/nats-io/jwt/v2 v2.2.1-0.20220113022732-58e87895b296 // indirect
+	github.com/nats-io/jwt/v2 v2.4.1 // indirect
 	github.com/nats-io/nats-streaming-server v0.24.3 // indirect
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
