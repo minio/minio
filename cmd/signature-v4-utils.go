@@ -260,3 +260,28 @@ func signV4TrimAll(input string) string {
 	// unicode.IsSpace() internally here) to one space and return
 	return strings.Join(strings.Fields(input), " ")
 }
+
+// checkMetaHeaders will check if the metadata from header/url is the same with the one from signed headers
+func checkMetaHeaders(signedHeadersMap http.Header, r *http.Request) APIErrorCode {
+	// check values from http header
+	for k, val := range r.Header {
+		if stringsHasPrefixFold(k, "X-Amz-Meta-") {
+			if signedHeadersMap.Get(k) == val[0] {
+				continue
+			}
+			return ErrUnsignedHeaders
+		}
+	}
+
+	// check values from url, if no http header
+	for k, val := range r.Form {
+		if stringsHasPrefixFold(k, "x-amz-meta-") {
+			if signedHeadersMap.Get(http.CanonicalHeaderKey(k)) == val[0] {
+				continue
+			}
+			return ErrUnsignedHeaders
+		}
+	}
+
+	return ErrNone
+}
