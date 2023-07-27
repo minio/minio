@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -227,6 +227,12 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	extractedSignedHeaders, errCode := extractSignedHeaders(pSignValues.SignedHeaders, r)
 	if errCode != ErrNone {
 		return errCode
+	}
+
+	// Check if the metadata headers are equal with signedheaders
+	errMetaCode := checkMetaHeaders(extractedSignedHeaders, r)
+	if errMetaCode != ErrNone {
+		return errMetaCode
 	}
 
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
