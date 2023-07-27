@@ -40,6 +40,8 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_cluster_kms_uptime`                    | The time the KMS has been up and running in seconds.                                                            |
 | `minio_cluster_nodes_offline_total`           | Total number of MinIO nodes offline.                                                                            |
 | `minio_cluster_nodes_online_total`            | Total number of MinIO nodes online.                                                                             |
+| `minio_cluster_write_quorum`                  | Maximum write quorum across all pools and sets                                                                  |
+| `minio_cluster_health_status`                 | Get current cluster health status                                                                               |
 | `minio_heal_objects_errors_total`             | Objects for which healing failed in current self healing run.                                                   |
 | `minio_heal_objects_heal_total`               | Objects healed in current self healing run.                                                                     |
 | `minio_heal_objects_total`                    | Objects scanned in current self healing run.                                                                    |

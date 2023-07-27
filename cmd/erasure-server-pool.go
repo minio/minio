@@ -2060,9 +2060,13 @@ type HealthOptions struct {
 // additionally with any specific heuristic information which
 // was queried
 type HealthResult struct {
-	Healthy       bool
-	HealingDrives int
-	PoolID, SetID int
+	Healthy        bool
+	HealingDrives  int
+	UnhealthyPools []struct {
+		Maintenance   bool
+		PoolID, SetID int
+		WriteQuorum   int
+	}
 	WriteQuorum   int
 	UsingDefaults bool
 }
@@ -2164,24 +2168,6 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		usingDefaults = true
 	}
 
-	for poolIdx := range erasureSetUpCount {
-		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
-				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
-				return HealthResult{
-					Healthy:       false,
-					HealingDrives: len(aggHealStateResult.HealDisks),
-					PoolID:        poolIdx,
-					SetID:         setIdx,
-					WriteQuorum:   poolWriteQuorums[poolIdx],
-					UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
-				}
-			}
-		}
-	}
-
 	var maximumWriteQuorum int
 	for _, writeQuorum := range poolWriteQuorums {
 		if maximumWriteQuorum == 0 {
@@ -2189,6 +2175,35 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		}
 		if writeQuorum > maximumWriteQuorum {
 			maximumWriteQuorum = writeQuorum
+		}
+	}
+
+	result := HealthResult{
+		HealingDrives: len(aggHealStateResult.HealDisks),
+		WriteQuorum:   maximumWriteQuorum,
+		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
+	}
+
+	for poolIdx := range erasureSetUpCount {
+		for setIdx := range erasureSetUpCount[poolIdx] {
+			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
+				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
+				result.UnhealthyPools = append(result.UnhealthyPools, struct {
+					Maintenance                bool
+					PoolID, SetID, WriteQuorum int
+				}{
+					Maintenance: opts.Maintenance,
+					SetID:       setIdx,
+					PoolID:      poolIdx,
+					WriteQuorum: poolWriteQuorums[poolIdx],
+				})
+			}
+		}
+		if len(result.UnhealthyPools) > 0 {
+			// We have unhealthy pools return error.
+			return result
 		}
 	}
 
