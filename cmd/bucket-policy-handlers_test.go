@@ -289,7 +289,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 10.
 		// Existent bucket with policy with Version field empty.
@@ -463,7 +463,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: "",
-			expectedRespStatus:   http.StatusNotFound,
+			expectedRespStatus:   http.StatusBadRequest,
 		},
 	}
 	// Iterating over the cases, fetching the policy and validating the response.
@@ -686,7 +686,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 			bucketName:         ".invalid-bucket-name",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 	// Iterating over the cases and deleting the bucket policy and then asserting response.
