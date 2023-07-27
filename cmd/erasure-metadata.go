@@ -342,6 +342,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		etagOnly := modTime.Equal(timeSentinel) && (etag != "" && etag == meta.Metadata["etag"])
 		mtimeValid := meta.ModTime.Equal(modTime)
 		if mtimeValid || etagOnly {
+			fmt.Fprint(h, meta.SuccessorModTime.Format(http.TimeFormat))
 			fmt.Fprintf(h, "%v", meta.XLV1)
 			if !etagOnly {
 				// Verify dataDir is same only when mtime is valid and etag is not considered.
