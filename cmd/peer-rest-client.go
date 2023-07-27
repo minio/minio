@@ -212,7 +212,7 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	values := make(url.Values)
 	values.Set(peerRESTMetricsTypes, strconv.FormatUint(uint64(t), 10))
 	for disk := range opts.disks {
-		values.Set(peerRESTDisk, disk)
+		values.Add(peerRESTDisk, disk)
 	}
 	for host := range opts.hosts {
 		values.Add(peerRESTHost, host)
