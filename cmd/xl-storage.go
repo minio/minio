@@ -1885,6 +1885,10 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 }
 
 func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSize int64, r io.Reader, flags int) (err error) {
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	parentFilePath := pathutil.Dir(filePath)
@@ -1939,6 +1943,10 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -2837,7 +2845,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 			newBuf, err := xl.AppendTo(metaDataPoolGet())
 			if err == nil {
 				defer metaDataPoolPut(newBuf)
-				return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, false)
+				return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 			}
 		}
 	}
