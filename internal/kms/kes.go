@@ -126,8 +126,8 @@ func NewWithConfig(config Config) (KMS, error) {
 		if config.Certificate == nil || config.ReloadCertEvents == nil {
 			return
 		}
+		var prevCertificate tls.Certificate
 		for {
-			var prevCertificate tls.Certificate
 			certificate, ok := <-config.ReloadCertEvents
 			if !ok {
 				return
