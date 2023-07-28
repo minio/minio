@@ -77,6 +77,8 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
+	totalErrsAvailability uint64 // Captures all data availability errors such as permission denied, faulty disk and timeout errors.
+	totalErrsTimeout      uint64 // Captures all timeout only errors
 	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
 	apiCalls     [storageMetricLast]uint64
 	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
@@ -102,6 +104,8 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 			for i := range p.apiCalls {
 				diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
 			}
+			diskMetric.TotalErrorsAvailability = atomic.LoadUint64(&p.totalErrsAvailability)
+			diskMetric.TotalErrorsTimeout = atomic.LoadUint64(&p.totalErrsTimeout)
 			return diskMetric, nil
 		}
 	})
@@ -654,15 +658,34 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 	return func(errp *error) {
 		duration := time.Since(startTime)
 
+		var err error
+		if errp != nil && *errp != nil {
+			err = *errp
+		}
+
 		atomic.AddUint64(&p.apiCalls[s], 1)
+		if IsErr(err, []error{
+			errVolumeAccessDenied,
+			errFileAccessDenied,
+			errDiskAccessDenied,
+			errFaultyDisk,
+			errFaultyRemoteDisk,
+			context.DeadlineExceeded,
+			context.Canceled,
+		}...) {
+			atomic.AddUint64(&p.totalErrsAvailability, 1)
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				atomic.AddUint64(&p.totalErrsTimeout, 1)
+			}
+		}
 		p.apiLatencies[s].add(duration)
 
 		if trace {
-			var errStr string
-			if errp != nil && *errp != nil {
-				errStr = (*errp).Error()
-			}
 			paths = append([]string{p.String()}, paths...)
+			var errStr string
+			if err != nil {
+				errStr = err.Error()
+			}
 			globalTrace.Publish(storageTrace(s, startTime, duration, strings.Join(paths, " "), errStr))
 		}
 	}
