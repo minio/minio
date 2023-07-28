@@ -359,6 +359,7 @@ func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath stri
 	return p.storage.ListDir(ctx, volume, dirPath, count)
 }
 
+// Legacy API - does not have any deadlines
 func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadFile, volume, path)
 	if err != nil {
@@ -369,6 +370,7 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 	return p.storage.ReadFile(ctx, volume, path, offset, buf, verifier)
 }
 
+// Legacy API - does not have any deadlines
 func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricAppendFile, volume, path)
 	if err != nil {
@@ -396,7 +398,12 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 	}
 	defer done(&err)
 
-	return p.storage.ReadFileStream(ctx, volume, path, offset, length)
+	rc, err := p.storage.ReadFileStream(ctx, volume, path, offset, length)
+	if err != nil {
+		return rc, err
+	}
+
+	return xioutil.NewDeadlineReader(rc, diskMaxTimeout), nil
 }
 
 func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
