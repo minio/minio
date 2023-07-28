@@ -138,8 +138,8 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-
-	req.Header.Set("x-minio-from-peer", "true")
+	// Indicate that the liveness check for a peer call
+	req.Header.Set(xhttp.MinIOPeerCall, "true")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

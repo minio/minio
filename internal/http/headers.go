@@ -152,6 +152,9 @@ const (
 	// Deployment id.
 	MinioDeploymentID = "x-minio-deployment-id"
 
+	// Peer call
+	MinIOPeerCall = "x-minio-from-peer"
+
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
 

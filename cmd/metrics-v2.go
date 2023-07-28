@@ -54,6 +54,7 @@ func init() {
 		getClusterTierMetrics(),
 		getClusterUsageMetrics(),
 		getKMSMetrics(),
+		getClusterHealthMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -2639,6 +2640,63 @@ func getLocalDriveStorageMetrics() *MetricsGroup {
 		}
 		return
 	})
+	return mg
+}
+
+func getClusterWriteQuorumMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "write",
+		Name:      "quorum",
+		Help:      "Maximum write quorum across all pools and sets",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterHealthStatusMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "status",
+		Help:      "Get current cluster health status",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterHealthMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil {
+			return
+		}
+
+		metrics = make([]Metric, 0, 2)
+
+		opts := HealthOptions{}
+		result := objLayer.Health(ctx, opts)
+
+		metrics = append(metrics, Metric{
+			Description: getClusterWriteQuorumMD(),
+			Value:       float64(result.WriteQuorum),
+		})
+
+		health := 1
+		if !result.Healthy {
+			health = 0
+		}
+
+		metrics = append(metrics, Metric{
+			Description: getClusterHealthStatusMD(),
+			Value:       float64(health),
+		})
+
+		return
+	})
+
 	return mg
 }
 
