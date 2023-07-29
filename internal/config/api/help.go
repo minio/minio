@@ -94,7 +94,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiDisableODirect,
-			Description: "set to disable O_DIRECT for reads under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing" + defaultHelpPostfix(apiDisableODirect),
+			Description: "set to disable O_DIRECT for read and writes under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing" + defaultHelpPostfix(apiDisableODirect),
 			Optional:    true,
 			Type:        "boolean",
 		},
