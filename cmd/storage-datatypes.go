@@ -63,7 +63,7 @@ type DiskInfo struct {
 type DiskMetrics struct {
 	LastMinute              map[string]AccElem `json:"apiLatencies,omitempty"`
 	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
-	TotalErrorsAvailability uint64             `json:"totalErrsAvailablity"`
+	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
 	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
 }
 
