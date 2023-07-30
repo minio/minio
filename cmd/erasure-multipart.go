@@ -644,9 +644,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	tmpPartPath := pathJoin(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	var online int
 	defer func() {
-		if online != len(onlineDisks) {
+		if countOnlineDisks(onlineDisks) != len(onlineDisks) {
 			er.deleteAll(context.Background(), minioMetaTmpBucket, tmpPart)
 		}
 	}()
@@ -1214,6 +1213,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			partsMetadata[index].Metadata = fi.Metadata
 			partsMetadata[index].Parts = fi.Parts
 			partsMetadata[index].Checksum = fi.Checksum
+			partsMetadata[index].Versioned = opts.Versioned || opts.VersionSuspended
 		}
 	}
 
@@ -1228,6 +1228,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Remove parts that weren't present in CompleteMultipartUpload request.
 	for _, curpart := range currentFI.Parts {
+		// Remove part.meta which is not needed anymore.
+		er.removePartMeta(bucket, object, uploadID, currentFI.DataDir, curpart.Number)
+
 		if objectPartIndex(fi.Parts, curpart.Number) == -1 {
 			// Delete the missing part files. e.g,
 			// Request 1: NewMultipart
@@ -1239,10 +1242,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	// Remove part.meta which is not needed anymore.
-	for _, part := range currentFI.Parts {
-		er.removePartMeta(bucket, object, uploadID, currentFI.DataDir, part.Number)
-	}
+	defer er.deleteAll(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 
 	// Rename the multipart object to final location.
 	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,

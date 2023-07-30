@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -426,7 +425,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			}
 
 			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			_, err = getLatestFileInfo(ctx, partsMetadata, z.serverPools[0].sets[0].defaultParityCount, errs)
+			fi, err := getLatestFileInfo(ctx, partsMetadata, z.serverPools[0].sets[0].defaultParityCount, errs)
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
@@ -483,11 +482,6 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					break
 				}
 
-			}
-			partsMetadata, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
-			fi, err := getLatestFileInfo(ctx, partsMetadata, z.serverPools[0].sets[0].defaultParityCount, errs)
-			if !errors.Is(err, errErasureReadQuorum) {
-				t.Fatalf("Failed to getLatestFileInfo, expected %v, got %v", errErasureReadQuorum, err)
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount

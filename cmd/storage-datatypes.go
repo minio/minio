@@ -235,6 +235,9 @@ type FileInfo struct {
 
 	// Combined checksum when object was uploaded.
 	Checksum []byte `msg:"cs,allownil"`
+
+	// Versioned - indicates if this file is versioned or not.
+	Versioned bool `msg:"vs"`
 }
 
 // WriteQuorum returns expected write quorum for this FileInfo

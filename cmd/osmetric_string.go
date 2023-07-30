@@ -24,12 +24,13 @@ func _() {
 	_ = x[osMetricReadDirent-13]
 	_ = x[osMetricFdatasync-14]
 	_ = x[osMetricSync-15]
-	_ = x[osMetricLast-16]
+	_ = x[osMetricRename2-16]
+	_ = x[osMetricLast-17]
 }
 
-const _osMetric_name = "RemoveAllMkdirAllMkdirRenameOpenFileWOpenFileROpenOpenFileDirectIOLstatRemoveStatAccessCreateReadDirentFdatasyncSyncLast"
+const _osMetric_name = "RemoveAllMkdirAllMkdirRenameOpenFileWOpenFileROpenOpenFileDirectIOLstatRemoveStatAccessCreateReadDirentFdatasyncSyncRename2Last"
 
-var _osMetric_index = [...]uint8{0, 9, 17, 22, 28, 37, 46, 50, 66, 71, 77, 81, 87, 93, 103, 112, 116, 120}
+var _osMetric_index = [...]uint8{0, 9, 17, 22, 28, 37, 46, 50, 66, 71, 77, 81, 87, 93, 103, 112, 116, 123, 127}
 
 func (i osMetric) String() string {
 	if i >= osMetric(len(_osMetric_index)-1) {
