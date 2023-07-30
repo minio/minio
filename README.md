@@ -200,7 +200,7 @@ service iptables restart
 
 MinIO Server comes with an embedded web based object browser. Point your web browser to <http://127.0.0.1:9000> to ensure your server has started successfully.
 
-> NOTE: MinIO runs console on random port by default if you wish choose a specific port use `--console-address` to pick a specific interface and port.
+> NOTE: MinIO runs console on random port by default if you wish to choose a specific port use `--console-address` to pick a specific interface and port.
 
 ### Things to consider
 
@@ -241,7 +241,7 @@ mc admin update <minio alias, e.g., myminio>
 ### Upgrade Checklist
 
 - Test all upgrades in a lower environment (DEV, QA, UAT) before applying to production. Performing blind upgrades in production environments carries significant risk.
-- Read the release notes for MinIO *before* performing any upgrade, there is no forced requirement to upgrade to latest releases upon every releases. Some releases may not be relevant to your setup, avoid upgrading production environments unnecessarily.
+- Read the release notes for MinIO *before* performing any upgrade, there is no forced requirement to upgrade to latest release upon every release. Some release may not be relevant to your setup, avoid upgrading production environments unnecessarily.
 - If you plan to use `mc admin update`, MinIO process must have write access to the parent directory where the binary is present on the host system.
 - `mc admin update` is not supported and should be avoided in kubernetes/container environments, please upgrade containers by upgrading relevant container images.
 - **We do not recommend upgrading one MinIO server at a time, the product is designed to support parallel upgrades please follow our recommended guidelines.**
