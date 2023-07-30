@@ -43,6 +43,7 @@ const (
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
+	apiODirect                     = "odirect"
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
@@ -52,17 +53,19 @@ const (
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPITransitionWorkers       = "MINIO_API_TRANSITION_WORKERS"
 	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default "on"
+	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
 	EnvAPIReplicationPriority     = "MINIO_API_REPLICATION_PRIORITY"
 
 	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
 	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
 	EnvAPIDeleteCleanupInterval       = "MINIO_API_DELETE_CLEANUP_INTERVAL"
 	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
+	EnvAPIODirect                     = "MINIO_API_ODIRECT"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
-	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default "on"
+	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
 	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
 )
 
@@ -71,11 +74,6 @@ const (
 	apiReadyDeadline            = "ready_deadline"
 	apiReplicationWorkers       = "replication_workers"
 	apiReplicationFailedWorkers = "replication_failed_workers"
-
-	EnvAPIReadyDeadline            = "MINIO_API_READY_DEADLINE"
-	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
-	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
-	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
 )
 
 // DefaultKVS - default storage class config
@@ -126,20 +124,25 @@ var (
 			Value: "5m",
 		},
 		config.KV{
-			Key:   apiDisableODirect,
-			Value: "off",
+			Key:        apiDisableODirect,
+			Value:      "",
+			Deprecated: true,
+		},
+		config.KV{
+			Key:   apiODirect,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   apiGzipObjects,
-			Value: "off",
+			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   apiRootAccess,
-			Value: "on",
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   apiSyncEvents,
-			Value: "off",
+			Value: config.EnableOff,
 		},
 	}
 )
@@ -157,7 +160,7 @@ type Config struct {
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
-	DisableODirect              bool          `json:"disable_odirect"`
+	EnableODirect               bool          `json:"enable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
@@ -184,13 +187,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
+	enableODirect := env.Get(EnvAPIODirect, kvs.Get(apiODirect)) == config.EnableOn
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
 	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
 
 	cfg = Config{
-		DisableODirect: disableODirect,
-		GzipObjects:    gzipObjects,
-		RootAccess:     rootAccess,
+		EnableODirect: enableODirect || !disableODirect,
+		GzipObjects:   gzipObjects,
+		RootAccess:    rootAccess,
 	}
 
 	var corsAllowOrigin []string
