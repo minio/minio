@@ -663,14 +663,14 @@ func closeStorageDisks(storageDisks ...StorageAPI) {
 
 // Initialize storage disks for each endpoint.
 // Errors are returned for each endpoint with matching index.
-func initStorageDisksWithErrors(endpoints Endpoints, healthCheck bool) ([]StorageAPI, []error) {
+func initStorageDisksWithErrors(endpoints Endpoints, opts storageOpts) ([]StorageAPI, []error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
 		index := index
 		g.Go(func() (err error) {
-			storageDisks[index], err = newStorageAPI(endpoints[index], healthCheck)
+			storageDisks[index], err = newStorageAPI(endpoints[index], opts)
 			return err
 		}, index)
 	}

@@ -828,7 +828,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthCheck bool) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -837,7 +837,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 
-	if healthcheck {
+	if healthCheck {
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 		healthClient.NoMetrics = true
