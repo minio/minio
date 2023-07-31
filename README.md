@@ -200,7 +200,7 @@ service iptables restart
 
 MinIO Server comes with an embedded web based object browser. Point your web browser to <http://127.0.0.1:9000> to ensure your server has started successfully.
 
-> NOTE: MinIO runs console on random port by default if you wish to choose a specific port use `--console-address` to pick a specific interface and port.
+> NOTE: MinIO runs console on random port by default, if you wish to choose a specific port use `--console-address` to pick a specific interface and port.
 
 ### Things to consider
 
