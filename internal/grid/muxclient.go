@@ -208,6 +208,18 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 				}
 			}
 		}()
+	} else {
+		go func() {
+			select {
+			case <-m.ctx.Done():
+				if debugPrint {
+					fmt.Println("Client sending disconnect to mux", m.MuxID)
+				}
+				logger.LogIf(m.ctx, m.send(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+				responses <- Response{Err: m.ctx.Err()}
+				m.close()
+			}
+		}()
 	}
 	// Route directly to output.
 	m.respWait = responses
@@ -221,13 +233,7 @@ func (m *MuxClient) checkSeq(seq uint32) (ok bool) {
 		if debugPrint {
 			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
 		}
-		select {
-		case m.respWait <- Response{Err: ErrIncorrectSequence}:
-		default:
-			go func() {
-				m.respWait <- Response{Err: ErrIncorrectSequence}
-			}()
-		}
+		m.addResponse(Response{Err: ErrIncorrectSequence})
 		return false
 	}
 	m.RecvSeq++
@@ -241,23 +247,15 @@ func (m *MuxClient) response(seq uint32, r Response) {
 	if debugPrint {
 		fmt.Printf("mux %d: got msg seqid %d, payload lenght: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
 	}
-	m.respMu.Lock()
-	defer m.respMu.Unlock()
-	if m.closed {
-		PutByteBuffer(r.Msg)
-		return
-	}
-
 	if !m.checkSeq(seq) {
 		PutByteBuffer(r.Msg)
 		return
 	}
 	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
-	select {
-	case m.respWait <- r:
+	ok := m.addResponse(r)
+	if ok {
 		logger.LogIf(m.ctx, m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
-	default:
-		// Disconnect stateful.
+	} else {
 		PutByteBuffer(r.Msg)
 	}
 }
@@ -267,20 +265,7 @@ func (m *MuxClient) error(err RemoteErr) {
 	if debugPrint {
 		fmt.Printf("mux %d: got disconnect err:%v\n", m.MuxID, string(err))
 	}
-	m.respMu.Lock()
-	defer m.respMu.Unlock()
-	if m.closed {
-		return
-	}
-	select {
-	case m.respWait <- Response{Err: &err}:
-		m.closeLocked()
-	default:
-		go func() {
-			m.respWait <- Response{Err: &err}
-			m.close()
-		}()
-	}
+	m.addResponse(Response{Err: &err})
 }
 
 func (m *MuxClient) ack(seq uint32) {
@@ -306,22 +291,37 @@ func (m *MuxClient) unblockSend(seq uint32) {
 
 func (m *MuxClient) pong(msg pongMsg) {
 	if msg.NotFound || msg.Err != nil {
-		m.respMu.Lock()
-		defer m.respMu.Unlock()
 		err := errors.New("remote terminated call")
 		if msg.Err != nil {
 			err = fmt.Errorf("remove pong failed: %v", &msg.Err)
 		}
-		if !m.closed {
-			select {
-			case m.respWait <- Response{Err: err}:
-			default:
-			}
-		}
-		m.closeLocked()
+		m.addResponse(Response{Err: err})
 		return
 	}
 	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
+}
+
+func (m *MuxClient) addResponse(r Response) (ok bool) {
+	m.respMu.Lock()
+	defer m.respMu.Unlock()
+	if m.closed {
+		return false
+	}
+	if r.Err != nil {
+		m.respWait <- r
+		m.closeLocked()
+		return false
+	}
+	select {
+	case m.respWait <- r:
+		return true
+	default:
+		err := errors.New("INTERNAL ERROR: Response was blocked")
+		logger.LogIf(m.ctx, err)
+		m.respWait <- Response{Err: err}
+		m.closeLocked()
+		return false
+	}
 }
 
 func (m *MuxClient) close() {

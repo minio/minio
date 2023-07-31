@@ -308,6 +308,10 @@ func TestStreamSuite(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamCancel(t, local, remote)
 	})
+	t.Run("testStreamDeadline", func(t *testing.T) {
+		defer timeout(5 * time.Second)()
+		testStreamDeadline(t, local, remote)
+	})
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -406,6 +410,18 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 				}
 			},
 			OutCapacity: 1,
+			InCapacity:  0,
+		}))
+		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				select {
+				case <-ctx.Done():
+					close(serverCanceled)
+					t.Log(GetCaller(ctx).Name, "Server Context canceled")
+					return nil
+				}
+			},
+			OutCapacity: 1,
 			InCapacity:  1,
 		}))
 	}
@@ -413,29 +429,119 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	register(remote)
 
 	// local to remote
-	remoteConn := local.Connection(remoteHost)
-	const testPayload = "Hello Grid World!"
+	testHandler := func(t *testing.T, handler HandlerID) {
+		remoteConn := local.Connection(remoteHost)
+		const testPayload = "Hello Grid World!"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
-	errFatal(err)
-	clientCanceled := make(chan time.Time, 1)
-	go func() {
-		for resp := range st.Responses {
-			err = resp.Err
+		ctx, cancel := context.WithCancel(context.Background())
+		st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+		errFatal(err)
+		clientCanceled := make(chan time.Time, 1)
+		go func() {
+			for resp := range st.Responses {
+				err = resp.Err
+			}
+			clientCanceled <- time.Now()
+			t.Log("Client Context canceled")
+		}()
+		start := time.Now()
+		cancel()
+		<-serverCanceled
+		t.Log("server cancel time:", time.Since(start))
+		clientEnd := <-clientCanceled
+		if !errors.Is(err, context.Canceled) {
+			t.Error("expected context.Canceled, got", err)
 		}
-		clientCanceled <- time.Now()
-		t.Log("Client Context canceled")
-	}()
-	start := time.Now()
-	cancel()
-	<-serverCanceled
-	t.Log("server cancel time:", time.Since(start))
-	clientEnd := <-clientCanceled
-	if !errors.Is(err, context.Canceled) {
-		t.Error("expected context.Canceled, got", err)
+		t.Log("client after", time.Since(clientEnd))
 	}
-	t.Log("client after", time.Since(clientEnd))
+	// local to remote, unbuffered
+	t.Run("unbuffered", func(t *testing.T) {
+		testHandler(t, handlerTest)
+	})
+
+	t.Run("buffered", func(t *testing.T) {
+		testHandler(t, handlerTest2)
+	})
+}
+
+func testStreamDeadline(t *testing.T, local, remote *Manager) {
+	defer testlogger.T.SetErrorTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
+
+	// 1: Echo
+	serverCanceled := make(chan time.Duration, 1)
+	register := func(manager *Manager) {
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				started := time.Now()
+				select {
+				case <-ctx.Done():
+					serverCanceled <- time.Since(started)
+					t.Log(GetCaller(ctx).Name, "Server Context canceled")
+					return nil
+				}
+			},
+			OutCapacity: 1,
+			InCapacity:  0,
+		}))
+		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				started := time.Now()
+				select {
+				case <-ctx.Done():
+					serverCanceled <- time.Since(started)
+					t.Log(GetCaller(ctx).Name, "Server Context canceled")
+					return nil
+				}
+			},
+			OutCapacity: 1,
+			InCapacity:  1,
+		}))
+	}
+	register(local)
+	register(remote)
+
+	testHandler := func(t *testing.T, handler HandlerID) {
+		remoteConn := local.Connection(remoteHost)
+		const testPayload = "Hello Grid World!"
+
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		st, err := remoteConn.NewStream(ctx, handler, []byte(testPayload))
+		errFatal(err)
+		clientCanceled := make(chan time.Duration, 1)
+		go func() {
+			started := time.Now()
+			for resp := range st.Responses {
+				err = resp.Err
+			}
+			clientCanceled <- time.Since(started)
+			t.Log("Client Context canceled")
+		}()
+		serverEnd := <-serverCanceled
+		clientEnd := <-clientCanceled
+		t.Log("server cancel time:", serverEnd)
+		t.Log("client cancel time:", clientEnd)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Error("expected context.Canceled, got", err)
+		}
+	}
+	// local to remote, unbuffered
+	t.Run("unbuffered", func(t *testing.T) {
+		testHandler(t, handlerTest)
+	})
+
+	t.Run("buffered", func(t *testing.T) {
+		testHandler(t, handlerTest2)
+	})
 }
 
 func timeout(after time.Duration) (cancel func()) {
