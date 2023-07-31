@@ -49,7 +49,7 @@ type apiConfig struct {
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
 	deleteCleanupInterval       time.Duration
-	disableODirect              bool
+	enableODirect               bool
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
@@ -164,17 +164,17 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.staleUploadsExpiry = cfg.StaleUploadsExpiry
 	t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
 	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
-	t.disableODirect = cfg.DisableODirect
+	t.enableODirect = cfg.EnableODirect
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
 }
 
-func (t *apiConfig) isDisableODirect() bool {
+func (t *apiConfig) odirectEnabled() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	return t.disableODirect
+	return t.enableODirect
 }
 
 func (t *apiConfig) shouldGzipObjects() bool {

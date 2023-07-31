@@ -284,16 +284,18 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	}
 
-	// Return an error if ODirect is not supported
-	// unless it is a single erasure disk mode
-	if err := s.checkODirectDiskSupport(); err == nil {
-		s.oDirect = true
-	} else {
-		// Allow if unsupported platform or single disk.
-		if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
-			s.oDirect = false
+	if globalAPIConfig.odirectEnabled() {
+		// Return an error if ODirect is not supported
+		// unless it is a single erasure disk mode
+		if err := s.checkODirectDiskSupport(); err == nil {
+			s.oDirect = true
 		} else {
-			return s, err
+			// Allow if unsupported platform or single disk.
+			if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
+				s.oDirect = false
+			} else {
+				return s, err
+			}
 		}
 	}
 
@@ -1478,7 +1480,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		return nil, time.Time{}, ctx.Err()
 	}
 
-	odirectEnabled := !globalAPIConfig.isDisableODirect() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
 	var f *os.File
 	if odirectEnabled {
 		f, err = OpenFileDirectIO(filePath, readMode, 0o666)
@@ -1759,7 +1761,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	odirectEnabled := !globalAPIConfig.isDisableODirect() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
 
 	var file *os.File
 	if odirectEnabled {
@@ -1896,7 +1898,8 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 		return osErrToFileErr(err)
 	}
 
-	odirectEnabled := s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+
 	var w *os.File
 	if odirectEnabled {
 		w, err = OpenFileDirectIO(filePath, flags, 0o666)
