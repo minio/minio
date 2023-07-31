@@ -405,7 +405,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		wg.Add(1)
 		go func(disk StorageAPI) {
 			defer wg.Done()
-			di, err := disk.DiskInfo(ctx)
+			di, err := disk.DiskInfo(ctx, false)
 			if err != nil || di.ID == "" {
 				atomicOfflineDrives.Inc()
 				atomicParityDrives.Inc()

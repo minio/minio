@@ -124,7 +124,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	format, err := loadFormatErasure(disk)
 	if err != nil {
 		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo(context.TODO())
+			info, derr := disk.DiskInfo(context.TODO(), false)
 			if derr != nil && info.RootDisk {
 				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
 			}
@@ -1025,7 +1025,7 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 				return errDiskNotFound
 			}
 			var err error
-			infos[index], err = storageDisks[index].DiskInfo(context.TODO())
+			infos[index], err = storageDisks[index].DiskInfo(context.TODO(), false)
 			return err
 		}, index)
 	}

@@ -1146,7 +1146,7 @@ func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 		if disk == nil {
 			continue
 		}
-		if di, err := disk.DiskInfo(ctx); err == nil {
+		if di, err := disk.DiskInfo(ctx, false); err == nil {
 			res[i] = &di
 		}
 	}

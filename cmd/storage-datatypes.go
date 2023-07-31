@@ -53,6 +53,7 @@ type DiskInfo struct {
 	Endpoint   string
 	MountPath  string
 	ID         string
+	Rotational bool
 	Metrics    DiskMetrics
 	Error      string // carries the error over the network
 }

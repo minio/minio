@@ -39,7 +39,7 @@ func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := storage.DiskInfo(context.Background())
+		_, err := storage.DiskInfo(context.Background(), true)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
