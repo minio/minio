@@ -38,6 +38,7 @@ RUN \
      curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o /opt/bin/mc && \
      microdnf clean all && \
      chmod +x /opt/bin/minio && \
+     chmod +x /opt/bin/mc && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
      /usr/bin/verify-minio.sh && \
