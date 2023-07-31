@@ -115,6 +115,7 @@ type xlStorage struct {
 	formatData []byte
 
 	// mutex to prevent concurrent read operations overloading walks.
+	rotational bool
 	walkMu     *sync.Mutex
 	walkReadMu *sync.Mutex
 }
@@ -216,7 +217,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return nil, err
 	}
 
-	info, err := disk.GetInfo(path)
+	info, err := disk.GetInfo(path, true)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +249,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 
 	// We stagger listings only on HDDs.
 	if info.Rotational == nil || *info.Rotational {
+		s.rotational = true
 		s.walkMu = &sync.Mutex{}
 		s.walkReadMu = &sync.Mutex{}
 	}
@@ -306,7 +308,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 // getDiskInfo returns given disk information.
 func getDiskInfo(drivePath string) (di disk.Info, err error) {
 	if err = checkPathLength(drivePath); err == nil {
-		di, err = disk.GetInfo(drivePath)
+		di, err = disk.GetInfo(drivePath, false)
 	}
 	switch {
 	case osIsNotExist(err):
@@ -627,7 +629,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -648,6 +650,7 @@ func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
+			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')

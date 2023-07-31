@@ -266,7 +266,7 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 	return errDiskNotFound
 }
 
-func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
 	if contextCanceled(ctx) {
 		return DiskInfo{}, ctx.Err()
 	}
@@ -279,12 +279,15 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 		return info, errFaultyDisk
 	}
 
-	info, err = p.storage.DiskInfo(ctx)
+	info, err = p.storage.DiskInfo(ctx, metrics)
 	if err != nil {
 		return info, err
 	}
 
-	info.Metrics = p.getMetrics()
+	if metrics {
+		info.Metrics = p.getMetrics()
+	}
+
 	// check cached diskID against backend
 	// only if its non-empty.
 	if p.diskID != "" && p.diskID != info.ID {

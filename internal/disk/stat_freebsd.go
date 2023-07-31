@@ -27,7 +27,7 @@ import (
 )
 
 // GetInfo returns total and free bytes available in a directory, e.g. `/`.
-func GetInfo(path string) (info Info, err error) {
+func GetInfo(path string, _ bool) (info Info, err error) {
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(path, &s)
 	if err != nil {

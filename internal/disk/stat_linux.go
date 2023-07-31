@@ -33,7 +33,7 @@ import (
 )
 
 // GetInfo returns total and free bytes available in a directory, e.g. `/`.
-func GetInfo(path string) (info Info, err error) {
+func GetInfo(path string, firstTime bool) (info Info, err error) {
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(path, &s)
 	if err != nil {
@@ -68,23 +68,25 @@ func GetInfo(path string) (info Info, err error) {
 	}
 	info.Used = info.Total - info.Free
 
-	bfs, err := blockdevice.NewDefaultFS()
-	if err == nil {
-		diskstats, _ := bfs.ProcDiskstats()
-		for _, dstat := range diskstats {
-			// ignore all loop devices
-			if strings.HasPrefix(dstat.DeviceName, "loop") {
-				continue
-			}
-			qst, err := bfs.SysBlockDeviceQueueStats(dstat.DeviceName)
-			if err != nil {
-				continue
-			}
-			rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
-			if dstat.MajorNumber == info.Major && dstat.MinorNumber == info.Minor {
-				info.Name = dstat.DeviceName
-				info.Rotational = &rot
-				break
+	if firstTime {
+		bfs, err := blockdevice.NewDefaultFS()
+		if err == nil {
+			diskstats, _ := bfs.ProcDiskstats()
+			for _, dstat := range diskstats {
+				// ignore all loop devices
+				if strings.HasPrefix(dstat.DeviceName, "loop") {
+					continue
+				}
+				qst, err := bfs.SysBlockDeviceQueueStats(dstat.DeviceName)
+				if err != nil {
+					continue
+				}
+				rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
+				if dstat.MajorNumber == info.Major && dstat.MinorNumber == info.Minor {
+					info.Name = dstat.DeviceName
+					info.Rotational = &rot
+					break
+				}
 			}
 		}
 	}
