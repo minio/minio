@@ -2,6 +2,14 @@
 
 This is a fork base on [MinIO RELEASE.2022-03-05T06-32-39Z version](https://github.com/minio/minio/tree/RELEASE.2022-03-05T06-32-39Z). We implemented the feature of [JuiceFS](https://github.com/juicedata/juicefs) as one of its gateway backend. This version supports full functionality of MinIO gateway such as [multi-user management](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html) while using JuiceFS as a backend.
 
+## branch info
+
+| branch      | description                                                                   |
+|-------------|-------------------------------------------------------------------------------|
+| main        | base on [JuiceFS main branch](https://github.com/juicedata/juicefs/tree/main) |
+| gateway     | base on [JuiceFS v1.0](https://github.com/juicedata/juicefs/tree/release-1.0) |
+| Gateway-1.1 | base on [JuiceFS v1.1](https://github.com/juicedata/juicefs/tree/release-1.1) |
+
 ## Compile
 
 > **Note**: The [gateway branch](https://github.com/juicedata/minio/tree/gateway) relies on a newer [release version](https://github.com/juicedata/juicefs/releases) of JuiceFS. Please refer to the [`go.mod`](go.mod) file for the specific JuiceFS version. If you want to use JuiceFS of the main line branch, please change the [main branch](https://github.com/juicedata/minio/tree/main) of this repository.
