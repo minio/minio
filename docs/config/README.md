@@ -143,7 +143,9 @@ transition_workers              (number)    set the number of transition workers
 stale_uploads_expiry            (duration)  set to expire stale multipart uploads older than this values (default: '24h')
 stale_uploads_cleanup_interval  (duration)  set to change intervals when stale multipart uploads are expired (default: '6h')
 delete_cleanup_interval         (duration)  set to change intervals when deleted objects are permanently deleted from ".trash" folder (default: '5m')
-disable_odirect                 (boolean)   set to disable O_DIRECT for reads under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing. (default: 'off')
+odirect                         (boolean)   set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
+root_access                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
+sync_events                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
 ```
 
 or environment variables
@@ -160,7 +162,9 @@ MINIO_API_TRANSITION_WORKERS              (number)    set the number of transiti
 MINIO_API_STALE_UPLOADS_EXPIRY            (duration)  set to expire stale multipart uploads older than this values (default: '24h')
 MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL  (duration)  set to change intervals when stale multipart uploads are expired (default: '6h')
 MINIO_API_DELETE_CLEANUP_INTERVAL         (duration)  set to change intervals when deleted objects are permanently deleted from ".trash" folder (default: '5m')
-MINIO_API_DISABLE_ODIRECT                 (boolean)   set to disable O_DIRECT for reads under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing. (default: 'off')
+MINIO_API_ODIRECT                         (boolean)   set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
+MINIO_API_ROOT_ACCESS                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
+MINIO_API_SYNC_EVENTS                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
 ```
 
 #### Notifications
