@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -79,6 +79,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		return err
 	}
 
+	s.RLock()
+	legacy := s.formatLegacy
+	s.RUnlock()
+
 	// Use a small block size to start sending quickly
 	w := newMetacacheWriter(wr, 16<<10)
 	w.reuseBlocks = true // We are not sharing results, so reuse buffers.
@@ -114,6 +118,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		metadata, err := s.readMetadata(ctx, pathJoin(volumeDir,
 			opts.BaseDir[:len(opts.BaseDir)-1]+globalDirSuffix,
 			xlStorageFormatFile))
+		diskHealthCheckOK(ctx, err)
 		if err == nil {
 			// if baseDir is already a directory object, consider it
 			// as part of the list call, this is AWS S3 specific
@@ -245,7 +250,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return nil
 			}
 			// Check legacy.
-			if HasSuffix(entry, xlStorageFormatFileV1) {
+			if HasSuffix(entry, xlStorageFormatFileV1) && legacy {
 				var meta metaCacheEntry
 				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, current, entry))
 				diskHealthCheckOK(ctx, err)
@@ -331,14 +336,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					return err
 				}
 			case osIsNotExist(err), isSysErrIsDir(err):
-				meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFileV1))
-				diskHealthCheckOK(ctx, err)
-				if err == nil {
-					// It was an object
-					if err := send(meta); err != nil {
-						return err
+				if legacy {
+					meta.metadata, err = xioutil.ReadFile(pathJoinBuf(&sb, volumeDir, meta.name, xlStorageFormatFileV1))
+					diskHealthCheckOK(ctx, err)
+					if err == nil {
+						// It was an object
+						if err := send(meta); err != nil {
+							return err
+						}
+						continue
 					}
-					continue
 				}
 
 				// NOT an object, append to stack (with slash)
