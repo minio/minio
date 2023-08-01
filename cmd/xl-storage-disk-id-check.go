@@ -274,6 +274,10 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info
 	si := p.updateStorageMetrics(storageMetricDiskInfo)
 	defer si(&err)
 
+	if metrics {
+		info.Metrics = p.getMetrics()
+	}
+
 	if p.health.isFaulty() {
 		// if disk is already faulty return faulty for 'mc admin info' output and prometheus alerts.
 		return info, errFaultyDisk
@@ -282,10 +286,6 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info
 	info, err = p.storage.DiskInfo(ctx, metrics)
 	if err != nil {
 		return info, err
-	}
-
-	if metrics {
-		info.Metrics = p.getMetrics()
 	}
 
 	// check cached diskID against backend
@@ -853,10 +853,9 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 			p.health.tokens <- struct{}{}
 			if errp != nil {
 				err := *errp
-				if err != nil && !errors.Is(err, io.EOF) {
-					return
+				if err == nil || errors.Is(err, io.EOF) {
+					p.health.logSuccess()
 				}
-				p.health.logSuccess()
 			}
 			si(errp)
 		})
