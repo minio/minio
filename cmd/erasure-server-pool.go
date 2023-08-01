@@ -703,7 +703,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) Stor
 	return globalNotificationSys.StorageInfo(z, metrics)
 }
 
-func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo) error {
 	// Updates must be closed before we return.
 	defer xioutil.SafeClose(updates)
 
@@ -712,24 +712,18 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var results []dataUsageCache
 	var firstErr error
 
-	allBuckets, err := z.ListBuckets(ctx, BucketOptions{})
-	if err != nil {
-		return err
-	}
-
-	if len(allBuckets) == 0 {
-		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
-		return nil
-	}
 	totalResults := 0
 	resultIndex := -1
 	for _, z := range z.serverPools {
 		totalResults += len(z.sets)
 	}
-	results = make([]dataUsageCache, totalResults)
+	results := make([]dataUsageCache, totalResults)
+
+	scanMgr := newBucketsScanMgr(z)
+	scanMgr.start()
+
 	// Collect for each set in serverPools.
 	for _, z := range z.serverPools {
 		for _, erObj := range z.sets {
@@ -748,7 +742,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.nsScanner(ctx, allBuckets, wantCycle, updates, healScanMode)
+				err := erObj.nsScanner(ctx, scanMgr, updates)
 				if err != nil {
 					scannerLogIf(ctx, err)
 					mu.Lock()
@@ -763,6 +757,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 			}(resultIndex, erObj)
 		}
 	}
+
 	updateCloser := make(chan chan struct{})
 	go func() {
 		updateTicker := time.NewTicker(30 * time.Second)
@@ -774,6 +769,8 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 		var allMerged dataUsageCache
 
 		update := func() {
+			knownBuckets := scanMgr.getKnownBuckets()
+
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -786,7 +783,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 				allMerged.merge(info)
 			}
 			if allMerged.root() != nil && allMerged.Info.LastUpdate.After(lastUpdate) {
-				updates <- allMerged.dui(allMerged.Info.Name, allBuckets)
+				updates <- allMerged.dui(allMerged.Info.Name, knownBuckets)
 				lastUpdate = allMerged.Info.LastUpdate
 			}
 		}
