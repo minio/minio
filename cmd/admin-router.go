@@ -163,6 +163,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// StorageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(adminMiddleware(adminAPI.StorageInfoHandler, traceAllFlag))
+		// Bucket scanner status info
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/scanner/status/{bucket}").HandlerFunc(adminMiddleware(adminAPI.BucketScanInfoHandler, traceAllFlag))
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(adminMiddleware(adminAPI.DataUsageInfoHandler, traceAllFlag))
 		// Metrics operation

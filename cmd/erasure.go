@@ -377,18 +377,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 
 // nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wantCycle uint32, updates chan<- dataUsageCache, healScanMode madmin.HealScanMode) error {
-	if len(buckets) == 0 {
-		return nil
-	}
-
-	// Collect disks we can use.
-	disks, healing := er.getOnlineDisksWithHealing(false)
-	if len(disks) == 0 {
-		scannerLogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
-		return nil
-	}
-
+func (er erasureObjects) nsScanner(ctx context.Context, scanMgr *bucketsScanMgr, updates chan<- dataUsageCache) error {
 	// Load bucket totals
 	oldCache := dataUsageCache{}
 	if err := oldCache.load(ctx, er, dataUsageCacheName); err != nil {
@@ -404,33 +393,16 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 		Cache: make(map[string]dataUsageEntry, len(oldCache.Cache)),
 	}
 
-	// Put all buckets into channel.
-	bucketCh := make(chan BucketInfo, len(buckets))
-
-	// Shuffle buckets to ensure total randomness of buckets, being scanned.
-	// Otherwise same set of buckets get scanned across erasure sets always.
-	// at any given point in time. This allows different buckets to be scanned
-	// in different order per erasure set, this wider spread is needed when
-	// there are lots of buckets with different order of objects in them.
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	permutes := r.Perm(len(buckets))
-	// Add new buckets first
-	for _, idx := range permutes {
-		b := buckets[idx]
-		if e := oldCache.find(b.Name); e == nil {
-			bucketCh <- b
+	for k := range oldCache.Cache {
+		if k == dataUsageRoot {
+			continue
+		}
+		if e := oldCache.find(k); e != nil {
+			cache.replace(k, dataUsageRoot, *e)
 		}
 	}
-	for _, idx := range permutes {
-		b := buckets[idx]
-		if e := oldCache.find(b.Name); e != nil {
-			cache.replace(b.Name, dataUsageRoot, *e)
-			bucketCh <- b
-		}
-	}
-	xioutil.SafeClose(bucketCh)
 
-	bucketResults := make(chan dataUsageEntryInfo, len(disks))
+	bucketResults := make(chan dataUsageEntryInfo)
 
 	// Start async collector/saver.
 	// This goroutine owns the cache.
@@ -439,14 +411,26 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 	go func() {
 		// Add jitter to the update time so multiple sets don't sync up.
 		updateTime := 30*time.Second + time.Duration(float64(10*time.Second)*rand.Float64())
-		t := time.NewTicker(updateTime)
-		defer t.Stop()
+		updateTimer := time.NewTicker(updateTime)
+		defer updateTimer.Stop()
+
+		cleanTimer := time.NewTicker(time.Minute)
+		defer cleanTimer.Stop()
+
 		defer saverWg.Done()
 		var lastSave time.Time
 
 		for {
 			select {
-			case <-t.C:
+			case <-cleanTimer.C:
+				for k := range cache.Cache {
+					if k != dataUsageRoot && !scanMgr.isKnownBucket(k) {
+						delete(cache.Cache, k)
+						delete(cache.Cache[dataUsageRoot].Children, k)
+						cache.Info.LastUpdate = time.Now()
+					}
+				}
+			case <-updateTimer.C:
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
 				}
@@ -457,7 +441,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 			case v, ok := <-bucketResults:
 				if !ok {
 					// Save final state...
-					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
 					scannerLogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
 					updates <- cache.clone()
@@ -469,105 +452,159 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 		}
 	}()
 
-	// Restrict parallelism for disk usage scanner
-	// upto GOMAXPROCS if GOMAXPROCS is < len(disks)
-	maxProcs := runtime.GOMAXPROCS(0)
-	if maxProcs < len(disks) {
-		disks = disks[:maxProcs]
-	}
+	var (
+		// Restrict parallelism for disk usage scanner
+		// upto GOMAXPROCS if GOMAXPROCS is < len(disks)
+		cpuGuard = make(chan struct{}, runtime.GOMAXPROCS(0))
 
-	// Start one scanner per disk
-	var wg sync.WaitGroup
-	wg.Add(len(disks))
+		scanWg sync.WaitGroup
+		id     = setID{pool: er.poolIndex, set: er.setIndex}
+	)
 
-	for i := range disks {
-		go func(i int) {
-			defer wg.Done()
-			disk := disks[i]
+	for bucket := range scanMgr.getBucketCh(id) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case cpuGuard <- struct{}{}:
+		}
 
-			for bucket := range bucketCh {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				// Load cache for bucket
-				cacheName := pathJoin(bucket.Name, dataUsageCacheName)
-				cache := dataUsageCache{}
-				scannerLogIf(ctx, cache.load(ctx, er, cacheName))
-				if cache.Info.Name == "" {
-					cache.Info.Name = bucket.Name
-				}
-				cache.Info.SkipHealing = healing
-				cache.Info.NextCycle = wantCycle
-				if cache.Info.Name != bucket.Name {
-					cache.Info = dataUsageCacheInfo{
-						Name:       bucket.Name,
-						LastUpdate: time.Time{},
-						NextCycle:  wantCycle,
-					}
-				}
-				// Collect updates.
-				updates := make(chan dataUsageEntry, 1)
-				var wg sync.WaitGroup
-				wg.Add(1)
-				go func(name string) {
-					defer wg.Done()
-					for update := range updates {
-						select {
-						case <-ctx.Done():
-						case bucketResults <- dataUsageEntryInfo{
-							Name:   name,
-							Parent: dataUsageRoot,
-							Entry:  update,
-						}:
-						}
-					}
-				}(cache.Info.Name)
-				// Calc usage
-				before := cache.Info.LastUpdate
-				var err error
-				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode, nil)
-				if err != nil {
-					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
-						scannerLogIf(ctx, cache.save(ctx, er, cacheName))
-					} else {
-						scannerLogIf(ctx, err)
-					}
-					// This ensures that we don't close
-					// bucketResults channel while the
-					// updates-collector goroutine still
-					// holds a reference to this.
-					wg.Wait()
+		var (
+			disk    StorageAPI
+			healing bool
+		)
+		// Check for an available disk, not scanning or healing
+		for {
+			disks := er.getDisks()
+			for i, d := range getDiskInfos(ctx, disks...) {
+				if d == nil || disks[i] == nil {
 					continue
 				}
+				if d.Healing {
+					healing = true
+				}
+				if !d.Scanning && !d.Healing {
+					disk = disks[i]
+					goto scan
+				}
+			}
 
-				wg.Wait()
-				// Flatten for upstream, but save full state.
-				var root dataUsageEntry
-				if r := cache.root(); r != nil {
-					root = cache.flatten(*r)
-					if root.ReplicationStats.empty() {
-						root.ReplicationStats = nil
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Second):
+				continue
+			}
+		}
+
+	scan:
+		scanWg.Add(1)
+		go func(disk StorageAPI, bucket string) {
+			defer func() {
+				scanWg.Done()
+				<-cpuGuard
+			}()
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Load cache for bucket
+			cacheName := pathJoin(bucket, dataUsageCacheName)
+			cache := dataUsageCache{}
+			scannerLogIf(ctx, cache.load(ctx, er, cacheName))
+			if cache.Info.Name == "" {
+				cache.Info.Name = bucket
+			}
+			cache.Info.SkipHealing = healing
+			cache.Info.NextCycle++
+			if cache.Info.Name != bucket {
+				scannerLogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket))
+				cache.Info = dataUsageCacheInfo{
+					Name:       bucket,
+					LastUpdate: time.Time{},
+					NextCycle:  0,
+				}
+			}
+
+			scanMgr.markBucketScanStarted(id, bucket, cache.Info.NextCycle, cache.Info.LastUpdate)
+			globalScannerMetrics.bucketScanStarted(id, bucket, cache.Info.NextCycle, cache.Info.LastUpdate)
+
+			// Calculate healing mode in the next bucket scan
+			bgHealInfo := readBackgroundHealInfo(ctx, er, bucket)
+			healScanMode := getCycleScanMode(uint64(cache.Info.NextCycle), bgHealInfo.BitrotStartCycle, bgHealInfo.BitrotStartTime)
+			if bgHealInfo.CurrentScanMode != healScanMode {
+				newHealInfo := bgHealInfo
+				newHealInfo.CurrentScanMode = healScanMode
+				if healScanMode == madmin.HealDeepScan {
+					newHealInfo.BitrotStartTime = time.Now().UTC()
+					newHealInfo.BitrotStartCycle = uint64(cache.Info.NextCycle)
+				}
+				saveBackgroundHealInfo(ctx, er, bucket, newHealInfo)
+			}
+
+			// Collect updates.
+			updates := make(chan dataUsageEntry, 1)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				for update := range updates {
+					select {
+					case <-ctx.Done():
+					case bucketResults <- dataUsageEntryInfo{
+						Name:   name,
+						Parent: dataUsageRoot,
+						Entry:  update,
+					}:
+						globalScannerMetrics.bucketScanUpdate(id, bucket)
 					}
 				}
-				select {
-				case <-ctx.Done():
-					return
-				case bucketResults <- dataUsageEntryInfo{
-					Name:   cache.Info.Name,
-					Parent: dataUsageRoot,
-					Entry:  root,
-				}:
-				}
+			}(cache.Info.Name)
 
-				// Save cache
-				scannerLogIf(ctx, cache.save(ctx, er, cacheName))
+			// Calc usage
+			before := cache.Info.LastUpdate
+			var err error
+			cache, err = disk.NSScanner(ctx, cache, updates, healScanMode, nil)
+			if err != nil {
+				if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
+					scannerLogIf(ctx, cache.save(ctx, er, cacheName))
+				} else {
+					scannerLogIf(ctx, err)
+				}
+				// This ensures that we don't close
+				// bucketResults channel while the
+				// updates-collector goroutine still
+				// holds a reference to this.
+				wg.Wait()
+				return
 			}
-		}(i)
+
+			globalScannerMetrics.bucketScanFinished(id, bucket)
+			scanMgr.markBucketScanDone(id, bucket)
+
+			wg.Wait()
+			var root dataUsageEntry
+			if r := cache.root(); r != nil {
+				root = cache.flatten(*r)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case bucketResults <- dataUsageEntryInfo{
+				Name:   cache.Info.Name,
+				Parent: dataUsageRoot,
+				Entry:  root,
+			}:
+			}
+
+			// Save cache
+			scannerLogIf(ctx, cache.save(ctx, er, cacheName))
+		}(disk, bucket)
 	}
-	wg.Wait()
+
+	scanWg.Wait()
 	xioutil.SafeClose(bucketResults)
 	saverWg.Wait()
 

@@ -702,6 +702,47 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
+// BucketScanInfoHandler - GET /minio/admin/v3/scanner/status/{bucket}
+func (a adminAPIHandlers) BucketScanInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.StorageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	cycles := globalScannerMetrics.getCycles()
+
+	l, ok := cycles[bucket]
+	if !ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("no scan status found")), r.URL)
+		return
+	}
+
+	output := make([]madmin.BucketScanInfo, 0, len(l))
+	for _, elem := range l {
+		output = append(output, madmin.BucketScanInfo{
+			Pool:        elem.pool,
+			Set:         elem.set,
+			Cycle:       elem.current,
+			LastStarted: elem.lastStarted,
+			LastUpdate:  elem.lastUpdate,
+			Completed:   elem.cycleCompleted,
+		})
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(output)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
 // MetricsHandler - GET /minio/admin/v3/metrics
 // ----------
 // Get realtime server metrics

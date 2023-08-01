@@ -566,7 +566,7 @@ func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
 
 // dui converts the flattened version of the path to madmin.DataUsageInfo.
 // As a side effect d will be flattened, use a clone if this is not ok.
-func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
+func (d *dataUsageCache) dui(path string, buckets []string) DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
 		// No entry found, return empty.
@@ -894,10 +894,10 @@ func (h *versionsHistogram) toMap() map[string]uint64 {
 	return res
 }
 
-func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *allTierStats {
+func (d *dataUsageCache) tiersUsageInfo(buckets []string) *allTierStats {
 	dst := newAllTierStats()
 	for _, bucket := range buckets {
-		e := d.find(bucket.Name)
+		e := d.find(bucket)
 		if e == nil {
 			continue
 		}
@@ -915,10 +915,10 @@ func (d *dataUsageCache) tiersUsageInfo(buckets []BucketInfo) *allTierStats {
 
 // bucketsUsageInfo returns the buckets usage info as a map, with
 // key as bucket name
-func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]BucketUsageInfo {
+func (d *dataUsageCache) bucketsUsageInfo(buckets []string) map[string]BucketUsageInfo {
 	dst := make(map[string]BucketUsageInfo, len(buckets))
 	for _, bucket := range buckets {
-		e := d.find(bucket.Name)
+		e := d.find(bucket)
 		if e == nil {
 			continue
 		}
@@ -947,7 +947,7 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 				}
 			}
 		}
-		dst[bucket.Name] = bui
+		dst[bucket] = bui
 	}
 	return dst
 }
@@ -1543,20 +1543,4 @@ func (z dataUsageHashMap) Msgsize() (s int) {
 		s += msgp.StringPrefixSize + len(zb0004)
 	}
 	return
-}
-
-//msgp:encode ignore currentScannerCycle
-//msgp:decode ignore currentScannerCycle
-
-type currentScannerCycle struct {
-	current        uint64
-	next           uint64
-	started        time.Time
-	cycleCompleted []time.Time
-}
-
-// clone returns a clone.
-func (z currentScannerCycle) clone() currentScannerCycle {
-	z.cycleCompleted = append(make([]time.Time, 0, len(z.cycleCompleted)), z.cycleCompleted...)
-	return z
 }

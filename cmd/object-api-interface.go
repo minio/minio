@@ -243,7 +243,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, scanMode madmin.HealScanMode) error
+	NSScanner(ctx context.Context, updates chan<- DataUsageInfo) error
 	BackendInfo() madmin.BackendInfo
 	Legacy() bool // Only returns true for deployments which use CRCMOD as its object distribution algorithm.
 	StorageInfo(ctx context.Context, metrics bool) StorageInfo
