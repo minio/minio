@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -229,6 +229,12 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return errCode
 	}
 
+	// Check if the metadata headers are equal with signedheaders
+	errMetaCode := checkMetaHeaders(extractedSignedHeaders, r)
+	if errMetaCode != ErrNone {
+		return errMetaCode
+	}
+
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
 	// request should still be allowed.
 	if pSignValues.Date.After(UTCNow().Add(globalMaxSkewTime)) {
@@ -260,7 +266,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	// Construct the query.
 	query.Set(xhttp.AmzDate, t.Format(iso8601Format))
 	query.Set(xhttp.AmzExpires, strconv.Itoa(expireSeconds))
-	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
+	query.Set(xhttp.AmzSignedHeaders, strings.Join(pSignValues.SignedHeaders, ";"))
 	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
 
 	defaultSigParams := set.CreateStringSet(

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xnet "github.com/minio/pkg/net"
 
@@ -206,7 +207,7 @@ func getRedirectLocation(r *http.Request) *xnet.URL {
 }
 
 // guessIsHealthCheckReq - returns true if incoming request looks
-// like healthcheck request
+// like healthCheck request
 func guessIsHealthCheckReq(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -229,7 +230,8 @@ func guessIsMetricsReq(req *http.Request) bool {
 	return (aType == authTypeAnonymous || aType == authTypeJWT) &&
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsPathLegacy ||
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ClusterPath ||
-		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2NodePath
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2NodePath ||
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2BucketPath
 }
 
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
@@ -397,6 +399,17 @@ func setRequestValidityMiddleware(h http.Handler) http.Handler {
 				}
 				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
+				return
+			}
+		} else {
+			// Validate bucket names if it is not empty
+			if bucketName != "" && s3utils.CheckValidBucketNameStrict(bucketName) != nil {
+				if ok {
+					tc.FuncName = "handler.ValidRequest"
+					tc.ResponseRecorder.LogErrBody = true
+				}
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidBucketName), r.URL)
 				return
 			}
 		}

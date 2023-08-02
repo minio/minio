@@ -121,6 +121,13 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 		EnvVar: "MINIO_INTERFACE",
 	},
+	cli.DurationFlag{
+		Name:   "dns-cache-ttl",
+		Usage:  "custom DNS cache TTL for baremetal setups",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_DNS_CACHE_TTL",
+	},
 	cli.StringSliceFlag{
 		Name:  "ftp",
 		Usage: "enable and configure an FTP(Secure) server",
@@ -248,12 +255,12 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 	globalNodes = globalEndpoints.GetNodes()
 
-	// Initialize, see which NIC the service is running on, and save it as global
-	_ = getGlobalInternodeInterface(ctx.String("interface"))
-
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
+
+	// Initialize, see which NIC the service is running on, and save it as global value
+	setGlobalInternodeInterface(ctx.String("interface"))
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
@@ -464,18 +471,27 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 	return nil
 }
 
-func getGlobalInternodeInterface(interfs ...string) string {
+func setGlobalInternodeInterface(interfaceName string) {
 	globalInternodeInterfaceOnce.Do(func() {
-		if len(interfs) != 0 && strings.TrimSpace(interfs[0]) != "" {
-			globalInternodeInterface = interfs[0]
+		if interfaceName != "" {
+			globalInternodeInterface = interfaceName
 			return
 		}
 		ip := "127.0.0.1"
-		host, _ := mustSplitHostPort(globalMinioAddr)
+		host, _ := mustSplitHostPort(globalLocalNodeName)
 		if host != "" {
-			ip = host
+			if net.ParseIP(host) != nil {
+				ip = host
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+
+				haddrs, err := globalDNSCache.LookupHost(ctx, host)
+				if err == nil {
+					ip = haddrs[0]
+				}
+			}
 		}
-		globalInternodeInterface = ip
 		ifs, _ := net.Interfaces()
 		for _, interf := range ifs {
 			addrs, err := interf.Addrs()
@@ -488,7 +504,6 @@ func getGlobalInternodeInterface(interfs ...string) string {
 			}
 		}
 	})
-	return globalInternodeInterface
 }
 
 // Return the list of address that MinIO server needs to listen on:

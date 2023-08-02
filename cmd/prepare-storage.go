@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -97,8 +98,15 @@ func bgFormatErasureCleanupTmp(diskPath string) {
 			err))
 	}
 
+	// Delete all temporary files created for DirectIO write check
+	files, _ := filepath.Glob(filepath.Join(diskPath, ".writable-check-*.tmp"))
+	for _, file := range files {
+		go removeAll(file)
+	}
+
 	// Remove the entire folder in case there are leftovers that didn't get cleaned up before restart.
 	go removeAll(pathJoin(diskPath, minioMetaTmpBucket+"-old"))
+
 	// Renames and schedules for purging all bucket metacache.
 	go renameAllBucketMetacache(diskPath)
 }
@@ -131,8 +139,8 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-
-	req.Header.Set("x-minio-from-peer", "true")
+	// Indicate that the liveness check for a peer call
+	req.Header.Set(xhttp.MinIOPeerCall, "true")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -148,7 +156,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 // time. additionally make sure to close all the disks used in this attempt.
 func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
 	// Initialize all storage disks
-	storageDisks, errs := initStorageDisksWithErrors(endpoints, true)
+	storageDisks, errs := initStorageDisksWithErrors(endpoints, storageOpts{cleanUp: true, healthCheck: true})
 
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {

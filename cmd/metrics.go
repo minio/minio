@@ -39,6 +39,14 @@ var (
 		},
 		[]string{"api"},
 	)
+	bucketHTTPRequestsDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "s3_ttfb_seconds",
+			Help:    "Time taken by requests served by current MinIO server instance per bucket",
+			Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10},
+		},
+		[]string{"api", "bucket"},
+	)
 	minioVersionInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "minio",
@@ -612,6 +620,11 @@ func metricsHandler() http.Handler {
 			closer.Close()
 		}
 	})
+}
+
+// NoAuthMiddleware no auth middle ware.
+func NoAuthMiddleware(h http.Handler) http.Handler {
+	return h
 }
 
 // AuthMiddleware checks if the bearer token is valid and authorized.

@@ -57,6 +57,7 @@ type dataUsageEntry struct {
 	Size             int64                `msg:"sz"`
 	Objects          uint64               `msg:"os"`
 	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
+	DeleteMarkers    uint64               `msg:"dms"`
 	ObjSizes         sizeHistogram        `msg:"szs"`
 	ObjVersions      versionsHistogram    `msg:"vh"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
@@ -328,6 +329,7 @@ type dataUsageCacheInfo struct {
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
 	e.Versions += summary.versions
+	e.DeleteMarkers += summary.deleteMarkers
 	e.ObjSizes.add(summary.totalSize)
 	e.ObjVersions.add(summary.versions)
 
@@ -366,6 +368,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Versions += other.Versions
+	e.DeleteMarkers += other.DeleteMarkers
 	e.Size += other.Size
 	if other.ReplicationStats != nil {
 		if e.ReplicationStats == nil {
@@ -531,13 +534,14 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	}
 	flat := d.flatten(*e)
 	dui := DataUsageInfo{
-		LastUpdate:         d.Info.LastUpdate,
-		ObjectsTotalCount:  flat.Objects,
-		VersionsTotalCount: flat.Versions,
-		ObjectsTotalSize:   uint64(flat.Size),
-		BucketsCount:       uint64(len(e.Children)),
-		BucketsUsage:       d.bucketsUsageInfo(buckets),
-		TierStats:          d.tiersUsageInfo(buckets),
+		LastUpdate:              d.Info.LastUpdate,
+		ObjectsTotalCount:       flat.Objects,
+		VersionsTotalCount:      flat.Versions,
+		DeleteMarkersTotalCount: flat.DeleteMarkers,
+		ObjectsTotalSize:        uint64(flat.Size),
+		BucketsCount:            uint64(len(e.Children)),
+		BucketsUsage:            d.bucketsUsageInfo(buckets),
+		TierStats:               d.tiersUsageInfo(buckets),
 	}
 	return dui
 }
@@ -805,6 +809,7 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 			Size:                    uint64(flat.Size),
 			VersionsCount:           flat.Versions,
 			ObjectsCount:            flat.Objects,
+			DeleteMarkersCount:      flat.DeleteMarkers,
 			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
 			ObjectVersionsHistogram: flat.ObjVersions.toMap(),
 		}

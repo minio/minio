@@ -28,7 +28,6 @@ import (
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/pkg/logger/message/audit"
 
-	"github.com/minio/madmin-go/v3"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -145,7 +144,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
 		if err := t.Send(ctx, entry); err != nil {
-			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Audit target (%v): %v", entry, t, err), madmin.LogKindAll)
+			LogOnceIf(ctx, fmt.Errorf("Unable to send an audit event to the target `%v`: %v", t, err), "send-audit-event-failure")
 		}
 	}
 }

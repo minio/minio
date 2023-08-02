@@ -2243,6 +2243,19 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}, replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 			scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.ObjectReplicationType)
 		}
+
+		// Notify object created event.
+		evt := eventArgs{
+			EventName:    event.ObjectCreatedPut,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}
+		sendEvent(evt)
+
 		return nil
 	}
 

@@ -28,7 +28,7 @@ import (
 )
 
 // GetInfo returns total and free bytes available in a directory, e.g. `/`.
-func GetInfo(path string) (info Info, err error) {
+func GetInfo(path string, _ bool) (info Info, err error) {
 	s := unix.Statvfs_t{}
 	if err = unix.Statvfs(path, &s); err != nil {
 		return Info{}, err

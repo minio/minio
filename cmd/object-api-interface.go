@@ -55,6 +55,7 @@ type ObjectOptions struct {
 
 	DeleteMarker            bool // Is only set in DELETE operations for delete marker replication
 	CheckDMReplicationReady bool // Is delete marker ready to be replicated - set only during HEAD
+	Tagging                 bool // Is only in GET/HEAD operations to return tagging metadata along with regular metadata and body.
 
 	UserDefined         map[string]string   // only set in case of POST/PUT operations
 	PartNumber          int                 // only useful in case of GetObject/HeadObject

@@ -1065,8 +1065,8 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	}
 
 	for i := 0; i < (nfi.Erasure.DataBlocks + nfi.Erasure.ParityBlocks); i++ {
-		_, err = erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
-		if err == nil {
+		stats, _ := erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+		if len(stats) != 0 {
 			t.Errorf("Expected xl.meta file to be not present, but succeeeded")
 		}
 	}

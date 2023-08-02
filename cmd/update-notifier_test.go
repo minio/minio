@@ -35,36 +35,36 @@ func TestPrepareUpdateMessage(t *testing.T) {
 		expectedSubStr string
 	}{
 		// Testcase index 0
-		{72 * time.Hour, "my_download_url", "3 days ago"},
-		{3 * time.Hour, "https://my_download_url_is_huge/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "3 hours ago"},
+		{72 * time.Hour, "my_download_url", "3 days before the latest release"},
+		{3 * time.Hour, "https://my_download_url_is_huge/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "3 hours before the latest release"},
 		{-72 * time.Hour, "another_update_url", ""},
 		{0, "another_update_url", ""},
 		{time.Hour, "", ""},
 		{0 * time.Second, "my_download_url", "now"},
-		{1 * time.Second, "my_download_url", "1 second ago"},
-		{37 * time.Second, "my_download_url", "37 seconds ago"},
-		{60 * time.Second, "my_download_url", "1 minute ago"},
-		{61 * time.Second, "my_download_url", "1 minute ago"},
+		{1 * time.Second, "my_download_url", "1 second before the latest release"},
+		{37 * time.Second, "my_download_url", "37 seconds before the latest release"},
+		{60 * time.Second, "my_download_url", "1 minute before the latest release"},
+		{61 * time.Second, "my_download_url", "1 minute before the latest release"},
 
 		// Testcase index 10
-		{37 * time.Minute, "my_download_url", "37 minutes ago"},
-		{1 * time.Hour, "my_download_url", "1 hour ago"},
-		{61 * time.Minute, "my_download_url", "1 hour ago"},
-		{122 * time.Minute, "my_download_url", "2 hours ago"},
-		{24 * time.Hour, "my_download_url", "1 day ago"},
-		{25 * time.Hour, "my_download_url", "1 day ago"},
-		{49 * time.Hour, "my_download_url", "2 days ago"},
-		{7 * 24 * time.Hour, "my_download_url", "1 week ago"},
-		{8 * 24 * time.Hour, "my_download_url", "1 week ago"},
-		{15 * 24 * time.Hour, "my_download_url", "2 weeks ago"},
+		{37 * time.Minute, "my_download_url", "37 minutes before the latest release"},
+		{1 * time.Hour, "my_download_url", "1 hour before the latest release"},
+		{61 * time.Minute, "my_download_url", "1 hour before the latest release"},
+		{122 * time.Minute, "my_download_url", "2 hours before the latest release"},
+		{24 * time.Hour, "my_download_url", "1 day before the latest release"},
+		{25 * time.Hour, "my_download_url", "1 day before the latest release"},
+		{49 * time.Hour, "my_download_url", "2 days before the latest release"},
+		{7 * 24 * time.Hour, "my_download_url", "1 week before the latest release"},
+		{8 * 24 * time.Hour, "my_download_url", "1 week before the latest release"},
+		{15 * 24 * time.Hour, "my_download_url", "2 weeks before the latest release"},
 
 		// Testcase index 20
-		{30 * 24 * time.Hour, "my_download_url", "1 month ago"},
-		{31 * 24 * time.Hour, "my_download_url", "1 month ago"},
-		{61 * 24 * time.Hour, "my_download_url", "2 months ago"},
-		{360 * 24 * time.Hour, "my_download_url", "1 year ago"},
-		{361 * 24 * time.Hour, "my_download_url", "1 year ago"},
-		{2 * 365 * 24 * time.Hour, "my_download_url", "2 years ago"},
+		{30 * 24 * time.Hour, "my_download_url", "1 month before the latest release"},
+		{31 * 24 * time.Hour, "my_download_url", "1 month before the latest release"},
+		{61 * 24 * time.Hour, "my_download_url", "2 months before the latest release"},
+		{360 * 24 * time.Hour, "my_download_url", "1 year before the latest release"},
+		{361 * 24 * time.Hour, "my_download_url", "1 year before the latest release"},
+		{2 * 365 * 24 * time.Hour, "my_download_url", "2 years before the latest release"},
 	}
 
 	plainMsg := "You are running an older version of MinIO released"

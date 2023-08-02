@@ -1397,7 +1397,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrAdminConfigIDPCfgNameAlreadyExists: {
 		Code:           "XMinioAdminConfigIDPCfgNameAlreadyExists",
-		Description:    "An IDP configuration with the given name aleady exists",
+		Description:    "An IDP configuration with the given name already exists",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminConfigIDPCfgNameDoesNotExist: {

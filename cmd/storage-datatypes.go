@@ -53,6 +53,7 @@ type DiskInfo struct {
 	Endpoint   string
 	MountPath  string
 	ID         string
+	Rotational bool
 	Metrics    DiskMetrics
 	Error      string // carries the error over the network
 }
@@ -61,8 +62,10 @@ type DiskInfo struct {
 // the number of calls of each API and the moving average of
 // the duration of each API.
 type DiskMetrics struct {
-	LastMinute map[string]AccElem `json:"apiLatencies,omitempty"`
-	APICalls   map[string]uint64  `json:"apiCalls,omitempty"`
+	LastMinute              map[string]AccElem `json:"apiLatencies,omitempty"`
+	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
+	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
+	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
 }
 
 // VolsInfo is a collection of volume(bucket) information

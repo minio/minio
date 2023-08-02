@@ -571,10 +571,10 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		errFileNameTooLong,
 		errVolumeNotFound,
 		errFileVersionNotFound,
-		errDiskNotFound,
 		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
 		io.EOF,              // some times we would read without locks, ignore these errors
 	}
+	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
 
 	errs := g.Wait()
 	for index, err := range errs {
@@ -1102,7 +1102,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			wg.Add(1)
 			go func(disk StorageAPI) {
 				defer wg.Done()
-				di, err := disk.DiskInfo(ctx)
+				di, err := disk.DiskInfo(ctx, false)
 				if err != nil || di.ID == "" {
 					atomicOfflineDrives.Inc()
 					atomicParityDrives.Inc()

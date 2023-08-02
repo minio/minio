@@ -355,7 +355,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 			maxUploads:         "0",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 			shouldPass:         false,
 		},
 		// Test case - 2.

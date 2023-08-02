@@ -173,7 +173,7 @@ func TestNewErasureSets(t *testing.T) {
 		defer os.RemoveAll(disk)
 	}
 
-	endpoints := mustGetNewEndpoints(0, erasureDisks...)
+	endpoints := mustGetNewEndpoints(0, 16, erasureDisks...)
 	_, _, err := waitForFormatErasure(true, endpoints, 1, 0, 16, "", "")
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)

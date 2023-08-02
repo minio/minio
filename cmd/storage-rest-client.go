@@ -272,7 +272,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 // DiskInfo - fetch disk information for a remote disk.
-func (client *storageRESTClient) DiskInfo(_ context.Context) (info DiskInfo, err error) {
+func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info DiskInfo, err error) {
 	if !client.IsOnline() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
@@ -287,7 +287,10 @@ func (client *storageRESTClient) DiskInfo(_ context.Context) (info DiskInfo, err
 			var info DiskInfo
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
+
+			vals := make(url.Values)
+			vals.Set(storageRESTMetrics, strconv.FormatBool(metrics))
+			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, vals, nil, -1)
 			if err != nil {
 				return info, err
 			}
@@ -825,7 +828,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthCheck bool) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -834,7 +837,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 
-	if healthcheck {
+	if healthCheck {
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 		healthClient.NoMetrics = true

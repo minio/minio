@@ -26,6 +26,19 @@ import (
 	"time"
 )
 
+type sleepReader struct {
+	timeout time.Duration
+}
+
+func (r *sleepReader) Read(p []byte) (n int, err error) {
+	time.Sleep(r.timeout)
+	return len(p), nil
+}
+
+func (r *sleepReader) Close() error {
+	return nil
+}
+
 type sleepWriter struct {
 	timeout time.Duration
 }
@@ -39,16 +52,39 @@ func (w *sleepWriter) Close() error {
 	return nil
 }
 
+func TestDeadlineReader(t *testing.T) {
+	r := NewDeadlineReader(&sleepReader{timeout: 500 * time.Millisecond}, 450*time.Millisecond)
+	buf := make([]byte, 4)
+	_, err := r.Read(buf)
+	r.Close()
+	if err != context.DeadlineExceeded {
+		t.Errorf("DeadlineReader shouldn't be successful %v - should return context.DeadlineExceeded", err)
+	}
+	_, err = r.Read(buf)
+	if err != context.DeadlineExceeded {
+		t.Errorf("DeadlineReader shouldn't be successful %v - should return context.DeadlineExceeded", err)
+	}
+	r = NewDeadlineReader(&sleepReader{timeout: 100 * time.Millisecond}, 600*time.Millisecond)
+	n, err := r.Read(buf)
+	r.Close()
+	if err != nil {
+		t.Errorf("DeadlineReader should succeed but failed with %s", err)
+	}
+	if n != 4 {
+		t.Errorf("DeadlineReader should succeed but should have only read 4 bytes, but returned %d instead", n)
+	}
+}
+
 func TestDeadlineWriter(t *testing.T) {
 	w := NewDeadlineWriter(&sleepWriter{timeout: 500 * time.Millisecond}, 450*time.Millisecond)
 	_, err := w.Write([]byte("1"))
 	w.Close()
-	if err != context.Canceled {
-		t.Error("DeadlineWriter shouldn't be successful - should return context.Canceled")
+	if err != context.DeadlineExceeded {
+		t.Error("DeadlineWriter shouldn't be successful - should return context.DeadlineExceeded")
 	}
 	_, err = w.Write([]byte("1"))
-	if err != context.Canceled {
-		t.Error("DeadlineWriter shouldn't be successful - should return context.Canceled")
+	if err != context.DeadlineExceeded {
+		t.Error("DeadlineWriter shouldn't be successful - should return context.DeadlineExceeded")
 	}
 	w = NewDeadlineWriter(&sleepWriter{timeout: 100 * time.Millisecond}, 600*time.Millisecond)
 	n, err := w.Write([]byte("abcd"))

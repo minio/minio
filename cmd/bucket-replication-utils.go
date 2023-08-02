@@ -720,6 +720,7 @@ type TargetReplicationResyncStatus struct {
 	// Last bucket/object replicated.
 	Bucket string `json:"-" msg:"bkt"`
 	Object string `json:"-" msg:"obj"`
+	Error  error  `json:"-" msg:"-"`
 }
 
 // BucketReplicationResyncStatus captures current replication resync status

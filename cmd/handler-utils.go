@@ -38,6 +38,7 @@ import (
 const (
 	copyDirective    = "COPY"
 	replaceDirective = "REPLACE"
+	accessDirective  = "ACCESS"
 )
 
 // Parses location constraint from the incoming reader.

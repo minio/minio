@@ -1,7 +1,7 @@
 //go:build linux && !s390x && !arm && !386
 // +build linux,!s390x,!arm,!386
 
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -28,11 +28,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/prometheus/procfs/blockdevice"
 	"golang.org/x/sys/unix"
 )
 
 // GetInfo returns total and free bytes available in a directory, e.g. `/`.
-func GetInfo(path string) (info Info, err error) {
+func GetInfo(path string, firstTime bool) (info Info, err error) {
 	s := syscall.Statfs_t{}
 	err = syscall.Statfs(path, &s)
 	if err != nil {
@@ -47,14 +48,6 @@ func GetInfo(path string) (info Info, err error) {
 		//nolint:unconvert
 		FSType: getFSType(int64(s.Type)),
 	}
-	// Check for overflows.
-	// https://github.com/minio/minio/issues/8035
-	// XFS can show wrong values at times error out
-	// in such scenarios.
-	if info.Free > info.Total {
-		return info, fmt.Errorf("detected free space (%d) > total drive space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
-	}
-	info.Used = info.Total - info.Free
 
 	st := syscall.Stat_t{}
 	err = syscall.Stat(path, &st)
@@ -65,6 +58,39 @@ func GetInfo(path string) (info Info, err error) {
 	devID := uint64(st.Dev) // Needed to support multiple GOARCHs
 	info.Major = unix.Major(devID)
 	info.Minor = unix.Minor(devID)
+
+	// Check for overflows.
+	// https://github.com/minio/minio/issues/8035
+	// XFS can show wrong values at times error out
+	// in such scenarios.
+	if info.Free > info.Total {
+		return info, fmt.Errorf("detected free space (%d) > total drive space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
+	}
+	info.Used = info.Total - info.Free
+
+	if firstTime {
+		bfs, err := blockdevice.NewDefaultFS()
+		if err == nil {
+			diskstats, _ := bfs.ProcDiskstats()
+			for _, dstat := range diskstats {
+				// ignore all loop devices
+				if strings.HasPrefix(dstat.DeviceName, "loop") {
+					continue
+				}
+				qst, err := bfs.SysBlockDeviceQueueStats(dstat.DeviceName)
+				if err != nil {
+					continue
+				}
+				rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
+				if dstat.MajorNumber == info.Major && dstat.MinorNumber == info.Minor {
+					info.Name = dstat.DeviceName
+					info.Rotational = &rot
+					break
+				}
+			}
+		}
+	}
+
 	return info, nil
 }
 

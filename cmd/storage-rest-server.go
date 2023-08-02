@@ -173,7 +173,7 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	if !s.IsAuthValid(w, r) {
 		return
 	}
-	info, err := s.storage.DiskInfo(r.Context())
+	info, err := s.storage.DiskInfo(r.Context(), r.Form.Get(storageRESTMetrics) == "true")
 	if err != nil {
 		info.Error = err.Error()
 	}

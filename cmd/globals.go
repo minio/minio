@@ -193,7 +193,7 @@ var (
 	globalBucketSSEConfigSys *BucketSSEConfigSys
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
-	// healthcheck readiness deadlines and cors settings.
+	// healthCheck readiness deadlines and cors settings.
 	globalAPIConfig = apiConfig{listQuorum: "strict", rootAccess: true}
 
 	globalStorageClass storageclass.Config
