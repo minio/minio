@@ -275,9 +275,11 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info
 	si := p.updateStorageMetrics(storageMetricDiskInfo)
 	defer si(&err)
 
-	if metrics {
-		info.Metrics = p.getMetrics()
-	}
+	defer func() {
+		if metrics {
+			info.Metrics = p.getMetrics()
+		}
+	}()
 
 	if p.health.isFaulty() {
 		// if disk is already faulty return faulty for 'mc admin info' output and prometheus alerts.
