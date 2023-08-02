@@ -441,7 +441,12 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 }
 
 func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, error) {
-	buf, _, err := s.readMetadataWithDMTime(ctx, itemPath)
+	var buf []byte
+	err := xioutil.NewDeadlineWorker(diskMaxTimeout).Run(func() error {
+		var rerr error
+		buf, _, rerr = s.readMetadataWithDMTime(ctx, itemPath)
+		return rerr
+	})
 	return buf, err
 }
 
@@ -957,16 +962,21 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err != errFileNotFound {
+		if !errors.Is(err, errFileNotFound) {
 			return err
 		}
 		metaDataPoolPut(buf) // Never used, return it
 
-		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
-		if err != nil {
-			return err
+		s.RLock()
+		legacy := s.formatLegacy
+		s.RUnlock()
+		if legacy {
+			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
+			if err != nil {
+				return err
+			}
+			legacyJSON = true
 		}
-		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
@@ -1099,7 +1109,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err != errFileNotFound {
+		if !errors.Is(err, errFileNotFound) {
 			return err
 		}
 		metaDataPoolPut(buf) // Never used, return it
@@ -1108,14 +1118,19 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return s.WriteMetadata(ctx, volume, path, fi)
 		}
 
-		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
-		if err != nil {
-			if err == errFileNotFound && fi.VersionID != "" {
-				return errFileVersionNotFound
+		s.RLock()
+		legacy := s.formatLegacy
+		s.RUnlock()
+		if legacy {
+			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
+			if err != nil {
+				if errors.Is(err, errFileNotFound) && fi.VersionID != "" {
+					return errFileVersionNotFound
+				}
+				return err
 			}
-			return err
+			legacyJSON = true
 		}
-		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
