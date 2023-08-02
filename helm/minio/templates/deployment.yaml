@@ -125,8 +125,8 @@ spec:
             {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.oidc.clientExistingSecretName }}
-                  key: {{ .Values.oidc.clientExisitingSecretKey }}
+                  name: {{ .Values.oidc.existingClientSecretName }}
+                  key: {{ .Values.oidc.existingClientSecretKey }}
             {{- end }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
               value: {{ .Values.oidc.claimName }}
