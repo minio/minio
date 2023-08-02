@@ -34,5 +34,5 @@ type ErrResponse struct {
 }
 
 func (e ErrResponse) Error() string {
-	return fmt.Sprintf("remote returned: %s", e.msg)
+	return fmt.Sprintf("remote: %s", e.msg)
 }

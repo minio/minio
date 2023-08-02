@@ -302,7 +302,7 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
 	if debugPrint {
-		fmt.Println(c.Local, "sendMsg: Sending", len(dst), "bytes. Side:", c.side)
+		fmt.Println(c.Local, "sendMsg: Sending", msg.Op, "as", len(dst), "bytes")
 	}
 	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
@@ -852,7 +852,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			return
 		case toSend := <-c.outQueue:
 			if debugPrint {
-				fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
+				// fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
 			}
 			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
 				return

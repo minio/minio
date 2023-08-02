@@ -404,7 +404,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				select {
 				case <-ctx.Done():
-					close(serverCanceled)
+					serverCanceled <- struct{}{}
 					t.Log(GetCaller(ctx).Name, "Server Context canceled")
 					return nil
 				}
@@ -416,7 +416,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				select {
 				case <-ctx.Done():
-					close(serverCanceled)
+					serverCanceled <- struct{}{}
 					t.Log(GetCaller(ctx).Name, "Server Context canceled")
 					return nil
 				}
@@ -464,6 +464,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	})
 }
 
+// testStreamDeadline will test if server
 func testStreamDeadline(t *testing.T, local, remote *Manager) {
 	defer testlogger.T.SetErrorTB(t)()
 	errFatal := func(err error) {
@@ -473,6 +474,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		}
 	}
 
+	const wantDL = 50 * time.Millisecond
 	// We fake a local and remote server.
 	remoteHost := remote.HostName()
 
@@ -482,12 +484,16 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				started := time.Now()
-				select {
-				case <-ctx.Done():
-					serverCanceled <- time.Since(started)
-					t.Log(GetCaller(ctx).Name, "Server Context canceled")
-					return nil
+				dl, _ := ctx.Deadline()
+				if testing.Verbose() {
+					fmt.Println(GetCaller(ctx).Name, "Server deadline:", time.Until(dl))
 				}
+				<-ctx.Done()
+				serverCanceled <- time.Since(started)
+				if testing.Verbose() {
+					fmt.Println(GetCaller(ctx).Name, "Server Context canceled with", ctx.Err(), "after", time.Since(started))
+				}
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  0,
@@ -495,12 +501,16 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				started := time.Now()
-				select {
-				case <-ctx.Done():
-					serverCanceled <- time.Since(started)
-					t.Log(GetCaller(ctx).Name, "Server Context canceled")
-					return nil
+				dl, _ := ctx.Deadline()
+				if testing.Verbose() {
+					fmt.Println(GetCaller(ctx).Name, "Server deadline:", time.Until(dl))
 				}
+				<-ctx.Done()
+				serverCanceled <- time.Since(started)
+				if testing.Verbose() {
+					fmt.Println(GetCaller(ctx).Name, "Server Context canceled with", ctx.Err(), "after", time.Since(started))
+				}
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  1,
@@ -513,7 +523,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		remoteConn := local.Connection(remoteHost)
 		const testPayload = "Hello Grid World!"
 
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), wantDL)
 		defer cancel()
 		st, err := remoteConn.NewStream(ctx, handler, []byte(testPayload))
 		errFatal(err)
