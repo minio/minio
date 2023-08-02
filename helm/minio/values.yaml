@@ -485,7 +485,7 @@ oidc:
   configUrl: "https://identity-provider-url/.well-known/openid-configuration"
   clientId: "minio"
   clientSecret: ""
-  # Provide client secret from the Secret resource, this will overwrite clientSecret
+  # Provide exisitng client secret from the Kubernetes Secret resource, `clientSecret` needs to be empty in order to use existing secret
   clientExistingSecretName: ""
   clientExisitingSecretKey: ""
   claimName: "policy"
