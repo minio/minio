@@ -403,13 +403,11 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		TierName:  oi.TransitionedObject.Tier,
 	}
 	if err := globalTierJournal.AddEntry(entry); err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	// Delete metadata on source, now that data in remote tier has been
 	// marked for deletion.
 	if _, err := objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts); err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 
