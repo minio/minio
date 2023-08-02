@@ -1124,7 +1124,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if legacy {
 			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
 			if err != nil {
-				if err == errFileNotFound && fi.VersionID != "" {
+				if errors.Is(err, errFileNotFound) && fi.VersionID != "" {
 					return errFileVersionNotFound
 				}
 				return err
