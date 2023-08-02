@@ -56,6 +56,12 @@ func (h HandlerID) isTestHandler() bool {
 // Any error seen on a remote will be returned like this.
 type RemoteErr string
 
+// NewRemoteErr creates a new remote error.
+func NewRemoteErr(msg string) *RemoteErr {
+	r := RemoteErr(msg)
+	return &r
+}
+
 func (r RemoteErr) Error() string {
 	return string(r)
 }

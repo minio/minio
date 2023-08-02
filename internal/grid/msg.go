@@ -80,6 +80,11 @@ const (
 	// MuxID is returned in response.
 	OpRequest
 
+	// OpResponse is a response to a single request.
+	// FlagPayloadIsErr is used to signify that the payload is a string error converted to byte slice.
+	// When a response is received, the mux is already removed from the remote.
+	OpResponse
+
 	// OpDisconnect instructs that remote wants to disconnect
 	OpDisconnect
 )

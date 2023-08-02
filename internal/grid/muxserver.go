@@ -128,15 +128,20 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 			}
 			msg.Op = OpMuxServerMsg
 			if !ok {
+				if debugPrint {
+					fmt.Println("muxServer: Mux", m.ID, "send EOF", handlerErr)
+				}
 				msg.Flags |= FlagEOF
 				if handlerErr != nil {
 					msg.Flags |= FlagPayloadIsErr
 					msg.Payload = []byte(*handlerErr)
 				}
+				msg.setZeroPayloadFlag()
 				m.send(msg)
 				return
 			}
 			msg.Payload = payload
+			msg.setZeroPayloadFlag()
 			m.send(msg)
 			if !ok {
 				return
@@ -198,6 +203,7 @@ func (m *muxServer) message(msg message) {
 }
 
 func (m *muxServer) unblockSend() {
+	m.RecvSeq++
 	select {
 	case m.outBlock <- struct{}{}:
 	default:

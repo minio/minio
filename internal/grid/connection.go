@@ -651,15 +651,40 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					})
 					PutByteBuffer(m.Payload)
 				} else {
-					v.response(m.Seq, Response{
-						Msg: m.Payload,
-						Err: nil,
-					})
+					if m.Payload != nil {
+						v.response(m.Seq, Response{
+							Msg: m.Payload,
+							Err: nil,
+						})
+					}
 				}
 				if m.Flags&FlagEOF != 0 {
 					v.close()
 					c.outgoing.Delete(m.MuxID)
 				}
+			case OpResponse:
+				if debugPrint {
+					fmt.Printf("%s Got mux response: %+v\n", c.Local, m)
+				}
+				v, ok := c.outgoing.Load(m.MuxID)
+				if !ok {
+					PutByteBuffer(m.Payload)
+					continue
+				}
+				if m.Flags&FlagPayloadIsErr != 0 {
+					v.response(m.Seq, Response{
+						Msg: nil,
+						Err: RemoteErr(m.Payload),
+					})
+					PutByteBuffer(m.Payload)
+				} else {
+					v.response(m.Seq, Response{
+						Msg: m.Payload,
+						Err: nil,
+					})
+				}
+				v.close()
+				c.outgoing.Delete(m.MuxID)
 			case OpMuxClientMsg:
 				v, ok := c.inStream.Load(m.MuxID)
 				if !ok {
@@ -761,13 +786,18 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if m.DeadlineMS > 0 {
 						start = time.Now()
 					}
-					m.Op = OpMuxServerMsg
 					b, err := handler(m.Payload)
 					// TODO: Maybe recycle m.Payload - should be free here.
 					if m.DeadlineMS > 0 && time.Since(start).Milliseconds() > int64(m.DeadlineMS) {
 						// No need to return result
 						PutByteBuffer(b)
 						return
+					}
+					m = message{
+						MuxID: m.MuxID,
+						Seq:   m.Seq,
+						Op:    OpResponse,
+						Flags: FlagEOF,
 					}
 					if err != nil {
 						m.Flags |= FlagPayloadIsErr

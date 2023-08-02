@@ -312,6 +312,10 @@ func TestStreamSuite(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamDeadline(t, local, remote)
 	})
+	t.Run("testOutgoingCongestion", func(t *testing.T) {
+		defer timeout(5 * time.Minute)()
+		testOutgoingCongestion(t, local, remote)
+	})
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -552,6 +556,80 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 	t.Run("buffered", func(t *testing.T) {
 		testHandler(t, handlerTest2)
 	})
+}
+
+func testOutgoingCongestion(t *testing.T, local, remote *Manager) {
+	defer testlogger.T.SetErrorTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
+
+	// 1: Echo
+	serverSent := make(chan struct{})
+	register := func(manager *Manager) {
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				// Send many responses.
+				// Test that this doesn't block.
+				for i := byte(0); i < 100; i++ {
+					select {
+					case resp <- []byte{i}:
+					// ok
+					case <-ctx.Done():
+						return NewRemoteErr(ctx.Err().Error())
+					}
+					if i == 0 {
+						close(serverSent)
+					}
+				}
+				return nil
+			},
+			OutCapacity: 1,
+			InCapacity:  0,
+		}))
+		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+			// Simple roundtrip
+			return append([]byte{}, payload...), nil
+		}))
+	}
+	register(local)
+	register(remote)
+
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+	errFatal(err)
+
+	// Wait for the server to send the first response.
+	<-serverSent
+
+	// Now do 100 other requests to ensure that the server doesn't block.
+	for i := 0; i < 100; i++ {
+		_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
+		errFatal(err)
+	}
+	// Drain responses
+	got := 0
+	for resp := range st.Responses {
+		t.Log("got response", resp)
+		errFatal(resp.Err)
+		if resp.Msg[0] != byte(got) {
+			t.Error("expected response", got, "got", resp.Msg[0])
+		}
+		got++
+	}
+	if got != 100 {
+		t.Error("expected 100 responses, got", got)
+	}
 }
 
 func timeout(after time.Duration) (cancel func()) {
