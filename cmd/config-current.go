@@ -627,12 +627,22 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:
+		ec := -1
 		for i, setDriveCount := range setDriveCounts {
 			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 				break
 			}
+			if ec == -1 {
+				ec = sc.Standard.Parity
+			} else {
+				if ec != sc.Standard.Parity {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", errors.New("incompatible EC config detected")))
+					break
+				}
+			}
+
 			// if we validated all setDriveCounts and it was successful
 			// proceed to store the correct storage class globally.
 			if i == len(setDriveCounts)-1 {
