@@ -346,7 +346,7 @@ var (
 
 	globalTierConfigMgr *TierConfigMgr
 
-	globalTierJournal *tierJournal
+	globalTierJournal *TierJournal
 
 	globalConsoleSrv *restapi.Server
 

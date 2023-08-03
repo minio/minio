@@ -362,6 +362,7 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+	globalTierJournal = NewTierJournal()
 
 	globalTransitionState = newTransitionState(GlobalContext)
 	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
@@ -798,14 +799,10 @@ func serverMain(ctx *cli.Context) {
 		go func() {
 			// Initialize transition tier configuration manager
 			bootstrapTrace("globalTierConfigMgr.Init")
-			err := globalTierConfigMgr.Init(GlobalContext, newObject)
-			if err != nil {
+			if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
 				logger.LogIf(GlobalContext, err)
 			} else {
-				globalTierJournal, err = initTierDeletionJournal(GlobalContext)
-				if err != nil {
-					logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
-				}
+				logger.FatalIf(globalTierJournal.Init(GlobalContext), "Unable to initialize remote tier pending deletes journal")
 			}
 		}()
 
