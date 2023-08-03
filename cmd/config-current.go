@@ -386,7 +386,7 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
-			if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
+			if err := logger.ValidateSubSysConfig(ctx, s, subSys); err != nil {
 				return err
 			}
 		}
@@ -575,7 +575,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.LoggerWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
@@ -592,7 +592,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
 		}
@@ -610,7 +610,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditKafkaSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
 		}
