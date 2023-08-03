@@ -545,12 +545,5 @@ func corsHandler(handler http.Handler) http.Handler {
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
 	}
-	for _, origin := range globalAPIConfig.getCorsAllowOrigins() {
-		if origin == "*" {
-			opts.AllowOriginFunc = nil
-			opts.AllowedOrigins = globalAPIConfig.getCorsAllowOrigins()
-			break
-		}
-	}
 	return cors.New(opts).Handler(handler)
 }
