@@ -289,12 +289,15 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 }
 
 // Heal reads from readers, reconstruct shards and writes the data to the writers.
-func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.ReaderAt, totalLength int64) (derr error) {
+func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.ReaderAt, totalLength int64, prefer []bool) (derr error) {
 	if len(writers) != e.parityBlocks+e.dataBlocks {
 		return errInvalidArgument
 	}
 
 	reader := newParallelReader(readers, e, 0, totalLength)
+	if len(readers) == len(prefer) {
+		reader.preferReaders(prefer)
+	}
 
 	startBlock := int64(0)
 	endBlock := totalLength / e.blockSize
