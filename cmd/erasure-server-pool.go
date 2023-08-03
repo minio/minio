@@ -1835,36 +1835,50 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						return
 					}
 
+					send := func(objInfo ObjectInfo) {
+						select {
+						case <-ctx.Done():
+							return
+						case results <- objInfo:
+						}
+					}
+
 					loadEntry := func(entry metaCacheEntry) {
 						if entry.isDir() {
 							return
 						}
 
-						fivs, err := entry.fileInfoVersions(bucket)
-						if err != nil {
-							cancel()
-							return
-						}
-
-						versionsSorter(fivs.Versions).reverse()
-
-						for _, version := range fivs.Versions {
-							send := true
-							if opts.WalkFilter != nil && !opts.WalkFilter(version) {
-								send = false
-							}
-
-							if !send {
-								continue
-							}
-
-							versioned := vcfg != nil && vcfg.Versioned(version.Name)
-							objInfo := version.ToObjectInfo(bucket, version.Name, versioned)
-
-							select {
-							case <-ctx.Done():
+						if opts.WalkLatestOnly {
+							fi, err := entry.fileInfo(bucket)
+							if err != nil {
+								cancel()
 								return
-							case results <- objInfo:
+							}
+							if opts.WalkFilter != nil {
+								if opts.WalkFilter(fi) {
+									send(fi.ToObjectInfo(bucket, fi.Name, vcfg != nil && vcfg.Versioned(fi.Name)))
+								}
+							} else {
+								send(fi.ToObjectInfo(bucket, fi.Name, vcfg != nil && vcfg.Versioned(fi.Name)))
+							}
+
+						} else {
+							fivs, err := entry.fileInfoVersions(bucket)
+							if err != nil {
+								cancel()
+								return
+							}
+
+							versionsSorter(fivs.Versions).reverse()
+
+							for _, version := range fivs.Versions {
+								if opts.WalkFilter != nil {
+									if opts.WalkFilter(version) {
+										send(version.ToObjectInfo(bucket, version.Name, vcfg != nil && vcfg.Versioned(version.Name)))
+									}
+								} else {
+									send(version.ToObjectInfo(bucket, version.Name, vcfg != nil && vcfg.Versioned(version.Name)))
+								}
 							}
 						}
 					}

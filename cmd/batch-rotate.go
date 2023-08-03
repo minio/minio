@@ -209,7 +209,6 @@ type BatchJobKeyRotateV1 struct {
 	Flags      BatchJobKeyRotateFlags      `yaml:"flags" json:"flags"`
 	Bucket     string                      `yaml:"bucket" json:"bucket"`
 	Prefix     string                      `yaml:"prefix" json:"prefix"`
-	Endpoint   string                      `yaml:"endpoint" json:"endpoint"`
 	Encryption BatchJobKeyRotateEncryption `yaml:"encryption" json:"encryption"`
 }
 
@@ -458,7 +457,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				attempts := attempts
-				stopFn := globalBatchJobsMetrics.trace(batchKeyRotationMetricObject, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts, result)
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
 					stopFn(err)
@@ -493,10 +492,6 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	cancel()
 	if ri.Failed {
-		ri.ObjectsFailed = 0
-		ri.Bucket = ""
-		ri.Object = ""
-		ri.Objects = 0
 		time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
 	}
 

@@ -526,12 +526,6 @@ func (z *BatchJobKeyRotateV1) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
-		case "Endpoint":
-			z.Endpoint, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Endpoint")
-				return
-			}
 		case "Encryption":
 			err = z.Encryption.DecodeMsg(dc)
 			if err != nil {
@@ -551,9 +545,9 @@ func (z *BatchJobKeyRotateV1) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 5
 	// write "APIVersion"
-	err = en.Append(0x86, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	err = en.Append(0x85, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 	if err != nil {
 		return
 	}
@@ -592,16 +586,6 @@ func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Prefix")
 		return
 	}
-	// write "Endpoint"
-	err = en.Append(0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Endpoint)
-	if err != nil {
-		err = msgp.WrapError(err, "Endpoint")
-		return
-	}
 	// write "Encryption"
 	err = en.Append(0xaa, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e)
 	if err != nil {
@@ -618,9 +602,9 @@ func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobKeyRotateV1) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 5
 	// string "APIVersion"
-	o = append(o, 0x86, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	o = append(o, 0x85, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 	o = msgp.AppendString(o, z.APIVersion)
 	// string "Flags"
 	o = append(o, 0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
@@ -635,9 +619,6 @@ func (z *BatchJobKeyRotateV1) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Prefix"
 	o = append(o, 0xa6, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78)
 	o = msgp.AppendString(o, z.Prefix)
-	// string "Endpoint"
-	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-	o = msgp.AppendString(o, z.Endpoint)
 	// string "Encryption"
 	o = append(o, 0xaa, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e)
 	o, err = z.Encryption.MarshalMsg(o)
@@ -690,12 +671,6 @@ func (z *BatchJobKeyRotateV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
-		case "Endpoint":
-			z.Endpoint, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Endpoint")
-				return
-			}
 		case "Encryption":
 			bts, err = z.Encryption.UnmarshalMsg(bts)
 			if err != nil {
@@ -716,7 +691,7 @@ func (z *BatchJobKeyRotateV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobKeyRotateV1) Msgsize() (s int) {
-	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 6 + z.Flags.Msgsize() + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 11 + z.Encryption.Msgsize()
+	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 6 + z.Flags.Msgsize() + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 11 + z.Encryption.Msgsize()
 	return
 }
 

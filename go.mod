@@ -49,7 +49,7 @@ require (
 	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v3 v3.0.9
+	github.com/minio/madmin-go/v3 v3.0.10
 	github.com/minio/minio-go/v7 v7.0.61
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.5
@@ -94,6 +94,7 @@ require (
 	golang.org/x/time v0.3.0
 	google.golang.org/api v0.134.0
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -238,5 +239,4 @@ require (
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
