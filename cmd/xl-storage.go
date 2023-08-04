@@ -2211,6 +2211,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			errFileVersionNotFound,
 			errDiskNotFound,
 			errUnformattedDisk,
+			errMaxVersionsExceeded,
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.

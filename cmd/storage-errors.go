@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -23,6 +23,9 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 )
+
+// errMaxVersionsExceeded return error beyond 10000 (default) versions per object
+var errMaxVersionsExceeded = StorageErr("maximum versions exceeded, please delete few versions to proceed")
 
 // errUnexpected - unexpected error, requires manual intervention.
 var errUnexpected = StorageErr("unexpected error, please report this issue at https://github.com/minio/minio/issues")
