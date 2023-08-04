@@ -27,6 +27,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,10 +313,11 @@ func TestStreamSuite(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamDeadline(t, local, remote)
 	})
-	t.Run("testOutgoingCongestion", func(t *testing.T) {
+	t.Run("testServerOutCongestion", func(t *testing.T) {
 		defer timeout(5 * time.Minute)()
-		testOutgoingCongestion(t, local, remote)
+		testServerOutCongestion(t, local, remote)
 	})
+	testServerInCongestion(t, local, remote)
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -441,8 +443,14 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 		st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
 		errFatal(err)
 		clientCanceled := make(chan time.Time, 1)
+		err = nil
 		go func() {
 			for resp := range st.Responses {
+				t.Log("got resp:", string(resp.Msg), "err:", resp.Err)
+				if err != nil {
+					t.Log("ERROR: got second error:", resp.Err, "first:", err)
+					continue
+				}
 				err = resp.Err
 			}
 			clientCanceled <- time.Now()
@@ -558,7 +566,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 	})
 }
 
-func testOutgoingCongestion(t *testing.T, local, remote *Manager) {
+func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	defer testlogger.T.SetErrorTB(t)()
 	errFatal := func(err error) {
 		t.Helper()
@@ -632,6 +640,94 @@ func testOutgoingCongestion(t *testing.T, local, remote *Manager) {
 	}
 }
 
+func testServerInCongestion(t *testing.T, local, remote *Manager) {
+	t.Run("testServerInCongestion", func(t *testing.T) {
+		defer timeout(5 * time.Minute)()
+		defer testlogger.T.SetErrorTB(t)()
+		errFatal := func(err error) {
+			t.Helper()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		// We fake a local and remote server.
+		remoteHost := remote.HostName()
+
+		// 1: Echo
+		processHandler := make(chan struct{})
+		register := func(manager *Manager) {
+			errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+				Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+					// Block incoming requests.
+					var n byte
+					<-processHandler
+					for {
+						select {
+						case in, ok := <-request:
+							if !ok {
+								return nil
+							}
+							if in[0] != n {
+								return NewRemoteErr(fmt.Sprintf("expected incoming %d, got %d", n, in[0]))
+							}
+							n++
+							resp <- append([]byte{}, in...)
+						case <-ctx.Done():
+							return NewRemoteErr(ctx.Err().Error())
+						}
+					}
+				},
+				OutCapacity: 5,
+				InCapacity:  5,
+			}))
+			errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+				// Simple roundtrip
+				return append([]byte{}, payload...), nil
+			}))
+		}
+		register(local)
+		register(remote)
+
+		remoteConn := local.Connection(remoteHost)
+		const testPayload = "Hello Grid World!"
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+		errFatal(err)
+
+		// Start sending requests.
+		go func() {
+			for i := byte(0); i < 100; i++ {
+				st.Requests <- []byte{i}
+			}
+			close(st.Requests)
+		}()
+		// Now do 100 other requests to ensure that the server doesn't block.
+		for i := 0; i < 100; i++ {
+			_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
+			errFatal(err)
+		}
+		// Start processing requests.
+		close(processHandler)
+
+		// Drain responses
+		got := 0
+		for resp := range st.Responses {
+			t.Log("got response", resp)
+			errFatal(resp.Err)
+			if resp.Msg[0] != byte(got) {
+				t.Error("expected response", got, "got", resp.Msg[0])
+			}
+			got++
+		}
+		if got != 100 {
+			t.Error("expected 100 responses, got", got)
+		}
+	})
+}
+
 func timeout(after time.Duration) (cancel func()) {
 	c := time.After(after)
 	cc := make(chan struct{})
@@ -649,4 +745,21 @@ func timeout(after time.Duration) (cancel func()) {
 	return func() {
 		close(cc)
 	}
+}
+
+func callerFnName() string {
+	pc, _, _, _ := runtime.Caller(1)
+
+	// returns a string of the form "path/to/package.funcName"
+	longFn := runtime.FuncForPC(pc).Name()
+
+	// discard package name
+	nameEnd := strings.Index(longFn, "/") + 1
+	fn := longFn[nameEnd:]
+
+	// discard '.' between package and function name
+	nameEnd2 := strings.Index(fn, ".")
+	fn = fn[nameEnd2+1:]
+
+	return fn
 }

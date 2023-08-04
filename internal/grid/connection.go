@@ -441,10 +441,7 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 		return nil, err
 	}
 
-	if err := cl.RequestStream(h, payload, requests, responses); err != nil {
-		return nil, err
-	}
-	return &Stream{Responses: responses, Requests: requests}, nil
+	return cl.RequestStream(h, payload, requests, responses)
 }
 
 // WaitForConnect will block until a connection has been established or
@@ -696,21 +693,17 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					continue
 				}
 				v.message(m)
-				if m.Flags&FlagEOF != 0 {
-					v.close()
-					c.inStream.Delete(m.MuxID)
-				}
 			case OpUnblockSrvMux:
 				PutByteBuffer(m.Payload)
 				m.Payload = nil
 				if v, ok := c.inStream.Load(m.MuxID); ok {
-					v.unblockSend()
+					v.unblockSend(m.Seq)
 					continue
 				}
 				if debugPrint {
 					fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
 				}
-				logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+				// We can expect to receive unblocks for closed muxes
 				continue
 			case OpUnblockClMux:
 				PutByteBuffer(m.Payload)
@@ -720,7 +713,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if debugPrint {
 						fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
 					}
-					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+					// We can expect to receive unblocks for closed muxes
 					continue
 				}
 				v.unblockSend(m.Seq)
@@ -899,6 +892,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 	if incoming {
+		fmt.Println("deleteMux: disconnect incoming mux", muxID)
 		v, loaded := c.inStream.LoadAndDelete(muxID)
 		if loaded && v != nil {
 			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: muxID}, nil))
@@ -908,7 +902,7 @@ func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 		v, loaded := c.outgoing.LoadAndDelete(muxID)
 		if loaded && v != nil {
 			v.close()
-			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: muxID}, nil))
+			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectServerMux, MuxID: muxID}, nil))
 		}
 	}
 }

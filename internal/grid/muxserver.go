@@ -91,8 +91,18 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 		outBlock: make(chan struct{}, outboundCap),
 		LastPing: time.Now().Unix(),
 	}
+	var handlerIn chan []byte
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)
+		handlerIn = make(chan []byte, 1)
+		go func() {
+			// Send unblocks when we have delivered the message to the handler.
+			for in := range m.inbound {
+				handlerIn <- in
+				m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
+			}
+			close(handlerIn)
+		}()
 	}
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
@@ -105,11 +115,13 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 				err := RemoteErr(fmt.Sprintf("panic: %v", r))
 				handlerErr = &err
 			}
-			m.close()
+			if debugPrint {
+				fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
+			}
 			close(send)
 		}()
 		// handlerErr is guarded by 'send' channel.
-		handlerErr = handler.Handle(ctx, msg.Payload, m.inbound, send)
+		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
 	}()
 	go func() {
 		defer m.parent.deleteMux(true, m.ID)
@@ -125,8 +137,8 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 			<-m.outBlock
 			msg := message{
 				MuxID: m.ID,
+				Op:    OpMuxServerMsg,
 			}
-			msg.Op = OpMuxServerMsg
 			if !ok {
 				if debugPrint {
 					fmt.Println("muxServer: Mux", m.ID, "send EOF", handlerErr)
@@ -143,9 +155,6 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 			msg.Payload = payload
 			msg.setZeroPayloadFlag()
 			m.send(msg)
-			if !ok {
-				return
-			}
 		}
 	}()
 
@@ -169,41 +178,38 @@ func (m *muxServer) message(msg message) {
 	if debugPrint {
 		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
 	}
-	if m.inbound == nil {
+	if cap(m.inbound) == 0 {
 		m.disconnect("did not expect inbound message")
 		return
 	}
 	if !m.checkSeq(msg.Seq) {
 		return
 	}
-
-	m.RecvSeq++
+	// Note, on EOF no value can be sent.
 	if msg.Flags&FlagEOF != 0 {
-		m.close()
-		PutByteBuffer(msg.Payload)
+		if len(msg.Payload) > 0 {
+			logger.LogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
+		}
+		close(m.inbound)
+		m.inbound = nil
 		return
 	}
+
 	select {
 	case <-m.ctx.Done():
 	case m.inbound <- msg.Payload:
 		if debugPrint {
 			fmt.Printf("muxServer: Sent seq %d to handler\n", msg.Seq)
 		}
-		m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
 	default:
-		go func() {
-			fmt.Printf("muxServer: Seq %d blocked, waiting\n", msg.Seq)
-			select {
-			case <-m.ctx.Done():
-			case m.inbound <- msg.Payload:
-				m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
-			}
-		}()
+		m.disconnect("handler blocked")
 	}
 }
 
-func (m *muxServer) unblockSend() {
-	m.RecvSeq++
+func (m *muxServer) unblockSend(seq uint32) {
+	if !m.checkSeq(seq) {
+		return
+	}
 	select {
 	case m.outBlock <- struct{}{}:
 	default:
@@ -231,7 +237,6 @@ func (m *muxServer) disconnect(msg string) {
 	} else {
 		m.send(message{Op: OpDisconnectClientMux, MuxID: m.ID})
 	}
-	m.close()
 	m.parent.deleteMux(true, m.ID)
 }
 
@@ -252,5 +257,9 @@ func (m *muxServer) close() {
 	if m.inbound != nil {
 		close(m.inbound)
 		m.inbound = nil
+	}
+	if m.outBlock != nil {
+		close(m.outBlock)
+		m.outBlock = nil
 	}
 }
