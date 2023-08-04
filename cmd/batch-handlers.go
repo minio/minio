@@ -319,17 +319,17 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 		tgtObject = path.Join(r.Target.Prefix, srcObjInfo.Name)
 	}
 
-	versioned := globalBucketVersioningSys.PrefixEnabled(tgtBucket, tgtObject)
-	versionSuspended := globalBucketVersioningSys.PrefixSuspended(tgtBucket, tgtObject)
 	versionID := srcObjInfo.VersionID
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		versionID = ""
 	}
 	if srcObjInfo.DeleteMarker {
 		_, err := api.DeleteObject(ctx, tgtBucket, tgtObject, ObjectOptions{
-			VersionID:          versionID,
-			VersionSuspended:   versionSuspended,
-			Versioned:          versioned,
+			VersionID: versionID,
+			// Since we are preserving a delete marker, we have to make sure this is always true.
+			// regardless of the current configuration of the bucket we must preserve all versions
+			// on the pool being batch replicated from source.
+			Versioned:          true,
 			MTime:              srcObjInfo.ModTime,
 			DeleteMarker:       srcObjInfo.DeleteMarker,
 			ReplicationRequest: true,
@@ -338,12 +338,10 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	}
 
 	opts := ObjectOptions{
-		VersionID:        srcObjInfo.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
-		MTime:            srcObjInfo.ModTime,
-		PreserveETag:     srcObjInfo.ETag,
-		UserDefined:      srcObjInfo.UserDefined,
+		VersionID:    srcObjInfo.VersionID,
+		MTime:        srcObjInfo.ModTime,
+		PreserveETag: srcObjInfo.ETag,
+		UserDefined:  srcObjInfo.UserDefined,
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		opts.VersionID = ""
