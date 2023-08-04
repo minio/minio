@@ -1491,7 +1491,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	var uploadedParts []minio.CompletePart
 	// new multipart must not set mtime as it may lead to erroneous cleanups at various intervals.
 	opts.Internal.SourceMTime = time.Time{} // this value is saved properly in CompleteMultipartUpload()
-	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
+	nctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	uploadID, err := c.NewMultipartUpload(nctx, bucket, object, opts)
 	if err != nil {
 		return err
 	}
@@ -1501,12 +1503,15 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			// block and abort remote upload upon failure.
 			attempts := 1
 			for attempts <= 3 {
-				aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID)
+				actx, acancel := context.WithTimeout(ctx, time.Minute)
+				aerr := c.AbortMultipartUpload(actx, bucket, object, uploadID)
 				if aerr == nil {
+					acancel()
 					return
 				}
-				logger.LogIf(ctx,
-					fmt.Errorf("Trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
+				acancel()
+				logger.LogIf(actx,
+					fmt.Errorf("trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
 						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
 				attempts++
 				time.Sleep(time.Second)
@@ -1541,7 +1546,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer ccancel()
+	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
