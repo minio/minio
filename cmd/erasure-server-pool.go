@@ -1254,6 +1254,11 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		return loi, err
 	}
 	defer merged.truncate(0) // Release when returning
+
+	if contextCanceled(ctx) {
+		return ListObjectVersionsInfo{}, ctx.Err()
+	}
+
 	if versionMarker == "" {
 		o := listPathOptions{Marker: marker}
 		// If we are not looking for a specific version skip it.
@@ -1341,6 +1346,10 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
+
+		if contextCanceled(ctx) {
+			return ListObjectsInfo{}, ctx.Err()
+		}
 	}
 
 	merged, err := z.listPath(ctx, &opts)
@@ -1353,6 +1362,10 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 
 	merged.forwardPast(opts.Marker)
 	defer merged.truncate(0) // Release when returning
+
+	if contextCanceled(ctx) {
+		return ListObjectsInfo{}, ctx.Err()
+	}
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	objects := merged.fileInfos(bucket, prefix, delimiter)
