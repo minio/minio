@@ -1565,7 +1565,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 	}
 
 	job := &BatchJobRequest{}
-	if err = yaml.Unmarshal(buf, job); err != nil {
+	if err = yaml.UnmarshalStrict(buf, job); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
