@@ -2953,7 +2953,7 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 					continue
 				}
 				for k, v := range metric.Histogram {
-					out <- prometheus.MustNewConstMetric(
+					pmetric, err := prometheus.NewConstMetric(
 						prometheus.NewDesc(
 							prometheus.BuildFQName(string(metric.Description.Namespace),
 								string(metric.Description.Subsystem),
@@ -2965,6 +2965,11 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 						prometheus.GaugeValue,
 						float64(v),
 						append(values, k)...)
+					if err != nil {
+						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), "bucket-metrics-histogram")
+					} else {
+						out <- pmetric
+					}
 				}
 				continue
 			}
@@ -2972,7 +2977,7 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 			if metric.Description.Type == counterMetric {
 				metricType = prometheus.CounterValue
 			}
-			toPost := prometheus.MustNewConstMetric(
+			pmetric, err := prometheus.NewConstMetric(
 				prometheus.NewDesc(
 					prometheus.BuildFQName(string(metric.Description.Namespace),
 						string(metric.Description.Subsystem),
@@ -2984,7 +2989,11 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 				metricType,
 				metric.Value,
 				values...)
-			out <- toPost
+			if err != nil {
+				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "bucket-metrics")
+			} else {
+				out <- pmetric
+			}
 		}
 	}
 
@@ -3024,7 +3033,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 					continue
 				}
 				for k, v := range metric.Histogram {
-					out <- prometheus.MustNewConstMetric(
+					pmetric, err := prometheus.NewConstMetric(
 						prometheus.NewDesc(
 							prometheus.BuildFQName(string(metric.Description.Namespace),
 								string(metric.Description.Subsystem),
@@ -3036,6 +3045,11 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 						prometheus.GaugeValue,
 						float64(v),
 						append(values, k)...)
+					if err != nil {
+						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
+					} else {
+						out <- pmetric
+					}
 				}
 				continue
 			}
@@ -3043,7 +3057,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 			if metric.Description.Type == counterMetric {
 				metricType = prometheus.CounterValue
 			}
-			toPost := prometheus.MustNewConstMetric(
+			pmetric, err := prometheus.NewConstMetric(
 				prometheus.NewDesc(
 					prometheus.BuildFQName(string(metric.Description.Namespace),
 						string(metric.Description.Subsystem),
@@ -3055,7 +3069,11 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				metricType,
 				metric.Value,
 				values...)
-			out <- toPost
+			if err != nil {
+				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
+			} else {
+				out <- pmetric
+			}
 		}
 	}
 

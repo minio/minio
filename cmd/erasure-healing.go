@@ -661,6 +661,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			partChecksums := latestMeta.Parts[partIndex].Checksums
 			tillOffset := erasure.ShardFileOffset(0, partSize, partSize)
 			readers := make([]io.ReaderAt, len(latestDisks))
+			prefer := make([]bool, len(latestDisks))
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
 			for i, disk := range latestDisks {
 				if disk == OfflineDisk {
@@ -670,6 +671,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				partPath := pathJoin(object, srcDataDir, fmt.Sprintf("part.%d", partNumber))
 				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
 					checksumInfo.Hash, erasure.ShardSize())
+				prefer[i] = disk.Hostname() == ""
+
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -689,7 +692,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			// Heal each part. erasure.Heal() will write the healed
 			// part to .minio/tmp/uuid/ which needs to be renamed
 			// later to the final location.
-			err = erasure.Heal(ctx, writers, readers, partSize)
+			err = erasure.Heal(ctx, writers, readers, partSize, prefer)
 			closeBitrotReaders(readers)
 			closeBitrotWriters(writers)
 			if err != nil {

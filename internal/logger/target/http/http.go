@@ -41,7 +41,7 @@ import (
 
 const (
 	// Timeout for the webhook http call
-	webhookCallTimeout = 5 * time.Second
+	webhookCallTimeout = 3 * time.Second
 
 	// maxWorkers is the maximum number of concurrent http loggers
 	maxWorkers = 16
@@ -61,7 +61,7 @@ type Config struct {
 	Enabled    bool              `json:"enabled"`
 	Name       string            `json:"name"`
 	UserAgent  string            `json:"userAgent"`
-	Endpoint   string            `json:"endpoint"`
+	Endpoint   *xnet.URL         `json:"endpoint"`
 	AuthToken  string            `json:"authToken"`
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
@@ -119,7 +119,7 @@ func (h *Target) Name() string {
 
 // Endpoint returns the backend endpoint
 func (h *Target) Endpoint() string {
-	return h.config.Endpoint
+	return h.config.Endpoint.String()
 }
 
 func (h *Target) String() string {
@@ -128,8 +128,8 @@ func (h *Target) String() string {
 
 // IsOnline returns true if the target is reachable.
 func (h *Target) IsOnline(ctx context.Context) bool {
-	if err := h.checkAlive(ctx); err != nil {
-		return !xnet.IsNetworkOrHostDown(err, false)
+	if err := h.send(ctx, []byte(`{}`), webhookCallTimeout); err != nil {
+		return !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnRefusedErr(err)
 	}
 	return true
 }
@@ -146,11 +146,6 @@ func (h *Target) Stats() types.TargetStats {
 	}
 
 	return stats
-}
-
-// This will check if we can reach the remote.
-func (h *Target) checkAlive(ctx context.Context) (err error) {
-	return h.send(ctx, []byte(`{}`), webhookCallTimeout)
 }
 
 // Init validate and initialize the http target
@@ -224,9 +219,9 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		h.config.Endpoint, bytes.NewReader(payload))
+		h.Endpoint(), bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("invalid configuration for '%s'; %v", h.config.Endpoint, err)
+		return fmt.Errorf("invalid configuration for '%s'; %v", h.Endpoint(), err)
 	}
 	req.Header.Set(xhttp.ContentType, "application/json")
 	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
@@ -242,7 +237,7 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err)
+		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.Endpoint(), err)
 	}
 
 	// Drain any response.
@@ -253,9 +248,9 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 		// accepted HTTP status codes.
 		return nil
 	case http.StatusForbidden:
-		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status)
+		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.Endpoint(), resp.Status)
 	default:
-		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status)
+		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 	}
 }
 
@@ -282,7 +277,7 @@ func (h *Target) logEntry(ctx context.Context, entry interface{}) {
 		}
 		tries++
 		if err := h.send(ctx, logJSON, webhookCallTimeout); err != nil {
-			h.config.LogOnce(ctx, err, h.config.Endpoint)
+			h.config.LogOnce(ctx, err, h.Endpoint())
 			atomic.AddInt64(&h.failedMessages, 1)
 		} else {
 			return

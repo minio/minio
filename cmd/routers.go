@@ -85,7 +85,7 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add Admin router, all APIs are enabled in server mode.
 	registerAdminRouter(router, true)
 
-	// Add healthcheck router
+	// Add healthCheck router
 	registerHealthCheckRouter(router)
 
 	// Add server metrics router

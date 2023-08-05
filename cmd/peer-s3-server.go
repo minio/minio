@@ -243,13 +243,6 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 	}
 
 	errs := g.Wait()
-
-	for _, err := range errs {
-		if err != nil && !IsErr(err, bucketOpIgnoredErrs...) {
-			logger.LogIf(ctx, err)
-		}
-	}
-
 	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
 }
 

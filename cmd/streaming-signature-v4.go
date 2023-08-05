@@ -443,6 +443,9 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 
 // readTrailers will read all trailers and populate cr.trailers with actual values.
 func (cr *s3ChunkedReader) readTrailers() error {
+	if cr.debug {
+		fmt.Printf("pre trailer sig: %s\n", cr.seedSignature)
+	}
 	var valueBuffer bytes.Buffer
 	// Read value
 	for {
@@ -506,6 +509,16 @@ func (cr *s3ChunkedReader) readTrailers() error {
 			fmt.Printf("prefix, want prefix %q, got %q", "x-amz-trailer-signature:", string(sig))
 		}
 		return errMalformedEncoding
+	}
+
+	// TODO: It seems like we may have to be prepared to rewrite and sort trailing headers:
+	// https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html
+
+	// Any value must end with a newline.
+	// Not all clients send that.
+	trailerRaw := valueBuffer.Bytes()
+	if len(trailerRaw) > 0 && trailerRaw[len(trailerRaw)-1] != '\n' {
+		valueBuffer.Write([]byte{'\n'})
 	}
 	sig = sig[len("x-amz-trailer-signature:"):]
 	sig = bytes.TrimSpace(sig)

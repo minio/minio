@@ -28,7 +28,7 @@ type tierMemJournal struct {
 	entries chan jentry
 }
 
-func newTierMemJoural(nevents int) *tierMemJournal {
+func newTierMemJournal(nevents int) *tierMemJournal {
 	return &tierMemJournal{
 		entries: make(chan jentry, nevents),
 	}

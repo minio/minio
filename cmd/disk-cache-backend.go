@@ -231,7 +231,7 @@ func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCa
 // stops when disk usage drops to 56%
 func (c *diskCache) diskUsageLow() bool {
 	gcStopPct := c.quotaPct * c.lowWatermark / 100
-	di, err := disk.GetInfo(c.dir)
+	di, err := disk.GetInfo(c.dir, false)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
@@ -254,7 +254,7 @@ func (c *diskCache) diskSpaceAvailable(size int64) bool {
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	gcTriggerPct := c.quotaPct * c.highWatermark / 100
-	di, err := disk.GetInfo(c.dir)
+	di, err := disk.GetInfo(c.dir, false)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return false
@@ -288,7 +288,7 @@ func (c *diskCache) queueGC() {
 // toClear returns how many bytes should be cleared to reach the low watermark quota.
 // returns 0 if below quota.
 func (c *diskCache) toClear() uint64 {
-	di, err := disk.GetInfo(c.dir)
+	di, err := disk.GetInfo(c.dir, false)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)

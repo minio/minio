@@ -115,6 +115,7 @@ type xlStorage struct {
 	formatData []byte
 
 	// mutex to prevent concurrent read operations overloading walks.
+	rotational bool
 	walkMu     *sync.Mutex
 	walkReadMu *sync.Mutex
 }
@@ -216,7 +217,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return nil, err
 	}
 
-	info, err := disk.GetInfo(path)
+	info, err := disk.GetInfo(path, true)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +249,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 
 	// We stagger listings only on HDDs.
 	if info.Rotational == nil || *info.Rotational {
+		s.rotational = true
 		s.walkMu = &sync.Mutex{}
 		s.walkReadMu = &sync.Mutex{}
 	}
@@ -306,7 +308,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 // getDiskInfo returns given disk information.
 func getDiskInfo(drivePath string) (di disk.Info, err error) {
 	if err = checkPathLength(drivePath); err == nil {
-		di, err = disk.GetInfo(drivePath)
+		di, err = disk.GetInfo(drivePath, false)
 	}
 	switch {
 	case osIsNotExist(err):
@@ -439,7 +441,12 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 }
 
 func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, error) {
-	buf, _, err := s.readMetadataWithDMTime(ctx, itemPath)
+	var buf []byte
+	err := xioutil.NewDeadlineWorker(diskMaxTimeout).Run(func() error {
+		var rerr error
+		buf, _, rerr = s.readMetadataWithDMTime(ctx, itemPath)
+		return rerr
+	})
 	return buf, err
 }
 
@@ -627,7 +634,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -648,6 +655,7 @@ func (s *xlStorage) DiskInfo(_ context.Context) (info DiskInfo, err error) {
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
+			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
@@ -954,16 +962,21 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err != errFileNotFound {
+		if !errors.Is(err, errFileNotFound) {
 			return err
 		}
 		metaDataPoolPut(buf) // Never used, return it
 
-		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
-		if err != nil {
-			return err
+		s.RLock()
+		legacy := s.formatLegacy
+		s.RUnlock()
+		if legacy {
+			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
+			if err != nil {
+				return err
+			}
+			legacyJSON = true
 		}
-		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
@@ -1096,7 +1109,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	var legacyJSON bool
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err != errFileNotFound {
+		if !errors.Is(err, errFileNotFound) {
 			return err
 		}
 		metaDataPoolPut(buf) // Never used, return it
@@ -1105,14 +1118,19 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return s.WriteMetadata(ctx, volume, path, fi)
 		}
 
-		buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
-		if err != nil {
-			if err == errFileNotFound && fi.VersionID != "" {
-				return errFileVersionNotFound
+		s.RLock()
+		legacy := s.formatLegacy
+		s.RUnlock()
+		if legacy {
+			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFileV1))
+			if err != nil {
+				if errors.Is(err, errFileNotFound) && fi.VersionID != "" {
+					return errFileVersionNotFound
+				}
+				return err
 			}
-			return err
+			legacyJSON = true
 		}
-		legacyJSON = true
 	}
 
 	if len(buf) == 0 {
@@ -2193,6 +2211,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			errFileVersionNotFound,
 			errDiskNotFound,
 			errUnformattedDisk,
+			errMaxVersionsExceeded,
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.

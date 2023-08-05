@@ -207,7 +207,7 @@ func getRedirectLocation(r *http.Request) *xnet.URL {
 }
 
 // guessIsHealthCheckReq - returns true if incoming request looks
-// like healthcheck request
+// like healthCheck request
 func guessIsHealthCheckReq(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -443,6 +443,11 @@ func setRequestValidityMiddleware(h http.Handler) http.Handler {
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if origin := w.Header().Get("Access-Control-Allow-Origin"); origin == "null" {
+			// This is a workaround change to ensure that "Origin: null"
+			// incoming request to a response back as "*" instead of "null"
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		if globalDNSConfig == nil || !globalBucketFederation ||
 			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {

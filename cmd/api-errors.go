@@ -190,6 +190,7 @@ const (
 	ErrMaximumExpires
 	ErrSlowDownRead
 	ErrSlowDownWrite
+	ErrMaxVersionsExceeded
 	ErrInvalidPrefixMarker
 	ErrBadRequest
 	ErrKeyTooLongError
@@ -856,6 +857,11 @@ var errorCodes = errorCodeMap{
 		Code:           "SlowDownWrite",
 		Description:    "Resource requested is unwritable, please reduce your request rate",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrMaxVersionsExceeded: {
+		Code:           "MaxVersionsExceeded",
+		Description:    "You've exceeded the limit on the number of versions you can create on this object",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPrefixMarker: {
 		Code:           "InvalidPrefixMarker",
@@ -2110,6 +2116,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDownRead
 	case errErasureWriteQuorum:
 		apiErr = ErrSlowDownWrite
+	case errMaxVersionsExceeded:
+		apiErr = ErrMaxVersionsExceeded
 	// SSE errors
 	case errInvalidEncryptionParameters:
 		apiErr = ErrInvalidEncryptionParameters

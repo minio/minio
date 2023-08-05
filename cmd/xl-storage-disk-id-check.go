@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -176,7 +177,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 	for i := range xl.apiLatencies[:] {
 		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
 	}
-	if healthCheck {
+	if healthCheck && diskActiveMonitoring {
 		go xl.monitorDiskWritable(xl.diskCtx)
 	}
 	return &xl
@@ -266,7 +267,7 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 	return errDiskNotFound
 }
 
-func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
 	if contextCanceled(ctx) {
 		return DiskInfo{}, ctx.Err()
 	}
@@ -274,17 +275,22 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	si := p.updateStorageMetrics(storageMetricDiskInfo)
 	defer si(&err)
 
+	defer func() {
+		if metrics {
+			info.Metrics = p.getMetrics()
+		}
+	}()
+
 	if p.health.isFaulty() {
 		// if disk is already faulty return faulty for 'mc admin info' output and prometheus alerts.
 		return info, errFaultyDisk
 	}
 
-	info, err = p.storage.DiskInfo(ctx)
+	info, err = p.storage.DiskInfo(ctx, metrics)
 	if err != nil {
 		return info, err
 	}
 
-	info.Metrics = p.getMetrics()
 	// check cached diskID against backend
 	// only if its non-empty.
 	if p.diskID != "" && p.diskID != info.ID {
@@ -715,6 +721,9 @@ var diskStartChecking = 32
 // offline under active monitoring.
 var diskMaxTimeout = 2 * time.Minute
 
+// diskActiveMonitoring indicates if we have enabled "active" disk monitoring
+var diskActiveMonitoring = true
+
 func init() {
 	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "")
 	if s != "" {
@@ -724,6 +733,7 @@ func init() {
 			diskMaxConcurrent = 512
 		}
 	}
+
 	d := env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
 	if d != "" {
 		timeoutOperation, _ := time.ParseDuration(d)
@@ -733,6 +743,8 @@ func init() {
 			diskMaxTimeout = timeoutOperation
 		}
 	}
+
+	diskActiveMonitoring = env.Get("_MINIO_DISK_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn
 
 	diskStartChecking = 16 + diskMaxConcurrent/8
 	if diskStartChecking > diskMaxConcurrent {
@@ -850,10 +862,9 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 			p.health.tokens <- struct{}{}
 			if errp != nil {
 				err := *errp
-				if err != nil && !errors.Is(err, io.EOF) {
-					return
+				if err == nil || errors.Is(err, io.EOF) {
+					p.health.logSuccess()
 				}
-				p.health.logSuccess()
 			}
 			si(errp)
 		})
@@ -994,41 +1005,48 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 	toWrite := []byte{xioutil.DirectioAlignSize + 1: 42}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for range t.C {
+	monitor := func() bool {
 		if contextCanceled(ctx) {
-			break
+			return false
 		}
+
 		if atomic.LoadInt32(&p.health.status) != diskHealthOK {
-			continue
+			return true
 		}
+
 		if time.Since(time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess))) < skipIfSuccessBefore {
 			// We recently saw a success - no need to check.
-			continue
+			return true
 		}
+
 		goOffline := func(err error, spent time.Duration) {
 			if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
 				logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
 				go p.monitorDiskStatus(spent)
 			}
 		}
+
 		// Offset checks a bit.
 		time.Sleep(time.Duration(rng.Int63n(int64(1 * time.Second))))
-		done := make(chan struct{})
+
+		dctx, dcancel := context.WithCancel(ctx)
 		started := time.Now()
 		go func() {
 			timeout := time.NewTimer(diskMaxTimeout)
 			select {
-			case <-timeout.C:
-				spent := time.Since(started)
-				goOffline(fmt.Errorf("unable to write+read for %v", spent.Round(time.Millisecond)), spent)
-			case <-done:
+			case <-dctx.Done():
 				if !timeout.Stop() {
 					<-timeout.C
 				}
+			case <-timeout.C:
+				spent := time.Since(started)
+				goOffline(fmt.Errorf("unable to write+read for %v", spent.Round(time.Millisecond)), spent)
 			}
 		}()
+
 		func() {
-			defer close(done)
+			defer dcancel()
+
 			err := p.storage.WriteAll(ctx, minioMetaTmpBucket, fn, toWrite)
 			if err != nil {
 				if osErrToFileErr(err) == errFaultyDisk {
@@ -1044,6 +1062,20 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 				return
 			}
 		}()
+
+		// Continue to monitor
+		return true
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if !monitor() {
+				return
+			}
+		}
 	}
 }
 
