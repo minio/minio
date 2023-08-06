@@ -1214,7 +1214,7 @@ func getMinioProcMetrics() *MetricsGroup {
 		if runtime.GOOS == "windows" {
 			return nil
 		}
-		metrics = make([]Metric, 0, 20)
+
 		p, err := procfs.Self()
 		if err != nil {
 			logger.LogOnceIf(ctx, err, string(nodeMetricNamespace))
@@ -1226,6 +1226,8 @@ func getMinioProcMetrics() *MetricsGroup {
 		io, _ := p.IO()
 		stat, _ := p.Stat()
 		startTime, _ := stat.StartTime()
+
+		metrics = make([]Metric, 0, 20)
 
 		if openFDs > 0 {
 			metrics = append(metrics,
@@ -1794,7 +1796,6 @@ func getMinioHealingMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
-		metrics = make([]Metric, 0, 5)
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if !exists {
 			return
@@ -1804,6 +1805,7 @@ func getMinioHealingMetrics() *MetricsGroup {
 			return
 		}
 
+		metrics = make([]Metric, 0, 5)
 		metrics = append(metrics, Metric{
 			Description: getHealLastActivityTimeMD(),
 			Value:       float64(time.Since(bgSeq.lastHealActivity)),
