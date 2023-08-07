@@ -456,7 +456,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 		errFatal(err)
 		clientCanceled := make(chan time.Time, 1)
 		err = nil
-		go func() {
+		go func(t *testing.T) {
 			for resp := range st.Responses {
 				t.Log("got resp:", string(resp.Msg), "err:", resp.Err)
 				if err != nil {
@@ -465,9 +465,9 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 				}
 				err = resp.Err
 			}
-			clientCanceled <- time.Now()
 			t.Log("Client Context canceled")
-		}()
+			clientCanceled <- time.Now()
+		}(t)
 		start := time.Now()
 		cancel()
 		<-serverCanceled

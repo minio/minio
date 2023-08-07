@@ -39,6 +39,7 @@ type muxServer struct {
 	inbound          chan []byte
 	parent           *Connection
 	sendMu           sync.Mutex
+	recvMu           sync.Mutex
 	outBlock         chan struct{}
 }
 
@@ -95,14 +96,14 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
-		go func() {
+		go func(inbound <-chan []byte) {
 			// Send unblocks when we have delivered the message to the handler.
-			for in := range m.inbound {
+			for in := range inbound {
 				handlerIn <- in
 				m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
 			}
 			close(handlerIn)
-		}()
+		}(m.inbound)
 	}
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
@@ -123,7 +124,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 		// handlerErr is guarded by 'send' channel.
 		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
 	}()
-	go func() {
+	go func(outBlock <-chan struct{}) {
 		defer m.parent.deleteMux(true, m.ID)
 		for {
 			// Process outgoing message.
@@ -134,7 +135,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 			case <-ctx.Done():
 				return
 			}
-			<-m.outBlock
+			<-outBlock
 			msg := message{
 				MuxID: m.ID,
 				Op:    OpMuxServerMsg,
@@ -156,7 +157,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler State
 			msg.setZeroPayloadFlag()
 			m.send(msg)
 		}
-	}()
+	}(m.outBlock)
 
 	return &m
 }
@@ -178,6 +179,8 @@ func (m *muxServer) message(msg message) {
 	if debugPrint {
 		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
 	}
+	m.recvMu.Lock()
+	defer m.recvMu.Unlock()
 	if cap(m.inbound) == 0 {
 		m.disconnect("did not expect inbound message")
 		return
@@ -208,6 +211,12 @@ func (m *muxServer) message(msg message) {
 
 func (m *muxServer) unblockSend(seq uint32) {
 	if !m.checkSeq(seq) {
+		return
+	}
+	m.recvMu.Lock()
+	defer m.recvMu.Unlock()
+	if m.outBlock == nil {
+		// Closed
 		return
 	}
 	select {
@@ -254,6 +263,8 @@ func (m *muxServer) send(msg message) {
 
 func (m *muxServer) close() {
 	m.cancel()
+	m.recvMu.Lock()
+	defer m.recvMu.Unlock()
 	if m.inbound != nil {
 		close(m.inbound)
 		m.inbound = nil

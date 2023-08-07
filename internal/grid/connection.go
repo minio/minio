@@ -865,7 +865,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 			debug.PrintStack()
 		}
-		atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError)
+		if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
+			c.connChange.Broadcast()
+		}
+
 		conn.Close()
 		c.connWg.Done()
 	}()
@@ -877,8 +880,17 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if debugPrint {
 				// fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
 			}
-			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
-				return
+			for atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				if debugPrint {
+					fmt.Println("Waiting for connection")
+				}
+				c.connChange.L.Lock()
+				c.connChange.Wait()
+				c.connChange.L.Unlock()
+				select {
+				case <-ctx.Done():
+					return
+				}
 			}
 
 			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
@@ -892,13 +904,18 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 	if incoming {
-		fmt.Println("deleteMux: disconnect incoming mux", muxID)
+		if debugPrint {
+			fmt.Println("deleteMux: disconnect incoming mux", muxID)
+		}
 		v, loaded := c.inStream.LoadAndDelete(muxID)
 		if loaded && v != nil {
 			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: muxID}, nil))
 			v.close()
 		}
 	} else {
+		if debugPrint {
+			fmt.Println("deleteMux: disconnect outgoing mux", muxID)
+		}
 		v, loaded := c.outgoing.LoadAndDelete(muxID)
 		if loaded && v != nil {
 			v.close()
