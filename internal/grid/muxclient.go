@@ -44,6 +44,8 @@ type MuxClient struct {
 	singleResp       bool
 	closed           bool
 	stateful         bool
+	acked            bool
+	init             bool
 	deadline         time.Duration
 	outBlock         chan struct{}
 }
@@ -71,6 +73,10 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 // roundtrip performs a roundtrip, returning the first response.
 // This cannot be used concurrently.
 func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
+	if m.init {
+		return nil, errors.New("mux client already used")
+	}
+	m.init = true
 	m.singleResp = true
 	msg := message{
 		Op:         OpRequest,
@@ -132,7 +138,13 @@ func (m *MuxClient) sendLocked(msg message) error {
 
 // RequestStateless will send a single payload request and stream back results.
 // req may not be read/writen to after calling.
+// TODO: Probably unexport this.
 func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
+	if m.init {
+		out <- Response{Err: errors.New("mux client already used")}
+	}
+	m.init = true
+
 	// Try to grab an initial block.
 	m.singleResp = false
 	msg := message{
@@ -159,15 +171,16 @@ func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 // RequestStream will send a single payload request and stream back results.
 // 'requests' can be nil, in which case only req is sent as input.
 // It will however take less resources.
+// TODO: Probably unexport this.
 func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan Response) (*Stream, error) {
+	if m.init {
+		return nil, errors.New("mux client already used")
+	}
+	m.init = true
 	// Try to grab an initial block.
 	m.singleResp = false
 	if cap(requests) > 0 {
-		available := cap(requests)
-		m.outBlock = make(chan struct{}, available)
-		for i := 0; i < available; i++ {
-			m.outBlock <- struct{}{}
-		}
+		m.outBlock = make(chan struct{}, cap(requests))
 	}
 	msg := message{
 		Op:         OpConnectMux,
@@ -197,6 +210,7 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if requests == nil {
 		go func() {
 			defer close(responseCh)
+			defer m.parent.deleteMux(false, m.MuxID)
 			for {
 				select {
 				case <-m.ctx.Done():
@@ -225,11 +239,12 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 				}
 			}
 		}()
-		return &Stream{Responses: responseCh, Requests: nil}, nil
+		return &Stream{Responses: responseCh, Requests: nil, ctx: m.ctx}, nil
 	}
 
 	// Deliver responses and send unblocks back to the server.
 	go func() {
+		defer m.parent.deleteMux(false, m.MuxID)
 		defer close(responseCh)
 		for resp := range responses {
 			responseCh <- resp
@@ -306,7 +321,7 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 		}
 	}()
 
-	return &Stream{Responses: responseCh, Requests: requests}, nil
+	return &Stream{Responses: responseCh, Requests: requests, ctx: m.ctx}, nil
 }
 
 // checkSeq will check if sequence number is correct and increment it by 1.
@@ -352,7 +367,14 @@ func (m *MuxClient) ack(seq uint32) {
 	if !m.checkSeq(seq) {
 		return
 	}
-	// TODO:
+	if m.acked || m.outBlock == nil {
+		return
+	}
+	available := cap(m.outBlock)
+	for i := 0; i < available; i++ {
+		m.outBlock <- struct{}{}
+	}
+	m.acked = true
 }
 
 func (m *MuxClient) unblockSend(seq uint32) {

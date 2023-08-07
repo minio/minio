@@ -27,7 +27,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -289,12 +288,12 @@ func TestStreamSuite(t *testing.T) {
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
 
-	conn := local.Connection(remoteHost)
-	err = conn.WaitForConnect(context.Background())
+	connLocalToRemote := local.Connection(remoteHost)
+	err = connLocalToRemote.WaitForConnect(context.Background())
 	errFatal(err)
 
-	conn = remote.Connection(localHost)
-	err = conn.WaitForConnect(context.Background())
+	connRemoteLocal := remote.Connection(localHost)
+	err = connRemoteLocal.WaitForConnect(context.Background())
 	errFatal(err)
 	defer func() {
 		localServer.Close()
@@ -304,20 +303,33 @@ func TestStreamSuite(t *testing.T) {
 	t.Run("testStreamRoundtrip", func(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamRoundtrip(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
 	})
 	t.Run("testStreamCancel", func(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamCancel(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
 	})
 	t.Run("testStreamDeadline", func(t *testing.T) {
 		defer timeout(5 * time.Second)()
 		testStreamDeadline(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
 	})
 	t.Run("testServerOutCongestion", func(t *testing.T) {
 		defer timeout(5 * time.Minute)()
 		testServerOutCongestion(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
 	})
-	testServerInCongestion(t, local, remote)
+	t.Run("testServerInCongestion", func(t *testing.T) {
+		defer timeout(5 * time.Minute)()
+		testServerInCongestion(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
+	})
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -382,7 +394,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 		}
 		if n == 10 {
 			close(stream.Requests)
-			break
+			continue
 		}
 		n++
 		t.Log("sending new client request")
@@ -641,91 +653,88 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 }
 
 func testServerInCongestion(t *testing.T, local, remote *Manager) {
-	t.Run("testServerInCongestion", func(t *testing.T) {
-		defer timeout(5 * time.Minute)()
-		defer testlogger.T.SetErrorTB(t)()
-		errFatal := func(err error) {
-			t.Helper()
-			if err != nil {
-				t.Fatal(err)
-			}
+	defer testlogger.T.SetErrorTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
 		}
+	}
 
-		// We fake a local and remote server.
-		remoteHost := remote.HostName()
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
 
-		// 1: Echo
-		processHandler := make(chan struct{})
-		register := func(manager *Manager) {
-			errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
-				Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
-					// Block incoming requests.
-					var n byte
-					<-processHandler
-					for {
-						select {
-						case in, ok := <-request:
-							if !ok {
-								return nil
-							}
-							if in[0] != n {
-								return NewRemoteErr(fmt.Sprintf("expected incoming %d, got %d", n, in[0]))
-							}
-							n++
-							resp <- append([]byte{}, in...)
-						case <-ctx.Done():
-							return NewRemoteErr(ctx.Err().Error())
+	// 1: Echo
+	processHandler := make(chan struct{})
+	register := func(manager *Manager) {
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				// Block incoming requests.
+				var n byte
+				<-processHandler
+				for {
+					select {
+					case in, ok := <-request:
+						if !ok {
+							return nil
 						}
+						if in[0] != n {
+							return NewRemoteErr(fmt.Sprintf("expected incoming %d, got %d", n, in[0]))
+						}
+						n++
+						resp <- append([]byte{}, in...)
+					case <-ctx.Done():
+						return NewRemoteErr(ctx.Err().Error())
 					}
-				},
-				OutCapacity: 5,
-				InCapacity:  5,
-			}))
-			errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
-				// Simple roundtrip
-				return append([]byte{}, payload...), nil
-			}))
+				}
+			},
+			OutCapacity: 5,
+			InCapacity:  5,
+		}))
+		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+			// Simple roundtrip
+			return append([]byte{}, payload...), nil
+		}))
+	}
+	register(local)
+	register(remote)
+
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+	errFatal(err)
+
+	// Start sending requests.
+	go func() {
+		for i := byte(0); i < 100; i++ {
+			st.Requests <- []byte{i}
 		}
-		register(local)
-		register(remote)
-
-		remoteConn := local.Connection(remoteHost)
-		const testPayload = "Hello Grid World!"
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+		close(st.Requests)
+	}()
+	// Now do 100 other requests to ensure that the server doesn't block.
+	for i := 0; i < 100; i++ {
+		_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
 		errFatal(err)
+	}
+	// Start processing requests.
+	close(processHandler)
 
-		// Start sending requests.
-		go func() {
-			for i := byte(0); i < 100; i++ {
-				st.Requests <- []byte{i}
-			}
-			close(st.Requests)
-		}()
-		// Now do 100 other requests to ensure that the server doesn't block.
-		for i := 0; i < 100; i++ {
-			_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
-			errFatal(err)
+	// Drain responses
+	got := 0
+	for resp := range st.Responses {
+		t.Log("got response", resp)
+		errFatal(resp.Err)
+		if resp.Msg[0] != byte(got) {
+			t.Error("expected response", got, "got", resp.Msg[0])
 		}
-		// Start processing requests.
-		close(processHandler)
-
-		// Drain responses
-		got := 0
-		for resp := range st.Responses {
-			t.Log("got response", resp)
-			errFatal(resp.Err)
-			if resp.Msg[0] != byte(got) {
-				t.Error("expected response", got, "got", resp.Msg[0])
-			}
-			got++
-		}
-		if got != 100 {
-			t.Error("expected 100 responses, got", got)
-		}
-	})
+		got++
+	}
+	if got != 100 {
+		t.Error("expected 100 responses, got", got)
+	}
 }
 
 func timeout(after time.Duration) (cancel func()) {
@@ -747,19 +756,23 @@ func timeout(after time.Duration) (cancel func()) {
 	}
 }
 
-func callerFnName() string {
-	pc, _, _, _ := runtime.Caller(1)
-
-	// returns a string of the form "path/to/package.funcName"
-	longFn := runtime.FuncForPC(pc).Name()
-
-	// discard package name
-	nameEnd := strings.Index(longFn, "/") + 1
-	fn := longFn[nameEnd:]
-
-	// discard '.' between package and function name
-	nameEnd2 := strings.Index(fn, ".")
-	fn = fn[nameEnd2+1:]
-
-	return fn
+func assertNoActive(t *testing.T, c *Connection) {
+	t.Helper()
+	stats := c.Stats()
+	if stats.IncomingStreams != 0 {
+		var found []uint64
+		c.inStream.Range(func(key uint64, value *muxServer) bool {
+			found = append(found, key)
+			return true
+		})
+		t.Errorf("expected no active streams, got %d incoming: %v", stats.IncomingStreams, found)
+	}
+	if stats.OutgoingStreams != 0 {
+		var found []uint64
+		c.outgoing.Range(func(key uint64, value *MuxClient) bool {
+			found = append(found, key)
+			return true
+		})
+		t.Errorf("expected no active streams, got %d outgoing: %v", stats.OutgoingStreams, found)
+	}
 }

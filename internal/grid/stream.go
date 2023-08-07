@@ -17,6 +17,11 @@
 
 package grid
 
+import (
+	"context"
+	"errors"
+)
+
 // A Stream is a two-way stream.
 // All responses *must* be read by the caller.
 // If the call is canceled though the context,
@@ -28,5 +33,21 @@ type Stream struct {
 
 	// Requests sent to the server.
 	// If the handler is defined with 0 incoming capacity this will be nil.
+	// Channel *must* be closed to signal the end of the stream.
+	// If the request context is canceled, the stream will no longer process requests.
 	Requests chan<- []byte
+
+	ctx context.Context
+}
+
+func (s *Stream) Send(b []byte) error {
+	if s.Requests == nil {
+		return errors.New("stream does not accept requests")
+	}
+	select {
+	case s.Requests <- b:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
 }
