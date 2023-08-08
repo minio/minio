@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 //go:generate msgp -file=$GOFILE
@@ -180,6 +182,7 @@ type replicateTargetDecision struct {
 	Synchronous bool   // Synchronous replication configured.
 	Arn         string // ARN of replication target
 	ID          string
+	Tgt         *TargetClient
 }
 
 func (t *replicateTargetDecision) String() string {
@@ -288,7 +291,7 @@ var errInvalidReplicateDecisionFormat = fmt.Errorf("ReplicateDecision has invali
 
 // parse k-v pairs of target ARN to stringified ReplicateTargetDecision delimited by ',' into a
 // ReplicateDecision struct
-func parseReplicateDecision(s string) (r ReplicateDecision, err error) {
+func parseReplicateDecision(ctx context.Context, bucket, s string) (r ReplicateDecision, err error) {
 	r = ReplicateDecision{
 		targetsMap: make(map[string]replicateTargetDecision),
 	}
@@ -317,7 +320,13 @@ func parseReplicateDecision(s string) (r ReplicateDecision, err error) {
 		if err != nil {
 			return r, err
 		}
-		r.targetsMap[slc[0]] = replicateTargetDecision{Replicate: replicate, Synchronous: sync, Arn: tgt[2], ID: tgt[3]}
+		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, slc[0])
+		if tgtClnt == nil {
+			// Skip stale targets if any and log them to be missing atleast once.
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, slc[0]), slc[0])
+			// We save the targetDecision even when its not configured or stale.
+		}
+		r.targetsMap[slc[0]] = replicateTargetDecision{Replicate: replicate, Synchronous: sync, Arn: tgt[2], ID: tgt[3], Tgt: tgtClnt}
 	}
 	return
 }
