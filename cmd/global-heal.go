@@ -192,7 +192,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		tracker.setObject("")
 		tracker.setBucket(bucket)
 		// Heal current bucket again in case if it is failed
-		// in the  being of erasure set healing
+		// in the being of erasure set healing
 		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
@@ -241,7 +241,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 
 		// Collect updates to tracker from concurrent healEntry calls
-		results := make(chan healEntryResult)
+		results := make(chan healEntryResult, 1000)
 		go func() {
 			for res := range results {
 				if res.entryDone {
@@ -255,6 +255,15 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				tracker.updateProgress(res.success, res.bytes)
 			}
 		}()
+
+		send := func(result healEntryResult) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			case results <- result:
+				return true
+			}
+		}
 
 		// Note: updates from healEntry to tracker must be sent on results channel.
 		healEntry := func(bucket string, entry metaCacheEntry) {
@@ -302,12 +311,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					result = healEntrySuccess(0)
 				}
 
-				select {
-				case <-ctx.Done():
-					return
-				case results <- result:
-				}
-
+				send(result)
 				return
 			}
 
@@ -342,10 +346,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				}
 				bgSeq.logHeal(madmin.HealItemObject)
 
-				select {
-				case <-ctx.Done():
+				if !send(result) {
 					return
-				case results <- result:
 				}
 			}
 			// All versions resulted in 'ObjectNotFound'

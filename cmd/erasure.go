@@ -309,6 +309,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	}
 	wg.Wait()
 
+	var scanningDisks []StorageAPI
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
 		// this information is used by scanner to skip healing
@@ -317,8 +318,16 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			healing = true
 			continue
 		}
-		newDisks = append(newDisks, disks[i])
+		if !info.Scanning {
+			newDisks = append(newDisks, disks[i])
+		} else {
+			scanningDisks = append(scanningDisks, disks[i])
+		}
 	}
+
+	// Add the disks being currently actively scanned to the
+	// end to avoid them to be consider for listing first.
+	newDisks = append(newDisks, scanningDisks...)
 
 	return newDisks, healing
 }

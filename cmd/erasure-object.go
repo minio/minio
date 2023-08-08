@@ -412,9 +412,14 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				switch scan {
 				case madmin.HealNormalScan, madmin.HealDeepScan:
 					healOnce.Do(func() {
-						if _, healing := er.getOnlineDisksWithHealing(); !healing {
-							go healObject(bucket, object, fi.VersionID, scan)
-						}
+						globalMRFState.addPartialOp(partialOperation{
+							bucket:    bucket,
+							object:    object,
+							versionID: fi.VersionID,
+							queued:    time.Now(),
+							setIndex:  er.setIndex,
+							poolIndex: er.poolIndex,
+						})
 					})
 					// Healing is triggered and we have written
 					// successfully the content to client for
@@ -732,9 +737,14 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	// additionally do not heal delete markers inline, let them be
 	// healed upon regular heal process.
 	if !fi.Deleted && missingBlocks > 0 && missingBlocks < readQuorum {
-		if _, healing := er.getOnlineDisksWithHealing(); !healing {
-			go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
-		}
+		globalMRFState.addPartialOp(partialOperation{
+			bucket:    bucket,
+			object:    object,
+			versionID: fi.VersionID,
+			queued:    time.Now(),
+			setIndex:  er.setIndex,
+			poolIndex: er.poolIndex,
+		})
 	}
 
 	return fi, metaArr, onlineDisks, nil
