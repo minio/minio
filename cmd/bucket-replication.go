@@ -427,7 +427,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, fmt.Errorf("unable to obtain replication config for bucket: %s: err: %s", bucket, err), bucket)
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -442,9 +442,10 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		})
 		return
 	}
-	dsc, err := parseReplicateDecision(dobj.ReplicationState.ReplicateDecisionStr)
+	dsc, err := parseReplicateDecision(ctx, bucket, dobj.ReplicationState.ReplicateDecisionStr)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, fmt.Errorf("unable to parse replication decision parameters for bucket: %s, err: %s, decision: %s",
+			bucket, err, dobj.ReplicationState.ReplicateDecisionStr), dobj.ReplicationState.ReplicateDecisionStr)
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -466,7 +467,6 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, dobj.TargetArn))
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -488,38 +488,23 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	var rinfos replicatedInfos
 	rinfos.Targets = make([]replicatedTargetInfo, len(dsc.targetsMap))
 	idx := -1
-	for tgtArn := range dsc.targetsMap {
+	for _, tgtEntry := range dsc.targetsMap {
 		idx++
-		tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, tgtArn)
-		if tgt == nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn))
-			sendEvent(eventArgs{
-				BucketName: bucket,
-				Object: ObjectInfo{
-					Bucket:       bucket,
-					Name:         dobj.ObjectName,
-					VersionID:    versionID,
-					DeleteMarker: dobj.DeleteMarker,
-				},
-				UserAgent: "Internal: [Replication]",
-				Host:      globalLocalNodeName,
-				EventName: event.ObjectReplicationNotTracked,
-			})
+		if tgtEntry.Tgt == nil {
 			continue
 		}
-		if tgt := dsc.targetsMap[tgtArn]; !tgt.Replicate {
+		if !tgtEntry.Replicate {
 			continue
 		}
 		// if dobj.TargetArn is not empty string, this is a case of specific target being re-synced.
-		if dobj.TargetArn != "" && dobj.TargetArn != tgt.ARN {
+		if dobj.TargetArn != "" && dobj.TargetArn != tgtEntry.Arn {
 			continue
 		}
 		wg.Add(1)
 		go func(index int, tgt *TargetClient) {
 			defer wg.Done()
-			rinfo := replicateDeleteToTarget(ctx, dobj, tgt)
-			rinfos.Targets[index] = rinfo
-		}(idx, tgt)
+			rinfos.Targets[index] = replicateDeleteToTarget(ctx, dobj, tgt)
+		}(idx, tgtEntry.Tgt)
 	}
 	wg.Wait()
 
@@ -1005,7 +990,6 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			Host:       globalLocalNodeName,
 		})
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, ri.TargetArn))
 		return
 	}
 	ctx = lkctx.Context()
@@ -1017,7 +1001,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	for i, tgtArn := range tgtArns {
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, tgtArn)
 		if tgt == nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn))
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn), tgtArn)
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -1156,7 +1140,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogIf(ctx, fmt.Errorf("unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+			logger.LogOnceIf(ctx, fmt.Errorf("unable to read source object %s/%s(%s): %w", bucket, object, objInfo.VersionID, err), object+":"+objInfo.VersionID)
 		}
 		return
 	}
