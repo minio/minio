@@ -1835,45 +1835,86 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						return
 					}
 
+					send := func(objInfo ObjectInfo) bool {
+						select {
+						case <-ctx.Done():
+							return false
+						case results <- objInfo:
+							return true
+						}
+					}
+
+					askDisks := getListQuorum(opts.WalkAskDisks, set.setDriveCount)
+					var fallbackDisks []StorageAPI
+
+					// Special case: ask all disks if the drive count is 4
+					if set.setDriveCount == 4 || askDisks > len(disks) {
+						askDisks = len(disks) // use all available drives
+					}
+
+					if askDisks > 0 && len(disks) > askDisks {
+						fallbackDisks = disks[askDisks:]
+						disks = disks[:askDisks]
+					}
+
+					requestedVersions := 0
+					if opts.WalkLatestOnly {
+						requestedVersions = 1
+					}
 					loadEntry := func(entry metaCacheEntry) {
 						if entry.isDir() {
 							return
 						}
 
-						fivs, err := entry.fileInfoVersions(bucket)
-						if err != nil {
-							cancel()
-							return
-						}
-
-						versionsSorter(fivs.Versions).reverse()
-
-						for _, version := range fivs.Versions {
-							send := true
-							if opts.WalkFilter != nil && !opts.WalkFilter(version) {
-								send = false
-							}
-
-							if !send {
-								continue
-							}
-
-							versioned := vcfg != nil && vcfg.Versioned(version.Name)
-							objInfo := version.ToObjectInfo(bucket, version.Name, versioned)
-
-							select {
-							case <-ctx.Done():
+						if opts.WalkLatestOnly {
+							fi, err := entry.fileInfo(bucket)
+							if err != nil {
+								cancel()
 								return
-							case results <- objInfo:
+							}
+							if opts.WalkFilter != nil {
+								if opts.WalkFilter(fi) {
+									if !send(fi.ToObjectInfo(bucket, fi.Name, vcfg != nil && vcfg.Versioned(fi.Name))) {
+										return
+									}
+								}
+							} else {
+								if !send(fi.ToObjectInfo(bucket, fi.Name, vcfg != nil && vcfg.Versioned(fi.Name))) {
+									return
+								}
+							}
+
+						} else {
+							fivs, err := entry.fileInfoVersions(bucket)
+							if err != nil {
+								cancel()
+								return
+							}
+
+							versionsSorter(fivs.Versions).reverse()
+
+							for _, version := range fivs.Versions {
+								if opts.WalkFilter != nil {
+									if opts.WalkFilter(version) {
+										if !send(version.ToObjectInfo(bucket, version.Name, vcfg != nil && vcfg.Versioned(version.Name))) {
+											return
+										}
+									}
+								} else {
+									if !send(version.ToObjectInfo(bucket, version.Name, vcfg != nil && vcfg.Versioned(version.Name))) {
+										return
+									}
+								}
 							}
 						}
 					}
 
 					// How to resolve partial results.
 					resolver := metadataResolutionParams{
-						dirQuorum: 1,
-						objQuorum: 1,
-						bucket:    bucket,
+						dirQuorum:         1,
+						objQuorum:         1,
+						bucket:            bucket,
+						requestedVersions: requestedVersions,
 					}
 
 					path := baseDirFromPrefix(prefix)
@@ -1884,6 +1925,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 
 					lopts := listPathRawOptions{
 						disks:          disks,
+						fallbackDisks:  fallbackDisks,
 						bucket:         bucket,
 						path:           path,
 						filterPrefix:   filterPrefix,

@@ -594,14 +594,11 @@ func getListQuorum(quorum string, driveCount int) int {
 		return 1
 	case "reduced":
 		return 2
-	case "strict":
-		return driveCount
-	}
-	// Defaults to (driveCount+1)/2 drives per set, defaults to "optimal" value
-	if driveCount > 0 {
+	case "optimal":
 		return (driveCount + 1) / 2
-	} // "3" otherwise.
-	return 3
+	}
+	// defaults to 'strict'
+	return driveCount
 }
 
 // Will return io.EOF if continuing would not yield more results.
