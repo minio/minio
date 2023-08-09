@@ -325,7 +325,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 		}
 	}
 
-	// Add the disks being currently actively scanned to the
+	// Prefer new disks over disks which are currently being scanned. 
 	// end to avoid them to be consider for listing first.
 	newDisks = append(newDisks, scanningDisks...)
 

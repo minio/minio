@@ -192,7 +192,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		tracker.setObject("")
 		tracker.setBucket(bucket)
 		// Heal current bucket again in case if it is failed
-		// in the being of erasure set healing
+		// in the beginning of erasure set healing
 		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
