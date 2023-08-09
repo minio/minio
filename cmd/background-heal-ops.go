@@ -75,9 +75,9 @@ func waitForLowIO(maxIO int, maxWait time.Duration, currentIO func() int) {
 		if tmpMaxWait > 0 {
 			if tmpMaxWait < waitTick {
 				time.Sleep(tmpMaxWait)
-			} else {
-				time.Sleep(waitTick)
+				return
 			}
+			time.Sleep(waitTick)
 			tmpMaxWait -= waitTick
 		}
 		if tmpMaxWait <= 0 {
