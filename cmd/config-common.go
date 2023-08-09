@@ -61,7 +61,8 @@ type objectDeleter interface {
 
 func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) error {
 	_, err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile, ObjectOptions{
-		DeletePrefix: true,
+		DeletePrefix:       true,
+		DeletePrefixObject: true, // use prefix delete on exact object (this is an optimization to avoid fan-out calls)
 	})
 	if err != nil && isErrObjectNotFound(err) {
 		return errConfigNotFound

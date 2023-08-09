@@ -78,6 +78,7 @@ type ObjectOptions struct {
 	ReplicationSourceLegalholdTimestamp time.Time // set if MinIOSourceObjectLegalholdTimestamp received
 	ReplicationSourceRetentionTimestamp time.Time // set if MinIOSourceObjectRetentionTimestamp received
 	DeletePrefix                        bool      // set true to enforce a prefix deletion, only application for DeleteObject API,
+	DeletePrefixObject                  bool      // set true to enforce not a fan-out call instead a hashedSet call
 
 	Speedtest bool // object call specifically meant for SpeedTest code, set to 'true' when invoked by SpeedtestHandler.
 
