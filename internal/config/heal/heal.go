@@ -97,7 +97,7 @@ var DefaultKVS = config.KVS{
 	},
 	config.KV{
 		Key:   Sleep,
-		Value: "1s",
+		Value: "250ms",
 	},
 	config.KV{
 		Key:   IOCount,
