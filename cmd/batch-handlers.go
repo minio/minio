@@ -1413,7 +1413,6 @@ func (j BatchJobRequest) delete(ctx context.Context, api ObjectLayer) {
 	case j.KeyRotate != nil:
 		deleteConfig(ctx, api, pathJoin(j.Location, batchKeyRotationName))
 	}
-	globalBatchJobsMetrics.delete(j.ID)
 	deleteConfig(ctx, api, j.Location)
 }
 
@@ -1815,8 +1814,11 @@ type batchJobMetrics struct {
 	metrics map[string]*batchJobInfo
 }
 
-var globalBatchJobsMetrics = batchJobMetrics{
-	metrics: make(map[string]*batchJobInfo),
+var globalBatchJobsMetrics batchJobMetrics
+
+func init() {
+	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
+	go globalBatchJobsMetrics.purgeJobMetrics()
 }
 
 //msgp:ignore batchJobMetric
@@ -1858,9 +1860,17 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 	metrics = &madmin.BatchJobMetrics{CollectedAt: time.Now(), Jobs: make(map[string]madmin.JobMetric)}
 	m.RLock()
 	defer m.RUnlock()
+
+	match := true
 	for id, job := range m.metrics {
-		match := jobID != "" && id == jobID
-		metrics.Jobs[id] = madmin.JobMetric{
+		if jobID != "" {
+			match = id == jobID
+		}
+		if !match {
+			continue
+		}
+
+		m := madmin.JobMetric{
 			JobID:         job.JobID,
 			JobType:       job.JobType,
 			StartTime:     job.StartTime,
@@ -1868,26 +1878,53 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 			RetryAttempts: job.RetryAttempts,
 			Complete:      job.Complete,
 			Failed:        job.Failed,
-			Replicate: &madmin.ReplicateInfo{
+		}
+
+		switch job.JobType {
+		case string(madmin.BatchJobReplicate):
+			m.Replicate = &madmin.ReplicateInfo{
 				Bucket:           job.Bucket,
 				Object:           job.Object,
 				Objects:          job.Objects,
 				ObjectsFailed:    job.ObjectsFailed,
 				BytesTransferred: job.BytesTransferred,
 				BytesFailed:      job.BytesFailed,
-			},
-			KeyRotate: &madmin.KeyRotationInfo{
+			}
+		case string(madmin.BatchJobKeyRotate):
+			m.KeyRotate = &madmin.KeyRotationInfo{
 				Bucket:        job.Bucket,
 				Object:        job.Object,
 				Objects:       job.Objects,
 				ObjectsFailed: job.ObjectsFailed,
-			},
+			}
 		}
-		if match {
-			break
-		}
+
+		metrics.Jobs[id] = m
 	}
 	return metrics
+}
+
+// keep job metrics for some time after the job is completed
+// in-case some one wants to look at the older results.
+func (m *batchJobMetrics) purgeJobMetrics() {
+	t := time.NewTicker(6 * time.Hour)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-GlobalContext.Done():
+		case <-t.C:
+			var toDeleteJobMetrics []string
+			for id, metrics := range m.metrics {
+				if time.Since(metrics.LastUpdate) > 24*time.Hour && (metrics.Complete || metrics.Failed) {
+					toDeleteJobMetrics = append(toDeleteJobMetrics, id)
+				}
+			}
+			for _, jobID := range toDeleteJobMetrics {
+				m.delete(jobID)
+			}
+		}
+	}
 }
 
 func (m *batchJobMetrics) delete(jobID string) {
