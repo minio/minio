@@ -18,6 +18,7 @@
 package logger
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"strconv"
@@ -97,6 +98,8 @@ const (
 	loggerTargetNamePrefix = "logger-"
 	auditTargetNamePrefix  = "audit-"
 )
+
+var errInvalidQueueSize = errors.New("invalid queue_size value")
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
 var (
@@ -260,7 +263,7 @@ func getCfgVal(envName, key, defaultValue string) string {
 	return env.Get(envName, defaultValue)
 }
 
-func lookupLegacyConfigForSubSys(subSys string) Config {
+func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 	cfg := NewConfig()
 	switch subSys {
 	case config.LoggerWebhookSubSys:
@@ -280,9 +283,14 @@ func lookupLegacyConfigForSubSys(subSys string) Config {
 			if endpoint == "" {
 				continue
 			}
+			url, err := xnet.ParseHTTPURL(endpoint)
+			if err != nil {
+				LogOnceIf(ctx, err, "logger-webhook-"+endpoint)
+				continue
+			}
 			cfg.HTTP[target] = http.Config{
 				Enabled:  true,
-				Endpoint: endpoint,
+				Endpoint: url,
 			}
 		}
 
@@ -303,9 +311,14 @@ func lookupLegacyConfigForSubSys(subSys string) Config {
 			if endpoint == "" {
 				continue
 			}
+			url, err := xnet.ParseHTTPURL(endpoint)
+			if err != nil {
+				LogOnceIf(ctx, err, "audit-webhook-"+endpoint)
+				continue
+			}
 			cfg.AuditWebhook[target] = http.Config{
 				Enabled:  true,
-				Endpoint: endpoint,
+				Endpoint: url,
 			}
 		}
 
@@ -373,7 +386,7 @@ func lookupAuditKafkaConfig(scfg config.Config, cfg Config) (Config, error) {
 			return cfg, err
 		}
 		if queueSize <= 0 {
-			return cfg, errors.New("invalid queue_size value")
+			return cfg, errInvalidQueueSize
 		}
 		kafkaArgs.QueueSize = queueSize
 
@@ -384,214 +397,121 @@ func lookupAuditKafkaConfig(scfg config.Config, cfg Config) (Config, error) {
 }
 
 func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
-	envs := env.List(EnvLoggerWebhookEndpoint)
-	var loggerTargets []string
-	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvLoggerWebhookEndpoint+config.Default)
-		if target == EnvLoggerWebhookEndpoint {
-			target = config.Default
-		}
-		loggerTargets = append(loggerTargets, target)
-	}
-
-	// Load HTTP logger from the environment if found
-	for _, target := range loggerTargets {
-		if v, ok := cfg.HTTP[target]; ok && v.Enabled {
+	for k, kv := range config.Merge(scfg[config.LoggerWebhookSubSys], EnvLoggerWebhookEnable, DefaultLoggerWebhookKVS) {
+		if v, ok := cfg.HTTP[k]; ok && v.Enabled {
 			// This target is already enabled using the
 			// legacy environment variables, ignore.
 			continue
 		}
-
-		enableCfgVal := getCfgVal(EnvLoggerWebhookEnable, target, "")
-		enable, err := config.ParseBool(enableCfgVal)
-		if err != nil || !enable {
-			continue
-		}
-
-		clientCert := getCfgVal(EnvLoggerWebhookClientCert, target, "")
-		clientKey := getCfgVal(EnvLoggerWebhookClientKey, target, "")
-		err = config.EnsureCertAndKey(clientCert, clientKey)
-		if err != nil {
-			return cfg, err
-		}
-
-		queueSizeCfgVal := getCfgVal(EnvLoggerWebhookQueueSize, target, "100000")
-		queueSize, err := strconv.Atoi(queueSizeCfgVal)
-		if err != nil {
-			return cfg, err
-		}
-		if queueSize <= 0 {
-			return cfg, errors.New("invalid queue_size value")
-		}
-
-		cfg.HTTP[target] = http.Config{
-			Enabled:    true,
-			Endpoint:   getCfgVal(EnvLoggerWebhookEndpoint, target, ""),
-			AuthToken:  getCfgVal(EnvLoggerWebhookAuthToken, target, ""),
-			ClientCert: clientCert,
-			ClientKey:  clientKey,
-			Proxy:      getCfgVal(EnvLoggerWebhookProxy, target, ""),
-			QueueSize:  queueSize,
-			QueueDir:   getCfgVal(EnvLoggerWebhookQueueDir, target, ""),
-			Name:       loggerTargetNamePrefix + target,
-		}
-	}
-
-	for starget, kv := range scfg[config.LoggerWebhookSubSys] {
-		if l, ok := cfg.HTTP[starget]; ok && l.Enabled {
-			// Ignore this HTTP logger config since there is
-			// a target with the same name loaded and enabled
-			// from the environment.
-			continue
-		}
 		subSysTarget := config.LoggerWebhookSubSys
-		if starget != config.Default {
-			subSysTarget = config.LoggerWebhookSubSys + config.SubSystemSeparator + starget
+		if k != config.Default {
+			subSysTarget = config.LoggerWebhookSubSys + config.SubSystemSeparator + k
 		}
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultLoggerWebhookKVS); err != nil {
 			return cfg, err
 		}
-		enabled, err := config.ParseBool(kv.Get(config.Enable))
-		if err != nil {
-			return cfg, err
-		}
-		if !enabled {
-			continue
-		}
-		err = config.EnsureCertAndKey(kv.Get(ClientCert), kv.Get(ClientKey))
-		if err != nil {
-			return cfg, err
-		}
-		queueSize, err := strconv.Atoi(kv.Get(QueueSize))
-		if err != nil {
-			return cfg, err
-		}
-		if queueSize <= 0 {
-			return cfg, errors.New("invalid queue_size value")
-		}
-		cfg.HTTP[starget] = http.Config{
-			Enabled:    true,
-			Endpoint:   kv.Get(Endpoint),
-			AuthToken:  kv.Get(AuthToken),
-			ClientCert: kv.Get(ClientCert),
-			ClientKey:  kv.Get(ClientKey),
-			Proxy:      kv.Get(Proxy),
-			QueueSize:  queueSize,
-			QueueDir:   kv.Get(QueueDir),
-			Name:       loggerTargetNamePrefix + starget,
-		}
-	}
-
-	return cfg, nil
-}
-
-func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
-	var loggerAuditTargets []string
-	envs := env.List(EnvAuditWebhookEndpoint)
-	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvAuditWebhookEndpoint+config.Default)
-		if target == EnvAuditWebhookEndpoint {
-			target = config.Default
-		}
-		loggerAuditTargets = append(loggerAuditTargets, target)
-	}
-
-	for _, target := range loggerAuditTargets {
-		if v, ok := cfg.AuditWebhook[target]; ok && v.Enabled {
-			// This target is already enabled using the
-			// legacy environment variables, ignore.
-			continue
-		}
-		enable, err := config.ParseBool(getCfgVal(EnvAuditWebhookEnable, target, ""))
+		enableCfgVal := getCfgVal(EnvLoggerWebhookEnable, k, kv.Get(config.Enable))
+		enable, err := config.ParseBool(enableCfgVal)
 		if err != nil || !enable {
 			continue
 		}
-
-		clientCert := getCfgVal(EnvAuditWebhookClientCert, target, "")
-		clientKey := getCfgVal(EnvAuditWebhookClientKey, target, "")
+		var url *xnet.URL
+		endpoint := getCfgVal(EnvLoggerWebhookEndpoint, k, kv.Get(Endpoint))
+		url, err = xnet.ParseHTTPURL(endpoint)
+		if err != nil {
+			return cfg, err
+		}
+		clientCert := getCfgVal(EnvLoggerWebhookClientCert, k, kv.Get(ClientCert))
+		clientKey := getCfgVal(EnvLoggerWebhookClientKey, k, kv.Get(ClientKey))
 		err = config.EnsureCertAndKey(clientCert, clientKey)
 		if err != nil {
 			return cfg, err
 		}
-
-		queueSizeCfgVal := getCfgVal(EnvAuditWebhookQueueSize, target, "100000")
+		queueSizeCfgVal := getCfgVal(EnvLoggerWebhookQueueSize, k, kv.Get(QueueSize))
 		queueSize, err := strconv.Atoi(queueSizeCfgVal)
 		if err != nil {
 			return cfg, err
 		}
 		if queueSize <= 0 {
-			return cfg, errors.New("invalid queue_size value")
+			return cfg, errInvalidQueueSize
 		}
-
-		cfg.AuditWebhook[target] = http.Config{
+		cfg.HTTP[k] = http.Config{
 			Enabled:    true,
-			Endpoint:   getCfgVal(EnvAuditWebhookEndpoint, target, ""),
-			AuthToken:  getCfgVal(EnvAuditWebhookAuthToken, target, ""),
+			Endpoint:   url,
+			AuthToken:  getCfgVal(EnvLoggerWebhookAuthToken, k, kv.Get(AuthToken)),
 			ClientCert: clientCert,
 			ClientKey:  clientKey,
+			Proxy:      getCfgVal(EnvLoggerWebhookProxy, k, kv.Get(Proxy)),
 			QueueSize:  queueSize,
-			QueueDir:   getCfgVal(EnvAuditWebhookQueueDir, target, ""),
-			Name:       auditTargetNamePrefix + target,
+			QueueDir:   getCfgVal(EnvLoggerWebhookQueueDir, k, kv.Get(QueueDir)),
+			Name:       loggerTargetNamePrefix + k,
 		}
 	}
+	return cfg, nil
+}
 
-	for starget, kv := range scfg[config.AuditWebhookSubSys] {
-		if l, ok := cfg.AuditWebhook[starget]; ok && l.Enabled {
-			// Ignore this audit config since another target
-			// with the same name is already loaded and enabled
-			// in the shell environment.
+func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
+	for k, kv := range config.Merge(scfg[config.AuditWebhookSubSys], EnvAuditWebhookEnable, DefaultAuditWebhookKVS) {
+		if v, ok := cfg.AuditWebhook[k]; ok && v.Enabled {
+			// This target is already enabled using the
+			// legacy environment variables, ignore.
 			continue
 		}
 		subSysTarget := config.AuditWebhookSubSys
-		if starget != config.Default {
-			subSysTarget = config.AuditWebhookSubSys + config.SubSystemSeparator + starget
+		if k != config.Default {
+			subSysTarget = config.AuditWebhookSubSys + config.SubSystemSeparator + k
 		}
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultAuditWebhookKVS); err != nil {
 			return cfg, err
 		}
-		enabled, err := config.ParseBool(kv.Get(config.Enable))
-		if err != nil {
-			return cfg, err
-		}
-		if !enabled {
+		enable, err := config.ParseBool(getCfgVal(EnvAuditWebhookEnable, k, kv.Get(config.Enable)))
+		if err != nil || !enable {
 			continue
 		}
-		err = config.EnsureCertAndKey(kv.Get(ClientCert), kv.Get(ClientKey))
+		var url *xnet.URL
+		endpoint := getCfgVal(EnvAuditWebhookEndpoint, k, kv.Get(Endpoint))
+		url, err = xnet.ParseHTTPURL(endpoint)
 		if err != nil {
 			return cfg, err
 		}
-		queueSize, err := strconv.Atoi(kv.Get(QueueSize))
+		clientCert := getCfgVal(EnvAuditWebhookClientCert, k, kv.Get(ClientCert))
+		clientKey := getCfgVal(EnvAuditWebhookClientKey, k, kv.Get(ClientKey))
+		err = config.EnsureCertAndKey(clientCert, clientKey)
+		if err != nil {
+			return cfg, err
+		}
+		queueSizeCfgVal := getCfgVal(EnvAuditWebhookQueueSize, k, kv.Get(QueueSize))
+		queueSize, err := strconv.Atoi(queueSizeCfgVal)
 		if err != nil {
 			return cfg, err
 		}
 		if queueSize <= 0 {
-			return cfg, errors.New("invalid queue_size value")
+			return cfg, errInvalidQueueSize
 		}
-		cfg.AuditWebhook[starget] = http.Config{
+		cfg.AuditWebhook[k] = http.Config{
 			Enabled:    true,
-			Endpoint:   kv.Get(Endpoint),
-			AuthToken:  kv.Get(AuthToken),
-			ClientCert: kv.Get(ClientCert),
-			ClientKey:  kv.Get(ClientKey),
+			Endpoint:   url,
+			AuthToken:  getCfgVal(EnvAuditWebhookAuthToken, k, kv.Get(AuthToken)),
+			ClientCert: clientCert,
+			ClientKey:  clientKey,
 			QueueSize:  queueSize,
-			QueueDir:   kv.Get(QueueDir),
-			Name:       auditTargetNamePrefix + starget,
+			QueueDir:   getCfgVal(EnvAuditWebhookQueueDir, k, kv.Get(QueueDir)),
+			Name:       auditTargetNamePrefix + k,
 		}
 	}
-
 	return cfg, nil
 }
 
 // LookupConfigForSubSys - lookup logger config, override with ENVs if set, for the given sub-system
-func LookupConfigForSubSys(scfg config.Config, subSys string) (cfg Config, err error) {
+func LookupConfigForSubSys(ctx context.Context, scfg config.Config, subSys string) (cfg Config, err error) {
 	switch subSys {
 	case config.LoggerWebhookSubSys:
-		cfg = lookupLegacyConfigForSubSys(config.LoggerWebhookSubSys)
+		cfg = lookupLegacyConfigForSubSys(ctx, config.LoggerWebhookSubSys)
 		if cfg, err = lookupLoggerWebhookConfig(scfg, cfg); err != nil {
 			return cfg, err
 		}
 	case config.AuditWebhookSubSys:
-		cfg = lookupLegacyConfigForSubSys(config.AuditWebhookSubSys)
+		cfg = lookupLegacyConfigForSubSys(ctx, config.AuditWebhookSubSys)
 		if cfg, err = lookupAuditWebhookConfig(scfg, cfg); err != nil {
 			return cfg, err
 		}
@@ -605,8 +525,8 @@ func LookupConfigForSubSys(scfg config.Config, subSys string) (cfg Config, err e
 }
 
 // ValidateSubSysConfig - validates logger related config of given sub-system
-func ValidateSubSysConfig(scfg config.Config, subSys string) error {
+func ValidateSubSysConfig(ctx context.Context, scfg config.Config, subSys string) error {
 	// Lookup for legacy environment variables first
-	_, err := LookupConfigForSubSys(scfg, subSys)
+	_, err := LookupConfigForSubSys(ctx, scfg, subSys)
 	return err
 }

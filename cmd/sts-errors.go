@@ -39,7 +39,7 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode S
 		stsErrorResponse.Error.Message = errCtxt.Error()
 	}
 	switch errCode {
-	case ErrSTSInternalError, ErrSTSNotInitialized, ErrSTSUpstreamError:
+	case ErrSTSInternalError, ErrSTSNotInitialized, ErrSTSUpstreamError, ErrSTSIAMNotInitialized:
 		logger.LogIf(ctx, errCtxt, logger.Minio)
 	}
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
@@ -82,6 +82,7 @@ const (
 	ErrSTSInsecureConnection
 	ErrSTSInvalidClientCertificate
 	ErrSTSNotInitialized
+	ErrSTSIAMNotInitialized
 	ErrSTSUpstreamError
 	ErrSTSInternalError
 )
@@ -147,6 +148,11 @@ var stsErrCodes = stsErrorCodeMap{
 	ErrSTSNotInitialized: {
 		Code:           "STSNotInitialized",
 		Description:    "STS API not initialized, please try again.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrSTSIAMNotInitialized: {
+		Code:           "STSIAMNotInitialized",
+		Description:    "STS IAM not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrSTSUpstreamError: {

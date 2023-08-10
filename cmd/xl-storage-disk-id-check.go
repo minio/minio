@@ -93,7 +93,7 @@ type xlStorageDiskIDCheck struct {
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	p.metricsCache.Once.Do(func() {
-		p.metricsCache.TTL = 100 * time.Millisecond
+		p.metricsCache.TTL = 1 * time.Second
 		p.metricsCache.Update = func() (interface{}, error) {
 			diskMetric := DiskMetrics{
 				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),

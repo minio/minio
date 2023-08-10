@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -183,7 +184,7 @@ var parseReplicationDecisionTest = []struct {
 
 func TestParseReplicateDecision(t *testing.T) {
 	for i, test := range parseReplicationDecisionTest {
-		dsc, err := parseReplicateDecision(test.expDsc.String())
+		dsc, err := parseReplicateDecision(context.Background(), "bucket", test.expDsc.String())
 		if err != nil {
 			if test.expErr != err {
 				t.Errorf("Test%d (%s): Expected parse error got %t , want %t", i+1, test.name, err, test.expErr)

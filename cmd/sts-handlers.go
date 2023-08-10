@@ -374,6 +374,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	if !globalIAMSys.Initialized() {
+		writeSTSErrorResponse(ctx, w, ErrSTSIAMNotInitialized, errIAMNotInitialized)
+		return
+	}
+
 	// Validate JWT; check clientID in claims matches the one associated with the roleArn
 	if err := globalIAMSys.OpenIDConfig.Validate(r.Context(), roleArn, token, accessToken, r.Form.Get(stsDurationSeconds), claims); err != nil {
 		switch err {
@@ -612,6 +617,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
+	if !globalIAMSys.Initialized() {
+		writeSTSErrorResponse(ctx, w, ErrSTSIAMNotInitialized, errIAMNotInitialized)
+		return
+	}
+
 	ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server error: %w", err)
@@ -699,6 +709,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 
 	claims := make(map[string]interface{})
 	defer logger.AuditLog(ctx, w, r, claims)
+
+	if !globalIAMSys.Initialized() {
+		writeSTSErrorResponse(ctx, w, ErrSTSIAMNotInitialized, errIAMNotInitialized)
+		return
+	}
 
 	if !globalIAMSys.STSTLSConfig.Enabled {
 		writeSTSErrorResponse(ctx, w, ErrSTSNotInitialized, errors.New("STS API 'AssumeRoleWithCertificate' is disabled"))
@@ -856,6 +871,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 
 	claims := make(map[string]interface{})
 	defer logger.AuditLog(ctx, w, r, claims)
+
+	if !globalIAMSys.Initialized() {
+		writeSTSErrorResponse(ctx, w, ErrSTSIAMNotInitialized, errIAMNotInitialized)
+		return
+	}
 
 	authn := newGlobalAuthNPluginFn()
 	if authn == nil {
