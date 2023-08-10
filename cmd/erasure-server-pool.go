@@ -263,8 +263,8 @@ type serverPoolsAvailableSpace []poolAvailableSpace
 
 type poolAvailableSpace struct {
 	Index      int
-	Available  uint64
-	MaxUsedPct int // Used disk percentage of most filled disk, rounded down.
+	Available  uint64 // in bytes
+	MaxUsedPct int    // Used disk percentage of most filled disk, rounded down.
 }
 
 // TotalAvailable - total available space
@@ -286,7 +286,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 	}
 	var ok bool
 	for _, z := range p {
-		if z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < max {
 			ok = true
 			break
 		}
@@ -299,7 +299,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 
 	// Remove entries that are above.
 	for i, z := range p {
-		if z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < max {
 			continue
 		}
 		p[i].Available = 0
@@ -365,7 +365,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 		}
 		var available uint64
 		if !isMinioMetaBucketName(bucket) {
-			if avail, err := hasSpaceFor(zinfo, size); err != nil && !avail {
+			if avail, err := hasSpaceFor(zinfo, size); err != nil || !avail {
 				serverPools[i] = poolAvailableSpace{Index: i}
 				continue
 			}
