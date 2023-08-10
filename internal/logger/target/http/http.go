@@ -377,7 +377,11 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 	select {
 	case h.logCh <- entry:
 	case <-ctx.Done():
-		return ctx.Err()
+		// return error only for context timedout.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ctx.Err()
+		}
+		return nil
 	default:
 		nWorkers := atomic.LoadInt64(&h.workers)
 		if nWorkers < maxWorkers {

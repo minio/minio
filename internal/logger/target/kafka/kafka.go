@@ -330,6 +330,12 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 
 	select {
 	case h.logCh <- entry:
+	case <-ctx.Done():
+		// return error only for context timedout.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ctx.Err()
+		}
+		return nil
 	default:
 		// log channel is full, do not wait and return
 		// an error immediately to the caller
