@@ -949,11 +949,13 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 	}
 	if err != nil {
 		if err == errFileNotFound {
-			if ierr := Access(volumeDir); ierr != nil {
-				if osIsNotExist(ierr) {
-					return nil, errVolumeNotFound
-				} else if isSysErrIO(ierr) {
-					return nil, errFaultyDisk
+			if !skipAccessChecks(volume) {
+				if ierr := Access(volumeDir); ierr != nil {
+					if osIsNotExist(ierr) {
+						return nil, errVolumeNotFound
+					} else if isSysErrIO(ierr) {
+						return nil, errFaultyDisk
+					}
 				}
 			}
 		}
@@ -970,7 +972,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	}
 
 	var legacyJSON bool
-	buf, _, err := s.readAllData(ctx, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile), false)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile), false)
 	if err != nil {
 		if !errors.Is(err, errFileNotFound) {
 			return err
@@ -980,7 +982,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		legacy := s.formatLegacy
 		s.RUnlock()
 		if legacy {
-			buf, _, err = s.readAllData(ctx, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1), false)
+			buf, _, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1), false)
 			if err != nil {
 				return err
 			}
@@ -1367,15 +1369,17 @@ func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
 	return nil
 }
 
-func (s *xlStorage) readRaw(ctx context.Context, volumeDir, filePath string, readData bool) (buf []byte, dmTime time.Time, err error) {
+func (s *xlStorage) readRaw(ctx context.Context, volume, volumeDir, filePath string, readData bool) (buf []byte, dmTime time.Time, err error) {
 	if readData {
-		buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFile), true)
+		buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFile), true)
 	} else {
 		buf, dmTime, err = s.readMetadataWithDMTime(ctx, pathJoin(filePath, xlStorageFormatFile))
 		if err != nil {
 			if osIsNotExist(err) {
-				if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
-					return nil, time.Time{}, errVolumeNotFound
+				if !skipAccessChecks(volume) {
+					if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
+						return nil, time.Time{}, errVolumeNotFound
+					}
 				}
 			}
 			err = osErrToFileErr(err)
@@ -1384,7 +1388,7 @@ func (s *xlStorage) readRaw(ctx context.Context, volumeDir, filePath string, rea
 
 	if err != nil {
 		if err == errFileNotFound {
-			buf, dmTime, err = s.readAllData(ctx, volumeDir, pathJoin(filePath, xlStorageFormatFileV1), true)
+			buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFileV1), true)
 			if err != nil {
 				return nil, time.Time{}, err
 			}
@@ -1414,7 +1418,7 @@ func (s *xlStorage) ReadXL(ctx context.Context, volume, path string, readData bo
 		return RawFileInfo{}, err
 	}
 
-	buf, dmTime, err := s.readRaw(ctx, volumeDir, filePath, readData)
+	buf, dmTime, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
 	return RawFileInfo{
 		Buf:       buf,
 		DiskMTime: dmTime,
@@ -1435,7 +1439,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, err
 	}
 
-	buf, dmTime, err := s.readRaw(ctx, volumeDir, filePath, readData)
+	buf, dmTime, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
 	if err != nil {
 		if err == errFileNotFound {
 			if versionID != "" {
@@ -1492,7 +1496,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			len(fi.Parts) == 1 {
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(volumeDir, path, fi.DataDir, partPath)
-			fi.Data, _, err = s.readAllData(ctx, volumeDir, dataPath, true)
+			fi.Data, _, err = s.readAllData(ctx, volume, volumeDir, dataPath, true)
 			if err != nil {
 				return FileInfo{}, err
 			}
@@ -1502,7 +1506,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	return fi, nil
 }
 
-func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath string, sync bool) (buf []byte, dmTime time.Time, err error) {
+func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, filePath string, sync bool) (buf []byte, dmTime time.Time, err error) {
 	if contextCanceled(ctx) {
 		return nil, time.Time{}, ctx.Err()
 	}
@@ -1519,8 +1523,10 @@ func (s *xlStorage) readAllData(ctx context.Context, volumeDir string, filePath 
 		case osIsNotExist(err):
 			// Check if the object doesn't exist because its bucket
 			// is missing in order to return the correct error.
-			if err = Access(volumeDir); err != nil && osIsNotExist(err) {
-				return nil, dmTime, errVolumeNotFound
+			if !skipAccessChecks(volume) {
+				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+					return nil, dmTime, errVolumeNotFound
+				}
 			}
 			return nil, dmTime, errFileNotFound
 		case osIsPermission(err):
@@ -1610,7 +1616,7 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	buf, _, err = s.readAllData(ctx, volumeDir, filePath, true)
+	buf, _, err = s.readAllData(ctx, volume, volumeDir, filePath, true)
 	return buf, err
 }
 
@@ -1799,8 +1805,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
-			if err = Access(volumeDir); err != nil && osIsNotExist(err) {
-				return nil, errVolumeNotFound
+			if !skipAccessChecks(volume) {
+				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+					return nil, errVolumeNotFound
+				}
 			}
 			return nil, errFileNotFound
 		case osIsPermission(err):
@@ -2082,12 +2090,14 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 		st, err := Lstat(filePath)
 		if err != nil {
 			if osIsNotExist(err) {
-				// Stat a volume entry.
-				if verr := Access(volumeDir); verr != nil {
-					if osIsNotExist(verr) {
-						return errVolumeNotFound
+				if !skipAccessChecks(volume) {
+					// Stat a volume entry.
+					if verr := Access(volumeDir); verr != nil {
+						if osIsNotExist(verr) {
+							return errVolumeNotFound
+						}
+						return verr
 					}
-					return verr
 				}
 			}
 			return osErrToFileErr(err)
@@ -2716,7 +2726,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			if req.MetadataOnly {
 				data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
 			} else {
-				data, mt, err = s.readAllData(ctx, volumeDir, fullPath, false)
+				data, mt, err = s.readAllData(ctx, req.Bucket, volumeDir, fullPath, false)
 			}
 			return err
 		}); err != nil {
@@ -2774,9 +2784,11 @@ func (s *xlStorage) StatInfoFile(ctx context.Context, volume, path string, glob 
 		}
 		st, _ := Lstat(filePath)
 		if st == nil {
-			// Stat a volume entry.
-			if verr := Access(volumeDir); verr != nil {
-				return stat, convertAccessError(verr, errVolumeAccessDenied)
+			if !skipAccessChecks(volume) {
+				// Stat a volume entry.
+				if verr := Access(volumeDir); verr != nil {
+					return stat, convertAccessError(verr, errVolumeAccessDenied)
+				}
 			}
 			return stat, errPathNotFound
 		}
@@ -2809,7 +2821,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	}
 	baseDir := pathJoin(volumeDir, path+slashSeparator)
 	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
-	buf, _, err := s.readAllData(ctx, volumeDir, metaPath, false)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, metaPath, false)
 	if err != nil {
 		return err
 	}
