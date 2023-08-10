@@ -36,6 +36,8 @@ const (
 	adminAPIVersionPrefix          = SlashSeparator + adminAPIVersion
 	adminAPISiteReplicationDevNull = "/site-replication/devnull"
 	adminAPISiteReplicationNetPerf = "/site-replication/netperf"
+	adminAPIClientDevNull          = "/speedtest/client/devnull"
+	adminAPIClientDevExtraTime     = "/speedtest/client/devnull/extratime"
 )
 
 var gzipHandler = func() func(http.Handler) http.HandlerFunc {
@@ -388,6 +390,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/drive").HandlerFunc(adminMiddleware(adminAPI.DriveSpeedtestHandler, noGZFlag))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/net").HandlerFunc(adminMiddleware(adminAPI.NetperfHandler, noGZFlag))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/speedtest/site").HandlerFunc(adminMiddleware(adminAPI.SitePerfHandler, noGZFlag))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPIClientDevNull).HandlerFunc(adminMiddleware(adminAPI.ClientDevNull, noGZFlag))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPIClientDevExtraTime).HandlerFunc(adminMiddleware(adminAPI.ClientDevNullExtraTime, noGZFlag))
 
 		// HTTP Trace
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/trace").HandlerFunc(adminMiddleware(adminAPI.TraceHandler, noObjLayerFlag))

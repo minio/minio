@@ -397,6 +397,8 @@ var (
 	globalInternodeInterface     string
 	globalInternodeInterfaceOnce sync.Once
 
+	// Set last client perf extra time (get lock, and validate)
+	globalLastClientPerfExtraTime int64
 	// Add new variable global values here.
 )
 

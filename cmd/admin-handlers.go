@@ -41,6 +41,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -1170,6 +1171,66 @@ func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request
 	if err := enc.Encode(results); err != nil {
 		return
 	}
+}
+
+// ClientDevNullExtraTime - return extratime for last devnull
+// [POST] /minio/admin/v3/speedtest/client/devnull/extratime
+func (a adminAPIHandlers) ClientDevNullExtraTime(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.BandwidthMonitorAction)
+	if objectAPI == nil {
+		return
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(madmin.ClientPerfExtraTime{TimeSpent: globalLastClientPerfExtraTime}); err != nil {
+		return
+	}
+}
+
+// ClientDevNull - everything goes to io.Discard
+// [POST] /minio/admin/v3/speedtest/client/devnull
+func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	timeStart := time.Now()
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.BandwidthMonitorAction)
+	if objectAPI == nil {
+		return
+	}
+
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "client-perf")
+	lkctx, err := nsLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	ctx = lkctx.Context()
+	defer nsLock.Unlock(lkctx)
+	timeEnd := time.Now()
+
+	atomic.SwapInt64(&globalLastClientPerfExtraTime, timeEnd.Sub(timeStart).Nanoseconds())
+
+	ctx, cancel := context.WithTimeout(ctx, madmin.MaxClientPerfTimeout)
+	defer cancel()
+	totalRx := int64(0)
+	connectTime := time.Now()
+	for {
+		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			// would mean the network is not stable. Logging here will help in debugging network issues.
+			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
+				logger.LogIf(ctx, err)
+			}
+		}
+		totalRx += n
+		if err != nil || ctx.Err() != nil || totalRx > 100*humanize.GiByte {
+			break
+		}
+
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // NetperfHandler - perform mesh style network throughput test
