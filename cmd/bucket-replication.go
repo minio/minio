@@ -1786,6 +1786,8 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 func (p *ReplicationPool) AddLargeWorkers() {
 	for i := 0; i < LargeWorkerCount; i++ {
 		p.lrgworkers = append(p.lrgworkers, make(chan ReplicationWorkerOperation, 100000))
+		i := i
+		go p.AddLargeWorker(p.lrgworkers[i])
 	}
 	go func() {
 		<-p.ctx.Done()
@@ -1793,6 +1795,28 @@ func (p *ReplicationPool) AddLargeWorkers() {
 			close(p.lrgworkers[i])
 		}
 	}()
+}
+
+// AddLargeWorker adds a replication worker to the static pool for large uploads.
+func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation) {
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case oi, ok := <-input:
+			if !ok {
+				return
+			}
+			switch v := oi.(type) {
+			case ReplicateObjectInfo:
+				replicateObject(p.ctx, v, p.objLayer)
+			case DeletedObjectReplicationInfo:
+				replicateDelete(p.ctx, v, p.objLayer)
+			default:
+				logger.LogOnceIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
+			}
+		}
+	}
 }
 
 // ActiveWorkers returns the number of active workers handling replication traffic.
