@@ -29,6 +29,7 @@ package testlogger
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -113,10 +114,10 @@ func (t *testLogger) Cancel() {
 
 func (t *testLogger) Send(ctx context.Context, entry interface{}) error {
 	tb := t.current.Load()
+	var logf func(format string, args ...any)
 	if tb != nil {
 		tbb := *tb
 		tbb.Helper()
-		var logf func(format string, args ...any)
 		switch t.action.Load() {
 		case errorMessage:
 			logf = tbb.Errorf
@@ -125,25 +126,40 @@ func (t *testLogger) Send(ctx context.Context, entry interface{}) error {
 		default:
 			logf = tbb.Logf
 		}
-		switch v := entry.(type) {
-		case log.Entry:
-			if v.Trace == nil {
-				logf("%s: %s", v.Level, v.Message)
-			} else {
-				msg := fmt.Sprintf("%s: %+v", v.Level, v.Trace.Message)
-				if testing.Verbose() {
-					for i, m := range v.Trace.Source {
-						if i == 0 && strings.Contains(m, "logger.go:") {
-							continue
-						}
-						msg += fmt.Sprintf("\n%s", m)
-					}
-				}
-				logf("%s", msg)
+	} else {
+		switch t.action.Load() {
+		case errorMessage:
+			logf = func(format string, args ...any) {
+				fmt.Fprintf(os.Stderr, format+"\n", args...)
 			}
+		case fatalMessage:
+			logf = func(format string, args ...any) {
+				fmt.Fprintf(os.Stderr, format+"\n", args...)
+			}
+			os.Exit(1)
 		default:
-			logf("%+v", v)
+			logf = func(format string, args ...any) {
+				fmt.Fprintf(os.Stdout, format+"\n", args...)
+			}
 		}
+	}
+
+	switch v := entry.(type) {
+	case log.Entry:
+		if v.Trace == nil {
+			logf("%s: %s", v.Level, v.Message)
+		} else {
+			msg := fmt.Sprintf("%s: %+v", v.Level, v.Trace.Message)
+			for i, m := range v.Trace.Source {
+				if i == 0 && strings.Contains(m, "logger.go:") {
+					continue
+				}
+				msg += fmt.Sprintf("\n%s", m)
+			}
+			logf("%s", msg)
+		}
+	default:
+		logf("%+v", v)
 	}
 	return nil
 }

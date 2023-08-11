@@ -198,3 +198,11 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) erro
 func (m *Manager) HostName() string {
 	return m.local
 }
+
+// TestingShutDown will shut down all connections.
+// This should *only* be used by tests.
+func (m *Manager) TestingShutDown() {
+	for _, c := range m.targets {
+		c.shutdown()
+	}
+}

@@ -93,6 +93,7 @@ func TestSingleRoundtrip(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
+	defer local.TestingShutDown()
 
 	// 1: Echo
 	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
@@ -110,6 +111,7 @@ func TestSingleRoundtrip(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
+	defer remote.TestingShutDown()
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	defer localServer.Close()
@@ -181,6 +183,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
 		return aud
 	})
+	defer local.TestingShutDown()
 	errFatal(err)
 
 	// 1: Echo
@@ -214,6 +217,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
+	defer remote.TestingShutDown()
 
 	errFatal(h1.Register(remote, handler1))
 	errFatal(h2.Register(remote, handler2))
@@ -279,11 +283,13 @@ func TestStreamSuite(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
+	defer local.TestingShutDown()
 
 	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
 		return aud
 	})
 	errFatal(err)
+	defer remote.TestingShutDown()
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
@@ -758,21 +764,34 @@ func timeout(after time.Duration) (cancel func()) {
 
 func assertNoActive(t *testing.T, c *Connection) {
 	t.Helper()
-	stats := c.Stats()
-	if stats.IncomingStreams != 0 {
-		var found []uint64
-		c.inStream.Range(func(key uint64, value *muxServer) bool {
-			found = append(found, key)
-			return true
-		})
-		t.Errorf("expected no active streams, got %d incoming: %v", stats.IncomingStreams, found)
-	}
-	if stats.OutgoingStreams != 0 {
-		var found []uint64
-		c.outgoing.Range(func(key uint64, value *MuxClient) bool {
-			found = append(found, key)
-			return true
-		})
-		t.Errorf("expected no active streams, got %d outgoing: %v", stats.OutgoingStreams, found)
+	// Tiny bit racy for tests, but we try to play nice.
+	for i := 10; i >= 0; i-- {
+		runtime.Gosched()
+		stats := c.Stats()
+		if stats.IncomingStreams != 0 {
+			if i > 0 {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			var found []uint64
+			c.inStream.Range(func(key uint64, value *muxServer) bool {
+				found = append(found, key)
+				return true
+			})
+			t.Errorf("expected no active streams, got %d incoming: %v", stats.IncomingStreams, found)
+		}
+		if stats.OutgoingStreams != 0 {
+			if i > 0 {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			var found []uint64
+			c.outgoing.Range(func(key uint64, value *MuxClient) bool {
+				found = append(found, key)
+				return true
+			})
+			t.Errorf("expected no active streams, got %d outgoing: %v", stats.OutgoingStreams, found)
+		}
+		return
 	}
 }

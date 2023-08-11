@@ -117,6 +117,10 @@ const (
 	// The connection will remain in this stat until the connection has been successfully re-established.
 	StateConnectionError
 
+	// StateShutdown is the state when the server has been shut down.
+	// This will not be used under normal operation.
+	StateShutdown
+
 	// MaxDeadline is the maximum deadline allowed,
 	// Approx 49 days.
 	MaxDeadline = time.Duration(math.MaxUint32) * time.Millisecond
@@ -399,14 +403,18 @@ func (c *Connection) connect() {
 		if debugPrint {
 			fmt.Println(c.Local, "Connected Waiting for Messages")
 		}
-		go c.handleMessages(c.ctx, conn)
 		c.updateState(StateConnected)
+		go c.handleMessages(c.ctx, conn)
+		c.connChange.L.Lock()
 		for {
-			c.connChange.L.Lock()
 			c.connChange.Wait()
-			newState := c.State
-			c.connChange.L.Unlock()
+			newState := atomic.LoadUint32((*uint32)(&c.State))
 			if newState != StateConnected {
+				c.connChange.L.Unlock()
+				if newState == StateShutdown {
+					conn.Close()
+					return
+				}
 				fmt.Println(c.Local, "Disconnected")
 				// Reconnect
 				break
@@ -447,22 +455,30 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 // WaitForConnect will block until a connection has been established or
 // the context is canceled, in which case the context error is returned.
 func (c *Connection) WaitForConnect(ctx context.Context) error {
+	c.connChange.L.Lock()
 	if atomic.LoadUint32((*uint32)(&c.State)) == StateConnected {
+		c.connChange.L.Unlock()
 		// Happy path.
 		return nil
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	changed := make(chan struct{}, 1)
+	changed := make(chan State, 1)
 	go func() {
 		defer close(changed)
-		c.connChange.L.Lock()
-		c.connChange.Wait()
-		c.connChange.L.Unlock()
-		select {
-		case changed <- struct{}{}:
-		case <-ctx.Done():
-			return
+		for {
+			c.connChange.Wait()
+			newState := c.State
+			select {
+			case changed <- newState:
+				if newState == StateConnected {
+					c.connChange.L.Unlock()
+					return
+				}
+			case <-ctx.Done():
+				c.connChange.L.Unlock()
+				return
+			}
 		}
 	}()
 
@@ -470,8 +486,8 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-changed:
-			if atomic.LoadUint32((*uint32)(&c.State)) == StateConnected {
+		case newState := <-changed:
+			if newState == StateConnected {
 				return nil
 			}
 		}
@@ -545,7 +561,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 
 func (c *Connection) updateState(s State) {
 	c.connChange.L.Lock()
-	c.connChange.L.Unlock()
+	defer c.connChange.L.Unlock()
 	// We may have reads that aren't locked, so update atomically.
 	atomic.StoreUint32((*uint32)(&c.State), uint32(s))
 	c.connChange.Broadcast()
@@ -615,7 +631,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var err error
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("ws read: %w", err))
+				logger.LogIfNot(c.ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
 
@@ -865,33 +881,50 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 			debug.PrintStack()
 		}
+		c.connChange.L.Lock()
 		if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
 			c.connChange.Broadcast()
 		}
+		c.connChange.L.Unlock()
 
 		conn.Close()
 		c.connWg.Done()
 	}()
+	const pingInterval = 5 * time.Second
+
+	ping := time.NewTicker(pingInterval)
+	pingFrame := ws.MustCompileFrame(ws.NewPingFrame([]byte(c.Local)))
+	defer ping.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ping.C:
+			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				continue
+			}
+			_, err := conn.Write(pingFrame)
+			logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
+			if err != nil {
+				return
+			}
 		case toSend := <-c.outQueue:
 			if debugPrint {
 				// fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
 			}
+			c.connChange.L.Lock()
 			for atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
 				if debugPrint {
 					fmt.Println("Waiting for connection")
 				}
-				c.connChange.L.Lock()
 				c.connChange.Wait()
-				c.connChange.L.Unlock()
 				select {
 				case <-ctx.Done():
+					c.connChange.L.Unlock()
 					return
 				}
 			}
+			c.connChange.L.Unlock()
 
 			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
 			if err != nil {
@@ -929,4 +962,8 @@ func (c *Connection) Stats() ConnectionStats {
 		IncomingStreams: c.inStream.Size(),
 		OutgoingStreams: c.outgoing.Size(),
 	}
+}
+
+func (c *Connection) shutdown() {
+	c.updateState(StateShutdown)
 }
