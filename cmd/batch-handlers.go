@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/env"
@@ -1526,14 +1527,14 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	id := r.Form.Get("jobId")
-	if id == "" {
+	jobID := r.Form.Get("jobId")
+	if jobID == "" {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL)
 		return
 	}
 
 	req := &BatchJobRequest{}
-	if err := req.load(ctx, objectAPI, pathJoin(batchJobPrefix, id)); err != nil {
+	if err := req.load(ctx, objectAPI, pathJoin(batchJobPrefix, jobID)); err != nil {
 		if !errors.Is(err, errNoSuchJob) {
 			logger.LogIf(ctx, err)
 		}
@@ -1561,7 +1562,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	buf, err := io.ReadAll(r.Body)
+	buf, err := io.ReadAll(ioutil.HardLimitReader(r.Body, humanize.MiByte*4))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1578,7 +1579,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	job.ID = shortuuid.New()
+	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	job.User = user
 	job.Started = time.Now()
 
@@ -1614,19 +1615,27 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 	if objectAPI == nil {
 		return
 	}
+
 	jobID := r.Form.Get("id")
 	if jobID == "" {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL)
 		return
 	}
+
+	if _, success := proxyRequestByToken(ctx, w, r, jobID); success {
+		return
+	}
+
 	if err := globalBatchJobPool.canceler(jobID, true); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
 		return
 	}
+
 	j := BatchJobRequest{
 		ID:       jobID,
 		Location: pathJoin(batchJobPrefix, jobID),
 	}
+
 	j.delete(ctx, objectAPI)
 
 	writeSuccessNoContent(w)
@@ -1679,6 +1688,11 @@ func (j *BatchJobPool) resume() {
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, j.objLayer, result.Name); err != nil {
 			logger.LogIf(ctx, err)
+			continue
+		}
+		_, nodeIdx := parseRequestToken(req.ID)
+		if nodeIdx > -1 && GetProxyEndpointLocalIndex(globalProxyEndpoints) != nodeIdx {
+			// This job doesn't belong on this node.
 			continue
 		}
 		if err := j.queueJob(req); err != nil {
