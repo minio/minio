@@ -1682,6 +1682,11 @@ func (j *BatchJobPool) resume() {
 			logger.LogIf(ctx, err)
 			continue
 		}
+		_, nodeIdx := parseRequestToken(req.ID)
+		if nodeIdx > -1 && GetProxyEndpointLocalIndex(globalProxyEndpoints) != nodeIdx {
+			// This job doesn't belong on this node.
+			continue
+		}
 		if err := j.queueJob(req); err != nil {
 			logger.LogIf(ctx, err)
 			continue
