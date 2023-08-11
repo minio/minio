@@ -18,13 +18,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -214,35 +210,8 @@ type BatchJobKeyRotateV1 struct {
 }
 
 // Notify notifies notification endpoint if configured regarding job failure or success.
-func (r BatchJobKeyRotateV1) Notify(ctx context.Context, body io.Reader) error {
-	if r.Flags.Notify.Endpoint == "" {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.Flags.Notify.Endpoint, body)
-	if err != nil {
-		return err
-	}
-
-	if r.Flags.Notify.Token != "" {
-		req.Header.Set("Authorization", r.Flags.Notify.Token)
-	}
-
-	clnt := http.Client{Transport: getRemoteInstanceTransport}
-	resp, err := clnt.Do(req)
-	if err != nil {
-		return err
-	}
-
-	xhttp.DrainBody(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
-	}
-
-	return nil
+func (r BatchJobKeyRotateV1) Notify(ctx context.Context, ri *batchJobInfo) error {
+	return notifyEndpoint(ctx, ri, r.Flags.Notify.Endpoint, r.Flags.Notify.Token)
 }
 
 // KeyRotate rotates encryption key of an object
@@ -330,7 +299,7 @@ const (
 	batchKeyRotateVersion              = batchKeyRotateVersionV1
 	batchKeyRotateAPIVersion           = "v1"
 	batchKeyRotateJobDefaultRetries    = 3
-	batchKeyRotateJobDefaultRetryDelay = 250 * time.Millisecond
+	batchKeyRotateJobDefaultRetryDelay = 25 * time.Millisecond
 )
 
 // Start the batch key rottion job, resumes if there was a pending job via "job.ID"
@@ -351,6 +320,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if delay == 0 {
 		delay = batchKeyRotateJobDefaultRetryDelay
 	}
+
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	skip := func(info FileInfo) (ok bool) {
@@ -475,6 +445,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				if success {
 					break
 				}
+				if delay > 0 {
+					time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
+				}
 			}
 		}()
 	}
@@ -486,20 +459,11 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	// persist in-memory state to disk.
 	logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
-	buf, _ := json.Marshal(ri)
-	if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
+	if err := r.Notify(ctx, ri); err != nil {
 		logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 	}
 
 	cancel()
-	if ri.Failed {
-		ri.ObjectsFailed = 0
-		ri.Bucket = ""
-		ri.Object = ""
-		ri.Objects = 0
-		time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
-	}
-
 	return nil
 }
 
