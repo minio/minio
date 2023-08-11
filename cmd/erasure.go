@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sync/errgroup"
 )
@@ -342,10 +343,13 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					wait := deletedCleanupSleeper.Timer(ctx)
-					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
-					wait()
-					return nil
+					w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+					return w.Run(func() error {
+						wait := deletedCleanupSleeper.Timer(ctx)
+						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+						wait()
+						return nil
+					})
 				})
 			}(disk)
 		}
