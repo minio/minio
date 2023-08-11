@@ -277,23 +277,28 @@ type BatchJobRequest struct {
 	ctx       context.Context      `msg:"-"`
 }
 
-// Notify notifies notification endpoint if configured regarding job failure or success.
-func (r BatchJobReplicateV1) Notify(ctx context.Context, body io.Reader) error {
-	if r.Flags.Notify.Endpoint == "" {
+func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
+	if endpoint == "" {
 		return nil
+	}
+
+	buf, err := json.Marshal(ri)
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.Flags.Notify.Endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
 
-	if r.Flags.Notify.Token != "" {
-		req.Header.Set("Authorization", r.Flags.Notify.Token)
+	if token != "" {
+		req.Header.Set("Authorization", token)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	clnt := http.Client{Transport: getRemoteInstanceTransport}
 	resp, err := clnt.Do(req)
@@ -307,6 +312,11 @@ func (r BatchJobReplicateV1) Notify(ctx context.Context, body io.Reader) error {
 	}
 
 	return nil
+}
+
+// Notify notifies notification endpoint if configured regarding job failure or success.
+func (r BatchJobReplicateV1) Notify(ctx context.Context, ri *batchJobInfo) error {
+	return notifyEndpoint(ctx, ri, r.Flags.Notify.Endpoint, r.Flags.Notify.Token)
 }
 
 // ReplicateFromSource - this is not implemented yet where source is 'remote' and target is local.
@@ -643,8 +653,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		// persist in-memory state to disk.
 		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
-		buf, _ := json.Marshal(ri)
-		if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
+		if err := r.Notify(ctx, ri); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
@@ -1191,8 +1200,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// persist in-memory state to disk.
 		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
-		buf, _ := json.Marshal(ri)
-		if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
+		if err := r.Notify(ctx, ri); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
