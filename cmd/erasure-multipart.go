@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/mimedb"
 	"github.com/minio/pkg/sync/errgroup"
@@ -205,25 +206,31 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			if err != nil {
 				return nil
 			}
-			wait := deletedCleanupSleeper.Timer(ctx)
-			if now.Sub(fi.ModTime) > expiry {
-				removeAll(pathJoin(diskPath, minioMetaMultipartBucket, uploadIDPath))
-			}
-			wait()
-			return nil
+			w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+			return w.Run(func() error {
+				wait := deletedCleanupSleeper.Timer(ctx)
+				if now.Sub(fi.ModTime) > expiry {
+					removeAll(pathJoin(diskPath, minioMetaMultipartBucket, uploadIDPath))
+				}
+				wait()
+				return nil
+			})
 		})
 		vi, err := disk.StatVol(ctx, pathJoin(minioMetaMultipartBucket, shaDir))
 		if err != nil {
 			return nil
 		}
-		wait := deletedCleanupSleeper.Timer(ctx)
-		if now.Sub(vi.Created) > expiry {
-			// We are not deleting shaDir recursively here, if shaDir is empty
-			// and its older then we can happily delete it.
-			Remove(pathJoin(diskPath, minioMetaMultipartBucket, shaDir))
-		}
-		wait()
-		return nil
+		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		return w.Run(func() error {
+			wait := deletedCleanupSleeper.Timer(ctx)
+			if now.Sub(vi.Created) > expiry {
+				// We are not deleting shaDir recursively here, if shaDir is empty
+				// and its older then we can happily delete it.
+				Remove(pathJoin(diskPath, minioMetaMultipartBucket, shaDir))
+			}
+			wait()
+			return nil
+		})
 	})
 
 	readDirFn(pathJoin(diskPath, minioMetaTmpBucket), func(tmpDir string, typ os.FileMode) error {
@@ -234,12 +241,15 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		wait := deletedCleanupSleeper.Timer(ctx)
-		if now.Sub(vi.Created) > expiry {
-			removeAll(pathJoin(diskPath, minioMetaTmpBucket, tmpDir))
-		}
-		wait()
-		return nil
+		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		return w.Run(func() error {
+			wait := deletedCleanupSleeper.Timer(ctx)
+			if now.Sub(vi.Created) > expiry {
+				removeAll(pathJoin(diskPath, minioMetaTmpBucket, tmpDir))
+			}
+			wait()
+			return nil
+		})
 	})
 }
 
