@@ -1814,13 +1814,6 @@ type batchJobMetrics struct {
 	metrics map[string]*batchJobInfo
 }
 
-var globalBatchJobsMetrics batchJobMetrics
-
-func init() {
-	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
-	go globalBatchJobsMetrics.purgeJobMetrics()
-}
-
 //msgp:ignore batchJobMetric
 //go:generate stringer -type=batchJobMetric -trimprefix=batchJobMetric $GOFILE
 type batchJobMetric uint8
@@ -1913,13 +1906,16 @@ func (m *batchJobMetrics) purgeJobMetrics() {
 	for {
 		select {
 		case <-GlobalContext.Done():
+			return
 		case <-t.C:
 			var toDeleteJobMetrics []string
+			m.RLock()
 			for id, metrics := range m.metrics {
 				if time.Since(metrics.LastUpdate) > 24*time.Hour && (metrics.Complete || metrics.Failed) {
 					toDeleteJobMetrics = append(toDeleteJobMetrics, id)
 				}
 			}
+			m.RUnlock()
 			for _, jobID := range toDeleteJobMetrics {
 				m.delete(jobID)
 			}

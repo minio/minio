@@ -399,6 +399,9 @@ var (
 
 	// Set last client perf extra time (get lock, and validate)
 	globalLastClientPerfExtraTime int64
+
+	// Captures all batch jobs metrics globally
+	globalBatchJobsMetrics batchJobMetrics
 	// Add new variable global values here.
 )
 
