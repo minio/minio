@@ -20,7 +20,9 @@ package cmd
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/minio/kes-go"
@@ -258,15 +260,26 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-	keys, err := manager.ListKeys(ctx, r.Form.Get("pattern"))
+	keys, err := manager.ListKeys(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	values, err := keys.Values(0)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+
+	pattern := r.Form.Get("pattern")
+	if !strings.Contains(pattern, "*") {
+		pattern += "*"
+	}
+
+	var values []kes.KeyInfo
+	for name, err := keys.SeekTo(ctx, pattern); err != io.EOF; name, err = keys.Next(ctx) {
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		values = append(values, kes.KeyInfo{
+			Name: name,
+		})
 	}
 	if res, err := json.Marshal(values); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
@@ -454,37 +467,6 @@ func (a kmsAPIHandlers) KMSAssignPolicyHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// KMSSetPolicyHandler - POST /minio/kms/v1/policy/policy?policy=<policy>
-func (a kmsAPIHandlers) KMSSetPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSSetPolicy")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSSetPolicyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	var policy kes.Policy
-	if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	if err := manager.SetPolicy(ctx, r.Form.Get("policy"), &policy); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
-}
-
 // KMSDeletePolicyHandler - DELETE /minio/kms/v1/policy/delete?policy=<policy>
 func (a kmsAPIHandlers) KMSDeletePolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSDeletePolicy")
@@ -531,15 +513,26 @@ func (a kmsAPIHandlers) KMSListPoliciesHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
-	policies, err := manager.ListPolicies(ctx, r.Form.Get("pattern"))
+	policies, err := manager.ListPolicies(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	values, err := policies.Values(0)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+
+	pattern := r.Form.Get("pattern")
+	if !strings.Contains(pattern, "*") {
+		pattern += "*"
+	}
+
+	var values []kes.PolicyInfo
+	for name, err := policies.SeekTo(ctx, pattern); err != io.EOF; name, err = policies.Next(ctx) {
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		values = append(values, kes.PolicyInfo{
+			Name: name,
+		})
 	}
 	if res, err := json.Marshal(values); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
@@ -707,15 +700,26 @@ func (a kmsAPIHandlers) KMSListIdentitiesHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
-	identities, err := manager.ListIdentities(ctx, r.Form.Get("pattern"))
+	identities, err := manager.ListIdentities(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	values, err := identities.Values(0)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+
+	pattern := r.Form.Get("pattern")
+	if !strings.Contains(pattern, "*") {
+		pattern += "*"
+	}
+
+	var values []kes.IdentityInfo
+	for name, err := identities.SeekTo(ctx, pattern); err != io.EOF; name, err = identities.Next(ctx) {
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		values = append(values, kes.IdentityInfo{
+			Identity: name,
+		})
 	}
 	if res, err := json.Marshal(values); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)

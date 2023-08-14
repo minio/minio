@@ -39,7 +39,6 @@ type IdentityManager interface {
 	// The admin identity cannot be deleted.
 	DeleteIdentity(ctx context.Context, identity string) error
 
-	// ListIdentities list all identity metadata that match the specified pattern.
-	// In particular, the pattern * lists all identity metadata.
-	ListIdentities(ctx context.Context, pattern string) (*kes.IdentityIterator, error)
+	// ListIdentities lists all identities.
+	ListIdentities(ctx context.Context) (*kes.ListIter[kes.Identity], error)
 }
