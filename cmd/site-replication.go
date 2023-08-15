@@ -2560,7 +2560,13 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		func(deploymentID string, p madmin.PeerInfo) error {
 			admClient, err := c.getAdminClient(ctx, deploymentID)
 			if err != nil {
-				return err
+				switch err.(type) {
+				case RemoteTargetConnectionErr:
+					sris[depIdx[deploymentID]] = madmin.SRInfo{}
+					return nil
+				default:
+					return err
+				}
 			}
 			srInfo, err := admClient.SRMetaInfo(ctx, opts)
 			if err != nil {
