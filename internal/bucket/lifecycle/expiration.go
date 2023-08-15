@@ -105,8 +105,9 @@ type ExpireDeleteMarker struct {
 
 // Boolean signifies a boolean XML struct with custom marshaling
 type Boolean struct {
-	val bool
-	set bool
+	val    bool
+	set    bool
+	Unused struct{} // Needed for GOB compatibility
 }
 
 // Expiration - expiration actions for a rule in lifecycle configuration.
