@@ -127,8 +127,6 @@ spec:
               value: {{ .Values.oidc.claimPrefix }}
             - name: MINIO_IDENTITY_OPENID_SCOPES
               value: {{ .Values.oidc.scopes }}
-            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
-              value: {{ .Values.oidc.redirectUri }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
             {{- end }}
