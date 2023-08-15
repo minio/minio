@@ -1,0 +1,51 @@
+version: '3.7'
+
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  image: minio/minio:${JOB_NAME}
+  command: server --console-address ":9001" edata{1...4}
+  expose:
+    - "9000"
+    - "9001"
+  environment:
+    MINIO_CI_CD: "on"
+    MINIO_ROOT_USER: "minio"
+    MINIO_ROOT_PASSWORD: "minio123"
+    MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    interval: 30s
+    timeout: 20s
+    retries: 3
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - edata1-1:/edata1
+      - edata1-2:/edata2
+      - edata1-3:/edata3
+      - edata1-4:/edata4
+
+  nginx:
+    image: nginx:1.19.2-alpine
+    hostname: nginx
+    volumes:
+      - ./nginx-1-node.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    depends_on:
+      - minio1
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  edata1-1:
+  edata1-2:
+  edata1-3:
+  edata1-4:

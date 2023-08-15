@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/pkg/env"
@@ -221,13 +221,12 @@ const (
 )
 
 // DefaultKVS - default kvs for all sub-systems
-var DefaultKVS map[string]KVS
+var DefaultKVS = map[string]KVS{}
 
 // RegisterDefaultKVS - this function saves input kvsMap
 // globally, this should be called only once preferably
 // during `init()`.
 func RegisterDefaultKVS(kvsMap map[string]KVS) {
-	DefaultKVS = map[string]KVS{}
 	for subSys, kvs := range kvsMap {
 		DefaultKVS[subSys] = kvs
 	}
@@ -236,14 +235,13 @@ func RegisterDefaultKVS(kvsMap map[string]KVS) {
 // HelpSubSysMap - help for all individual KVS for each sub-systems
 // also carries a special empty sub-system which dumps
 // help for each sub-system key.
-var HelpSubSysMap map[string]HelpKVS
+var HelpSubSysMap = map[string]HelpKVS{}
 
 // RegisterHelpSubSys - this function saves
 // input help KVS for each sub-system globally,
 // this function should be called only once
 // preferably in during `init()`.
 func RegisterHelpSubSys(helpKVSMap map[string]HelpKVS) {
-	HelpSubSysMap = map[string]HelpKVS{}
 	for subSys, hkvs := range helpKVSMap {
 		HelpSubSysMap[subSys] = hkvs
 	}
@@ -251,12 +249,11 @@ func RegisterHelpSubSys(helpKVSMap map[string]HelpKVS) {
 
 // HelpDeprecatedSubSysMap - help for all deprecated sub-systems, that may be
 // removed in the future.
-var HelpDeprecatedSubSysMap map[string]HelpKV
+var HelpDeprecatedSubSysMap = map[string]HelpKV{}
 
 // RegisterHelpDeprecatedSubSys - saves input help KVS for deprecated
 // sub-systems globally. Should be called only once at init.
 func RegisterHelpDeprecatedSubSys(helpDeprecatedKVMap map[string]HelpKV) {
-	HelpDeprecatedSubSysMap = map[string]HelpKV{}
 	for k, v := range helpDeprecatedKVMap {
 		HelpDeprecatedSubSysMap[k] = v
 	}
@@ -426,6 +423,34 @@ func (c Config) DelFrom(r io.Reader) error {
 	return scanner.Err()
 }
 
+// ContextKeyString is type(string) for contextKey
+type ContextKeyString string
+
+// ContextKeyForTargetFromConfig - key for context for target from config
+const ContextKeyForTargetFromConfig = ContextKeyString("ContextKeyForTargetFromConfig")
+
+// ParseConfigTargetID - read all targetIDs from reader
+func ParseConfigTargetID(r io.Reader) (ids map[string]bool, err error) {
+	ids = make(map[string]bool)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		// Skip any empty lines, or comment like characters
+		text := scanner.Text()
+		if text == "" || strings.HasPrefix(text, KvComment) {
+			continue
+		}
+		_, _, tgt, err := GetSubSys(text)
+		if err != nil {
+			return nil, err
+		}
+		ids[tgt] = true
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return
+}
+
 // ReadConfig - read content from input and write into c.
 // Returns whether all parameters were dynamic.
 func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
@@ -570,13 +595,23 @@ func LookupSite(siteKV KVS, regionKV KVS) (s Site, err error) {
 
 // CheckValidKeys - checks if inputs KVS has the necessary keys,
 // returns error if it find extra or superflous keys.
-func CheckValidKeys(subSys string, kv KVS, validKVS KVS) error {
+func CheckValidKeys(subSys string, kv KVS, validKVS KVS, deprecatedKeys ...string) error {
 	nkv := KVS{}
 	for _, kv := range kv {
 		// Comment is a valid key, its also fully optional
 		// ignore it since it is a valid key for all
 		// sub-systems.
 		if kv.Key == Comment {
+			continue
+		}
+		var skip bool
+		for _, deprecatedKey := range deprecatedKeys {
+			if kv.Key == deprecatedKey {
+				skip = true
+				break
+			}
+		}
+		if skip {
 			continue
 		}
 		if _, ok := validKVS.Lookup(kv.Key); !ok {
@@ -600,6 +635,17 @@ func LookupWorm() (bool, error) {
 var renamedSubsys = map[string]string{
 	CrawlerSubSys: ScannerSubSys,
 	// Add future sub-system renames
+}
+
+const ( // deprecated keys
+	apiReplicationWorkers       = "replication_workers"
+	apiReplicationFailedWorkers = "replication_failed_workers"
+)
+
+// map of subsystem to deleted keys
+var deletedSubSysKeys = map[string][]string{
+	APISubSys: {apiReplicationWorkers, apiReplicationFailedWorkers},
+	// Add future sub-system deleted keys
 }
 
 // Merge - merges a new config with all the
@@ -632,9 +678,16 @@ func (c Config) Merge() Config {
 				}
 				subSys = rnSubSys
 			}
+			// Delete deprecated keys for subsystem if any
+			if keys, ok := deletedSubSysKeys[subSys]; ok {
+				for _, key := range keys {
+					ckvs.Delete(key)
+				}
+			}
 			cp[subSys][tgt] = ckvs
 		}
 	}
+
 	return cp
 }
 
@@ -1091,7 +1144,11 @@ const (
 // This function only works for a subset of sub-systems, others return
 // `ValueSourceAbsent`. FIXME: some parameters have custom environment
 // variables for which support needs to be added.
-func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value string, cs ValueSource) {
+//
+// When redactSecrets is true, the returned value is empty if the configuration
+// parameter is a secret, and the returned isRedacted flag is set.
+func (c Config) ResolveConfigParam(subSys, target, cfgParam string, redactSecrets bool,
+) (value string, cs ValueSource, isRedacted bool) {
 	// cs = ValueSourceAbsent initially as it is iota by default.
 
 	// Initially only support OpenID
@@ -1116,6 +1173,18 @@ func (c Config) ResolveConfigParam(subSys, target, cfgParam string) (value strin
 
 	if target == "" {
 		target = Default
+	}
+
+	if redactSecrets {
+		// If the configuration parameter is a secret, make sure to redact it when
+		// we return.
+		helpKV, _ := HelpSubSysMap[subSys].Lookup(cfgParam)
+		if helpKV.Secret {
+			defer func() {
+				value = ""
+				isRedacted = true
+			}()
+		}
 	}
 
 	envVar := getEnvVarName(subSys, target, cfgParam)
@@ -1155,8 +1224,7 @@ type KVSrc struct {
 
 // GetResolvedConfigParams returns all applicable config parameters with their
 // value sources.
-func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) {
-	// Initially only support OpenID
+func (c Config) GetResolvedConfigParams(subSys, target string, redactSecrets bool) ([]KVSrc, error) {
 	if !resolvableSubsystems.Contains(subSys) {
 		return nil, Errorf("unsupported subsystem: %s", subSys)
 	}
@@ -1169,11 +1237,16 @@ func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) 
 
 	r := make([]KVSrc, 0, len(defKVS)+1)
 	for _, kv := range defKVS {
-		v, vs := c.ResolveConfigParam(subSys, target, kv.Key)
+		v, vs, isRedacted := c.ResolveConfigParam(subSys, target, kv.Key, redactSecrets)
 
 		// Fix `vs` when default.
 		if v == kv.Value {
 			vs = ValueSourceDef
+		}
+
+		if redactSecrets && isRedacted {
+			// Skip adding redacted secrets to the output.
+			continue
 		}
 
 		r = append(r, KVSrc{
@@ -1183,8 +1256,9 @@ func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) 
 		})
 	}
 
-	// Add the comment key as well if non-empty.
-	v, vs := c.ResolveConfigParam(subSys, target, Comment)
+	// Add the comment key as well if non-empty (and comments are never
+	// redacted).
+	v, vs, _ := c.ResolveConfigParam(subSys, target, Comment, redactSecrets)
 	if vs != ValueSourceDef {
 		r = append(r, KVSrc{
 			Key:   Comment,
@@ -1196,12 +1270,59 @@ func (c Config) GetResolvedConfigParams(subSys, target string) ([]KVSrc, error) 
 	return r, nil
 }
 
-func (c Config) getTargetKVS(subSys, target string) KVS {
+// getTargetKVS returns configuration KVs for the given subsystem and target. It
+// does not return any secrets in the configuration values when `redactSecrets`
+// is set.
+func (c Config) getTargetKVS(subSys, target string, redactSecrets bool) KVS {
 	store, ok := c[subSys]
 	if !ok {
 		return nil
 	}
-	return store[target]
+
+	// Lookup will succeed, because this function only works with valid subSys
+	// values.
+	resultKVS := make([]KV, 0, len(store[target]))
+	hkvs := HelpSubSysMap[subSys]
+	for _, kv := range store[target] {
+		hkv, _ := hkvs.Lookup(kv.Key)
+		if hkv.Secret && redactSecrets && kv.Value != "" {
+			// Skip returning secrets.
+			continue
+			// clonedKV := kv
+			// clonedKV.Value = redactedSecret
+			// resultKVS = append(resultKVS, clonedKV)
+		} else {
+			resultKVS = append(resultKVS, kv)
+		}
+	}
+
+	return resultKVS
+}
+
+// getTargetEnvs returns configured environment variable settings for the given
+// subsystem and target.
+func (c Config) getTargetEnvs(subSys, target string, defKVS KVS, redactSecrets bool) map[string]EnvPair {
+	hkvs := HelpSubSysMap[subSys]
+	envMap := make(map[string]EnvPair)
+
+	// Add all env vars that are set.
+	for _, kv := range defKVS {
+		envName := getEnvVarName(subSys, target, kv.Key)
+		envPair := EnvPair{
+			Name:  envName,
+			Value: env.Get(envName, ""),
+		}
+		if envPair.Value != "" {
+			hkv, _ := hkvs.Lookup(kv.Key)
+			if hkv.Secret && redactSecrets {
+				// Skip adding any secret to the returned value.
+				continue
+				// envPair.Value = redactedSecret
+			}
+			envMap[kv.Key] = envPair
+		}
+	}
+	return envMap
 }
 
 // EnvPair represents an environment variable and its value.
@@ -1222,7 +1343,7 @@ type SubsysInfo struct {
 // GetSubsysInfo returns `SubsysInfo`s for all targets for the subsystem, when
 // target is empty. Otherwise returns `SubsysInfo` for the desired target only.
 // To request the default target only, target must be set to `Default`.
-func (c Config) GetSubsysInfo(subSys, target string) ([]SubsysInfo, error) {
+func (c Config) GetSubsysInfo(subSys, target string, redactSecrets bool) ([]SubsysInfo, error) {
 	// Check if config param requested is valid.
 	defKVS1, ok := DefaultKVS[subSys]
 	if !ok {
@@ -1258,28 +1379,13 @@ func (c Config) GetSubsysInfo(subSys, target string) ([]SubsysInfo, error) {
 
 	r := make([]SubsysInfo, 0, len(targets))
 	for _, target := range targets {
-		kvs := c.getTargetKVS(subSys, target)
-		cs := SubsysInfo{
+		r = append(r, SubsysInfo{
 			SubSys:   subSys,
 			Target:   target,
 			Defaults: defKVS,
-			Config:   kvs,
-			EnvMap:   make(map[string]EnvPair),
-		}
-
-		// Add all env vars that are set.
-		for _, kv := range defKVS {
-			envName := getEnvVarName(subSys, target, kv.Key)
-			envPair := EnvPair{
-				Name:  envName,
-				Value: env.Get(envName, ""),
-			}
-			if envPair.Value != "" {
-				cs.EnvMap[kv.Key] = envPair
-			}
-		}
-
-		r = append(r, cs)
+			Config:   c.getTargetKVS(subSys, target, redactSecrets),
+			EnvMap:   c.getTargetEnvs(subSys, target, defKVS, redactSecrets),
+		})
 	}
 
 	return r, nil

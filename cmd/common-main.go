@@ -52,14 +52,13 @@ import (
 	"github.com/minio/console/restapi"
 	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes-go"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
@@ -67,7 +66,6 @@ import (
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
-	"github.com/rs/dnscache"
 )
 
 // serverDebugLog will enable debug printing
@@ -97,11 +95,6 @@ func init() {
 
 	initGlobalContext()
 
-	options := dnscache.ResolverRefreshOptions{
-		ClearUnused:      true,
-		PersistOnFailure: false,
-	}
-
 	t, _ := minioVersionToReleaseTime(Version)
 	if !t.IsZero() {
 		globalVersionUnix = uint64(t.Unix())
@@ -109,44 +102,11 @@ func init() {
 
 	globalIsCICD = env.Get("MINIO_CI_CD", "") != "" || env.Get("CI", "") != ""
 
-	containers := IsKubernetes() || IsDocker() || IsBOSH() || IsDCOS() || IsPCFTile()
-
-	// Call to refresh will refresh names in cache. If you pass true, it will also
-	// remove cached names not looked up since the last call to Refresh. It is a good idea
-	// to call this method on a regular interval.
-	go func() {
-		var t *time.Ticker
-		if containers {
-			// k8s DNS TTL is 30s (Attempt a refresh only after)
-			t = time.NewTicker(30 * time.Second)
-		} else {
-			t = time.NewTicker(10 * time.Minute)
-		}
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				globalDNSCache.RefreshWithOptions(options)
-			case <-GlobalContext.Done():
-				return
-			}
-		}
-	}()
-
-	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
-		PassHost:     true,
-		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
-		Logger: func(err error) {
-			if err != nil && !errors.Is(err, context.Canceled) {
-				logger.LogIf(GlobalContext, err)
-			}
-		},
-	})
-
 	console.SetColor("Debug", fcolor.New())
 
 	gob.Register(StorageErr(""))
 	gob.Register(madmin.TimeInfo{})
+	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
 
 	defaultAWSCredProvider = []credentials.Provider{
@@ -187,7 +147,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvMinIOBrowserRedirectURL, ""); value != "" {
+	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
@@ -208,6 +168,11 @@ func minioConfigToConsoleFeatures() {
 	if globalIAMSys.LDAPConfig.Enabled() {
 		os.Setenv("CONSOLE_LDAP_ENABLED", config.EnableOn)
 	}
+	// Handle animation in welcome page
+	if value := env.Get(config.EnvBrowserLoginAnimation, "on"); value != "" {
+		os.Setenv("CONSOLE_ANIMATED_LOGIN", value)
+	}
+
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
@@ -257,6 +222,9 @@ func initConsoleServer() (*restapi.Server, error) {
 		Path: globalCertsCADir.Get(),
 	}
 
+	// set certs before other console initialization
+	restapi.GlobalRootCAs, restapi.GlobalPublicCerts, restapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
+
 	swaggerSpec, err := loads.Embedded(restapi.SwaggerJSON, restapi.FlatSwaggerJSON)
 	if err != nil {
 		return nil, err
@@ -282,8 +250,6 @@ func initConsoleServer() (*restapi.Server, error) {
 	server := restapi.NewServer(api)
 	// register all APIs
 	server.ConfigureAPI()
-
-	restapi.GlobalRootCAs, restapi.GlobalPublicCerts, restapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
 
 	consolePort, _ := strconv.Atoi(globalMinioConsolePort)
 
@@ -461,6 +427,28 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
+
+	// Check if we have configured a custom DNS cache TTL.
+	dnsTTL := ctx.Duration("dns-cache-ttl")
+	if dnsTTL <= 0 {
+		dnsTTL = 10 * time.Minute
+	}
+
+	// Call to refresh will refresh names in cache.
+	go func() {
+		// Baremetal setups set DNS refresh window up to dnsTTL duration.
+		t := time.NewTicker(dnsTTL)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				globalDNSCache.Refresh()
+
+			case <-GlobalContext.Done():
+				return
+			}
+		}
+	}()
 }
 
 type envKV struct {
@@ -631,7 +619,7 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
 	if globalBrowserEnabled {
-		if redirectURL := env.Get(config.EnvMinIOBrowserRedirectURL, ""); redirectURL != "" {
+		if redirectURL := env.Get(config.EnvBrowserRedirectURL, ""); redirectURL != "" {
 			u, err := xnet.ParseHTTPURL(redirectURL)
 			if err != nil {
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
@@ -776,9 +764,12 @@ func handleCommonEnvVars() {
 			logger.Info(color.RedBold(msg))
 		}
 		globalActiveCred = cred
+		globalCredViaEnv = true
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}
+
+	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.

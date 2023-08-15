@@ -6,53 +6,50 @@ apiVersion: {{ template "minio.consoleIngress.apiVersion" . }}
 kind: Ingress
 metadata:
   name: {{ $fullName }}
-  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- with .Values.consoleIngress.labels }}
-{{ toYaml . | indent 4 }}
-{{- end }}
-
-{{- with .Values.consoleIngress.annotations }}
-  annotations:
-{{ toYaml . | indent 4 }}
-{{- end }}
+    {{- with .Values.consoleIngress.labels }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.consoleIngress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-{{- if .Values.consoleIngress.ingressClassName }}
+  {{- if .Values.consoleIngress.ingressClassName }}
   ingressClassName: {{ .Values.consoleIngress.ingressClassName }}
-{{- end }}
-{{- if .Values.consoleIngress.tls }}
+  {{- end }}
+  {{- if .Values.consoleIngress.tls }}
   tls:
-  {{- range .Values.consoleIngress.tls }}
+    {{- range .Values.consoleIngress.tls }}
     - hosts:
       {{- range .hosts }}
         - {{ . | quote }}
       {{- end }}
       secretName: {{ .secretName }}
+    {{- end }}
   {{- end }}
-{{- end }}
   rules:
-  {{- range .Values.consoleIngress.hosts }}
+    {{- range .Values.consoleIngress.hosts }}
     - http:
         paths:
           - path: {{ $ingressPath }}
-          {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+            {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
             pathType: Prefix
             backend:
               service:
                 name: {{ $fullName }}
                 port: 
                   number: {{ $servicePort }}
-          {{- else }}
+            {{- else }}
             backend:
               serviceName: {{ $fullName }}
               servicePort: {{ $servicePort }}
-          {{- end }}
+            {{- end }}
       {{- if . }}
-      host: {{ . | quote }}
+      host: {{ tpl . $ | quote }}
       {{- end }}
-  {{- end }}
+    {{- end }}
 {{- end }}

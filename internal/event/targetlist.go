@@ -34,7 +34,7 @@ type Target interface {
 	ID() TargetID
 	IsActive() (bool, error)
 	Save(Event) error
-	Send(string) error
+	SendFromStore(string) error
 	Close() error
 	Store() TargetStore
 }
@@ -157,7 +157,7 @@ func (list *TargetList) TargetMap() map[TargetID]Target {
 }
 
 // Send - sends events to targets identified by target IDs.
-func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult) {
+func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult, synchronous bool) {
 	if atomic.LoadInt64(&list.currentSendCalls) > maxConcurrentTargetSendCalls {
 		err := fmt.Errorf("concurrent target notifications exceeded %d", maxConcurrentTargetSendCalls)
 		for id := range targetIDset {
@@ -165,31 +165,38 @@ func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- 
 		}
 		return
 	}
-
+	if synchronous {
+		list.send(event, targetIDset, resCh)
+		return
+	}
 	go func() {
-		var wg sync.WaitGroup
-		for id := range targetIDset {
-			list.RLock()
-			target, ok := list.targets[id]
-			list.RUnlock()
-			if ok {
-				wg.Add(1)
-				go func(id TargetID, target Target) {
-					atomic.AddInt64(&list.currentSendCalls, 1)
-					defer atomic.AddInt64(&list.currentSendCalls, -1)
-					defer wg.Done()
-					tgtRes := TargetIDResult{ID: id}
-					if err := target.Save(event); err != nil {
-						tgtRes.Err = err
-					}
-					resCh <- tgtRes
-				}(id, target)
-			} else {
-				resCh <- TargetIDResult{ID: id}
-			}
-		}
-		wg.Wait()
+		list.send(event, targetIDset, resCh)
 	}()
+}
+
+func (list *TargetList) send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult) {
+	var wg sync.WaitGroup
+	for id := range targetIDset {
+		list.RLock()
+		target, ok := list.targets[id]
+		list.RUnlock()
+		if ok {
+			wg.Add(1)
+			go func(id TargetID, target Target) {
+				atomic.AddInt64(&list.currentSendCalls, 1)
+				defer atomic.AddInt64(&list.currentSendCalls, -1)
+				defer wg.Done()
+				tgtRes := TargetIDResult{ID: id}
+				if err := target.Save(event); err != nil {
+					tgtRes.Err = err
+				}
+				resCh <- tgtRes
+			}(id, target)
+		} else {
+			resCh <- TargetIDResult{ID: id}
+		}
+	}
+	wg.Wait()
 }
 
 // Stats returns stats for targets.

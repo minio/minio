@@ -24,7 +24,8 @@ import (
 // Prefix holds the prefix xml tag in <Rule> and <Filter>
 type Prefix struct {
 	string
-	set bool
+	set    bool
+	Unused struct{} // Needed for GOB compatibility
 }
 
 // UnmarshalXML - decodes XML data.

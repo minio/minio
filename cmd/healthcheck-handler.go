@@ -28,38 +28,32 @@ import (
 
 const unavailable = "offline"
 
-func isServerInitialized() bool {
-	return newObjectLayerFn() == nil
-}
-
 // ClusterCheckHandler returns if the server is ready for requests.
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterCheckHandler")
 
-	if isServerInitialized() {
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
 
-	objLayer := newObjectLayerFn()
-
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
 	opts := HealthOptions{
-		Maintenance: r.Form.Get("maintenance") == "true",
+		Maintenance:    r.Form.Get("maintenance") == "true",
 		DeploymentType: r.Form.Get("deployment-type"),
 	}
 	result := objLayer.Health(ctx, opts)
-	if result.WriteQuorum > 0 {
-		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
+	w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
+	w.Header().Set(xhttp.MinIOStorageClassDefaults, strconv.FormatBool(result.UsingDefaults))
+	// return how many drives are being healed if any
+	if result.HealingDrives > 0 {
+		w.Header().Set(xhttp.MinIOHealingDrives, strconv.Itoa(result.HealingDrives))
 	}
 	if !result.Healthy {
-		// return how many drives are being healed if any
-		if result.HealingDrives > 0 {
-			w.Header().Set(xhttp.MinIOHealingDrives, strconv.Itoa(result.HealingDrives))
-		}
 		// As a maintenance call we are purposefully asked to be taken
 		// down, this is for orchestrators to know if we can safely
 		// take this server down, return appropriate error.
@@ -77,13 +71,12 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterReadCheckHandler")
 
-	if isServerInitialized() {
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
-
-	objLayer := newObjectLayerFn()
 
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
@@ -104,9 +97,15 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if isServerInitialized() {
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+	}
+
+	peerCall := r.Header.Get(xhttp.MinIOPeerCall) != ""
+	if peerCall {
+		return
 	}
 
 	if int(globalHTTPStats.loadRequestsInQueue()) > globalAPIConfig.getRequestsPoolCapacity() {
@@ -121,7 +120,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify if KMS is reachable if its configured
-	if GlobalKMS != nil {
+	if GlobalKMS != nil && !peerCall {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 

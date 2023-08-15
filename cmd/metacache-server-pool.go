@@ -129,7 +129,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 				return entries, io.EOF
 			}
 			if !errors.Is(err, context.DeadlineExceeded) {
-				o.debugln("listPath: got error", err)
+				// Report error once per bucket, but continue listing.
+				logger.LogOnceIf(ctx, err, "GetMetacacheListing:"+o.Bucket)
 			}
 			o.Transient = true
 			o.Create = false
@@ -210,10 +211,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			}
 		}()
 		o.ID = ""
-
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Resuming listing from drives failed %w, proceeding to do raw listing", err))
-		}
 	}
 
 	// Do listing in-place.
@@ -399,14 +396,14 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			if o.Lifecycle != nil {
 				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
 				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {
 						continue
 					} // queue version for replication upon expired restored copies if needed.
 				}
 			}
 
-			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication)
+			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication, 0)
 		}
 	}
 }

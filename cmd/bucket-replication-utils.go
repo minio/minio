@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,9 +29,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/logger"
 )
 
 //go:generate msgp -file=$GOFILE
@@ -180,6 +182,7 @@ type replicateTargetDecision struct {
 	Synchronous bool   // Synchronous replication configured.
 	Arn         string // ARN of replication target
 	ID          string
+	Tgt         *TargetClient
 }
 
 func (t *replicateTargetDecision) String() string {
@@ -288,7 +291,7 @@ var errInvalidReplicateDecisionFormat = fmt.Errorf("ReplicateDecision has invali
 
 // parse k-v pairs of target ARN to stringified ReplicateTargetDecision delimited by ',' into a
 // ReplicateDecision struct
-func parseReplicateDecision(s string) (r ReplicateDecision, err error) {
+func parseReplicateDecision(ctx context.Context, bucket, s string) (r ReplicateDecision, err error) {
 	r = ReplicateDecision{
 		targetsMap: make(map[string]replicateTargetDecision),
 	}
@@ -317,7 +320,13 @@ func parseReplicateDecision(s string) (r ReplicateDecision, err error) {
 		if err != nil {
 			return r, err
 		}
-		r.targetsMap[slc[0]] = replicateTargetDecision{Replicate: replicate, Synchronous: sync, Arn: tgt[2], ID: tgt[3]}
+		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, slc[0])
+		if tgtClnt == nil {
+			// Skip stale targets if any and log them to be missing atleast once.
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, slc[0]), slc[0])
+			// We save the targetDecision even when its not configured or stale.
+		}
+		r.targetsMap[slc[0]] = replicateTargetDecision{Replicate: replicate, Synchronous: sync, Arn: tgt[2], ID: tgt[3], Tgt: tgtClnt}
 	}
 	return
 }
@@ -512,7 +521,10 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 				ObjectName: oi.Name,
 				VersionID:  oi.VersionID,
 			},
-		}, oi, ObjectOptions{VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name)}, nil)
+		}, oi, ObjectOptions{
+			Versioned:        globalBucketVersioningSys.PrefixEnabled(oi.Bucket, oi.Name),
+			VersionSuspended: globalBucketVersioningSys.PrefixSuspended(oi.Bucket, oi.Name),
+		}, nil)
 	} else {
 		dsc = mustReplicate(GlobalContext, oi.Bucket, oi.Name, getMustReplicateOptions(ObjectInfo{
 			UserDefined: oi.UserDefined,
@@ -533,12 +545,18 @@ func getHealReplicateObjectInfo(objInfo ObjectInfo, rcfg replicationConfig) Repl
 	}
 }
 
+func (ri *ReplicateObjectInfo) getReplicationState() ReplicationState {
+	rs := ri.ObjectInfo.getReplicationState()
+	rs.ReplicateDecisionStr = ri.Dsc.String()
+	return rs
+}
+
 // vID here represents the versionID client specified in request - need to distinguish between delete marker and delete marker deletion
-func (o *ObjectInfo) getReplicationState(dsc string, vID string, heal bool) ReplicationState {
+func (o *ObjectInfo) getReplicationState() ReplicationState {
 	rs := ReplicationState{
 		ReplicationStatusInternal:  o.ReplicationStatusInternal,
 		VersionPurgeStatusInternal: o.VersionPurgeStatusInternal,
-		ReplicateDecisionStr:       dsc,
+		ReplicateDecisionStr:       o.replicationDecision,
 		Targets:                    make(map[string]replication.StatusType),
 		PurgeTargets:               make(map[string]VersionPurgeStatusType),
 		ResetStatusesMap:           make(map[string]string),
@@ -711,6 +729,7 @@ type TargetReplicationResyncStatus struct {
 	// Last bucket/object replicated.
 	Bucket string `json:"-" msg:"bkt"`
 	Object string `json:"-" msg:"obj"`
+	Error  error  `json:"-" msg:"-"`
 }
 
 // BucketReplicationResyncStatus captures current replication resync status
@@ -776,9 +795,10 @@ const (
 
 // MRFReplicateEntry mrf entry to save to disk
 type MRFReplicateEntry struct {
-	Bucket    string `json:"bucket" msg:"b"`
-	Object    string `json:"object" msg:"o"`
-	versionID string `json:"-"`
+	Bucket     string `json:"bucket" msg:"b"`
+	Object     string `json:"object" msg:"o"`
+	versionID  string `json:"-"`
+	RetryCount int    `json:"retryCount" msg:"rc"`
 }
 
 // MRFReplicateEntries has the map of MRF entries to save to disk
@@ -790,9 +810,10 @@ type MRFReplicateEntries struct {
 // ToMRFEntry returns the relevant info needed by MRF
 func (ri ReplicateObjectInfo) ToMRFEntry() MRFReplicateEntry {
 	return MRFReplicateEntry{
-		Bucket:    ri.Bucket,
-		Object:    ri.Name,
-		versionID: ri.VersionID,
+		Bucket:     ri.Bucket,
+		Object:     ri.Name,
+		versionID:  ri.VersionID,
+		RetryCount: int(ri.RetryCount),
 	}
 }
 

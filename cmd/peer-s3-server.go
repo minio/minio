@@ -25,8 +25,8 @@ import (
 	"sort"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (
@@ -210,13 +210,12 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 		}
 	}
 
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
+	// Since we recreated buckets and error was `not-empty`, return not-empty.
+	if recreate {
+		return errVolumeNotEmpty
+	} // for all other errors reduce by write quorum.
 
-	return nil
+	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
@@ -238,9 +237,6 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 				// No need to return error when force create was
 				// requested.
 				return nil
-			}
-			if err != nil && !errors.Is(err, errVolumeExists) {
-				logger.LogIf(ctx, err)
 			}
 			return err
 		}, index)
@@ -333,9 +329,13 @@ func registerPeerS3Handlers(router *mux.Router) {
 	server := &peerS3Server{}
 	subrouter := router.PathPrefix(peerS3Prefix).Subrouter()
 
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodMakeBucket).HandlerFunc(httpTraceHdrs(server.MakeBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodGetBucketInfo).HandlerFunc(httpTraceHdrs(server.GetBucketInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(httpTraceHdrs(server.ListBucketsHandler))
+	h := func(f http.HandlerFunc) http.HandlerFunc {
+		return collectInternodeStats(httpTraceHdrs(f))
+	}
+
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(h(server.HealthHandler))
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodMakeBucket).HandlerFunc(h(server.MakeBucketHandler))
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodDeleteBucket).HandlerFunc(h(server.DeleteBucketHandler))
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodGetBucketInfo).HandlerFunc(h(server.GetBucketInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(h(server.ListBucketsHandler))
 }

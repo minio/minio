@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -116,11 +116,11 @@ func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updat
 	return d.disk.NSScanner(ctx, cache, updates, scanMode)
 }
 
-func (d *naughtyDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+func (d *naughtyDisk) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return info, err
 	}
-	return d.disk.DiskInfo(ctx)
+	return d.disk.DiskInfo(ctx, metrics)
 }
 
 func (d *naughtyDisk) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {

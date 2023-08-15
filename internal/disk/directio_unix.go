@@ -1,7 +1,7 @@
-//go:build linux || netbsd || freebsd
-// +build linux netbsd freebsd
+//go:build !windows && !darwin && !openbsd && !plan9
+// +build !windows,!darwin,!openbsd,!plan9
 
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,6 +27,9 @@ import (
 	"github.com/ncw/directio"
 	"golang.org/x/sys/unix"
 )
+
+// ODirectPlatform indicates if the platform supports O_DIRECT
+const ODirectPlatform = true
 
 // OpenFileDirectIO - bypass kernel cache.
 func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, error) {

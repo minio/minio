@@ -1,7 +1,6 @@
-//go:build !linux && !netbsd && !freebsd && !darwin
-// +build !linux,!netbsd,!freebsd,!darwin
+//go:build windows || openbsd || plan9
 
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -23,6 +22,9 @@ package disk
 import (
 	"os"
 )
+
+// ODirectPlatform indicates if the platform supports O_DIRECT
+const ODirectPlatform = false
 
 // OpenBSD, Windows, and illumos do not support O_DIRECT.
 // On Windows there is no documentation on disabling O_DIRECT.

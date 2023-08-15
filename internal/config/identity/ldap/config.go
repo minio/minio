@@ -23,7 +23,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/ldap"
 )
@@ -174,7 +174,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	getCfgVal := func(cfgParam string) string {
 		// As parameters are already validated, we skip checking
 		// if the config param was found.
-		val, _ := s.ResolveConfigParam(config.IdentityLDAPSubSys, config.Default, cfgParam)
+		val, _, _ := s.ResolveConfigParam(config.IdentityLDAPSubSys, config.Default, cfgParam, false)
 		return val
 	}
 
@@ -272,7 +272,7 @@ func (l *Config) GetConfigInfo(s config.Config, cfgName string) ([]madmin.IDPCfg
 	if cfgName != madmin.Default {
 		return nil, ErrProviderConfigNotFound
 	}
-	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityLDAPSubSys, cfgName)
+	kvsrcs, err := s.GetResolvedConfigParams(config.IdentityLDAPSubSys, cfgName, true)
 	if err != nil {
 		return nil, err
 	}

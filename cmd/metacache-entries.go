@@ -55,7 +55,7 @@ func (e metaCacheEntry) isObject() bool {
 	return len(e.metadata) > 0
 }
 
-// isObjectDir returns if the entry is representing an object__XL_DIR__
+// isObjectDir returns if the entry is representing an object/
 func (e metaCacheEntry) isObjectDir() bool {
 	return len(e.metadata) > 0 && strings.HasSuffix(e.name, slashSeparator)
 }

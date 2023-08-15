@@ -340,6 +340,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 }
 
 func globalSync() {
-	defer globalOSMetrics.time(osMetricSync)
+	defer globalOSMetrics.time(osMetricSync)()
 	syscall.Sync()
 }

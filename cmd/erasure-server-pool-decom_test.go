@@ -29,8 +29,8 @@ func prepareErasurePools() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, err := newErasureServerPools(context.Background(), pools)
@@ -127,8 +127,8 @@ func TestPoolMetaValidate(t *testing.T) {
 			meta:           meta,
 			pools:          orderChangePools,
 			name:           "Invalid-Orderchange",
-			expectedErr:    true,
-			expectedUpdate: false,
+			expectedErr:    false,
+			expectedUpdate: true,
 		},
 		{
 			meta:           nmeta1,
@@ -148,8 +148,8 @@ func TestPoolMetaValidate(t *testing.T) {
 			meta:           nmeta2,
 			pools:          reducedPools,
 			name:           "Invalid-Decom-Pending-Pool-Removal",
-			expectedErr:    true,
-			expectedUpdate: false,
+			expectedErr:    false,
+			expectedUpdate: true,
 		},
 		{
 			meta:           nmeta1,
@@ -169,8 +169,8 @@ func TestPoolMetaValidate(t *testing.T) {
 			meta:           nmeta2,
 			pools:          orderChangePools,
 			name:           "Invalid-Orderchange-Decom",
-			expectedErr:    true,
-			expectedUpdate: false,
+			expectedErr:    false,
+			expectedUpdate: true,
 		},
 	}
 

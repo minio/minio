@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -44,23 +43,30 @@ const (
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
+	apiODirect                     = "odirect"
 	apiGzipObjects                 = "gzip_objects"
+	apiRootAccess                  = "root_access"
+	apiSyncEvents                  = "sync_events"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPITransitionWorkers       = "MINIO_API_TRANSITION_WORKERS"
 	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default "on"
+	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
 	EnvAPIReplicationPriority     = "MINIO_API_REPLICATION_PRIORITY"
 
 	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
 	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
 	EnvAPIDeleteCleanupInterval       = "MINIO_API_DELETE_CLEANUP_INTERVAL"
 	EnvDeleteCleanupInterval          = "MINIO_DELETE_CLEANUP_INTERVAL"
+	EnvAPIODirect                     = "MINIO_API_ODIRECT"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
+	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
+	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
 )
 
 // Deprecated key and ENVs
@@ -68,11 +74,6 @@ const (
 	apiReadyDeadline            = "ready_deadline"
 	apiReplicationWorkers       = "replication_workers"
 	apiReplicationFailedWorkers = "replication_failed_workers"
-
-	EnvAPIReadyDeadline            = "MINIO_API_READY_DEADLINE"
-	EnvAPIReplicationWorkers       = "MINIO_API_REPLICATION_WORKERS"
-	EnvAPIReplicationFailedWorkers = "MINIO_API_REPLICATION_FAILED_WORKERS"
-	EnvAPITransitionWorkers        = "MINIO_API_TRANSITION_WORKERS"
 )
 
 // DefaultKVS - default storage class config
@@ -123,12 +124,25 @@ var (
 			Value: "5m",
 		},
 		config.KV{
-			Key:   apiDisableODirect,
-			Value: "off",
+			Key:        apiDisableODirect,
+			Value:      "",
+			Deprecated: true,
+		},
+		config.KV{
+			Key:   apiODirect,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   apiGzipObjects,
-			Value: "off",
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   apiRootAccess,
+			Value: config.EnableOn,
+		},
+		config.KV{
+			Key:   apiSyncEvents,
+			Value: config.EnableOff,
 		},
 	}
 )
@@ -146,8 +160,10 @@ type Config struct {
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
-	DisableODirect              bool          `json:"disable_odirect"`
+	EnableODirect               bool          `json:"enable_odirect"`
 	GzipObjects                 bool          `json:"gzip_objects"`
+	RootAccess                  bool          `json:"root_access"`
+	SyncEvents                  bool          `json:"sync_events"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -163,13 +179,39 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	// remove this since we have removed this already.
-	kvs.Delete(apiReadyDeadline)
-	kvs.Delete("extend_list_cache_life")
-	kvs.Delete(apiReplicationWorkers)
-	kvs.Delete(apiReplicationFailedWorkers)
+	deprecatedKeys := []string{
+		apiReadyDeadline,
+		"extend_list_cache_life",
+		apiReplicationWorkers,
+		apiReplicationFailedWorkers,
+	}
 
-	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
+	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
+	enableODirect := env.Get(EnvAPIODirect, kvs.Get(apiODirect)) == config.EnableOn
+	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
+
+	cfg = Config{
+		EnableODirect: enableODirect || !disableODirect,
+		GzipObjects:   gzipObjects,
+		RootAccess:    rootAccess,
+	}
+
+	var corsAllowOrigin []string
+	corsList := env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin))
+	if corsList == "" {
+		corsAllowOrigin = []string{"*"} // defaults to '*'
+	} else {
+		corsAllowOrigin = strings.Split(corsList, ",")
+		for _, cors := range corsAllowOrigin {
+			if cors == "" {
+				return cfg, errors.New("invalid cors value")
+			}
+		}
+	}
+	cfg.CorsAllowOrigin = corsAllowOrigin
+
+	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
 		return cfg, err
 	}
 
@@ -179,6 +221,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	cfg.RequestsMax = requestsMax
 	if requestsMax < 0 {
 		return cfg, errors.New("invalid API max requests value")
 	}
@@ -187,28 +230,27 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+	cfg.RequestsDeadline = requestsDeadline
 
 	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.GetWithDefault(apiClusterDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
-
-	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
-	if len(corsAllowOrigin) == 0 {
-		corsAllowOrigin = []string{"*"} // defaults to '*'
-	}
+	cfg.ClusterDeadline = clusterDeadline
 
 	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.GetWithDefault(apiRemoteTransportDeadline, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.RemoteTransportDeadline = remoteTransportDeadline
 
 	listQuorum := env.Get(EnvAPIListQuorum, kvs.GetWithDefault(apiListQuorum, DefaultKVS))
 	switch listQuorum {
 	case "strict", "optimal", "reduced", "disk":
 	default:
-		return cfg, fmt.Errorf("invalid value %v for list_quorum", listQuorum)
+		return cfg, fmt.Errorf("invalid value %v for list_quorum: will default to 'strict'", listQuorum)
 	}
+	cfg.ListQuorum = listQuorum
 
 	replicationPriority := env.Get(EnvAPIReplicationPriority, kvs.GetWithDefault(apiReplicationPriority, DefaultKVS))
 	switch replicationPriority {
@@ -216,14 +258,13 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	default:
 		return cfg, fmt.Errorf("invalid value %v for replication_priority", replicationPriority)
 	}
+	cfg.ReplicationPriority = replicationPriority
 
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
-	if transitionWorkers < runtime.GOMAXPROCS(0)/2 {
-		return cfg, config.ErrInvalidTransitionWorkersValue(nil)
-	}
+	cfg.TransitionWorkers = transitionWorkers
 
 	v := env.Get(EnvAPIDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
 	if v == "" {
@@ -234,33 +275,21 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+	cfg.DeleteCleanupInterval = deleteCleanupInterval
 
 	staleUploadsCleanupInterval, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsCleanupInterval, kvs.GetWithDefault(apiStaleUploadsCleanupInterval, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.StaleUploadsCleanupInterval = staleUploadsCleanupInterval
 
 	staleUploadsExpiry, err := time.ParseDuration(env.Get(EnvAPIStaleUploadsExpiry, kvs.GetWithDefault(apiStaleUploadsExpiry, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
-	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
-	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
+	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
 
-	return Config{
-		RequestsMax:                 requestsMax,
-		RequestsDeadline:            requestsDeadline,
-		ClusterDeadline:             clusterDeadline,
-		CorsAllowOrigin:             corsAllowOrigin,
-		RemoteTransportDeadline:     remoteTransportDeadline,
-		ListQuorum:                  listQuorum,
-		ReplicationPriority:         replicationPriority,
-		TransitionWorkers:           transitionWorkers,
-		StaleUploadsCleanupInterval: staleUploadsCleanupInterval,
-		StaleUploadsExpiry:          staleUploadsExpiry,
-		DeleteCleanupInterval:       deleteCleanupInterval,
-		DisableODirect:              disableODirect,
-		GzipObjects:                 gzipObjects,
-	}, nil
+	return cfg, nil
 }

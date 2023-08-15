@@ -34,8 +34,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/cli"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -43,11 +44,13 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	"golang.org/x/exp/slices"
 )
 
 // ServerFlags - server command specific flags
@@ -105,6 +108,34 @@ var ServerFlags = []cli.Flag{
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
 	},
+	cli.DurationFlag{
+		Name:   "conn-user-timeout",
+		Usage:  "custom TCP_USER_TIMEOUT for socket buffers",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_CONN_USER_TIMEOUT",
+	},
+	cli.StringFlag{
+		Name:   "interface",
+		Usage:  "bind to right VRF device for MinIO services",
+		Hidden: true,
+		EnvVar: "MINIO_INTERFACE",
+	},
+	cli.DurationFlag{
+		Name:   "dns-cache-ttl",
+		Usage:  "custom DNS cache TTL for baremetal setups",
+		Hidden: true,
+		Value:  10 * time.Minute,
+		EnvVar: "MINIO_DNS_CACHE_TTL",
+	},
+	cli.StringSliceFlag{
+		Name:  "ftp",
+		Usage: "enable and configure an FTP(Secure) server",
+	},
+	cli.StringSliceFlag{
+		Name:  "sftp",
+		Usage: "enable and configure an SFTP server",
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -145,22 +176,23 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 EXAMPLES:
-  1. Start minio server on "/home/shared" directory.
+  1. Start MinIO server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
   2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
      {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
 
-  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  3. Start distributed MinIO server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
+  4. Start distributed MinIO server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
+
+  5. Start distributed MinIO server, with FTP and SFTP servers on all interfaces via port 8021, 8022 respectively
+     {{.Prompt}} {{.HelpName}} http://node{1...4}.example.com/mnt/export{1...4} \
+           --ftp="address=:8021" --ftp="passive-port-range=30000-40000" \
+           --sftp="address=:8022" --sftp="ssh-private-key=${HOME}/.ssh/id_rsa"
 `,
 }
 
@@ -221,33 +253,41 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
+	globalNodes = globalEndpoints.GetNodes()
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
-	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeNameHex))
+	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
 
-	globalRemoteEndpoints = make(map[string]Endpoint)
-	for _, z := range globalEndpoints {
-		for _, ep := range z.Endpoints {
-			if ep.IsLocal {
-				globalRemoteEndpoints[globalLocalNodeName] = ep
-			} else {
-				globalRemoteEndpoints[ep.Host] = ep
-			}
-		}
-	}
+	// Initialize, see which NIC the service is running on, and save it as global value
+	setGlobalInternodeInterface(ctx.String("interface"))
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = NewInternodeHTTPTransport()()
-	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport()()
+	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
+
+	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
+		Logger: func(err error) {
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.LogIf(GlobalContext, err)
+			}
+		},
+	})
+
+	globalTCPOptions = xhttp.TCPOptions{
+		UserTimeout: int(ctx.Duration("conn-user-timeout").Milliseconds()),
+		Interface:   ctx.String("interface"),
+	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
+	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
 
 	globalIsErasure = (setupType == ErasureSetupType)
 	globalIsDistErasure = (setupType == DistErasureSetupType)
@@ -322,6 +362,7 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
+	globalTierJournal = NewTierJournal()
 
 	globalTransitionState = newTransitionState(GlobalContext)
 	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
@@ -352,7 +393,10 @@ func configRetriableErrors(err error) bool {
 }
 
 func bootstrapTrace(msg string) {
-	globalBootstrapTracer.Record(msg)
+	globalBootstrapTracer.Record(msg, 2)
+	if serverDebugLog {
+		logger.Info(fmt.Sprint(time.Now().Round(time.Millisecond).Format(time.RFC3339), " bootstrap: ", msg))
+	}
 
 	if globalTrace.NumSubscribers(madmin.TraceBootstrap) == 0 {
 		return
@@ -367,22 +411,10 @@ func bootstrapTrace(msg string) {
 	})
 }
 
-func initServer(ctx context.Context, newObject ObjectLayer) error {
+func initServerConfig(ctx context.Context, newObject ObjectLayer) error {
 	t1 := time.Now()
 
-	// Once the config is fully loaded, initialize the new object layer.
-	setObjectLayer(newObject)
-
-	// ****  WARNING ****
-	// Migrating to encrypted backend should happen before initialization of any
-	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	lockTimeout := newDynamicTimeoutWithOpts(dynamicTimeoutOpts{
-		timeout: 5 * time.Second,
-		minimum: 3 * time.Second,
-	})
 
 	for {
 		select {
@@ -392,56 +424,22 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		default:
 		}
 
-		bootstrapTrace("trying to acquire transaction.lock")
-
-		// Make sure to hold lock for entire migration to avoid
-		// such that only one server should migrate the entire config
-		// at a given time, this big transaction lock ensures this
-		// appropriately. This is also true for rotation of encrypted
-		// content.
-		txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-
-		// let one of the server acquire the lock, if not let them timeout.
-		// which shall be retried again by this loop.
-		lkctx, err := txnLk.GetLock(ctx, lockTimeout)
-		if err != nil {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
-			waitDuration := time.Duration(r.Float64() * 5 * float64(time.Second))
-			bootstrapTrace(fmt.Sprintf("lock not available. error: %v. sleeping for %v before retry", err, waitDuration))
-
-			// Sleep 0 -> 5 seconds, provider a higher range such that sleeps()
-			// and retries for lock are more spread out, needed orchestrated
-			// systems take 30s minimum to respond to DNS resolvers.
-			//
-			// Do not change this value.
-			time.Sleep(waitDuration)
-			continue
-		}
-
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
 		if globalIsDistErasure {
-			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+			logger.Info("Waiting for all MinIO sub-systems to be initialize...")
 		}
 
-		// Migrate all backend configs to encrypted backend configs, optionally
-		// handles rotating keys for encryption, if there is any retriable failure
-		// that shall be retried if there is an error.
-		if err = handleEncryptedConfigBackend(newObject); err == nil {
-			// Upon success migrating the config, initialize all sub-systems
-			// if all sub-systems initialized successfully return right away
-			if err = initConfigSubsystem(lkctx.Context(), newObject); err == nil {
-				txnLk.Unlock(lkctx)
-				// All successful return.
-				if globalIsDistErasure {
-					// These messages only meant primarily for distributed setup, so only log during distributed setup.
-					logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
-				}
-				return nil
+		// Upon success migrating the config, initialize all sub-systems
+		// if all sub-systems initialized successfully return right away
+		err := initConfigSubsystem(ctx, newObject)
+		if err == nil {
+			// All successful return.
+			if globalIsDistErasure {
+				// These messages only meant primarily for distributed setup, so only log during distributed setup.
+				logger.Info("All MinIO sub-systems initialized successfully in %s", time.Since(t1))
 			}
+			return nil
 		}
-
-		// Unlock the transaction lock and allow other nodes to acquire the lock if possible.
-		txnLk.Unlock(lkctx)
 
 		if configRetriableErrors(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
@@ -472,6 +470,41 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 	}
 
 	return nil
+}
+
+func setGlobalInternodeInterface(interfaceName string) {
+	globalInternodeInterfaceOnce.Do(func() {
+		if interfaceName != "" {
+			globalInternodeInterface = interfaceName
+			return
+		}
+		ip := "127.0.0.1"
+		host, _ := mustSplitHostPort(globalLocalNodeName)
+		if host != "" {
+			if net.ParseIP(host) != nil {
+				ip = host
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+
+				haddrs, err := globalDNSCache.LookupHost(ctx, host)
+				if err == nil {
+					ip = haddrs[0]
+				}
+			}
+		}
+		ifs, _ := net.Interfaces()
+		for _, interf := range ifs {
+			addrs, err := interf.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					if strings.SplitN(addr.String(), "/", 2)[0] == ip {
+						globalInternodeInterface = interf.Name
+					}
+				}
+			}
+		}
+	})
 }
 
 // Return the list of address that MinIO server needs to listen on:
@@ -516,30 +549,38 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
+	bootstrapTrace("newConsoleLogger")
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddSystemTarget(globalConsoleSys)
+	logger.AddSystemTarget(GlobalContext, globalConsoleSys)
 
 	// Perform any self-tests
+	bootstrapTrace("selftests")
 	bitrotSelfTest()
 	erasureSelfTest()
 	compressSelfTest()
 
 	// Handle all server environment vars.
+	bootstrapTrace("serverHandleEnvVars")
 	serverHandleEnvVars()
 
 	// Handle all server command args.
+	bootstrapTrace("serverHandleCmdArgs")
 	serverHandleCmdArgs(ctx)
 
 	// Initialize KMS configuration
+	bootstrapTrace("handleKMSConfig")
 	handleKMSConfig()
 
 	// Set node name, only set for distributed setup.
+	bootstrapTrace("setNodeName")
 	globalConsoleSys.SetNodeName(globalLocalNodeName)
 
 	// Initialize all help
+	bootstrapTrace("initHelp")
 	initHelp()
 
 	// Initialize all sub-systems
+	bootstrapTrace("initAllSubsystems")
 	initAllSubsystems(GlobalContext)
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
@@ -556,11 +597,13 @@ func serverMain(ctx *cli.Context) {
 	go func() {
 		if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
 			// Check for new updates from dl.min.io.
+			bootstrapTrace("checkUpdate")
 			checkUpdate(getMinioMode())
 		}
 	}()
 
 	// Set system resources to maximum.
+	bootstrapTrace("setMaxResources")
 	setMaxResources()
 
 	// Verify kernel release and version.
@@ -575,6 +618,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Configure server.
+	bootstrapTrace("configureServerHandler")
 	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
 		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
@@ -585,6 +629,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
+	bootstrapTrace("xhttp.NewServer")
 	httpServer := xhttp.NewServer(getServerListenAddrs()).
 		UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 		UseTLSConfig(newTLSConfig(getCert)).
@@ -592,12 +637,22 @@ func serverMain(ctx *cli.Context) {
 		UseIdleTimeout(ctx.Duration("idle-timeout")).
 		UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
 		UseBaseContext(GlobalContext).
-		UseCustomLogger(log.New(io.Discard, "", 0)) // Turn-off random logging by Go stdlib
+		UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib
+		UseTCPOptions(globalTCPOptions)
 
+	httpServer.TCPOptions.Trace = bootstrapTrace
 	go func() {
-		globalHTTPServerErrorCh <- httpServer.Start(GlobalContext)
+		serveFn, err := httpServer.Init(GlobalContext, func(listenAddr string, err error) {
+			logger.LogIf(GlobalContext, fmt.Errorf("Unable to listen on `%s`: %v", listenAddr, err))
+		})
+		if err != nil {
+			globalHTTPServerErrorCh <- err
+			return
+		}
+		globalHTTPServerErrorCh <- serveFn()
 	}()
 
+	bootstrapTrace("setHTTPServer")
 	setHTTPServer(httpServer)
 
 	if globalIsDistErasure {
@@ -608,33 +663,50 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	if !globalDisableFreezeOnBoot {
+		// Freeze the services until the bucket notification subsystem gets initialized.
+		bootstrapTrace("freezeServices")
+		freezeServices()
+	}
+
+	bootstrapTrace("newObjectLayer")
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
+	bootstrapTrace("newObjectLayer (initialized)")
 
 	xhttp.SetDeploymentID(globalDeploymentID)
 	xhttp.SetMinIOVersion(Version)
 
+	for _, n := range globalNodes {
+		nodeName := n.Host
+		if n.IsLocal {
+			nodeName = globalLocalNodeName
+		}
+		nodeNameSum := sha256.Sum256([]byte(nodeName + globalDeploymentID))
+		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
+	}
+
+	bootstrapTrace("newSharedLock")
 	globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
 
-	// Enable background operations for erasure coding
+	// Enable background operations on
+	//
+	// - Disk auto healing
+	// - MRF (most recently failed) healing
+	// - Background expiration routine for lifecycle policies
+	bootstrapTrace("initAutoHeal")
 	initAutoHeal(GlobalContext, newObject)
+
+	bootstrapTrace("initHealMRF")
 	initHealMRF(GlobalContext, newObject)
+
+	bootstrapTrace("initBackgroundExpiry")
 	initBackgroundExpiry(GlobalContext, newObject)
 
-	if !globalCLIContext.StrictS3Compat {
-		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
-	}
-
-	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
-			globalActiveCred)
-		logger.Info(color.RedBold(msg))
-	}
-
-	bootstrapTrace("initializing the server")
-	if err = initServer(GlobalContext, newObject); err != nil {
+	bootstrapTrace("initServerConfig")
+	if err = initServerConfig(GlobalContext, newObject); err != nil {
 		var cerr config.Err
 		// For any config error, we don't need to drop into safe-mode
 		// instead its a user error and should be fixed by user.
@@ -650,56 +722,89 @@ func serverMain(ctx *cli.Context) {
 		logger.LogIf(GlobalContext, err)
 	}
 
+	if !globalCLIContext.StrictS3Compat {
+		logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+	}
+
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+			globalActiveCred)
+		logger.Info(color.RedBold(msg))
+	}
+
 	// Initialize users credentials and policies in background right after config has initialized.
 	go func() {
+		bootstrapTrace("globalIAMSys.Init")
 		globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+		bootstrapTrace("globalIAMSys.Initialized")
 
-		// Initialize
+		// Initialize Console UI
 		if globalBrowserEnabled {
+			bootstrapTrace("initConsoleServer")
 			srv, err := initConsoleServer()
 			if err != nil {
 				logger.FatalIf(err, "Unable to initialize console service")
 			}
 
+			bootstrapTrace("setConsoleSrv")
 			setConsoleSrv(srv)
 
 			go func() {
 				logger.FatalIf(newConsoleServerFn().Serve(), "Unable to initialize console server")
 			}()
 		}
+
+		// if we see FTP args, start FTP if possible
+		if len(ctx.StringSlice("ftp")) > 0 {
+			bootstrapTrace("startFTPServer")
+			go startFTPServer(ctx)
+		}
+
+		// If we see SFTP args, start SFTP if possible
+		if len(ctx.StringSlice("sftp")) > 0 {
+			bootstrapTrace("startFTPServer")
+			go startSFTPServer(ctx)
+		}
 	}()
 
-	// Background all other operations such as initializing bucket metadata etc.
 	go func() {
+		if !globalDisableFreezeOnBoot {
+			defer unfreezeServices()
+			defer bootstrapTrace("unfreezeServices")
+			t := time.AfterFunc(5*time.Minute, func() {
+				logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+			})
+			defer t.Stop()
+		}
+
 		// Initialize data scanner.
+		bootstrapTrace("initDataScanner")
 		initDataScanner(GlobalContext, newObject)
 
 		// Initialize background replication
+		bootstrapTrace("initBackgroundReplication")
 		initBackgroundReplication(GlobalContext, newObject)
 
+		bootstrapTrace("globalTransitionState.Init")
 		globalTransitionState.Init(newObject)
 
 		// Initialize batch job pool.
+		bootstrapTrace("newBatchJobPool")
 		globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
 
 		// Initialize the license update job
+		bootstrapTrace("initLicenseUpdateJob")
 		initLicenseUpdateJob(GlobalContext, newObject)
 
 		go func() {
 			// Initialize transition tier configuration manager
-			err := globalTierConfigMgr.Init(GlobalContext, newObject)
-			if err != nil {
+			bootstrapTrace("globalTierConfigMgr.Init")
+			if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
 				logger.LogIf(GlobalContext, err)
 			} else {
-				globalTierJournal, err = initTierDeletionJournal(GlobalContext)
-				if err != nil {
-					logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
-				}
+				logger.FatalIf(globalTierJournal.Init(GlobalContext), "Unable to initialize remote tier pending deletes journal")
 			}
 		}()
-
-		// Initialize bucket notification system first before loading bucket metadata.
-		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
 
 		// initialize the new disk cache objects.
 		if globalCacheConfig.Enabled {
@@ -711,26 +816,40 @@ func serverMain(ctx *cli.Context) {
 			setCacheObjectLayer(cacheAPI)
 		}
 
-		// List buckets to heal, and be re-used for loading configs.
+		// Initialize bucket notification system.
+		bootstrapTrace("initBucketTargets")
+		logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
+
+		// List buckets to initialize bucket metadata sub-sys.
+		bootstrapTrace("listBuckets")
 		buckets, err := newObject.ListBuckets(GlobalContext, BucketOptions{})
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to heal: %w", err))
+			logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 		}
-		// initialize replication resync state.
-		go globalReplicationPool.initResync(GlobalContext, buckets, newObject)
 
 		// Initialize bucket metadata sub-system.
+		bootstrapTrace("globalBucketMetadataSys.Init")
 		globalBucketMetadataSys.Init(GlobalContext, buckets, newObject)
+		bootstrapTrace("globalBucketMetadataSys.Initialized")
 
-		// Initialize site replication manager after bucket metadat
+		// initialize replication resync state.
+		bootstrapTrace("initResync")
+		globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+
+		// Initialize site replication manager after bucket metadata
+		bootstrapTrace("globalSiteReplicationSys.Init")
 		globalSiteReplicationSys.Init(GlobalContext, newObject)
+		bootstrapTrace("globalSiteReplicationSys.Initialized")
 
 		// Initialize quota manager.
+		bootstrapTrace("globalBucketQuotaSys.Init")
 		globalBucketQuotaSys.Init(newObject)
+		bootstrapTrace("globalBucketQuotaSys.Initialized")
 
 		// Populate existing buckets to the etcd backend
 		if globalDNSConfig != nil {
 			// Background this operation.
+			bootstrapTrace("go initFederatorBackend")
 			go initFederatorBackend(buckets, newObject)
 		}
 
@@ -738,7 +857,7 @@ func serverMain(ctx *cli.Context) {
 		printStartupMessage(getAPIEndpoints(), err)
 
 		// Print a warning at the end of the startup banner so it is more noticeable
-		if globalStorageClass.GetParityForSC("") == 0 {
+		if newObject.BackendInfo().StandardSCParity == 0 {
 			logger.Error("Warning: The standard parity is set to 0. This can lead to data loss.")
 		}
 	}()
@@ -747,6 +866,7 @@ func serverMain(ctx *cli.Context) {
 	if region == "" {
 		region = "us-east-1"
 	}
+	bootstrapTrace("globalMinioClient")
 	globalMinioClient, err = minio.New(globalLocalNodeName, &minio.Options{
 		Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
 		Secure:    globalIsTLS,
@@ -769,13 +889,15 @@ func serverMain(ctx *cli.Context) {
 		}
 		for _, v := range os.Environ() {
 			// Do not print sensitive creds in debug.
-			if contains(ks, strings.Split(v, "=")[0]) {
+			if slices.Contains(ks, strings.Split(v, "=")[0]) {
 				continue
 			}
 			logger.Info(v)
 		}
 		logger.Info("======")
 	}
+
+	daemon.SdNotify(false, daemon.SdNotifyReady)
 
 	<-globalOSSignalCh
 }

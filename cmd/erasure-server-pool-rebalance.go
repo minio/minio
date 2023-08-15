@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -31,7 +32,7 @@ import (
 	"time"
 
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -62,7 +63,10 @@ func (rs *rebalanceStats) update(bucket string, fi FileInfo) {
 	}
 
 	rs.NumVersions++
-	onDiskSz := fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	onDiskSz := int64(0)
+	if !fi.Deleted {
+		onDiskSz = fi.Size * int64(fi.Erasure.DataBlocks+fi.Erasure.ParityBlocks) / int64(fi.Erasure.DataBlocks)
+	}
 	rs.Bytes += uint64(onDiskSz)
 	rs.Bucket = bucket
 	rs.Object = fi.Name
@@ -465,7 +469,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
 			if evt.Action.Delete() {
-				globalExpiryState.enqueueByDays(objInfo, evt.Action.DeleteRestored(), evt.Action.DeleteVersioned())
+				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
 			}
 
@@ -496,7 +500,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			// to create the appropriate stack.
 			versionsSorter(fivs.Versions).reverse()
 
-			var rebalanced int
+			var rebalanced, expired int
 			for _, version := range fivs.Versions {
 				// Skip transitioned objects for now. TBD
 				if version.IsRemote() {
@@ -505,16 +509,23 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bucket, version.Name, version) {
-					logger.LogIf(ctx, fmt.Errorf("found %s/%s (%s) expired object based on ILM rules, skipping and scheduled for deletion", bucket, version.Name, version.VersionID))
+					rebalanced++
+					expired++
 					continue
 				}
 
-				// We will skip rebalancing delete markers
-				// with single version, its as good as there
-				// is no data associated with the object.
-				if version.Deleted && len(fivs.Versions) == 1 {
-					logger.LogIf(ctx, fmt.Errorf("found %s/%s delete marked object with no other versions, skipping since there is no data to be rebalanced", bucket, version.Name))
+				// any object with only single DEL marker we don't need
+				// to rebalance, just skip it, this also includes
+				// any other versions that have already expired.
+				remainingVersions := len(fivs.Versions) - expired
+				if version.Deleted && remainingVersions == 1 {
+					rebalanced++
 					continue
+				}
+
+				versionID := version.VersionID
+				if versionID == "" {
+					versionID = nullVersionID
 				}
 
 				if version.Deleted {
@@ -522,8 +533,8 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						bucket,
 						version.Name,
 						ObjectOptions{
-							Versioned:         vc.PrefixEnabled(version.Name),
-							VersionID:         version.VersionID,
+							Versioned:         true,
+							VersionID:         versionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
 							DeleteMarker:      true, // make sure we create a delete marker
@@ -542,34 +553,37 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					continue
 				}
 
-				var failure bool
+				var failure, ignore bool
 				for try := 0; try < 3; try++ {
 					// GetObjectReader.Close is called by rebalanceObject
+					stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceObject, poolIdx, bucket, version.Name, version.VersionID)
 					gr, err := set.GetObjectNInfo(ctx,
 						bucket,
 						encodeDirObject(version.Name),
 						nil,
 						http.Header{},
-						noLock, // all mutations are blocked reads are safe without locks.
 						ObjectOptions{
-							VersionID:    version.VersionID,
+							VersionID:    versionID,
 							NoDecryption: true,
+							NoLock:       true,
 						})
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
-						return
+						ignore = true
+						stopFn(nil)
+						break
 					}
 					if err != nil {
 						failure = true
 						logger.LogIf(ctx, err)
+						stopFn(err)
 						continue
 					}
 
-					stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceObject, poolIdx, bucket, version.Name)
 					if err = z.rebalanceObject(ctx, bucket, gr); err != nil {
-						stopFn(err)
 						failure = true
 						logger.LogIf(ctx, err)
+						stopFn(err)
 						continue
 					}
 
@@ -577,7 +591,9 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					failure = false
 					break
 				}
-
+				if ignore {
+					continue
+				}
 				if failure {
 					break // break out on first error
 				}
@@ -711,7 +727,6 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 	if oi.isMultipart() {
 		res, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
 			VersionID:   oi.VersionID,
-			MTime:       oi.ModTime,
 			UserDefined: oi.UserDefined,
 		})
 		if err != nil {
@@ -721,7 +736,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewReader(gr, part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}

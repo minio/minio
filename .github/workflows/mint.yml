@@ -1,0 +1,65 @@
+name: Mint Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+
+# This ensures that previous jobs for the PR are canceled when the PR is
+# updated.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mint-test:
+    runs-on: mint
+    timeout-minutes: 120
+    steps:
+      - name: cleanup #https://github.com/actions/checkout/issues/273
+        run: |
+          sudo -S rm -rf ${GITHUB_WORKSPACE}
+          mkdir ${GITHUB_WORKSPACE}
+      - name: checkout-step
+        uses: actions/checkout@v3
+
+      - name: setup-go-step
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.21.x
+
+      - name: github sha short
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: build-minio
+        run: |
+          TAG="minio/minio:${{ steps.vars.outputs.sha_short }}" make docker
+
+      - name: compress and encrypt
+        run: |
+          ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "compress-encrypt" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
+      - name: multiple pools
+        run: |
+          ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "pools" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
+      - name: standalone erasure
+        run: |
+          ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "erasure" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
+      - name: The job must cleanup
+        if: ${{ always() }}
+        run: |
+          export JOB_NAME=${{ steps.vars.outputs.sha_short }}
+          for mode in $(echo compress-encrypt pools erasure); do
+             docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml down || true
+             docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml rm || true
+          done
+          docker rmi -f minio/minio:${{ steps.vars.outputs.sha_short }}
+          docker system prune -f || true
+          docker volume prune -f || true
+          docker volume rm $(docker volume ls -q -f dangling=true) || true

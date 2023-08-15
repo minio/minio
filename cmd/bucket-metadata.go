@@ -29,7 +29,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	bucketsse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -88,6 +88,7 @@ type BucketMetadata struct {
 	QuotaConfigUpdatedAt        time.Time
 	ReplicationConfigUpdatedAt  time.Time
 	VersioningConfigUpdatedAt   time.Time
+	LifecycleConfigUpdatedAt    time.Time
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig           *policy.Policy
@@ -117,6 +118,16 @@ func newBucketMetadata(name string) BucketMetadata {
 		bucketTargetConfig:     &madmin.BucketTargets{},
 		bucketTargetConfigMeta: make(map[string]string),
 	}
+}
+
+// Versioning returns true if versioning is enabled
+func (b BucketMetadata) Versioning() bool {
+	return b.LockEnabled || (b.versioningConfig != nil && b.versioningConfig.Enabled()) || (b.objectLockConfig != nil && b.objectLockConfig.Enabled())
+}
+
+// ObjectLocking returns true if object locking is enabled
+func (b BucketMetadata) ObjectLocking() bool {
+	return b.LockEnabled || (b.objectLockConfig != nil && b.objectLockConfig.Enabled())
 }
 
 // SetCreatedAt preserves the CreatedAt time for bucket across sites in site replication. It defaults to
@@ -416,6 +427,10 @@ func (b *BucketMetadata) defaultTimestamps() {
 
 	if b.VersioningConfigUpdatedAt.IsZero() {
 		b.VersioningConfigUpdatedAt = b.Created
+	}
+
+	if b.LifecycleConfigUpdatedAt.IsZero() {
+		b.LifecycleConfigUpdatedAt = b.Created
 	}
 }
 

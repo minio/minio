@@ -18,6 +18,7 @@
 package crypto
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -25,24 +26,29 @@ import (
 // an object. It indicates that the object itself or its metadata was
 // modified accidentally or maliciously.
 type Error struct {
-	err error
+	msg   string
+	cause error
 }
 
 // Errorf - formats according to a format specifier and returns
 // the string as a value that satisfies error of type crypto.Error
 func Errorf(format string, a ...interface{}) error {
-	return Error{err: fmt.Errorf(format, a...)}
+	e := fmt.Errorf(format, a...)
+	ee := Error{}
+	ee.msg = e.Error()
+	ee.cause = errors.Unwrap(e)
+	return ee
 }
 
 // Unwrap the internal error.
-func (e Error) Unwrap() error { return e.err }
+func (e Error) Unwrap() error { return e.cause }
 
 // Error 'error' compatible method.
 func (e Error) Error() string {
-	if e.err == nil {
+	if e.msg == "" {
 		return "crypto: cause <nil>"
 	}
-	return e.err.Error()
+	return e.msg
 }
 
 var (

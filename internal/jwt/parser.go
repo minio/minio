@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+	"github.com/dustin/go-humanize"
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -53,7 +54,7 @@ var (
 	SigningMethodHS512 *SigningMethodHMAC
 )
 
-const base64BufferSize = 8192
+const base64BufferSize = 64 * humanize.KiByte
 
 var (
 	base64BufPool sync.Pool

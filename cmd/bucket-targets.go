@@ -25,7 +25,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -58,7 +58,7 @@ type epHealth struct {
 }
 
 // isOffline returns current liveness result of remote target. Add endpoint to
-// healthcheck map if missing and default to online status
+// healthCheck map if missing and default to online status
 func (sys *BucketTargetSys) isOffline(ep *url.URL) bool {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
@@ -126,7 +126,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 	}
 }
 
-// periodically rebuild the healthcheck map from list of targets to clear
+// periodically rebuild the healthCheck map from list of targets to clear
 // out stale endpoints
 func (sys *BucketTargetSys) reloadHealthCheckers(ctx context.Context) {
 	m := make(map[string]epHealth)
@@ -208,14 +208,14 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 	clnt, err := sys.getRemoteTargetClient(tgt)
 	if err != nil {
-		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket, Err: err}
 	}
 	// validate if target credentials are ok
 	exists, err := clnt.BucketExists(ctx, tgt.TargetBucket)
 	if err != nil {
 		switch minio.ToErrorResponse(err).Code {
 		case "NoSuchBucket":
-			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket, Err: err}
 		case "AccessDenied":
 			return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, AccessKey: tgt.Credentials.AccessKey, Err: err}
 		}
@@ -362,7 +362,7 @@ func NewBucketTargetSys(ctx context.Context) *BucketTargetSys {
 		hc:            make(map[string]epHealth),
 		hcClient:      newHCClient(),
 	}
-	// reload healthcheck endpoints map periodically to remove stale endpoints from the map.
+	// reload healthCheck endpoints map periodically to remove stale endpoints from the map.
 	go func() {
 		rTimer := time.NewTimer(defaultHealthCheckReloadDuration)
 		defer rTimer.Stop()

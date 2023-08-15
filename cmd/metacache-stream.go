@@ -255,12 +255,13 @@ type metacacheReader struct {
 func newMetacacheReader(r io.Reader) *metacacheReader {
 	dec := s2DecPool.Get().(*s2.Reader)
 	dec.Reset(r)
-	mr := msgp.NewReader(dec)
+	mr := msgpNewReader(dec)
 	return &metacacheReader{
 		mr: mr,
 		closer: func() {
 			dec.Reset(nil)
 			s2DecPool.Put(dec)
+			readMsgpReaderPoolPut(mr)
 		},
 		creator: func() error {
 			v, err := mr.ReadByte()

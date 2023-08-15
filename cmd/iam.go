@@ -32,8 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
@@ -286,21 +285,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
-		if etcdClient != nil {
-			// ****  WARNING ****
-			// Migrating to encrypted backend on etcd should happen before initialization of
-			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(retryCtx, etcdClient); err != nil {
-				if errors.Is(err, errEtcdUnreachable) {
-					logger.Info("Connection to etcd timed out. Retrying..")
-					continue
-				}
-				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
-				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
-				return
-			}
-		}
-
 		// Migrate IAM configuration, if necessary.
 		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {
@@ -546,6 +530,14 @@ func (sys *IAMSys) GetRolePolicy(arnStr string) (arn.ARN, string, error) {
 func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
+	}
+
+	for _, v := range iampolicy.DefaultPolicies {
+		if v.Name == policyName {
+			if err := checkConfig(ctx, globalObjectAPI, getPolicyDocPath(policyName)); err != nil && err == errConfigNotFound {
+				return fmt.Errorf("inbuilt policy `%s` not allowed to be deleted", policyName)
+			}
+		}
 	}
 
 	err := sys.store.DeletePolicy(ctx, policyName)
@@ -807,13 +799,13 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 		return nil, errServerNotInitialized
 	}
 
-	if sys.usersSysType != LDAPUsersSysType {
+	if !sys.LDAPConfig.Enabled() {
 		return nil, errIAMActionNotAllowed
 	}
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListLDAPPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -821,7 +813,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 	}
 }
 
-// IsTempUser - returns if given key is a temporary user.
+// IsTempUser - returns if given key is a temporary user and parent user.
 func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {
 		return false, "", errServerNotInitialized
@@ -880,21 +872,21 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListPolicyMappings(q)
+		var userPredicate, groupPredicate func(string) bool
+		if sys.LDAPConfig.Enabled() {
+			userPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPUserDN(s)
+			}
+			groupPredicate = func(s string) bool {
+				return !sys.LDAPConfig.IsLDAPGroupDN(s)
+			}
+		}
+		pe := sys.store.ListPolicyMappings(q, userPredicate, groupPredicate)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-// GetUserPolicies - get policies attached to a user.
-func (sys *IAMSys) GetUserPolicies(name string) (p []string, err error) {
-	if !sys.Initialized() {
-		return p, errServerNotInitialized
-	}
-
-	return sys.store.GetUserPolicies(name)
 }
 
 // SetUserStatus - sets current user status, supports disabled or enabled.
@@ -929,11 +921,12 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	accessKey     string
-	secretKey     string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy              *iampolicy.Policy
+	accessKey                  string
+	secretKey                  string
+	name, description          string
+	expiration                 *time.Time
+	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
 	claims map[string]interface{}
 }
@@ -958,8 +951,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		if err != nil {
 			return auth.Credentials{}, time.Time{}, err
 		}
-		if len(policyBuf) > 16*humanize.KiByte {
-			return auth.Credentials{}, time.Time{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
+		if len(policyBuf) > 2048 {
+			return auth.Credentials{}, time.Time{}, errSessionPolicyTooLarge
 		}
 	}
 
@@ -968,7 +961,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if parentUser == opts.accessKey {
 		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
 	}
-
+	if siteReplicatorSvcAcc == opts.accessKey && !opts.allowSiteReplicatorAccount {
+		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
+	}
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
@@ -1004,7 +999,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.ParentUser = parentUser
 	cred.Groups = groups
 	cred.Status = string(auth.AccountOn)
-	cred.Comment = opts.comment
+	cred.Name = opts.name
+	cred.Description = opts.description
 
 	if opts.expiration != nil {
 		expirationInUTC := opts.expiration.UTC()
@@ -1024,11 +1020,11 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 }
 
 type updateServiceAccountOpts struct {
-	sessionPolicy *iampolicy.Policy
-	secretKey     string
-	status        string
-	comment       string
-	expiration    *time.Time
+	sessionPolicy     *iampolicy.Policy
+	secretKey         string
+	status            string
+	name, description string
+	expiration        *time.Time
 }
 
 // UpdateServiceAccount - edit a service account
@@ -1451,6 +1447,11 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
+	if !ok {
+		if accessKey == globalActiveCred.AccessKey {
+			return newUserIdentity(globalActiveCred), true
+		}
+	}
 	return u, ok && u.Credentials.IsValid()
 }
 
@@ -1572,13 +1573,93 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	return updatedAt, nil
 }
 
+// PolicyDBUpdateBuiltin - adds or removes policies from a user or a group
+// verified to be an internal IDP user.
+func (sys *IAMSys) PolicyDBUpdateBuiltin(ctx context.Context, isAttach bool,
+	r madmin.PolicyAssociationReq,
+) (updatedAt time.Time, addedOrRemoved, effectivePolicies []string, err error) {
+	if !sys.Initialized() {
+		err = errServerNotInitialized
+		return
+	}
+
+	userOrGroup := r.User
+	var isGroup bool
+	if userOrGroup == "" {
+		isGroup = true
+		userOrGroup = r.Group
+	}
+
+	if isGroup {
+		_, err = sys.GetGroupDescription(userOrGroup)
+		if err != nil {
+			return
+		}
+	} else {
+		var isTemp bool
+		isTemp, _, err = sys.IsTempUser(userOrGroup)
+		if err != nil && err != errNoSuchUser {
+			return
+		}
+		if isTemp {
+			err = errIAMActionNotAllowed
+			return
+		}
+
+		// When the user is root credential you are not allowed to
+		// add policies for root user.
+		if userOrGroup == globalActiveCred.AccessKey {
+			err = errIAMActionNotAllowed
+			return
+		}
+
+		// Validate that user exists.
+		var userExists bool
+		_, userExists = sys.GetUser(ctx, userOrGroup)
+		if !userExists {
+			err = errNoSuchUser
+			return
+		}
+	}
+
+	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, userOrGroup, isGroup,
+		regUser, r.Policies, isAttach)
+	if err != nil {
+		return
+	}
+
+	// Notify all other MinIO peers to reload policy
+	if !sys.HasWatcher() {
+		for _, nerr := range globalNotificationSys.LoadPolicyMapping(userOrGroup, regUser, isGroup) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: userOrGroup,
+			UserType:    int(regUser),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(effectivePolicies, ","),
+		},
+		UpdatedAt: updatedAt,
+	}))
+
+	return
+}
+
 // PolicyDBUpdateLDAP - adds or removes policies from a user or a group verified
 // to be in the LDAP directory.
 func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	r madmin.PolicyAssociationReq,
-) (updatedAt time.Time, addedOrRemoved []string, err error) {
+) (updatedAt time.Time, addedOrRemoved, effectivePolicies []string, err error) {
 	if !sys.Initialized() {
-		return updatedAt, nil, errServerNotInitialized
+		err = errServerNotInitialized
+		return
 	}
 
 	var dn string
@@ -1587,28 +1668,31 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return updatedAt, nil, err
+			return
 		}
 		if dn == "" {
-			return updatedAt, nil, errNoSuchUser
+			err = errNoSuchUser
+			return
 		}
 		isGroup = false
 	} else {
-		if exists, err := sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+		var exists bool
+		if exists, err = sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
 			logger.LogIf(ctx, err)
-			return updatedAt, nil, err
+			return
 		} else if !exists {
-			return updatedAt, nil, errNoSuchGroup
+			err = errNoSuchGroup
+			return
 		}
 		dn = r.Group
 		isGroup = true
 	}
 
 	userType := stsUser
-	updatedAt, addedOrRemoved, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
+	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
 		userType, r.Policies, isAttach)
 	if err != nil {
-		return updatedAt, nil, err
+		return
 	}
 
 	// Notify all other MinIO peers to reload policy
@@ -1621,7 +1705,18 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 	}
 
-	return updatedAt, addedOrRemoved, nil
+	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		Type: madmin.SRIAMItemPolicyMapping,
+		PolicyMapping: &madmin.SRPolicyMapping{
+			UserOrGroup: dn,
+			UserType:    int(userType),
+			IsGroup:     isGroup,
+			Policy:      strings.Join(effectivePolicies, ","),
+		},
+		UpdatedAt: updatedAt,
+	}))
+
+	return
 }
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is

@@ -80,8 +80,9 @@ var ConfigLock sync.RWMutex
 
 // Config storage class configuration
 type Config struct {
-	Standard StorageClass `json:"standard"`
-	RRS      StorageClass `json:"rrs"`
+	Standard    StorageClass `json:"standard"`
+	RRS         StorageClass `json:"rrs"`
+	initialized bool
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -204,7 +205,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 	}
 
 	if ssParity > 0 && rrsParity > 0 {
-		if ssParity > 0 && ssParity < rrsParity {
+		if ssParity < rrsParity {
 			return fmt.Errorf("Standard storage class parity drives %d should be greater than or equal to Reduced redundancy storage class parity drives %d", ssParity, rrsParity)
 		}
 	}
@@ -217,11 +218,13 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 // returned.
 //
 // -- if input storage class is empty then standard is assumed
-// -- if input is RRS but RRS is not configured default '2' parity
 //
-//	for RRS is assumed
+// -- if input is RRS but RRS is not configured/initialized '-1' parity
 //
-// -- if input is STANDARD but STANDARD is not configured '0' parity
+//	for RRS is assumed, the caller is expected to choose the right parity
+//	at that point.
+//
+// -- if input is STANDARD but STANDARD is not configured/initialized '-1' parity
 //
 //	is returned, the caller is expected to choose the right parity
 //	at that point.
@@ -230,8 +233,14 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	defer ConfigLock.RUnlock()
 	switch strings.TrimSpace(sc) {
 	case RRS:
+		if !sCfg.initialized {
+			return -1
+		}
 		return sCfg.RRS.Parity
 	default:
+		if !sCfg.initialized {
+			return -1
+		}
 		return sCfg.Standard.Parity
 	}
 }
@@ -242,9 +251,10 @@ func (sCfg *Config) Update(newCfg Config) {
 	defer ConfigLock.Unlock()
 	sCfg.RRS = newCfg.RRS
 	sCfg.Standard = newCfg.Standard
+	sCfg.initialized = true
 }
 
-// Enabled returns if etcd is enabled.
+// Enabled returns if storageClass is enabled is enabled.
 func Enabled(kvs config.KVS) bool {
 	ssc := kvs.Get(ClassStandard)
 	rrsc := kvs.Get(ClassRRS)
@@ -271,9 +281,11 @@ func DefaultParityBlocks(drive int) int {
 func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg = Config{}
 
-	kvs.Delete("dma")
+	deprecatedKeys := []string{
+		"dma",
+	}
 
-	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
+	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS, deprecatedKeys...); err != nil {
 		return Config{}, err
 	}
 
@@ -307,5 +319,6 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 		return Config{}, err
 	}
 
+	cfg.initialized = true
 	return cfg, nil
 }

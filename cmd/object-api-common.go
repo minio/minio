@@ -55,15 +55,20 @@ var globalObjectAPI ObjectLayer
 // Global cacheObjects, only accessed by newCacheObjectsFn().
 var globalCacheObjectAPI CacheObjectLayer
 
+type storageOpts struct {
+	cleanUp     bool
+	healthCheck bool
+}
+
 // Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(endpoint Endpoint, healthCheck bool) (storage StorageAPI, err error) {
+func newStorageAPI(endpoint Endpoint, opts storageOpts) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newXLStorage(endpoint, healthCheck)
+		storage, err := newXLStorage(endpoint, opts.cleanUp)
 		if err != nil {
 			return nil, err
 		}
-		return newXLStorageDiskIDCheck(storage), nil
+		return newXLStorageDiskIDCheck(storage, opts.healthCheck), nil
 	}
 
-	return newStorageRESTClient(endpoint, healthCheck), nil
+	return newStorageRESTClient(endpoint, opts.healthCheck), nil
 }

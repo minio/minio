@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 const (
@@ -380,7 +380,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	disk.SetDiskID(diskID)
 	if healID != "" {
 		ctx := context.Background()
-		ht := newHealingTracker(disk, healID)
+		ht := initHealingTracker(disk, healID)
 		return ht.save(ctx)
 	}
 	return nil
@@ -663,14 +663,14 @@ func closeStorageDisks(storageDisks ...StorageAPI) {
 
 // Initialize storage disks for each endpoint.
 // Errors are returned for each endpoint with matching index.
-func initStorageDisksWithErrors(endpoints Endpoints, healthCheck bool) ([]StorageAPI, []error) {
+func initStorageDisksWithErrors(endpoints Endpoints, opts storageOpts) ([]StorageAPI, []error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
 		index := index
 		g.Go(func() (err error) {
-			storageDisks[index], err = newStorageAPI(endpoints[index], healthCheck)
+			storageDisks[index], err = newStorageAPI(endpoints[index], opts)
 			return err
 		}, index)
 	}

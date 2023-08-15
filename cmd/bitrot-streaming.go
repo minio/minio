@@ -94,16 +94,23 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 	r, w := io.Pipe()
 	h := algo.New()
 
-	bw := &streamingBitrotWriter{iow: w, closeWithErr: w.CloseWithError, h: h, shardSize: shardSize, canClose: &sync.WaitGroup{}}
+	bw := &streamingBitrotWriter{
+		iow:          ioutil.NewDeadlineWriter(w, diskMaxTimeout),
+		closeWithErr: w.CloseWithError,
+		h:            h,
+		shardSize:    shardSize,
+		canClose:     &sync.WaitGroup{},
+	}
 	bw.canClose.Add(1)
 	go func() {
+		defer bw.canClose.Done()
+
 		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
 		if length != -1 {
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
 		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
-		bw.canClose.Done()
 	}()
 	return bw
 }
@@ -165,9 +172,9 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 			b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
 			if err != nil {
 				if !IsErr(err, ignoredErrs...) {
-					logger.LogIf(GlobalContext,
+					logger.LogOnceIf(GlobalContext,
 						fmt.Errorf("Reading erasure shards at (%s: %s/%s) returned '%w', will attempt to reconstruct if we have quorum",
-							b.disk, b.volume, b.filePath, err))
+							b.disk, b.volume, b.filePath, err), "bitrot-read-file-stream-"+b.volume+"-"+b.filePath)
 				}
 			}
 		} else {

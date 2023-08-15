@@ -245,10 +245,10 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodPut).Path("/{object:.+}").
 			HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").
 			HandlerFunc(collectAPIStats("copyobjectpart", maxClients(gz(httpTraceAll(api.CopyObjectPartHandler))))).
-			Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+			Queries("partNumber", "{partNumber:.*}", "uploadId", "{uploadId:.*}")
 		// PutObjectPart
 		router.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
-			collectAPIStats("putobjectpart", maxClients(gz(httpTraceHdrs(api.PutObjectPartHandler))))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+			collectAPIStats("putobjectpart", maxClients(gz(httpTraceHdrs(api.PutObjectPartHandler))))).Queries("partNumber", "{partNumber:.*}", "uploadId", "{uploadId:.*}")
 		// ListObjectParts
 		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("listobjectparts", maxClients(gz(httpTraceAll(api.ListObjectPartsHandler))))).Queries("uploadId", "{uploadId:.*}")
@@ -393,6 +393,9 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("listobjectsv2", maxClients(gz(httpTraceAll(api.ListObjectsV2Handler))))).Queries("list-type", "2")
 		// ListObjectVersions
 		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsMHandler))))).Queries("versions", "", "metadata", "true")
+		// ListObjectVersions
+		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsHandler))))).Queries("versions", "")
 		// GetBucketPolicyStatus
 		router.Methods(http.MethodGet).HandlerFunc(
@@ -461,6 +464,9 @@ func registerAPIRouter(router *mux.Router) {
 		// GetBucketReplicationMetrics
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsHandler))))).Queries("replication-metrics", "")
+		// ValidateBucketReplicationCreds
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("checkbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")
 
 		// Register rejected bucket APIs
 		for _, r := range rejectedBucketAPIs {
@@ -517,14 +523,9 @@ func corsHandler(handler http.Handler) http.Handler {
 		"x-amz*",
 		"*",
 	}
-
-	return cors.New(cors.Options{
+	opts := cors.Options{
 		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := globalAPIConfig.getCorsAllowOrigins()
-			if len(allowedOrigins) == 0 {
-				allowedOrigins = []string{"*"}
-			}
-			for _, allowedOrigin := range allowedOrigins {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
 				if wildcard.MatchSimple(allowedOrigin, origin) {
 					return true
 				}
@@ -543,5 +544,6 @@ func corsHandler(handler http.Handler) http.Handler {
 		AllowedHeaders:   commonS3Headers,
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
-	}).Handler(handler)
+	}
+	return cors.New(opts).Handler(handler)
 }

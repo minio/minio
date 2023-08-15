@@ -39,7 +39,7 @@ func prepareUpdateMessage(downloadURL string, older time.Duration) string {
 	// Compute friendly duration string to indicate time
 	// difference between newer and current release.
 	t := time.Time{}
-	newerThan := humanize.RelTime(t, t.Add(older), "ago", "")
+	newerThan := humanize.RelTime(t, t.Add(older), "before the latest release", "")
 
 	if globalCLIContext.JSON {
 		return fmt.Sprintf("You are running an older version of MinIO released %s, update: %s", newerThan, downloadURL)

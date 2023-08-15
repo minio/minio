@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v49" // Added RenameData() to return versions
+	storageRESTVersion       = "v50" // Added DiskInfo metrics query
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -83,4 +83,5 @@ const (
 	storageRESTForceDelete    = "force-delete"
 	storageRESTGlob           = "glob"
 	storageRESTScanMode       = "scan-mode"
+	storageRESTMetrics        = "metrics"
 )

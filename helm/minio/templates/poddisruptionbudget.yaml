@@ -7,7 +7,6 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: minio
-  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}
 spec:

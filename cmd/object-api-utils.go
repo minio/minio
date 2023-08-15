@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/trie"
 	"github.com/minio/pkg/wildcard"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -209,6 +210,9 @@ func checkObjectNameForLengthAndSlash(bucket, object string) error {
 // SlashSeparator - slash separator.
 const SlashSeparator = "/"
 
+// SlashSeparatorChar - slash separator.
+const SlashSeparatorChar = '/'
+
 // retainSlash - retains slash from a path.
 func retainSlash(s string) string {
 	if s == "" {
@@ -231,11 +235,100 @@ func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if HasSuffix(elem[len(elem)-1], SlashSeparator) {
+		if hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar) {
 			trailingSlash = SlashSeparator
 		}
 	}
 	return path.Join(elem...) + trailingSlash
+}
+
+// pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
+// Provide a string builder to reduce allocation.
+func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
+	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar)
+	dst.Reset()
+	added := 0
+	for _, e := range elem {
+		if added > 0 || e != "" {
+			if added > 0 {
+				dst.WriteRune(SlashSeparatorChar)
+			}
+			dst.WriteString(e)
+			added += len(e)
+		}
+	}
+
+	if pathNeedsClean(dst.Bytes()) {
+		s := path.Clean(dst.String())
+		if trailingSlash {
+			return s + SlashSeparator
+		}
+		return s
+	}
+	if trailingSlash {
+		dst.WriteRune(SlashSeparatorChar)
+	}
+	return dst.String()
+}
+
+// hasSuffixByte returns true if the last byte of s is 'suffix'
+func hasSuffixByte(s string, suffix byte) bool {
+	return len(s) > 0 && s[len(s)-1] == suffix
+}
+
+// pathNeedsClean returns whether path.Clean may change the path.
+// Will detect all cases that will be cleaned,
+// but may produce false positives on non-trivial paths.
+func pathNeedsClean(path []byte) bool {
+	if len(path) == 0 {
+		return true
+	}
+
+	rooted := path[0] == '/'
+	n := len(path)
+
+	r, w := 0, 0
+	if rooted {
+		r, w = 1, 1
+	}
+
+	for r < n {
+		switch {
+		case path[r] > 127:
+			// Non ascii.
+			return true
+		case path[r] == '/':
+			// multiple / elements
+			return true
+		case path[r] == '.' && (r+1 == n || path[r+1] == '/'):
+			// . element - assume it has to be cleaned.
+			return true
+		case path[r] == '.' && path[r+1] == '.' && (r+2 == n || path[r+2] == '/'):
+			// .. element: remove to last / - assume it has to be cleaned.
+			return true
+		default:
+			// real path element.
+			// add slash if needed
+			if rooted && w != 1 || !rooted && w != 0 {
+				w++
+			}
+			// copy element
+			for ; r < n && path[r] != '/'; r++ {
+				w++
+			}
+			// allow one slash, not at end
+			if r < n-1 && path[r] == '/' {
+				r++
+			}
+		}
+	}
+
+	// Turn empty string into "."
+	if w == 0 {
+		return true
+	}
+
+	return false
 }
 
 // mustGetUUID - get a random UUID.
@@ -285,7 +378,7 @@ func removeStandardStorageClass(metadata map[string]string) map[string]string {
 func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
 	newMeta := make(map[string]string, len(metadata))
 	for k, v := range metadata {
-		if contains(keyNames, k) {
+		if slices.Contains(keyNames, k) {
 			continue
 		}
 		newMeta[k] = v
@@ -309,7 +402,7 @@ func extractETag(metadata map[string]string) string {
 // to do case insensitive checks.
 func HasPrefix(s string, prefix string) bool {
 	if runtime.GOOS == globalWindowsOSName {
-		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
+		return stringsHasPrefixFold(s, prefix)
 	}
 	return strings.HasPrefix(s, prefix)
 }
@@ -1053,7 +1146,7 @@ func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 		if disk == nil {
 			continue
 		}
-		if di, err := disk.DiskInfo(ctx); err == nil {
+		if di, err := disk.DiskInfo(ctx, false); err == nil {
 			res[i] = &di
 		}
 	}
@@ -1061,7 +1154,7 @@ func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 }
 
 // hasSpaceFor returns whether the disks in `di` have space for and object of a given size.
-func hasSpaceFor(di []*DiskInfo, size int64) bool {
+func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	// We multiply the size by 2 to account for erasure coding.
 	size *= 2
 	if size < 0 {
@@ -1073,7 +1166,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 	var total uint64
 	var nDisks int
 	for _, disk := range di {
-		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 {
 			// Disk offline, no inodes or something else is wrong.
 			continue
 		}
@@ -1082,24 +1175,28 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 		available += disk.Total - disk.Used
 	}
 
-	if nDisks == 0 {
-		return false
+	if nDisks < len(di)/2 || nDisks <= 0 {
+		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", (len(di)/2)+1, nDisks)
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.
 	perDisk := size / int64(nDisks)
 	for _, disk := range di {
-		if disk == nil || disk.Total == 0 || (disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0) {
+		if disk == nil || disk.Total == 0 {
 			continue
 		}
+		if disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
+			// We have an inode count, but not enough inodes.
+			return false, nil
+		}
 		if int64(disk.Free) <= perDisk {
-			return false
+			return false, nil
 		}
 	}
 
 	// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
 	if available < uint64(size) {
-		return false
+		return false, nil
 	}
 
 	// How much will be left after adding the file.
@@ -1107,5 +1204,5 @@ func hasSpaceFor(di []*DiskInfo, size int64) bool {
 
 	// wantLeft is how much space there at least must be left.
 	wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
-	return available > wantLeft
+	return available > wantLeft, nil
 }

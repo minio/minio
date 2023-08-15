@@ -61,7 +61,7 @@ jobs:
       # are turned off - i.e. if ldap="", then ldap server is not enabled for
       # the tests.
       matrix:
-        go-version: [1.20.x]
+        go-version: [1.21.x]
         ldap: ["", "localhost:389"]
         etcd: ["", "http://localhost:2379"]
         openid: ["", "http://127.0.0.1:5556/dex"]
@@ -82,9 +82,9 @@ jobs:
           check-latest: true
       - name: Test LDAP/OpenID/Etcd combo
         env:
-          LDAP_TEST_SERVER: ${{ matrix.ldap }}
-          ETCD_SERVER: ${{ matrix.etcd }}
-          OPENID_TEST_SERVER: ${{ matrix.openid }}
+          _MINIO_LDAP_TEST_SERVER: ${{ matrix.ldap }}
+          _MINIO_ETCD_TEST_SERVER: ${{ matrix.etcd }}
+          _MINIO_OPENID_TEST_SERVER: ${{ matrix.openid }}
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
@@ -92,20 +92,20 @@ jobs:
       - name: Test with multiple OpenID providers
         if: matrix.openid == 'http://127.0.0.1:5556/dex'
         env:
-          LDAP_TEST_SERVER: ${{ matrix.ldap }}
-          ETCD_SERVER: ${{ matrix.etcd }}
-          OPENID_TEST_SERVER: ${{ matrix.openid }}
-          OPENID_TEST_SERVER_2: "http://127.0.0.1:5557/dex"
+          _MINIO_LDAP_TEST_SERVER: ${{ matrix.ldap }}
+          _MINIO_ETCD_TEST_SERVER: ${{ matrix.etcd }}
+          _MINIO_OPENID_TEST_SERVER: ${{ matrix.openid }}
+          _MINIO_OPENID_TEST_SERVER_2: "http://127.0.0.1:5557/dex"
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-iam
       - name: Test with Access Management Plugin enabled
         env:
-          LDAP_TEST_SERVER: ${{ matrix.ldap }}
-          ETCD_SERVER: ${{ matrix.etcd }}
-          OPENID_TEST_SERVER: ${{ matrix.openid }}
-          POLICY_PLUGIN_ENDPOINT: "http://127.0.0.1:8080"
+          _MINIO_LDAP_TEST_SERVER: ${{ matrix.ldap }}
+          _MINIO_ETCD_TEST_SERVER: ${{ matrix.etcd }}
+          _MINIO_OPENID_TEST_SERVER: ${{ matrix.openid }}
+          _MINIO_POLICY_PLUGIN_TEST_ENDPOINT: "http://127.0.0.1:8080"
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0

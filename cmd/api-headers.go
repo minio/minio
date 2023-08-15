@@ -23,11 +23,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -140,9 +140,13 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set tag count if object has tags
 	if len(objInfo.UserTags) > 0 {
-		tags, _ := url.ParseQuery(objInfo.UserTags)
-		if len(tags) > 0 {
-			w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(len(tags))}
+		tags, _ := tags.ParseObjectTags(objInfo.UserTags)
+		if tags.Count() > 0 {
+			w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(tags.Count())}
+			if opts.Tagging {
+				// This is MinIO only extension to return back tags along with the count.
+				w.Header()[xhttp.AmzObjectTagging] = []string{objInfo.UserTags}
+			}
 		}
 	}
 
@@ -153,7 +157,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 			continue
 		}
 
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			// values to client.
 			continue
@@ -166,7 +170,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 		var isSet bool
 		for _, userMetadataPrefix := range userMetadataKeyPrefixes {
-			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(userMetadataPrefix)) {
+			if !stringsHasPrefixFold(k, userMetadataPrefix) {
 				continue
 			}
 			w.Header()[strings.ToLower(k)] = []string{v}
@@ -203,7 +207,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// Set the relevant version ID as part of the response header.
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 

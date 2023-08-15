@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"path"
 	"strings"
@@ -75,9 +76,9 @@ type Client struct {
 	// is online or offline.
 	HealthCheckFn func() bool
 
-	// HealthCheckInterval will be the duration between re-connection attempts
-	// when a call has failed with a network error.
-	HealthCheckInterval time.Duration
+	// HealthCheckRetryUnit will be used to calculate the exponential
+	// backoff when trying to reconnect to an offline node
+	HealthCheckReconnectUnit time.Duration
 
 	// HealthCheckTimeout determines timeout for each call.
 	HealthCheckTimeout time.Duration
@@ -86,12 +87,11 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
-	// ExpectTimeouts indicates if context timeouts are expected.
-	// This will not mark the client offline in these cases.
-	ExpectTimeouts bool
-
 	// Avoid metrics update if set to true
 	NoMetrics bool
+
+	// TraceOutput will print debug information on non-200 calls if set.
+	TraceOutput io.Writer // Debug trace output
 
 	httpClient   *http.Client
 	url          *url.URL
@@ -99,6 +99,7 @@ type Client struct {
 
 	sync.RWMutex // mutex for lastErr
 	lastErr      error
+	lastErrTime  time.Time
 }
 
 type restError string
@@ -125,16 +126,14 @@ func removeEmptyPort(host string) string {
 }
 
 // Copied from http.NewRequest but implemented to ensure we re-use `url.URL` instance.
-func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
-	u.Host = removeEmptyPort(u.Host)
-	// The host's colon:port should be normalized. See Issue 14836.
 	req := &http.Request{
 		Method:     http.MethodPost,
-		URL:        u,
+		URL:        &u,
 		Proto:      "HTTP/1.1",
 		ProtoMajor: 1,
 		ProtoMinor: 1,
@@ -191,9 +190,6 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
 	}
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
-	if body != nil {
-		req.Header.Set("Expect", "100-continue")
-	}
 
 	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
 		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
@@ -204,54 +200,118 @@ func (c *Client) newRequest(ctx context.Context, u *url.URL, body io.Reader) (*h
 
 type respBodyMonitor struct {
 	io.ReadCloser
-	expectTimeouts bool
+	expectTimeouts  bool
+	errorStatusOnce sync.Once
 }
 
-func (r respBodyMonitor) Read(p []byte) (n int, err error) {
+func (r *respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
-	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
-		atomic.AddUint64(&globalStats.errs, 1)
-	}
+	r.errorStatus(err)
 	return
 }
 
-func (r respBodyMonitor) Close() (err error) {
+func (r *respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
+	r.errorStatus(err)
+	return
+}
+
+func (r *respBodyMonitor) errorStatus(err error) {
 	if xnet.IsNetworkOrHostDown(err, r.expectTimeouts) {
-		atomic.AddUint64(&globalStats.errs, 1)
+		r.errorStatusOnce.Do(func() {
+			atomic.AddUint64(&globalStats.errs, 1)
+		})
 	}
+}
+
+// dumpHTTP - dump HTTP request and response.
+func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
+	// Starts http dump.
+	_, err := fmt.Fprintln(c.TraceOutput, "---------START-HTTP---------")
+	if err != nil {
+		return
+	}
+
+	// Filter out Signature field from Authorization header.
+	origAuth := req.Header.Get("Authorization")
+	if origAuth != "" {
+		req.Header.Set("Authorization", "**REDACTED**")
+	}
+
+	// Only display request header.
+	reqTrace, err := httputil.DumpRequestOut(req, false)
+	if err != nil {
+		return
+	}
+
+	// Write request to trace output.
+	_, err = fmt.Fprint(c.TraceOutput, string(reqTrace))
+	if err != nil {
+		return
+	}
+
+	// Only display response header.
+	var respTrace []byte
+
+	// For errors we make sure to dump response body as well.
+	if resp.StatusCode != http.StatusOK &&
+		resp.StatusCode != http.StatusPartialContent &&
+		resp.StatusCode != http.StatusNoContent {
+		respTrace, err = httputil.DumpResponse(resp, true)
+		if err != nil {
+			return
+		}
+	} else {
+		respTrace, err = httputil.DumpResponse(resp, false)
+		if err != nil {
+			return
+		}
+	}
+
+	// Write response to trace output.
+	_, err = fmt.Fprint(c.TraceOutput, strings.TrimSuffix(string(respTrace), "\r\n"))
+	if err != nil {
+		return
+	}
+
+	// Ends the http dump.
+	_, err = fmt.Fprintln(c.TraceOutput, "---------END-HTTP---------")
+	if err != nil {
+		return
+	}
+
+	// Returns success.
 	return
 }
 
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	urlStr := c.url.String()
 	if !c.IsOnline() {
-		return nil, &NetworkError{c.LastError()}
+		return nil, &NetworkError{Err: c.LastError()}
 	}
 
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, &NetworkError{Err: &url.Error{Op: method, URL: urlStr, Err: err}}
-	}
-
+	// Shallow copy. We don't modify the *UserInfo, if set.
+	// All other fields are copied.
+	u := *c.url
 	u.Path = path.Join(u.Path, method)
 	u.RawQuery = values.Encode()
 
 	req, err := c.newRequest(ctx, u, body)
 	if err != nil {
-		return nil, &NetworkError{err}
+		return nil, &NetworkError{Err: err}
 	}
 	if length > 0 {
 		req.ContentLength = length
 	}
+
+	_, expectTimeouts := ctx.Deadline()
 
 	req, update := setupReqStatsUpdate(req)
 	defer update()
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+		if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
 			if !c.NoMetrics {
 				atomic.AddUint64(&globalStats.errs, 1)
 			}
@@ -260,6 +320,12 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 			}
 		}
 		return nil, &NetworkError{err}
+	}
+
+	// If trace is enabled, dump http request and response,
+	// except when the traceErrorsOnly enabled and the response's status code is ok
+	if c.TraceOutput != nil && resp.StatusCode != http.StatusOK {
+		c.dumpHTTP(req, resp)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -281,7 +347,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := io.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
 				if !c.NoMetrics {
 					atomic.AddUint64(&globalStats.errs, 1)
 				}
@@ -296,8 +362,8 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		}
 		return nil, errors.New(resp.Status)
 	}
-	if !c.NoMetrics && !c.ExpectTimeouts {
-		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: c.ExpectTimeouts}
+	if !c.NoMetrics {
+		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: expectTimeouts}
 	}
 	return resp.Body, nil
 }
@@ -308,18 +374,31 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+	connected := int32(online)
+	urlStr := uu.String()
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		// Mark offline, with no reconnection attempts.
+		connected = int32(offline)
+		err = &url.Error{URL: urlStr, Err: err}
+	}
+	// The host's colon:port should be normalized. See Issue 14836.
+	u.Host = removeEmptyPort(u.Host)
+
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
 	return &Client{
-		httpClient:          &http.Client{Transport: tr},
-		url:                 url,
-		newAuthToken:        newAuthToken,
-		connected:           online,
-		lastConn:            time.Now().UnixNano(),
-		MaxErrResponseSize:  4096,
-		HealthCheckInterval: 200 * time.Millisecond,
-		HealthCheckTimeout:  time.Second,
+		httpClient:               &http.Client{Transport: tr},
+		url:                      u,
+		lastErr:                  err,
+		lastErrTime:              time.Now(),
+		newAuthToken:             newAuthToken,
+		connected:                connected,
+		lastConn:                 time.Now().UnixNano(),
+		MaxErrResponseSize:       4096,
+		HealthCheckReconnectUnit: 200 * time.Millisecond,
+		HealthCheckTimeout:       time.Second,
 	}
 }
 
@@ -337,7 +416,29 @@ func (c *Client) LastConn() time.Time {
 func (c *Client) LastError() error {
 	c.RLock()
 	defer c.RUnlock()
-	return c.lastErr
+	return fmt.Errorf("[%s] %w", c.lastErrTime.Format(time.RFC3339), c.lastErr)
+}
+
+// computes the exponential backoff duration according to
+// https://www.awsarchitectureblog.com/2015/03/backoff.html
+func exponentialBackoffWait(r *rand.Rand, unit, cap time.Duration) func(uint) time.Duration {
+	if unit > time.Hour {
+		// Protect against integer overflow
+		panic("unit cannot exceed one hour")
+	}
+	return func(attempt uint) time.Duration {
+		if attempt > 16 {
+			// Protect against integer overflow
+			attempt = 16
+		}
+		// sleep = random_between(unit, min(cap, base * 2 ** attempt))
+		sleep := unit * time.Duration(1<<attempt)
+		if sleep > cap {
+			sleep = cap
+		}
+		sleep -= time.Duration(r.Float64() * float64(sleep-unit))
+		return sleep
+	}
 }
 
 // MarkOffline - will mark a client as being offline and spawns
@@ -346,12 +447,19 @@ func (c *Client) LastError() error {
 func (c *Client) MarkOffline(err error) bool {
 	c.Lock()
 	c.lastErr = err
+	c.lastErrTime = time.Now()
 	c.Unlock()
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
 	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		go func() {
+			backOff := exponentialBackoffWait(
+				rand.New(rand.NewSource(time.Now().UnixNano())),
+				200*time.Millisecond,
+				30*time.Second,
+			)
+
+			attempt := uint(0)
 			for {
 				if atomic.LoadInt32(&c.connected) == closed {
 					return
@@ -365,7 +473,8 @@ func (c *Client) MarkOffline(err error) bool {
 					}
 					return
 				}
-				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))
+				attempt++
+				time.Sleep(backOff(attempt))
 			}
 		}()
 		return true

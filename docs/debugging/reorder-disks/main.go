@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -97,7 +96,7 @@ type localDisk struct {
 func getMajorMinor(path string) (string, error) {
 	var stat syscall.Stat_t
 	if err := syscall.Stat(path, &stat); err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to stat `%s`: %w", path, err)
 	}
 
 	major := (stat.Dev & 0x00000000000fff00) >> 8
@@ -137,7 +136,7 @@ func filterLocalDisks(node, args string) ([]localDisk, error) {
 }
 
 func getFormatJSON(path string) (format, error) {
-	formatJSON, err := ioutil.ReadFile(filepath.Join(path, ".minio.sys/format.json"))
+	formatJSON, err := os.ReadFile(filepath.Join(path, ".minio.sys/format.json"))
 	if err != nil {
 		return format{}, err
 	}
@@ -158,14 +157,13 @@ func getDiskLocation(f format) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("disk not found")
+	return "", errors.New("format.json is corrupted")
 }
 
 func main() {
-
 	var node, args string
 
-	flag.StringVar(&node, "filter-node", "", "Filter disks which belong to the given node")
+	flag.StringVar(&node, "local-node-name", "", "the name of the local node")
 	flag.StringVar(&args, "args", "", "arguments passed to MinIO server")
 
 	flag.Parse()
@@ -176,7 +174,7 @@ func main() {
 	}
 
 	if len(localDisks) == 0 {
-		log.Fatal("Fix --filter-node or/and --args to select local disks.")
+		log.Fatal("Fix --local-node-name or/and --args to select local disks.")
 	}
 
 	format, err := getFormatJSON(localDisks[0].path)
@@ -194,33 +192,40 @@ func main() {
 		expectedDisksName[fmt.Sprintf("%d-%d", disk.index/setSize, disk.index%setSize)] = disk.path
 		format, err := getFormatJSON(disk.path)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Unable to read format.json from `%s`, error: %v\n", disk.path, err)
+			continue
 		}
 		foundDiskLoc, err := getDiskLocation(format)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Unable to get disk location of `%s`, error: %v\n", disk.path, err)
+			continue
 		}
 		actualDisksName[foundDiskLoc] = disk.path
 	}
 
 	uuidMap, err := getDiskUUIDMap()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Unable to analyze UUID in /dev/disk/by-uuid/:", err)
 	}
 
 	mountMap, err := getMountMap()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Unable to parse /proc/self/mountinfo:", err)
 	}
 
 	for loc, expectedDiskName := range expectedDisksName {
 		diskName := actualDisksName[loc]
+		if diskName == "" {
+			log.Printf("skipping disk location `%s`, err: %v\n", diskName, err)
+			continue
+		}
 		mami, err := getMajorMinor(diskName)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("skipping `%s`, err: %v\n", diskName, err)
+			continue
 		}
 		devName := mountMap[mami]
 		uuid := uuidMap[devName]
-		fmt.Printf("UID=%s\t%s\txfs\tdefaults,noatime\t0\t2\n", uuid, expectedDiskName)
+		fmt.Printf("UUID=%s\t%s\txfs\tdefaults,noatime\t0\t2\n", uuid, expectedDiskName)
 	}
 }

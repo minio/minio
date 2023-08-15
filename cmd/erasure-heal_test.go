@@ -132,7 +132,7 @@ func TestErasureHeal(t *testing.T) {
 		}
 
 		// test case setup is complete - now call Heal()
-		err = erasure.Heal(context.Background(), staleWriters, readers, test.size)
+		err = erasure.Heal(context.Background(), staleWriters, readers, test.size, nil)
 		closeBitrotReaders(readers)
 		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {

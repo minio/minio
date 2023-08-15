@@ -41,34 +41,34 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	registerLockRESTHandlers(router)
 }
 
-// List of some generic handlers which are applied for all incoming requests.
-var globalHandlers = []mux.MiddlewareFunc{
-	// The generic tracer needs to be the first handler
-	// to catch all requests returned early by any other handler
-	httpTracer,
-	// Auth handler verifies incoming authorization headers and
-	// routes them accordingly. Client receives a HTTP error for
-	// invalid/unsupported signatures.
+// List of some generic middlewares which are applied for all incoming requests.
+var globalMiddlewares = []mux.MiddlewareFunc{
+	// set x-amz-request-id header and others
+	addCustomHeadersMiddleware,
+	// The generic tracer needs to be the first middleware to catch all requests
+	// returned early by any other middleware (but after the middleware that
+	// sets the amz request id).
+	httpTracerMiddleware,
+	// Auth middleware verifies incoming authorization headers and routes them
+	// accordingly. Client receives a HTTP error for invalid/unsupported
+	// signatures.
 	//
 	// Validates all incoming requests to have a valid date header.
-	setAuthHandler,
-	// Redirect some pre-defined browser request paths to a static location prefix.
-	setBrowserRedirectHandler,
-	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
-	setCrossDomainPolicy,
+	setAuthMiddleware,
+	// Redirect some pre-defined browser request paths to a static location
+	// prefix.
+	setBrowserRedirectMiddleware,
+	// Adds 'crossdomain.xml' policy middleware to serve legacy flash clients.
+	setCrossDomainPolicyMiddleware,
 	// Limits all body and header sizes to a maximum fixed limit
-	setRequestLimitHandler,
-	// Network statistics
-	setHTTPStatsHandler,
+	setRequestLimitMiddleware,
 	// Validate all the incoming requests.
-	setRequestValidityHandler,
-	// set x-amz-request-id header.
-	addCustomHeaders,
-	// Add upload forwarding handler for site replication
-	setUploadForwardingHandler,
-	// Add bucket forwarding handler
-	setBucketForwardingHandler,
-	// Add new handlers here.
+	setRequestValidityMiddleware,
+	// Add upload forwarding middleware for site replication
+	setUploadForwardingMiddleware,
+	// Add bucket forwarding middleware
+	setBucketForwardingMiddleware,
+	// Add new middlewares here.
 }
 
 // configureServer handler returns final handler for the http server.
@@ -85,7 +85,7 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add Admin router, all APIs are enabled in server mode.
 	registerAdminRouter(router, true)
 
-	// Add healthcheck router
+	// Add healthCheck router
 	registerHealthCheckRouter(router)
 
 	// Add server metrics router
@@ -100,7 +100,7 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add API router
 	registerAPIRouter(router)
 
-	router.Use(globalHandlers...)
+	router.Use(globalMiddlewares...)
 
 	return router, nil
 }

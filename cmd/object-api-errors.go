@@ -31,9 +31,14 @@ func toObjectErr(err error, params ...string) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
+
+	// Unwarp the error first
+	err = unwrapAll(err)
+
+	if err == context.Canceled {
 		return context.Canceled
 	}
+
 	switch err.Error() {
 	case errVolumeNotFound.Error():
 		apiErr := BucketNotFound{}
@@ -437,6 +442,16 @@ func (e RemoteTargetConnectionErr) Error() string {
 	return fmt.Sprintf("Remote service endpoint %s not available\n\t%s", e.Endpoint, e.Err.Error())
 }
 
+// BucketRemoteIdenticalToSource remote already exists for this target type.
+type BucketRemoteIdenticalToSource struct {
+	GenericError
+	Endpoint string
+}
+
+func (e BucketRemoteIdenticalToSource) Error() string {
+	return fmt.Sprintf("Remote service endpoint %s is self referential to current cluster", e.Endpoint)
+}
+
 // BucketRemoteAlreadyExists remote already exists for this target type.
 type BucketRemoteAlreadyExists GenericError
 
@@ -674,6 +689,12 @@ func isErrBucketNotFound(err error) bool {
 	return errors.As(err, &bkNotFound)
 }
 
+// isErrReadQuorum check if the error type is InsufficentReadQuorum
+func isErrReadQuorum(err error) bool {
+	var rquorum InsufficientReadQuorum
+	return errors.As(err, &rquorum)
+}
+
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	var objNotFound ObjectNotFound
@@ -712,5 +733,17 @@ func isErrMethodNotAllowed(err error) bool {
 
 func isErrInvalidRange(err error) bool {
 	_, ok := err.(InvalidRange)
+	return ok
+}
+
+// ReplicationPermissionCheck - Check if error type is ReplicationPermissionCheck.
+type ReplicationPermissionCheck struct{}
+
+func (e ReplicationPermissionCheck) Error() string {
+	return "Replication permission validation requests cannot be completed"
+}
+
+func isReplicationPermissionCheck(err error) bool {
+	_, ok := err.(ReplicationPermissionCheck)
 	return ok
 }

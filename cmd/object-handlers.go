@@ -28,6 +28,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,7 +91,7 @@ const (
 func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
 		if header, ok := supportedHeadGetReqParams[strings.ToLower(k)]; ok {
-			w.Header()[header] = v
+			w.Header()[header] = []string{strings.Join(v, ",")}
 		}
 	}
 }
@@ -201,13 +202,11 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	gopts.NoLock = true // We already have a lock, we can live with it.
 	objInfo, err := getObjectInfo(ctx, bucket, object, gopts)
 	if err != nil {
-		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if objInfo.VersionID != "" && objInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
-			}
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if objInfo.VersionID != "" && objInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
 		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -238,7 +237,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Start:          offset,
 				End:            -1,
 			}
-			return getObjectNInfo(ctx, bucket, object, rs, r.Header, noLock, opts)
+			opts.NoLock = true
+			return getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 		},
 		actualSize,
 	)
@@ -402,7 +402,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	var proxy proxyResult
-	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 	if err != nil {
 		var (
 			reader *GetObjectReader
@@ -437,7 +437,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
 				return
 			}
-			if globalBucketVersioningSys.PrefixEnabled(bucket, object) && gr != nil {
+			if gr != nil {
 				if !gr.ObjInfo.VersionPurgeStatus.Empty() {
 					// Shows the replication status of a permanent delete of a version
 					w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(gr.ObjInfo.VersionPurgeStatus)}
@@ -452,7 +452,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 					w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
 					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 				}
-				QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+				QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -475,11 +475,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, lcEventSrc_s3GetObject, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
@@ -487,7 +487,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			}
 		}
 
-		QueueReplicationHeal(ctx, bucket, gr.ObjInfo)
+		QueueReplicationHeal(ctx, bucket, gr.ObjInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -498,22 +498,27 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	// Set encryption response headers
-	switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
-	case crypto.S3:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-	case crypto.S3KMS:
-		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
-		w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
-		if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
-			w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+
+	if kind, isEncrypted := crypto.IsEncrypted(objInfo.UserDefined); isEncrypted {
+		switch kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.S3KMS:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionKMS)
+			w.Header().Set(xhttp.AmzServerSideEncryptionKmsID, objInfo.KMSKeyID())
+			if kmsCtx, ok := objInfo.UserDefined[crypto.MetaContext]; ok {
+				w.Header().Set(xhttp.AmzServerSideEncryptionKmsContext, kmsCtx)
+			}
+		case crypto.SSEC:
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
-	case crypto.SSEC:
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
@@ -543,7 +548,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogOnceIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err), "get-object-handler-write")
 		}
 		return
 	}
@@ -554,7 +559,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			return
 		}
 		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+			logger.LogOnceIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err), "get-object-handler-close")
 		}
 		return
 	}
@@ -678,7 +683,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				objInfo = oi
 			}
 			if proxy.Err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, proxy.Err), r.URL)
+				writeErrorResponseHeadersOnly(w, toAPIError(ctx, proxy.Err))
 				return
 			}
 		}
@@ -690,36 +695,36 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
 		return
 	}
 
 	if err != nil && !proxy.Proxy {
-		if globalBucketVersioningSys.PrefixEnabled(bucket, object) {
-			switch {
-			case !objInfo.VersionPurgeStatus.Empty():
-				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
-			case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
-				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
-			}
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if objInfo.VersionID != "" && objInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
-			}
-			QueueReplicationHeal(ctx, bucket, objInfo)
-			// do an additional verification whether object exists when object is deletemarker and request
-			// is from replication
-			if opts.CheckDMReplicationReady {
-				topts := opts
-				topts.VersionID = ""
-				goi, gerr := getObjectInfo(ctx, bucket, object, topts)
-				if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
-					w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
-				}
+		switch {
+		case !objInfo.VersionPurgeStatus.Empty():
+			w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
+		case !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker:
+			w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
+		}
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if objInfo.VersionID != "" && objInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+		}
+
+		QueueReplicationHeal(ctx, bucket, objInfo, 0)
+		// do an additional verification whether object exists when object is deletemarker and request
+		// is from replication
+		if opts.CheckDMReplicationReady {
+			topts := opts
+			topts.VersionID = ""
+			goi, gerr := getObjectInfo(ctx, bucket, object, topts)
+			if gerr == nil || goi.VersionID != "" { // object layer returned more info because object is deleted
+				w.Header().Set(xhttp.MinIOTargetReplicationReady, "true")
 			}
 		}
+
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -728,18 +733,18 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			act := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo).Action
-			if act.Delete() {
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
-				applyExpiryRule(objInfo, act.DeleteRestored(), act.DeleteVersioned())
-				if !act.DeleteRestored() {
+				applyExpiryRule(event, lcEventSrc_s3HeadObject, objInfo)
+				if !event.Action.DeleteRestored() {
 					// If the ILM action is not on restored object return error.
 					writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 					return
 				}
 			}
 		}
-		QueueReplicationHeal(ctx, bucket, objInfo)
+		QueueReplicationHeal(ctx, bucket, objInfo, 0)
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -799,8 +804,9 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 	}
 
-	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" {
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums())
+	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
+		// AWS S3 silently drops checksums on range requests.
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
 	}
 
 	// Set standard object headers.
@@ -1098,31 +1104,24 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
-
-	// FIXME: a possible race exists between a parallel
-	// GetObject v/s CopyObject with metadata updates, ideally
-	// we should be holding write lock here but it is not
-	// possible due to other constraints such as knowing
-	// the type of source content etc.
-	lock := noLock
-	if !cpSrcDstSame {
-		lock = readLock
+	if cpSrcDstSame {
+		getOpts.NoLock = true
 	}
 
 	var rs *HTTPRangeSpec
-	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
 		}
-		if globalBucketVersioningSys.PrefixEnabled(srcBucket, srcObject) && gr != nil {
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
-			}
+
+		// Versioning enabled quite possibly object is deleted might be delete-marker
+		// if present set the headers, no idea why AWS S3 sets these headers.
+		if gr != nil && gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+			w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
 		}
+
 		// Update context bucket & object names for correct S3 XML error response
 		reqInfo := logger.GetReqInfo(ctx)
 		reqInfo.BucketName = srcBucket
@@ -1260,7 +1259,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		for k, v := range srcInfo.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				encMetadata[k] = v
 			}
 		}
@@ -1564,7 +1563,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrc_s3CopyObject)
 		// Remove the transitioned object whose object version is being overwritten.
 		logger.LogIf(ctx, os.Sweep())
 	}
@@ -1619,7 +1618,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
-	if rAuthType == authTypeStreamingSigned {
+	switch rAuthType {
+	// Check signature types that must have content length
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
 		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
@@ -1673,9 +1674,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	switch rAuthType {
-	case authTypeStreamingSigned:
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Err = newSignV4ChunkedReader(r)
+		reader, s3Err = newSignV4ChunkedReader(r, rAuthType == authTypeStreamingSignedTrailer)
+		if s3Err != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+			return
+		}
+	case authTypeStreamingUnsignedTrailer:
+		// Initialize stream chunked reader with optional trailers.
+		reader, s3Err = newUnsignedV4ChunkedReader(r, true)
 		if s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
@@ -1695,6 +1703,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r, serviceS3)
 		}
+	}
+
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to write data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
+		return
 	}
 
 	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
@@ -1815,6 +1829,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
+		if crypto.SSEC.IsRequested(r.Header) && crypto.S3KMS.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionMethod), r.URL)
+			return
+		}
+
 		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
 			return
@@ -1907,7 +1931,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
 	evt := eventArgs{
@@ -1925,15 +1948,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sendEvent(evt)
 	}
 
+	// Do not send checksums in events to avoid leaks.
+	hash.TransferChecksumHeader(w, r)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Remove the transitioned object whose object version is being overwritten.
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
-		enqueueTransitionImmediate(objInfo)
+		enqueueTransitionImmediate(objInfo, lcEventSrc_s3PutObject)
 		logger.LogIf(ctx, os.Sweep())
 	}
-	// Do not send checksums in events to avoid leaks.
-	hash.TransferChecksumHeader(w, r)
 }
 
 // PutObjectExtractHandler - PUT Object extract is an extended API
@@ -1987,7 +2012,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	// if Content-Length is unknown/missing, deny the request
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
-	if rAuthType == authTypeStreamingSigned {
+	if rAuthType == authTypeStreamingSigned || rAuthType == authTypeStreamingSignedTrailer {
 		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
@@ -2027,9 +2052,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	}
 
 	switch rAuthType {
-	case authTypeStreamingSigned:
+	case authTypeStreamingSigned, authTypeStreamingSignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Err = newSignV4ChunkedReader(r)
+		reader, s3Err = newSignV4ChunkedReader(r, rAuthType == authTypeStreamingSignedTrailer)
 		if s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
@@ -2086,8 +2111,13 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
+
+		if sc == "" {
+			sc = storageclass.STANDARD
+		}
+
 		metadata := map[string]string{
-			xhttp.AmzStorageClass: sc,
+			xhttp.AmzStorageClass: sc, // save same storage-class as incoming stream.
 		}
 
 		actualSize := size
@@ -2133,6 +2163,9 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			return err
 		}
 		opts.MTime = info.ModTime()
+		if opts.MTime.Unix() <= 0 {
+			opts.MTime = UTCNow()
+		}
 		opts.IndexCB = idxCb
 
 		retentionMode, retentionDate, legalHold, s3err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
@@ -2208,6 +2241,19 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}, replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 			scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.ObjectReplicationType)
 		}
+
+		// Notify object created event.
+		evt := eventArgs{
+			EventName:    event.ObjectCreatedPut,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}
+		sendEvent(evt)
+
 		return nil
 	}
 
@@ -2268,6 +2314,19 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationCheck]; ok {
+		// requests to just validate replication settings and permissions are not allowed to delete data
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationPermissionCheckError), r.URL)
+		return
+	}
+
+	replica := r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String()
+	if replica {
+		if s3Error := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); s3Error != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+			return
+		}
+	}
 
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
@@ -2282,75 +2341,58 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	var (
-		goi  ObjectInfo
-		gerr error
-	)
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
+	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+	if rcfg.LockEnabled && opts.DeletePrefix {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
+		return
 	}
 
 	os := newObjSweeper(bucket, object).WithVersion(opts.VersionID).WithVersioning(opts.Versioned, opts.VersionSuspended)
-	// Mutations of objects on versioning suspended buckets
-	// affect its null version. Through opts below we select
-	// the null version's remote object to delete if
-	// transitioned.
-	goiOpts := os.GetOpts()
-	goi, gerr = getObjectInfo(ctx, bucket, object, goiOpts)
-	if gerr == nil {
-		os.SetTransitionState(goi.TransitionedObject)
-	}
 
-	dsc := checkReplicateDelete(ctx, bucket, ObjectToDelete{
-		ObjectV: ObjectV{
-			ObjectName: object,
-			VersionID:  opts.VersionID,
-		},
-	}, goi, opts, gerr)
-	if dsc.ReplicateAny() {
-		opts.SetDeleteReplicationState(dsc, opts.VersionID)
-	}
+	opts.SetEvalMetadataFn(func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
+		if replica { // no need to check replication on receiver
+			return dsc, nil
+		}
+		dsc = checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			ObjectV: ObjectV{
+				ObjectName: object,
+				VersionID:  opts.VersionID,
+			},
+		}, *oi, opts, gerr)
+		// Mutations of objects on versioning suspended buckets
+		// affect its null version. Through opts below we select
+		// the null version's remote object to delete if
+		// transitioned.
+		if gerr == nil {
+			os.SetTransitionState(oi.TransitionedObject)
+		}
+		return dsc, nil
+	})
 
 	vID := opts.VersionID
-	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-		// check if replica has permission to be deleted.
-		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL)
-			return
-		}
+	if replica {
 		opts.SetReplicaStatus(replication.Replica)
 		if opts.VersionPurgeStatus().Empty() {
 			// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
 			vID = ""
 		}
 	}
-
-	apiErr := ErrNone
-	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
-		if opts.DeletePrefix {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
-			return
-		}
+	opts.SetEvalRetentionBypassFn(func(goi ObjectInfo, gerr error) (err error) {
+		err = nil
 		if vID != "" {
-			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
+			err := enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
 				ObjectV: ObjectV{
 					ObjectName: object,
 					VersionID:  vID,
 				},
 			}, goi, gerr)
-			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL)
-				return
+			if err != nil && !isErrObjectNotFound(err) {
+				return err
 			}
 		}
-	}
-
-	if apiErr == ErrNoSuchKey {
-		writeSuccessNoContent(w)
 		return
-	}
+	})
 
 	deleteObject := objectAPI.DeleteObject
 	if api.CacheAPI() != nil {
@@ -2365,6 +2407,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
+		if isErrObjectNotFound(err) {
+			writeSuccessNoContent(w)
+			return
+		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
 	}
 
 	if objInfo.Name == "" {
@@ -2391,7 +2439,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	if dsc.ReplicateAny() {
+	if objInfo.ReplicationStatus == replication.Pending || objInfo.VersionPurgeStatus == Pending {
 		dmVersionID := ""
 		versionID := ""
 		if objInfo.DeleteMarker {
@@ -2406,7 +2454,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				DeleteMarkerVersionID: dmVersionID,
 				DeleteMarkerMTime:     DeleteMarkerMTime{objInfo.ModTime},
 				DeleteMarker:          objInfo.DeleteMarker,
-				ReplicationState:      objInfo.getReplicationState(dsc.String(), opts.VersionID, false),
+				ReplicationState:      objInfo.getReplicationState(),
 			},
 			Bucket:    bucket,
 			EventType: ReplicateIncomingDelete,
@@ -2477,7 +2525,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 	popts := ObjectOptions{
 		MTime:     opts.MTime,
 		VersionID: opts.VersionID,
-		EvalMetadataFn: func(oi *ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo, gerr error) (ReplicateDecision, error) {
 			oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
 			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp] = UTCNow().Format(time.RFC3339Nano)
 
@@ -2486,7 +2534,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 			}
-			return nil
+			return dsc, nil
 		},
 	}
 
@@ -2638,9 +2686,9 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	popts := ObjectOptions{
 		MTime:     opts.MTime,
 		VersionID: opts.VersionID,
-		EvalMetadataFn: func(oi *ObjectInfo) error {
+		EvalMetadataFn: func(oi *ObjectInfo, gerr error) (dsc ReplicateDecision, err error) {
 			if err := enforceRetentionBypassForPut(ctx, r, *oi, objRetention, cred, owner); err != nil {
-				return err
+				return dsc, err
 			}
 			if objRetention.Mode.Valid() {
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
@@ -2650,12 +2698,12 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 				oi.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = ""
 			}
 			oi.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp] = UTCNow().Format(time.RFC3339Nano)
-			dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(*oi, replication.MetadataReplicationType, opts))
+			dsc = mustReplicate(ctx, bucket, object, getMustReplicateOptions(*oi, replication.MetadataReplicationType, opts))
 			if dsc.ReplicateAny() {
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 				oi.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 			}
-			return nil
+			return dsc, nil
 		},
 	}
 
@@ -2670,7 +2718,8 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
+
 	// Notify object  event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutRetention,
@@ -2776,8 +2825,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Allow getObjectTagging if policy action is set.
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectTaggingAction, bucket, object); s3Error != ErrNone {
+	if s3Error := authenticateRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
 	}
@@ -2788,14 +2836,23 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Get object tags
 	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	if opts.VersionID != "" {
+	// Set this such that authorization policies can be applied on the object tags.
+	if tags := ot.String(); tags != "" {
+		r.Header.Set(xhttp.AmzObjectTagging, tags)
+	}
+
+	if s3Error := authorizeRequest(ctx, r, policy.GetObjectTaggingAction); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	if opts.VersionID != "" && opts.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
 	}
 
@@ -2810,6 +2867,10 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 			Value: v,
 		})
 	}
+	// Always return in sorted order for tags.
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Key < list[j].Key
+	})
 	otags.TagSet.Tags = list
 
 	writeSuccessResponseXML(w, encodeResponse(otags))
@@ -2884,7 +2945,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		scheduleReplication(ctx, objInfo.Clone(), objAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	if objInfo.VersionID != "" {
+	if objInfo.VersionID != "" && objInfo.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
@@ -2960,7 +3021,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		scheduleReplication(ctx, oi.Clone(), objAPI, dsc, replication.MetadataReplicationType)
 	}
 
-	if oi.VersionID != "" {
+	if oi.VersionID != "" && oi.VersionID != nullVersionID {
 		w.Header()[xhttp.AmzVersionID] = []string{oi.VersionID}
 	}
 	writeSuccessNoContent(w)

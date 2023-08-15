@@ -29,11 +29,10 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/tinylib/msgp/msgp"
 )
 
 //go:generate msgp -file $GOFILE -unexported
-//msgp:ignore tierJournal tierDiskJournal walkfn
+//msgp:ignore TierJournal tierDiskJournal walkfn
 
 type tierDiskJournal struct {
 	sync.RWMutex
@@ -41,7 +40,8 @@ type tierDiskJournal struct {
 	file     *os.File // active journal file
 }
 
-type tierJournal struct {
+// TierJournal holds an in-memory and an on-disk delete journal of tiered content.
+type TierJournal struct {
 	*tierDiskJournal // for processing legacy journal entries
 	*tierMemJournal  // for processing new journal entries
 }
@@ -63,24 +63,28 @@ func newTierDiskJournal() *tierDiskJournal {
 	return &tierDiskJournal{}
 }
 
-// initTierDeletionJournal intializes an in-memory journal built using a
-// buffered channel for new journal entries. It also initializes the on-disk
-// journal only to process existing journal entries made from previous versions.
-func initTierDeletionJournal(ctx context.Context) (*tierJournal, error) {
-	j := &tierJournal{
-		tierMemJournal:  newTierMemJoural(1000),
+// NewTierJournal initializes tier deletion journal
+func NewTierJournal() *TierJournal {
+	j := &TierJournal{
+		tierMemJournal:  newTierMemJournal(1000),
 		tierDiskJournal: newTierDiskJournal(),
 	}
+	return j
+}
 
+// Init intializes an in-memory journal built using a
+// buffered channel for new journal entries. It also initializes the on-disk
+// journal only to process existing journal entries made from previous versions.
+func (t *TierJournal) Init(ctx context.Context) error {
 	for _, diskPath := range globalEndpoints.LocalDisksPaths() {
-		j.diskPath = diskPath
+		t.diskPath = diskPath
 
-		go j.deletePending(ctx)  // for existing journal entries from previous MinIO versions
-		go j.processEntries(ctx) // for newer journal entries circa free-versions
-		return j, nil
+		go t.deletePending(ctx)  // for existing journal entries from previous MinIO versions
+		go t.processEntries(ctx) // for newer journal entries circa free-versions
+		return nil
 	}
 
-	return nil, errors.New("no local drive found")
+	return errors.New("no local drive found")
 }
 
 // rotate rotates the journal. If a read-only journal already exists it does
@@ -120,7 +124,8 @@ func (jd *tierDiskJournal) WalkEntries(ctx context.Context, fn walkFn) {
 		return
 	}
 	defer ro.Close()
-	mr := msgp.NewReader(ro)
+	mr := msgpNewReader(ro)
+	defer readMsgpReaderPoolPut(mr)
 
 	done := false
 	for {

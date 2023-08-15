@@ -4,32 +4,29 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ template "minio.fullname" . }}
-  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "minio.name" . }}
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- if .Values.persistence.annotations }}
-  annotations:
-{{ toYaml .Values.persistence.annotations | trimSuffix "\n" | indent 4 }}
-{{- end }}
+  {{- if .Values.persistence.annotations }}
+  annotations: {{- toYaml .Values.persistence.annotations | nindent 4 }}
+  {{- end }}
 spec:
   accessModes:
     - {{ .Values.persistence.accessMode | quote }}
   resources:
     requests:
       storage: {{ .Values.persistence.size | quote }}
-
-{{- if .Values.persistence.storageClass }}
-{{- if (eq "-" .Values.persistence.storageClass) }}
+  {{- if .Values.persistence.storageClass }}
+  {{- if (eq "-" .Values.persistence.storageClass) }}
   storageClassName: ""
-{{- else }}
+  {{- else }}
   storageClassName: "{{ .Values.persistence.storageClass }}"
-{{- end }}
-{{- end }}
-{{- if .Values.persistence.VolumeName }}
-  volumeName: "{{ .Values.persistence.VolumeName }}"
-{{- end }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.persistence.volumeName }}
+  volumeName: "{{ .Values.persistence.volumeName }}"
+  {{- end }}
 {{- end }}
 {{- end }}

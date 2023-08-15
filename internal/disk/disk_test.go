@@ -27,7 +27,7 @@ import (
 )
 
 func TestFree(t *testing.T) {
-	di, err := disk.GetInfo(t.TempDir())
+	di, err := disk.GetInfo(t.TempDir(), true)
 	if err != nil {
 		t.Fatal(err)
 	}

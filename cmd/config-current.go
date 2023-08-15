@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/cache"
@@ -283,7 +283,7 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) error {
+func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, objAPI ObjectLayer) error {
 	switch subSys {
 	case config.SiteSubSys:
 		if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
@@ -386,14 +386,14 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
-			if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
+			if err := logger.ValidateSubSysConfig(ctx, s, subSys); err != nil {
 				return err
 			}
 		}
 	}
 
 	if config.NotifySubSystems.Contains(subSys) {
-		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, subSys, NewHTTPTransport()); err != nil {
+		if err := notify.TestSubSysNotificationTargets(ctx, s, subSys, NewHTTPTransport()); err != nil {
 			return err
 		}
 	}
@@ -407,7 +407,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 	return nil
 }
 
-func validateConfig(s config.Config, subSys string) error {
+func validateConfig(ctx context.Context, s config.Config, subSys string) error {
 	objAPI := newObjectLayerFn()
 
 	// We must have a global lock for this so nobody else modifies env while we do.
@@ -419,12 +419,12 @@ func validateConfig(s config.Config, subSys string) error {
 	// Enable env values to validate KMS.
 	defer env.SetEnvOn()
 	if subSys != "" {
-		return validateSubSysConfig(s, subSys, objAPI)
+		return validateSubSysConfig(ctx, s, subSys, objAPI)
 	}
 
 	// No sub-system passed. Validate all of them.
 	for _, ss := range config.SubSystems.ToSlice() {
-		if err := validateSubSysConfig(s, ss, objAPI); err != nil {
+		if err := validateSubSysConfig(ctx, s, ss, objAPI); err != nil {
 			return err
 		}
 	}
@@ -575,7 +575,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.LoggerWebhookSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.LoggerWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
@@ -588,11 +588,11 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			}
 			loggerCfg.HTTP[n] = l
 		}
-		if errs := logger.UpdateSystemTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateSystemTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditWebhookSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditWebhookSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
 		}
@@ -606,21 +606,24 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if errs := logger.UpdateAuditWebhookTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateAuditWebhookTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
-		loggerCfg, err := logger.LookupConfigForSubSys(s, config.AuditKafkaSubSys)
+		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditKafkaSubSys)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
 		}
 		for n, l := range loggerCfg.AuditKafka {
 			if l.Enabled {
+				if l.TLS.Enable {
+					l.TLS.RootCAs = globalRootCAs
+				}
 				l.LogOnce = logger.LogOnceIf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
-		if errs := logger.UpdateAuditKafkaTargets(loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateAuditKafkaTargets(ctx, loggerCfg); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:

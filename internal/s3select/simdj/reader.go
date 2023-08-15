@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/minio/minio/internal/s3select/json"
 	"github.com/minio/minio/internal/s3select/sql"
@@ -34,8 +35,9 @@ type Reader struct {
 	decoded chan simdjson.Object
 
 	// err will only be returned after decoded has been closed.
-	err        *error
-	readCloser io.ReadCloser
+	err          *error
+	readCloser   io.ReadCloser
+	onReaderExit func()
 
 	exitReader chan struct{}
 	readerWg   sync.WaitGroup
@@ -80,8 +82,7 @@ func (r *Reader) Close() error {
 // When this function returns r.readerWg will be decremented and r.decoded will be closed.
 // On errors, r.err will be set. This should only be accessed after r.decoded has been closed.
 func (r *Reader) startReader() {
-	defer r.readerWg.Done()
-	defer close(r.decoded)
+	defer r.onReaderExit()
 	var tmpObj simdjson.Object
 	for {
 		var in simdjson.Stream
@@ -153,11 +154,22 @@ func (r *Reader) startReader() {
 func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
-		readCloser: readCloser,
+		readCloser: &safeCloser{r: io.Reader(readCloser)},
 		decoded:    make(chan simdjson.Object, 1000),
 		input:      make(chan simdjson.Stream, 2),
 		exitReader: make(chan struct{}),
 	}
+	r.onReaderExit = func() {
+		close(r.decoded)
+		readCloser.Close()
+		for range r.input {
+			// Read until EOF trickles through.
+			// Otherwise, we risk the decoder hanging.
+		}
+		r.readerWg.Done()
+	}
+
+	// We cannot reuse as we are sending parsed objects elsewhere.
 	simdjson.ParseNDStream(readCloser, r.input, nil)
 	r.readerWg.Add(1)
 	go r.startReader()
@@ -174,15 +186,25 @@ func NewElementReader(ch chan simdjson.Object, err *error, args *json.ReaderArgs
 	}
 }
 
-// NewTapeReaderChan will start a reader that will read input from the provided channel.
-func NewTapeReaderChan(pj chan simdjson.Stream, args *json.ReaderArgs) *Reader {
-	r := Reader{
-		args:       args,
-		decoded:    make(chan simdjson.Object, 1000),
-		input:      pj,
-		exitReader: make(chan struct{}),
+// safeCloser will wrap a Reader as a ReadCloser.
+// It is safe to call Close while the reader is being used.
+type safeCloser struct {
+	closed uint32
+	r      io.Reader
+}
+
+func (s *safeCloser) Read(p []byte) (n int, err error) {
+	if atomic.LoadUint32(&s.closed) == 1 {
+		return 0, io.EOF
 	}
-	r.readerWg.Add(1)
-	go r.startReader()
-	return &r
+	n, err = s.r.Read(p)
+	if atomic.LoadUint32(&s.closed) == 1 {
+		return 0, io.EOF
+	}
+	return n, err
+}
+
+func (s *safeCloser) Close() error {
+	atomic.CompareAndSwapUint32(&s.closed, 0, 1)
+	return nil
 }

@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/mux"
 )
@@ -73,7 +73,7 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 	// Initialize boot time
 	globalBootTime = UTCNow()
 
-	globalEndpoints = mustGetPoolEndpoints(erasureDirs...)
+	globalEndpoints = mustGetPoolEndpoints(0, erasureDirs...)
 
 	initAllSubsystems(ctx)
 
@@ -108,7 +108,7 @@ func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error)
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints := mustGetPoolEndpoints(erasureDirs...)
+	endpoints := mustGetPoolEndpoints(0, erasureDirs...)
 	globalPolicySys = NewPolicySys()
 	objLayer, err := newErasureServerPools(ctx, endpoints)
 	if err != nil {
@@ -479,8 +479,8 @@ func TestTopLockEntries(t *testing.T) {
 		if len(exp) != len(got) {
 			return 0, false
 		}
-		sort.Sort(byResourceUID{exp})
-		sort.Sort(byResourceUID{got})
+		sort.Slice(exp, byResourceUID{exp}.Less)
+		sort.Slice(got, byResourceUID{got}.Less)
 		// printEntries(exp)
 		// printEntries(got)
 		for i, e := range exp {

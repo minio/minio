@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -33,6 +33,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
+	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 )
 
@@ -145,7 +147,7 @@ func (m MySQLArgs) Validate() error {
 
 // MySQLTarget - MySQL target.
 type MySQLTarget struct {
-	lazyInit lazyInit
+	initOnce once.Init
 
 	id         event.TargetID
 	args       MySQLArgs
@@ -153,7 +155,7 @@ type MySQLTarget struct {
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	db         *sql.DB
-	store      Store
+	store      store.Store[event.Event]
 	firstPing  bool
 	loggerOnce logger.LogOnce
 
@@ -163,6 +165,11 @@ type MySQLTarget struct {
 // ID - returns target ID.
 func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
+}
+
+// Name - returns the Name of the target.
+func (target *MySQLTarget) Name() string {
+	return target.ID().String()
 }
 
 // Store returns any underlying store if set.
@@ -181,7 +188,7 @@ func (target *MySQLTarget) IsActive() (bool, error) {
 func (target *MySQLTarget) isActive() (bool, error) {
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
-			return false, errNotConnected
+			return false, store.ErrNotConnected
 		}
 		return false, err
 	}
@@ -190,13 +197,13 @@ func (target *MySQLTarget) isActive() (bool, error) {
 
 // Save - saves the events to the store which will be replayed when the SQL connection is active.
 func (target *MySQLTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
 	if err := target.init(); err != nil {
 		return err
 	}
 
-	if target.store != nil {
-		return target.store.Put(eventData)
-	}
 	_, err := target.isActive()
 	if err != nil {
 		return err
@@ -246,8 +253,8 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// Send - reads an event from store and sends it to MySQL.
-func (target *MySQLTarget) Send(eventKey string) error {
+// SendFromStore - reads an event from store and sends it to MySQL.
+func (target *MySQLTarget) SendFromStore(eventKey string) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -260,7 +267,7 @@ func (target *MySQLTarget) Send(eventKey string) error {
 	if !target.firstPing {
 		if err := target.executeStmts(); err != nil {
 			if IsConnErr(err) {
-				return errNotConnected
+				return store.ErrNotConnected
 			}
 			return err
 		}
@@ -278,7 +285,7 @@ func (target *MySQLTarget) Send(eventKey string) error {
 
 	if err := target.send(eventData); err != nil {
 		if IsConnErr(err) {
-			return errNotConnected
+			return store.ErrNotConnected
 		}
 		return err
 	}
@@ -343,7 +350,7 @@ func (target *MySQLTarget) executeStmts() error {
 }
 
 func (target *MySQLTarget) init() error {
-	return target.lazyInit.Do(target.initMySQL)
+	return target.initOnce.Do(target.initMySQL)
 }
 
 func (target *MySQLTarget) initMySQL() error {
@@ -363,7 +370,7 @@ func (target *MySQLTarget) initMySQL() error {
 
 	err = target.db.Ping()
 	if err != nil {
-		if !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+		if !(xnet.IsConnRefusedErr(err) || xnet.IsConnResetErr(err)) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 	} else {
@@ -384,7 +391,7 @@ func (target *MySQLTarget) initMySQL() error {
 		return err
 	}
 	if !yes {
-		return errNotConnected
+		return store.ErrNotConnected
 	}
 
 	return nil
@@ -392,11 +399,11 @@ func (target *MySQLTarget) initMySQL() error {
 
 // NewMySQLTarget - creates new MySQL target.
 func NewMySQLTarget(id string, args MySQLArgs, loggerOnce logger.LogOnce) (*MySQLTarget, error) {
-	var store Store
+	var queueStore store.Store[event.Event]
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
+		queueStore = store.NewQueueStore[event.Event](queueDir, args.QueueLimit, event.StoreExtension)
+		if err := queueStore.Open(); err != nil {
 			return nil, fmt.Errorf("unable to initialize the queue store of MySQL `%s`: %w", id, err)
 		}
 	}
@@ -419,13 +426,13 @@ func NewMySQLTarget(id string, args MySQLArgs, loggerOnce logger.LogOnce) (*MySQ
 		id:         event.TargetID{ID: id, Name: "mysql"},
 		args:       args,
 		firstPing:  false,
-		store:      store,
+		store:      queueStore,
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
-		streamEventsFromStore(target.store, target, target.quitCh, target.loggerOnce)
+		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil

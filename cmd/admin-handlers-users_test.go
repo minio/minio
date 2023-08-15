@@ -27,20 +27,19 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/pkg/env"
 )
 
 const (
@@ -122,7 +121,7 @@ var iamTestSuites = func() []*TestSuiteIAM {
 }()
 
 const (
-	EnvTestEtcdBackend = "ETCD_SERVER"
+	EnvTestEtcdBackend = "_MINIO_ETCD_TEST_SERVER"
 )
 
 func (s *TestSuiteIAM) setUpEtcd(c *check, etcdServer string) {
@@ -145,7 +144,7 @@ func (s *TestSuiteIAM) setUpEtcd(c *check, etcdServer string) {
 func (s *TestSuiteIAM) SetUpSuite(c *check) {
 	// If etcd backend is specified and etcd server is not present, the test
 	// is skipped.
-	etcdServer := os.Getenv(EnvTestEtcdBackend)
+	etcdServer := env.Get(EnvTestEtcdBackend, "")
 	if s.withEtcdBackend && etcdServer == "" {
 		c.Skip("Skipping etcd backend IAM test as no etcd server is configured.")
 	}
@@ -877,7 +876,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 
 	// Create an madmin client with user creds
 	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
-		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: s.secure,
 	})
 	if err != nil {
@@ -984,9 +983,9 @@ func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
-	pluginEndpoint := os.Getenv("POLICY_PLUGIN_ENDPOINT")
+	pluginEndpoint := env.Get("_MINIO_POLICY_PLUGIN_ENDPOINT", "")
 	if pluginEndpoint == "" {
-		c.Skip("POLICY_PLUGIN_ENDPOINT not given - skipping.")
+		c.Skip("_MINIO_POLICY_PLUGIN_ENDPOINT not given - skipping.")
 	}
 
 	configCmds := []string{
@@ -1072,7 +1071,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 
 	// Create an madmin client with user creds
 	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
-		Creds:  cr.NewStaticV4(accessKey, secretKey, ""),
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: s.secure,
 	})
 	if err != nil {
@@ -1329,7 +1328,11 @@ func (c *check) assertSvcAccAppearsInListing(ctx context.Context, madmClient *ma
 	if err != nil {
 		c.Fatalf("unable to list svc accounts: %v", err)
 	}
-	if !set.CreateStringSet(listResp.Accounts...).Contains(svcAK) {
+	var accessKeys []string
+	for _, item := range listResp.Accounts {
+		accessKeys = append(accessKeys, item.AccessKey)
+	}
+	if !set.CreateStringSet(accessKeys...).Contains(svcAK) {
 		c.Fatalf("service account did not appear in listing!")
 	}
 }

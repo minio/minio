@@ -89,6 +89,9 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		if err != nil {
 			return opts, err
 		}
+		if isMaxPartID(partNumber) {
+			return opts, errInvalidMaxParts
+		}
 		if partNumber <= 0 {
 			return opts, errInvalidArgument
 		}
@@ -105,21 +108,11 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		}
 	}
 
-	deletePrefix := false
-	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
-		if b, err := strconv.ParseBool(d); err == nil {
-			deletePrefix = b
-		} else {
-			return opts, err
-		}
-	}
-
 	// default case of passing encryption headers to backend
 	opts, err = getDefaultOpts(r.Header, false, nil)
 	if err != nil {
 		return opts, err
 	}
-	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
@@ -154,7 +147,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 			}
 		}
 	}
-
+	opts.Tagging = r.Header.Get(xhttp.AmzTagDirective) == accessDirective
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(bucket, object)
 	return opts, nil
@@ -165,12 +158,28 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	if err != nil {
 		return opts, err
 	}
+
+	deletePrefix := false
+	if d := r.Header.Get(xhttp.MinIOForceDelete); d != "" {
+		if b, err := strconv.ParseBool(d); err == nil {
+			deletePrefix = b
+		} else {
+			return opts, err
+		}
+	}
+
+	opts.DeletePrefix = deletePrefix
 	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	// Objects matching prefixes should not leave delete markers,
 	// dramatically reduces namespace pollution while keeping the
 	// benefits of replication, make sure to apply version suspension
 	// only at bucket level instead.
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
+	// For directory objects, delete `null` version permanently.
+	if isDirObject(object) && opts.VersionID == "" {
+		opts.VersionID = nullVersionID
+	}
+
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
 		switch delMarker {
@@ -232,7 +241,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {
-		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
@@ -283,7 +292,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		metadata = make(map[string]string)
 	}
 
-	wantCRC, err := hash.GetContentChecksum(r)
+	wantCRC, err := hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,
@@ -318,9 +327,16 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	if err != nil {
 		return opts, err
 	}
+
 	opts.VersionID = vid
 	opts.Versioned = versioned
 	opts.VersionSuspended = versionSuspended
+
+	// For directory objects skip creating new versions.
+	if isDirObject(object) && vid == "" {
+		opts.VersionID = nullVersionID
+	}
+
 	opts.MTime = mtime
 	opts.ReplicationSourceLegalholdTimestamp = lholdtimestmp
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
@@ -353,7 +369,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	mtime := UTCNow()
 	if mtimeStr != "" {
-		mtime, err = time.Parse(time.RFC3339, mtimeStr)
+		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
@@ -362,7 +378,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 			}
 		}
 	}
-	opts.WantChecksum, err = hash.GetContentChecksum(r)
+	opts.WantChecksum, err = hash.GetContentChecksum(r.Header)
 	if err != nil {
 		return opts, InvalidArgument{
 			Bucket: bucket,

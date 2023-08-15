@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -36,22 +35,18 @@ import (
 // EventNotifier - notifies external systems about events in MinIO.
 type EventNotifier struct {
 	sync.RWMutex
-	targetList                 *event.TargetList
-	targetResCh                chan event.TargetIDResult
-	bucketRulesMap             map[string]event.RulesMap
-	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	eventsQueue                chan eventArgs
+	targetList     *event.TargetList
+	targetResCh    chan event.TargetIDResult
+	bucketRulesMap map[string]event.RulesMap
 }
 
 // NewEventNotifier - creates new event notification object.
 func NewEventNotifier() *EventNotifier {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.InitBucketTargets()
 	return &EventNotifier{
-		targetList:                 event.NewTargetList(),
-		targetResCh:                make(chan event.TargetIDResult),
-		bucketRulesMap:             make(map[string]event.RulesMap),
-		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		eventsQueue:                make(chan eventArgs, 10000),
+		targetList:     event.NewTargetList(),
+		targetResCh:    make(chan event.TargetIDResult),
+		bucketRulesMap: make(map[string]event.RulesMap),
 	}
 }
 
@@ -106,12 +101,6 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 	}
 
 	go func() {
-		for e := range evnot.eventsQueue {
-			evnot.send(e)
-		}
-	}()
-
-	go func() {
 		for res := range evnot.targetResCh {
 			if res.Err != nil {
 				reqInfo := &logger.ReqInfo{}
@@ -130,10 +119,6 @@ func (evnot *EventNotifier) AddRulesMap(bucketName string, rulesMap event.RulesM
 	defer evnot.Unlock()
 
 	rulesMap = rulesMap.Clone()
-
-	for _, targetRulesMap := range evnot.bucketRemoteTargetRulesMap[bucketName] {
-		rulesMap.Add(targetRulesMap)
-	}
 
 	// Do not add for an empty rulesMap.
 	if len(rulesMap) == 0 {
@@ -183,43 +168,22 @@ func (evnot *EventNotifier) RemoveNotification(bucketName string) {
 	defer evnot.Unlock()
 
 	delete(evnot.bucketRulesMap, bucketName)
-
-	targetIDSet := event.NewTargetIDSet()
-	for targetID := range evnot.bucketRemoteTargetRulesMap[bucketName] {
-		targetIDSet[targetID] = struct{}{}
-		delete(evnot.bucketRemoteTargetRulesMap[bucketName], targetID)
-	}
-	evnot.targetList.Remove(targetIDSet)
-
-	delete(evnot.bucketRemoteTargetRulesMap, bucketName)
 }
 
-// RemoveAllRemoteTargets - closes and removes all notification targets.
-func (evnot *EventNotifier) RemoveAllRemoteTargets() {
+// RemoveAllBucketTargets - closes and removes all notification targets.
+func (evnot *EventNotifier) RemoveAllBucketTargets() {
 	evnot.Lock()
 	defer evnot.Unlock()
 
-	for _, targetMap := range evnot.bucketRemoteTargetRulesMap {
-		targetIDSet := event.NewTargetIDSet()
-		for k := range targetMap {
-			targetIDSet[k] = struct{}{}
-		}
-		evnot.targetList.Remove(targetIDSet)
+	targetIDSet := event.NewTargetIDSet()
+	for k := range evnot.targetList.TargetMap() {
+		targetIDSet[k] = struct{}{}
 	}
+	evnot.targetList.Remove(targetIDSet)
 }
 
 // Send - sends the event to all registered notification targets
 func (evnot *EventNotifier) Send(args eventArgs) {
-	select {
-	case evnot.eventsQueue <- args:
-	default:
-		// A new goroutine is created for each notification job, eventsQueue is
-		// drained quickly and is not expected to be filled with any scenario.
-		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
-	}
-}
-
-func (evnot *EventNotifier) send(args eventArgs) {
 	evnot.RLock()
 	targetIDSet := evnot.bucketRulesMap[args.BucketName].Match(args.EventName, args.Object.Name)
 	evnot.RUnlock()
@@ -228,7 +192,8 @@ func (evnot *EventNotifier) send(args eventArgs) {
 		return
 	}
 
-	evnot.targetList.Send(args.ToEvent(true), targetIDSet, evnot.targetResCh)
+	// If MINIO_API_SYNC_EVENTS is set, send events synchronously.
+	evnot.targetList.Send(args.ToEvent(true), targetIDSet, evnot.targetResCh, globalAPIConfig.isSyncEventsEnabled())
 }
 
 type eventArgs struct {
@@ -303,7 +268,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		newEvent.S3.Object.ContentType = args.Object.ContentType
 		newEvent.S3.Object.UserMetadata = make(map[string]string, len(args.Object.UserDefined))
 		for k, v := range args.Object.UserDefined {
-			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			if stringsHasPrefixFold(strings.ToLower(k), ReservedMetadataPrefixLower) {
 				continue
 			}
 			newEvent.S3.Object.UserMetadata[k] = v

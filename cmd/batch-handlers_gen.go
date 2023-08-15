@@ -702,6 +702,12 @@ func (z *BatchJobReplicateSource) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
+		case "Path":
+			z.Path, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
+				return
+			}
 		case "Creds":
 			var zb0003 uint32
 			zb0003, err = dc.ReadMapHeader()
@@ -756,9 +762,9 @@ func (z *BatchJobReplicateSource) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "Type"
-	err = en.Append(0x85, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	err = en.Append(0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	if err != nil {
 		return
 	}
@@ -795,6 +801,16 @@ func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.Endpoint)
 	if err != nil {
 		err = msgp.WrapError(err, "Endpoint")
+		return
+	}
+	// write "Path"
+	err = en.Append(0xa4, 0x50, 0x61, 0x74, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Path)
+	if err != nil {
+		err = msgp.WrapError(err, "Path")
 		return
 	}
 	// write "Creds"
@@ -839,9 +855,9 @@ func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobReplicateSource) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "Type"
-	o = append(o, 0x85, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	o = append(o, 0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, string(z.Type))
 	// string "Bucket"
 	o = append(o, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
@@ -852,6 +868,9 @@ func (z *BatchJobReplicateSource) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Endpoint"
 	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
 	o = msgp.AppendString(o, z.Endpoint)
+	// string "Path"
+	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	o = msgp.AppendString(o, z.Path)
 	// string "Creds"
 	o = append(o, 0xa5, 0x43, 0x72, 0x65, 0x64, 0x73)
 	// map header, size 3
@@ -913,6 +932,12 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
+		case "Path":
+			z.Path, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
+				return
+			}
 		case "Creds":
 			var zb0003 uint32
 			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -968,7 +993,7 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobReplicateSource) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken)
+	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken)
 	return
 }
 
@@ -1016,6 +1041,12 @@ func (z *BatchJobReplicateTarget) DecodeMsg(dc *msgp.Reader) (err error) {
 			z.Endpoint, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Endpoint")
+				return
+			}
+		case "Path":
+			z.Path, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
 				return
 			}
 		case "Creds":
@@ -1072,9 +1103,9 @@ func (z *BatchJobReplicateTarget) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobReplicateTarget) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "Type"
-	err = en.Append(0x85, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	err = en.Append(0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	if err != nil {
 		return
 	}
@@ -1111,6 +1142,16 @@ func (z *BatchJobReplicateTarget) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.Endpoint)
 	if err != nil {
 		err = msgp.WrapError(err, "Endpoint")
+		return
+	}
+	// write "Path"
+	err = en.Append(0xa4, 0x50, 0x61, 0x74, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Path)
+	if err != nil {
+		err = msgp.WrapError(err, "Path")
 		return
 	}
 	// write "Creds"
@@ -1155,9 +1196,9 @@ func (z *BatchJobReplicateTarget) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobReplicateTarget) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "Type"
-	o = append(o, 0x85, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	o = append(o, 0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, string(z.Type))
 	// string "Bucket"
 	o = append(o, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
@@ -1168,6 +1209,9 @@ func (z *BatchJobReplicateTarget) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Endpoint"
 	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
 	o = msgp.AppendString(o, z.Endpoint)
+	// string "Path"
+	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
+	o = msgp.AppendString(o, z.Path)
 	// string "Creds"
 	o = append(o, 0xa5, 0x43, 0x72, 0x65, 0x64, 0x73)
 	// map header, size 3
@@ -1229,6 +1273,12 @@ func (z *BatchJobReplicateTarget) UnmarshalMsg(bts []byte) (o []byte, err error)
 				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
+		case "Path":
+			z.Path, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Path")
+				return
+			}
 		case "Creds":
 			var zb0003 uint32
 			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -1284,7 +1334,7 @@ func (z *BatchJobReplicateTarget) UnmarshalMsg(bts []byte) (o []byte, err error)
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobReplicateTarget) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken)
+	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken)
 	return
 }
 
@@ -1538,6 +1588,24 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "KeyRotate":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+				z.KeyRotate = nil
+			} else {
+				if z.KeyRotate == nil {
+					z.KeyRotate = new(BatchJobKeyRotateV1)
+				}
+				err = z.KeyRotate.DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1551,9 +1619,9 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "ID"
-	err = en.Append(0x85, 0xa2, 0x49, 0x44)
+	err = en.Append(0x86, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -1609,15 +1677,32 @@ func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "KeyRotate"
+	err = en.Append(0xa9, 0x4b, 0x65, 0x79, 0x52, 0x6f, 0x74, 0x61, 0x74, 0x65)
+	if err != nil {
+		return
+	}
+	if z.KeyRotate == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = z.KeyRotate.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "KeyRotate")
+			return
+		}
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "ID"
-	o = append(o, 0x85, 0xa2, 0x49, 0x44)
+	o = append(o, 0x86, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "User"
 	o = append(o, 0xa4, 0x55, 0x73, 0x65, 0x72)
@@ -1636,6 +1721,17 @@ func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 		o, err = z.Replicate.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "Replicate")
+			return
+		}
+	}
+	// string "KeyRotate"
+	o = append(o, 0xa9, 0x4b, 0x65, 0x79, 0x52, 0x6f, 0x74, 0x61, 0x74, 0x65)
+	if z.KeyRotate == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o, err = z.KeyRotate.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "KeyRotate")
 			return
 		}
 	}
@@ -1701,6 +1797,23 @@ func (z *BatchJobRequest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "KeyRotate":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.KeyRotate = nil
+			} else {
+				if z.KeyRotate == nil {
+					z.KeyRotate = new(BatchJobKeyRotateV1)
+				}
+				bts, err = z.KeyRotate.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyRotate")
+					return
+				}
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1720,6 +1833,12 @@ func (z *BatchJobRequest) Msgsize() (s int) {
 		s += msgp.NilSize
 	} else {
 		s += z.Replicate.Msgsize()
+	}
+	s += 10
+	if z.KeyRotate == nil {
+		s += msgp.NilSize
+	} else {
+		s += z.KeyRotate.Msgsize()
 	}
 	return
 }

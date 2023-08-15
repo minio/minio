@@ -21,11 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	bucketsse "github.com/minio/minio/internal/bucket/encryption"
@@ -36,8 +35,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
 	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
@@ -121,6 +120,7 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		meta.NotificationConfigXML = configData
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
+		meta.LifecycleConfigUpdatedAt = updatedAt
 	case bucketSSEConfig:
 		meta.EncryptionConfigXML = configData
 		meta.EncryptionConfigUpdatedAt = updatedAt
@@ -246,18 +246,18 @@ func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Co
 
 // GetLifecycleConfig returns configured lifecycle config
 // The returned object may not be modified.
-func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, time.Time, error) {
 	meta, _, err := sys.GetConfig(GlobalContext, bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
-			return nil, BucketLifecycleNotFound{Bucket: bucket}
+			return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 		}
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if meta.lifecycleConfig == nil {
-		return nil, BucketLifecycleNotFound{Bucket: bucket}
+		return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 	}
-	return meta.lifecycleConfig, nil
+	return meta.lifecycleConfig, meta.LifecycleConfigUpdatedAt, nil
 }
 
 // GetNotificationConfig returns configured notification config
@@ -419,8 +419,8 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 
 	sys.objAPI = objAPI
 
-	// Load bucket metadata sys in background
-	go sys.init(ctx, buckets)
+	// Load bucket metadata sys.
+	sys.init(ctx, buckets)
 	return nil
 }
 
@@ -488,6 +488,8 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 	const bucketMetadataRefresh = 15 * time.Minute
 
+	sleeper := newDynamicSleeper(2, 150*time.Millisecond, false)
+
 	t := time.NewTimer(bucketMetadataRefresh)
 	defer t.Stop()
 	for {
@@ -511,13 +513,16 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 			sys.RemoveStaleBuckets(diskBuckets)
 
 			for _, bucket := range buckets {
+				wait := sleeper.Timer(ctx)
+
 				err := sys.loadBucketMetadata(ctx, bucket)
 				if err != nil {
 					logger.LogIf(ctx, err)
+					wait() // wait to proceed to next entry.
 					continue
 				}
-				// Check if there is a spare procs, wait 100ms instead
-				waitForLowIO(runtime.GOMAXPROCS(0), 100*time.Millisecond, currentHTTPIO)
+
+				wait() // wait to proceed to next entry.
 			}
 
 			t.Reset(bucketMetadataRefresh)

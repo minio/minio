@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/pubsub"
 )
 
@@ -62,8 +62,8 @@ func (bs *bootstrapTracer) Empty() bool {
 	return empty
 }
 
-func (bs *bootstrapTracer) Record(msg string) {
-	source := getSource(2)
+func (bs *bootstrapTracer) Record(msg string, skip int) {
+	source := getSource(skip + 1)
 	bs.mu.Lock()
 	now := time.Now().UTC()
 	bs.info[bs.idx] = bootstrapInfo{

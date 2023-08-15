@@ -22,7 +22,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -45,9 +45,7 @@ import (
 //
 // When all query parameters are omitted, returns mappings for all policies.
 func (a adminAPIHandlers) ListLDAPPolicyMappingEntities(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListLDAPPolicyMappingEntities")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	// Check authorization.
 
@@ -94,9 +92,7 @@ func (a adminAPIHandlers) ListLDAPPolicyMappingEntities(w http.ResponseWriter, r
 //
 // POST <admin-prefix>/idp/ldap/policy/{operation}
 func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AttachDetachPolicyLDAP")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	// Check authorization.
 
@@ -150,7 +146,7 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 	}
 
 	// Call IAM subsystem
-	updatedAt, addedOrRemoved, err := globalIAMSys.PolicyDBUpdateLDAP(ctx, isAttach, par)
+	updatedAt, addedOrRemoved, _, err := globalIAMSys.PolicyDBUpdateLDAP(ctx, isAttach, par)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

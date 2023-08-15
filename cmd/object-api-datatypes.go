@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -185,6 +185,7 @@ type ObjectInfo struct {
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
 
+	replicationDecision string // internal representation of replication decision for use by DeleteObject handler
 	// The total count of all versions of this object
 	NumVersions int
 	//  The modtime of the successor object version if any
@@ -193,6 +194,12 @@ type ObjectInfo struct {
 	// Checksums added on upload.
 	// Encoded, maybe encrypted.
 	Checksum []byte
+
+	// Inlined
+	Inlined bool
+
+	DataBlocks   int
+	ParityBlocks int
 }
 
 // ArchiveInfo returns any saved zip archive meta information.
@@ -548,13 +555,6 @@ type CompletePart struct {
 	ChecksumSHA1   string
 	ChecksumSHA256 string
 }
-
-// CompletedParts - is a collection satisfying sort.Interface.
-type CompletedParts []CompletePart
-
-func (a CompletedParts) Len() int           { return len(a) }
-func (a CompletedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a CompletedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
 
 // CompleteMultipartUpload - represents list of parts which are completed, this is sent by the
 // client during CompleteMultipartUpload request.

@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/mcontext"
@@ -39,7 +39,7 @@ var ldapPwdRegex = regexp.MustCompile("(^.*?)LDAPPassword=([^&]*?)(&(.*?))?$")
 // redact LDAP password if part of string
 func redactLDAPPwd(s string) string {
 	parts := ldapPwdRegex.FindStringSubmatch(s)
-	if len(parts) > 0 {
+	if len(parts) > 3 {
 		return parts[1] + "LDAPPassword=*REDACTED*" + parts[3]
 	}
 	return s
@@ -65,43 +65,39 @@ func getOpName(name string) (op string) {
 
 // If trace is enabled, execute the request if it is traced by other handlers
 // otherwise, generate a trace event with request information but no response.
-func httpTracer(h http.Handler) http.Handler {
+func httpTracerMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
-			h.ServeHTTP(w, r)
-			return
-		}
+		// Setup a http request response recorder - this is needed for
+		// http stats requests and audit if enabled.
+		respRecorder := xhttp.NewResponseRecorder(w)
+
+		// Setup a http request body recorder
+		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
+		r.Body = reqRecorder
 
 		// Create tracing data structure and associate it to the request context
 		tc := mcontext.TraceCtxt{
-			AmzReqID: r.Header.Get(xhttp.AmzRequestID),
+			AmzReqID:         w.Header().Get(xhttp.AmzRequestID),
+			RequestRecorder:  reqRecorder,
+			ResponseRecorder: respRecorder,
 		}
 
-		ctx := context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc)
-		r = r.WithContext(ctx)
-
-		// Setup a http request and response body recorder
-		reqRecorder := &xhttp.RequestRecorder{Reader: r.Body}
-		respRecorder := xhttp.NewResponseRecorder(w)
-
-		tc.RequestRecorder = reqRecorder
-		tc.ResponseRecorder = respRecorder
-
-		// Execute call.
-		r.Body = reqRecorder
+		r = r.WithContext(context.WithValue(r.Context(), mcontext.ContextTraceKey, &tc))
 
 		reqStartTime := time.Now().UTC()
 		h.ServeHTTP(respRecorder, r)
 		reqEndTime := time.Now().UTC()
 
+		if globalTrace.NumSubscribers(madmin.TraceS3|madmin.TraceInternal) == 0 {
+			// no subscribers nothing to trace.
+			return
+		}
+
 		tt := madmin.TraceInternal
 		if strings.HasPrefix(tc.FuncName, "s3.") {
 			tt = madmin.TraceS3
 		}
-		// No need to continue if no subscribers for actual type...
-		if globalTrace.NumSubscribers(tt) == 0 {
-			return
-		}
+
 		// Calculate input body size with headers
 		reqHeaders := r.Header.Clone()
 		reqHeaders.Set("Host", r.Host)
@@ -110,7 +106,7 @@ func httpTracer(h http.Handler) http.Handler {
 		} else {
 			reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
 		}
-		inputBytes := reqRecorder.BodySize()
+		inputBytes := reqRecorder.Size()
 		for k, v := range reqHeaders {
 			inputBytes += len(k) + len(v)
 		}

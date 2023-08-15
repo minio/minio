@@ -136,33 +136,37 @@ func TestNewHTTPListener(t *testing.T) {
 		tcpKeepAliveTimeout time.Duration
 		readTimeout         time.Duration
 		writeTimeout        time.Duration
-		expectedErr         bool
+		expectedListenErrs  []bool
 	}{
-		{[]string{"93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"example.org:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"unknown-host"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"localhost:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
-		{[]string{"localhost:65432", "93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"localhost:65432", "unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
-		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
-		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
-		{[]string{"[::1]:9090", "localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
+		{[]string{"93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true}},                           // 1
+		{[]string{"example.org:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true}},                             // 2
+		{[]string{"unknown-host"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true}},                                  // 3
+		{[]string{"unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true}},                            // 4
+		{[]string{"localhost:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                              // 5
+		{[]string{"localhost:65432", "93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false, true}}, // 6
+		{[]string{"localhost:65432", "unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false, true}},  // 7
+		{[]string{"[::1:65432", "unknown-host:-1"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true, true}},           // 7
+		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                                  // 8
+		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                                  // 9
+		{[]string{"[::1]:9090", "127.0.0.1:90900"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                // 10
+		{[]string{"[::1]:9090", "localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                    // 10
 	}
 
-	for _, testCase := range testCases {
-		listener, err := newHTTPListener(context.Background(),
+	for testIdx, testCase := range testCases {
+		listener, listenErrs := newHTTPListener(context.Background(),
 			testCase.serverAddrs,
+			TCPOptions{},
 		)
-		if !testCase.expectedErr {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
+		for i, expectedListenErr := range testCase.expectedListenErrs {
+			if !expectedListenErr {
+				if listenErrs[i] != nil {
+					t.Fatalf("Test %d:, listenErrs[%d] error: expected = <nil>, got = %v", testIdx+1, i, listenErrs[i])
+				}
+			} else if listenErrs[i] == nil {
+				t.Fatalf("Test %d: listenErrs[%d]: expected = %v, got = <nil>", testIdx+1, i, expectedListenErr)
 			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
 		}
-
-		if err == nil {
+		if listener != nil {
 			listener.Close()
 		}
 	}
@@ -186,19 +190,23 @@ func TestHTTPListenerStartClose(t *testing.T) {
 		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}},
 	}
 
+nextTest:
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(context.Background(),
 			testCase.serverAddrs,
+			TCPOptions{},
 		)
-		if err != nil {
-			if strings.Contains(err.Error(), "The requested address is not valid in its context") {
-				// Ignore if IP is unbindable.
-				continue
+		for _, err := range errs {
+			if err != nil {
+				if strings.Contains(err.Error(), "The requested address is not valid in its context") {
+					// Ignore if IP is unbindable.
+					continue nextTest
+				}
+				if strings.Contains(err.Error(), "bind: address already in use") {
+					continue nextTest
+				}
+				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
-			if strings.Contains(err.Error(), "bind: address already in use") {
-				continue
-			}
-			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
 		for _, serverAddr := range listener.Addrs() {
@@ -236,19 +244,23 @@ func TestHTTPListenerAddr(t *testing.T) {
 		{[]string{"127.0.0.1:" + casePorts[5], nonLoopBackIP + ":" + casePorts[5]}, "0.0.0.0:" + casePorts[5]},
 	}
 
+nextTest:
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(context.Background(),
 			testCase.serverAddrs,
+			TCPOptions{},
 		)
-		if err != nil {
-			if strings.Contains(err.Error(), "The requested address is not valid in its context") {
-				// Ignore if IP is unbindable.
-				continue
+		for _, err := range errs {
+			if err != nil {
+				if strings.Contains(err.Error(), "The requested address is not valid in its context") {
+					// Ignore if IP is unbindable.
+					continue nextTest
+				}
+				if strings.Contains(err.Error(), "bind: address already in use") {
+					continue nextTest
+				}
+				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
-			if strings.Contains(err.Error(), "bind: address already in use") {
-				continue
-			}
-			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
 		addr := listener.Addr()
@@ -283,19 +295,23 @@ func TestHTTPListenerAddrs(t *testing.T) {
 		{[]string{"127.0.0.1:" + casePorts[5], nonLoopBackIP + ":" + casePorts[5]}, set.CreateStringSet("127.0.0.1:"+casePorts[5], nonLoopBackIP+":"+casePorts[5])},
 	}
 
+nextTest:
 	for i, testCase := range testCases {
-		listener, err := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(context.Background(),
 			testCase.serverAddrs,
+			TCPOptions{},
 		)
-		if err != nil {
-			if strings.Contains(err.Error(), "The requested address is not valid in its context") {
-				// Ignore if IP is unbindable.
-				continue
+		for _, err := range errs {
+			if err != nil {
+				if strings.Contains(err.Error(), "The requested address is not valid in its context") {
+					// Ignore if IP is unbindable.
+					continue nextTest
+				}
+				if strings.Contains(err.Error(), "bind: address already in use") {
+					continue nextTest
+				}
+				t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 			}
-			if strings.Contains(err.Error(), "bind: address already in use") {
-				continue
-			}
-			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
 		addrs := listener.Addrs()

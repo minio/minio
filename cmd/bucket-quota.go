@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -47,9 +47,13 @@ func NewBucketQuotaSys() *BucketQuotaSys {
 // Init initialize bucket quota.
 func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 	sys.bucketStorageCache.Once.Do(func() {
-		sys.bucketStorageCache.TTL = 1 * time.Second
+		// Set this to 10 secs since its enough, as scanner
+		// does not update the bucket usage values frequently.
+		sys.bucketStorageCache.TTL = 10 * time.Second
+		// Rely on older value if usage loading fails from disk.
+		sys.bucketStorageCache.Relax = true
 		sys.bucketStorageCache.Update = func() (interface{}, error) {
-			ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objAPI)
@@ -60,16 +64,20 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 // GetBucketUsageInfo return bucket usage info for a given bucket
 func (sys *BucketQuotaSys) GetBucketUsageInfo(bucket string) (BucketUsageInfo, error) {
 	v, err := sys.bucketStorageCache.Get()
-	if err != nil {
-		return BucketUsageInfo{}, err
+	if err != nil && v != nil {
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to retrieve usage information for bucket: %s, relying on older value cached in-memory: err(%v)", bucket, err), "bucket-usage-cache-"+bucket)
 	}
+	if v == nil {
+		logger.LogOnceIf(GlobalContext, errors.New("unable to retrieve usage information for bucket: %s, no reliable usage value available - quota will not be enforced"), "bucket-usage-empty-"+bucket)
+	}
+
+	var bui BucketUsageInfo
 
 	dui, ok := v.(DataUsageInfo)
-	if !ok {
-		return BucketUsageInfo{}, fmt.Errorf("internal error: Unexpected DUI data type: %T", v)
+	if ok {
+		bui = dui.BucketsUsage[bucket]
 	}
 
-	bui := dui.BucketsUsage[bucket]
 	return bui, nil
 }
 
@@ -82,7 +90,7 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 	if !quotaCfg.IsValid() {
 		if quotaCfg.Type == "fifo" {
 			logger.LogIf(GlobalContext, errors.New("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore. Please clear your quota configs using 'mc admin bucket quota alias/bucket --clear' and use 'mc ilm add' for expiration of objects"))
-			return quotaCfg, nil
+			return quotaCfg, fmt.Errorf("invalid quota type 'fifo'")
 		}
 		return quotaCfg, fmt.Errorf("Invalid quota config %#v", quotaCfg)
 	}
@@ -100,6 +108,10 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 	}
 
 	if q != nil && q.Type == madmin.HardQuota && q.Quota > 0 {
+		if uint64(size) >= q.Quota { // check if file size already exceeds the quota
+			return BucketQuotaExceeded{Bucket: bucket}
+		}
+
 		bui, err := sys.GetBucketUsageInfo(bucket)
 		if err != nil {
 			return err

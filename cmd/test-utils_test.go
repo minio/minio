@@ -191,7 +191,7 @@ func prepareFS(ctx context.Context) (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		return nil, "", err
 	}
@@ -211,7 +211,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -222,19 +222,6 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 
 func prepareErasure16(ctx context.Context) (ObjectLayer, []string, error) {
 	return prepareErasure(ctx, 16)
-}
-
-// Initialize FS objects.
-func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	obj, _, err := initObjectLayer(context.Background(), mustGetPoolEndpoints(disk))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	newTestConfig(globalMinioDefaultRegion, obj)
-
-	initAllSubsystems(GlobalContext)
-	return obj
 }
 
 // TestErrHandler - Go testing.T satisfy this interface.
@@ -344,7 +331,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 
 	testServer.Obj = objLayer
 	testServer.rawDiskPaths = disks
-	testServer.Disks = mustGetPoolEndpoints(disks...)
+	testServer.Disks = mustGetPoolEndpoints(0, disks...)
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
@@ -1945,7 +1932,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of drives for Erasure setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(erasureDisks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, erasureDisks...))
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
@@ -2008,10 +1995,10 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 			bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
 		case "CopyObjectPart":
 			// Register CopyObjectPart handler.
-			bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+			bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:.*}", "uploadId", "{uploadId:.*}")
 		case "PutObjectPart":
 			// Register PutObjectPart handler.
-			bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+			bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:.*}", "uploadId", "{uploadId:.*}")
 		case "ListObjectParts":
 			// Register ListObjectParts handler.
 			bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
@@ -2083,11 +2070,11 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	if len(apiFunctions) > 0 {
 		// Iterate the list of API functions requested for and register them in mux HTTP handler.
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
-		muxRouter.Use(globalHandlers...)
+		muxRouter.Use(globalMiddlewares...)
 		return muxRouter
 	}
 	registerAPIRouter(muxRouter)
-	muxRouter.Use(globalHandlers...)
+	muxRouter.Use(globalMiddlewares...)
 	return muxRouter
 }
 
@@ -2185,14 +2172,14 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	return certOut.Bytes(), keyOut.Bytes(), nil
 }
 
-func mustGetPoolEndpoints(args ...string) EndpointServerPools {
-	endpoints := mustGetNewEndpoints(args...)
+func mustGetPoolEndpoints(poolIdx int, args ...string) EndpointServerPools {
 	drivesPerSet := len(args)
 	setCount := 1
 	if len(args) >= 16 {
 		drivesPerSet = 16
 		setCount = len(args) / 16
 	}
+	endpoints := mustGetNewEndpoints(poolIdx, drivesPerSet, args...)
 	return []PoolEndpoints{{
 		SetCount:     setCount,
 		DrivesPerSet: drivesPerSet,
@@ -2201,9 +2188,16 @@ func mustGetPoolEndpoints(args ...string) EndpointServerPools {
 	}}
 }
 
-func mustGetNewEndpoints(args ...string) (endpoints Endpoints) {
+func mustGetNewEndpoints(poolIdx int, drivesPerSet int, args ...string) (endpoints Endpoints) {
 	endpoints, err := NewEndpoints(args...)
-	logger.FatalIf(err, "unable to create new endpoint list")
+	if err != nil {
+		panic(err)
+	}
+	for i := range endpoints {
+		endpoints[i].SetPoolIndex(poolIdx)
+		endpoints[i].SetSetIndex(i / drivesPerSet)
+		endpoints[i].SetDiskIndex(i % drivesPerSet)
+	}
 	return endpoints
 }
 

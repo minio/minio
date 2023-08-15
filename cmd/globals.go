@@ -27,14 +27,14 @@ import (
 	"time"
 
 	"github.com/minio/console/restapi"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/dnscache"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
-	"github.com/rs/dnscache"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
@@ -88,9 +88,6 @@ const (
 	// Limit fields size (except file) to 1Mib since Policy document
 	// can reach that size according to https://aws.amazon.com/articles/1434
 	maxFormFieldSize = int64(1 * humanize.MiByte)
-
-	// Limit memory allocation to store multipart data
-	maxFormMemory = int64(5 * humanize.MiByte)
 
 	// The maximum allowed time difference between the incoming request
 	// date and server date during signature verification.
@@ -196,8 +193,8 @@ var (
 	globalBucketSSEConfigSys *BucketSSEConfigSys
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
-	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig = apiConfig{listQuorum: "strict"}
+	// healthCheck readiness deadlines and cors settings.
+	globalAPIConfig = apiConfig{listQuorum: "strict", rootAccess: true}
 
 	globalStorageClass storageclass.Config
 
@@ -212,6 +209,7 @@ var (
 	globalTLSCerts *certs.Manager
 
 	globalHTTPServer        *xhttp.Server
+	globalTCPOptions        xhttp.TCPOptions
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
@@ -226,11 +224,15 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
+	// All unique drives for this deployment
 	globalEndpoints EndpointServerPools
+	// All unique nodes for this deployment
+	globalNodes []Node
 
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName    string
 	globalLocalNodeNameHex string
+	globalNodeNamesHex     = make(map[string]struct{})
 
 	// The global subnet config
 	globalSubnetConfig subnet.Config
@@ -238,21 +240,23 @@ var (
 	// The global callhome config
 	globalCallhomeConfig callhome.Config
 
-	globalRemoteEndpoints map[string]Endpoint
-
 	// Global server's network statistics
 	globalConnStats = newConnStats()
 
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
-	// Global bucket network statistics
+	// Global bucket network and API statistics
 	globalBucketConnStats = newBucketConnStats()
+	globalBucketHTTPStats = newBucketHTTPStats()
 
 	// Time when the server is started
 	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
+
+	// Captures if root credentials are set via ENV.
+	globalCredViaEnv bool
 
 	globalPublicCerts []*x509.Certificate
 
@@ -342,7 +346,7 @@ var (
 
 	globalTierConfigMgr *TierConfigMgr
 
-	globalTierJournal *tierJournal
+	globalTierJournal *TierJournal
 
 	globalConsoleSrv *restapi.Server
 
@@ -366,6 +370,7 @@ var (
 	// Used for collecting stats for netperf
 	globalNetPerfMinDuration     = time.Second * 10
 	globalNetPerfRX              netPerfRX
+	globalSiteNetPerfRX          netPerfRX
 	globalObjectPerfBucket       = "minio-perf-test-tmp-bucket"
 	globalObjectPerfUserMetadata = "X-Amz-Meta-Minio-Object-Perf" // Clients can set this to bypass S3 API service freeze. Used by object pref tests.
 
@@ -385,6 +390,15 @@ var (
 	// Controller for deleted file sweeper.
 	deletedCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
 
+	// Is _MINIO_DISABLE_API_FREEZE_ON_BOOT set?
+	globalDisableFreezeOnBoot bool
+
+	// Contains NIC interface name used for internode communication
+	globalInternodeInterface     string
+	globalInternodeInterfaceOnce sync.Once
+
+	// Set last client perf extra time (get lock, and validate)
+	globalLastClientPerfExtraTime int64
 	// Add new variable global values here.
 )
 

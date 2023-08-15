@@ -28,11 +28,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -92,15 +93,6 @@ func (er erasureObjects) defaultWQuorum() int {
 		return dataCount + 1
 	}
 	return dataCount
-}
-
-// byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []madmin.Disk
-
-func (d byDiskTotal) Len() int      { return len(d) }
-func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d byDiskTotal) Less(i, j int) bool {
-	return d[i].TotalSpace < d[j].TotalSpace
 }
 
 func diskErrToDriveState(err error) (state string) {
@@ -183,32 +175,32 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 	for index := range disks {
 		index := index
 		g.Go(func() error {
-			diskEndpoint := endpoints[index].String()
+			di := madmin.Disk{
+				Endpoint:  endpoints[index].String(),
+				PoolIndex: endpoints[index].PoolIdx,
+				SetIndex:  endpoints[index].SetIdx,
+				DiskIndex: endpoints[index].DiskIdx,
+			}
 			if disks[index] == OfflineDisk {
-				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
-				disksInfo[index] = madmin.Disk{
-					State:    diskErrToDriveState(errDiskNotFound),
-					Endpoint: diskEndpoint,
-				}
+				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline-"+di.Endpoint)
+				di.State = diskErrToDriveState(errDiskNotFound)
+				disksInfo[index] = di
 				return nil
 			}
-			info, err := disks[index].DiskInfo(context.TODO())
-			di := madmin.Disk{
-				Endpoint:       diskEndpoint,
-				DrivePath:      info.MountPath,
-				TotalSpace:     info.Total,
-				UsedSpace:      info.Used,
-				AvailableSpace: info.Free,
-				UUID:           info.ID,
-				Major:          info.Major,
-				Minor:          info.Minor,
-				RootDisk:       info.RootDisk,
-				Healing:        info.Healing,
-				Scanning:       info.Scanning,
-				State:          diskErrToDriveState(err),
-				FreeInodes:     info.FreeInodes,
-			}
-			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
+			info, err := disks[index].DiskInfo(context.TODO(), true)
+			di.DrivePath = info.MountPath
+			di.TotalSpace = info.Total
+			di.UsedSpace = info.Used
+			di.AvailableSpace = info.Free
+			di.UUID = info.ID
+			di.Major = info.Major
+			di.Minor = info.Minor
+			di.RootDisk = info.RootDisk
+			di.Healing = info.Healing
+			di.Scanning = info.Scanning
+			di.State = diskErrToDriveState(err)
+			di.FreeInodes = info.FreeInodes
+			di.UsedInodes = info.UsedInodes
 			if info.Healing {
 				if hi := disks[index].Healing(); hi != nil {
 					hd := hi.toHealingDisk()
@@ -216,8 +208,10 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				}
 			}
 			di.Metrics = &madmin.DiskMetrics{
-				LastMinute: make(map[string]madmin.TimedAction, len(info.Metrics.LastMinute)),
-				APICalls:   make(map[string]uint64, len(info.Metrics.APICalls)),
+				LastMinute:              make(map[string]madmin.TimedAction, len(info.Metrics.LastMinute)),
+				APICalls:                make(map[string]uint64, len(info.Metrics.APICalls)),
+				TotalErrorsAvailability: info.Metrics.TotalErrorsAvailability,
+				TotalErrorsTimeout:      info.Metrics.TotalErrorsTimeout,
 			}
 			for k, v := range info.Metrics.LastMinute {
 				if v.N > 0 {
@@ -244,7 +238,9 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
 	disksInfo := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
-	sort.Sort(byDiskTotal(disksInfo))
+	sort.Slice(disksInfo, func(i, j int) bool {
+		return disksInfo[i].TotalSpace < disksInfo[j].TotalSpace
+	})
 
 	storageInfo := StorageInfo{
 		Disks: disksInfo,
@@ -283,35 +279,38 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	var wg sync.WaitGroup
 	disks := er.getDisks()
 	infos := make([]DiskInfo, len(disks))
-	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for _, i := range r.Perm(len(disks)) {
 		i := i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			disk := disks[i-1]
-
+			disk := disks[i]
 			if disk == nil {
-				infos[i-1].Error = "nil drive"
+				infos[i].Error = "offline drive"
 				return
 			}
 
-			di, err := disk.DiskInfo(context.Background())
-			if err != nil {
+			di, err := disk.DiskInfo(context.Background(), false)
+			if err != nil || di.Healing {
 				// - Do not consume disks which are not reachable
 				//   unformatted or simply not accessible for some reason.
 				//
 				//
 				// - Future: skip busy disks
-				infos[i-1].Error = err.Error()
+				if err != nil {
+					infos[i].Error = err.Error()
+				}
 				return
 			}
 
-			infos[i-1] = di
+			infos[i] = di
 		}()
 	}
 	wg.Wait()
 
+	var scanningDisks []StorageAPI
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
 		// this information is used by scanner to skip healing
@@ -320,8 +319,15 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			healing = true
 			continue
 		}
-		newDisks = append(newDisks, disks[i])
+		if !info.Scanning {
+			newDisks = append(newDisks, disks[i])
+		} else {
+			scanningDisks = append(scanningDisks, disks[i])
+		}
 	}
+
+	// Prefer new disks over disks which are currently being scanned.
+	newDisks = append(newDisks, scanningDisks...)
 
 	return newDisks, healing
 }
@@ -337,10 +343,13 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					wait := deletedCleanupSleeper.Timer(ctx)
-					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
-					wait()
-					return nil
+					w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+					return w.Run(func() error {
+						wait := deletedCleanupSleeper.Timer(ctx)
+						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+						wait()
+						return nil
+					})
 				})
 			}(disk)
 		}
@@ -379,23 +388,30 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 
 	// Put all buckets into channel.
 	bucketCh := make(chan BucketInfo, len(buckets))
+
+	// Shuffle buckets to ensure total randomness of buckets, being scanned.
+	// Otherwise same set of buckets get scanned across erasure sets always.
+	// at any given point in time. This allows different buckets to be scanned
+	// in different order per erasure set, this wider spread is needed when
+	// there are lots of buckets with different order of objects in them.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	permutes := r.Perm(len(buckets))
 	// Add new buckets first
-	for _, b := range buckets {
-		if oldCache.find(b.Name) == nil {
+	for _, idx := range permutes {
+		b := buckets[idx]
+		if e := oldCache.find(b.Name); e == nil {
 			bucketCh <- b
 		}
 	}
-
-	// Add existing buckets.
-	for _, b := range buckets {
-		e := oldCache.find(b.Name)
-		if e != nil {
+	for _, idx := range permutes {
+		b := buckets[idx]
+		if e := oldCache.find(b.Name); e != nil {
 			cache.replace(b.Name, dataUsageRoot, *e)
 			bucketCh <- b
 		}
 	}
-
 	close(bucketCh)
+
 	bucketResults := make(chan dataUsageEntryInfo, len(disks))
 
 	// Start async collector/saver.
@@ -416,7 +432,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
 				}
-				logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
+				logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-cache-update")
 				updates <- cache.clone()
 				lastSave = cache.Info.LastUpdate
 			case v, ok := <-bucketResults:
@@ -424,7 +440,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 					// Save final state...
 					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
-					logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
+					logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
 					updates <- cache
 					return
 				}
@@ -433,11 +449,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 			}
 		}
 	}()
-
-	// Shuffle disks to ensure a total randomness of bucket/disk association to ensure
-	// that objects that are not present in all disks are accounted and ILM applied.
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	r.Shuffle(len(disks), func(i, j int) { disks[i], disks[j] = disks[j], disks[i] })
 
 	// Restrict parallelism for disk usage scanner
 	// upto GOMAXPROCS if GOMAXPROCS is < len(disks)

@@ -532,7 +532,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 	}
 
-	gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+	gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, opts)
 	if err != nil {
 		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
 			t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
@@ -577,7 +577,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		z.serverPools[0].erasureDisksMu.Unlock()
 		// Fetch object from store.
-		gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, opts)
+		gr, err := xl.GetObjectNInfo(ctx, bucket, object, nil, nil, opts)
 		if err != nil {
 			if err != toObjectErr(errErasureReadQuorum, bucket, object) {
 				t.Errorf("Expected GetObject to fail with %v, but failed with %v", toObjectErr(errErasureReadQuorum, bucket, object), err)
@@ -831,7 +831,7 @@ func TestPutObjectSmallInlineData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	gr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 	}
@@ -855,7 +855,7 @@ func TestPutObjectSmallInlineData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gr, err = obj.GetObjectNInfo(ctx, bucket, object, nil, nil, readLock, ObjectOptions{})
+	gr, err = obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 	}
@@ -895,14 +895,14 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 
 	// Object for test case 1 - No StorageClass defined, no MetaData in PutObject
 	object1 := "object1"
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
 		Standard: storageclass.StorageClass{
 			Parity: 4,
 		},
-	}
+	})
 	_, err = obj.PutObject(ctx, bucket, object1, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
@@ -939,11 +939,11 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object4 := "object4"
 	metadata4 := make(map[string]string)
 	metadata4["x-amz-storage-class"] = storageclass.STANDARD
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 6,
 		},
-	}
+	})
 
 	_, err = obj.PutObject(ctx, bucket, object4, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata4})
 	if err != nil {
@@ -962,11 +962,11 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object5 := "object5"
 	metadata5 := make(map[string]string)
 	metadata5["x-amz-storage-class"] = storageclass.RRS
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
-	}
+	})
 
 	_, err = obj.PutObject(ctx, bucket, object5, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata5})
 	if err != nil {
@@ -980,14 +980,14 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object6 := "object6"
 	metadata6 := make(map[string]string)
 	metadata6["x-amz-storage-class"] = storageclass.STANDARD
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 4,
 		},
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
-	}
+	})
 
 	_, err = obj.PutObject(ctx, bucket, object6, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata6})
 	if err != nil {
@@ -1006,11 +1006,11 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object7 := "object7"
 	metadata7 := make(map[string]string)
 	metadata7["x-amz-storage-class"] = storageclass.STANDARD
-	globalStorageClass = storageclass.Config{
+	globalStorageClass.Update(storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 5,
 		},
-	}
+	})
 
 	_, err = obj.PutObject(ctx, bucket, object7, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata7})
 	if err != nil {
@@ -1043,7 +1043,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	for _, tt := range tests {
 		tt := tt
 		t.(*testing.T).Run("", func(t *testing.T) {
-			globalStorageClass = tt.storageClassCfg
+			globalStorageClass.Update(tt.storageClassCfg)
 			actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(ctx, tt.parts, tt.errs, storageclass.DefaultParityBlocks(len(erasureDisks)))
 			if tt.expectedError != nil && err == nil {
 				t.Errorf("Expected %s, got %s", tt.expectedError, err)
@@ -1076,7 +1076,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 		fsDirs = append(fsDirs, filepath.Join(path, fmt.Sprintf("disk%d", i)))
 	}
 
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		t.Fatal(err)
@@ -1099,7 +1099,7 @@ func TestGetObjectInlineNotInline(t *testing.T) {
 	}
 
 	// Try to read the object and check its md5sum
-	gr, err := objLayer.GetObjectNInfo(ctx, "testbucket", "file", nil, nil, readLock, ObjectOptions{})
+	gr, err := objLayer.GetObjectNInfo(ctx, "testbucket", "file", nil, nil, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 	}
@@ -1193,7 +1193,7 @@ func TestGetObjectWithOutdatedDisks(t *testing.T) {
 		sets.erasureDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI { return origErasureDisks }
 		sets.erasureDisksMu.Unlock()
-		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, readLock, ObjectOptions{VersionID: got.VersionID})
+		gr, err := z.GetObjectNInfo(ctx, testCase.bucket, testCase.object, nil, nil, ObjectOptions{VersionID: got.VersionID})
 		if err != nil {
 			t.Fatalf("Expected GetObject to succeed, but failed with %v", err)
 		}

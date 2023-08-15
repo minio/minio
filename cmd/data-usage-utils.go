@@ -21,7 +21,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 // BucketTargetUsageInfo - bucket target usage info provides
@@ -62,6 +62,7 @@ type BucketUsageInfo struct {
 	ObjectSizesHistogram    map[string]uint64                `json:"objectsSizesHistogram"`
 	ObjectVersionsHistogram map[string]uint64                `json:"objectsVersionsHistogram"`
 	VersionsCount           uint64                           `json:"versionsCount"`
+	DeleteMarkersCount      uint64                           `json:"deleteMarkersCount"`
 	ReplicaSize             uint64                           `json:"objectReplicaTotalSize"`
 	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
 }
@@ -75,8 +76,11 @@ type DataUsageInfo struct {
 	// Objects total count across all buckets
 	ObjectsTotalCount uint64 `json:"objectsCount"`
 
-	// Objects total count across all buckets
+	// Versions total count across all buckets
 	VersionsTotalCount uint64 `json:"versionsCount"`
+
+	// Delete markers total count across all buckets
+	DeleteMarkersTotalCount uint64 `json:"deleteMarkersCount"`
 
 	// Objects total size across all buckets
 	ObjectsTotalSize uint64                           `json:"objectsTotalSize"`

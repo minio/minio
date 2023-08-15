@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"time"
 
@@ -152,14 +153,18 @@ func (b *bootstrapRESTServer) VerifyHandler(w http.ResponseWriter, r *http.Reque
 
 // registerBootstrapRESTHandlers - register bootstrap rest router.
 func registerBootstrapRESTHandlers(router *mux.Router) {
+	h := func(f http.HandlerFunc) http.HandlerFunc {
+		return collectInternodeStats(httpTraceHdrs(f))
+	}
+
 	server := &bootstrapRESTServer{}
 	subrouter := router.PathPrefix(bootstrapRESTPrefix).Subrouter()
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodHealth).HandlerFunc(
-		httpTraceHdrs(server.HealthHandler))
+		h(server.HealthHandler))
 
 	subrouter.Methods(http.MethodPost).Path(bootstrapRESTVersionPrefix + bootstrapRESTMethodVerify).HandlerFunc(
-		httpTraceHdrs(server.VerifyHandler))
+		h(server.VerifyHandler))
 }
 
 // client to talk to bootstrap NEndpoints.
@@ -216,6 +221,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 	for onlineServers < len(clnts)/2 {
 		for _, clnt := range clnts {
 			if err := clnt.Verify(ctx, srcCfg); err != nil {
+				bootstrapTrace(fmt.Sprintf("clnt.Verify: %v, endpoint: %v", err, clnt.endpoint))
 				if !isNetworkError(err) {
 					logger.LogOnceIf(ctx, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err), clnt.String())
 					incorrectConfigs = append(incorrectConfigs, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err))
@@ -264,7 +270,11 @@ func newBootstrapRESTClients(endpointServerPools EndpointServerPools) []*bootstr
 
 			// Only proceed for remote endpoints.
 			if !endpoint.IsLocal {
-				clnts = append(clnts, newBootstrapRESTClient(endpoint))
+				cl := newBootstrapRESTClient(endpoint)
+				if serverDebugLog {
+					cl.restClient.TraceOutput = os.Stdout
+				}
+				clnts = append(clnts, cl)
 			}
 		}
 	}

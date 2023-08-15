@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	minio "github.com/minio/minio-go/v7"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 )
 
 func runAllIAMConcurrencyTests(suite *TestSuiteIAM, c *check) {

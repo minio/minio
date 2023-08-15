@@ -18,7 +18,7 @@
 package event
 
 import (
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 )
 
 const (
@@ -30,6 +30,9 @@ const (
 
 	// AMZTimeFormat - event time format.
 	AMZTimeFormat = "2006-01-02T15:04:05.000Z"
+
+	// StoreExtension - file extension of an event file in store
+	StoreExtension = ".event"
 )
 
 // Identity represents access key who caused the event.

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -42,7 +43,7 @@ var (
 )
 
 const (
-	serverShutdownPoll = 500 * time.Millisecond
+	shutdownPollIntervalMax = 500 * time.Millisecond
 
 	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
 	DefaultShutdownTimeout = 5 * time.Second
@@ -61,6 +62,7 @@ const (
 type Server struct {
 	http.Server
 	Addrs           []string      // addresses on which the server listens for new connection.
+	TCPOptions      TCPOptions    // all the configurable TCP conn specific configurable options.
 	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
 	listenerMutex   sync.Mutex    // to guard 'listener' field.
 	listener        *httpListener // HTTP listener for all 'Addrs' field.
@@ -73,8 +75,8 @@ func (srv *Server) GetRequestCount() int {
 	return int(atomic.LoadInt32(&srv.requestCount))
 }
 
-// Start - start HTTP server
-func (srv *Server) Start(ctx context.Context) (err error) {
+// Init - init HTTP server
+func (srv *Server) Init(listenCtx context.Context, listenErrCallback func(listenAddr string, err error)) (serve func() error, err error) {
 	// Take a copy of server fields.
 	var tlsConfig *tls.Config
 	if srv.TLSConfig != nil {
@@ -84,12 +86,22 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 
 	// Create new HTTP listener.
 	var listener *httpListener
-	listener, err = newHTTPListener(
-		ctx,
+	listener, listenErrs := newHTTPListener(
+		listenCtx,
 		srv.Addrs,
+		srv.TCPOptions,
 	)
-	if err != nil {
-		return err
+
+	var interfaceFound bool
+	for i := range listenErrs {
+		if listenErrs[i] != nil {
+			listenErrCallback(srv.Addrs[i], listenErrs[i])
+		} else {
+			interfaceFound = true
+		}
+	}
+	if !interfaceFound {
+		return nil, errors.New("no available interface found")
 	}
 
 	// Wrap given handler to do additional
@@ -116,11 +128,16 @@ func (srv *Server) Start(ctx context.Context) (err error) {
 	srv.listener = listener
 	srv.listenerMutex.Unlock()
 
-	// Start servicing with listener.
+	var l net.Listener = listener
 	if tlsConfig != nil {
-		return srv.Server.Serve(tls.NewListener(listener, tlsConfig))
+		l = tls.NewListener(listener, tlsConfig)
 	}
-	return srv.Server.Serve(listener)
+
+	serve = func() error {
+		return srv.Server.Serve(l)
+	}
+
+	return
 }
 
 // Shutdown - shuts down HTTP server.
@@ -145,14 +162,32 @@ func (srv *Server) Shutdown() error {
 		return err
 	}
 
+	pollIntervalBase := time.Millisecond
+	nextPollInterval := func() time.Duration {
+		// Add 10% jitter.
+		interval := pollIntervalBase + time.Duration(rand.Intn(int(pollIntervalBase/10)))
+		// Double and clamp for next time.
+		pollIntervalBase *= 2
+		if pollIntervalBase > shutdownPollIntervalMax {
+			pollIntervalBase = shutdownPollIntervalMax
+		}
+		return interval
+	}
+
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
 	shutdownTimer := time.NewTimer(shutdownTimeout)
-	ticker := time.NewTicker(serverShutdownPoll)
-	defer ticker.Stop()
+	defer shutdownTimer.Stop()
+
+	timer := time.NewTimer(nextPollInterval())
+	defer timer.Stop()
 	for {
 		select {
 		case <-shutdownTimer.C:
+			if atomic.LoadInt32(&srv.requestCount) <= 0 {
+				return nil
+			}
+
 			// Write all running goroutines.
 			tmp, err := os.CreateTemp("", "minio-goroutines-*.txt")
 			if err == nil {
@@ -161,10 +196,11 @@ func (srv *Server) Shutdown() error {
 				return errors.New("timed out. some connections are still active. goroutines written to " + tmp.Name())
 			}
 			return errors.New("timed out. some connections are still active")
-		case <-ticker.C:
+		case <-timer.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
 				return nil
 			}
+			timer.Reset(nextPollInterval())
 		}
 	}
 }
@@ -210,6 +246,12 @@ func (srv *Server) UseBaseContext(ctx context.Context) *Server {
 // UseCustomLogger use customized logger for this HTTP *Server
 func (srv *Server) UseCustomLogger(l *log.Logger) *Server {
 	srv.ErrorLog = l
+	return srv
+}
+
+// UseTCPOptions use custom TCP options on raw socket
+func (srv *Server) UseTCPOptions(opts TCPOptions) *Server {
+	srv.TCPOptions = opts
 	return srv
 }
 

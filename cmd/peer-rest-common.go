@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v30" // Removed bloom filter
+	peerRESTVersion = "v32" // Add bucket peer metrics
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -65,6 +65,7 @@ const (
 	peerRESTMethodGetMetacacheListing         = "/getmetacache"
 	peerRESTMethodUpdateMetacacheListing      = "/updatemetacache"
 	peerRESTMethodGetPeerMetrics              = "/peermetrics"
+	peerRESTMethodGetPeerBucketMetrics        = "/peerbucketmetrics"
 	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
 	peerRESTMethodSpeedTest                   = "/speedtest"
 	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
@@ -76,6 +77,7 @@ const (
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodMetrics                     = "/metrics"
+	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
 )
 
 const (
@@ -97,6 +99,7 @@ const (
 	peerRESTStorageClass   = "storage-class"
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
+	peerRESTHost           = "host"
 	peerRESTJobID          = "job-id"
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"

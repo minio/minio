@@ -48,7 +48,7 @@ var (
 // It returns free space available to the user (including quota limitations)
 //
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
-func GetInfo(path string) (info Info, err error) {
+func GetInfo(path string, _ bool) (info Info, err error) {
 	// Stat to know if the path exists.
 	if _, err = os.Stat(path); err != nil {
 		return Info{}, err

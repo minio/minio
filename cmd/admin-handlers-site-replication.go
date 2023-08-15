@@ -20,25 +20,26 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
-	"github.com/minio/mux"
-
+	"github.com/dustin/go-humanize"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 	"github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
 )
 
 // SiteReplicationAdd - PUT /minio/admin/v3/site-replication/add
 func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationAdd")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
@@ -72,9 +73,7 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 // used internally to tell current cluster to enable SR with
 // the provided peer clusters and service account.
 func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerJoin")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
@@ -96,9 +95,7 @@ func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 
 // SRPeerBucketOps - PUT /minio/admin/v3/site-replication/bucket-ops?bucket=x&operation=y
 func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerBucketOps")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
 	if objectAPI == nil {
@@ -145,9 +142,7 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 
 // SRPeerReplicateIAMItem - PUT /minio/admin/v3/site-replication/iam-item
 func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerReplicateIAMItem")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
 	if objectAPI == nil {
@@ -199,9 +194,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 
 // SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
 func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerReplicateBucketItem")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
 	if objectAPI == nil {
@@ -265,9 +258,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 
 // SiteReplicationInfo - GET /minio/admin/v3/site-replication/info
 func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationInfo")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
 	if objectAPI == nil {
@@ -287,9 +278,7 @@ func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Req
 }
 
 func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationGetIDPSettings")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
@@ -326,9 +315,7 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 
 // SiteReplicationStatus - GET /minio/admin/v3/site-replication/status
 func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationStatus")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
 	if objectAPI == nil {
@@ -357,9 +344,7 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 
 // SiteReplicationMetaInfo - GET /minio/admin/v3/site-replication/metainfo
 func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationMetaInfo")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
 	if objectAPI == nil {
@@ -381,8 +366,7 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 
 // SiteReplicationEdit - PUT /minio/admin/v3/site-replication/edit
 func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationEdit")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
@@ -413,8 +397,7 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 //
 // used internally to tell current cluster to update endpoint for peer
 func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerEdit")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
 	if objectAPI == nil {
@@ -448,9 +431,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 
 // SiteReplicationRemove - PUT /minio/admin/v3/site-replication/remove
 func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationRemove")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
 	if objectAPI == nil {
@@ -481,8 +462,7 @@ func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.R
 //
 // used internally to tell current cluster to update endpoint for peer
 func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SRPeerRemove")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
 	if objectAPI == nil {
@@ -504,9 +484,7 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 
 // SiteReplicationResyncOp - PUT /minio/admin/v3/site-replication/resync/op
 func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SiteReplicationResyncOp")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	ctx := r.Context()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationResyncAction)
 	if objectAPI == nil {
@@ -542,4 +520,46 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 		return
 	}
 	writeSuccessResponseJSON(w, body)
+}
+
+// SiteReplicationDevNull - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/devnull
+func (a adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	globalSiteNetPerfRX.Connect()
+	defer globalSiteNetPerfRX.Disconnect()
+
+	connectTime := time.Now()
+	for {
+		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		atomic.AddUint64(&globalSiteNetPerfRX.RX, uint64(n))
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
+			// would mean the network is not stable. Logging here will help in debugging network issues.
+			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
+				logger.LogIf(ctx, err)
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+			}
+			break
+		}
+	}
+}
+
+// SiteReplicationNetPerf - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/netperf
+func (a adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.Request) {
+	durationStr := r.Form.Get(peerRESTDuration)
+	duration, _ := time.ParseDuration(durationStr)
+	if duration < globalNetPerfMinDuration {
+		duration = globalNetPerfMinDuration
+	}
+	result := siteNetperf(r.Context(), duration)
+	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }

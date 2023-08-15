@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -91,18 +93,40 @@ func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}
 	return saveConfig(ctx, iamOS.objAPI, objPath, data)
 }
 
+func decryptData(data []byte, objPath string) ([]byte, error) {
+	if utf8.Valid(data) {
+		return data, nil
+	}
+
+	pdata, err := madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	if err == nil {
+		return pdata, nil
+	}
+	if GlobalKMS != nil {
+		pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: path.Join(minioMetaBucket, objPath),
+		})
+		if err == nil {
+			return pdata, nil
+		}
+		pdata, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
+			minioMetaBucket: objPath,
+		})
+		if err == nil {
+			return pdata, nil
+		}
+	}
+	return nil, err
+}
+
 func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context, objPath string) ([]byte, ObjectInfo, error) {
 	data, meta, err := readConfigWithMetadata(ctx, iamOS.objAPI, objPath, ObjectOptions{})
 	if err != nil {
 		return nil, meta, err
 	}
-	if !utf8.Valid(data) && GlobalKMS != nil {
-		data, err = config.DecryptBytes(GlobalKMS, data, kms.Context{
-			minioMetaBucket: path.Join(minioMetaBucket, objPath),
-		})
-		if err != nil {
-			return nil, meta, err
-		}
+	data, err = decryptData(data, objPath)
+	if err != nil {
+		return nil, meta, err
 	}
 	return data, meta, nil
 }
@@ -198,6 +222,10 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 
 		}
 		u.Credentials.Claims = jwtClaims.Map()
+	}
+
+	if u.Credentials.Description == "" {
+		u.Credentials.Description = u.Credentials.Comment
 	}
 
 	m[user] = u
@@ -362,7 +390,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	}
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to list IAM data: %w", err)
 	}
 
 	// Loads things in the same order as `LoadIAMCache()`
@@ -373,7 +401,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range policiesList {
 		policyName := path.Dir(item)
 		if err := iamOS.loadPolicyDoc(ctx, policyName, cache.iamPolicyDocsMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
+			return fmt.Errorf("unable to load the policy doc `%s`: %w", policyName, err)
 		}
 	}
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
@@ -384,7 +412,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		for _, item := range regUsersList {
 			userName := path.Dir(item)
 			if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-				return err
+				return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
 			}
 		}
 
@@ -393,7 +421,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		for _, item := range groupsList {
 			group := path.Dir(item)
 			if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
-				return err
+				return fmt.Errorf("unable to load the group `%s`: %w", group, err)
 			}
 		}
 	}
@@ -403,7 +431,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range userPolicyMappingsList {
 		userName := strings.TrimSuffix(item, ".json")
 		if err := iamOS.loadMappedPolicy(ctx, userName, regUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
+			return fmt.Errorf("unable to load the policy mapping for the user `%s`: %w", userName, err)
 		}
 	}
 
@@ -412,7 +440,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range groupPolicyMappingsList {
 		groupName := strings.TrimSuffix(item, ".json")
 		if err := iamOS.loadMappedPolicy(ctx, groupName, regUser, true, cache.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
+			return fmt.Errorf("unable to load the policy mapping for the group `%s`: %w", groupName, err)
 		}
 	}
 
@@ -421,7 +449,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range svcAccList {
 		userName := path.Dir(item)
 		if err := iamOS.loadUser(ctx, userName, svcUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-			return err
+			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
 		}
 	}
 
@@ -430,7 +458,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range stsUsersList {
 		userName := path.Dir(item)
 		if err := iamOS.loadUser(ctx, userName, stsUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-			return err
+			return fmt.Errorf("unable to load the STS user `%s`: %w", userName, err)
 		}
 	}
 
@@ -439,7 +467,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range stsPolicyMappingsList {
 		stsName := strings.TrimSuffix(item, ".json")
 		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
+			return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", stsName, err)
 		}
 	}
 

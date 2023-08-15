@@ -740,3 +740,70 @@ func TestS2CompressReader(t *testing.T) {
 		})
 	}
 }
+
+func Test_pathNeedsClean(t *testing.T) {
+	type pathTest struct {
+		path, result string
+	}
+
+	cleantests := []pathTest{
+		// Already clean
+		{"", "."},
+		{"abc", "abc"},
+		{"abc/def", "abc/def"},
+		{"a/b/c", "a/b/c"},
+		{".", "."},
+		{"..", ".."},
+		{"../..", "../.."},
+		{"../../abc", "../../abc"},
+		{"/abc", "/abc"},
+		{"/abc/def", "/abc/def"},
+		{"/", "/"},
+
+		// Remove trailing slash
+		{"abc/", "abc"},
+		{"abc/def/", "abc/def"},
+		{"a/b/c/", "a/b/c"},
+		{"./", "."},
+		{"../", ".."},
+		{"../../", "../.."},
+		{"/abc/", "/abc"},
+
+		// Remove doubled slash
+		{"abc//def//ghi", "abc/def/ghi"},
+		{"//abc", "/abc"},
+		{"///abc", "/abc"},
+		{"//abc//", "/abc"},
+		{"abc//", "abc"},
+
+		// Remove . elements
+		{"abc/./def", "abc/def"},
+		{"/./abc/def", "/abc/def"},
+		{"abc/.", "abc"},
+
+		// Remove .. elements
+		{"abc/def/ghi/../jkl", "abc/def/jkl"},
+		{"abc/def/../ghi/../jkl", "abc/jkl"},
+		{"abc/def/..", "abc"},
+		{"abc/def/../..", "."},
+		{"/abc/def/../..", "/"},
+		{"abc/def/../../..", ".."},
+		{"/abc/def/../../..", "/"},
+		{"abc/def/../../../ghi/jkl/../../../mno", "../../mno"},
+
+		// Combinations
+		{"abc/./../def", "def"},
+		{"abc//./../def", "def"},
+		{"abc/../../././../def", "../../def"},
+	}
+	for _, test := range cleantests {
+		want := test.path != test.result
+		got := pathNeedsClean([]byte(test.path))
+		if !got {
+			t.Logf("no clean: %q", test.path)
+		}
+		if want && !got {
+			t.Errorf("input: %q, want %v, got %v", test.path, want, got)
+		}
+	}
+}

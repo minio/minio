@@ -1,3 +1,20 @@
+// Copyright (c) 2015-2022 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package cmd
 
 import (
@@ -7,7 +24,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
@@ -125,14 +142,14 @@ func (p *scannerMetrics) incTime(s scannerMetric, d time.Duration) {
 // timeILM times an ILM action.
 // lifecycle.NoneAction is ignored.
 // Use for s < scannerMetricLastRealtime
-func (p *scannerMetrics) timeILM(a lifecycle.Action) func() {
+func (p *scannerMetrics) timeILM(a lifecycle.Action) func(versions uint64) {
 	if a == lifecycle.NoneAction || a >= lifecycle.ActionCount {
-		return func() {}
+		return func(_ uint64) {}
 	}
 	startTime := time.Now()
-	return func() {
+	return func(versions uint64) {
 		duration := time.Since(startTime)
-		atomic.AddUint64(&p.actions[a], 1)
+		atomic.AddUint64(&p.actions[a], versions)
 		p.actionsLatency[a].add(duration)
 	}
 }

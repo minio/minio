@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -93,8 +93,20 @@ var (
 			Type:        "duration",
 		},
 		config.HelpKV{
-			Key:         apiDisableODirect,
-			Description: "set to disable O_DIRECT for reads under special conditions. NOTE: it is not recommended to disable O_DIRECT without prior testing." + defaultHelpPostfix(apiDisableODirect),
+			Key:         apiODirect,
+			Description: "set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
+			Optional:    true,
+			Type:        "boolean",
+		},
+		config.HelpKV{
+			Key:         apiRootAccess,
+			Description: "turn 'off' root credential access for all API calls including s3, admin operations" + defaultHelpPostfix(apiRootAccess),
+			Optional:    true,
+			Type:        "boolean",
+		},
+		config.HelpKV{
+			Key:         apiSyncEvents,
+			Description: "set to enable synchronous bucket notifications" + defaultHelpPostfix(apiSyncEvents),
 			Optional:    true,
 			Type:        "boolean",
 		},

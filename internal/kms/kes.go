@@ -20,9 +20,11 @@ package kms
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -124,8 +126,8 @@ func NewWithConfig(config Config) (KMS, error) {
 		if config.Certificate == nil || config.ReloadCertEvents == nil {
 			return
 		}
+		var prevCertificate tls.Certificate
 		for {
-			var prevCertificate tls.Certificate
 			certificate, ok := <-config.ReloadCertEvents
 			if !ok {
 				return
@@ -466,4 +468,52 @@ func (c *kesClient) ListIdentities(ctx context.Context, pattern string) (*kes.Id
 	defer c.lock.RUnlock()
 
 	return c.enclave.ListIdentities(ctx, pattern)
+}
+
+// Verify verifies all KMS endpoints and returns details
+func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	results := []VerifyResult{}
+	kmsContext := Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+	for _, endpoint := range c.client.Endpoints {
+		client := kes.Client{
+			Endpoints:  []string{endpoint},
+			HTTPClient: c.client.HTTPClient,
+		}
+
+		// 1. Get stats for the KES instance
+		state, err := client.Status(ctx)
+		if err != nil {
+			results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
+			continue
+		}
+
+		// 2. Generate a new key using the KMS.
+		kmsCtx, err := kmsContext.MarshalText()
+		if err != nil {
+			results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
+			continue
+		}
+		result := VerifyResult{Status: "online", Endpoint: endpoint, Version: state.Version}
+		key, err := client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
+		if err != nil {
+			result.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+		} else {
+			result.Encrypt = "success"
+		}
+		// 3. Verify that we can indeed decrypt the (encrypted) key
+		decryptedKey, err := client.Decrypt(ctx, env.Get(EnvKESKeyName, ""), key.Ciphertext, kmsCtx)
+		switch {
+		case err != nil:
+			result.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+		case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
+			result.Decrypt = "Decryption failed: decrypted key does not match generated key"
+		default:
+			result.Decrypt = "success"
+		}
+		results = append(results, result)
+	}
+	return results
 }

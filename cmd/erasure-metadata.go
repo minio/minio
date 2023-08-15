@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/sync/errgroup"
+	"github.com/minio/pkg/sync/errgroup"
 	"github.com/minio/sio"
 )
 
@@ -41,13 +41,6 @@ import (
 const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
-
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []ObjectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
@@ -165,6 +158,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		IsDir:            HasSuffix(object, SlashSeparator),
 		Bucket:           bucket,
 		Name:             object,
+		ParityBlocks:     fi.Erasure.ParityBlocks,
+		DataBlocks:       fi.Erasure.DataBlocks,
 		VersionID:        versionID,
 		IsLatest:         fi.IsLatest,
 		DeleteMarker:     fi.Deleted,
@@ -234,6 +229,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.Checksum = fi.Checksum
+	objInfo.Inlined = fi.InlineData()
 	// Success.
 	return objInfo
 }
@@ -307,7 +303,7 @@ func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, act
 	fi.Parts = append(fi.Parts, partInfo)
 
 	// Parts in FileInfo should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(fi.Parts))
+	sort.Slice(fi.Parts, func(i, j int) bool { return fi.Parts[i].Number < fi.Parts[j].Number })
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
@@ -332,7 +328,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 	return 0, 0, InvalidRange{}
 }
 
-func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
+func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
 	// with less quorum return error.
 	if quorum < 1 {
 		return FileInfo{}, errErasureReadQuorum
@@ -340,13 +336,26 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
 	for i, meta := range metaArr {
-		if meta.IsValid() && meta.ModTime.Equal(modTime) {
+		if !meta.IsValid() {
+			continue
+		}
+		etagOnly := modTime.Equal(timeSentinel) && (etag != "" && etag == meta.Metadata["etag"])
+		mtimeValid := meta.ModTime.Equal(modTime)
+		if mtimeValid || etagOnly {
+			fmt.Fprint(h, meta.SuccessorModTime.Format(http.TimeFormat))
 			fmt.Fprintf(h, "%v", meta.XLV1)
-			fmt.Fprintf(h, "%v", meta.GetDataDir())
+			if !etagOnly {
+				// Verify dataDir is same only when mtime is valid and etag is not considered.
+				fmt.Fprintf(h, "%v", meta.GetDataDir())
+			}
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
 			}
-			fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
+
+			if !meta.Deleted && meta.Size != 0 {
+				fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
+				fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
+			}
 
 			// ILM transition fields
 			fmt.Fprint(h, meta.TransitionStatus)
@@ -412,8 +421,8 @@ func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
-func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (FileInfo, error) {
-	return findFileInfoInQuorum(ctx, metaArr, modTime, quorum)
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
+	return findFileInfoInQuorum(ctx, metaArr, modTime, etag, quorum)
 }
 
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.
@@ -444,22 +453,35 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 	return evalDisks(disks, mErrs), err
 }
 
-func commonParity(parities []int) int {
+func commonParity(parities []int, defaultParityCount int) int {
+	N := len(parities)
+
 	occMap := make(map[int]int)
 	for _, p := range parities {
 		occMap[p]++
 	}
 
-	var maxOcc, commonParity int
-
+	var maxOcc, cparity int
 	for parity, occ := range occMap {
 		if parity == -1 {
 			// Ignore non defined parity
 			continue
 		}
-		if occ >= maxOcc {
+
+		readQuorum := N - parity
+		if defaultParityCount > 0 && parity == 0 {
+			// In this case, parity == 0 implies that this object version is a
+			// delete marker
+			readQuorum = N/2 + 1
+		}
+		if occ < readQuorum {
+			// Ignore this parity since we don't have enough shards for read quorum
+			continue
+		}
+
+		if occ > maxOcc {
 			maxOcc = occ
-			commonParity = parity
+			cparity = parity
 		}
 	}
 
@@ -467,7 +489,7 @@ func commonParity(parities []int) int {
 		// Did not found anything useful
 		return -1
 	}
-	return commonParity
+	return cparity
 }
 
 func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int) {
@@ -481,7 +503,10 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = -1
 			continue
 		}
-		if !metadata.Deleted {
+		// Delete marker or zero byte objects take highest parity.
+		if metadata.Deleted || metadata.Size == 0 {
+			parities[index] = len(partsMetadata) / 2
+		} else {
 			parities[index] = metadata.Erasure.ParityBlocks
 		}
 	}
@@ -510,8 +535,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	}
 
 	parities := listObjectParities(partsMetaData, errs)
-	parityBlocks := commonParity(parities)
-
+	parityBlocks := commonParity(parities, defaultParityCount)
 	if parityBlocks < 0 {
 		return -1, -1, errErasureReadQuorum
 	}
@@ -616,11 +640,9 @@ func getInternalReplicationState(m map[string]string) ReplicationState {
 	for k, v := range m {
 		switch {
 		case equals(k, ReservedMetadataPrefixLower+ReplicationTimestamp):
-			tm, _ := time.Parse(http.TimeFormat, v)
-			d.ReplicationTimeStamp = tm
+			d.ReplicaTimeStamp, _ = amztime.ParseReplicationTS(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicaTimestamp):
-			tm, _ := time.Parse(http.TimeFormat, v)
-			d.ReplicaTimeStamp = tm
+			d.ReplicaTimeStamp, _ = amztime.ParseReplicationTS(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicaStatus):
 			d.ReplicaStatus = replication.StatusType(v)
 		case equals(k, ReservedMetadataPrefixLower+ReplicationStatus):

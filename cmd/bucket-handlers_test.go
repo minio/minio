@@ -355,7 +355,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 			maxUploads:         "0",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 			shouldPass:         false,
 		},
 		// Test case - 2.
@@ -657,13 +657,14 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 ) {
 	var err error
 
-	contentBytes := []byte("hello")
 	sha256sum := ""
 	var objectNames []string
 	for i := 0; i < 10; i++ {
+		contentBytes := []byte("hello")
 		objectName := "test-object-" + strconv.Itoa(i)
 		if i == 0 {
 			objectName += "/"
+			contentBytes = []byte{}
 		}
 		// uploading the object.
 		_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
@@ -676,6 +677,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 		objectNames = append(objectNames, objectName)
 	}
 
+	contentBytes := []byte("hello")
 	for _, name := range []string{"private/object", "public/object"} {
 		// Uploading the object with retention enabled
 		_, err = obj.PutObject(GlobalContext, bucketName, name, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
@@ -745,8 +747,13 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 	deletedObjects := make([]DeletedObject, len(requestList[0].Objects))
 	for i := range requestList[0].Objects {
+		var vid string
+		if isDirObject(requestList[0].Objects[i].ObjectName) {
+			vid = ""
+		}
 		deletedObjects[i] = DeletedObject{
 			ObjectName: requestList[0].Objects[i].ObjectName,
+			VersionID:  vid,
 		}
 	}
 
@@ -756,9 +763,14 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	successRequest1 := encodeResponse(requestList[1])
 
 	deletedObjects = make([]DeletedObject, len(requestList[1].Objects))
-	for i := range requestList[0].Objects {
+	for i := range requestList[1].Objects {
+		var vid string
+		if isDirObject(requestList[0].Objects[i].ObjectName) {
+			vid = ""
+		}
 		deletedObjects[i] = DeletedObject{
 			ObjectName: requestList[1].Objects[i].ObjectName,
+			VersionID:  vid,
 		}
 	}
 

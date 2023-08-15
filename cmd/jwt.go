@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -40,47 +39,16 @@ const (
 
 	// Inter-node JWT token expiry is 15 minutes.
 	defaultInterNodeJWTExpiry = 15 * time.Minute
-
-	// URL JWT token expiry is one minute (might be exposed).
-	defaultURLJWTExpiry = time.Minute
 )
 
 var (
 	errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
+	errAccessKeyDisabled  = errors.New("The access key you provided is disabled")
 	errAuthentication     = errors.New("Authentication failed, check your access credentials")
 	errNoAuthToken        = errors.New("JWT token missing")
+	errSkewedAuthTime     = errors.New("Skewed authenticationdate/time")
+	errMalformedAuth      = errors.New("Malformed authentication input")
 )
-
-func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
-	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
-	if err != nil {
-		return "", err
-	}
-	expiresAt := UTCNow().Add(expiry)
-	return authenticateJWTUsersWithCredentials(passedCredential, expiresAt)
-}
-
-func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt time.Time) (string, error) {
-	serverCred := globalActiveCred
-	if serverCred.AccessKey != credentials.AccessKey {
-		u, ok := globalIAMSys.GetUser(context.TODO(), credentials.AccessKey)
-		if !ok {
-			return "", errInvalidAccessKeyID
-		}
-		serverCred = u.Credentials
-	}
-
-	if !serverCred.Equal(credentials) {
-		return "", errAuthentication
-	}
-
-	claims := xjwt.NewMapClaims()
-	claims.SetExpiry(expiresAt)
-	claims.SetAccessKey(credentials.AccessKey)
-
-	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
-	return jwt.SignedString([]byte(serverCred.SecretKey))
-}
 
 // cachedAuthenticateNode will cache authenticateNode results for given values up to ttl.
 func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audience string) (string, error) {
@@ -121,14 +89,6 @@ func authenticateNode(accessKey, secretKey, audience string) (string, error) {
 	return jwt.SignedString([]byte(secretKey))
 }
 
-func authenticateWeb(accessKey, secretKey string) (string, error) {
-	return authenticateJWTUsers(accessKey, secretKey, defaultJWTExpiry)
-}
-
-func authenticateURL(accessKey, secretKey string) (string, error) {
-	return authenticateJWTUsers(accessKey, secretKey, defaultURLJWTExpiry)
-}
-
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
@@ -142,15 +102,24 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 	}
 	claims := xjwt.NewMapClaims()
 	if err := xjwt.ParseWithClaims(token, claims, func(claims *xjwt.MapClaims) ([]byte, error) {
-		if claims.AccessKey == globalActiveCred.AccessKey {
-			return []byte(globalActiveCred.SecretKey), nil
+		if claims.AccessKey != globalActiveCred.AccessKey {
+			u, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
+			if !ok {
+				// Credentials will be invalid but for disabled
+				// return a different error in such a scenario.
+				if u.Credentials.Status == auth.AccountOff {
+					return nil, errAccessKeyDisabled
+				}
+				return nil, errInvalidAccessKeyID
+			}
+			cred := u.Credentials
+			return []byte(cred.SecretKey), nil
+		} // this means claims.AccessKey == rootAccessKey
+		if !globalAPIConfig.permitRootAccess() {
+			// if root access is disabled, fail this request.
+			return nil, errAccessKeyDisabled
 		}
-		u, ok := globalIAMSys.GetUser(req.Context(), claims.AccessKey)
-		if !ok {
-			return nil, errInvalidAccessKeyID
-		}
-		cred := u.Credentials
-		return []byte(cred.SecretKey), nil
+		return []byte(globalActiveCred.SecretKey), nil
 	}); err != nil {
 		return claims, nil, false, errAuthentication
 	}
@@ -171,6 +140,11 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 
 		for k, v := range eclaims {
 			claims.MapClaims[k] = v
+		}
+
+		// if root access is disabled, disable all its service accounts and temporary credentials.
+		if ucred.ParentUser == globalActiveCred.AccessKey && !globalAPIConfig.permitRootAccess() {
+			return nil, nil, false, errAccessKeyDisabled
 		}
 
 		// Now check if we have a sessionPolicy.

@@ -32,7 +32,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	uuid2 "github.com/google/uuid"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/config/storageclass"
 )
 
 // Tests isObjectDangling function
@@ -563,6 +564,17 @@ func TestHealingDanglingObject(t *testing.T) {
 	resetGlobalHealState()
 	defer resetGlobalHealState()
 
+	// Set globalStoragClass.STANDARD to EC:4 for this test
+	saveSC := globalStorageClass
+	defer func() {
+		globalStorageClass.Update(saveSC)
+	}()
+	globalStorageClass.Update(storageclass.Config{
+		Standard: storageclass.StorageClass{
+			Parity: 4,
+		},
+	})
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -572,10 +584,12 @@ func TestHealingDanglingObject(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	setObjectLayer(objLayer)
 
 	bucket := getRandomBucketName()
 	object := getRandomObjectName()
@@ -762,8 +776,8 @@ func TestHealCorrectQuorum(t *testing.T) {
 
 	defer removeRoots(fsDirs)
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, _, err := initObjectLayer(ctx, pools)
@@ -893,8 +907,8 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 
 	defer removeRoots(fsDirs)
 
-	pools := mustGetPoolEndpoints(fsDirs[:16]...)
-	pools = append(pools, mustGetPoolEndpoints(fsDirs[16:]...)...)
+	pools := mustGetPoolEndpoints(0, fsDirs[:16]...)
+	pools = append(pools, mustGetPoolEndpoints(1, fsDirs[16:]...)...)
 
 	// Everything is fine, should return nil
 	objLayer, _, err := initObjectLayer(ctx, pools)
@@ -1051,8 +1065,8 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	}
 
 	for i := 0; i < (nfi.Erasure.DataBlocks + nfi.Erasure.ParityBlocks); i++ {
-		_, err = erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
-		if err == nil {
+		stats, _ := erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+		if len(stats) != 0 {
 			t.Errorf("Expected xl.meta file to be not present, but succeeeded")
 		}
 	}
@@ -1074,7 +1088,7 @@ func TestHealObjectCorruptedXLMeta(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1217,7 +1231,7 @@ func TestHealObjectCorruptedParts(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1374,7 +1388,7 @@ func TestHealObjectErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1472,7 +1486,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1568,7 +1582,7 @@ func TestHealLastDataShard(t *testing.T) {
 
 			defer removeRoots(fsDirs)
 
-			obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
+			obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1620,7 +1634,7 @@ func TestHealLastDataShard(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			firstGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{NoLock: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1650,7 +1664,7 @@ func TestHealLastDataShard(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, noLock, ObjectOptions{})
+			secondGr, err := obj.GetObjectNInfo(ctx, bucket, object, nil, nil, ObjectOptions{NoLock: true})
 			if err != nil {
 				t.Fatal(err)
 			}

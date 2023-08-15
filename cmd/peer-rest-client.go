@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
@@ -178,9 +178,7 @@ func (client *peerRESTClient) GetSysConfig(ctx context.Context) (info madmin.Sys
 	defer xhttp.DrainBody(respBody)
 
 	err = gob.NewDecoder(respBody).Decode(&info)
-	cfg := info.Config["time-info"]
-	if cfg != nil {
-		ti := cfg.(madmin.TimeInfo)
+	if ti, ok := info.Config["time-info"].(madmin.TimeInfo); ok {
 		ti.RoundtripDuration = roundtrip
 		info.Config["time-info"] = ti
 	}
@@ -214,7 +212,10 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	values := make(url.Values)
 	values.Set(peerRESTMetricsTypes, strconv.FormatUint(uint64(t), 10))
 	for disk := range opts.disks {
-		values.Set(peerRESTDisk, disk)
+		values.Add(peerRESTDisk, disk)
+	}
+	for host := range opts.hosts {
+		values.Add(peerRESTHost, host)
 	}
 	values.Set(peerRESTJobID, opts.jobID)
 	values.Set(peerRESTDepID, opts.depID)
@@ -784,7 +785,6 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
 	// Use a separate client to avoid recursive calls.
 	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.ExpectTimeouts = true
 	healthClient.NoMetrics = true
 
 	// Construct a new health function.
@@ -817,6 +817,33 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 
 func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetPeerMetrics, nil, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var metric Metric
+			if err := dec.Decode(&metric); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
+		}
+	}(ch)
+	return ch, nil
+}
+
+func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan Metric, error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetPeerBucketMetrics, nil, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -946,4 +973,35 @@ func (client *peerRESTClient) Netperf(ctx context.Context, duration time.Duratio
 	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&result)
 	return result, err
+}
+
+// GetReplicationMRF - get replication MRF for bucket
+func (client *peerRESTClient) GetReplicationMRF(ctx context.Context, bucket string) (chan madmin.ReplicationMRF, error) {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetReplicationMRF, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan madmin.ReplicationMRF)
+	go func(ch chan madmin.ReplicationMRF) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var entry madmin.ReplicationMRF
+			if err := dec.Decode(&entry); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- entry:
+			}
+		}
+	}(ch)
+	return ch, nil
 }

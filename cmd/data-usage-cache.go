@@ -33,7 +33,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zstd"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
@@ -57,6 +57,7 @@ type dataUsageEntry struct {
 	Size             int64                `msg:"sz"`
 	Objects          uint64               `msg:"os"`
 	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
+	DeleteMarkers    uint64               `msg:"dms"`
 	ObjSizes         sizeHistogram        `msg:"szs"`
 	ObjVersions      versionsHistogram    `msg:"vh"`
 	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
@@ -86,6 +87,20 @@ func (ats *allTierStats) merge(other *allTierStats) {
 	for tier, st := range other.Tiers {
 		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
+}
+
+func (ats *allTierStats) clone() *allTierStats {
+	if ats == nil {
+		return nil
+	}
+	dst := *ats
+	if dst.Tiers != nil {
+		dst.Tiers = make(map[string]tierStats, len(dst.Tiers))
+		for tier, st := range dst.Tiers {
+			dst.Tiers[tier] = st
+		}
+	}
+	return &dst
 }
 
 func (ats *allTierStats) adminStats(stats map[string]madmin.TierStats) map[string]madmin.TierStats {
@@ -166,6 +181,25 @@ type replicationAllStats struct {
 type replicationAllStatsV1 struct {
 	Targets     map[string]replicationStats
 	ReplicaSize uint64 `msg:"ReplicaSize,omitempty"`
+}
+
+// clone creates a deep-copy clone.
+func (r *replicationAllStats) clone() *replicationAllStats {
+	if r == nil {
+		return nil
+	}
+
+	// Shallow copy
+	dst := *r
+
+	// Copy individual targets.
+	if dst.Targets != nil {
+		dst.Targets = make(map[string]replicationStats, len(dst.Targets))
+		for k, v := range r.Targets {
+			dst.Targets[k] = v
+		}
+	}
+	return &dst
 }
 
 //msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6
@@ -295,6 +329,7 @@ type dataUsageCacheInfo struct {
 func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.Size += summary.totalSize
 	e.Versions += summary.versions
+	e.DeleteMarkers += summary.deleteMarkers
 	e.ObjSizes.add(summary.totalSize)
 	e.ObjVersions.add(summary.versions)
 
@@ -333,6 +368,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Versions += other.Versions
+	e.DeleteMarkers += other.DeleteMarkers
 	e.Size += other.Size
 	if other.ReplicationStats != nil {
 		if e.ReplicationStats == nil {
@@ -413,14 +449,11 @@ func (e dataUsageEntry) clone() dataUsageEntry {
 		e.Children = ch
 	}
 	if e.ReplicationStats != nil {
-		// Copy to new struct
-		r := *e.ReplicationStats
-		e.ReplicationStats = &r
+		// Clone ReplicationStats
+		e.ReplicationStats = e.ReplicationStats.clone()
 	}
 	if e.AllTierStats != nil {
-		ats := newAllTierStats()
-		ats.merge(e.AllTierStats)
-		e.AllTierStats = ats
+		e.AllTierStats = e.AllTierStats.clone()
 	}
 	return e
 }
@@ -501,13 +534,14 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	}
 	flat := d.flatten(*e)
 	dui := DataUsageInfo{
-		LastUpdate:         d.Info.LastUpdate,
-		ObjectsTotalCount:  flat.Objects,
-		VersionsTotalCount: flat.Versions,
-		ObjectsTotalSize:   uint64(flat.Size),
-		BucketsCount:       uint64(len(e.Children)),
-		BucketsUsage:       d.bucketsUsageInfo(buckets),
-		TierStats:          d.tiersUsageInfo(buckets),
+		LastUpdate:              d.Info.LastUpdate,
+		ObjectsTotalCount:       flat.Objects,
+		VersionsTotalCount:      flat.Versions,
+		DeleteMarkersTotalCount: flat.DeleteMarkers,
+		ObjectsTotalSize:        uint64(flat.Size),
+		BucketsCount:            uint64(len(e.Children)),
+		BucketsUsage:            d.bucketsUsageInfo(buckets),
+		TierStats:               d.tiersUsageInfo(buckets),
 	}
 	return dui
 }
@@ -775,6 +809,7 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 			Size:                    uint64(flat.Size),
 			VersionsCount:           flat.Versions,
 			ObjectsCount:            flat.Objects,
+			DeleteMarkersCount:      flat.DeleteMarkers,
 			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
 			ObjectVersionsHistogram: flat.ObjVersions.toMap(),
 		}
@@ -873,7 +908,7 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 }
 
 type objectIO interface {
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (reader *GetObjectReader, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 }
 
@@ -889,7 +924,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	// Caches are read+written without locks,
 	retries := 0
 	for retries < 5 {
-		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, noLock, ObjectOptions{NoLock: true})
+		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, ObjectOptions{NoLock: true})
 		if err != nil {
 			switch err.(type) {
 			case ObjectNotFound, BucketNotFound:

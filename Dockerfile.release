@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.7
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.8
 
 ARG TARGETARCH
 
@@ -29,17 +29,16 @@ COPY LICENSE /licenses/LICENSE
 RUN \
      microdnf clean all && \
      microdnf update --nodocs && \
-     microdnf install curl ca-certificates shadow-utils util-linux gzip lsof tar net-tools --nodocs && \
      rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-     microdnf install minisign --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux gzip lsof tar net-tools iproute iputils jq minisign --nodocs && \
      mkdir -p /opt/bin && chmod -R 777 /opt/bin && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE} -o /opt/bin/minio && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.sha256sum -o /opt/bin/minio.sha256sum && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.minisig -o /opt/bin/minio.minisig && \
      curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o /opt/bin/mc && \
-     gzip /opt/bin/mc && \
      microdnf clean all && \
      chmod +x /opt/bin/minio && \
+     chmod +x /opt/bin/mc && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
      /usr/bin/verify-minio.sh && \

@@ -24,7 +24,7 @@ import (
 	"net/http"
 
 	"github.com/minio/kes-go"
-	"github.com/minio/madmin-go/v2"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -168,8 +168,14 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 			}
 		case errors.Is(err, errPolicyInUse):
 			apiErr = APIError{
-				Code:           "XMinioAdminPolicyInUse",
+				Code:           "XMinioIAMPolicyInUse",
 				Description:    "The policy cannot be removed, as it is in use",
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case errors.Is(err, errSessionPolicyTooLarge):
+			apiErr = APIError{
+				Code:           "XMinioIAMServiceAccountSessionPolicyTooLarge",
+				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case errors.Is(err, kes.ErrKeyExists):
@@ -220,12 +226,10 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 // toAdminAPIErrCode - converts errErasureWriteQuorum error to admin API
 // specific error.
 func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
-	switch err {
-	case errErasureWriteQuorum:
+	if errors.Is(err, errErasureWriteQuorum) {
 		return ErrAdminConfigNoQuorum
-	default:
-		return toAPIErrorCode(ctx, err)
 	}
+	return toAPIErrorCode(ctx, err)
 }
 
 // wraps export error for more context
