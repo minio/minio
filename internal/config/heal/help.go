@@ -29,7 +29,7 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Bitrot,
-			Description: `perform bitrot scan on disks when checking objects during scanner` + defaultHelpPostfix(Bitrot),
+			Description: `perform bitrot scan on drives when checking objects during scanner` + defaultHelpPostfix(Bitrot),
 			Optional:    true,
 			Type:        "on|off",
 		},

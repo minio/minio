@@ -8,15 +8,15 @@ MinIO in distributed mode can help you setup a highly-available storage system w
 
 ### Data protection
 
-Distributed MinIO provides protection against multiple node/drive failures and [bit rot](https://github.com/minio/minio/blob/master/docs/erasure/README.md#what-is-bit-rot-protection) using [erasure code](https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html). As the minimum disks required for distributed MinIO is 2 (same as minimum disks required for erasure coding), erasure code automatically kicks in as you launch distributed MinIO.
+Distributed MinIO provides protection against multiple node/drive failures and [bit rot](https://github.com/minio/minio/blob/master/docs/erasure/README.md#what-is-bit-rot-protection) using [erasure code](https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html). As the minimum drives required for distributed MinIO is 2 (same as minimum drives required for erasure coding), erasure code automatically kicks in as you launch distributed MinIO.
 
-If one or more disks are offline at the start of a PutObject or NewMultipartUpload operation the object will have additional data protection bits added automatically to provide additional safety for these objects.
+If one or more drives are offline at the start of a PutObject or NewMultipartUpload operation the object will have additional data protection bits added automatically to provide additional safety for these objects.
 
 ### High availability
 
-A stand-alone MinIO server would go down if the server hosting the disks goes offline. In contrast, a distributed MinIO setup with _m_ servers and _n_ disks will have your data safe as long as _m/2_ servers or _m*n_/2 or more disks are online.
+A stand-alone MinIO server would go down if the server hosting the drives goes offline. In contrast, a distributed MinIO setup with _m_ servers and _n_ drives will have your data safe as long as _m/2_ servers or _m*n_/2 or more drives are online.
 
-For example, an 16-server distributed setup with 200 disks per node would continue serving files, up to 4 servers can be offline in default configuration i.e around 800 disks down MinIO would continue to read and write objects.
+For example, an 16-server distributed setup with 200 drives per node would continue serving files, up to 4 servers can be offline in default configuration i.e around 800 drives down MinIO would continue to read and write objects.
 
 Refer to sizing guide for more understanding on default values chosen depending on your erasure stripe size [here](https://github.com/minio/minio/blob/master/docs/distributed/SIZING.md). Parity settings can be changed using [storage classes](https://github.com/minio/minio/tree/master/docs/erasure/storage-class).
 
@@ -54,7 +54,7 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 - **MinIO creates erasure-coding sets of _2_ to _16_ drives per set.  The number of drives you provide in total must be a multiple of one of those numbers.**
 - **MinIO chooses the largest EC set size which divides into the total number of drives or total number of nodes given - making sure to keep the uniform distribution i.e each node participates equal number of drives per set**.
 - **Each object is written to a single EC set, and therefore is spread over no more than 16 drives.**
-- **All the nodes running distributed MinIO setup are recommended to be homogeneous, i.e. same operating system, same number of disks and same network interconnects.**
+- **All the nodes running distributed MinIO setup are recommended to be homogeneous, i.e. same operating system, same number of drives and same network interconnects.**
 - MinIO distributed mode requires **fresh directories**. If required, the drives can be shared with other applications. You can do this by using a sub-directory exclusive to MinIO. For example, if you have mounted your volume under `/export`, pass `/export/data` as arguments to MinIO server.
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
 - Servers running distributed MinIO instances should be less than 15 minutes apart. You can enable [NTP](http://www.ntp.org/) service as a best practice to ensure same times across servers.
@@ -92,7 +92,7 @@ For example:
 minio server http://host{1...4}/export{1...16} http://host{5...12}/export{1...16}
 ```
 
-Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a pool. There are 2 server pools in this example. New objects are placed in server pools in proportion to the amount of free space in each pool. Within each pool, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+Now the server has expanded total storage by _(newly_added_servers\*m)_ more drives, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ drives. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a pool. There are 2 server pools in this example. New objects are placed in server pools in proportion to the amount of free space in each pool. Within each pool, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
 
 > **NOTE:** **Each pool you add must have the same erasure coding parity configuration as the original pool, so the same data redundancy SLA is maintained.**
 

@@ -49,8 +49,8 @@ const (
 	// Supported storage class scheme is EC
 	schemePrefix = "EC"
 
-	// Min parity disks
-	minParityDisks = 0
+	// Min parity drives
+	minParityDrives = 0
 
 	// Default RRS parity is always minimum parity.
 	defaultRRSParity = 1
@@ -150,26 +150,26 @@ func parseStorageClass(storageClassEnv string) (sc StorageClass, err error) {
 		return StorageClass{}, config.ErrStorageClassValue(nil).Msg("Unsupported scheme " + s[0] + ". Supported scheme is EC")
 	}
 
-	// Number of parity disks should be integer
-	parityDisks, err := strconv.Atoi(s[1])
+	// Number of parity drives should be integer
+	parityDrives, err := strconv.Atoi(s[1])
 	if err != nil {
 		return StorageClass{}, config.ErrStorageClassValue(err)
 	}
-	if parityDisks < 0 {
+	if parityDrives < 0 {
 		return StorageClass{}, config.ErrStorageClassValue(nil).Msg("Unsupported parity value " + s[1] + " provided")
 	}
 	return StorageClass{
-		Parity: parityDisks,
+		Parity: parityDrives,
 	}, nil
 }
 
 // ValidateParity validate standard storage class parity.
 func ValidateParity(ssParity, setDriveCount int) error {
-	// SS parity disks should be greater than or equal to minParityDisks.
-	// Parity below minParityDisks is not supported.
-	if ssParity > 0 && ssParity < minParityDisks {
+	// SS parity drives should be greater than or equal to minParityDrives.
+	// Parity below minParityDrives is not supported.
+	if ssParity > 0 && ssParity < minParityDrives {
 		return fmt.Errorf("parity %d should be greater than or equal to %d",
-			ssParity, minParityDisks)
+			ssParity, minParityDrives)
 	}
 
 	if ssParity > setDriveCount/2 {
@@ -179,19 +179,19 @@ func ValidateParity(ssParity, setDriveCount int) error {
 	return nil
 }
 
-// Validates the parity disks.
+// Validates the parity drives.
 func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
-	// SS parity disks should be greater than or equal to minParityDisks.
-	// Parity below minParityDisks is not supported.
-	if ssParity > 0 && ssParity < minParityDisks {
+	// SS parity drives should be greater than or equal to minParityDrives.
+	// Parity below minParityDrives is not supported.
+	if ssParity > 0 && ssParity < minParityDrives {
 		return fmt.Errorf("Standard storage class parity %d should be greater than or equal to %d",
-			ssParity, minParityDisks)
+			ssParity, minParityDrives)
 	}
 
-	// RRS parity disks should be greater than or equal to minParityDisks.
-	// Parity below minParityDisks is not supported.
-	if rrsParity > 0 && rrsParity < minParityDisks {
-		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minParityDisks)
+	// RRS parity drives should be greater than or equal to minParityDrives.
+	// Parity below minParityDrives is not supported.
+	if rrsParity > 0 && rrsParity < minParityDrives {
+		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minParityDrives)
 	}
 
 	if setDriveCount > 2 {
