@@ -984,7 +984,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_disk_online_total{job=\"$scrape_jobs\"}",
+          "expr": "minio_cluster_drive_online_total{job=\"$scrape_jobs\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1418,7 +1418,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_disk_offline_total{job=\"$scrape_jobs\"}",
+          "expr": "minio_cluster_drive_offline_total{job=\"$scrape_jobs\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -2389,7 +2389,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_node_disk_used_bytes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_drive_used_bytes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -2479,7 +2479,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_node_disk_free_inodes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_drive_free_inodes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
