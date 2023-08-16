@@ -99,7 +99,6 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 	}
 	if uploadIDMarker != "" {
 		if HasSuffix(keyMarker, SlashSeparator) {
-
 			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
@@ -125,24 +124,34 @@ func checkNewMultipartArgs(ctx context.Context, bucket, object string, obj Objec
 	return checkObjectArgs(ctx, bucket, object, obj)
 }
 
-// Checks for PutObjectPart arguments validity, also validates if bucket exists.
-func checkPutObjectPartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+func checkMultipartObjectArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+	_, err := base64.RawURLEncoding.DecodeString(uploadID)
+	if err != nil {
+		return MalformedUploadID{
+			UploadID: uploadID,
+		}
+	}
 	return checkObjectArgs(ctx, bucket, object, obj)
+}
+
+// Checks for PutObjectPart arguments validity, also validates if bucket exists.
+func checkPutObjectPartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
 }
 
 // Checks for ListParts arguments validity, also validates if bucket exists.
-func checkListPartsArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(ctx, bucket, object, obj)
+func checkListPartsArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
 }
 
 // Checks for CompleteMultipartUpload arguments validity, also validates if bucket exists.
-func checkCompleteMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(ctx, bucket, object, obj)
+func checkCompleteMultipartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
 }
 
 // Checks for AbortMultipartUpload arguments validity, also validates if bucket exists.
-func checkAbortMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(ctx, bucket, object, obj)
+func checkAbortMultipartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
 }
 
 // Checks Object arguments validity, also validates if bucket exists.

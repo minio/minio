@@ -951,8 +951,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 	}
 
-	setEventStreamHeaders(w)
-
 	opts, err := completeMultipartOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)

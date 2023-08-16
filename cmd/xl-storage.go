@@ -2528,11 +2528,14 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	// srcFilePath is always in minioMetaTmpBucket, an attempt to
-	// remove the temporary folder is enough since at this point
-	// ideally all transaction should be complete.
-
-	Remove(pathutil.Dir(srcFilePath))
+	if srcVolume != minioMetaMultipartBucket {
+		// srcFilePath is some-times minioMetaTmpBucket, an attempt to
+		// remove the temporary folder is enough since at this point
+		// ideally all transaction should be complete.
+		Remove(pathutil.Dir(srcFilePath))
+	} else {
+		s.deleteFile(srcVolumeDir, pathutil.Dir(srcFilePath), true, false)
+	}
 	return sign, nil
 }
 
