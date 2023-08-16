@@ -3,6 +3,7 @@
 set -E
 set -o pipefail
 set -x
+set -e
 
 WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
