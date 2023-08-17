@@ -17,21 +17,22 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 
 ## Limits of S3 API
 
-| Item                                                                            | Specification                                   |
-|:--------------------------------------------------------------------------------|:------------------------------------------------|
-| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets) |
-| Maximum number of objects per bucket                                            | no-limit                                        |
-| Maximum object size                                                             | 50 TiB                                          |
-| Minimum object size                                                             | 0 B                                             |
-| Maximum object size per PUT operation                                           | 5 TiB                                           |
-| Maximum number of parts per upload                                              | 10,000                                          |
-| Part size range                                                                 | 5 MiB to 5 TiB. Last part can be 0 B to 5 TiB   |
-| Maximum number of parts returned per list parts request                         | 10000                                           |
-| Maximum number of objects returned per list objects request                     | 1000                                            |
-| Maximum number of multipart uploads returned per list multipart uploads request | 1000                                            |
-| Maximum length for bucket names                                                 | 63                                              |
-| Maximum length for object names                                                 | 1024                                            |
-| Maximum length for '/' separated object name segment                            | 255                                             |
+| Item                                                                            | Specification                                                                   |
+|:--------------------------------------------------------------------------------|:--------------------------------------------------------------------------------|
+| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets)                              |
+| Maximum number of objects per bucket                                            | no-limit                                                                        |
+| Maximum object size                                                             | 50 TiB                                                                          |
+| Minimum object size                                                             | 0 B                                                                             |
+| Maximum object size per PUT operation                                           | 5 TiB                                                                           |
+| Maximum number of parts per upload                                              | 10,000                                                                          |
+| Part size range                                                                 | 5 MiB to 5 TiB. Last part can be 0 B to 5 TiB                                   |
+| Maximum number of parts returned per list parts request                         | 10000                                                                           |
+| Maximum number of objects returned per list objects request                     | 1000                                                                            |
+| Maximum number of multipart uploads returned per list multipart uploads request | 1000                                                                            |
+| Maximum length for bucket names                                                 | 63                                                                              |
+| Maximum length for object names                                                 | 1024                                                                            |
+| Maximum length for '/' separated object name segment                            | 255                                                                             |
+| Maximum number of versions per object                                           | 10000 (can be configured to higher values but we do not recommend beyond 10000) |
 
 ## List of Amazon S3 API's not supported on MinIO
 

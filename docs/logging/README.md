@@ -77,7 +77,7 @@ NOTE:
 - Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
   - Pool number the object operation was performed on.
   - Set number the object operation was performed on.
-  - The list of disks participating in this operation belong to the set.
+  - The list of drives participating in this operation belong to the set.
 
 ```json
 {
@@ -218,7 +218,7 @@ NOTE:
 - Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
   - Pool number the object operation was performed on.
   - Set number the object operation was performed on.
-  - The list of disks participating in this operation belong to the set.
+  - The list of drives participating in this operation belong to the set.
 
 ## Explore Further
 

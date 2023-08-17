@@ -41,7 +41,7 @@ func SetLoggerHTTPAudit(scfg config.Config, k string, args http.Config) {
 		},
 		config.KV{
 			Key:   Endpoint,
-			Value: args.Endpoint,
+			Value: args.Endpoint.String(),
 		},
 		config.KV{
 			Key:   AuthToken,
@@ -64,7 +64,7 @@ func SetLoggerHTTP(scfg config.Config, k string, args http.Config) {
 		},
 		config.KV{
 			Key:   Endpoint,
-			Value: args.Endpoint,
+			Value: args.Endpoint.String(),
 		},
 		config.KV{
 			Key:   AuthToken,

@@ -27,9 +27,9 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_cluster_usage_deletemarker_total`      | Total number of delete markers in a cluster                                                                     |
 | `minio_cluster_usage_total_bytes`             | Total cluster usage in bytes                                                                                    |
 | `minio_cluster_buckets_total`                 | Total number of buckets in the cluster                                                                          |
-| `minio_cluster_disk_offline_total`            | Total drives offline.                                                                                           |
-| `minio_cluster_disk_online_total`             | Total drives online.                                                                                            |
-| `minio_cluster_disk_total`                    | Total drives.                                                                                                   |
+| `minio_cluster_drive_offline_total`           | Total drives offline in this cluster.                                                                           |
+| `minio_cluster_drive_online_total`            | Total drives online in this cluster.                                                                            |
+| `minio_cluster_drive_total`                   | Total drives in this cluster.                                                                                   |
 | `minio_cluster_ilm_transitioned_bytes`        | Total bytes transitioned to a tier.                                                                             |
 | `minio_cluster_ilm_transitioned_objects`      | Total number of objects transitioned to a tier.                                                                 |
 | `minio_cluster_ilm_transitioned_versions`     | Total number of versions transitioned to a tier.                                                                |
@@ -51,15 +51,34 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_inter_node_traffic_errors_total`       | Total number of failed internode calls.                                                                         |
 | `minio_inter_node_traffic_received_bytes`     | Total number of bytes received from other peer nodes.                                                           |
 | `minio_inter_node_traffic_sent_bytes`         | Total number of bytes sent to the other peer nodes.                                                             |
-| `minio_minio_update_percent`                  | Total percentage cache usage.                                                                                   |
-| `minio_node_disk_free_bytes`                  | Total storage available on a drive.                                                                             |
-| `minio_node_disk_free_inodes`                 | Total free inodes.                                                                                              |
-| `minio_node_disk_latency_us`                  | Average last minute latency in µs for drive API storage operations.                                             |
-| `minio_node_disk_offline_total`               | Total drives offline.                                                                                           |
-| `minio_node_disk_online_total`                | Total drives online.                                                                                            |
-| `minio_node_disk_total`                       | Total drives.                                                                                                   |
-| `minio_node_disk_total_bytes`                 | Total storage on a drive.                                                                                       |
-| `minio_node_disk_used_bytes`                  | Total storage used on a drive.                                                                                  |
+| `minio_notify_current_send_in_progress`       | Number of concurrent async Send calls active to all targets.                                                    |
+| `minio_notify_target_queue_length`            | Number of unsent notifications in queue for target.                                                             |
+| `minio_s3_requests_4xx_errors_total`          | Total number S3 requests with (4xx) errors.                                                                     |
+| `minio_s3_requests_5xx_errors_total`          | Total number S3 requests with (5xx) errors.                                                                     |
+| `minio_s3_requests_canceled_total`            | Total number S3 requests canceled by the client.                                                                |
+| `minio_s3_requests_errors_total`              | Total number S3 requests with (4xx and 5xx) errors.                                                             |
+| `minio_s3_requests_incoming_total`            | Volatile number of total incoming S3 requests.                                                                  |
+| `minio_s3_requests_inflight_total`            | Total number of S3 requests currently in flight.                                                                |
+| `minio_s3_requests_rejected_auth_total`       | Total number S3 requests rejected for auth failure.                                                             |
+| `minio_s3_requests_rejected_header_total`     | Total number S3 requests rejected for invalid header.                                                           |
+| `minio_s3_requests_rejected_invalid_total`    | Total number S3 invalid requests.                                                                               |
+| `minio_s3_requests_rejected_timestamp_total`  | Total number S3 requests rejected for invalid timestamp.                                                        |
+| `minio_s3_requests_total`                     | Total number S3 requests.                                                                                       |
+| `minio_s3_requests_waiting_total`             | Number of S3 requests in the waiting queue.                                                                     |
+| `minio_s3_requests_ttfb_seconds_distribution` | Distribution of the time to first byte across API calls.                                                        |
+| `minio_s3_traffic_received_bytes`             | Total number of s3 bytes received.                                                                              |
+| `minio_s3_traffic_sent_bytes`                 | Total number of s3 bytes sent.                                                                                  |
+| `minio_software_commit_info`                  | Git commit hash for the MinIO release.                                                                          |
+| `minio_software_version_info`                 | MinIO Release tag for the server.                                                                               |
+| `minio_usage_last_activity_nano_seconds`      | Time elapsed (in nano seconds) since last scan activity.                                                        |
+| `minio_node_drive_free_bytes`                 | Total storage available on a drive.                                                                             |
+| `minio_node_drive_free_inodes`                | Total free inodes.                                                                                              |
+| `minio_node_drive_latency_us`                 | Average last minute latency in µs for drive API storage operations.                                             |
+| `minio_node_drive_offline_total`              | Total drives offline in this node.                                                                              |
+| `minio_node_drive_online_total`               | Total drives online in this node.                                                                               |
+| `minio_node_drive_total`                      | Total drives in this node.                                                                                      |
+| `minio_node_drive_total_bytes`                | Total storage on a drive.                                                                                       |
+| `minio_node_drive_used_bytes`                 | Total storage used on a drive.                                                                                  |
 | `minio_node_file_descriptor_limit_total`      | Limit on total number of open file descriptors for the MinIO Server process.                                    |
 | `minio_node_file_descriptor_open_total`       | Total number of open file descriptors by the MinIO Server process.                                              |
 | `minio_node_go_routine_total`                 | Total number of go routines running.                                                                            |
@@ -86,26 +105,6 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_node_scanner_versions_scanned`         | Total number of object versions scanned since server start.                                                     |
 | `minio_node_syscall_read_total`               | Total read SysCalls to the kernel. /proc/[pid]/io syscr.                                                        |
 | `minio_node_syscall_write_total`              | Total write SysCalls to the kernel. /proc/[pid]/io syscw.                                                       |
-| `minio_notify_current_send_in_progress`       | Number of concurrent async Send calls active to all targets.                                                    |
-| `minio_notify_target_queue_length`            | Number of unsent notifications in queue for target.                                                             |
-| `minio_s3_requests_4xx_errors_total`          | Total number S3 requests with (4xx) errors.                                                                     |
-| `minio_s3_requests_5xx_errors_total`          | Total number S3 requests with (5xx) errors.                                                                     |
-| `minio_s3_requests_canceled_total`            | Total number S3 requests canceled by the client.                                                                |
-| `minio_s3_requests_errors_total`              | Total number S3 requests with (4xx and 5xx) errors.                                                             |
-| `minio_s3_requests_incoming_total`            | Volatile number of total incoming S3 requests.                                                                  |
-| `minio_s3_requests_inflight_total`            | Total number of S3 requests currently in flight.                                                                |
-| `minio_s3_requests_rejected_auth_total`       | Total number S3 requests rejected for auth failure.                                                             |
-| `minio_s3_requests_rejected_header_total`     | Total number S3 requests rejected for invalid header.                                                           |
-| `minio_s3_requests_rejected_invalid_total`    | Total number S3 invalid requests.                                                                               |
-| `minio_s3_requests_rejected_timestamp_total`  | Total number S3 requests rejected for invalid timestamp.                                                        |
-| `minio_s3_requests_total`                     | Total number S3 requests.                                                                                       |
-| `minio_s3_requests_waiting_total`             | Number of S3 requests in the waiting queue.                                                                     |
-| `minio_s3_requests_ttfb_seconds_distribution` | Distribution of the time to first byte across API calls.                                                        |
-| `minio_s3_traffic_received_bytes`             | Total number of s3 bytes received.                                                                              |
-| `minio_s3_traffic_sent_bytes`                 | Total number of s3 bytes sent.                                                                                  |
-| `minio_software_commit_info`                  | Git commit hash for the MinIO release.                                                                          |
-| `minio_software_version_info`                 | MinIO Release tag for the server.                                                                               |
-| `minio_usage_last_activity_nano_seconds`      | Time elapsed (in nano seconds) since last scan activity.                                                        |
 
 # List of metrics exported per bucket level
 

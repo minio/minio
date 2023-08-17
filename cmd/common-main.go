@@ -95,6 +95,9 @@ func init() {
 
 	initGlobalContext()
 
+	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
+	go globalBatchJobsMetrics.purgeJobMetrics()
+
 	t, _ := minioVersionToReleaseTime(Version)
 	if !t.IsZero() {
 		globalVersionUnix = uint64(t.Unix())

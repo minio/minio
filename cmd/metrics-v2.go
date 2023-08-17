@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/minio/kes-go"
-	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -83,7 +82,6 @@ func init() {
 
 	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(),
-		getLocalDriveStorageMetrics(),
 		getCacheMetrics(),
 		getHTTPMetrics(false),
 		getNetworkMetrics(),
@@ -129,7 +127,7 @@ const (
 	cacheSubsystem            MetricSubsystem = "cache"
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
-	diskSubsystem             MetricSubsystem = "disk"
+	driveSubsystem            MetricSubsystem = "drive"
 	storageClassSubsystem     MetricSubsystem = "storage_class"
 	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
 	goRoutines                MetricSubsystem = "go_routine"
@@ -379,7 +377,7 @@ func getClusterCapacityUsageFreeBytesMD() MetricDescription {
 func getNodeDriveAPILatencyMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      latencyMicroSec,
 		Help:      "Average last minute latency in µs for drive API storage operations",
 		Type:      gaugeMetric,
@@ -389,17 +387,37 @@ func getNodeDriveAPILatencyMD() MetricDescription {
 func getNodeDriveUsedBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      usedBytes,
 		Help:      "Total storage used on a drive",
 		Type:      gaugeMetric,
 	}
 }
 
+func getNodeDriveTimeoutErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "errors_timeout",
+		Help:      "Total number of timeout errors since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveAvailablityErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "errors_availability",
+		Help:      "Total number of I/O errors, permission denied and timeouts since server start",
+		Type:      counterMetric,
+	}
+}
+
 func getNodeDriveFreeBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      freeBytes,
 		Help:      "Total storage available on a drive",
 		Type:      gaugeMetric,
@@ -409,9 +427,9 @@ func getNodeDriveFreeBytesMD() MetricDescription {
 func getClusterDrivesOfflineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      offlineTotal,
-		Help:      "Total drives offline",
+		Help:      "Total drives offline in this cluster",
 		Type:      gaugeMetric,
 	}
 }
@@ -419,9 +437,9 @@ func getClusterDrivesOfflineTotalMD() MetricDescription {
 func getClusterDrivesOnlineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      onlineTotal,
-		Help:      "Total drives online",
+		Help:      "Total drives online in this cluster",
 		Type:      gaugeMetric,
 	}
 }
@@ -429,9 +447,9 @@ func getClusterDrivesOnlineTotalMD() MetricDescription {
 func getClusterDrivesTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      total,
-		Help:      "Total drives",
+		Help:      "Total drives in this cluster",
 		Type:      gaugeMetric,
 	}
 }
@@ -439,9 +457,9 @@ func getClusterDrivesTotalMD() MetricDescription {
 func getNodeDrivesOfflineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      offlineTotal,
-		Help:      "Total drives offline",
+		Help:      "Total drives offline in this node",
 		Type:      gaugeMetric,
 	}
 }
@@ -449,9 +467,9 @@ func getNodeDrivesOfflineTotalMD() MetricDescription {
 func getNodeDrivesOnlineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      onlineTotal,
-		Help:      "Total drives online",
+		Help:      "Total drives online in this node",
 		Type:      gaugeMetric,
 	}
 }
@@ -459,9 +477,9 @@ func getNodeDrivesOnlineTotalMD() MetricDescription {
 func getNodeDrivesTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      total,
-		Help:      "Total drives",
+		Help:      "Total drives in this node",
 		Type:      gaugeMetric,
 	}
 }
@@ -489,7 +507,7 @@ func getNodeRRSParityMD() MetricDescription {
 func getNodeDrivesFreeInodes() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      freeInodes,
 		Help:      "Total free inodes",
 		Type:      gaugeMetric,
@@ -499,7 +517,7 @@ func getNodeDrivesFreeInodes() MetricDescription {
 func getNodeDriveTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
-		Subsystem: diskSubsystem,
+		Subsystem: driveSubsystem,
 		Name:      totalBytes,
 		Help:      "Total storage on a drive",
 		Type:      gaugeMetric,
@@ -1214,7 +1232,7 @@ func getMinioProcMetrics() *MetricsGroup {
 		if runtime.GOOS == "windows" {
 			return nil
 		}
-		metrics = make([]Metric, 0, 20)
+
 		p, err := procfs.Self()
 		if err != nil {
 			logger.LogOnceIf(ctx, err, string(nodeMetricNamespace))
@@ -1226,6 +1244,8 @@ func getMinioProcMetrics() *MetricsGroup {
 		io, _ := p.IO()
 		stat, _ := p.Stat()
 		startTime, _ := stat.StartTime()
+
+		metrics = make([]Metric, 0, 20)
 
 		if openFDs > 0 {
 			metrics = append(metrics,
@@ -1794,7 +1814,6 @@ func getMinioHealingMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
-		metrics = make([]Metric, 0, 5)
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if !exists {
 			return
@@ -1804,6 +1823,7 @@ func getMinioHealingMetrics() *MetricsGroup {
 			return
 		}
 
+		metrics = make([]Metric, 0, 5)
 		metrics = append(metrics, Metric{
 			Description: getHealLastActivityTimeMD(),
 			Value:       float64(time.Since(bgSeq.lastHealActivity)),
@@ -1886,22 +1906,22 @@ func getCacheMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:    getCacheUsagePercentMD(),
 				Value:          float64(cdStats.UsagePercent),
-				VariableLabels: map[string]string{"disk": cdStats.Dir},
+				VariableLabels: map[string]string{"drive": cdStats.Dir},
 			})
 			metrics = append(metrics, Metric{
 				Description:    getCacheUsageInfoMD(),
 				Value:          float64(cdStats.UsageState),
-				VariableLabels: map[string]string{"disk": cdStats.Dir, "level": cdStats.GetUsageLevelString()},
+				VariableLabels: map[string]string{"drive": cdStats.Dir, "level": cdStats.GetUsageLevelString()},
 			})
 			metrics = append(metrics, Metric{
 				Description:    getCacheUsedBytesMD(),
 				Value:          float64(cdStats.UsageSize),
-				VariableLabels: map[string]string{"disk": cdStats.Dir},
+				VariableLabels: map[string]string{"drive": cdStats.Dir},
 			})
 			metrics = append(metrics, Metric{
 				Description:    getCacheTotalBytesMD(),
 				Value:          float64(cdStats.TotalCapacity),
-				VariableLabels: map[string]string{"disk": cdStats.Dir},
+				VariableLabels: map[string]string{"drive": cdStats.Dir},
 			})
 		}
 		return
@@ -2558,26 +2578,48 @@ func getLocalStorageMetrics() *MetricsGroup {
 			metrics = append(metrics, Metric{
 				Description:    getNodeDriveUsedBytesMD(),
 				Value:          float64(disk.UsedSpace),
-				VariableLabels: map[string]string{"disk": disk.DrivePath},
+				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
 				Description:    getNodeDriveFreeBytesMD(),
 				Value:          float64(disk.AvailableSpace),
-				VariableLabels: map[string]string{"disk": disk.DrivePath},
+				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
 				Description:    getNodeDriveTotalBytesMD(),
 				Value:          float64(disk.TotalSpace),
-				VariableLabels: map[string]string{"disk": disk.DrivePath},
+				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
 
 			metrics = append(metrics, Metric{
 				Description:    getNodeDrivesFreeInodes(),
 				Value:          float64(disk.FreeInodes),
-				VariableLabels: map[string]string{"disk": disk.DrivePath},
+				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
+
+			if disk.Metrics != nil {
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveTimeoutErrorsMD(),
+					Value:          float64(disk.Metrics.TotalErrorsTimeout),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveAvailablityErrorsMD(),
+					Value:          float64(disk.Metrics.TotalErrorsAvailability),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				for apiName, latency := range disk.Metrics.LastMinute {
+					metrics = append(metrics, Metric{
+						Description:    getNodeDriveAPILatencyMD(),
+						Value:          float64(latency.Avg().Microseconds()),
+						VariableLabels: map[string]string{"drive": disk.DrivePath, "api": "storage." + apiName},
+					})
+				}
+			}
 		}
 
 		metrics = append(metrics, Metric{
@@ -2605,39 +2647,6 @@ func getLocalStorageMetrics() *MetricsGroup {
 			Value:       float64(storageInfo.Backend.RRSCParity),
 		})
 
-		return
-	})
-	return mg
-}
-
-func getLocalDriveStorageMetrics() *MetricsGroup {
-	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
-	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
-
-		storageInfo := objLayer.LocalStorageInfo(ctx)
-		if storageInfo.Backend.Type == madmin.FS {
-			return
-		}
-		metrics = make([]Metric, 0, 50)
-		for _, disk := range storageInfo.Disks {
-			if disk.Metrics == nil {
-				continue
-			}
-			for apiName, latency := range disk.Metrics.LastMinute {
-				metrics = append(metrics, Metric{
-					Description:    getNodeDriveAPILatencyMD(),
-					Value:          float64(latency.Avg().Microseconds()),
-					VariableLabels: map[string]string{"disk": disk.DrivePath, "api": "storage." + apiName},
-				})
-			}
-		}
 		return
 	})
 	return mg

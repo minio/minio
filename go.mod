@@ -43,13 +43,13 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.55
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.34.0
+	github.com/minio/console v0.37.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.1.0
-	github.com/minio/madmin-go/v3 v3.0.9
+	github.com/minio/madmin-go/v3 v3.0.11
 	github.com/minio/minio-go/v7 v7.0.61
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg v1.7.5

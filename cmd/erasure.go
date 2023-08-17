@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/sync/errgroup"
 )
@@ -309,6 +310,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	}
 	wg.Wait()
 
+	var scanningDisks []StorageAPI
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
 		// this information is used by scanner to skip healing
@@ -317,8 +319,15 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			healing = true
 			continue
 		}
-		newDisks = append(newDisks, disks[i])
+		if !info.Scanning {
+			newDisks = append(newDisks, disks[i])
+		} else {
+			scanningDisks = append(scanningDisks, disks[i])
+		}
 	}
+
+	// Prefer new disks over disks which are currently being scanned.
+	newDisks = append(newDisks, scanningDisks...)
 
 	return newDisks, healing
 }
@@ -334,10 +343,13 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					wait := deletedCleanupSleeper.Timer(ctx)
-					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
-					wait()
-					return nil
+					w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+					return w.Run(func() error {
+						wait := deletedCleanupSleeper.Timer(ctx)
+						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+						wait()
+						return nil
+					})
 				})
 			}(disk)
 		}

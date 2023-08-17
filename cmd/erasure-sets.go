@@ -776,7 +776,7 @@ func (s *erasureSets) deletePrefix(ctx context.Context, bucket string, prefix st
 
 // DeleteObject - deletes an object from the hashedSet based on the object name.
 func (s *erasureSets) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if opts.DeletePrefix {
+	if opts.DeletePrefix && !opts.DeletePrefixObject {
 		err := s.deletePrefix(ctx, bucket, object)
 		return ObjectInfo{}, err
 	}

@@ -129,7 +129,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 				return entries, io.EOF
 			}
 			if !errors.Is(err, context.DeadlineExceeded) {
-				o.debugln("listPath: got error", err)
+				// Report error once per bucket, but continue listing.
+				logger.LogOnceIf(ctx, err, "GetMetacacheListing:"+o.Bucket)
 			}
 			o.Transient = true
 			o.Create = false

@@ -124,7 +124,7 @@ func TestValidateParity(t *testing.T) {
 func TestParityCount(t *testing.T) {
 	tests := []struct {
 		sc             string
-		disksCount     int
+		drivesCount    int
 		expectedData   int
 		expectedParity int
 	}{
@@ -158,8 +158,8 @@ func TestParityCount(t *testing.T) {
 			scfg.Standard.Parity = 7
 		}
 		parity := scfg.GetParityForSC(tt.sc)
-		if (tt.disksCount - parity) != tt.expectedData {
-			t.Errorf("Test %d, Expected data drives %d, got %d", i+1, tt.expectedData, tt.disksCount-parity)
+		if (tt.drivesCount - parity) != tt.expectedData {
+			t.Errorf("Test %d, Expected data drives %d, got %d", i+1, tt.expectedData, tt.drivesCount-parity)
 			continue
 		}
 		if parity != tt.expectedParity {

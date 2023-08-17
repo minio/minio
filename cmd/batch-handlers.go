@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/env"
@@ -277,23 +278,28 @@ type BatchJobRequest struct {
 	ctx       context.Context      `msg:"-"`
 }
 
-// Notify notifies notification endpoint if configured regarding job failure or success.
-func (r BatchJobReplicateV1) Notify(ctx context.Context, body io.Reader) error {
-	if r.Flags.Notify.Endpoint == "" {
+func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
+	if endpoint == "" {
 		return nil
+	}
+
+	buf, err := json.Marshal(ri)
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.Flags.Notify.Endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
 
-	if r.Flags.Notify.Token != "" {
-		req.Header.Set("Authorization", r.Flags.Notify.Token)
+	if token != "" {
+		req.Header.Set("Authorization", token)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	clnt := http.Client{Transport: getRemoteInstanceTransport}
 	resp, err := clnt.Do(req)
@@ -309,6 +315,11 @@ func (r BatchJobReplicateV1) Notify(ctx context.Context, body io.Reader) error {
 	return nil
 }
 
+// Notify notifies notification endpoint if configured regarding job failure or success.
+func (r BatchJobReplicateV1) Notify(ctx context.Context, ri *batchJobInfo) error {
+	return notifyEndpoint(ctx, ri, r.Flags.Notify.Endpoint, r.Flags.Notify.Token)
+}
+
 // ReplicateFromSource - this is not implemented yet where source is 'remote' and target is local.
 func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api ObjectLayer, core *miniogo.Core, srcObjInfo ObjectInfo, retry bool) error {
 	srcBucket := r.Source.Bucket
@@ -319,17 +330,17 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 		tgtObject = path.Join(r.Target.Prefix, srcObjInfo.Name)
 	}
 
-	versioned := globalBucketVersioningSys.PrefixEnabled(tgtBucket, tgtObject)
-	versionSuspended := globalBucketVersioningSys.PrefixSuspended(tgtBucket, tgtObject)
 	versionID := srcObjInfo.VersionID
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		versionID = ""
 	}
 	if srcObjInfo.DeleteMarker {
 		_, err := api.DeleteObject(ctx, tgtBucket, tgtObject, ObjectOptions{
-			VersionID:          versionID,
-			VersionSuspended:   versionSuspended,
-			Versioned:          versioned,
+			VersionID: versionID,
+			// Since we are preserving a delete marker, we have to make sure this is always true.
+			// regardless of the current configuration of the bucket we must preserve all versions
+			// on the pool being batch replicated from source.
+			Versioned:          true,
 			MTime:              srcObjInfo.ModTime,
 			DeleteMarker:       srcObjInfo.DeleteMarker,
 			ReplicationRequest: true,
@@ -338,12 +349,10 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	}
 
 	opts := ObjectOptions{
-		VersionID:        srcObjInfo.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
-		MTime:            srcObjInfo.ModTime,
-		PreserveETag:     srcObjInfo.ETag,
-		UserDefined:      srcObjInfo.UserDefined,
+		VersionID:    srcObjInfo.VersionID,
+		MTime:        srcObjInfo.ModTime,
+		PreserveETag: srcObjInfo.ETag,
+		UserDefined:  srcObjInfo.UserDefined,
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		opts.VersionID = ""
@@ -645,8 +654,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		// persist in-memory state to disk.
 		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
-		buf, _ := json.Marshal(ri)
-		if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
+		if err := r.Notify(ctx, ri); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
@@ -1193,8 +1201,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// persist in-memory state to disk.
 		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
-		buf, _ := json.Marshal(ri)
-		if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
+		if err := r.Notify(ctx, ri); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
@@ -1406,7 +1413,6 @@ func (j BatchJobRequest) delete(ctx context.Context, api ObjectLayer) {
 	case j.KeyRotate != nil:
 		deleteConfig(ctx, api, pathJoin(j.Location, batchKeyRotationName))
 	}
-	globalBatchJobsMetrics.delete(j.ID)
 	deleteConfig(ctx, api, j.Location)
 }
 
@@ -1520,14 +1526,14 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	id := r.Form.Get("jobId")
-	if id == "" {
+	jobID := r.Form.Get("jobId")
+	if jobID == "" {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL)
 		return
 	}
 
 	req := &BatchJobRequest{}
-	if err := req.load(ctx, objectAPI, pathJoin(batchJobPrefix, id)); err != nil {
+	if err := req.load(ctx, objectAPI, pathJoin(batchJobPrefix, jobID)); err != nil {
 		if !errors.Is(err, errNoSuchJob) {
 			logger.LogIf(ctx, err)
 		}
@@ -1555,7 +1561,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	buf, err := io.ReadAll(r.Body)
+	buf, err := io.ReadAll(ioutil.HardLimitReader(r.Body, humanize.MiByte*4))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1567,12 +1573,12 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 	}
 
 	job := &BatchJobRequest{}
-	if err = yaml.Unmarshal(buf, job); err != nil {
+	if err = yaml.UnmarshalStrict(buf, job); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	job.ID = shortuuid.New()
+	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	job.User = user
 	job.Started = time.Now()
 
@@ -1608,19 +1614,27 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 	if objectAPI == nil {
 		return
 	}
+
 	jobID := r.Form.Get("id")
 	if jobID == "" {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL)
 		return
 	}
+
+	if _, success := proxyRequestByToken(ctx, w, r, jobID); success {
+		return
+	}
+
 	if err := globalBatchJobPool.canceler(jobID, true); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
 		return
 	}
+
 	j := BatchJobRequest{
 		ID:       jobID,
 		Location: pathJoin(batchJobPrefix, jobID),
 	}
+
 	j.delete(ctx, objectAPI)
 
 	writeSuccessNoContent(w)
@@ -1673,6 +1687,11 @@ func (j *BatchJobPool) resume() {
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, j.objLayer, result.Name); err != nil {
 			logger.LogIf(ctx, err)
+			continue
+		}
+		_, nodeIdx := parseRequestToken(req.ID)
+		if nodeIdx > -1 && GetProxyEndpointLocalIndex(globalProxyEndpoints) != nodeIdx {
+			// This job doesn't belong on this node.
 			continue
 		}
 		if err := j.queueJob(req); err != nil {
@@ -1795,10 +1814,6 @@ type batchJobMetrics struct {
 	metrics map[string]*batchJobInfo
 }
 
-var globalBatchJobsMetrics = batchJobMetrics{
-	metrics: make(map[string]*batchJobInfo),
-}
-
 //msgp:ignore batchJobMetric
 //go:generate stringer -type=batchJobMetric -trimprefix=batchJobMetric $GOFILE
 type batchJobMetric uint8
@@ -1838,9 +1853,17 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 	metrics = &madmin.BatchJobMetrics{CollectedAt: time.Now(), Jobs: make(map[string]madmin.JobMetric)}
 	m.RLock()
 	defer m.RUnlock()
+
+	match := true
 	for id, job := range m.metrics {
-		match := jobID != "" && id == jobID
-		metrics.Jobs[id] = madmin.JobMetric{
+		if jobID != "" {
+			match = id == jobID
+		}
+		if !match {
+			continue
+		}
+
+		m := madmin.JobMetric{
 			JobID:         job.JobID,
 			JobType:       job.JobType,
 			StartTime:     job.StartTime,
@@ -1848,26 +1871,56 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 			RetryAttempts: job.RetryAttempts,
 			Complete:      job.Complete,
 			Failed:        job.Failed,
-			Replicate: &madmin.ReplicateInfo{
+		}
+
+		switch job.JobType {
+		case string(madmin.BatchJobReplicate):
+			m.Replicate = &madmin.ReplicateInfo{
 				Bucket:           job.Bucket,
 				Object:           job.Object,
 				Objects:          job.Objects,
 				ObjectsFailed:    job.ObjectsFailed,
 				BytesTransferred: job.BytesTransferred,
 				BytesFailed:      job.BytesFailed,
-			},
-			KeyRotate: &madmin.KeyRotationInfo{
+			}
+		case string(madmin.BatchJobKeyRotate):
+			m.KeyRotate = &madmin.KeyRotationInfo{
 				Bucket:        job.Bucket,
 				Object:        job.Object,
 				Objects:       job.Objects,
 				ObjectsFailed: job.ObjectsFailed,
-			},
+			}
 		}
-		if match {
-			break
-		}
+
+		metrics.Jobs[id] = m
 	}
 	return metrics
+}
+
+// keep job metrics for some time after the job is completed
+// in-case some one wants to look at the older results.
+func (m *batchJobMetrics) purgeJobMetrics() {
+	t := time.NewTicker(6 * time.Hour)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-GlobalContext.Done():
+			return
+		case <-t.C:
+			var toDeleteJobMetrics []string
+			m.RLock()
+			for id, metrics := range m.metrics {
+				if time.Since(metrics.LastUpdate) > 24*time.Hour && (metrics.Complete || metrics.Failed) {
+					toDeleteJobMetrics = append(toDeleteJobMetrics, id)
+				}
+			}
+			m.RUnlock()
+			for _, jobID := range toDeleteJobMetrics {
+				m.delete(jobID)
+			}
+		}
+	}
 }
 
 func (m *batchJobMetrics) delete(jobID string) {

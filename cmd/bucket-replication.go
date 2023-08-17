@@ -427,7 +427,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, fmt.Errorf("unable to obtain replication config for bucket: %s: err: %s", bucket, err), bucket)
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -442,9 +442,10 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		})
 		return
 	}
-	dsc, err := parseReplicateDecision(dobj.ReplicationState.ReplicateDecisionStr)
+	dsc, err := parseReplicateDecision(ctx, bucket, dobj.ReplicationState.ReplicateDecisionStr)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, fmt.Errorf("unable to parse replication decision parameters for bucket: %s, err: %s, decision: %s",
+			bucket, err, dobj.ReplicationState.ReplicateDecisionStr), dobj.ReplicationState.ReplicateDecisionStr)
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -466,7 +467,6 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
 		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", dobj.ObjectName, bucket, dobj.TargetArn))
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -488,38 +488,23 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	var rinfos replicatedInfos
 	rinfos.Targets = make([]replicatedTargetInfo, len(dsc.targetsMap))
 	idx := -1
-	for tgtArn := range dsc.targetsMap {
+	for _, tgtEntry := range dsc.targetsMap {
 		idx++
-		tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, tgtArn)
-		if tgt == nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn))
-			sendEvent(eventArgs{
-				BucketName: bucket,
-				Object: ObjectInfo{
-					Bucket:       bucket,
-					Name:         dobj.ObjectName,
-					VersionID:    versionID,
-					DeleteMarker: dobj.DeleteMarker,
-				},
-				UserAgent: "Internal: [Replication]",
-				Host:      globalLocalNodeName,
-				EventName: event.ObjectReplicationNotTracked,
-			})
+		if tgtEntry.Tgt == nil {
 			continue
 		}
-		if tgt := dsc.targetsMap[tgtArn]; !tgt.Replicate {
+		if !tgtEntry.Replicate {
 			continue
 		}
 		// if dobj.TargetArn is not empty string, this is a case of specific target being re-synced.
-		if dobj.TargetArn != "" && dobj.TargetArn != tgt.ARN {
+		if dobj.TargetArn != "" && dobj.TargetArn != tgtEntry.Arn {
 			continue
 		}
 		wg.Add(1)
 		go func(index int, tgt *TargetClient) {
 			defer wg.Done()
-			rinfo := replicateDeleteToTarget(ctx, dobj, tgt)
-			rinfos.Targets[index] = rinfo
-		}(idx, tgt)
+			rinfos.Targets[index] = replicateDeleteToTarget(ctx, dobj, tgt)
+		}(idx, tgtEntry.Tgt)
 	}
 	wg.Wait()
 
@@ -1005,7 +990,6 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			Host:       globalLocalNodeName,
 		})
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
-		logger.LogIf(ctx, fmt.Errorf("failed to get lock for object: %s bucket:%s arn:%s", object, bucket, ri.TargetArn))
 		return
 	}
 	ctx = lkctx.Context()
@@ -1017,7 +1001,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	for i, tgtArn := range tgtArns {
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, tgtArn)
 		if tgt == nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn))
+			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn), tgtArn)
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -1156,7 +1140,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogIf(ctx, fmt.Errorf("unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+			logger.LogOnceIf(ctx, fmt.Errorf("unable to read source object %s/%s(%s): %w", bucket, object, objInfo.VersionID, err), object+":"+objInfo.VersionID)
 		}
 		return
 	}
@@ -1491,7 +1475,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	var uploadedParts []minio.CompletePart
 	// new multipart must not set mtime as it may lead to erroneous cleanups at various intervals.
 	opts.Internal.SourceMTime = time.Time{} // this value is saved properly in CompleteMultipartUpload()
-	uploadID, err := c.NewMultipartUpload(context.Background(), bucket, object, opts)
+	nctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	uploadID, err := c.NewMultipartUpload(nctx, bucket, object, opts)
 	if err != nil {
 		return err
 	}
@@ -1501,12 +1487,15 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			// block and abort remote upload upon failure.
 			attempts := 1
 			for attempts <= 3 {
-				aerr := c.AbortMultipartUpload(ctx, bucket, object, uploadID)
+				actx, acancel := context.WithTimeout(ctx, time.Minute)
+				aerr := c.AbortMultipartUpload(actx, bucket, object, uploadID)
 				if aerr == nil {
+					acancel()
 					return
 				}
-				logger.LogIf(ctx,
-					fmt.Errorf("Trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
+				acancel()
+				logger.LogIf(actx,
+					fmt.Errorf("trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
 						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
 				attempts++
 				time.Sleep(time.Second)
@@ -1541,7 +1530,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			ETag:       pInfo.ETag,
 		})
 	}
-	_, err = c.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer ccancel()
+	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
@@ -1795,6 +1786,8 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 func (p *ReplicationPool) AddLargeWorkers() {
 	for i := 0; i < LargeWorkerCount; i++ {
 		p.lrgworkers = append(p.lrgworkers, make(chan ReplicationWorkerOperation, 100000))
+		i := i
+		go p.AddLargeWorker(p.lrgworkers[i])
 	}
 	go func() {
 		<-p.ctx.Done()
@@ -1802,6 +1795,28 @@ func (p *ReplicationPool) AddLargeWorkers() {
 			close(p.lrgworkers[i])
 		}
 	}()
+}
+
+// AddLargeWorker adds a replication worker to the static pool for large uploads.
+func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation) {
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case oi, ok := <-input:
+			if !ok {
+				return
+			}
+			switch v := oi.(type) {
+			case ReplicateObjectInfo:
+				replicateObject(p.ctx, v, p.objLayer)
+			case DeletedObjectReplicationInfo:
+				replicateDelete(p.ctx, v, p.objLayer)
+			default:
+				logger.LogOnceIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
+			}
+		}
+	}
 }
 
 // ActiveWorkers returns the number of active workers handling replication traffic.

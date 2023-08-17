@@ -283,7 +283,7 @@ KEY:
 heal  manage object healing frequency and bitrot verification checks
 
 ARGS:
-bitrotscan  (on|off)    perform bitrot scan on disks when checking objects during scanner
+bitrotscan  (on|off)    perform bitrot scan on drives when checking objects during scanner
 max_sleep   (duration)  maximum sleep duration between objects to slow down heal operation. eg. 2s
 max_io      (int)       maximum IO requests allowed between objects to slow down heal operation. eg. 3
 ```

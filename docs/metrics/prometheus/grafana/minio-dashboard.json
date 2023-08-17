@@ -984,19 +984,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_disk_online_total{job=\"$scrape_jobs\"}",
+          "expr": "minio_cluster_drive_online_total{job=\"$scrape_jobs\"}",
           "format": "table",
           "hide": false,
           "instant": true,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Total online disks in MinIO Cluster",
+          "legendFormat": "Total online drives in MinIO Cluster",
           "metric": "process_start_time_seconds",
           "refId": "A",
           "step": 60
         }
       ],
-      "title": "Total Online Disks",
+      "title": "Total Online Drives",
       "type": "stat"
     },
     {
@@ -1418,7 +1418,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_disk_offline_total{job=\"$scrape_jobs\"}",
+          "expr": "minio_cluster_drive_offline_total{job=\"$scrape_jobs\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1430,7 +1430,7 @@
           "step": 60
         }
       ],
-      "title": "Total Offline Disks",
+      "title": "Total Offline Drives",
       "type": "stat"
     },
     {
@@ -2389,11 +2389,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_node_disk_used_bytes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_drive_used_bytes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "Used Capacity [{{server}}:{{disk}}]",
+          "legendFormat": "Used Capacity [{{server}}:{{drive}}]",
           "refId": "A"
         }
       ],
@@ -2479,11 +2479,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_node_disk_free_inodes{job=\"$scrape_jobs\"}",
+          "expr": "minio_node_drive_free_inodes{job=\"$scrape_jobs\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "Free Inodes [{{server}}:{{disk}}]",
+          "legendFormat": "Free Inodes [{{server}}:{{drive}}]",
           "refId": "A"
         }
       ],
@@ -2531,7 +2531,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of online disks per MinIO Server",
+      "description": "Number of online drives per MinIO Server",
       "fieldConfig": {
         "defaults": {
           "links": []

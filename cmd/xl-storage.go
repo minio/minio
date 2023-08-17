@@ -558,8 +558,13 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
-			actualSz, _ := oi.GetActualSize()
 			done()
+
+			actualSz, err := oi.GetActualSize()
+			if err != nil {
+				continue
+			}
+
 			if oi.DeleteMarker {
 				sizeS.deleteMarkers++
 			}
@@ -2211,6 +2216,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			errFileVersionNotFound,
 			errDiskNotFound,
 			errUnformattedDisk,
+			errMaxVersionsExceeded,
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.
