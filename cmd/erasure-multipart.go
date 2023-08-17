@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -101,7 +101,6 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 
 	// Pick one from the first valid metadata.
 	fi, err = pickValidFileInfo(ctx, partsMetadata, modTime, etag, quorum)
-
 	return fi, partsMetadata, err
 }
 
@@ -310,7 +309,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		populatedUploadIds.Add(uploadID)
 		uploads = append(uploads, MultipartInfo{
 			Object:    object,
-			UploadID:  uploadID,
+			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadID))),
 			Initiated: fi.ModTime,
 		})
 	}
@@ -954,10 +953,10 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	if err != nil {
 		return oi, err
 	}
-	wctx := wlkctx.Context()
+	ctx = wlkctx.Context()
 	defer uploadIDLock.Unlock(wlkctx)
 
-	fi, partsMetadata, err := er.checkUploadIDExists(wctx, bucket, object, uploadID, true)
+	fi, partsMetadata, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
@@ -1227,12 +1226,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	ctx = lkctx.Context()
 	defer lk.Unlock(lkctx)
 
-	// Write final `xl.meta` at uploadID location
-	onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, partsMetadata, writeQuorum)
-	if err != nil {
-		return oi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
-	}
-
 	// Remove parts that weren't present in CompleteMultipartUpload request.
 	for _, curpart := range currentFI.Parts {
 		if objectPartIndex(fi.Parts, curpart.Number) == -1 {
@@ -1242,13 +1235,13 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			// Request 3: PutObjectPart 2
 			// Request 4: CompleteMultipartUpload --part 2
 			// N.B. 1st part is not present. This part should be removed from the storage.
-			er.removeObjectPart(bucket, object, uploadID, fi.DataDir, curpart.Number)
+			er.removeObjectPart(bucket, object, uploadID, currentFI.DataDir, curpart.Number)
 		}
 	}
 
 	// Remove part.meta which is not needed anymore.
-	for _, part := range fi.Parts {
-		er.removePartMeta(bucket, object, uploadID, fi.DataDir, part.Number)
+	for _, part := range currentFI.Parts {
+		er.removePartMeta(bucket, object, uploadID, currentFI.DataDir, part.Number)
 	}
 
 	// Rename the multipart object to final location.
