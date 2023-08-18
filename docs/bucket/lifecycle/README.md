@@ -134,7 +134,11 @@ Note: This rule has an implicit zero NoncurrentDays, which makes the expiry of t
 #### 3.2.b Automatic removal of all versions (MinIO only extension)
 
 This is available only on MinIO as an extension to the Expiration feature. The following rule makes it possible to remove all versions of an object under 
-the prefix `user-uploads/` as soon as the latest object satisfies the expiration criteria.
+the prefix `user-uploads/` as soon as the latest object satisfies the expiration criteria. 
+
+> NOTE: If the latest object is a delete marker then filtering based on `Filter.Tags` is ignored and 
+> if the DELETE marker modTime satisfies the `Expiration.Days` then all versions of the object are 
+> immediately purged.
 
 ```
 {
