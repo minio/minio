@@ -1147,6 +1147,7 @@ func (a adminAPIHandlers) SitePerfHandler(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
 		return
 	}
+	ctx = lkctx.Context()
 	defer nsLock.Unlock(lkctx)
 
 	durationStr := r.Form.Get(peerRESTDuration)
@@ -1253,6 +1254,7 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
 		return
 	}
+	ctx = lkctx.Context()
 	defer nsLock.Unlock(lkctx)
 
 	durationStr := r.Form.Get(peerRESTDuration)
