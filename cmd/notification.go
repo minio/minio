@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sync"
 	"time"
 
@@ -1157,7 +1158,7 @@ func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric 
 	}
 	go func(wg *sync.WaitGroup, ch chan Metric) {
 		wg.Wait()
-		close(ch)
+		CloseChannelWithoutEmpty(ctx, ch)
 	}(&wg, ch)
 	return ch
 }
@@ -1216,7 +1217,7 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 	}
 	go func(wg *sync.WaitGroup, ch chan Metric) {
 		wg.Wait()
-		close(ch)
+		CloseChannelWithoutEmpty(ctx, ch)
 	}(&wg, ch)
 	return ch
 }
@@ -1399,7 +1400,7 @@ func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.Driv
 
 	go func(wg *sync.WaitGroup, ch chan madmin.DriveSpeedTestResult) {
 		wg.Wait()
-		close(ch)
+		CloseChannelWithoutEmpty(ctx, ch)
 	}(&wg, ch)
 
 	return ch
@@ -1528,7 +1529,24 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 	}(mrfCh)
 	go func(wg *sync.WaitGroup) {
 		wg.Wait()
-		defer close(mrfCh)
+		CloseChannelWithoutEmpty(ctx, mrfCh)
 	}(&wg)
 	return mrfCh, nil
+}
+
+// CloseChannelWithoutEmpty - close channel without empty
+func CloseChannelWithoutEmpty[T any](ctx context.Context, ch chan T) {
+	defer close(ch)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if len(ch) == 0 {
+				return
+			}
+			// make sure all the data have being sent
+			runtime.Gosched()
+		}
+	}
 }
