@@ -36,15 +36,11 @@ type PolicyManager interface {
 	// Further, an identity cannot assign a policy to itself.
 	AssignPolicy(ctx context.Context, policy, identity string) error
 
-	// SetPolicy creates or updates a policy.
-	SetPolicy(ctx context.Context, policy string, policyItem *kes.Policy) error
-
 	// GetPolicy gets a policy from KMS.
 	GetPolicy(ctx context.Context, policy string) (*kes.Policy, error)
 
-	// ListPolicies list all policy metadata that match the specified pattern.
-	// In particular, the pattern * lists all policy metadata.
-	ListPolicies(ctx context.Context, pattern string) (*kes.PolicyIterator, error)
+	// ListPolicies lists all policies.
+	ListPolicies(ctx context.Context) (*kes.ListIter[string], error)
 
 	// DeletePolicy	deletes a policy from KMS.
 	// All identities that have been assigned to this policy will lose all authorization privileges.
