@@ -476,7 +476,7 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 		}
 		defer DrainBody(resp.Body)
 		if resp.IsError() {
-			return fmt.Errorf("Create index err: %s", res.String())
+			return fmt.Errorf("Create index err: %v", res)
 		}
 		return nil
 	}
