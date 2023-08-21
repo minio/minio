@@ -1520,15 +1520,14 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 			select {
 			case <-ctx.Done():
 				return err
-			default:
-				mrfCh <- e
+			case mrfCh <- e:
 			}
 		}
 		return nil
 	}(mrfCh)
 	go func(wg *sync.WaitGroup) {
 		wg.Wait()
-		defer close(mrfCh)
+		close(mrfCh)
 	}(&wg)
 	return mrfCh, nil
 }
