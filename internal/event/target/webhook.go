@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"io"
 	"net"
 	"net/http"
@@ -313,6 +314,6 @@ func DrainBody(respBody io.ReadCloser) {
 		// the same connection for future uses.
 		//  - http://stackoverflow.com/a/17961593/4465767
 		defer respBody.Close()
-		io.Copy(io.Discard, respBody)
+		io.CopyN(io.Discard, respBody, 1*humanize.MiByte)
 	}
 }
