@@ -23,7 +23,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -475,12 +474,10 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer DrainBody(resp.Body)
 		if resp.IsError() {
-			err := fmt.Errorf("Create index err: %s", res.String())
-			return err
+			return fmt.Errorf("Create index err: %s", res.String())
 		}
-		io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 	return nil
@@ -493,8 +490,7 @@ func (c *esClientV7) ping(ctx context.Context, _ ElasticsearchArgs) (bool, error
 	if err != nil {
 		return false, store.ErrNotConnected
 	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	DrainBody(resp.Body)
 	return !resp.IsError(), nil
 }
 
@@ -507,8 +503,7 @@ func (c *esClientV7) entryExists(ctx context.Context, index string, key string) 
 	if err != nil {
 		return false, err
 	}
-	io.Copy(io.Discard, res.Body)
-	res.Body.Close()
+	DrainBody(res.Body)
 	return !res.IsError(), nil
 }
 
@@ -523,8 +518,7 @@ func (c *esClientV7) removeEntry(ctx context.Context, index string, key string) 
 		if err != nil {
 			return err
 		}
-		defer res.Body.Close()
-		defer io.Copy(io.Discard, res.Body)
+		defer DrainBody(res.Body)
 		if res.IsError() {
 			return fmt.Errorf("Delete err: %s", res.String())
 		}
@@ -552,8 +546,7 @@ func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, 
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
-	defer io.Copy(io.Discard, res.Body)
+	defer DrainBody(res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Update err: %s", res.String())
 	}
@@ -579,8 +572,7 @@ func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
-	defer io.Copy(io.Discard, res.Body)
+	defer DrainBody(res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Add err: %s", res.String())
 	}
