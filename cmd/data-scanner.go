@@ -550,7 +550,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				dst = &dataUsageEntry{Compacted: false}
 			}
 			if err := f.scanFolder(ctx, folder, dst); err != nil {
-				logger.LogIf(ctx, err)
 				return
 			}
 			if !into.Compacted {
