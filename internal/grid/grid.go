@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	debugPrint = false
+	debugPrint = true
 )
 
 var internalByteBuffer = sync.Pool{

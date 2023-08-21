@@ -56,7 +56,7 @@ type Manager struct {
 // NewManager creates a new grid manager
 func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn) (*Manager, error) {
 	found := false
-	m := Manager{
+	m := &Manager{
 		ID:      uuid.New(),
 		targets: make(map[string]*Connection, len(hosts)),
 		local:   local,
@@ -76,7 +76,7 @@ func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn)
 		return nil, fmt.Errorf("grid: local host not found")
 	}
 
-	return &m, nil
+	return m, nil
 }
 
 func (c *Manager) Handler() http.HandlerFunc {
@@ -201,8 +201,8 @@ func (m *Manager) HostName() string {
 
 // TestingShutDown will shut down all connections.
 // This should *only* be used by tests.
-func (m *Manager) TestingShutDown() {
+func (m *Manager) debugMsg(d debugMsg) {
 	for _, c := range m.targets {
-		c.shutdown()
+		c.debugMsg(d)
 	}
 }

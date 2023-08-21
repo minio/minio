@@ -95,6 +95,11 @@ type Connection struct {
 
 	remote *RemoteClient
 	auth   AuthFn
+
+	// For testing only
+	debugInConn  net.Conn
+	debugOutConn net.Conn
+	connMu       sync.Mutex
 }
 
 // State is a connection state.
@@ -201,7 +206,15 @@ func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
 	return client, nil
 }
 
-func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
+// Request allows to do a single remote request.
+func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
+	if !h.valid() {
+		return nil, ErrUnknownHandler
+	}
+	handler := c.handlers.single[h]
+	if handler == nil {
+		return nil, ErrUnknownHandler
+	}
 	client, err := c.NewMuxClient(ctx)
 	if err != nil {
 		return nil, err
@@ -213,6 +226,9 @@ func (c *Connection) Single(ctx context.Context, h HandlerID, req []byte) ([]byt
 var ErrDone = errors.New("done for now")
 
 var ErrRemoteRestart = errors.New("remote restarted")
+
+// ErrDisconnected is returned when the connection to the remote has been lost during the call.
+var ErrDisconnected = errors.New("remote disconnected")
 
 // Stateless connects to the remote handler and return all packets sent back.
 // If the remote is restarted will return ErrRemoteRestart.
@@ -338,6 +354,9 @@ func (c *Connection) connect() {
 		if br != nil {
 			ws.PutReader(br)
 		}
+		c.connMu.Lock()
+		c.debugOutConn = conn
+		c.connMu.Unlock()
 		retry := func(err error) {
 			if debugPrint {
 				fmt.Printf("%v Connecting to %v: %v. Retrying.\n", c.Local, toDial, err)
@@ -348,7 +367,10 @@ func (c *Connection) connect() {
 			if sleep < 0 {
 				sleep = 0
 			}
-			logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %v Sleeping %v", toDial, err, sleep))
+			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnecting {
+				// Don't print error on first attempt.
+				logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %w (%T) Sleeping %v", toDial, err, err, sleep))
+			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
 		}
@@ -494,6 +516,15 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 	}
 }
 
+func (c *Connection) disconnected() {
+	c.outgoing.Range(func(key uint64, client *MuxClient) bool {
+		if !client.stateless {
+			client.cancelFn(ErrDisconnected)
+		}
+		return true
+	})
+}
+
 func (c *Connection) receive(conn net.Conn, r receiver) error {
 	b, op, err := wsutil.ReadData(conn, c.side)
 	if err != nil {
@@ -515,6 +546,10 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 }
 
 func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) error {
+	c.connMu.Lock()
+	c.debugInConn = conn
+	c.connMu.Unlock()
+
 	if req.Host != c.Remote {
 		err := fmt.Errorf("expected remote '%s', got '%s'", c.Remote, req.Host)
 		if debugPrint {
@@ -570,10 +605,11 @@ func (c *Connection) updateState(s State) {
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
 	c.connWg.Add(2)
+	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+				logger.LogIf(ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 				debug.PrintStack()
 			}
 			c.connChange.L.Lock()
@@ -631,14 +667,16 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var err error
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
-				logger.LogIfNot(c.ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
+				cancel(ErrDisconnected)
+				logger.LogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
 
 			// Parse the received message
 			err = m.parse(msg)
 			if err != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("ws parse package: %w", err))
+				logger.LogIf(ctx, fmt.Errorf("ws parse package: %w", err))
+				cancel(ErrDisconnected)
 				return
 			}
 			if debugPrint {
@@ -652,7 +690,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					}
 					PutByteBuffer(m.Payload)
 					continue
@@ -704,7 +742,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if debugPrint {
 						fmt.Println(c.Local, "OpMuxClientMsg: Unknown Mux:", m.MuxID)
 					}
-					logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+					logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					PutByteBuffer(m.Payload)
 					continue
 				}
@@ -819,14 +857,14 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 							fmt.Println("returning payload:", string(b))
 						}
 					}
-					logger.LogIf(c.ctx, c.queueMsg(m, nil))
+					logger.LogIf(ctx, c.queueMsg(m, nil))
 				}(m)
 				continue
 			case OpAckMux:
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
 					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
 					}
 					PutByteBuffer(m.Payload)
 					continue
@@ -878,14 +916,19 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Write goroutine.
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.LogIf(c.ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
+			logger.LogIf(ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
 			debug.PrintStack()
 		}
+		if debugPrint {
+			fmt.Println("handleMessages: write goroutine exited")
+		}
+		cancel(ErrDisconnected)
 		c.connChange.L.Lock()
 		if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
 			c.connChange.Broadcast()
 		}
 		c.connChange.L.Unlock()
+		c.disconnected()
 
 		conn.Close()
 		c.connWg.Done()
@@ -904,8 +947,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				continue
 			}
 			_, err := conn.Write(pingFrame)
-			logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
 			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
+				cancel(ErrDisconnected)
 				return
 			}
 		case toSend := <-c.outQueue:
@@ -928,7 +972,8 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
 			if err != nil {
-				logger.LogIf(c.ctx, fmt.Errorf("ws write: %v", err))
+				logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
+				cancel(ErrDisconnected)
 				return
 			}
 		}
@@ -964,6 +1009,27 @@ func (c *Connection) Stats() ConnectionStats {
 	}
 }
 
-func (c *Connection) shutdown() {
-	c.updateState(StateShutdown)
+func (c *Connection) debugMsg(d debugMsg) {
+	switch d {
+	case debugShutdown:
+		c.updateState(StateShutdown)
+	case debugKillInbound:
+		c.connMu.Lock()
+		defer c.connMu.Unlock()
+		if c.debugInConn != nil {
+			if debugPrint {
+				fmt.Println("debug: closing inbound connection")
+			}
+			c.debugInConn.Close()
+		}
+	case debugKillOutbound:
+		c.connMu.Lock()
+		defer c.connMu.Unlock()
+		if c.debugInConn != nil {
+			if debugPrint {
+				fmt.Println("debug: closing outgoing connection")
+			}
+			c.debugInConn.Close()
+		}
+	}
 }

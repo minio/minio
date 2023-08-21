@@ -54,9 +54,8 @@ func startServer(t testing.TB, listener net.Listener, handler http.Handler) (ser
 	server = httptest.NewUnstartedServer(handler)
 	server.Config.Addr = listener.Addr().String()
 	server.Listener = listener
-	t.Log("Starting server on", server.Config.Addr)
 	server.Start()
-	t.Log("URL:", server.URL)
+	t.Log("Started server on", server.Config.Addr, "URL:", server.URL)
 	return server
 }
 
@@ -64,15 +63,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
 	hosts, listeners := getHosts(2)
 	dialer := &net.Dialer{
-		Timeout:        5 * time.Second,
-		Deadline:       time.Time{},
-		LocalAddr:      nil,
-		DualStack:      false,
-		FallbackDelay:  0,
-		KeepAlive:      0,
-		Resolver:       nil,
-		Control:        nil,
-		ControlContext: nil,
+		Timeout: 5 * time.Second,
 	}
 	errFatal := func(err error) {
 		t.Helper()
@@ -93,7 +84,7 @@ func TestSingleRoundtrip(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
-	defer local.TestingShutDown()
+	defer local.debugMsg(debugShutdown)
 
 	// 1: Echo
 	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
@@ -111,7 +102,7 @@ func TestSingleRoundtrip(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
-	defer remote.TestingShutDown()
+	defer remote.debugMsg(debugShutdown)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	defer localServer.Close()
@@ -135,7 +126,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	const testPayload = "Hello Grid World!"
 
 	start := time.Now()
-	resp, err := remoteConn.Single(context.Background(), handlerTest, []byte(testPayload))
+	resp, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
 	errFatal(err)
 	if string(resp) != testPayload {
 		t.Errorf("want %q, got %q", testPayload, string(resp))
@@ -143,7 +134,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	t.Log("Roundtrip:", time.Since(start))
 
 	start = time.Now()
-	resp, err = remoteConn.Single(context.Background(), handlerTest2, []byte(testPayload))
+	resp, err = remoteConn.Request(context.Background(), handlerTest2, []byte(testPayload))
 	t.Log("Roundtrip:", time.Since(start))
 	if err != RemoteErr(testPayload) {
 		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
@@ -155,15 +146,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
 	hosts, listeners := getHosts(2)
 	dialer := &net.Dialer{
-		Timeout:        5 * time.Second,
-		Deadline:       time.Time{},
-		LocalAddr:      nil,
-		DualStack:      false,
-		FallbackDelay:  0,
-		KeepAlive:      0,
-		Resolver:       nil,
-		Control:        nil,
-		ControlContext: nil,
+		Timeout: 5 * time.Second,
 	}
 	errFatal := func(err error) {
 		t.Helper()
@@ -183,7 +166,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
 		return aud
 	})
-	defer local.TestingShutDown()
+	defer local.debugMsg(debugShutdown)
 	errFatal(err)
 
 	// 1: Echo
@@ -217,7 +200,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
-	defer remote.TestingShutDown()
+	defer remote.debugMsg(debugShutdown)
 
 	errFatal(h1.Register(remote, handler1))
 	errFatal(h2.Register(remote, handler2))
@@ -253,15 +236,7 @@ func TestStreamSuite(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
 	hosts, listeners := getHosts(2)
 	dialer := &net.Dialer{
-		Timeout:        5 * time.Second,
-		Deadline:       time.Time{},
-		LocalAddr:      nil,
-		DualStack:      false,
-		FallbackDelay:  0,
-		KeepAlive:      0,
-		Resolver:       nil,
-		Control:        nil,
-		ControlContext: nil,
+		Timeout: 1 * time.Second,
 	}
 	errFatal := func(err error) {
 		t.Helper()
@@ -283,13 +258,13 @@ func TestStreamSuite(t *testing.T) {
 		return aud
 	})
 	errFatal(err)
-	defer local.TestingShutDown()
+	defer local.debugMsg(debugShutdown)
 
 	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
 		return aud
 	})
 	errFatal(err)
-	defer remote.TestingShutDown()
+	defer remote.debugMsg(debugShutdown)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
@@ -640,7 +615,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 
 	// Now do 100 other requests to ensure that the server doesn't block.
 	for i := 0; i < 100; i++ {
-		_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
+		_, err := remoteConn.Request(ctx, handlerTest2, []byte(testPayload))
 		errFatal(err)
 	}
 	// Drain responses
@@ -722,7 +697,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 	}()
 	// Now do 100 other requests to ensure that the server doesn't block.
 	for i := 0; i < 100; i++ {
-		_, err := remoteConn.Single(ctx, handlerTest2, []byte(testPayload))
+		_, err := remoteConn.Request(ctx, handlerTest2, []byte(testPayload))
 		errFatal(err)
 	}
 	// Start processing requests.

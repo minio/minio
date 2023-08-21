@@ -38,12 +38,13 @@ type MuxClient struct {
 	BaseFlags        uint8
 	Resp             chan []byte
 	ctx              context.Context
+	cancelFn         context.CancelCauseFunc
 	parent           *Connection
 	respWait         chan<- Response
 	respMu           sync.Mutex
 	singleResp       bool
 	closed           bool
-	stateful         bool
+	stateless        bool
 	acked            bool
 	init             bool
 	deadline         time.Duration
@@ -61,10 +62,12 @@ type Response struct {
 }
 
 func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxClient {
+	ctx, cancelFn := context.WithCancelCause(ctx)
 	return &MuxClient{
 		MuxID:    muxID,
 		Resp:     make(chan []byte, 1),
 		ctx:      ctx,
+		cancelFn: cancelFn,
 		parent:   parent,
 		LastPong: time.Now().Unix(),
 	}
@@ -415,7 +418,7 @@ func (m *MuxClient) addResponse(r Response) (ok bool) {
 		}
 		return true
 	default:
-		if !m.stateful {
+		if m.stateless {
 			// Drop message if not stateful.
 			return
 		}

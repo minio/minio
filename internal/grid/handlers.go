@@ -204,7 +204,7 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req 
 	if err != nil {
 		return dst, err
 	}
-	res, err := c.Single(ctx, h.id, payload)
+	res, err := c.Request(ctx, h.id, payload)
 	if err != nil {
 		return dst, err
 	}
