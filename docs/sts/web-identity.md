@@ -26,6 +26,7 @@ MINIO_IDENTITY_OPENID_CLIENT_SECRET*        (string)    secret for the unique pu
 MINIO_IDENTITY_OPENID_ROLE_POLICY           (string)    Set the IAM access policies applicable to this client application and IDP e.g. "app-bucket-write,app-bucket-list"
 MINIO_IDENTITY_OPENID_CLAIM_NAME            (string)    JWT canned policy claim name (default: 'policy')
 MINIO_IDENTITY_OPENID_SCOPES                (csv)       Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"
+MINIO_IDENTITY_OPENID_SESSION_TIMEOUT       (string)    Set the session expiry in seconds
 MINIO_IDENTITY_OPENID_VENDOR                (string)    Specify vendor type for vendor specific behavior to checking validity of temporary credentials and service accounts on MinIO
 MINIO_IDENTITY_OPENID_CLAIM_USERINFO        (on|off)    Enable fetching claims from UserInfo Endpoint for authenticated user
 MINIO_IDENTITY_OPENID_KEYCLOAK_REALM        (string)    Specify Keycloak 'realm' name, only honored if vendor was set to 'keycloak' as value, if no realm is specified 'master' is default
@@ -91,7 +92,7 @@ For deployments with a load-balancer (LB), it is required that the LB is configu
 
 For deployments employing DNS round-robin on a single domain to all the MinIO servers, it is possible that after redirection the browser may land on a different MinIO server. For example, the domain `console.minio.example.org` may resolve to `console-X.minio.example.org`, where `X` is `1`, `2`, `3` or `4`. For the login to work, if the user first landed on `console-1.minio.example.org`, they must be redirected back to the same place after logging in at the OpenID provider's web-page. To ensure this, set the `MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC=on` parameter - this lets MinIO set the redirect URL based on the "Host" header of the (initial login) request.
 
-The **deprecated** parameter `MINIO_IDENTITY_OPENID_REDIRECT_URI` works similar to the `MINIO_BROWSER_REDIRECT_URL` but needs to include the `/oauth_callback` suffix. Please do not use it, as it is sufficient to the set the `MINIO_BROWSER_REDIRECT_URL` parameter (which is required anyway for most load-balancer based setups to work correctly). This deprecated parameter **will be removed** in a future release. 
+The **deprecated** parameter `MINIO_IDENTITY_OPENID_REDIRECT_URI` works similar to the `MINIO_BROWSER_REDIRECT_URL` but needs to include the `/oauth_callback` suffix. Please do not use it, as it is sufficient to the set the `MINIO_BROWSER_REDIRECT_URL` parameter (which is required anyway for most load-balancer based setups to work correctly). This deprecated parameter **will be removed** in a future release.
 
 ## Specifying Access Control with IAM Policies
 

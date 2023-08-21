@@ -51,6 +51,8 @@ type providerCfg struct {
 
 	roleArn  arn.ARN
 	provider provider.Provider
+
+	SessionTimeout     string
 }
 
 func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg {
@@ -64,6 +66,7 @@ func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg
 		ClientID:           getCfgVal(ClientID),
 		ClientSecret:       getCfgVal(ClientSecret),
 		RolePolicy:         getCfgVal(RolePolicy),
+		SessionTimeout:     getCfgVal(SessionTimeout),
 	}
 }
 

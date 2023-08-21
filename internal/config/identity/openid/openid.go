@@ -62,6 +62,8 @@ const (
 	// Removed params
 	JwksURL     = "jwks_url"
 	ClaimPrefix = "claim_prefix"
+
+	SessionTimeout = "session_timeout"
 )
 
 // DefaultKVS - default config for OpenID config
@@ -125,6 +127,10 @@ var (
 		},
 		config.KV{
 			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   SessionTimeout,
 			Value: "",
 		},
 	}

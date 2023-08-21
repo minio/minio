@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -135,6 +136,17 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 	return nil
 }
 
+func replaceClaimsExpiry(timeout string, claims map[string]interface{}) error {
+	expirySecs, err := strconv.ParseInt(timeout, 10, 64)
+	if err != nil {
+		return err
+	}
+	newExpiryDuration := time.Duration(expirySecs) * time.Second
+
+	claims["exp"] = time.Now().UTC().Add(newExpiryDuration).Unix() // update with new expiry.
+	return nil
+}
+
 const (
 	audClaim = "aud"
 	azpClaim = "azp"
@@ -181,8 +193,19 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	if err = updateClaimsExpiry(dsecs, claims); err != nil {
-		return err
+	sessionTimeout := r.ProviderCfgs["_"].SessionTimeout
+
+	if sessionTimeout == "" {
+		// update Claims Expiry based on stsDurationSeconds if
+		// no sessionTimeout override has been configured
+		if err = updateClaimsExpiry(dsecs, claims); err != nil {
+			return err
+		}
+	} else {
+		// Accept OIDC sessionTimout as the new expiry time
+		if err = replaceClaimsExpiry(sessionTimeout, claims); err != nil {
+			return err
+		}
 	}
 
 	if err = r.updateUserinfoClaims(ctx, arn, accessToken, claims); err != nil {
