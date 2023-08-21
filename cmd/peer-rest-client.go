@@ -488,12 +488,10 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []string) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetLocalDiskIDs, nil, nil, -1)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil
 	}
 	defer xhttp.DrainBody(respBody)
 	if err = gob.NewDecoder(respBody).Decode(&diskIDs); err != nil {
-		logger.LogIf(ctx, err)
 		return nil
 	}
 	return diskIDs
@@ -513,7 +511,6 @@ func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPat
 	}
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetMetacacheListing, nil, &reader, int64(reader.Len()))
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	var resp metacache
@@ -532,7 +529,6 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 	}
 	respBody, err := client.callWithContext(ctx, peerRESTMethodUpdateMetacacheListing, nil, bytes.NewBuffer(b), int64(len(b)))
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return m, err
 	}
 	defer xhttp.DrainBody(respBody)
@@ -543,7 +539,6 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodReloadPoolMeta, nil, nil, 0)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
@@ -553,7 +548,6 @@ func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodStopRebalance, nil, nil, 0)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
@@ -565,7 +559,6 @@ func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebala
 	values.Set(peerRESTStartRebalance, strconv.FormatBool(startRebalance))
 	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadRebalanceMeta, values, nil, 0)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
@@ -575,7 +568,6 @@ func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebala
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadTransitionTierConfig, nil, nil, 0)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
