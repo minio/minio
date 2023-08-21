@@ -61,10 +61,11 @@ const (
 	EnvMinIOCallhomeEnable    = "MINIO_CALLHOME_ENABLE"
 	EnvMinIOCallhomeFrequency = "MINIO_CALLHOME_FREQUENCY"
 
-	EnvMinIOServerURL        = "MINIO_SERVER_URL"
-	EnvBrowserRedirectURL    = "MINIO_BROWSER_REDIRECT_URL"
-	EnvRootDiskThresholdSize = "MINIO_ROOTDISK_THRESHOLD_SIZE"
-	EnvBrowserLoginAnimation = "MINIO_BROWSER_LOGIN_ANIMATION"
+	EnvMinIOServerURL         = "MINIO_SERVER_URL"
+	EnvBrowserRedirectURL     = "MINIO_BROWSER_REDIRECT_URL"
+	EnvRootDiskThresholdSize  = "MINIO_ROOTDISK_THRESHOLD_SIZE"
+	EnvBrowserLoginAnimation  = "MINIO_BROWSER_LOGIN_ANIMATION"
+	EnvBrowserSessionDuration = "MINIO_BROWSER_SESSION_DURATION"
 
 	EnvUpdate = "MINIO_UPDATE"
 
