@@ -345,7 +345,7 @@ func getProfileData() (map[string][]byte, error) {
 }
 
 func setDefaultProfilerRates() {
-	runtime.MemProfileRate = 4096      // 512K -> 4K - Must be constant throughout application lifetime.
+	runtime.MemProfileRate = 128 << 10 // 512KB -> 128K - Must be constant throughout application lifetime.
 	runtime.SetMutexProfileFraction(0) // Disable until needed
 	runtime.SetBlockProfileRate(0)     // Disable until needed
 }
