@@ -109,7 +109,7 @@ func getUserIdentityPath(user string, userType IAMUserType) string {
 }
 
 func saveIAMFormat(ctx context.Context, store IAMStorageAPI) error {
-	bootstrapTrace("Load IAM format file")
+	bootstrapTraceMsg("Load IAM format file")
 	var iamFmt iamFormat
 	path := getIAMFormatFilePath()
 	if err := store.loadIAMConfig(ctx, &iamFmt, path); err != nil {
@@ -127,7 +127,7 @@ func saveIAMFormat(ctx context.Context, store IAMStorageAPI) error {
 		return nil
 	}
 
-	bootstrapTrace("Write IAM format file")
+	bootstrapTraceMsg("Write IAM format file")
 	// Save iam format to version 1.
 	if err := store.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
 		logger.LogIf(ctx, err)
@@ -462,7 +462,7 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
-	bootstrapTrace("loading IAM data")
+	bootstrapTraceMsg("loading IAM data")
 
 	newCache := newIamCache()
 
@@ -475,7 +475,7 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 		}
 	} else {
 
-		bootstrapTrace("loading policy documents")
+		bootstrapTraceMsg("loading policy documents")
 		if err := store.loadPolicyDocs(ctx, newCache.iamPolicyDocsMap); err != nil {
 			return err
 		}
@@ -484,41 +484,41 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 		setDefaultCannedPolicies(newCache.iamPolicyDocsMap)
 
 		if store.getUsersSysType() == MinIOUsersSysType {
-			bootstrapTrace("loading regular users")
+			bootstrapTraceMsg("loading regular users")
 			if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
 				return err
 			}
-			bootstrapTrace("loading regular groups")
+			bootstrapTraceMsg("loading regular groups")
 			if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
 				return err
 			}
 		}
 
-		bootstrapTrace("loading user policy mapping")
+		bootstrapTraceMsg("loading user policy mapping")
 		// load polices mapped to users
 		if err := store.loadMappedPolicies(ctx, regUser, false, newCache.iamUserPolicyMap); err != nil {
 			return err
 		}
 
-		bootstrapTrace("loading group policy mapping")
+		bootstrapTraceMsg("loading group policy mapping")
 		// load policies mapped to groups
 		if err := store.loadMappedPolicies(ctx, regUser, true, newCache.iamGroupPolicyMap); err != nil {
 			return err
 		}
 
-		bootstrapTrace("loading service accounts")
+		bootstrapTraceMsg("loading service accounts")
 		// load service accounts
 		if err := store.loadUsers(ctx, svcUser, newCache.iamUsersMap); err != nil {
 			return err
 		}
 
-		bootstrapTrace("loading STS users")
+		bootstrapTraceMsg("loading STS users")
 		// load STS temp users
 		if err := store.loadUsers(ctx, stsUser, newCache.iamUsersMap); err != nil {
 			return err
 		}
 
-		bootstrapTrace("loading STS policy mapping")
+		bootstrapTraceMsg("loading STS policy mapping")
 		// load STS policy mappings
 		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamUserPolicyMap); err != nil {
 			return err

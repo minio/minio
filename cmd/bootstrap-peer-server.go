@@ -221,7 +221,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 	for onlineServers < len(clnts)/2 {
 		for _, clnt := range clnts {
 			if err := clnt.Verify(ctx, srcCfg); err != nil {
-				bootstrapTrace(fmt.Sprintf("clnt.Verify: %v, endpoint: %v", err, clnt.endpoint))
+				bootstrapTraceMsg(fmt.Sprintf("clnt.Verify: %v, endpoint: %v", err, clnt.endpoint))
 				if !isNetworkError(err) {
 					logger.LogOnceIf(ctx, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err), clnt.String())
 					incorrectConfigs = append(incorrectConfigs, fmt.Errorf("%s has incorrect configuration: %w", clnt.String(), err))
