@@ -19,12 +19,15 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/disk"
 	"github.com/minio/minio/internal/net"
+	c "github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/load"
 )
 
 type collectMetricsOpts struct {
@@ -87,6 +90,34 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 			m.Errors = append(m.Errors, err.Error())
 		} else {
 			m.Aggregated.Net.NetStats = netStats
+		}
+	}
+	if types.Contains(madmin.MetricsMem) {
+		m.Aggregated.Mem = &madmin.MemMetrics{
+			CollectedAt: UTCNow(),
+		}
+		m.Aggregated.Mem.Info = madmin.GetMemInfo(GlobalContext, globalMinioAddr)
+	}
+	if types.Contains(madmin.MetricsCPU) {
+		m.Aggregated.CPU = &madmin.CPUMetrics{
+			CollectedAt: UTCNow(),
+		}
+		cm, err := c.Times(false)
+		if err != nil {
+			m.Errors = append(m.Errors, err.Error())
+		} else {
+			// not collecting per-cpu stats, so there will be only one element
+			if len(cm) == 1 {
+				m.Aggregated.CPU.TimesStat = &cm[0]
+			} else {
+				m.Errors = append(m.Errors, fmt.Sprintf("Expected one CPU stat, got %d", len(cm)))
+			}
+		}
+		loadStat, err := load.Avg()
+		if err != nil {
+			m.Errors = append(m.Errors, err.Error())
+		} else {
+			m.Aggregated.CPU.LoadStat = loadStat
 		}
 	}
 	// Add types...
