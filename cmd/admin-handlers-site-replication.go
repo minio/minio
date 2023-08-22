@@ -207,10 +207,15 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		return
 	}
 
+	if item.Bucket == "" {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errSRInvalidRequest(errInvalidArgument)), r.URL)
+		return
+	}
+
 	var err error
 	switch item.Type {
 	default:
-		err = errSRInvalidRequest(errInvalidArgument)
+		err = globalSiteReplicationSys.PeerBucketMetadataUpdateHandler(ctx, item)
 	case madmin.SRBucketMetaTypePolicy:
 		if item.Policy == nil {
 			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil, item.UpdatedAt)
@@ -236,7 +241,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 				return
 			}
 			if err = globalSiteReplicationSys.PeerBucketQuotaConfigHandler(ctx, item.Bucket, quotaConfig, item.UpdatedAt); err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
 		}
