@@ -232,10 +232,10 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	enc := json.NewEncoder(w)
 	stats := globalReplicationStats.getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
-	bwMap := bwRpt.BucketStats[bucket]
+	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
-		if bwMap != nil {
-			if bw, ok := bwMap[arn]; ok {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
 				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
 				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
 				stats.ReplicationStats.Stats[arn] = st
@@ -288,10 +288,10 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsV2Handler(w http.Respons
 	enc := json.NewEncoder(w)
 	stats := globalReplicationStats.getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
-	bwMap := bwRpt.BucketStats[bucket]
+	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
-		if bwMap != nil {
-			if bw, ok := bwMap[arn]; ok {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
 				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
 				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
 				stats.ReplicationStats.Stats[arn] = st

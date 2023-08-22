@@ -26,17 +26,22 @@ import (
 // MonitoredReader represents a throttled reader subject to bandwidth monitoring
 type MonitoredReader struct {
 	r        io.Reader
-	throttle *throttle
+	throttle *bucketThrottle
 	ctx      context.Context // request context
 	lastErr  error           // last error reported, if this non-nil all reads will fail.
 	m        *Monitor
 	opts     *MonitorReaderOptions
 }
 
+// BucketOptions represents the bucket and optionally its replication target pair.
+type BucketOptions struct {
+	Name           string
+	ReplicationARN string // This is optional, and not mandatory.
+}
+
 // MonitorReaderOptions provides configurable options for monitor reader implementation.
 type MonitorReaderOptions struct {
-	Bucket     string
-	TargetARN  string
+	BucketOptions
 	HeaderSize int
 }
 
@@ -80,7 +85,7 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 		r.lastErr = err
 		return
 	}
-	r.m.updateMeasurement(r.opts.Bucket, r.opts.TargetARN, uint64(tokens))
+	r.m.updateMeasurement(r.opts.BucketOptions, uint64(tokens))
 	return
 }
 
@@ -89,11 +94,11 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 func NewMonitoredReader(ctx context.Context, m *Monitor, r io.Reader, opts *MonitorReaderOptions) *MonitoredReader {
 	reader := MonitoredReader{
 		r:        r,
-		throttle: m.throttle(opts.Bucket, opts.TargetARN),
+		throttle: m.throttle(opts.BucketOptions),
 		m:        m,
 		opts:     opts,
 		ctx:      ctx,
 	}
-	reader.m.track(opts.Bucket, opts.TargetARN)
+	reader.m.init(opts.BucketOptions)
 	return &reader
 }
