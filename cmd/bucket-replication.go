@@ -632,6 +632,9 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				return
 			}
 		default:
+			if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+				globalBucketTargetSys.markOffline(tgt.EndpointURL())
+			}
 			// mark delete marker replication as failed if target cluster not ready to receive
 			// this request yet (object version not replicated yet)
 			if err != nil && !toi.ReplicationReady {
@@ -656,6 +659,9 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 			rinfo.VersionPurgeStatus = Failed
 		}
 		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", tgt.Bucket, dobj.ObjectName, versionID, rmErr))
+		if rmErr != nil && minio.IsNetworkOrHostDown(rmErr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			globalBucketTargetSys.markOffline(tgt.EndpointURL())
+		}
 	} else {
 		if dobj.VersionID == "" {
 			rinfo.ReplicationStatus = replication.Completed
@@ -1217,7 +1223,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	}
 	r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
 	if objInfo.isMultipart() {
-		if err := replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
+		if err = replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
 			r, objInfo, putOpts); err != nil {
 			if minio.ToErrorResponse(err).Code != "PreconditionFailed" {
 				rinfo.ReplicationStatus = replication.Failed
@@ -1231,6 +1237,9 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 			}
 		}
+	}
+	if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		globalBucketTargetSys.markOffline(tgt.EndpointURL())
 	}
 	return
 }
@@ -1375,6 +1384,10 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}
 	// if target returns error other than NoSuchKey, defer replication attempt
 	if cerr != nil {
+		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			globalBucketTargetSys.markOffline(tgt.EndpointURL())
+		}
+
 		errResp := minio.ToErrorResponse(cerr)
 		switch errResp.Code {
 		case "NoSuchKey", "NoSuchVersion", "SlowDownRead":
@@ -1446,7 +1459,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
 		if objInfo.isMultipart() {
-			if err := replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
+			if err = replicateObjectWithMultipart(ctx, c, tgt.Bucket, object,
 				r, objInfo, putOpts); err != nil {
 				if minio.ToErrorResponse(err).Code != "PreconditionFailed" {
 					rinfo.ReplicationStatus = replication.Failed
@@ -1464,6 +1477,9 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 					rinfo.ReplicationStatus = replication.Completed
 				}
 			}
+		}
+		if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 	}
 	return
