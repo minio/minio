@@ -64,6 +64,8 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 		w.WriteHeader(http.StatusNotFound)
 	case errInvalidAccessKeyID, errAccessKeyDisabled, errNoAuthToken, errMalformedAuth, errAuthentication, errSkewedAuthTime:
 		w.WriteHeader(http.StatusUnauthorized)
+	case context.Canceled, context.DeadlineExceeded:
+		w.WriteHeader(499)
 	default:
 		w.WriteHeader(http.StatusForbidden)
 	}
