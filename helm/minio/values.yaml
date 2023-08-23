@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2022-09-17T00-09-45Z
+  tag: RELEASE.2022-10-24T18-35-07Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2022-09-16T09-16-47Z
+  tag: RELEASE.2022-10-24T18-35-07Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed or gateway.
@@ -141,7 +141,7 @@ trustedCertsSecret: ""
 ## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
 ##
 persistence:
-  enabled: true
+  enabled: false
   annotations: {}
 
   ## A manually managed Persistent Volume and Claim
@@ -388,14 +388,14 @@ buckets:
   #   # bucket [true|false]
   #   versioning: false
   #   # set objectlocking for
-  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking 
+  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
   #   objectlocking: false
   # - name: bucket2
   #   policy: none
   #   purge: false
   #   versioning: true
   #   # set objectlocking for
-  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking 
+  #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
   #   objectlocking: false
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
@@ -417,7 +417,7 @@ makeBucketJob:
   extraVolumeMounts: []
   # Command to run after the main command on exit
   exitCommand: ""
-  
+
 ## List of command to run after minio install
 ## NOTE: the mc command TARGET is always "myminio"
 customCommands:
@@ -440,7 +440,7 @@ customCommandJob:
   affinity: {}
   # Command to run after the main command on exit
   exitCommand: ""
-  
+
 ## Use this field to add environment variables relevant to MinIO server. These fields will be passed on to MinIO container(s)
 ## when Chart is deployed
 environment:
@@ -492,7 +492,7 @@ metrics:
   serviceMonitor:
     enabled: false
     # scrape each node/pod individually for additional metrics
-    includeNode: false 
+    includeNode: false
     public: true
     additionalLabels: {}
     # for node metrics

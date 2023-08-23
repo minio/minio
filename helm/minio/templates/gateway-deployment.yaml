@@ -74,6 +74,9 @@ spec:
             {{- if eq .Values.gateway.type "nas" }}
             - "/usr/bin/docker-entrypoint.sh minio gateway nas {{ $bucketRoot }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
             {{- end }}
+            {{- if eq .Values.gateway.type "s3" }}
+            - "/usr/bin/docker-entrypoint.sh minio gateway s3 {{ .Values.gateway.serviceEndpoint }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template "minio.extraArgs" . }} "
+            {{- end }}
           volumeMounts:
             - name: minio-user
               mountPath: "/tmp/credentials"
@@ -90,6 +93,9 @@ spec:
               mountPath: "/tmp/minio-config-env"
             {{- end }}
             {{- include "minio.tlsKeysVolumeMount" . | indent 12 }}
+            {{- if .Values.extraVolumeMounts }}
+              {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
           ports:
             - name: {{ $scheme }}
               containerPort: {{ .Values.minioAPIPort }}
@@ -110,6 +116,20 @@ spec:
             - name: MINIO_CONFIG_ENV_FILE
               value: "/tmp/minio-config-env/config.env"
             {{- end}}
+            {{- if or .Values.gateway.accessKey .Values.existingSecret }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" . }}
+                  key: awsAccessKeyId
+            {{- end }}
+            {{- if or .Values.gateway.secretKey .Values.existingSecret }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" . }}
+                  key: awsSecretAccessKey
+            {{- end }}
             {{- if .Values.metrics.serviceMonitor.public }}
             - name: MINIO_PROMETHEUS_AUTH_TYPE
               value: "public"
@@ -138,6 +158,9 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end}}
+            {{- if .Values.extraEnv }}
+              {{- toYaml .Values.extraEnv | nindent 12 }}
+            {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
 {{- with .Values.nodeSelector }}
@@ -152,6 +175,10 @@ spec:
 {{- with .Values.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
+{{- end }}
+{{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{- toYaml . | nindent 8 }}
 {{- end }}
       volumes:
         - name: export
@@ -170,4 +197,7 @@ spec:
             secretName: {{ .Values.extraSecret }}
         {{- end }}
         {{- include "minio.tlsKeysVolume" . | indent 8 }}
+        {{- if .Values.extraVolumes }}
+          {{ toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
 {{- end }}

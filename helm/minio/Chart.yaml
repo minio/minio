@@ -1,8 +1,8 @@
 apiVersion: v1
 description: Multi-Cloud Object Storage
 name: minio
-version: 4.0.15
-appVersion: RELEASE.2022-09-17T00-09-45Z
+version: 5.0.0
+appVersion: RELEASE.2022-10-24T18-35-07Z
 keywords:
   - minio
   - storage
@@ -13,6 +13,9 @@ home: https://min.io
 icon: https://min.io/resources/img/logo/MINIO_wordmark.png
 sources:
 - https://github.com/minio/minio
+- https://github.com/ubbleai/minio
 maintainers:
 - name: MinIO, Inc
   email: dev@minio.io
+- name: Ubble
+  email: dev@ubble.ai

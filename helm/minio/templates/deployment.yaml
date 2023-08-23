@@ -161,6 +161,9 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end}}
+            {{- if .Values.extraEnv }}
+            {{- toYaml .Values.extraEnv | nindent 12 }}
+            {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
 {{- with .Values.nodeSelector }}
@@ -175,6 +178,10 @@ spec:
 {{- with .Values.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
+{{- end }}
+{{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{- toYaml . | indent 8 }}
 {{- end }}
       volumes:
         - name: export
