@@ -54,6 +54,7 @@ func init() {
 		getClusterUsageMetrics(),
 		getKMSMetrics(),
 		getClusterHealthMetrics(),
+		getIAMNodeMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -89,6 +90,7 @@ func init() {
 		getS3TTFBMetric(),
 		getNotificationMetrics(),
 		getDistLockMetrics(),
+		getIAMNodeMetrics(),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{
