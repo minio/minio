@@ -47,9 +47,6 @@ func handleSignals() {
 	stopProcess := func() bool {
 		var err, oerr error
 
-		// send signal to various go-routines that they need to quit.
-		cancelGlobalContext()
-
 		if globalEventNotifier != nil {
 			globalEventNotifier.RemoveAllRemoteTargets()
 		}
@@ -60,6 +57,9 @@ func handleSignals() {
 				logger.LogIf(context.Background(), err)
 			}
 		}
+
+		// send signal to various go-routines that they need to quit.
+		cancelGlobalContext()
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
