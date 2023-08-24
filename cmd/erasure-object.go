@@ -1969,8 +1969,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-// updateObjectMeta will update the metadata of a file.
-func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI) error {
+func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI, opts UpdateMetadataOpts) error {
 	if len(fi.Metadata) == 0 {
 		return nil
 	}
@@ -1984,7 +1983,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 			if onlineDisks[index] == nil {
 				return errDiskNotFound
 			}
-			return onlineDisks[index].UpdateMetadata(ctx, bucket, object, fi)
+			return onlineDisks[index].UpdateMetadata(ctx, bucket, object, fi, opts)
 		}, index)
 	}
 
@@ -1992,6 +1991,11 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 	mErrs := g.Wait()
 
 	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, er.defaultWQuorum())
+}
+
+// updateObjectMeta will update the metadata of a file.
+func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI) error {
+	return er.updateObjectMetaWithOpts(ctx, bucket, object, fi, onlineDisks, UpdateMetadataOpts{})
 }
 
 // DeleteObjectTags - delete object tags from an existing object

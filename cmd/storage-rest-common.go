@@ -84,4 +84,5 @@ const (
 	storageRESTGlob           = "glob"
 	storageRESTScanMode       = "scan-mode"
 	storageRESTMetrics        = "metrics"
+	storageRESTNoPersistence  = "no-persistence"
 )
