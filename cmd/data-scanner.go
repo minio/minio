@@ -997,7 +997,6 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 
 	versioned := vcfg != nil && vcfg.Versioned(i.objectPath())
 
-	// current version + most recent lim noncurrent versions
 	objectInfos := make([]ObjectInfo, 0, len(fivs))
 
 	if i.lifeCycle == nil {
@@ -1017,6 +1016,10 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	}
 
 	overflowVersions := fivs[lim+1:]
+	// Retain the current version + most recent lim noncurrent versions
+	for _, fi := range fivs[:lim+1] {
+		objectInfos = append(objectInfos, fi.ToObjectInfo(i.bucket, i.objectPath(), versioned))
+	}
 
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
