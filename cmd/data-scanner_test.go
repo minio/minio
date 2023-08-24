@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,8 +40,11 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	globalBucketObjectLockSys = &BucketObjectLockSys{}
 	globalBucketVersioningSys = &BucketVersioningSys{}
 	globalExpiryState = newExpiryState()
+	var wg sync.WaitGroup
+	wg.Add(1)
 	expired := make([]ObjectToDelete, 0, 5)
 	go func() {
+		defer wg.Done()
 		for t := range globalExpiryState.byNewerNoncurrentCh {
 			expired = append(expired, t.versions...)
 		}
@@ -122,6 +126,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 
 	// Close expiry state's channel to inspect object versions enqueued for expiration
 	close(globalExpiryState.byNewerNoncurrentCh)
+	wg.Wait()
 	for _, obj := range expired {
 		switch obj.ObjectV.VersionID {
 		case uuids[2].String(), uuids[3].String(), uuids[4].String():
