@@ -261,6 +261,9 @@ resources:
   requests:
     memory: 16Gi
 
+## Configure pod lifecyle
+lifecycle: {}
+
 ## List of policies to be created after minio install
 ##
 ## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
