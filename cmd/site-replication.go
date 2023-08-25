@@ -1456,6 +1456,75 @@ func (c *SiteReplicationSys) PeerBucketVersioningHandler(ctx context.Context, bu
 	return nil
 }
 
+// PeerBucketMetadataUpdateHandler - merges the bucket metadata, save and ping other nodes
+func (c *SiteReplicationSys) PeerBucketMetadataUpdateHandler(ctx context.Context, item madmin.SRBucketMeta) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errSRObjectLayerNotReady
+	}
+
+	if item.Bucket == "" || item.UpdatedAt.IsZero() {
+		return wrapSRErr(errInvalidArgument)
+	}
+
+	meta, err := readBucketMetadata(ctx, objectAPI, item.Bucket)
+	if err != nil {
+		return wrapSRErr(err)
+	}
+
+	if meta.Created.After(item.UpdatedAt) {
+		return nil
+	}
+
+	if item.Policy != nil {
+		meta.PolicyConfigJSON = item.Policy
+		meta.PolicyConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Versioning != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.Versioning)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.VersioningConfigXML = configData
+		meta.VersioningConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Tags != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.Tags)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.TaggingConfigXML = configData
+		meta.TaggingConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.ObjectLockConfig != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.ObjectLockConfig)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.ObjectLockConfigXML = configData
+		meta.ObjectLockConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.SSEConfig != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.SSEConfig)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.EncryptionConfigXML = configData
+		meta.EncryptionConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Quota != nil {
+		meta.QuotaConfigJSON = item.Quota
+		meta.QuotaConfigUpdatedAt = item.UpdatedAt
+	}
+
+	return globalBucketMetadataSys.save(ctx, meta)
+}
+
 // PeerBucketPolicyHandler - copies/deletes policy to local cluster.
 func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket string, policy *bktpolicy.Policy, updatedAt time.Time) error {
 	// skip overwrite if local update is newer than peer update.

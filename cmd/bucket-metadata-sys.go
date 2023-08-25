@@ -151,14 +151,27 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		return updatedAt, fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
 
-	if err := meta.Save(ctx, objAPI); err != nil {
-		return updatedAt, err
+	err = sys.save(ctx, meta)
+	return updatedAt, err
+}
+
+func (sys *BucketMetadataSys) save(ctx context.Context, meta BucketMetadata) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
 	}
 
-	sys.Set(bucket, meta)
-	globalNotificationSys.LoadBucketMetadata(bgContext(ctx), bucket) // Do not use caller context here
+	if isMinioMetaBucketName(meta.Name) {
+		return errInvalidArgument
+	}
 
-	return updatedAt, nil
+	if err := meta.Save(ctx, objAPI); err != nil {
+		return err
+	}
+
+	sys.Set(meta.Name, meta)
+	globalNotificationSys.LoadBucketMetadata(bgContext(ctx), meta.Name) // Do not use caller context here
+	return nil
 }
 
 // Delete delete the bucket metadata for the specified bucket.

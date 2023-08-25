@@ -143,39 +143,38 @@ func (b *BucketMetadata) SetCreatedAt(createdAt time.Time) {
 
 // Load - loads the metadata of bucket by name from ObjectLayer api.
 // If an error is returned the returned metadata will be default initialized.
-func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string) error {
+func readBucketMetadata(ctx context.Context, api ObjectLayer, name string) (BucketMetadata, error) {
 	if name == "" {
 		logger.LogIf(ctx, errors.New("bucket name cannot be empty"))
-		return errInvalidArgument
+		return BucketMetadata{}, errInvalidArgument
 	}
+	b := newBucketMetadata(name)
 	configFile := path.Join(bucketMetaPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, api, configFile)
 	if err != nil {
-		return err
+		return b, err
 	}
 	if len(data) <= 4 {
-		return fmt.Errorf("loadBucketMetadata: no data")
+		return b, fmt.Errorf("loadBucketMetadata: no data")
 	}
 	// Read header
 	switch binary.LittleEndian.Uint16(data[0:2]) {
 	case bucketMetadataFormat:
 	default:
-		return fmt.Errorf("loadBucketMetadata: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
+		return b, fmt.Errorf("loadBucketMetadata: unknown format: %d", binary.LittleEndian.Uint16(data[0:2]))
 	}
 	switch binary.LittleEndian.Uint16(data[2:4]) {
 	case bucketMetadataVersion:
 	default:
-		return fmt.Errorf("loadBucketMetadata: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
+		return b, fmt.Errorf("loadBucketMetadata: unknown version: %d", binary.LittleEndian.Uint16(data[2:4]))
 	}
-	// OK, parse data.
 	_, err = b.UnmarshalMsg(data[4:])
-	b.Name = name // in-case parsing failed for some reason, make sure bucket name is not empty.
-	return err
+	return b, err
 }
 
 func loadBucketMetadataParse(ctx context.Context, objectAPI ObjectLayer, bucket string, parse bool) (BucketMetadata, error) {
-	b := newBucketMetadata(bucket)
-	err := b.Load(ctx, objectAPI, b.Name)
+	b, err := readBucketMetadata(ctx, objectAPI, bucket)
+	b.Name = bucket // in-case parsing failed for some reason, make sure bucket name is not empty.
 	if err != nil && !errors.Is(err, errConfigNotFound) {
 		return b, err
 	}
