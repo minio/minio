@@ -69,6 +69,16 @@ func (sys *BucketTargetSys) isOffline(ep *url.URL) bool {
 	return false
 }
 
+// markOffline sets endpoint to offline if network i/o timeout seen.
+func (sys *BucketTargetSys) markOffline(ep *url.URL) {
+	sys.hMutex.Lock()
+	defer sys.hMutex.Unlock()
+	if h, ok := sys.hc[ep.Host]; ok {
+		h.Online = false
+		sys.hc[ep.Host] = h
+	}
+}
+
 func (sys *BucketTargetSys) initHC(ep *url.URL) {
 	sys.hMutex.Lock()
 	sys.hc[ep.Host] = epHealth{
