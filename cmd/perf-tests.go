@@ -85,13 +85,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 
 	objCountPerThread := make([]uint64, opts.concurrency)
 
-	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
+	uploadsCtx, uploadsCancel := context.WithTimeout(ctx, opts.duration)
 	defer uploadsCancel()
-
-	go func() {
-		time.Sleep(opts.duration)
-		uploadsCancel()
-	}()
 
 	objNamePrefix := pathJoin(speedTest, mustGetUUID())
 
@@ -144,12 +139,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 		}, nil
 	}
 
-	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
+	downloadsCtx, downloadsCancel := context.WithTimeout(ctx, opts.duration)
 	defer downloadsCancel()
-	go func() {
-		time.Sleep(opts.duration)
-		downloadsCancel()
-	}()
 
 	gopts := minio.GetObjectOptions{}
 	gopts.Set(globalObjectPerfUserMetadata, "true") // Bypass S3 API freeze
