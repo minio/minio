@@ -280,8 +280,10 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
 			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
-				logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
-					task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
+					logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
+						task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+				}
 			} else {
 				ts := tierStats{
 					TotalSize:   uint64(task.objInfo.Size),
