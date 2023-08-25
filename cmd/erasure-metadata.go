@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -365,8 +364,6 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 			// Server-side replication fields
 			fmt.Fprintf(h, "%v", meta.MarkDeleted)
 			fmt.Fprint(h, meta.Metadata[string(meta.ReplicationState.ReplicaStatus)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationTimeStamp.Format(http.TimeFormat)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicaTimeStamp.Format(http.TimeFormat)])
 			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationStatusInternal])
 			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.VersionPurgeStatusInternal])
 

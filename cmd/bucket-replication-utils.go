@@ -349,8 +349,6 @@ type ReplicationState struct {
 // Equal returns true if replication state is identical for version purge statuses and (replica)tion statuses.
 func (rs *ReplicationState) Equal(o ReplicationState) bool {
 	return rs.ReplicaStatus == o.ReplicaStatus &&
-		rs.ReplicaTimeStamp.Equal(o.ReplicaTimeStamp) &&
-		rs.ReplicationTimeStamp.Equal(o.ReplicationTimeStamp) &&
 		rs.ReplicationStatusInternal == o.ReplicationStatusInternal &&
 		rs.VersionPurgeStatusInternal == o.VersionPurgeStatusInternal
 }
@@ -366,7 +364,10 @@ func (rs *ReplicationState) CompositeReplicationStatus() (st replication.StatusT
 			replStatus := getCompositeReplicationStatus(rs.Targets)
 			// return REPLICA status if replica received timestamp is later than replication timestamp
 			// provided object replication completed for all targets.
-			if !rs.ReplicaTimeStamp.Equal(timeSentinel) && replStatus == replication.Completed && rs.ReplicaTimeStamp.After(rs.ReplicationTimeStamp) {
+			if rs.ReplicaTimeStamp.Equal(timeSentinel) || rs.ReplicaTimeStamp.IsZero() {
+				return replStatus
+			}
+			if replStatus == replication.Completed && rs.ReplicaTimeStamp.After(rs.ReplicationTimeStamp) {
 				return rs.ReplicaStatus
 			}
 			return replStatus
