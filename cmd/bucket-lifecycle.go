@@ -145,13 +145,14 @@ func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []Object
 var globalExpiryState *expiryState
 
 const (
-	ChannelCapacity = 100000
+	// MaximumExpiryTasks defines the maximum capacity of the expiration tasks channel.
+	MaximumExpiryTasks = 100000
 )
 
 func newExpiryState() *expiryState {
 	return &expiryState{
-		byDaysCh:            make(chan expiryTask, ChannelCapacity),
-		byNewerNoncurrentCh: make(chan newerNoncurrentTask, ChannelCapacity),
+		byDaysCh:            make(chan expiryTask, MaximumExpiryTasks),
+		byNewerNoncurrentCh: make(chan newerNoncurrentTask, MaximumExpiryTasks),
 	}
 }
 
