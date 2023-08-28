@@ -17,6 +17,8 @@
 
 package grid
 
+//go:generate stringer -type=debugMsg $GOFILE
+
 // debugMsg is a debug message for testing purposes.
 // may only be used for tests.
 type debugMsg int
@@ -25,4 +27,7 @@ const (
 	debugShutdown debugMsg = iota
 	debugKillInbound
 	debugKillOutbound
+	debugWaitForExit
+	debugSetConnPingDuration
+	debugSetClientPingDuration
 )

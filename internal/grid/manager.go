@@ -18,6 +18,7 @@
 package grid
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -53,16 +54,28 @@ type Manager struct {
 	local string
 }
 
+type ManagerOptions struct {
+	Dialer ContextDialer
+	Local  string
+	Hosts  []string
+	Auth   AuthFn
+
+	debugBlockConnect chan struct{}
+}
+
 // NewManager creates a new grid manager
-func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn) (*Manager, error) {
+func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 	found := false
 	m := &Manager{
 		ID:      uuid.New(),
-		targets: make(map[string]*Connection, len(hosts)),
-		local:   local,
+		targets: make(map[string]*Connection, len(o.Hosts)),
+		local:   o.Local,
 	}
-	for _, host := range hosts {
-		if host == local {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, host := range o.Hosts {
+		if host == o.Local {
 			if found {
 				return nil, fmt.Errorf("grid: local host found multiple times")
 			}
@@ -70,7 +83,15 @@ func NewManager(dialer ContextDialer, local string, hosts []string, auth AuthFn)
 			// No connection to local.
 			continue
 		}
-		m.targets[host] = NewConnection(m.ID, local, host, dialer, &m.handlers, auth)
+		m.targets[host] = newConnection(connectionParams{
+			ctx:      ctx,
+			id:       m.ID,
+			local:    o.Local,
+			remote:   host,
+			dial:     o.Dialer,
+			handlers: &m.handlers,
+			auth:     o.Auth,
+		})
 	}
 	if !found {
 		return nil, fmt.Errorf("grid: local host not found")
@@ -184,7 +205,7 @@ func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
 
 // RegisterStreamingHandler will register a stateless handler that serves
 // two-way streaming requests.
-func (m *Manager) RegisterStreamingHandler(id HandlerID, h StatefulHandler) error {
+func (m *Manager) RegisterStreamingHandler(id HandlerID, h StreamHandler) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
@@ -201,8 +222,8 @@ func (m *Manager) HostName() string {
 
 // TestingShutDown will shut down all connections.
 // This should *only* be used by tests.
-func (m *Manager) debugMsg(d debugMsg) {
+func (m *Manager) debugMsg(d debugMsg, args ...any) {
 	for _, c := range m.targets {
-		c.debugMsg(d)
+		c.debugMsg(d, args...)
 	}
 }

@@ -171,6 +171,10 @@ func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 	m.respWait = out
 }
 
+// clientPingInterval will ping the remote handler every 15 seconds.
+// We disconnect when we exceed 2 intervals.
+const clientPingInterval = time.Second * 15
+
 // RequestStream will send a single payload request and stream back results.
 // 'requests' can be nil, in which case only req is sent as input.
 // It will however take less resources.
@@ -213,6 +217,13 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if requests == nil {
 		go func() {
 			defer close(responseCh)
+			var pingTimer <-chan time.Time
+			if m.deadline == 0 || m.deadline > clientPingInterval {
+				ticker := time.NewTicker(clientPingInterval)
+				defer ticker.Stop()
+				pingTimer = ticker.C
+				m.LastPong = time.Now().Unix()
+			}
 			defer m.parent.deleteMux(false, m.MuxID)
 			for {
 				select {
@@ -223,8 +234,8 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 					m.respMu.Lock()
 					defer m.respMu.Unlock() // We always return in this path.
 					if !m.closed {
-						logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 						responseCh <- Response{Err: m.ctx.Err()}
+						logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 						m.closeLocked()
 					}
 					return
@@ -239,6 +250,19 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 						// Client canceled. Don't block.
 						// Next loop will catch it.
 					}
+				case <-pingTimer:
+					if time.Now().Sub(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
+						m.respMu.Lock()
+						defer m.respMu.Unlock() // We always return in this path.
+						if !m.closed {
+							responseCh <- Response{Err: ErrDisconnected}
+							logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+							m.closeLocked()
+						}
+						return
+					}
+					// Send new ping.
+					logger.LogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
 				}
 			}
 		}()
@@ -414,6 +438,9 @@ func (m *MuxClient) addResponse(r Response) (ok bool) {
 	select {
 	case m.respWait <- r:
 		if r.Err != nil {
+			if debugPrint {
+				fmt.Println("Closing mux", m.MuxID, "due to error:", r.Err)
+			}
 			m.closeLocked()
 		}
 		return true

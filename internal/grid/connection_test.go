@@ -28,11 +28,16 @@ func TestDisconnect(t *testing.T) {
 			handler.ServeHTTP(w, r)
 		})
 	}
+	connReady := make(chan struct{})
 	// We fake a local and remote server.
 	localHost := hosts[0]
 	remoteHost := hosts[1]
-	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
-		return aud
+	local, err := NewManager(context.Background(), ManagerOptions{
+		Dialer:            dialer,
+		Local:             localHost,
+		Hosts:             hosts,
+		Auth:              func(aud string) string { return aud },
+		debugBlockConnect: connReady,
 	})
 	errFatal(err)
 	defer local.debugMsg(debugShutdown)
@@ -49,16 +54,23 @@ func TestDisconnect(t *testing.T) {
 		return nil, &err
 	}))
 
-	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
-		return aud
+	remote, err := NewManager(context.Background(), ManagerOptions{
+		Dialer:            dialer,
+		Local:             remoteHost,
+		Hosts:             hosts,
+		Auth:              func(aud string) string { return aud },
+		debugBlockConnect: connReady,
 	})
 	errFatal(err)
 	defer remote.debugMsg(debugShutdown)
+	defer local.debugMsg(debugWaitForExit)
+	defer remote.debugMsg(debugWaitForExit)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	defer localServer.Close()
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
 	defer remoteServer.Close()
+	close(connReady)
 
 	cleanReqs := make(chan struct{})
 	gotCall := make(chan struct{})
@@ -70,7 +82,7 @@ func TestDisconnect(t *testing.T) {
 		return nil, nil
 	}
 	// 2: Also block, but with streaming.
-	h2 := StatefulHandler{
+	h2 := StreamHandler{
 		Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 			gotCall <- struct{}{}
 			select {
@@ -121,8 +133,8 @@ func TestDisconnect(t *testing.T) {
 	}()
 
 	<-gotCall
-	remote.debugMsg(debugKillInbound)
-	local.debugMsg(debugKillInbound)
+	remote.debugMsg(debugKillOutbound)
+	local.debugMsg(debugKillOutbound)
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall

@@ -93,8 +93,10 @@ type Connection struct {
 
 	handlers *handlers
 
-	remote *RemoteClient
-	auth   AuthFn
+	remote             *RemoteClient
+	auth               AuthFn
+	clientPingInterval time.Duration
+	connPingInterval   time.Duration
 
 	// For testing only
 	debugInConn  net.Conn
@@ -140,35 +142,55 @@ const (
 	readBufferSize     = 4 << 10
 	writeBufferSize    = 4 << 10
 	defaultDialTimeout = time.Second
+	connPingInterval   = 5 * time.Second
 )
 
-// NewConnection will create an unconnected connection to a remote.
-func NewConnection(id uuid.UUID, local, remote string, dial ContextDialer, handlers *handlers, auth AuthFn) *Connection {
+type connectionParams struct {
+	ctx           context.Context
+	id            uuid.UUID
+	local, remote string
+	dial          ContextDialer
+	handlers      *handlers
+	auth          AuthFn
+
+	debugBlockConnect chan struct{}
+}
+
+// newConnection will create an unconnected connection to a remote.
+func newConnection(o connectionParams) *Connection {
 	c := &Connection{
-		State:      StateUnconnected,
-		Remote:     remote,
-		Local:      local,
-		id:         id,
-		ctx:        context.Background(),
-		outgoing:   xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
-		inStream:   xsync.NewIntegerMapOfPresized[uint64, *muxServer](1000),
-		outQueue:   make(chan []byte, defaultOutQueue),
-		dialer:     dial,
-		side:       ws.StateServerSide,
-		connChange: &sync.Cond{L: &sync.Mutex{}},
-		handlers:   handlers,
-		auth:       auth,
-		header:     make(http.Header, 1),
-		remote:     &RemoteClient{Name: remote},
+		State:              StateUnconnected,
+		Remote:             o.remote,
+		Local:              o.local,
+		id:                 o.id,
+		ctx:                o.ctx,
+		outgoing:           xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		inStream:           xsync.NewIntegerMapOfPresized[uint64, *muxServer](1000),
+		outQueue:           make(chan []byte, defaultOutQueue),
+		dialer:             o.dial,
+		side:               ws.StateServerSide,
+		connChange:         &sync.Cond{L: &sync.Mutex{}},
+		handlers:           o.handlers,
+		auth:               o.auth,
+		header:             make(http.Header, 1),
+		remote:             &RemoteClient{Name: o.remote},
+		clientPingInterval: clientPingInterval,
+		connPingInterval:   connPingInterval,
 	}
 
-	if local == remote {
+	if o.local == o.remote {
 		panic("equal hosts")
 	}
-	c.header.Set("Authorization", "Bearer "+auth(remote+RoutePath))
+	c.header.Set("Authorization", "Bearer "+o.auth(o.remote+RoutePath))
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
-		go c.connect()
+
+		go func() {
+			if o.debugBlockConnect != nil {
+				<-o.debugBlockConnect
+			}
+			c.connect()
+		}()
 	}
 	if debugPrint {
 		fmt.Println(c.Local, "->", c.Remote, "Should local connect:", c.shouldConnect(), "side:", c.side)
@@ -332,6 +354,9 @@ func (c *Connection) connect() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Runs until the server is shut down.
 	for {
+		if atomic.LoadUint32((*uint32)(&c.State)) == StateShutdown {
+			return
+		}
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
 		toDial = toDial + RoutePath
@@ -367,9 +392,13 @@ func (c *Connection) connect() {
 			if sleep < 0 {
 				sleep = 0
 			}
-			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnecting {
+			gotState := atomic.LoadUint32((*uint32)(&c.State))
+			if gotState == StateShutdown {
+				return
+			}
+			if gotState != StateConnecting {
 				// Don't print error on first attempt.
-				logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %w (%T) Sleeping %v", toDial, err, err, sleep))
+				logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %w (%T) Sleeping %v (%v)", toDial, err, err, sleep, gotState))
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
@@ -597,8 +626,19 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 func (c *Connection) updateState(s State) {
 	c.connChange.L.Lock()
 	defer c.connChange.L.Unlock()
+
 	// We may have reads that aren't locked, so update atomically.
+	gotState := atomic.LoadUint32((*uint32)(&c.State))
+	if gotState == StateShutdown || State(gotState) == s {
+		return
+	}
+	if s == StateConnected {
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+	}
 	atomic.StoreUint32((*uint32)(&c.State), uint32(s))
+	if debugPrint {
+		fmt.Println(c.Local, "updateState:", gotState, "->", s)
+	}
 	c.connChange.Broadcast()
 }
 
@@ -798,6 +838,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
 					continue
 				}
+				// Single calls do not support pinging.
 				if v, ok := c.inStream.Load(m.MuxID); ok {
 					pong := v.ping()
 					logger.LogIf(ctx, c.queueMsg(m, &pong))
@@ -811,11 +852,16 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				_, err := pong.UnmarshalMsg(m.Payload)
 				PutByteBuffer(m.Payload)
 				logger.LogIf(ctx, err)
-				// Broadcast when we get a pong.
-				// TODO: Add automatic pings.
 				if m.MuxID == 0 {
-					c.connChange.Broadcast()
 					atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+				} else {
+					if v, ok := c.outgoing.Load(m.MuxID); ok {
+						v.pong(pong)
+					} else {
+						// We don't care if the client was removed in the meantime,
+						// but we send a disconnect message to the server just in case.
+						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+					}
 				}
 			case OpRequest:
 				if !m.Handler.valid() {
@@ -933,12 +979,19 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		conn.Close()
 		c.connWg.Done()
 	}()
-	const pingInterval = 5 * time.Second
 
-	ping := time.NewTicker(pingInterval)
-	pingFrame := ws.MustCompileFrame(ws.NewPingFrame([]byte(c.Local)))
+	c.connMu.Lock()
+	connPingInterval := c.connPingInterval
+	c.connMu.Unlock()
+	ping := time.NewTicker(connPingInterval)
+	pingFrame := message{
+		Op:         OpPing,
+		DeadlineMS: 1000,
+	}
+
 	defer ping.Stop()
 	for {
+		var toSend []byte
 		select {
 		case <-ctx.Done():
 			return
@@ -946,36 +999,49 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
 				continue
 			}
-			_, err := conn.Write(pingFrame)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
-				cancel(ErrDisconnected)
-				return
-			}
-		case toSend := <-c.outQueue:
-			if debugPrint {
-				// fmt.Println("Sending", len(toSend), "bytes. Side", c.side)
-			}
-			c.connChange.L.Lock()
-			for atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
-				if debugPrint {
-					fmt.Println("Waiting for connection")
-				}
-				c.connChange.Wait()
-				select {
-				case <-ctx.Done():
-					c.connChange.L.Unlock()
+			lastPong := atomic.LoadInt64(&c.LastPong)
+			if lastPong > 0 {
+				lastPongTime := time.Unix(lastPong, 0)
+				if time.Since(lastPongTime) > connPingInterval*2 {
+					if debugPrint {
+						fmt.Println(c.Local, "Last pong too old. Disconnecting")
+					}
+					cancel(ErrDisconnected)
 					return
 				}
 			}
-			c.connChange.L.Unlock()
-
-			err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
+			var err error
+			toSend, err = pingFrame.MarshalMsg(GetByteBuffer()[:0])
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
-				cancel(ErrDisconnected)
+				logger.LogIf(ctx, err)
+				// Fake it...
+				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+				continue
+			}
+		case toSend = <-c.outQueue:
+			if len(toSend) == 0 {
+				continue
+			}
+		}
+		c.connChange.L.Lock()
+		for atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+			if debugPrint {
+				fmt.Println("Waiting for connection")
+			}
+			c.connChange.Wait()
+			select {
+			case <-ctx.Done():
+				c.connChange.L.Unlock()
 				return
 			}
+		}
+		c.connChange.L.Unlock()
+
+		err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
+			cancel(ErrDisconnected)
+			return
 		}
 	}
 }
@@ -1009,7 +1075,11 @@ func (c *Connection) Stats() ConnectionStats {
 	}
 }
 
-func (c *Connection) debugMsg(d debugMsg) {
+func (c *Connection) debugMsg(d debugMsg, args ...any) {
+	if debugPrint {
+		fmt.Println("debug: sending message", d, args)
+	}
+
 	switch d {
 	case debugShutdown:
 		c.updateState(StateShutdown)
@@ -1031,5 +1101,13 @@ func (c *Connection) debugMsg(d debugMsg) {
 			}
 			c.debugInConn.Close()
 		}
+	case debugWaitForExit:
+		c.connWg.Wait()
+	case debugSetConnPingDuration:
+		c.connMu.Lock()
+		defer c.connMu.Unlock()
+		c.connPingInterval = args[0].(time.Duration)
+	case debugSetClientPingDuration:
+		c.clientPingInterval = args[0].(time.Duration)
 	}
 }

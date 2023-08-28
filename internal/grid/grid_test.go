@@ -59,6 +59,16 @@ func startServer(t testing.TB, listener net.Listener, handler http.Handler) (ser
 	return server
 }
 
+func shutdownManagers(t testing.TB, servers ...*Manager) {
+	t.Helper()
+	for _, s := range servers {
+		s.debugMsg(debugShutdown)
+	}
+	for _, s := range servers {
+		s.debugMsg(debugWaitForExit)
+	}
+}
+
 func TestSingleRoundtrip(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
 	hosts, listeners := getHosts(2)
@@ -80,11 +90,13 @@ func TestSingleRoundtrip(t *testing.T) {
 	// We fake a local and remote server.
 	localHost := hosts[0]
 	remoteHost := hosts[1]
-	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
-		return aud
+	local, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  localHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
 	errFatal(err)
-	defer local.debugMsg(debugShutdown)
 
 	// 1: Echo
 	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
@@ -98,11 +110,14 @@ func TestSingleRoundtrip(t *testing.T) {
 		return nil, &err
 	}))
 
-	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
-		return aud
+	remote, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  remoteHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
 	errFatal(err)
-	defer remote.debugMsg(debugShutdown)
+	defer shutdownManagers(t, local, remote)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	defer localServer.Close()
@@ -163,10 +178,12 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	// We fake a local and remote server.
 	localHost := hosts[0]
 	remoteHost := hosts[1]
-	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
-		return aud
+	local, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  localHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
-	defer local.debugMsg(debugShutdown)
 	errFatal(err)
 
 	// 1: Echo
@@ -196,11 +213,15 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(h1.Register(local, handler1))
 	errFatal(h2.Register(local, handler2))
 
-	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
-		return aud
+	remote, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  remoteHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
+
 	errFatal(err)
-	defer remote.debugMsg(debugShutdown)
+	defer shutdownManagers(t, local, remote)
 
 	errFatal(h1.Register(remote, handler1))
 	errFatal(h2.Register(remote, handler2))
@@ -254,17 +275,23 @@ func TestStreamSuite(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 
-	local, err := NewManager(dialer, localHost, hosts, func(aud string) string {
-		return aud
+	local, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  localHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
-	errFatal(err)
-	defer local.debugMsg(debugShutdown)
 
-	remote, err := NewManager(dialer, remoteHost, hosts, func(aud string) string {
-		return aud
+	errFatal(err)
+
+	remote, err := NewManager(context.Background(), ManagerOptions{
+		Dialer: dialer,
+		Local:  remoteHost,
+		Hosts:  hosts,
+		Auth:   func(aud string) string { return aud },
 	})
 	errFatal(err)
-	defer remote.debugMsg(debugShutdown)
+	defer shutdownManagers(t, local, remote)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
@@ -328,7 +355,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 
 	// 1: Echo
 	register := func(manager *Manager) {
-		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				for in := range request {
 					b := append([]byte{}, payload...)
@@ -342,7 +369,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 			InCapacity:  1,
 		}))
 		// 2: Return as error
-		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest2, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				for in := range request {
 					t.Log("2: Got err request", string(in))
@@ -399,7 +426,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	serverCanceled := make(chan struct{})
 	register := func(manager *Manager) {
-		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				select {
 				case <-ctx.Done():
@@ -411,7 +438,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			OutCapacity: 1,
 			InCapacity:  0,
 		}))
-		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest2, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				select {
 				case <-ctx.Done():
@@ -446,7 +473,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 				}
 				err = resp.Err
 			}
-			t.Log("Client Context canceled")
+			t.Log("Client Context canceled. err state:", err)
 			clientCanceled <- time.Now()
 		}(t)
 		start := time.Now()
@@ -486,7 +513,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	serverCanceled := make(chan time.Duration, 1)
 	register := func(manager *Manager) {
-		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				started := time.Now()
 				dl, _ := ctx.Deadline()
@@ -503,7 +530,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 			OutCapacity: 1,
 			InCapacity:  0,
 		}))
-		errFatal(manager.RegisterStreamingHandler(handlerTest2, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest2, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				started := time.Now()
 				dl, _ := ctx.Deadline()
@@ -574,7 +601,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	serverSent := make(chan struct{})
 	register := func(manager *Manager) {
-		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				// Send many responses.
 				// Test that this doesn't block.
@@ -648,7 +675,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	processHandler := make(chan struct{})
 	register := func(manager *Manager) {
-		errFatal(manager.RegisterStreamingHandler(handlerTest, StatefulHandler{
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				// Block incoming requests.
 				var n byte
