@@ -2485,6 +2485,13 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 		diskHealthCheckOK(ctx, err)
 
+		if !fi.Versioned && !fi.Healing() {
+			// Use https://man7.org/linux/man-pages/man2/rename.2.html if possible on unversioned bucket.
+			if err := Rename2(pathutil.Join(srcVolumeDir, srcPath), pathutil.Join(dstVolumeDir, dstPath)); err == nil {
+				return sign, nil
+			} // if Rename2 is not successful fallback.
+		}
+
 		// renameAll only for objects that have xl.meta not saved inline.
 		if len(fi.Data) == 0 && fi.Size > 0 {
 			s.moveToTrash(dstDataPath, true, false)

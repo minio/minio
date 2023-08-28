@@ -1196,15 +1196,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	partName := "part.1"
 	tempErasureObj := pathJoin(uniqueID, fi.DataDir, partName)
 
-	// Delete temporary object in the event of failure.
-	// If PutObject succeeded there would be no temporary
-	// object to delete.
-	var online int
-	defer func() {
-		if online != len(onlineDisks) {
-			er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
-		}
-	}()
+	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
 	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
@@ -1309,6 +1301,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			Algorithm:  DefaultBitrotAlgorithm,
 			Hash:       bitrotWriterSum(w),
 		})
+		partsMetadata[i].Versioned = opts.Versioned || opts.VersionSuspended
 	}
 
 	userDefined["etag"] = r.MD5CurrentHexString()
@@ -1389,7 +1382,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.ReplicationState = opts.PutReplicationState()
-	online = countOnlineDisks(onlineDisks)
 
 	// we are adding a new version to this object under the namespace lock, so this is the latest version.
 	fi.IsLatest = true
