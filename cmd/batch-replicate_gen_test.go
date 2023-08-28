@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshalBatchJobKeyRotateEncryption(t *testing.T) {
-	v := BatchJobKeyRotateEncryption{}
+func TestMarshalUnmarshalBatchJobReplicateCredentials(t *testing.T) {
+	v := BatchJobReplicateCredentials{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshalBatchJobKeyRotateEncryption(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBatchJobKeyRotateEncryption(b *testing.B) {
-	v := BatchJobKeyRotateEncryption{}
+func BenchmarkMarshalMsgBatchJobReplicateCredentials(b *testing.B) {
+	v := BatchJobReplicateCredentials{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgBatchJobKeyRotateEncryption(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBatchJobKeyRotateEncryption(b *testing.B) {
-	v := BatchJobKeyRotateEncryption{}
+func BenchmarkAppendMsgBatchJobReplicateCredentials(b *testing.B) {
+	v := BatchJobReplicateCredentials{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgBatchJobKeyRotateEncryption(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBatchJobKeyRotateEncryption(b *testing.B) {
-	v := BatchJobKeyRotateEncryption{}
+func BenchmarkUnmarshalBatchJobReplicateCredentials(b *testing.B) {
+	v := BatchJobReplicateCredentials{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshalBatchJobKeyRotateEncryption(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBatchJobKeyRotateEncryption(t *testing.T) {
-	v := BatchJobKeyRotateEncryption{}
+func TestEncodeDecodeBatchJobReplicateCredentials(t *testing.T) {
+	v := BatchJobReplicateCredentials{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBatchJobKeyRotateEncryption Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBatchJobReplicateCredentials Msgsize() is inaccurate")
 	}
 
-	vn := BatchJobKeyRotateEncryption{}
+	vn := BatchJobReplicateCredentials{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodeBatchJobKeyRotateEncryption(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBatchJobKeyRotateEncryption(b *testing.B) {
-	v := BatchJobKeyRotateEncryption{}
+func BenchmarkEncodeBatchJobReplicateCredentials(b *testing.B) {
+	v := BatchJobReplicateCredentials{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodeBatchJobKeyRotateEncryption(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBatchJobKeyRotateEncryption(b *testing.B) {
-	v := BatchJobKeyRotateEncryption{}
+func BenchmarkDecodeBatchJobReplicateCredentials(b *testing.B) {
+	v := BatchJobReplicateCredentials{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -122,8 +122,8 @@ func BenchmarkDecodeBatchJobKeyRotateEncryption(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBatchJobKeyRotateFlags(t *testing.T) {
-	v := BatchJobKeyRotateFlags{}
+func TestMarshalUnmarshalBatchJobReplicateFlags(t *testing.T) {
+	v := BatchJobReplicateFlags{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +145,8 @@ func TestMarshalUnmarshalBatchJobKeyRotateFlags(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBatchJobKeyRotateFlags(b *testing.B) {
-	v := BatchJobKeyRotateFlags{}
+func BenchmarkMarshalMsgBatchJobReplicateFlags(b *testing.B) {
+	v := BatchJobReplicateFlags{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -154,8 +154,8 @@ func BenchmarkMarshalMsgBatchJobKeyRotateFlags(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBatchJobKeyRotateFlags(b *testing.B) {
-	v := BatchJobKeyRotateFlags{}
+func BenchmarkAppendMsgBatchJobReplicateFlags(b *testing.B) {
+	v := BatchJobReplicateFlags{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -166,8 +166,8 @@ func BenchmarkAppendMsgBatchJobKeyRotateFlags(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBatchJobKeyRotateFlags(b *testing.B) {
-	v := BatchJobKeyRotateFlags{}
+func BenchmarkUnmarshalBatchJobReplicateFlags(b *testing.B) {
+	v := BatchJobReplicateFlags{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -180,17 +180,17 @@ func BenchmarkUnmarshalBatchJobKeyRotateFlags(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBatchJobKeyRotateFlags(t *testing.T) {
-	v := BatchJobKeyRotateFlags{}
+func TestEncodeDecodeBatchJobReplicateFlags(t *testing.T) {
+	v := BatchJobReplicateFlags{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBatchJobKeyRotateFlags Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBatchJobReplicateFlags Msgsize() is inaccurate")
 	}
 
-	vn := BatchJobKeyRotateFlags{}
+	vn := BatchJobReplicateFlags{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -204,8 +204,8 @@ func TestEncodeDecodeBatchJobKeyRotateFlags(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBatchJobKeyRotateFlags(b *testing.B) {
-	v := BatchJobKeyRotateFlags{}
+func BenchmarkEncodeBatchJobReplicateFlags(b *testing.B) {
+	v := BatchJobReplicateFlags{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -218,8 +218,8 @@ func BenchmarkEncodeBatchJobKeyRotateFlags(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBatchJobKeyRotateFlags(b *testing.B) {
-	v := BatchJobKeyRotateFlags{}
+func BenchmarkDecodeBatchJobReplicateFlags(b *testing.B) {
+	v := BatchJobReplicateFlags{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -235,8 +235,8 @@ func BenchmarkDecodeBatchJobKeyRotateFlags(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBatchJobKeyRotateV1(t *testing.T) {
-	v := BatchJobKeyRotateV1{}
+func TestMarshalUnmarshalBatchJobReplicateSource(t *testing.T) {
+	v := BatchJobReplicateSource{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -258,8 +258,8 @@ func TestMarshalUnmarshalBatchJobKeyRotateV1(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBatchJobKeyRotateV1(b *testing.B) {
-	v := BatchJobKeyRotateV1{}
+func BenchmarkMarshalMsgBatchJobReplicateSource(b *testing.B) {
+	v := BatchJobReplicateSource{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -267,8 +267,8 @@ func BenchmarkMarshalMsgBatchJobKeyRotateV1(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBatchJobKeyRotateV1(b *testing.B) {
-	v := BatchJobKeyRotateV1{}
+func BenchmarkAppendMsgBatchJobReplicateSource(b *testing.B) {
+	v := BatchJobReplicateSource{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -279,8 +279,8 @@ func BenchmarkAppendMsgBatchJobKeyRotateV1(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBatchJobKeyRotateV1(b *testing.B) {
-	v := BatchJobKeyRotateV1{}
+func BenchmarkUnmarshalBatchJobReplicateSource(b *testing.B) {
+	v := BatchJobReplicateSource{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -293,17 +293,17 @@ func BenchmarkUnmarshalBatchJobKeyRotateV1(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBatchJobKeyRotateV1(t *testing.T) {
-	v := BatchJobKeyRotateV1{}
+func TestEncodeDecodeBatchJobReplicateSource(t *testing.T) {
+	v := BatchJobReplicateSource{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBatchJobKeyRotateV1 Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBatchJobReplicateSource Msgsize() is inaccurate")
 	}
 
-	vn := BatchJobKeyRotateV1{}
+	vn := BatchJobReplicateSource{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -317,8 +317,8 @@ func TestEncodeDecodeBatchJobKeyRotateV1(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBatchJobKeyRotateV1(b *testing.B) {
-	v := BatchJobKeyRotateV1{}
+func BenchmarkEncodeBatchJobReplicateSource(b *testing.B) {
+	v := BatchJobReplicateSource{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -331,8 +331,8 @@ func BenchmarkEncodeBatchJobKeyRotateV1(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBatchJobKeyRotateV1(b *testing.B) {
-	v := BatchJobKeyRotateV1{}
+func BenchmarkDecodeBatchJobReplicateSource(b *testing.B) {
+	v := BatchJobReplicateSource{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -348,8 +348,8 @@ func BenchmarkDecodeBatchJobKeyRotateV1(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBatchKeyRotateFilter(t *testing.T) {
-	v := BatchKeyRotateFilter{}
+func TestMarshalUnmarshalBatchJobReplicateTarget(t *testing.T) {
+	v := BatchJobReplicateTarget{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -371,8 +371,8 @@ func TestMarshalUnmarshalBatchKeyRotateFilter(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBatchKeyRotateFilter(b *testing.B) {
-	v := BatchKeyRotateFilter{}
+func BenchmarkMarshalMsgBatchJobReplicateTarget(b *testing.B) {
+	v := BatchJobReplicateTarget{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -380,8 +380,8 @@ func BenchmarkMarshalMsgBatchKeyRotateFilter(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBatchKeyRotateFilter(b *testing.B) {
-	v := BatchKeyRotateFilter{}
+func BenchmarkAppendMsgBatchJobReplicateTarget(b *testing.B) {
+	v := BatchJobReplicateTarget{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -392,8 +392,8 @@ func BenchmarkAppendMsgBatchKeyRotateFilter(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBatchKeyRotateFilter(b *testing.B) {
-	v := BatchKeyRotateFilter{}
+func BenchmarkUnmarshalBatchJobReplicateTarget(b *testing.B) {
+	v := BatchJobReplicateTarget{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -406,17 +406,17 @@ func BenchmarkUnmarshalBatchKeyRotateFilter(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBatchKeyRotateFilter(t *testing.T) {
-	v := BatchKeyRotateFilter{}
+func TestEncodeDecodeBatchJobReplicateTarget(t *testing.T) {
+	v := BatchJobReplicateTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBatchKeyRotateFilter Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBatchJobReplicateTarget Msgsize() is inaccurate")
 	}
 
-	vn := BatchKeyRotateFilter{}
+	vn := BatchJobReplicateTarget{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -430,8 +430,8 @@ func TestEncodeDecodeBatchKeyRotateFilter(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBatchKeyRotateFilter(b *testing.B) {
-	v := BatchKeyRotateFilter{}
+func BenchmarkEncodeBatchJobReplicateTarget(b *testing.B) {
+	v := BatchJobReplicateTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -444,8 +444,8 @@ func BenchmarkEncodeBatchKeyRotateFilter(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBatchKeyRotateFilter(b *testing.B) {
-	v := BatchKeyRotateFilter{}
+func BenchmarkDecodeBatchJobReplicateTarget(b *testing.B) {
+	v := BatchJobReplicateTarget{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -461,8 +461,8 @@ func BenchmarkDecodeBatchKeyRotateFilter(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBatchKeyRotateNotification(t *testing.T) {
-	v := BatchKeyRotateNotification{}
+func TestMarshalUnmarshalBatchJobReplicateV1(t *testing.T) {
+	v := BatchJobReplicateV1{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -484,8 +484,8 @@ func TestMarshalUnmarshalBatchKeyRotateNotification(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBatchKeyRotateNotification(b *testing.B) {
-	v := BatchKeyRotateNotification{}
+func BenchmarkMarshalMsgBatchJobReplicateV1(b *testing.B) {
+	v := BatchJobReplicateV1{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -493,8 +493,8 @@ func BenchmarkMarshalMsgBatchKeyRotateNotification(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBatchKeyRotateNotification(b *testing.B) {
-	v := BatchKeyRotateNotification{}
+func BenchmarkAppendMsgBatchJobReplicateV1(b *testing.B) {
+	v := BatchJobReplicateV1{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -505,8 +505,8 @@ func BenchmarkAppendMsgBatchKeyRotateNotification(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBatchKeyRotateNotification(b *testing.B) {
-	v := BatchKeyRotateNotification{}
+func BenchmarkUnmarshalBatchJobReplicateV1(b *testing.B) {
+	v := BatchJobReplicateV1{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -519,17 +519,17 @@ func BenchmarkUnmarshalBatchKeyRotateNotification(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBatchKeyRotateNotification(t *testing.T) {
-	v := BatchKeyRotateNotification{}
+func TestEncodeDecodeBatchJobReplicateV1(t *testing.T) {
+	v := BatchJobReplicateV1{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBatchKeyRotateNotification Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBatchJobReplicateV1 Msgsize() is inaccurate")
 	}
 
-	vn := BatchKeyRotateNotification{}
+	vn := BatchJobReplicateV1{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -543,8 +543,8 @@ func TestEncodeDecodeBatchKeyRotateNotification(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBatchKeyRotateNotification(b *testing.B) {
-	v := BatchKeyRotateNotification{}
+func BenchmarkEncodeBatchJobReplicateV1(b *testing.B) {
+	v := BatchJobReplicateV1{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -557,8 +557,121 @@ func BenchmarkEncodeBatchKeyRotateNotification(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBatchKeyRotateNotification(b *testing.B) {
-	v := BatchKeyRotateNotification{}
+func BenchmarkDecodeBatchJobReplicateV1(b *testing.B) {
+	v := BatchJobReplicateV1{}
+	var buf bytes.Buffer
+	msgp.Encode(&buf, &v)
+	b.SetBytes(int64(buf.Len()))
+	rd := msgp.NewEndlessReader(buf.Bytes(), b)
+	dc := msgp.NewReader(rd)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := v.DecodeMsg(dc)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalBatchReplicateFilter(t *testing.T) {
+	v := BatchReplicateFilter{}
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func BenchmarkMarshalMsgBatchReplicateFilter(b *testing.B) {
+	v := BatchReplicateFilter{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgBatchReplicateFilter(b *testing.B) {
+	v := BatchReplicateFilter{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts, _ = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts, _ = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalBatchReplicateFilter(b *testing.B) {
+	v := BatchReplicateFilter{}
+	bts, _ := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestEncodeDecodeBatchReplicateFilter(t *testing.T) {
+	v := BatchReplicateFilter{}
+	var buf bytes.Buffer
+	msgp.Encode(&buf, &v)
+
+	m := v.Msgsize()
+	if buf.Len() > m {
+		t.Log("WARNING: TestEncodeDecodeBatchReplicateFilter Msgsize() is inaccurate")
+	}
+
+	vn := BatchReplicateFilter{}
+	err := msgp.Decode(&buf, &vn)
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf.Reset()
+	msgp.Encode(&buf, &v)
+	err = msgp.NewReader(&buf).Skip()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func BenchmarkEncodeBatchReplicateFilter(b *testing.B) {
+	v := BatchReplicateFilter{}
+	var buf bytes.Buffer
+	msgp.Encode(&buf, &v)
+	b.SetBytes(int64(buf.Len()))
+	en := msgp.NewWriter(msgp.Nowhere)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.EncodeMsg(en)
+	}
+	en.Flush()
+}
+
+func BenchmarkDecodeBatchReplicateFilter(b *testing.B) {
+	v := BatchReplicateFilter{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
