@@ -64,6 +64,8 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 		w.WriteHeader(http.StatusNotFound)
 	case errInvalidAccessKeyID, errAccessKeyDisabled, errNoAuthToken, errMalformedAuth, errAuthentication, errSkewedAuthTime:
 		w.WriteHeader(http.StatusUnauthorized)
+	case context.Canceled, context.DeadlineExceeded:
+		w.WriteHeader(499)
 	default:
 		w.WriteHeader(http.StatusForbidden)
 	}
@@ -440,6 +442,7 @@ func (s *storageRESTServer) UpdateMetadataHandler(w http.ResponseWriter, r *http
 	}
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
+	noPersistence := r.Form.Get(storageRESTNoPersistence) == "true"
 
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
@@ -452,7 +455,7 @@ func (s *storageRESTServer) UpdateMetadataHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	err := s.storage.UpdateMetadata(r.Context(), volume, filePath, fi)
+	err := s.storage.UpdateMetadata(r.Context(), volume, filePath, fi, UpdateMetadataOpts{NoPersistence: noPersistence})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}

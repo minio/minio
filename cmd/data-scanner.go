@@ -550,7 +550,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				dst = &dataUsageEntry{Compacted: false}
 			}
 			if err := f.scanFolder(ctx, folder, dst); err != nil {
-				logger.LogIf(ctx, err)
 				return
 			}
 			if !into.Compacted {
@@ -998,7 +997,6 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 
 	versioned := vcfg != nil && vcfg.Versioned(i.objectPath())
 
-	// current version + most recent lim noncurrent versions
 	objectInfos := make([]ObjectInfo, 0, len(fivs))
 
 	if i.lifeCycle == nil {
@@ -1018,6 +1016,10 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 	}
 
 	overflowVersions := fivs[lim+1:]
+	// Retain the current version + most recent lim noncurrent versions
+	for _, fi := range fivs[:lim+1] {
+		objectInfos = append(objectInfos, fi.ToObjectInfo(i.bucket, i.objectPath(), versioned))
+	}
 
 	toDel := make([]ObjectToDelete, 0, len(overflowVersions))
 	for _, fi := range overflowVersions {
@@ -1186,10 +1188,10 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	if lcEvent.Action.DeleteVersioned() {
 		opts.VersionID = obj.VersionID
 	}
-	if opts.VersionID == "" {
-		opts.Versioned = globalBucketVersioningSys.PrefixEnabled(obj.Bucket, obj.Name)
-		opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(obj.Bucket, obj.Name)
-	}
+
+	opts.Versioned = globalBucketVersioningSys.PrefixEnabled(obj.Bucket, obj.Name)
+	opts.VersionSuspended = globalBucketVersioningSys.PrefixSuspended(obj.Bucket, obj.Name)
+
 	if lcEvent.Action.DeleteAll() {
 		opts.DeletePrefix = true
 	}

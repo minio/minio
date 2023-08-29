@@ -2423,7 +2423,7 @@ func migrateV27ToV28() error {
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 // if etcd is configured then migrates /config/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
-	bootstrapTrace("migrate config to .minio.sys/config/config.json")
+	bootstrapTraceMsg("migrate config to .minio.sys/config/config.json")
 	// Construct path to config.json for the given bucket.
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 

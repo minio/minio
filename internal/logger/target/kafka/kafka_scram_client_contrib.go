@@ -20,7 +20,7 @@ package kafka
 import (
 	"crypto/sha512"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/xdg/scram"
 
 	"github.com/minio/minio/internal/hash/sha256"

@@ -5,7 +5,7 @@
   "Statement": [
 {{- range $i, $statement := .statements }}
     {
-      "Effect": "Allow",
+      "Effect": "{{ $statement.effect | default "Allow" }}",
       "Action": [
 "{{ $statement.actions | join "\",\n\"" }}"
       ]{{ if $statement.resources }},
@@ -21,7 +21,7 @@
  {{- range $operator,$object := $v }}
         "{{ $operator }}": { {{ $object }} }{{- if lt $k $condition_len }},{{- end }}
  {{- end }}{{- end }}
-      }{{- end }} 
+      }{{- end }}
     }{{ if lt $i $statements_length }},{{end }}
 {{- end }}
   ]

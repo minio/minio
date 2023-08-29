@@ -187,7 +187,7 @@ func (sys *IAMSys) Initialized() bool {
 }
 
 // Load - loads all credentials, policies and policy mappings.
-func (sys *IAMSys) Load(ctx context.Context) error {
+func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	loadStartTime := time.Now()
 	err := sys.store.LoadIAMCache(ctx)
 	if err != nil {
@@ -200,6 +200,10 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 	atomic.StoreUint64(&sys.LastRefreshTimeUnixNano, uint64(loadStartTime.Add(loadDuration).UnixNano()))
 	atomic.AddUint64(&sys.TotalRefreshSuccesses, 1)
 
+	if firstTime {
+		bootstrapTraceMsg(fmt.Sprintf("globalIAMSys.Load(): (duration: %s)", loadDuration))
+	}
+
 	select {
 	case <-sys.configLoaded:
 	default:
@@ -210,7 +214,7 @@ func (sys *IAMSys) Load(ctx context.Context) error {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etcd.Client, iamRefreshInterval time.Duration) {
-	bootstrapTrace("IAM initialization started")
+	bootstrapTraceMsg("IAM initialization started")
 	globalServerConfigMu.RLock()
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
@@ -300,7 +304,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Load IAM data from storage.
 	for {
-		if err := sys.Load(retryCtx); err != nil {
+		if err := sys.Load(retryCtx, true); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -312,8 +316,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		}
 		break
 	}
-
-	bootstrapTrace("finishing IAM loading")
 
 	refreshInterval := sys.iamRefreshInterval
 
@@ -371,6 +373,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	sys.printIAMRoles()
+
+	bootstrapTraceMsg("finishing IAM loading")
 }
 
 func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
@@ -446,7 +450,7 @@ func (sys *IAMSys) watch(ctx context.Context) {
 		select {
 		case <-timer.C:
 			refreshStart := time.Now()
-			if err := sys.Load(ctx); err != nil {
+			if err := sys.Load(ctx, false); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
 			} else {
 				took := time.Since(refreshStart).Seconds()
@@ -590,12 +594,7 @@ func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[str
 		return nil, errServerNotInitialized
 	}
 
-	select {
-	case <-sys.configLoaded:
-		return sys.store.ListPolicies(ctx, bucketName)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return sys.store.ListPolicies(ctx, bucketName)
 }
 
 // ListPolicyDocs - lists all canned policy docs.
@@ -604,12 +603,7 @@ func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[s
 		return nil, errServerNotInitialized
 	}
 
-	select {
-	case <-sys.configLoaded:
-		return sys.store.ListPolicyDocs(ctx, bucketName)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return sys.store.ListPolicyDocs(ctx, bucketName)
 }
 
 // SetPolicy - sets a new named policy.

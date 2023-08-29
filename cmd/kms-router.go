@@ -63,7 +63,6 @@ func registerKMSRouter(router *mux.Router) {
 		kmsRouter.Methods(http.MethodGet).Path(version + "/key/status").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSKeyStatusHandler)))
 
 		// KMS Policy APIs
-		kmsRouter.Methods(http.MethodPost).Path(version+"/policy/set").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSSetPolicyHandler))).Queries("policy", "{policy:.*}")
 		kmsRouter.Methods(http.MethodPost).Path(version+"/policy/assign").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSAssignPolicyHandler))).Queries("policy", "{policy:.*}")
 		kmsRouter.Methods(http.MethodGet).Path(version+"/policy/describe").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDescribePolicyHandler))).Queries("policy", "{policy:.*}")
 		kmsRouter.Methods(http.MethodGet).Path(version+"/policy/get").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSGetPolicyHandler))).Queries("policy", "{policy:.*}")

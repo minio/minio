@@ -261,7 +261,7 @@ func (lc Lifecycle) FilterRules(obj ObjectOpts) []Rule {
 		if !strings.HasPrefix(obj.Name, rule.GetPrefix()) {
 			continue
 		}
-		if !rule.Filter.TestTags(obj.UserTags) {
+		if !obj.DeleteMarker && !rule.Filter.TestTags(obj.UserTags) {
 			continue
 		}
 		rules = append(rules, rule)

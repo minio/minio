@@ -406,10 +406,11 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	return err
 }
 
-func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTNoPersistence, strconv.FormatBool(opts.NoPersistence))
 
 	var reader bytes.Buffer
 	if err := msgp.Encode(&reader, &fi); err != nil {

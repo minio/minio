@@ -34,9 +34,8 @@ type KeyManager interface {
 	// anymore, and therefore, is lost.
 	DeleteKey(ctx context.Context, keyID string) error
 
-	// ListKeys List all key names that match the specified pattern. In particular,
-	// the pattern * lists all keys.
-	ListKeys(ctx context.Context, pattern string) (*kes.KeyIterator, error)
+	// ListKeys lists all key names.
+	ListKeys(ctx context.Context) (*kes.ListIter[string], error)
 
 	// ImportKey imports a cryptographic key into the KMS.
 	ImportKey(ctx context.Context, keyID string, bytes []byte) error

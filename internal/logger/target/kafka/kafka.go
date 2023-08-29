@@ -32,8 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
-	saramatls "github.com/Shopify/sarama/tools/tls"
+	"github.com/IBM/sarama"
+	saramatls "github.com/IBM/sarama/tools/tls"
 	"github.com/tidwall/gjson"
 
 	"github.com/minio/minio/internal/logger/target/types"
@@ -287,9 +287,20 @@ func (h *Target) init() error {
 	sconfig.Net.TLS.Config.ClientAuth = h.kconfig.TLS.ClientAuth
 	sconfig.Net.TLS.Config.RootCAs = h.kconfig.TLS.RootCAs
 
-	sconfig.Producer.RequiredAcks = sarama.WaitForAll
-	sconfig.Producer.Retry.Max = 10
+	// These settings are needed to ensure that kafka client doesn't hang on brokers
+	// refer https://github.com/IBM/sarama/issues/765#issuecomment-254333355
+	sconfig.Producer.Retry.Max = 2
+	sconfig.Producer.Retry.Backoff = (10 * time.Second)
 	sconfig.Producer.Return.Successes = true
+	sconfig.Producer.Return.Errors = true
+	sconfig.Producer.RequiredAcks = 1
+	sconfig.Producer.Timeout = (10 * time.Second)
+	sconfig.Net.ReadTimeout = (10 * time.Second)
+	sconfig.Net.DialTimeout = (10 * time.Second)
+	sconfig.Net.WriteTimeout = (10 * time.Second)
+	sconfig.Metadata.Retry.Max = 1
+	sconfig.Metadata.Retry.Backoff = (10 * time.Second)
+	sconfig.Metadata.RefreshFrequency = (15 * time.Minute)
 
 	h.config = sconfig
 
@@ -330,6 +341,12 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 
 	select {
 	case h.logCh <- entry:
+	case <-ctx.Done():
+		// return error only for context timedout.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ctx.Err()
+		}
+		return nil
 	default:
 		// log channel is full, do not wait and return
 		// an error immediately to the caller

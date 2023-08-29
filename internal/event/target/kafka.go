@@ -37,8 +37,8 @@ import (
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/net"
 
-	"github.com/Shopify/sarama"
-	saramatls "github.com/Shopify/sarama/tools/tls"
+	"github.com/IBM/sarama"
+	saramatls "github.com/IBM/sarama/tools/tls"
 )
 
 // Kafka input constants
@@ -332,9 +332,20 @@ func (target *KafkaTarget) initKafka() error {
 	config.Net.TLS.Config.ClientAuth = args.TLS.ClientAuth
 	config.Net.TLS.Config.RootCAs = args.TLS.RootCAs
 
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 10
+	// These settings are needed to ensure that kafka client doesn't hang on brokers
+	// refer https://github.com/IBM/sarama/issues/765#issuecomment-254333355
+	config.Producer.Retry.Max = 2
+	config.Producer.Retry.Backoff = (10 * time.Second)
 	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
+	config.Producer.RequiredAcks = 1
+	config.Producer.Timeout = (10 * time.Second)
+	config.Net.ReadTimeout = (10 * time.Second)
+	config.Net.DialTimeout = (10 * time.Second)
+	config.Net.WriteTimeout = (10 * time.Second)
+	config.Metadata.Retry.Max = 1
+	config.Metadata.Retry.Backoff = (10 * time.Second)
+	config.Metadata.RefreshFrequency = (15 * time.Minute)
 
 	target.config = config
 

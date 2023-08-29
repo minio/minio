@@ -84,6 +84,11 @@ e.g., To scan objects stored under `user-uploads/` prefix and remove versions ol
 }
 ```
 
+This JSON rule is equivalent to the following MinIO Client command:
+```
+mc ilm rule add --noncurrent-expire-days 365 --prefix "user-uploads/" myminio/mydata
+```
+
 ### 3.2 Automatic removal of noncurrent versions keeping only most recent ones after noncurrent days
 
 It is possible to configure automatic removal of older noncurrent versions keeping only the most recent `N` using `NewerNoncurrentVersions`.
@@ -106,6 +111,11 @@ e.g, To remove noncurrent versions of all objects keeping the most recent 5 nonc
         }
     ]
 }
+```
+
+This JSON rule is equivalent to the following MinIO Client command:
+```
+mc ilm rule add --noncurrent-expire-days 30 --noncurrent-expire-newer 5 myminio/mydata
 ```
 
 #### 3.2.a Automatic removal of noncurrent versions keeping only most recent ones immediately (MinIO only extension)
@@ -134,7 +144,11 @@ Note: This rule has an implicit zero NoncurrentDays, which makes the expiry of t
 #### 3.2.b Automatic removal of all versions (MinIO only extension)
 
 This is available only on MinIO as an extension to the Expiration feature. The following rule makes it possible to remove all versions of an object under 
-the prefix `user-uploads/` as soon as the latest object satisfies the expiration criteria.
+the prefix `user-uploads/` as soon as the latest object satisfies the expiration criteria. 
+
+> NOTE: If the latest object is a delete marker then filtering based on `Filter.Tags` is ignored and 
+> if the DELETE marker modTime satisfies the `Expiration.Days` then all versions of the object are 
+> immediately purged.
 
 ```
 {

@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
@@ -84,13 +85,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 
 	objCountPerThread := make([]uint64, opts.concurrency)
 
-	uploadsCtx, uploadsCancel := context.WithCancel(context.Background())
+	uploadsCtx, uploadsCancel := context.WithTimeout(ctx, opts.duration)
 	defer uploadsCancel()
-
-	go func() {
-		time.Sleep(opts.duration)
-		uploadsCancel()
-	}()
 
 	objNamePrefix := pathJoin(speedTest, mustGetUUID())
 
@@ -143,12 +139,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 		}, nil
 	}
 
-	downloadsCtx, downloadsCancel := context.WithCancel(context.Background())
+	downloadsCtx, downloadsCancel := context.WithTimeout(ctx, opts.duration)
 	defer downloadsCancel()
-	go func() {
-		time.Sleep(opts.duration)
-		downloadsCancel()
-	}()
 
 	gopts := minio.GetObjectOptions{}
 	gopts.Set(globalObjectPerfUserMetadata, "true") // Bypass S3 API freeze
@@ -367,29 +359,14 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		for i := 0; i < connectionsPerPeer; i++ {
 			go func() {
 				defer wg.Done()
-				cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
-				if err != nil {
-					return
-				}
-				rp := cli.GetEndpointURL()
-				reqURL := &url.URL{
-					Scheme: rp.Scheme,
-					Host:   rp.Host,
-					Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplicationDevNull,
-				}
-				req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), r)
-				if err != nil {
-					return
-				}
-				client := &http.Client{
-					Timeout:   duration + 10*time.Second,
-					Transport: globalRemoteTargetTransport,
-				}
-				resp, err := client.Do(req)
-				if err != nil {
-					return
-				}
-				defer xhttp.DrainBody(resp.Body)
+				ctx, cancel := context.WithTimeout(ctx, duration+10*time.Second)
+				defer cancel()
+				perfNetRequest(
+					ctx,
+					info.DeploymentID,
+					adminPathPrefix+adminAPIVersionPrefix+adminAPISiteReplicationDevNull,
+					r,
+				)
 			}()
 		}
 	}
@@ -421,4 +398,42 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		Error:           errStr,
 		TotalConn:       uint64(connectionsPerPeer),
 	}
+}
+
+// perfNetRequest - reader for http.request.body
+func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io.Reader) (result madmin.SiteNetPerfNodeResult) {
+	result = madmin.SiteNetPerfNodeResult{}
+	cli, err := globalSiteReplicationSys.getAdminClient(ctx, deploymentID)
+	if err != nil {
+		result.Error = err.Error()
+		return
+	}
+	rp := cli.GetEndpointURL()
+	reqURL := &url.URL{
+		Scheme: rp.Scheme,
+		Host:   rp.Host,
+		Path:   reqPath,
+	}
+	result.Endpoint = rp.String()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), reader)
+	if err != nil {
+		result.Error = err.Error()
+		return
+	}
+	client := &http.Client{
+		Transport: globalRemoteTargetTransport,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		result.Error = err.Error()
+		return
+	}
+	defer xhttp.DrainBody(resp.Body)
+	err = gob.NewDecoder(resp.Body).Decode(&result)
+	// endpoint have been overwritten
+	result.Endpoint = rp.String()
+	if err != nil {
+		result.Error = err.Error()
+	}
+	return
 }

@@ -440,7 +440,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
 	if err == nil && dnsURL != "" {
-		bootstrapTrace("initialize remote bucket DNS store")
+		bootstrapTraceMsg("initialize remote bucket DNS store")
 		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
@@ -455,7 +455,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	}
 
 	if etcdCfg.Enabled {
-		bootstrapTrace("initialize etcd store")
+		bootstrapTraceMsg("initialize etcd store")
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
@@ -514,19 +514,19 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	transport := NewHTTPTransport()
 
-	bootstrapTrace("initialize the event notification targets")
+	bootstrapTraceMsg("initialize the event notification targets")
 	globalNotifyTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	bootstrapTrace("initialize the lambda targets")
+	bootstrapTraceMsg("initialize the lambda targets")
 	globalLambdaTargetList, err = lambda.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
 	}
 
-	bootstrapTrace("applying the dynamic configuration")
+	bootstrapTraceMsg("applying the dynamic configuration")
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
 		logger.LogIf(ctx, err)
@@ -786,13 +786,13 @@ func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
 // from env if found and valid
 // data is optional. If nil it will be loaded from backend.
 func loadConfig(objAPI ObjectLayer, data []byte) error {
-	bootstrapTrace("load the configuration")
+	bootstrapTraceMsg("load the configuration")
 	srvCfg, err := readServerConfig(GlobalContext, objAPI, data)
 	if err != nil {
 		return err
 	}
 
-	bootstrapTrace("lookup the configuration")
+	bootstrapTraceMsg("lookup the configuration")
 	// Override any values from ENVs.
 	lookupConfigs(srvCfg, objAPI)
 

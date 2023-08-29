@@ -175,6 +175,10 @@ func minioConfigToConsoleFeatures() {
 	if value := env.Get(config.EnvBrowserLoginAnimation, "on"); value != "" {
 		os.Setenv("CONSOLE_ANIMATED_LOGIN", value)
 	}
+	// Pass on the session duration environment variable, else we will default to 12 hours
+	if value := env.Get(config.EnvBrowserSessionDuration, ""); value != "" {
+		os.Setenv("CONSOLE_STS_DURATION", value)
+	}
 
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))

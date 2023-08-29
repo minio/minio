@@ -192,7 +192,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if !opts.MTime.IsZero() && opts.PreserveETag != "" {
+	if opts.PreserveETag != "" ||
+		r.Header.Get(xhttp.IfMatch) != "" ||
+		r.Header.Get(xhttp.IfNoneMatch) != "" {
 		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -950,8 +952,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			os.SetTransitionState(goi.TransitionedObject)
 		}
 	}
-
-	setEventStreamHeaders(w)
 
 	opts, err := completeMultipartOpts(ctx, r, bucket, object)
 	if err != nil {

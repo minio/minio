@@ -22,12 +22,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/gob"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -43,7 +41,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	bktpolicy "github.com/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -663,64 +660,38 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		// will call siteNetperf, means call others's adminAPISiteReplicationDevNull
 		if globalDeploymentID == info.DeploymentID {
 			wg.Add(1)
-			go func() (err error) {
+			go func() {
 				defer wg.Done()
-				result := &madmin.SiteNetPerfNodeResult{}
-				defer func() {
-					if err != nil {
-						result.Error = err.Error()
-					}
-					resultsMu.Lock()
-					results.NodeResults = append(results.NodeResults, *result)
-					resultsMu.Unlock()
-				}()
+				result := madmin.SiteNetPerfNodeResult{}
 				cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
 				if err != nil {
-					return err
-				}
-				*result = siteNetperf(ctx, duration)
-				result.Endpoint = cli.GetEndpointURL().String()
-				return nil
-			}()
-			continue
-		}
-		wg.Add(1)
-		go func() (err error) {
-			defer wg.Done()
-			result := madmin.SiteNetPerfNodeResult{}
-			defer func() {
-				if err != nil {
 					result.Error = err.Error()
+				} else {
+					result = siteNetperf(ctx, duration)
+					result.Endpoint = cli.GetEndpointURL().String()
 				}
 				resultsMu.Lock()
 				results.NodeResults = append(results.NodeResults, result)
 				resultsMu.Unlock()
+				return
 			}()
-			cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
-			if err != nil {
-				return err
-			}
-			rp := cli.GetEndpointURL()
-			reqURL := &url.URL{
-				Scheme: rp.Scheme,
-				Host:   rp.Host,
-				Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplicationNetPerf,
-			}
-			result.Endpoint = rp.String()
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), nil)
-			if err != nil {
-				return err
-			}
-			client := &http.Client{
-				Timeout:   duration + 10*time.Second,
-				Transport: globalRemoteTargetTransport,
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				return err
-			}
-			defer xhttp.DrainBody(resp.Body)
-			return gob.NewDecoder(resp.Body).Decode(&result)
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, duration+10*time.Second)
+			defer cancel()
+			result := perfNetRequest(
+				ctx,
+				info.DeploymentID,
+				adminPathPrefix+adminAPIVersionPrefix+adminAPISiteReplicationNetPerf,
+				nil,
+			)
+			resultsMu.Lock()
+			results.NodeResults = append(results.NodeResults, result)
+			resultsMu.Unlock()
+			return
 		}()
 	}
 	wg.Wait()
@@ -1483,6 +1454,75 @@ func (c *SiteReplicationSys) PeerBucketVersioningHandler(ctx context.Context, bu
 	}
 
 	return nil
+}
+
+// PeerBucketMetadataUpdateHandler - merges the bucket metadata, save and ping other nodes
+func (c *SiteReplicationSys) PeerBucketMetadataUpdateHandler(ctx context.Context, item madmin.SRBucketMeta) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errSRObjectLayerNotReady
+	}
+
+	if item.Bucket == "" || item.UpdatedAt.IsZero() {
+		return wrapSRErr(errInvalidArgument)
+	}
+
+	meta, err := readBucketMetadata(ctx, objectAPI, item.Bucket)
+	if err != nil {
+		return wrapSRErr(err)
+	}
+
+	if meta.Created.After(item.UpdatedAt) {
+		return nil
+	}
+
+	if item.Policy != nil {
+		meta.PolicyConfigJSON = item.Policy
+		meta.PolicyConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Versioning != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.Versioning)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.VersioningConfigXML = configData
+		meta.VersioningConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Tags != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.Tags)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.TaggingConfigXML = configData
+		meta.TaggingConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.ObjectLockConfig != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.ObjectLockConfig)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.ObjectLockConfigXML = configData
+		meta.ObjectLockConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.SSEConfig != nil {
+		configData, err := base64.StdEncoding.DecodeString(*item.SSEConfig)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		meta.EncryptionConfigXML = configData
+		meta.EncryptionConfigUpdatedAt = item.UpdatedAt
+	}
+
+	if item.Quota != nil {
+		meta.QuotaConfigJSON = item.Quota
+		meta.QuotaConfigUpdatedAt = item.UpdatedAt
+	}
+
+	return globalBucketMetadataSys.save(ctx, meta)
 }
 
 // PeerBucketPolicyHandler - copies/deletes policy to local cluster.

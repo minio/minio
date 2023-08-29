@@ -283,7 +283,10 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	req := GetReqInfo(ctx)
 
 	if req == nil {
-		req = &ReqInfo{API: "SYSTEM"}
+		req = &ReqInfo{
+			API:       "SYSTEM",
+			RequestID: fmt.Sprintf("%X", time.Now().UTC().UnixNano()),
+		}
 	}
 	req.RLock()
 	defer req.RUnlock()
