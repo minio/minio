@@ -327,13 +327,13 @@ func TestStreamSuite(t *testing.T) {
 		assertNoActive(t, connLocalToRemote)
 	})
 	t.Run("testServerOutCongestion", func(t *testing.T) {
-		defer timeout(5 * time.Minute)()
+		defer timeout(1 * time.Minute)()
 		testServerOutCongestion(t, local, remote)
 		assertNoActive(t, connRemoteLocal)
 		assertNoActive(t, connLocalToRemote)
 	})
 	t.Run("testServerInCongestion", func(t *testing.T) {
-		defer timeout(5 * time.Minute)()
+		defer timeout(1 * time.Minute)()
 		testServerInCongestion(t, local, remote)
 		assertNoActive(t, connRemoteLocal)
 		assertNoActive(t, connLocalToRemote)

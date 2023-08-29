@@ -29,6 +29,8 @@ import (
 type Stream struct {
 	// Responses from the remote server.
 	// Channel will be closed after error or when remote closes.
+	// All responses *must* be read by the caller until either an error is returned or the channel is closed.
+	// Canceling the context will cause the context cancellation error to be returned.
 	Responses <-chan Response
 
 	// Requests sent to the server.

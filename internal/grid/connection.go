@@ -252,6 +252,7 @@ var ErrRemoteRestart = errors.New("remote restarted")
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
 var ErrDisconnected = errors.New("remote disconnected")
 
+/*
 // Stateless connects to the remote handler and return all packets sent back.
 // If the remote is restarted will return ErrRemoteRestart.
 // If nil will be returned remote call sent EOF or ErrDone is returned by the callback.
@@ -281,6 +282,7 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 	}
 	return nil
 }
+*/
 
 func (c *Connection) send(msg []byte) error {
 	select {

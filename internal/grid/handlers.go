@@ -397,6 +397,7 @@ type TypedResponse[Resp RoundTripper] struct {
 type TypedSteam[Req, Resp RoundTripper] struct {
 	// Responses from the remote server.
 	// Channel will be closed after error or when remote closes.
+	// Responses *must* be read to either an error is returned or the channel is closed.
 	Responses <-chan TypedResponse[Resp]
 
 	// Requests sent to the server.
