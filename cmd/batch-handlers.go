@@ -62,6 +62,7 @@ type BatchJobRequest struct {
 	Location  string               `yaml:"-" json:"location"`
 	Replicate *BatchJobReplicateV1 `yaml:"replicate" json:"replicate"`
 	KeyRotate *BatchJobKeyRotateV1 `yaml:"keyrotate" json:"keyrotate"`
+	Expire    *BatchJobExpireV1    `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
 
@@ -431,7 +432,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 			wk.Take()
 			go func() {
 				defer wk.Give()
-				stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, oi)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts, oi)
 				success := true
 				if err := r.ReplicateFromSource(ctx, api, core, oi, retry); err != nil {
 					// object must be deleted concurrently, allow these failures but do not count them
@@ -725,7 +726,12 @@ func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobR
 		fileName = batchKeyRotationName
 		version = batchKeyRotateVersionV1
 		format = batchKeyRotationFormat
-
+	case job.Expire != nil:
+		fileName = batchExpireName
+		version = batchExpireVersionV1
+		format = batchExpireFormat
+	default:
+		return errors.New("no supported batch job request specified")
 	}
 	data, err := readConfig(ctx, api, pathJoin(job.Location, fileName))
 	if err != nil {
@@ -741,6 +747,11 @@ func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobR
 				ri.RetryAttempts = batchKeyRotateJobDefaultRetries
 				if job.KeyRotate.Flags.Retry.Attempts > 0 {
 					ri.RetryAttempts = job.KeyRotate.Flags.Retry.Attempts
+				}
+			case job.Expire != nil:
+				ri.RetryAttempts = batchExpireJobDefaultRetries
+				if job.Expire.Retry.Attempts > 0 {
+					ri.RetryAttempts = job.Expire.Retry.Attempts
 				}
 			}
 			return nil
@@ -851,6 +862,12 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 			jobTyp = string(job.Type())
 			fileName = batchKeyRotationName
 			ri.Version = batchKeyRotateVersionV1
+		case madmin.BatchJobExpire:
+			format = batchExpireFormat
+			version = batchExpireVersion
+			jobTyp = string(job.Type())
+			fileName = batchExpireName
+			ri.Version = batchExpireVersionV1
 		default:
 			return errInvalidArgument
 		}
@@ -1115,7 +1132,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			go func() {
 				defer wk.Give()
 
-				stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts, result)
 				success := true
 				if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
 					if miniogo.ToErrorResponse(err).Code == "PreconditionFailed" {
@@ -1340,6 +1357,8 @@ func (j BatchJobRequest) Type() madmin.BatchJobType {
 		return madmin.BatchJobReplicate
 	case j.KeyRotate != nil:
 		return madmin.BatchJobKeyRotate
+	case j.Expire != nil:
+		return madmin.BatchJobExpire
 	}
 	return madmin.BatchJobType("unknown")
 }
@@ -1352,6 +1371,8 @@ func (j BatchJobRequest) Validate(ctx context.Context, o ObjectLayer) error {
 		return j.Replicate.Validate(ctx, j, o)
 	case j.KeyRotate != nil:
 		return j.KeyRotate.Validate(ctx, j, o)
+	case j.Expire != nil:
+		return j.Expire.Validate(ctx, j, o)
 	}
 	return errInvalidArgument
 }
@@ -1362,12 +1383,14 @@ func (j BatchJobRequest) delete(ctx context.Context, api ObjectLayer) {
 		deleteConfig(ctx, api, pathJoin(j.Location, batchReplName))
 	case j.KeyRotate != nil:
 		deleteConfig(ctx, api, pathJoin(j.Location, batchKeyRotationName))
+	case j.Expire != nil:
+		deleteConfig(ctx, api, pathJoin(j.Location, batchExpireName))
 	}
 	deleteConfig(ctx, api, j.Location)
 }
 
 func (j *BatchJobRequest) save(ctx context.Context, api ObjectLayer) error {
-	if j.Replicate == nil && j.KeyRotate == nil {
+	if j.Replicate == nil && j.KeyRotate == nil && j.Expire == nil {
 		return errInvalidArgument
 	}
 
@@ -1692,7 +1715,8 @@ func (j *BatchJobPool) AddWorker() {
 			if !ok {
 				return
 			}
-			if job.Replicate != nil {
+			switch {
+			case job.Replicate != nil:
 				if job.Replicate.RemoteToLocal() {
 					if err := job.Replicate.StartFromSource(job.ctx, j.objLayer, *job); err != nil {
 						if !isErrBucketNotFound(err) {
@@ -1712,9 +1736,15 @@ func (j *BatchJobPool) AddWorker() {
 						// Bucket not found proceed to delete such a job.
 					}
 				}
-			}
-			if job.KeyRotate != nil {
+			case job.KeyRotate != nil:
 				if err := job.KeyRotate.Start(job.ctx, j.objLayer, *job); err != nil {
+					if !isErrBucketNotFound(err) {
+						logger.LogIf(j.ctx, err)
+						continue
+					}
+				}
+			case job.Expire != nil:
+				if err := job.Expire.Start(job.ctx, j.objLayer, *job); err != nil {
 					if !isErrBucketNotFound(err) {
 						logger.LogIf(j.ctx, err)
 						continue
@@ -1797,8 +1827,9 @@ type batchJobMetrics struct {
 type batchJobMetric uint8
 
 const (
-	batchReplicationMetricObject batchJobMetric = iota
-	batchKeyRotationMetricObject
+	batchJobMetricReplication batchJobMetric = iota
+	batchJobMetricKeyRotation
+	batchJobMetricExpire
 )
 
 func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration time.Duration, info ObjectInfo, attempts int, err error) madmin.TraceInfo {
@@ -1806,15 +1837,16 @@ func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration t
 	if err != nil {
 		errStr = err.Error()
 	}
-	jobKind := "batchReplication"
 	traceType := madmin.TraceBatchReplication
-	if d == batchKeyRotationMetricObject {
-		jobKind = "batchKeyRotation"
+	switch d {
+	case batchJobMetricKeyRotation:
 		traceType = madmin.TraceBatchKeyRotation
+	case batchJobMetricExpire:
+		traceType = madmin.TraceBatchExpire
 	}
-	funcName := fmt.Sprintf("%s.%s (job-name=%s)", jobKind, d.String(), job)
+	funcName := fmt.Sprintf("%s() (job-name=%s)", d.String(), job)
 	if attempts > 0 {
-		funcName = fmt.Sprintf("%s.%s (job-name=%s,attempts=%s)", jobKind, d.String(), job, humanize.Ordinal(attempts))
+		funcName = fmt.Sprintf("%s() (job-name=%s,attempts=%s)", d.String(), job, humanize.Ordinal(attempts))
 	}
 	return madmin.TraceInfo{
 		TraceType: traceType,
@@ -1919,13 +1951,21 @@ func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int, info
 	startTime := time.Now()
 	return func(err error) {
 		duration := time.Since(startTime)
+		if globalTrace.NumSubscribers(madmin.TraceBatch) > 0 {
+			globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
+			return
+		}
 		switch d {
-		case batchReplicationMetricObject:
+		case batchJobMetricReplication:
 			if globalTrace.NumSubscribers(madmin.TraceBatchReplication) > 0 {
 				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
 			}
-		case batchKeyRotationMetricObject:
+		case batchJobMetricKeyRotation:
 			if globalTrace.NumSubscribers(madmin.TraceBatchKeyRotation) > 0 {
+				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
+			}
+		case batchJobMetricExpire:
+			if globalTrace.NumSubscribers(madmin.TraceBatchExpire) > 0 {
 				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
 			}
 		}

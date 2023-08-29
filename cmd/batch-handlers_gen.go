@@ -84,6 +84,24 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "Expire":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "Expire")
+					return
+				}
+				z.Expire = nil
+			} else {
+				if z.Expire == nil {
+					z.Expire = new(BatchJobExpireV1)
+				}
+				err = z.Expire.DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "Expire")
+					return
+				}
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -97,9 +115,9 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 7
 	// write "ID"
-	err = en.Append(0x86, 0xa2, 0x49, 0x44)
+	err = en.Append(0x87, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -172,15 +190,32 @@ func (z *BatchJobRequest) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "Expire"
+	err = en.Append(0xa6, 0x45, 0x78, 0x70, 0x69, 0x72, 0x65)
+	if err != nil {
+		return
+	}
+	if z.Expire == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = z.Expire.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Expire")
+			return
+		}
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 7
 	// string "ID"
-	o = append(o, 0x86, 0xa2, 0x49, 0x44)
+	o = append(o, 0x87, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "User"
 	o = append(o, 0xa4, 0x55, 0x73, 0x65, 0x72)
@@ -210,6 +245,17 @@ func (z *BatchJobRequest) MarshalMsg(b []byte) (o []byte, err error) {
 		o, err = z.KeyRotate.MarshalMsg(o)
 		if err != nil {
 			err = msgp.WrapError(err, "KeyRotate")
+			return
+		}
+	}
+	// string "Expire"
+	o = append(o, 0xa6, 0x45, 0x78, 0x70, 0x69, 0x72, 0x65)
+	if z.Expire == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o, err = z.Expire.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Expire")
 			return
 		}
 	}
@@ -292,6 +338,23 @@ func (z *BatchJobRequest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "Expire":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.Expire = nil
+			} else {
+				if z.Expire == nil {
+					z.Expire = new(BatchJobExpireV1)
+				}
+				bts, err = z.Expire.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Expire")
+					return
+				}
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -317,6 +380,12 @@ func (z *BatchJobRequest) Msgsize() (s int) {
 		s += msgp.NilSize
 	} else {
 		s += z.KeyRotate.Msgsize()
+	}
+	s += 7
+	if z.Expire == nil {
+		s += msgp.NilSize
+	} else {
+		s += z.Expire.Msgsize()
 	}
 	return
 }

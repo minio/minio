@@ -8,13 +8,14 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[batchReplicationMetricObject-0]
-	_ = x[batchKeyRotationMetricObject-1]
+	_ = x[batchJobMetricReplication-0]
+	_ = x[batchJobMetricKeyRotation-1]
+	_ = x[batchJobMetricExpire-2]
 }
 
-const _batchJobMetric_name = "batchReplicationMetricObjectbatchKeyRotationMetricObject"
+const _batchJobMetric_name = "ReplicationKeyRotationExpire"
 
-var _batchJobMetric_index = [...]uint8{0, 28, 56}
+var _batchJobMetric_index = [...]uint8{0, 11, 22, 28}
 
 func (i batchJobMetric) String() string {
 	if i >= batchJobMetric(len(_batchJobMetric_index)-1) {
