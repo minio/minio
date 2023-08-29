@@ -112,3 +112,37 @@ func (b BatchJobSnowball) Validate() error {
 	_, err := humanize.ParseBytes(*b.SmallerThan)
 	return err
 }
+
+// BatchJobSizeFilter supports size based filters - LesserThan and GreaterThan
+type BatchJobSizeFilter struct {
+	LesserThan  BatchJobSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
+	GreaterThan BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
+}
+
+// BatchJobSize supports humanized byte values in yaml files type BatchJobSize uint64
+type BatchJobSize int64
+
+// LesserThan returns true if sz is less than s, false otherwise.
+func (s BatchJobSize) LesserThan(sz int64) bool {
+	return sz < int64(s)
+}
+
+// GreaterThan returns true if sz is greater than s, false otherwise.
+func (s BatchJobSize) GreaterThan(sz int64) bool {
+	return sz > int64(s)
+}
+
+// UnmarshalYAML to parse humanized byte values
+func (s *BatchJobSize) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var batchExpireSz string
+	err := unmarshal(&batchExpireSz)
+	if err != nil {
+		return err
+	}
+	sz, err := humanize.ParseBytes(batchExpireSz)
+	if err != nil {
+		return err
+	}
+	*s = BatchJobSize(sz)
+	return nil
+}

@@ -29,7 +29,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -77,34 +76,6 @@ import (
 
 //go:generate msgp -file $GOFILE -unexported
 
-// BatchExpireSize supports humanized byte values in yaml files
-type BatchExpireSize uint64
-
-// LesserThan returns true if sz is less than s, false otherwise.
-func (s BatchExpireSize) LesserThan(sz int64) bool {
-	return sz < int64(s)
-}
-
-// GreaterThan returns true if sz is greater than s, false otherwise.
-func (s BatchExpireSize) GreaterThan(sz int64) bool {
-	return sz > int64(s)
-}
-
-// UnmarshalYAML to parse humanized byte values
-func (s *BatchExpireSize) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var batchExpireSz string
-	err := unmarshal(&batchExpireSz)
-	if err != nil {
-		return err
-	}
-	sz, err := humanize.ParseBytes(batchExpireSz)
-	if err != nil {
-		return err
-	}
-	*s = BatchExpireSize(sz)
-	return nil
-}
-
 // BatchJobExpirePurge type accepts non-negative versions to be retained
 type BatchJobExpirePurge struct {
 	RetainVersions int `yaml:"retainVersions" json:"retainVersions"`
@@ -125,8 +96,8 @@ type BatchJobExpireFilter struct {
 	Tags          []BatchJobKV  `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV  `yaml:"metadata,omitempty" json:"metadata"`
 	Size          struct {
-		LesserThan  BatchExpireSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
-		GreaterThan BatchExpireSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
+		LesserThan  BatchJobSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
+		GreaterThan BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
 	} `yaml:"size" json:"size"`
 	Type  string              `yaml:"type" json:"type"`
 	Name  string              `yaml:"name" json:"name"`

@@ -7,58 +7,6 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
-func (z *BatchExpireSize) DecodeMsg(dc *msgp.Reader) (err error) {
-	{
-		var zb0001 uint64
-		zb0001, err = dc.ReadUint64()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = BatchExpireSize(zb0001)
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z BatchExpireSize) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteUint64(uint64(z))
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z BatchExpireSize) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BatchExpireSize) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = BatchExpireSize(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z BatchExpireSize) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
 func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
@@ -142,24 +90,16 @@ func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "LesserThan":
-					{
-						var zb0005 uint64
-						zb0005, err = dc.ReadUint64()
-						if err != nil {
-							err = msgp.WrapError(err, "Size", "LesserThan")
-							return
-						}
-						z.Size.LesserThan = BatchExpireSize(zb0005)
+					err = z.Size.LesserThan.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Size", "LesserThan")
+						return
 					}
 				case "GreaterThan":
-					{
-						var zb0006 uint64
-						zb0006, err = dc.ReadUint64()
-						if err != nil {
-							err = msgp.WrapError(err, "Size", "GreaterThan")
-							return
-						}
-						z.Size.GreaterThan = BatchExpireSize(zb0006)
+					err = z.Size.GreaterThan.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Size", "GreaterThan")
+						return
 					}
 				default:
 					err = dc.Skip()
@@ -182,14 +122,14 @@ func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Purge":
-			var zb0007 uint32
-			zb0007, err = dc.ReadMapHeader()
+			var zb0005 uint32
+			zb0005, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Purge")
 				return
 			}
-			for zb0007 > 0 {
-				zb0007--
+			for zb0005 > 0 {
+				zb0005--
 				field, err = dc.ReadMapKeyPtr()
 				if err != nil {
 					err = msgp.WrapError(err, "Purge")
@@ -289,7 +229,7 @@ func (z *BatchJobExpireFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(uint64(z.Size.LesserThan))
+	err = z.Size.LesserThan.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "Size", "LesserThan")
 		return
@@ -299,7 +239,7 @@ func (z *BatchJobExpireFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(uint64(z.Size.GreaterThan))
+	err = z.Size.GreaterThan.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "Size", "GreaterThan")
 		return
@@ -378,10 +318,18 @@ func (z *BatchJobExpireFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "LesserThan"
 	o = append(o, 0x82, 0xaa, 0x4c, 0x65, 0x73, 0x73, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendUint64(o, uint64(z.Size.LesserThan))
+	o, err = z.Size.LesserThan.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Size", "LesserThan")
+		return
+	}
 	// string "GreaterThan"
 	o = append(o, 0xab, 0x47, 0x72, 0x65, 0x61, 0x74, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendUint64(o, uint64(z.Size.GreaterThan))
+	o, err = z.Size.GreaterThan.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Size", "GreaterThan")
+		return
+	}
 	// string "Type"
 	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, z.Type)
@@ -481,24 +429,16 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				switch msgp.UnsafeString(field) {
 				case "LesserThan":
-					{
-						var zb0005 uint64
-						zb0005, bts, err = msgp.ReadUint64Bytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Size", "LesserThan")
-							return
-						}
-						z.Size.LesserThan = BatchExpireSize(zb0005)
+					bts, err = z.Size.LesserThan.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Size", "LesserThan")
+						return
 					}
 				case "GreaterThan":
-					{
-						var zb0006 uint64
-						zb0006, bts, err = msgp.ReadUint64Bytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Size", "GreaterThan")
-							return
-						}
-						z.Size.GreaterThan = BatchExpireSize(zb0006)
+					bts, err = z.Size.GreaterThan.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Size", "GreaterThan")
+						return
 					}
 				default:
 					bts, err = msgp.Skip(bts)
@@ -521,14 +461,14 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Purge":
-			var zb0007 uint32
-			zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0005 uint32
+			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Purge")
 				return
 			}
-			for zb0007 > 0 {
-				zb0007--
+			for zb0005 > 0 {
+				zb0005--
 				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Purge")
@@ -571,7 +511,7 @@ func (z *BatchJobExpireFilter) Msgsize() (s int) {
 	for za0002 := range z.Metadata {
 		s += z.Metadata[za0002].Msgsize()
 	}
-	s += 5 + 1 + 11 + msgp.Uint64Size + 12 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Type) + 5 + msgp.StringPrefixSize + len(z.Name) + 6 + 1 + 15 + msgp.IntSize
+	s += 5 + 1 + 11 + z.Size.LesserThan.Msgsize() + 12 + z.Size.GreaterThan.Msgsize() + 5 + msgp.StringPrefixSize + len(z.Type) + 5 + msgp.StringPrefixSize + len(z.Name) + 6 + 1 + 15 + msgp.IntSize
 	return
 }
 
