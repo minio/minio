@@ -114,6 +114,8 @@ type xlStorage struct {
 
 	formatData []byte
 
+	nrRequests uint64
+
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
 	walkMu     *sync.Mutex
@@ -242,6 +244,11 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		poolIndex:  -1,
 		setIndex:   -1,
 		diskIndex:  -1,
+	}
+
+	// Sanitaize before setting it
+	if info.NRRequests > 0 {
+		s.nrRequests = info.NRRequests
 	}
 
 	// We stagger listings only on HDDs.
@@ -658,6 +665,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
+			dcinfo.NRRequests = s.nrRequests
 			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when

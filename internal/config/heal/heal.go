@@ -34,10 +34,12 @@ const (
 	Bitrot  = "bitrotscan"
 	Sleep   = "max_sleep"
 	IOCount = "max_io"
+	Workers = "workers"
 
 	EnvBitrot  = "MINIO_HEAL_BITROTSCAN"
 	EnvSleep   = "MINIO_HEAL_MAX_SLEEP"
 	EnvIOCount = "MINIO_HEAL_MAX_IO"
+	EnvWorkers = "MINIO_HEAL_WORKERS"
 )
 
 var configMutex sync.RWMutex
@@ -50,6 +52,8 @@ type Config struct {
 	// maximum sleep duration between objects to slow down heal operation.
 	Sleep   time.Duration `json:"sleep"`
 	IOCount int           `json:"iocount"`
+
+	Workers int `json:"workers,omitempty"`
 
 	// Cached value from Bitrot field
 	cache struct {
@@ -77,6 +81,13 @@ func (opts Config) Clone() (int, time.Duration, string) {
 	return opts.IOCount, opts.Sleep, opts.Bitrot
 }
 
+// GetWorkers returns the number of workers, -1 is none configured
+func (opts Config) GetWorkers() int {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return opts.Workers
+}
+
 // Update updates opts with nopts
 func (opts *Config) Update(nopts Config) {
 	configMutex.Lock()
@@ -85,6 +96,7 @@ func (opts *Config) Update(nopts Config) {
 	opts.Bitrot = nopts.Bitrot
 	opts.IOCount = nopts.IOCount
 	opts.Sleep = nopts.Sleep
+	opts.Workers = nopts.Workers
 
 	opts.cache.bitrotCycle, _ = parseBitrotConfig(nopts.Bitrot)
 }
@@ -102,6 +114,11 @@ var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   IOCount,
 		Value: "100",
+	},
+	config.KV{
+		Key:        Workers,
+		Value:      "",
+		Deprecated: true,
 	},
 }
 
@@ -154,5 +171,18 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_io' value invalid: %w", err)
 	}
+	if ws := env.Get(EnvWorkers, kvs.GetWithDefault(Workers, DefaultKVS)); ws != "" {
+		w, err := strconv.Atoi(ws)
+		if err != nil {
+			return cfg, fmt.Errorf("'heal:workers' value invalid: %w", err)
+		}
+		if w < 1 {
+			return cfg, fmt.Errorf("'heal:workers' value invalid: zero or negative integer unsupported")
+		}
+		cfg.Workers = w
+	} else {
+		cfg.Workers = -1
+	}
+
 	return cfg, nil
 }
