@@ -94,6 +94,8 @@ type IAMSys struct {
 
 	usersSysType UsersSysType
 
+	// Map of role ARN to policy name(s) associated with the role. This map is
+	// read-only after the initial load.
 	rolesMap map[arn.ARN]string
 
 	// Persistence layer for IAM subsystem
@@ -280,19 +282,15 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
 
-	retryCtx, cancel := context.WithCancel(ctx)
-
-	// Indicate to our routine to exit cleanly upon return.
-	defer cancel()
-
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Migrate storage format if needed.
 	for {
 		// Migrate IAM configuration, if necessary.
-		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
+		if err := saveIAMFormat(ctx, sys.store); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
+				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 				continue
 			}
 			logger.LogIf(ctx, fmt.Errorf("IAM sub-system is partially initialized, unable to write the IAM format: %w", err))
@@ -302,9 +300,41 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
+		for k, v := range riMap {
+			sys.rolesMap[k] = v
+		}
+	}
+
+	// From AuthN plugin if enabled.
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
+		for k, v := range riMap {
+			sys.rolesMap[k] = v
+		}
+	}
+
+	sys.printIAMRoles()
+
+	// Load IAM data from store in background
+	go sys.loadIAMDataFromStore(ctx)
+
+	bootstrapTraceMsg("IAM initialization completed")
+}
+
+// loadIAMDataFromStore - loads IAM data of users, groups, policies, etc from
+// storage and starts routines for watching for expired credentials and for
+// periodically reloading IAM data.
+func (sys *IAMSys) loadIAMDataFromStore(ctx context.Context) {
+	bootstrapTraceMsg("globalIAMSys.loadIAMDataFromStore() started")
 	// Load IAM data from storage.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		if err := sys.Load(retryCtx, true); err != nil {
+		if err := sys.Load(ctx, true); err != nil {
 			if configRetriableErrors(err) {
 				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
 				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -358,50 +388,25 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Start watching changes to storage.
 	go sys.watch(ctx)
 
-	// Load RoleARNs
-	sys.rolesMap = make(map[arn.ARN]string)
-
-	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	// From AuthN plugin if enabled.
-	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	sys.printIAMRoles()
-
-	bootstrapTraceMsg("finishing IAM loading")
-}
-
-func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
-	// Validate that policies associated with roles are defined. If
-	// authZ plugin is set, role policies are just claims sent to
-	// the plugin and they need not exist.
-	//
-	// If some mapped policies do not exist, we print some error
-	// messages but continue any way - they can be fixed in the
-	// running server by creating the policies after start up.
-	for arn, rolePolicies := range m {
+	// Validate that policies associated with roles are defined. Print warning
+	// logs otherwise. When policies associated with RoleARNs are not defined,
+	// credentials may not work as expected, but this can be fixed by
+	// (re-)creating the policies on the running server.
+	for arn, rolePolicies := range sys.rolesMap {
 		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
 		validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
 		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
 		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
 		if len(unknownPoliciesSet) > 0 {
-			authz := newGlobalAuthZPluginFn()
-			if authz == nil {
-				// Print a warning that some policies mapped to a role are not defined.
-				errMsg := fmt.Errorf(
-					"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",
-					unknownPoliciesSet.ToSlice(), arn.String())
-				logger.LogIf(ctx, errMsg)
-			}
+			// Print a warning that some policies mapped to a role are not defined.
+			errMsg := fmt.Errorf(
+				"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",
+				unknownPoliciesSet.ToSlice(), arn.String())
+			logger.LogIf(ctx, errMsg)
 		}
-		sys.rolesMap[arn] = rolePolicies
 	}
+
+	bootstrapTraceMsg("globalIAMSys.loadIAMDataFromStore() completed")
 }
 
 // Prints IAM role ARNs.
