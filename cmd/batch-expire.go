@@ -105,14 +105,14 @@ type BatchJobExpireFilter struct {
 }
 
 // Matches returns true if fi matches the filter conditions specified in ef.
-func (ef BatchJobExpireFilter) Matches(fi FileInfo, now time.Time) bool {
+func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	switch ef.Type {
 	case BatchJobExpireObject:
-		if fi.Deleted {
+		if obj.DeleteMarker {
 			return false
 		}
 	case BatchJobExpireDeleted:
-		if !fi.Deleted {
+		if !obj.DeleteMarker {
 			return false
 		}
 	default:
@@ -120,21 +120,21 @@ func (ef BatchJobExpireFilter) Matches(fi FileInfo, now time.Time) bool {
 		return false
 	}
 
-	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, fi.Name) {
+	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(fi.ModTime) <= ef.OlderThan {
-		return false
-	}
-
-	if !ef.CreatedBefore.IsZero() && (fi.ModTime.Equal(ef.CreatedBefore) || fi.ModTime.After(ef.CreatedBefore)) {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan {
 		return false
 	}
 
-	if len(ef.Tags) > 0 && !fi.Deleted {
+	if !ef.CreatedBefore.IsZero() && (obj.ModTime.Equal(ef.CreatedBefore) || obj.ModTime.After(ef.CreatedBefore)) {
+		return false
+	}
+
+	if len(ef.Tags) > 0 && !obj.DeleteMarker {
 		// Only parse object tags if tags filter is specified.
 		tagMap := map[string]string{}
-		tagStr := fi.Metadata[xhttp.AmzObjectTagging]
+		tagStr := obj.UserDefined[xhttp.AmzObjectTagging]
 		if len(tagStr) != 0 {
 			t, err := tags.ParseObjectTags(tagStr)
 			if err != nil {
@@ -158,13 +158,13 @@ func (ef BatchJobExpireFilter) Matches(fi FileInfo, now time.Time) bool {
 		}
 
 	}
-	if len(ef.Metadata) > 0 && !fi.Deleted {
+	if len(ef.Metadata) > 0 && !obj.DeleteMarker {
 		for _, kv := range ef.Metadata {
 			// Object (version) must match all x-amz-meta and
 			// standard metadata headers
 			// specified in the filter
 			var match bool
-			for k, v := range fi.Metadata {
+			for k, v := range obj.UserDefined {
 				if !stringsHasPrefixFold(k, "x-amz-meta-") && !isStandardHeader(k) {
 					continue
 				}
@@ -180,13 +180,13 @@ func (ef BatchJobExpireFilter) Matches(fi FileInfo, now time.Time) bool {
 	}
 
 	if ef.Size.LesserThan > 0 {
-		if !ef.Size.LesserThan.LesserThan(fi.Size) {
+		if !ef.Size.LesserThan.LesserThan(obj.Size) {
 			return false
 		}
 	}
 
 	if ef.Size.GreaterThan > 0 {
-		if !ef.Size.GreaterThan.GreaterThan(fi.Size) {
+		if !ef.Size.GreaterThan.GreaterThan(obj.Size) {
 			return false
 		}
 	}
@@ -312,10 +312,13 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		delay = batchExpireJobDefaultRetryDelay
 	}
 
+	vcfg, _ := globalBucketVersioningSys.Get(ri.Bucket)
+
 	now := time.Now().UTC()
 	filter := func(info FileInfo) (ok bool) {
+		versioned := vcfg != nil && vcfg.Versioned(info.Name)
 		for _, rule := range r.Rules {
-			if rule.Matches(info, now) {
+			if rule.Matches(info.ToObjectInfo(r.Bucket, info.Name, versioned), now) {
 				return true
 			}
 		}
@@ -371,8 +374,36 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		}
 	}()
 
+	var (
+		prevObj       ObjectInfo
+		matchedFilter BatchJobExpireFilter
+		versionsCount int
+	)
 	for result := range results {
 		result := result
+		if prevObj.Name != result.Name {
+			prevObj = result
+			var match BatchJobExpireFilter
+			var found bool
+			for _, rule := range r.Rules {
+				if rule.Matches(prevObj, now) {
+					match = rule
+					found = true
+					break
+				}
+			}
+			if found {
+				matchedFilter = match
+				versionsCount = 1
+			}
+		}
+
+		if prevObj.Name == result.Name {
+			if versionsCount <= matchedFilter.Purge.RetainVersions {
+				continue // retain versions
+			}
+		}
+
 		wk.Take()
 		go func() {
 			defer wk.Give()
