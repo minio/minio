@@ -68,3 +68,6 @@ expire: # Expire objects that match a condition
 		t.Fatal("Failed to parse batch-job-expire yaml", err)
 	}
 }
+
+func TestBatchJobExpireFilterMatches(t *testing.T) {
+}

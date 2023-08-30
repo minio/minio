@@ -347,27 +347,49 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		return err
 	}
 
+	// Goroutine to periodically save batch-expire job's in-memory state
+	saverQuitCh := make(chan struct{})
+	go func() {
+		saveTicker := time.NewTicker(10 * time.Second)
+		defer saveTicker.Stop()
+		for {
+			select {
+			case <-saveTicker.C:
+				// persist in-memory state to disk after every 10secs.
+				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+
+			case <-ctx.Done():
+				// persist in-memory state immediately before exiting due to context cancelation.
+				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				return
+
+			case <-saverQuitCh:
+				// persist in-memory state immediately to disk.
+				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				return
+			}
+		}
+	}()
+
 	for result := range results {
 		result := result
 		wk.Take()
 		go func() {
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
-				attempts := attempts
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, job.ID, attempts, result)
 				success := true
 				if err := r.Expire(ctx, api, result); err != nil {
 					stopFn(err)
-					logger.LogIf(ctx, err)
+					logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", result.Bucket, result.Name, result.VersionID, err, attempts))
 					success = false
 				} else {
 					stopFn(nil)
 				}
+
 				ri.trackCurrentBucketObject(r.Bucket, result, success)
 				ri.RetryAttempts = attempts
 				globalBatchJobsMetrics.save(job.ID, ri)
-				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 				if success {
 					break
 				}
@@ -381,9 +403,12 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 	ri.Complete = ri.ObjectsFailed == 0
 	ri.Failed = ri.ObjectsFailed > 0
 	globalBatchJobsMetrics.save(job.ID, ri)
-	// persist in-memory state to disk.
-	logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
+	// Close the saverQuitCh - this also triggers saving in-memory state
+	// immediately one last time before we exit this method.
+	close(saverQuitCh)
+
+	// Notify expire jobs final status to the configured endpoint
 	buf, _ := json.Marshal(ri)
 	if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
 		logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
