@@ -308,7 +308,11 @@ func (target *PostgreSQLTarget) Close() error {
 		_ = target.insertStmt.Close()
 	}
 
-	return target.db.Close()
+	if target.db != nil {
+		target.db.Close()
+	}
+
+	return nil
 }
 
 // Executes the table creation statements.

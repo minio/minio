@@ -219,7 +219,9 @@ func (target *MQTTTarget) Save(eventData event.Event) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *MQTTTarget) Close() error {
-	target.client.Disconnect(100)
+	if target.client != nil {
+		target.client.Disconnect(100)
+	}
 	close(target.quitCh)
 	return nil
 }

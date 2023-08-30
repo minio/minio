@@ -312,7 +312,11 @@ func (target *MySQLTarget) Close() error {
 		_ = target.insertStmt.Close()
 	}
 
-	return target.db.Close()
+	if target.db != nil {
+		return target.db.Close()
+	}
+
+	return nil
 }
 
 // Executes the table creation statements.

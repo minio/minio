@@ -273,7 +273,10 @@ func (target *RedisTarget) SendFromStore(eventKey string) error {
 // Close - releases the resources used by the pool.
 func (target *RedisTarget) Close() error {
 	close(target.quitCh)
-	return target.pool.Close()
+	if target.pool != nil {
+		return target.pool.Close()
+	}
+	return nil
 }
 
 func (target *RedisTarget) init() error {
