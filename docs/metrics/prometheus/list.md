@@ -4,6 +4,9 @@ Each metric includes a label for the server that calculated the metric. Each met
 
 These metrics can be obtained from any MinIO server once per collection.
 
+The replication metrics marked with * are only relevant for site replication, where metrics are published at the cluster level and not at bucket level. If bucket 
+replication is in use, these metrics are exported at the bucket level.
+
 | Name                                          | Description                                                                                                     |
 |:----------------------------------------------|:----------------------------------------------------------------------------------------------------------------|
 | `minio_audit_failed_messages`                 | Total number of messages that failed to send since start.                                                       |
@@ -42,7 +45,38 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_cluster_nodes_online_total`            | Total number of MinIO nodes online.                                                                             |
 | `minio_cluster_write_quorum`                  | Maximum write quorum across all pools and sets                                                                  |
 | `minio_cluster_health_status`                 | Get current cluster health status                                                                               |
+| `minio_cluster_replication_current_active_workers`                 | Total number of active replication workers                                                 |
+| `minio_cluster_replication_average_active_workers`                 | Average number of active replication workers                                               |
+| `minio_cluster_replication_max_active_workers`                 | Maximum number of active replication workers seen since server start                           |
+| `minio_cluster_replication_link_online`       | Reports whether the replication link is online (1) or offline (0).                                              |
+| `minio_cluster_replication_link_offline_duration_seconds` | Total duration of replication link being offline in seconds since last offline event|
+| `minio_cluster_replication_link_downtime_duration_seconds` | Total downtime of replication link in seconds since server start|
+| `minio_cluster_replication_average_link_latency_ms` | Average replication link latency in milliseconds                                                          |
+| `minio_cluster_replication_max_link_latency_ms`     | Maximum replication link latency in milliseconds seen since server start                                  |
+| `minio_cluster_replication_current_link_latency_ms` | Current replication link latency in milliseconds                                                          |
+| `minio_cluster_replication_current_transfer_rate` | Current replication transfer rate in bytes/sec                                                              |
+| `minio_cluster_replication_average_transfer_rate` | Average replication transfer rate in bytes/sec                                                              |
+| `minio_cluster_replication_max_transfer_rate`     | Maximum replication transfer rate in bytes/sec seen since server start                                      |
+| `minio_cluster_replication_last_minute_queued_count` | Total number of objects queued for replication in the last full minute                                   |
+| `minio_cluster_replication_last_minute_queued_bytes` | Total number of bytes queued for replication in the last full minute                                     |
+| `minio_cluster_replication_average_queued_count` | Average number of objects queued for replication since server start                                          |
+| `minio_cluster_replication_average_queued_bytes` | Average number of bytes queued for replication since server start                                            |
+| `minio_cluster_replication_max_queued_bytes`  | Maximum number of bytes queued for replication seen since server start                                          |
+| `minio_cluster_replication_max_queued_count`  | Maximum number of objects queued for replication seen since server start                                        |
+| `minio_cluster_replication_recent_backlog_count` | Total number of objects seen in replication backlog in the last 5 minutes                                    |
 | `minio_heal_objects_errors_total`             | Objects for which healing failed in current self healing run.                                                   |
+| `minio_cluster_replication_last_minute_failed_bytes`           | Total number of bytes failed at least once to replicate in the last full minute.                        |
+| `minio_cluster_replication_last_minute_failed_count`           | Total number of objects which failed replication in the last full minute.                               |
+| `minio_cluster_replication_last_hour_failed_bytes` | * Total number of bytes failed at least once to replicate in the last full hour.                          |
+| `minio_cluster_replication_last_hour_failed_count` | * Total number of objects which failed replication in the last full hour.                                 |
+| `minio_cluster_replication_total_failed_bytes`     | * Total number of bytes failed at least once to replicate since server start.                            |
+| `minio_cluster_replication_total_failed_count`     | * Total number of objects which failed replication since server start.                                   |
+| `minio_cluster_replication_received_bytes`         | * Total number of bytes replicated to this cluster from another source cluster.     |
+| `minio_cluster_replication_received_count`         | * Total number of objects received by this cluster from another source cluster.     |
+| `minio_cluster_replication_sent_bytes`             | * Total number of bytes replicated to the target cluster. |                         |
+| `minio_cluster_replication_sent_count`             | * Total number of objects replicated to the target cluster.  |                        |
+| `minio_cluster_replication_credential_errors`      | * Total number of replication credential errors since server start                |
+
 | `minio_heal_objects_heal_total`               | Objects healed in current self healing run.                                                                     |
 | `minio_heal_objects_total`                    | Objects scanned in current self healing run.                                                                    |
 | `minio_heal_time_last_activity_nano_seconds`  | Time elapsed (in nano seconds) since last self healing activity.                                                |
@@ -118,11 +152,17 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_bucket_objects_size_distribution`          | Distribution of object sizes in the bucket, includes label for the bucket name. |
 | `minio_bucket_objects_version_distribution`       | Distribution of object sizes in a bucket, by number of versions                 |
 | `minio_bucket_quota_total_bytes`                  | Total bucket quota size in bytes.                                               |
-| `minio_bucket_replication_failed_bytes`           | Total number of bytes failed at least once to replicate.                        |
-| `minio_bucket_replication_failed_count`           | Total number of objects which failed replication.                               |
+| `minio_bucket_replication_last_minute_failed_bytes`           | Total number of bytes failed at least once to replicate in the last full minute.                        |
+| `minio_bucket_replication_last_minute_failed_count`           | Total number of objects which failed replication in the last full minute.                               |
+| `minio_bucket_replication_last_hour_failed_bytes` | Total number of bytes failed at least once to replicate in the last full hour.                          |
+| `minio_bucket_replication_last_hour_failed_count` | Total number of objects which failed replication in the last full hour.                                 |
+| `minio_bucket_replication_total_failed_bytes`     | Total number of bytes failed at least once to replicate since server start.                            |
+| `minio_bucket_replication_total_failed_count`     | Total number of objects which failed replication since server start.                                   |
 | `minio_bucket_replication_latency_ms`             | Replication latency in milliseconds.                                            |
 | `minio_bucket_replication_received_bytes`         | Total number of bytes replicated to this bucket from another source bucket.     |
-| `minio_bucket_replication_sent_bytes`             | Total number of bytes replicated to the target bucket.                          |
+| `minio_bucket_replication_received_count`         | Total number of objects received by this bucket from another source bucket.     |
+| `minio_bucket_replication_sent_bytes`             | Total number of bytes replicated to the target bucket. |                         |
+| `minio_bucket_replication_sent_count`             | Total number of objects replicated to the target bucket.  |                        |
 | `minio_bucket_traffic_received_bytes`             | Total number of S3 bytes received for this bucket.                              |
 | `minio_bucket_traffic_sent_bytes`                 | Total number of S3 bytes sent for this bucket.                                  |
 | `minio_bucket_usage_object_total`                 | Total number of objects.                                                        |
@@ -135,3 +175,4 @@ These metrics can be obtained from any MinIO server once per collection.
 | `minio_bucket_requests_total`                     | Total number of S3 requests on a bucket.                                        |
 | `minio_bucket_requests_canceled_total`            | Total number S3 requests canceled by the client.                                |
 | `minio_bucket_requests_ttfb_seconds_distribution` | Distribution of time to first byte across API calls per bucket.                 |
+| `minio_bucket_replication_credential_errors`      | Total number of replication credential errors since server start                |

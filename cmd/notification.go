@@ -549,8 +549,38 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	}
 	bucketStats = append(bucketStats, BucketStats{
 		ReplicationStats: globalReplicationStats.Get(bucketName),
+		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
 	})
 	return bucketStats
+}
+
+// GetClusterSiteMetrics - calls GetClusterSiteMetrics call on all peers for a cluster statistics view.
+func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetricsSummary {
+	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
+	siteStats := make([]SRMetricsSummary, len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		index := index
+		client := client
+		ng.Go(ctx, func() error {
+			if client == nil {
+				return errPeerNotReachable
+			}
+			sm, err := client.GetSRMetrics()
+			if err != nil {
+				return err
+			}
+			siteStats[index] = sm
+			return nil
+		}, index, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+	siteStats = append(siteStats, globalReplicationStats.getSRMetricsForNode())
+	return siteStats
 }
 
 // ReloadPoolMeta reloads on disk updates on pool metadata

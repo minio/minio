@@ -989,6 +989,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				Type:            madmin.ReplicationService,
 				Region:          "",
 				ReplicationSync: peer.SyncState == madmin.SyncEnabled,
+				DeploymentID:    d,
 			}
 			var exists bool // true if ARN already exists
 			bucketTarget.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget, peer.DeploymentID)
@@ -2511,6 +2512,7 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 		MaxPolicies:  sinfo.MaxPolicies,
 		Sites:        sinfo.Sites,
 		StatsSummary: sinfo.StatsSummary,
+		Metrics:      sinfo.Metrics,
 	}
 	info.BucketStats = make(map[string]map[string]madmin.SRBucketStatsSummary, len(sinfo.Sites))
 	info.PolicyStats = make(map[string]map[string]madmin.SRPolicyStatsSummary)
@@ -2617,7 +2619,6 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		},
 		replicationStatus,
 	)
-
 	if err := errors.Unwrap(metaInfoConcErr); err != nil {
 		return info, errSRBackendIssue(err)
 	}
@@ -3091,6 +3092,14 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 				info.StatsSummary[s.DeploymentID] = sum
 			}
 		}
+	}
+
+	if opts.Metrics {
+		m, err := globalSiteReplicationSys.getSiteMetrics(ctx)
+		if err != nil {
+			return info, err
+		}
+		info.Metrics = m
 	}
 
 	// maximum buckets users etc seen across sites
@@ -3846,6 +3855,7 @@ type srStatusInfo struct {
 	// GroupStats map of group to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific bucket's stats are requested
 	GroupStats map[string]map[string]srGroupStatsSummary
+	Metrics    madmin.SRMetricsSummary
 }
 
 // SRBucketDeleteOp - type of delete op
@@ -5384,4 +5394,89 @@ func saveSiteResyncMetadata(ctx context.Context, ss SiteResyncStatus, objectAPI 
 
 func getSRResyncFilePath(dID string) string {
 	return pathJoin(siteResyncPrefix, dID+".meta")
+}
+
+func (c *SiteReplicationSys) getDeplIDForEndpoint(ep string) (dID string, err error) {
+	if ep == "" {
+		return dID, fmt.Errorf("no deployment id found for endpoint %s", ep)
+	}
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return dID, errSRNotEnabled
+	}
+	for _, peer := range c.state.Peers {
+		if ep == peer.Endpoint {
+			return peer.DeploymentID, nil
+		}
+	}
+	return dID, fmt.Errorf("no deployment id found for endpoint %s", ep)
+}
+
+func (c *SiteReplicationSys) getSiteMetrics(ctx context.Context) (madmin.SRMetricsSummary, error) {
+	if !c.isEnabled() {
+		return madmin.SRMetricsSummary{}, errSRNotEnabled
+	}
+	peerSMetricsList := globalNotificationSys.GetClusterSiteMetrics(ctx)
+	var sm madmin.SRMetricsSummary
+	sm.Metrics = make(map[string]madmin.SRMetric)
+
+	for _, peer := range peerSMetricsList {
+		sm.ActiveWorkers.Avg += peer.ActiveWorkers.Avg
+		sm.ActiveWorkers.Curr += peer.ActiveWorkers.Curr
+		if peer.ActiveWorkers.Max > sm.ActiveWorkers.Max {
+			sm.ActiveWorkers.Max += peer.ActiveWorkers.Max
+		}
+		sm.Queued.Avg.Bytes += peer.Queued.Avg.Bytes
+		sm.Queued.Avg.Count += peer.Queued.Avg.Count
+		sm.Queued.Curr.Bytes += peer.Queued.Curr.Bytes
+		sm.Queued.Curr.Count += peer.Queued.Curr.Count
+		if peer.Queued.Max.Count > sm.Queued.Max.Count {
+			sm.Queued.Max.Bytes = peer.Queued.Max.Bytes
+			sm.Queued.Max.Count = peer.Queued.Max.Count
+		}
+		sm.ReplicaCount += peer.ReplicaCount
+		sm.ReplicaSize += peer.ReplicaSize
+		for dID, v := range peer.Metrics {
+			v2, ok := sm.Metrics[dID]
+			if !ok {
+				v2 = madmin.SRMetric{}
+				v2.Failed.ErrCounts = make(map[string]int)
+			}
+
+			// use target endpoint metrics from node which has been up the longest
+			if v2.LastOnline.After(v.LastOnline) || v2.LastOnline.IsZero() {
+				v2.Endpoint = v.Endpoint
+				v2.LastOnline = v.LastOnline
+				v2.Latency = v.Latency
+				v2.Online = v.Online
+				v2.TotalDowntime = v.TotalDowntime
+				v2.DeploymentID = v.DeploymentID
+			}
+			v2.ReplicatedCount += v.ReplicatedCount
+			v2.ReplicatedSize += v.ReplicatedSize
+			v2.Failed = v2.Failed.Add(v.Failed)
+			for k, v := range v.Failed.ErrCounts {
+				v2.Failed.ErrCounts[k] += v
+			}
+			if v2.XferStats == nil {
+				v2.XferStats = make(map[replication.MetricName]replication.XferStats)
+			}
+			for rm, x := range v.XferStats {
+				x2, ok := v2.XferStats[replication.MetricName(rm)]
+				if !ok {
+					x2 = replication.XferStats{}
+				}
+				x2.AvgRate += x.Avg
+				x2.CurrRate += x.Curr
+				if x.Peak > x2.PeakRate {
+					x2.PeakRate = x.Peak
+				}
+				v2.XferStats[replication.MetricName(rm)] = x2
+			}
+			sm.Metrics[dID] = v2
+		}
+	}
+	sm.Uptime = UTCNow().Unix() - globalBootTime.Unix()
+	return sm, nil
 }
