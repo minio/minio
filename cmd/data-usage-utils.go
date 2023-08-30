@@ -38,6 +38,7 @@ type BucketTargetUsageInfo struct {
 	ReplicaSize             uint64 `json:"objectReplicaTotalSize"`
 	ReplicationPendingCount uint64 `json:"objectsPendingReplicationCount"`
 	ReplicationFailedCount  uint64 `json:"objectsFailedReplicationCount"`
+	ReplicatedCount         uint64 `json:"objectsReplicatedCount"`
 }
 
 // BucketUsageInfo - bucket usage info provides
@@ -64,6 +65,7 @@ type BucketUsageInfo struct {
 	VersionsCount           uint64                           `json:"versionsCount"`
 	DeleteMarkersCount      uint64                           `json:"deleteMarkersCount"`
 	ReplicaSize             uint64                           `json:"objectReplicaTotalSize"`
+	ReplicaCount            uint64                           `json:"objectReplicaCount"`
 	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
 }
 

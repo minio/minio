@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshalBucketReplicationStat(t *testing.T) {
-	v := BucketReplicationStat{}
+func TestMarshalUnmarshalActiveWorkerStat(t *testing.T) {
+	v := ActiveWorkerStat{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshalBucketReplicationStat(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBucketReplicationStat(b *testing.B) {
-	v := BucketReplicationStat{}
+func BenchmarkMarshalMsgActiveWorkerStat(b *testing.B) {
+	v := ActiveWorkerStat{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgBucketReplicationStat(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBucketReplicationStat(b *testing.B) {
-	v := BucketReplicationStat{}
+func BenchmarkAppendMsgActiveWorkerStat(b *testing.B) {
+	v := ActiveWorkerStat{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgBucketReplicationStat(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBucketReplicationStat(b *testing.B) {
-	v := BucketReplicationStat{}
+func BenchmarkUnmarshalActiveWorkerStat(b *testing.B) {
+	v := ActiveWorkerStat{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshalBucketReplicationStat(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBucketReplicationStat(t *testing.T) {
-	v := BucketReplicationStat{}
+func TestEncodeDecodeActiveWorkerStat(t *testing.T) {
+	v := ActiveWorkerStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBucketReplicationStat Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeActiveWorkerStat Msgsize() is inaccurate")
 	}
 
-	vn := BucketReplicationStat{}
+	vn := ActiveWorkerStat{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodeBucketReplicationStat(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBucketReplicationStat(b *testing.B) {
-	v := BucketReplicationStat{}
+func BenchmarkEncodeActiveWorkerStat(b *testing.B) {
+	v := ActiveWorkerStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodeBucketReplicationStat(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBucketReplicationStat(b *testing.B) {
-	v := BucketReplicationStat{}
+func BenchmarkDecodeActiveWorkerStat(b *testing.B) {
+	v := ActiveWorkerStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -122,8 +122,8 @@ func BenchmarkDecodeBucketReplicationStat(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBucketReplicationStats(t *testing.T) {
-	v := BucketReplicationStats{}
+func TestMarshalUnmarshalInQueueMetric(t *testing.T) {
+	v := InQueueMetric{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +145,8 @@ func TestMarshalUnmarshalBucketReplicationStats(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBucketReplicationStats(b *testing.B) {
-	v := BucketReplicationStats{}
+func BenchmarkMarshalMsgInQueueMetric(b *testing.B) {
+	v := InQueueMetric{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -154,8 +154,8 @@ func BenchmarkMarshalMsgBucketReplicationStats(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBucketReplicationStats(b *testing.B) {
-	v := BucketReplicationStats{}
+func BenchmarkAppendMsgInQueueMetric(b *testing.B) {
+	v := InQueueMetric{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -166,8 +166,8 @@ func BenchmarkAppendMsgBucketReplicationStats(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBucketReplicationStats(b *testing.B) {
-	v := BucketReplicationStats{}
+func BenchmarkUnmarshalInQueueMetric(b *testing.B) {
+	v := InQueueMetric{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -180,17 +180,17 @@ func BenchmarkUnmarshalBucketReplicationStats(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBucketReplicationStats(t *testing.T) {
-	v := BucketReplicationStats{}
+func TestEncodeDecodeInQueueMetric(t *testing.T) {
+	v := InQueueMetric{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBucketReplicationStats Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeInQueueMetric Msgsize() is inaccurate")
 	}
 
-	vn := BucketReplicationStats{}
+	vn := InQueueMetric{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -204,8 +204,8 @@ func TestEncodeDecodeBucketReplicationStats(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBucketReplicationStats(b *testing.B) {
-	v := BucketReplicationStats{}
+func BenchmarkEncodeInQueueMetric(b *testing.B) {
+	v := InQueueMetric{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -218,8 +218,8 @@ func BenchmarkEncodeBucketReplicationStats(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBucketReplicationStats(b *testing.B) {
-	v := BucketReplicationStats{}
+func BenchmarkDecodeInQueueMetric(b *testing.B) {
+	v := InQueueMetric{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -235,8 +235,8 @@ func BenchmarkDecodeBucketReplicationStats(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBucketStats(t *testing.T) {
-	v := BucketStats{}
+func TestMarshalUnmarshalInQueueStats(t *testing.T) {
+	v := InQueueStats{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -258,8 +258,8 @@ func TestMarshalUnmarshalBucketStats(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBucketStats(b *testing.B) {
-	v := BucketStats{}
+func BenchmarkMarshalMsgInQueueStats(b *testing.B) {
+	v := InQueueStats{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -267,8 +267,8 @@ func BenchmarkMarshalMsgBucketStats(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBucketStats(b *testing.B) {
-	v := BucketStats{}
+func BenchmarkAppendMsgInQueueStats(b *testing.B) {
+	v := InQueueStats{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -279,8 +279,8 @@ func BenchmarkAppendMsgBucketStats(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBucketStats(b *testing.B) {
-	v := BucketStats{}
+func BenchmarkUnmarshalInQueueStats(b *testing.B) {
+	v := InQueueStats{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -293,17 +293,17 @@ func BenchmarkUnmarshalBucketStats(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBucketStats(t *testing.T) {
-	v := BucketStats{}
+func TestEncodeDecodeInQueueStats(t *testing.T) {
+	v := InQueueStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBucketStats Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeInQueueStats Msgsize() is inaccurate")
 	}
 
-	vn := BucketStats{}
+	vn := InQueueStats{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -317,8 +317,8 @@ func TestEncodeDecodeBucketStats(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBucketStats(b *testing.B) {
-	v := BucketStats{}
+func BenchmarkEncodeInQueueStats(b *testing.B) {
+	v := InQueueStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -331,8 +331,8 @@ func BenchmarkEncodeBucketStats(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBucketStats(b *testing.B) {
-	v := BucketStats{}
+func BenchmarkDecodeInQueueStats(b *testing.B) {
+	v := InQueueStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -348,8 +348,8 @@ func BenchmarkDecodeBucketStats(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBucketStatsMap(t *testing.T) {
-	v := BucketStatsMap{}
+func TestMarshalUnmarshalQStat(t *testing.T) {
+	v := QStat{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -371,8 +371,8 @@ func TestMarshalUnmarshalBucketStatsMap(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgBucketStatsMap(b *testing.B) {
-	v := BucketStatsMap{}
+func BenchmarkMarshalMsgQStat(b *testing.B) {
+	v := QStat{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -380,8 +380,8 @@ func BenchmarkMarshalMsgBucketStatsMap(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBucketStatsMap(b *testing.B) {
-	v := BucketStatsMap{}
+func BenchmarkAppendMsgQStat(b *testing.B) {
+	v := QStat{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -392,8 +392,8 @@ func BenchmarkAppendMsgBucketStatsMap(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBucketStatsMap(b *testing.B) {
-	v := BucketStatsMap{}
+func BenchmarkUnmarshalQStat(b *testing.B) {
+	v := QStat{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -406,17 +406,17 @@ func BenchmarkUnmarshalBucketStatsMap(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeBucketStatsMap(t *testing.T) {
-	v := BucketStatsMap{}
+func TestEncodeDecodeQStat(t *testing.T) {
+	v := QStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeBucketStatsMap Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeQStat Msgsize() is inaccurate")
 	}
 
-	vn := BucketStatsMap{}
+	vn := QStat{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -430,8 +430,8 @@ func TestEncodeDecodeBucketStatsMap(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeBucketStatsMap(b *testing.B) {
-	v := BucketStatsMap{}
+func BenchmarkEncodeQStat(b *testing.B) {
+	v := QStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -444,8 +444,8 @@ func BenchmarkEncodeBucketStatsMap(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeBucketStatsMap(b *testing.B) {
-	v := BucketStatsMap{}
+func BenchmarkDecodeQStat(b *testing.B) {
+	v := QStat{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -461,8 +461,8 @@ func BenchmarkDecodeBucketStatsMap(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalReplQNodeStats(t *testing.T) {
-	v := ReplQNodeStats{}
+func TestMarshalUnmarshalReplicationMRFStats(t *testing.T) {
+	v := ReplicationMRFStats{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -484,8 +484,8 @@ func TestMarshalUnmarshalReplQNodeStats(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgReplQNodeStats(b *testing.B) {
-	v := ReplQNodeStats{}
+func BenchmarkMarshalMsgReplicationMRFStats(b *testing.B) {
+	v := ReplicationMRFStats{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -493,8 +493,8 @@ func BenchmarkMarshalMsgReplQNodeStats(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgReplQNodeStats(b *testing.B) {
-	v := ReplQNodeStats{}
+func BenchmarkAppendMsgReplicationMRFStats(b *testing.B) {
+	v := ReplicationMRFStats{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -505,8 +505,8 @@ func BenchmarkAppendMsgReplQNodeStats(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalReplQNodeStats(b *testing.B) {
-	v := ReplQNodeStats{}
+func BenchmarkUnmarshalReplicationMRFStats(b *testing.B) {
+	v := ReplicationMRFStats{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -519,17 +519,17 @@ func BenchmarkUnmarshalReplQNodeStats(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeReplQNodeStats(t *testing.T) {
-	v := ReplQNodeStats{}
+func TestEncodeDecodeReplicationMRFStats(t *testing.T) {
+	v := ReplicationMRFStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeReplQNodeStats Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeReplicationMRFStats Msgsize() is inaccurate")
 	}
 
-	vn := ReplQNodeStats{}
+	vn := ReplicationMRFStats{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -543,8 +543,8 @@ func TestEncodeDecodeReplQNodeStats(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeReplQNodeStats(b *testing.B) {
-	v := ReplQNodeStats{}
+func BenchmarkEncodeReplicationMRFStats(b *testing.B) {
+	v := ReplicationMRFStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -557,8 +557,8 @@ func BenchmarkEncodeReplQNodeStats(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeReplQNodeStats(b *testing.B) {
-	v := ReplQNodeStats{}
+func BenchmarkDecodeReplicationMRFStats(b *testing.B) {
+	v := ReplicationMRFStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -574,8 +574,8 @@ func BenchmarkDecodeReplQNodeStats(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalReplicationLastHour(t *testing.T) {
-	v := ReplicationLastHour{}
+func TestMarshalUnmarshalSMA(t *testing.T) {
+	v := SMA{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -597,8 +597,8 @@ func TestMarshalUnmarshalReplicationLastHour(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgReplicationLastHour(b *testing.B) {
-	v := ReplicationLastHour{}
+func BenchmarkMarshalMsgSMA(b *testing.B) {
+	v := SMA{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -606,8 +606,8 @@ func BenchmarkMarshalMsgReplicationLastHour(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgReplicationLastHour(b *testing.B) {
-	v := ReplicationLastHour{}
+func BenchmarkAppendMsgSMA(b *testing.B) {
+	v := SMA{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -618,8 +618,8 @@ func BenchmarkAppendMsgReplicationLastHour(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalReplicationLastHour(b *testing.B) {
-	v := ReplicationLastHour{}
+func BenchmarkUnmarshalSMA(b *testing.B) {
+	v := SMA{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -632,17 +632,17 @@ func BenchmarkUnmarshalReplicationLastHour(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeReplicationLastHour(t *testing.T) {
-	v := ReplicationLastHour{}
+func TestEncodeDecodeSMA(t *testing.T) {
+	v := SMA{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeReplicationLastHour Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeSMA Msgsize() is inaccurate")
 	}
 
-	vn := ReplicationLastHour{}
+	vn := SMA{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -656,8 +656,8 @@ func TestEncodeDecodeReplicationLastHour(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeReplicationLastHour(b *testing.B) {
-	v := ReplicationLastHour{}
+func BenchmarkEncodeSMA(b *testing.B) {
+	v := SMA{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -670,8 +670,8 @@ func BenchmarkEncodeReplicationLastHour(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeReplicationLastHour(b *testing.B) {
-	v := ReplicationLastHour{}
+func BenchmarkDecodeSMA(b *testing.B) {
+	v := SMA{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -687,8 +687,8 @@ func BenchmarkDecodeReplicationLastHour(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalReplicationLastMinute(t *testing.T) {
-	v := ReplicationLastMinute{}
+func TestMarshalUnmarshalXferStats(t *testing.T) {
+	v := XferStats{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -710,8 +710,8 @@ func TestMarshalUnmarshalReplicationLastMinute(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgReplicationLastMinute(b *testing.B) {
-	v := ReplicationLastMinute{}
+func BenchmarkMarshalMsgXferStats(b *testing.B) {
+	v := XferStats{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -719,8 +719,8 @@ func BenchmarkMarshalMsgReplicationLastMinute(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgReplicationLastMinute(b *testing.B) {
-	v := ReplicationLastMinute{}
+func BenchmarkAppendMsgXferStats(b *testing.B) {
+	v := XferStats{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -731,8 +731,8 @@ func BenchmarkAppendMsgReplicationLastMinute(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalReplicationLastMinute(b *testing.B) {
-	v := ReplicationLastMinute{}
+func BenchmarkUnmarshalXferStats(b *testing.B) {
+	v := XferStats{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -745,17 +745,17 @@ func BenchmarkUnmarshalReplicationLastMinute(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeReplicationLastMinute(t *testing.T) {
-	v := ReplicationLastMinute{}
+func TestEncodeDecodeXferStats(t *testing.T) {
+	v := XferStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeReplicationLastMinute Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeXferStats Msgsize() is inaccurate")
 	}
 
-	vn := ReplicationLastMinute{}
+	vn := XferStats{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -769,8 +769,8 @@ func TestEncodeDecodeReplicationLastMinute(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeReplicationLastMinute(b *testing.B) {
-	v := ReplicationLastMinute{}
+func BenchmarkEncodeXferStats(b *testing.B) {
+	v := XferStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -783,234 +783,8 @@ func BenchmarkEncodeReplicationLastMinute(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeReplicationLastMinute(b *testing.B) {
-	v := ReplicationLastMinute{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	rd := msgp.NewEndlessReader(buf.Bytes(), b)
-	dc := msgp.NewReader(rd)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := v.DecodeMsg(dc)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalReplicationLatency(t *testing.T) {
-	v := ReplicationLatency{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func BenchmarkMarshalMsgReplicationLatency(b *testing.B) {
-	v := ReplicationLatency{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgReplicationLatency(b *testing.B) {
-	v := ReplicationLatency{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalReplicationLatency(b *testing.B) {
-	v := ReplicationLatency{}
-	bts, _ := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestEncodeDecodeReplicationLatency(t *testing.T) {
-	v := ReplicationLatency{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-
-	m := v.Msgsize()
-	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeReplicationLatency Msgsize() is inaccurate")
-	}
-
-	vn := ReplicationLatency{}
-	err := msgp.Decode(&buf, &vn)
-	if err != nil {
-		t.Error(err)
-	}
-
-	buf.Reset()
-	msgp.Encode(&buf, &v)
-	err = msgp.NewReader(&buf).Skip()
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func BenchmarkEncodeReplicationLatency(b *testing.B) {
-	v := ReplicationLatency{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	en := msgp.NewWriter(msgp.Nowhere)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.EncodeMsg(en)
-	}
-	en.Flush()
-}
-
-func BenchmarkDecodeReplicationLatency(b *testing.B) {
-	v := ReplicationLatency{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	rd := msgp.NewEndlessReader(buf.Bytes(), b)
-	dc := msgp.NewReader(rd)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := v.DecodeMsg(dc)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalReplicationQueueStats(t *testing.T) {
-	v := ReplicationQueueStats{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func BenchmarkMarshalMsgReplicationQueueStats(b *testing.B) {
-	v := ReplicationQueueStats{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgReplicationQueueStats(b *testing.B) {
-	v := ReplicationQueueStats{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalReplicationQueueStats(b *testing.B) {
-	v := ReplicationQueueStats{}
-	bts, _ := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestEncodeDecodeReplicationQueueStats(t *testing.T) {
-	v := ReplicationQueueStats{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-
-	m := v.Msgsize()
-	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeReplicationQueueStats Msgsize() is inaccurate")
-	}
-
-	vn := ReplicationQueueStats{}
-	err := msgp.Decode(&buf, &vn)
-	if err != nil {
-		t.Error(err)
-	}
-
-	buf.Reset()
-	msgp.Encode(&buf, &v)
-	err = msgp.NewReader(&buf).Skip()
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func BenchmarkEncodeReplicationQueueStats(b *testing.B) {
-	v := ReplicationQueueStats{}
-	var buf bytes.Buffer
-	msgp.Encode(&buf, &v)
-	b.SetBytes(int64(buf.Len()))
-	en := msgp.NewWriter(msgp.Nowhere)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.EncodeMsg(en)
-	}
-	en.Flush()
-}
-
-func BenchmarkDecodeReplicationQueueStats(b *testing.B) {
-	v := ReplicationQueueStats{}
+func BenchmarkDecodeXferStats(b *testing.B) {
+	v := XferStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
