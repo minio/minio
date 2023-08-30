@@ -902,15 +902,11 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 		Remove:   healDeleteDangling,
 		ScanMode: scanMode,
 	}
-	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
-	if err != nil {
-		if errors.Is(err, NotImplemented{}) || isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-			err = nil
-		}
-		logger.LogIf(ctx, err)
-		return 0
+	res, _ := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
+	if res.ObjectSize > 0 {
+		return res.ObjectSize
 	}
-	return res.ObjectSize
+	return 0
 }
 
 func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (applied bool, size int64) {
