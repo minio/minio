@@ -50,11 +50,33 @@ type BucketTargetSys struct {
 	hcClient      *madmin.AnonymousClient
 }
 
+type latencyStat struct {
+	lastmin lastMinuteLatency
+	curr    time.Duration
+	avg     time.Duration
+	peak    time.Duration
+	N       int64
+}
+
+func (l *latencyStat) update(d time.Duration) {
+	l.lastmin.add(d)
+	l.N++
+	if d > l.peak {
+		l.peak = d
+	}
+	l.curr = l.lastmin.getTotal().avg()
+	l.avg = time.Duration((int64(l.avg)*(l.N-1) + int64(l.curr)) / l.N)
+}
+
 // epHealth struct represents health of a replication target endpoint.
 type epHealth struct {
-	Endpoint string
-	Scheme   string
-	Online   bool
+	Endpoint        string
+	Scheme          string
+	Online          bool
+	lastOnline      time.Time
+	lastHCAt        time.Time
+	offlineDuration time.Duration
+	latency         latencyStat
 }
 
 // isOffline returns current liveness result of remote target. Add endpoint to
@@ -117,11 +139,40 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				m := make(map[string]epHealth, len(eps))
+				start := time.Now()
+
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
+					var lastOnline time.Time
+					var offline time.Duration
+					//	var deploymentID string
+					sys.hMutex.RLock()
+					prev, ok := sys.hc[result.Endpoint.Host]
+					sys.hMutex.RUnlock()
+					if ok {
+						if prev.Online != result.Online || !result.Online {
+							if !prev.lastHCAt.IsZero() {
+								offline = time.Since(prev.lastHCAt) + prev.offlineDuration
+							} else {
+								offline = prev.offlineDuration
+							}
+						} else if result.Online {
+							offline = prev.offlineDuration
+						}
+					}
+					lastOnline = prev.lastOnline
+					if result.Online {
+						lastOnline = time.Now()
+					}
+					l := prev.latency
+					l.update(time.Since(start))
 					m[result.Endpoint.Host] = epHealth{
-						Endpoint: result.Endpoint.Host,
-						Scheme:   result.Endpoint.Scheme,
-						Online:   result.Online,
+						Endpoint:        result.Endpoint.Host,
+						Scheme:          result.Endpoint.Scheme,
+						Online:          result.Online,
+						lastOnline:      lastOnline,
+						offlineDuration: offline,
+						lastHCAt:        time.Now(),
+						latency:         l,
 					}
 				}
 				cancel()
@@ -141,32 +192,61 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 func (sys *BucketTargetSys) reloadHealthCheckers(ctx context.Context) {
 	m := make(map[string]epHealth)
 	tgts := sys.ListTargets(ctx, "", "")
+	sys.hMutex.Lock()
 	for _, t := range tgts {
 		if _, ok := m[t.Endpoint]; !ok {
 			scheme := "http"
 			if t.Secure {
 				scheme = "https"
 			}
-			m[t.Endpoint] = epHealth{
+			epHealth := epHealth{
 				Online:   true,
 				Endpoint: t.Endpoint,
 				Scheme:   scheme,
 			}
+			if prev, ok := sys.hc[t.Endpoint]; ok {
+				epHealth.lastOnline = prev.lastOnline
+				epHealth.offlineDuration = prev.offlineDuration
+				epHealth.lastHCAt = prev.lastHCAt
+				epHealth.latency = prev.latency
+			}
+			m[t.Endpoint] = epHealth
 		}
 	}
-	sys.hMutex.Lock()
 	// swap out the map
 	sys.hc = m
 	sys.hMutex.Unlock()
 }
 
+func (sys *BucketTargetSys) healthStats() map[string]epHealth {
+	sys.hMutex.RLock()
+	defer sys.hMutex.RUnlock()
+	m := make(map[string]epHealth, len(sys.hc))
+	for k, v := range sys.hc {
+		m[k] = v
+	}
+	return m
+}
+
 // ListTargets lists bucket targets across tenant or for individual bucket, and returns
 // results filtered by arnType
 func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType string) (targets []madmin.BucketTarget) {
+	h := sys.healthStats()
+
 	if bucket != "" {
 		if ts, err := sys.ListBucketTargets(ctx, bucket); err == nil {
 			for _, t := range ts.Targets {
 				if string(t.Type) == arnType || arnType == "" {
+					if hs, ok := h[t.URL().Host]; ok {
+						t.TotalDowntime = hs.offlineDuration
+						t.Online = hs.Online
+						t.LastOnline = hs.lastOnline
+						t.Latency = madmin.LatencyStat{
+							Curr: hs.latency.curr,
+							Avg:  hs.latency.avg,
+							Max:  hs.latency.peak,
+						}
+					}
 					targets = append(targets, t.Clone())
 				}
 			}
@@ -178,6 +258,16 @@ func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType str
 	for _, tgts := range sys.targetsMap {
 		for _, t := range tgts {
 			if string(t.Type) == arnType || arnType == "" {
+				if hs, ok := h[t.URL().Host]; ok {
+					t.TotalDowntime = hs.offlineDuration
+					t.Online = hs.Online
+					t.LastOnline = hs.lastOnline
+					t.Latency = madmin.LatencyStat{
+						Curr: hs.latency.curr,
+						Avg:  hs.latency.avg,
+						Max:  hs.latency.peak,
+					}
+				}
 				targets = append(targets, t.Clone())
 			}
 		}
@@ -343,7 +433,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 }
 
 // GetRemoteTargetClient returns minio-go client for replication target instance
-func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn string) *TargetClient {
+func (sys *BucketTargetSys) GetRemoteTargetClient(arn string) *TargetClient {
 	sys.RLock()
 	defer sys.RUnlock()
 	return sys.arnRemotesMap[arn]
@@ -489,6 +579,8 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	if target == nil {
 		return
 	}
+	sys.RLock()
+	defer sys.RUnlock()
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
 		if tgt.Type == target.Type &&
@@ -506,6 +598,8 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 
 // getRemoteARNForPeer returns the remote target for a peer site in site replication
 func (sys *BucketTargetSys) getRemoteARNForPeer(bucket string, peer madmin.PeerInfo) string {
+	sys.RLock()
+	defer sys.RUnlock()
 	tgts := sys.targetsMap[bucket]
 	for _, target := range tgts {
 		ep, _ := url.Parse(peer.Endpoint)

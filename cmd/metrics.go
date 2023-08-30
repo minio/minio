@@ -381,7 +381,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	for bucket, usageInfo := range dataUsageInfo.BucketsUsage {
-		stat := globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)
+		stat := globalReplicationStats.getLatestReplicationStats(bucket)
 		// Total space used by bucket
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
@@ -403,20 +403,11 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "replication", "failed_size"),
-				"Total capacity failed to replicate at least once",
-				[]string{"bucket"}, nil),
-			prometheus.GaugeValue,
-			float64(stat.FailedSize),
-			bucket,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
 				prometheus.BuildFQName("bucket", "replication", "successful_size"),
 				"Total capacity replicated to destination",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(stat.ReplicatedSize),
+			float64(stat.ReplicationStats.ReplicatedSize),
 			bucket,
 		)
 		ch <- prometheus.MustNewConstMetric(
@@ -425,18 +416,10 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total capacity replicated to this instance",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
-			float64(stat.ReplicaSize),
+			float64(stat.ReplicationStats.ReplicaSize),
 			bucket,
 		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "replication", "failed_count"),
-				"Total replication operations failed",
-				[]string{"bucket"}, nil),
-			prometheus.GaugeValue,
-			float64(stat.FailedCount),
-			bucket,
-		)
+
 		for k, v := range usageInfo.ObjectSizesHistogram {
 			ch <- prometheus.MustNewConstMetric(
 				prometheus.NewDesc(
