@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v32" // Add bucket peer metrics
+	peerRESTVersion = "v33" // Add SRMetrics
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -78,6 +78,7 @@ const (
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodMetrics                     = "/metrics"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
+	peerRESTMethodGetSRMetrics                = "/getsrmetrics"
 )
 
 const (

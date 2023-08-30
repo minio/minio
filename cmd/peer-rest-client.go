@@ -277,6 +277,19 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	return bs, msgp.Decode(respBody, &bs)
 }
 
+// GetSRMetrics- loads site replication metrics, optionally for a specific bucket
+func (client *peerRESTClient) GetSRMetrics() (SRMetricsSummary, error) {
+	values := make(url.Values)
+	respBody, err := client.call(peerRESTMethodGetSRMetrics, values, nil, -1)
+	if err != nil {
+		return SRMetricsSummary{}, err
+	}
+
+	var sm SRMetricsSummary
+	defer xhttp.DrainBody(respBody)
+	return sm, msgp.Decode(respBody, &sm)
+}
+
 // GetAllBucketStats - load replication stats for all buckets
 func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
 	values := make(url.Values)

@@ -846,9 +846,11 @@ type sizeSummary struct {
 	versions        uint64
 	deleteMarkers   uint64
 	replicatedSize  int64
+	replicatedCount int64
 	pendingSize     int64
 	failedSize      int64
 	replicaSize     int64
+	replicaCount    int64
 	pendingCount    uint64
 	failedCount     uint64
 	replTargetStats map[string]replTargetSizeSummary
@@ -857,11 +859,12 @@ type sizeSummary struct {
 
 // replTargetSizeSummary holds summary of replication stats by target
 type replTargetSizeSummary struct {
-	replicatedSize int64
-	pendingSize    int64
-	failedSize     int64
-	pendingCount   uint64
-	failedCount    uint64
+	replicatedSize  int64
+	replicatedCount int64
+	pendingSize     int64
+	failedSize      int64
+	pendingCount    uint64
+	failedCount     uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -1286,13 +1289,16 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 			sizeS.failedCount++
 		case replication.Completed, replication.CompletedLegacy:
 			tgtSizeS.replicatedSize += oi.Size
+			tgtSizeS.replicatedCount++
 			sizeS.replicatedSize += oi.Size
+			sizeS.replicatedCount++
 		}
 		sizeS.replTargetStats[arn] = tgtSizeS
 	}
 
 	if oi.ReplicationStatus == replication.Replica {
 		sizeS.replicaSize += oi.Size
+		sizeS.replicaCount++
 	}
 }
 

@@ -55,6 +55,7 @@ func init() {
 		getKMSMetrics(),
 		getClusterHealthMetrics(),
 		getIAMNodeMetrics(),
+		getReplicationSiteMetrics(),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
@@ -73,6 +74,7 @@ func init() {
 		getKMSNodeMetrics(),
 		getMinioHealingMetrics(),
 		getWebhookMetrics(),
+		getReplicationClusterMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -186,8 +188,39 @@ const (
 	total             MetricName = "total"
 	freeInodes        MetricName = "free_inodes"
 
-	failedCount     MetricName = "failed_count"
-	failedBytes     MetricName = "failed_bytes"
+	lastMinFailedCount  MetricName = "last_minute_failed_count"
+	lastMinFailedBytes  MetricName = "last_minute_failed_bytes"
+	lastHourFailedCount MetricName = "last_hour_failed_count"
+	lastHourFailedBytes MetricName = "last_hour_failed_bytes"
+	totalFailedCount    MetricName = "total_failed_count"
+	totalFailedBytes    MetricName = "total_failed_bytes"
+
+	currActiveWorkers  MetricName = "current_active_workers"
+	avgActiveWorkers   MetricName = "average_active_workers"
+	maxActiveWorkers   MetricName = "max_active_workers"
+	recentBacklogCount MetricName = "recent_backlog_count"
+	currInQueueCount   MetricName = "last_minute_queued_count"
+	currInQueueBytes   MetricName = "last_minute_queued_bytes"
+	receivedCount      MetricName = "received_count"
+	sentCount          MetricName = "sent_count"
+	currTransferRate   MetricName = "current_transfer_rate"
+	avgTransferRate    MetricName = "average_transfer_rate"
+	maxTransferRate    MetricName = "max_transfer_rate"
+	credentialErrors   MetricName = "credential_errors"
+
+	currLinkLatency MetricName = "current_link_latency_ms"
+	avgLinkLatency  MetricName = "average_link_latency_ms"
+	maxLinkLatency  MetricName = "max_link_latency_ms"
+
+	linkOnline                MetricName = "link_online"
+	linkOfflineDuration       MetricName = "link_offline_duration_seconds"
+	linkDowntimeTotalDuration MetricName = "link_downtime_duration_seconds"
+
+	avgInQueueCount MetricName = "average_queued_count"
+	avgInQueueBytes MetricName = "average_queued_bytes"
+	maxInQueueCount MetricName = "max_queued_count"
+	maxInQueueBytes MetricName = "max_queued_bytes"
+
 	freeBytes       MetricName = "free_bytes"
 	readBytes       MetricName = "read_bytes"
 	rcharBytes      MetricName = "rchar_bytes"
@@ -646,56 +679,6 @@ func getBucketUsageDeleteMarkersTotalMD() MetricDescription {
 	}
 }
 
-func getBucketRepLatencyMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      latencyMilliSec,
-		Help:      "Replication latency in milliseconds",
-		Type:      histogramMetric,
-	}
-}
-
-func getBucketRepFailedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      failedBytes,
-		Help:      "Total number of bytes failed at least once to replicate",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepSentBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      sentBytes,
-		Help:      "Total number of bytes replicated to the target bucket",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepReceivedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      receivedBytes,
-		Help:      "Total number of bytes replicated to this bucket from another source bucket",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepFailedOperationsMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      failedCount,
-		Help:      "Total number of objects which failed replication",
-		Type:      gaugeMetric,
-	}
-}
-
 func getClusterObjectDistributionMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
@@ -713,6 +696,324 @@ func getClusterObjectVersionsMD() MetricDescription {
 		Name:      versionDistribution,
 		Help:      "Distribution of object sizes across a cluster",
 		Type:      histogramMetric,
+	}
+}
+
+func getClusterRepLinkLatencyCurrMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currLinkLatency,
+		Help:      "Replication current link latency in milliseconds",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkOnlineMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkOnline,
+		Help:      "Reports whether replication link is online (1) or offline(0)",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkCurrOfflineDurationMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkOfflineDuration,
+		Help:      "Duration of replication link being offline in seconds since last offline event",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkTotalOfflineDurationMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkDowntimeTotalDuration,
+		Help:      "Total downtime of replication link in seconds since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketRepLatencyMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      latencyMilliSec,
+		Help:      "Replication latency in milliseconds",
+		Type:      histogramMetric,
+	}
+}
+
+func getRepFailedBytesLastMinuteMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastMinFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsLastMinuteMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastMinFailedCount,
+		Help:      "Total number of objects which failed replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedBytesLastHourMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastHourFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate in the last hour",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsLastHourMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastHourFailedCount,
+		Help:      "Total number of objects which failed replication in the last hour",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedBytesTotalMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      totalFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsTotalMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      totalFailedCount,
+		Help:      "Total number of objects which failed replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepSentBytesMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      sentBytes,
+		Help:      "Total number of bytes replicated to the target",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepSentOperationsMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      sentCount,
+		Help:      "Total number of objects replicated to the target",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepReceivedBytesMD(namespace MetricNamespace) MetricDescription {
+	helpText := "Total number of bytes replicated to this bucket from another source bucket"
+	if namespace == clusterMetricNamespace {
+		helpText = "Total number of bytes replicated to this cluster from site replication peer"
+	}
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      receivedBytes,
+		Help:      helpText,
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepReceivedOperationsMD(namespace MetricNamespace) MetricDescription {
+	help := "Total number of objects received by this cluster"
+	if namespace == bucketMetricNamespace {
+		help = "Total number of objects received by this bucket from another source bucket"
+	}
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      receivedCount,
+		Help:      help,
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMRFFailedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      recentBacklogCount,
+		Help:      "Total number of objects seen in replication backlog in the last 5 minutes",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepCredentialErrorsMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      credentialErrors,
+		Help:      "Total number of replication credential errors since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplCurrQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currInQueueCount,
+		Help:      "Total number of objects queued for replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplCurrQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currInQueueBytes,
+		Help:      "Total number of bytes queued for replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currActiveWorkers,
+		Help:      "Total number of active replication workers",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgActiveWorkers,
+		Help:      "Average number of active replication workers",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxActiveWorkers,
+		Help:      "Maximum number of active replication workers seen since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplCurrentTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currTransferRate,
+		Help:      "Current replication transfer rate in bytes/sec",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkLatencyMaxMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxLinkLatency,
+		Help:      "Maximum replication link latency in milliseconds seen since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkLatencyAvgMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgLinkLatency,
+		Help:      "Average replication link latency in milliseconds",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgInQueueCount,
+		Help:      "Average number of objects queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgInQueueBytes,
+		Help:      "Average number of bytes queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxInQueueCount,
+		Help:      "Maximum number of objects queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxInQueueBytes,
+		Help:      "Maximum number of bytes queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgTransferRate,
+		Help:      "Average replication transfer rate in bytes/sec",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxTransferRate,
+		Help:      "Maximum replication transfer rate in bytes/sec seen since server start",
+		Type:      gaugeMetric,
 	}
 }
 
@@ -1773,6 +2074,273 @@ func getIAMNodeMetrics() *MetricsGroup {
 	return mg
 }
 
+// replication metrics for each node - published to the cluster endpoint with nodename as label
+func getReplicationClusterMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Minute,
+	}
+	const (
+		Online  = 1
+		Offline = 0
+	)
+
+	mg.RegisterRead(func(_ context.Context) []Metric {
+		// common operational metrics for bucket replication and site replication - published
+		// at cluster level
+		qs := globalReplicationStats.getNodeQueueStatsSummary()
+		activeWorkersCount := Metric{
+			Description:    getClusterReplActiveWorkersCountMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		avgActiveWorkersCount := Metric{
+			Description:    getClusterReplAvgActiveWorkersCountMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		maxActiveWorkersCount := Metric{
+			Description:    getClusterReplMaxActiveWorkersCountMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		currInQueueCount := Metric{
+			Description:    getClusterReplCurrQueuedOperationsMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		currInQueueBytes := Metric{
+			Description:    getClusterReplCurrQueuedBytesMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+
+		currTransferRate := Metric{
+			Description:    getClusterReplCurrentTransferRateMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		avgQueueCount := Metric{
+			Description:    getClusterReplAvgQueuedOperationsMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		avgQueueBytes := Metric{
+			Description:    getClusterReplAvgQueuedBytesMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		maxQueueCount := Metric{
+			Description:    getClusterReplMaxQueuedOperationsMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		maxQueueBytes := Metric{
+			Description:    getClusterReplMaxQueuedBytesMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		avgTransferRate := Metric{
+			Description:    getClusterReplAvgTransferRateMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		maxTransferRate := Metric{
+			Description:    getClusterReplMaxTransferRateMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+		}
+		mrfCount := Metric{
+			Description:    getClusterReplMRFFailedOperationsMD(),
+			VariableLabels: map[string]string{serverName: qs.NodeName},
+			Value:          float64(qs.MRFStats.LastFailedCount),
+		}
+
+		if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
+			qt := qs.QStats
+			currInQueueBytes.Value = qt.Curr.Bytes
+			currInQueueCount.Value = qt.Curr.Count
+			avgQueueBytes.Value = qt.Avg.Bytes
+			avgQueueCount.Value = qt.Avg.Count
+			maxQueueBytes.Value = qt.Max.Bytes
+			maxQueueCount.Value = qt.Max.Count
+		}
+		activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
+		avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
+		maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
+
+		if len(qs.XferStats) > 0 {
+			tots := qs.XferStats[Total]
+			currTransferRate.Value = tots.Curr
+			avgTransferRate.Value = tots.Avg
+			maxTransferRate.Value = tots.Peak
+		}
+		ml := []Metric{
+			activeWorkersCount,
+			avgActiveWorkersCount,
+			maxActiveWorkersCount,
+			currInQueueCount,
+			currInQueueBytes,
+			avgQueueCount,
+			avgQueueBytes,
+			maxQueueCount,
+			maxQueueBytes,
+			currTransferRate,
+			avgTransferRate,
+			maxTransferRate,
+			mrfCount,
+		}
+
+		for ep, health := range globalBucketTargetSys.healthStats() {
+			// link latency current
+			m := Metric{
+				Description: getClusterRepLinkLatencyCurrMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.curr / time.Millisecond)
+			ml = append(ml, m)
+
+			// link latency average
+			m = Metric{
+				Description: getClusterRepLinkLatencyAvgMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.avg / time.Millisecond)
+			ml = append(ml, m)
+
+			// link latency max
+			m = Metric{
+				Description: getClusterRepLinkLatencyMaxMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.peak / time.Millisecond)
+			ml = append(ml, m)
+
+			linkOnline := Metric{
+				Description: getClusterRepLinkOnlineMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			online := Offline
+			if health.Online {
+				online = Online
+			}
+			linkOnline.Value = float64(online)
+			ml = append(ml, linkOnline)
+			offlineDuration := Metric{
+				Description: getClusterRepLinkCurrOfflineDurationMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			currDowntime := time.Duration(0)
+			if !health.Online && !health.lastOnline.IsZero() {
+				currDowntime = UTCNow().Sub(health.lastOnline)
+			}
+			offlineDuration.Value = float64(currDowntime / time.Second)
+			ml = append(ml, offlineDuration)
+
+			downtimeDuration := Metric{
+				Description: getClusterRepLinkTotalOfflineDurationMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			dwntime := currDowntime
+			if health.offlineDuration > currDowntime {
+				dwntime = health.offlineDuration
+			}
+			downtimeDuration.Value = float64(dwntime / time.Second)
+			ml = append(ml, downtimeDuration)
+
+		}
+		return ml
+	})
+	return mg
+}
+
+// replication metrics for site replication
+func getReplicationSiteMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 1 * time.Minute,
+	}
+	mg.RegisterRead(func(_ context.Context) []Metric {
+		ml := []Metric{}
+
+		// metrics pertinent to site replication - overall roll up.
+		if globalSiteReplicationSys.isEnabled() {
+			m, err := globalSiteReplicationSys.getSiteMetrics(GlobalContext)
+			if err != nil {
+				logger.LogIf(GlobalContext, err)
+				return ml
+			}
+			ml = append(ml, Metric{
+				Description: getRepReceivedBytesMD(clusterMetricNamespace),
+				Value:       float64(m.ReplicaSize),
+			})
+			ml = append(ml, Metric{
+				Description: getRepReceivedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.ReplicaCount),
+			})
+
+			for _, stat := range m.Metrics {
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesLastMinuteMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.LastMinute.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsLastMinuteMD(clusterMetricNamespace),
+					Value:          stat.Failed.LastMinute.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesLastHourMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.LastHour.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsLastHourMD(clusterMetricNamespace),
+					Value:          stat.Failed.LastHour.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesTotalMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.Totals.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsTotalMD(clusterMetricNamespace),
+					Value:          stat.Failed.Totals.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+
+				ml = append(ml, Metric{
+					Description:    getRepSentBytesMD(clusterMetricNamespace),
+					Value:          float64(stat.ReplicatedSize),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepSentOperationsMD(clusterMetricNamespace),
+					Value:          float64(stat.ReplicatedCount),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+
+				if c, ok := stat.Failed.ErrCounts["AccessDenied"]; ok {
+					ml = append(ml, Metric{
+						Description:    getClusterRepCredentialErrorsMD(clusterMetricNamespace),
+						Value:          float64(c),
+						VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+					})
+				}
+			}
+		}
+
+		return ml
+	})
+	return mg
+}
+
 func getMinioVersionMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
@@ -2412,10 +2980,11 @@ func getBucketUsageMetrics() *MetricsGroup {
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
-		bucketReplStats := globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+		var bucketReplStats map[string]BucketStats
+		if !globalSiteReplicationSys.isEnabled() {
+			bucketReplStats = globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+		}
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			stats := bucketReplStats[bucket]
-
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
 			metrics = append(metrics, Metric{
@@ -2442,12 +3011,6 @@ func getBucketUsageMetrics() *MetricsGroup {
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 
-			metrics = append(metrics, Metric{
-				Description:    getBucketRepReceivedBytesMD(),
-				Value:          float64(stats.ReplicaSize),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
 			if quota != nil && quota.Quota > 0 {
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageQuotaTotalBytesMD(),
@@ -2455,47 +3018,89 @@ func getBucketUsageMetrics() *MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 			}
-
-			if stats.hasReplicationUsage() {
-				for arn, stat := range stats.Stats {
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedBytesMD(),
-						Value:          float64(stat.FailedSize),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepSentBytesMD(),
-						Value:          float64(stat.ReplicatedSize),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
-					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedOperationsMD(),
-						Value:          float64(stat.FailedCount),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
-					})
-					metrics = append(metrics, Metric{
-						Description:          getBucketRepLatencyMD(),
-						HistogramBucketLabel: "range",
-						Histogram:            stat.Latency.getUploadLatency(),
-						VariableLabels:       map[string]string{"bucket": bucket, "operation": "upload", "targetArn": arn},
-					})
-
+			if !globalSiteReplicationSys.isEnabled() {
+				stats := bucketReplStats[bucket].ReplicationStats
+				metrics = append(metrics, Metric{
+					Description:    getRepReceivedBytesMD(bucketMetricNamespace),
+					Value:          float64(stats.ReplicaSize),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+				metrics = append(metrics, Metric{
+					Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
+					Value:          float64(stats.ReplicaCount),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+				if stats.hasReplicationUsage() {
+					for arn, stat := range stats.Stats {
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesLastMinuteMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.LastMinute.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsLastMinuteMD(bucketMetricNamespace),
+							Value:          stat.Failed.LastMinute.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesLastHourMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.LastHour.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsLastHourMD(bucketMetricNamespace),
+							Value:          stat.Failed.LastHour.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesTotalMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.Totals.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsTotalMD(bucketMetricNamespace),
+							Value:          stat.Failed.Totals.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepSentBytesMD(bucketMetricNamespace),
+							Value:          float64(stat.ReplicatedSize),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepSentOperationsMD(bucketMetricNamespace),
+							Value:          float64(stat.ReplicatedCount),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:          getBucketRepLatencyMD(),
+							HistogramBucketLabel: "range",
+							Histogram:            stat.Latency.getUploadLatency(),
+							VariableLabels:       map[string]string{"bucket": bucket, "operation": "upload", "targetArn": arn},
+						})
+						if c, ok := stat.Failed.ErrCounts["AccessDenied"]; ok {
+							metrics = append(metrics, Metric{
+								Description:    getClusterRepCredentialErrorsMD(bucketMetricNamespace),
+								Value:          float64(c),
+								VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+							})
+						}
+					}
 				}
+				metrics = append(metrics, Metric{
+					Description:          getBucketObjectDistributionMD(),
+					Histogram:            usage.ObjectSizesHistogram,
+					HistogramBucketLabel: "range",
+					VariableLabels:       map[string]string{"bucket": bucket},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:          getBucketObjectVersionsMD(),
+					Histogram:            usage.ObjectVersionsHistogram,
+					HistogramBucketLabel: "range",
+					VariableLabels:       map[string]string{"bucket": bucket},
+				})
 			}
-
-			metrics = append(metrics, Metric{
-				Description:          getBucketObjectDistributionMD(),
-				Histogram:            usage.ObjectSizesHistogram,
-				HistogramBucketLabel: "range",
-				VariableLabels:       map[string]string{"bucket": bucket},
-			})
-
-			metrics = append(metrics, Metric{
-				Description:          getBucketObjectVersionsMD(),
-				Histogram:            usage.ObjectVersionsHistogram,
-				HistogramBucketLabel: "range",
-				VariableLabels:       map[string]string{"bucket": bucket},
-			})
 		}
 		return
 	})
