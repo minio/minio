@@ -5290,7 +5290,8 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 			}
 			if st, ok := m.TargetsMap[t.Arn]; ok {
 				st.LastUpdate = UTCNow()
-				st.ResyncStatus = ResyncCanceled
+				st.StatusType = ResyncCanceled
+				st.ResyncStatus = ResyncCanceled.String()
 				m.TargetsMap[t.Arn] = st
 				m.LastUpdate = UTCNow()
 			}
@@ -5313,6 +5314,34 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 
 	res.Status = rs.Status.String()
 	return res, nil
+}
+
+// getResyncStatus reports resync status
+func (c *SiteReplicationSys) getResyncStatus(ctx context.Context, objAPI ObjectLayer, peer madmin.PeerInfo) (res SiteResyncStatus, err error) {
+	if !c.isEnabled() {
+		return res, errSRNotEnabled
+	}
+	if objAPI == nil {
+		return res, errSRObjectLayerNotReady
+	}
+	if peer.DeploymentID == globalDeploymentID {
+		return res, errSRResyncToSelf
+	}
+
+	if _, ok := c.state.Peers[peer.DeploymentID]; !ok {
+		return res, errSRPeerNotFound
+	}
+	res, err = globalSiteResyncMetrics.siteStatus(ctx, objAPI, peer.DeploymentID)
+	if err != nil {
+		return res, err
+	}
+	switch res.Status {
+	case ResyncCanceled:
+		return res, errSRResyncCanceled
+	case ResyncCompleted, NoResync:
+		return res, errSRNoResync
+	}
+	return
 }
 
 const (

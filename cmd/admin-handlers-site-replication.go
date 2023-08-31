@@ -528,6 +528,30 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 	writeSuccessResponseJSON(w, body)
 }
 
+// SiteReplicationResyncInfo - GET /minio/admin/v3/site-replication/resync/info
+// reports whether resync is in progress or not
+func (a adminAPIHandlers) SiteReplicationResyncInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationResyncAction)
+	if objectAPI == nil {
+		return
+	}
+	vars := mux.Vars(r)
+	peerID := vars["id"]
+	status, err := globalSiteReplicationSys.getResyncStatus(ctx, objectAPI, madmin.PeerInfo{DeploymentID: peerID})
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	body, err := json.Marshal(status.TargetReplicationResyncStatus)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, body)
+}
+
 // SiteReplicationDevNull - everything goes to io.Discard
 // [POST] /minio/admin/v3/site-replication/devnull
 func (a adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {

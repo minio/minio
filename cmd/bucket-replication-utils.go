@@ -721,7 +721,10 @@ type TargetReplicationResyncStatus struct {
 	// ResyncBeforeDate - resync all objects created prior to this date
 	ResyncBeforeDate time.Time `json:"resyncBeforeDate" msg:"rdt"`
 	// Status of resync operation
-	ResyncStatus ResyncStatusType `json:"resyncStatus" msg:"rst"`
+	StatusType ResyncStatusType `json:"resyncStatus" msg:"rst"`
+	// Status of resync operation
+	ResyncStatus string `json:"status" msg:"rss"`
+
 	// Failed size in bytes
 	FailedSize int64 `json:"failedReplicationSize"  msg:"fs"`
 	// Total number of failed operations

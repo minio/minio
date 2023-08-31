@@ -2437,7 +2437,8 @@ func (s *replicationResyncer) markStatus(status ResyncStatusType, opts resyncOpt
 	m := s.statusMap[opts.bucket]
 	st := m.TargetsMap[opts.arn]
 	st.LastUpdate = UTCNow()
-	st.ResyncStatus = status
+	st.StatusType = status
+	st.ResyncStatus = status.String()
 	m.TargetsMap[opts.arn] = st
 	m.LastUpdate = UTCNow()
 	s.statusMap[opts.bucket] = m
@@ -2521,7 +2522,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	st := m.TargetsMap[opts.arn]
 	s.RUnlock()
 	var lastCheckpoint string
-	if st.ResyncStatus == ResyncStarted || st.ResyncStatus == ResyncFailed {
+	if st.StatusType == ResyncStarted || st.StatusType == ResyncFailed {
 		lastCheckpoint = st.Object
 	}
 	workers := make([]chan ReplicateObjectInfo, resyncParallelRoutines)
@@ -2674,7 +2675,7 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 	}
 	// validate if resync is in progress for this arn
 	for tArn, st := range data.TargetsMap {
-		if opts.arn == tArn && (st.ResyncStatus == ResyncStarted || st.ResyncStatus == ResyncPending) {
+		if opts.arn == tArn && (st.StatusType == ResyncStarted || st.StatusType == ResyncPending) {
 			return fmt.Errorf("Resync of bucket %s is already in progress for remote bucket %s", opts.bucket, opts.arn)
 		}
 	}
@@ -2683,7 +2684,8 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 		ResyncID:         opts.resyncID,
 		ResyncBeforeDate: opts.resyncBefore,
 		StartTime:        UTCNow(),
-		ResyncStatus:     ResyncPending,
+		StatusType:       ResyncPending,
+		ResyncStatus:     ResyncPending.String(),
 		Bucket:           opts.bucket,
 	}
 	data.TargetsMap[opts.arn] = status
@@ -2795,7 +2797,7 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 
 		tgts := meta.cloneTgtStats()
 		for arn, st := range tgts {
-			switch st.ResyncStatus {
+			switch st.StatusType {
 			case ResyncFailed, ResyncStarted, ResyncPending:
 				go p.resyncer.resyncBucket(ctx, objAPI, true, resyncOpts{
 					bucket:       bucket,

@@ -505,7 +505,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 			ResetID:         st.ResyncID,
 			StartTime:       st.StartTime,
 			EndTime:         st.LastUpdate,
-			ResyncStatus:    st.ResyncStatus.String(),
+			ResyncStatus:    st.ResyncStatus,
 			ReplicatedSize:  st.ReplicatedSize,
 			ReplicatedCount: st.ReplicatedCount,
 			FailedSize:      st.FailedSize,

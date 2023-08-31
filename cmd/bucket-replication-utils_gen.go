@@ -2190,10 +2190,16 @@ func (z *TargetReplicationResyncStatus) DecodeMsg(dc *msgp.Reader) (err error) {
 				var zb0002 int
 				zb0002, err = dc.ReadInt()
 				if err != nil {
-					err = msgp.WrapError(err, "ResyncStatus")
+					err = msgp.WrapError(err, "StatusType")
 					return
 				}
-				z.ResyncStatus = ResyncStatusType(zb0002)
+				z.StatusType = ResyncStatusType(zb0002)
+			}
+		case "rss":
+			z.ResyncStatus, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "ResyncStatus")
+				return
 			}
 		case "fs":
 			z.FailedSize, err = dc.ReadInt64()
@@ -2244,9 +2250,9 @@ func (z *TargetReplicationResyncStatus) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *TargetReplicationResyncStatus) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 11
+	// map header, size 12
 	// write "st"
-	err = en.Append(0x8b, 0xa2, 0x73, 0x74)
+	err = en.Append(0x8c, 0xa2, 0x73, 0x74)
 	if err != nil {
 		return
 	}
@@ -2290,7 +2296,17 @@ func (z *TargetReplicationResyncStatus) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt(int(z.ResyncStatus))
+	err = en.WriteInt(int(z.StatusType))
+	if err != nil {
+		err = msgp.WrapError(err, "StatusType")
+		return
+	}
+	// write "rss"
+	err = en.Append(0xa3, 0x72, 0x73, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.ResyncStatus)
 	if err != nil {
 		err = msgp.WrapError(err, "ResyncStatus")
 		return
@@ -2361,9 +2377,9 @@ func (z *TargetReplicationResyncStatus) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *TargetReplicationResyncStatus) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 11
+	// map header, size 12
 	// string "st"
-	o = append(o, 0x8b, 0xa2, 0x73, 0x74)
+	o = append(o, 0x8c, 0xa2, 0x73, 0x74)
 	o = msgp.AppendTime(o, z.StartTime)
 	// string "lst"
 	o = append(o, 0xa3, 0x6c, 0x73, 0x74)
@@ -2376,7 +2392,10 @@ func (z *TargetReplicationResyncStatus) MarshalMsg(b []byte) (o []byte, err erro
 	o = msgp.AppendTime(o, z.ResyncBeforeDate)
 	// string "rst"
 	o = append(o, 0xa3, 0x72, 0x73, 0x74)
-	o = msgp.AppendInt(o, int(z.ResyncStatus))
+	o = msgp.AppendInt(o, int(z.StatusType))
+	// string "rss"
+	o = append(o, 0xa3, 0x72, 0x73, 0x73)
+	o = msgp.AppendString(o, z.ResyncStatus)
 	// string "fs"
 	o = append(o, 0xa2, 0x66, 0x73)
 	o = msgp.AppendInt64(o, z.FailedSize)
@@ -2445,10 +2464,16 @@ func (z *TargetReplicationResyncStatus) UnmarshalMsg(bts []byte) (o []byte, err 
 				var zb0002 int
 				zb0002, bts, err = msgp.ReadIntBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ResyncStatus")
+					err = msgp.WrapError(err, "StatusType")
 					return
 				}
-				z.ResyncStatus = ResyncStatusType(zb0002)
+				z.StatusType = ResyncStatusType(zb0002)
+			}
+		case "rss":
+			z.ResyncStatus, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ResyncStatus")
+				return
 			}
 		case "fs":
 			z.FailedSize, bts, err = msgp.ReadInt64Bytes(bts)
@@ -2500,7 +2525,7 @@ func (z *TargetReplicationResyncStatus) UnmarshalMsg(bts []byte) (o []byte, err 
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *TargetReplicationResyncStatus) Msgsize() (s int) {
-	s = 1 + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ResyncID) + 4 + msgp.TimeSize + 4 + msgp.IntSize + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object)
+	s = 1 + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ResyncID) + 4 + msgp.TimeSize + 4 + msgp.IntSize + 4 + msgp.StringPrefixSize + len(z.ResyncStatus) + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object)
 	return
 }
 
