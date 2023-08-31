@@ -485,6 +485,10 @@ func (r *BatchJobExpireV1) Validate(ctx context.Context, job BatchJobRequest, o 
 		return err
 	}
 
+	if len(r.Rules) > 10 {
+		return errors.New("Too many rules. Batch expire job can't have more than 10 rules")
+	}
+
 	for _, rule := range r.Rules {
 		if err := rule.Validate(); err != nil {
 			return err
