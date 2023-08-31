@@ -101,7 +101,6 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 		reportNotFound: false,
 		agreed: func(entry metaCacheEntry) {
 			if err := healEntry(bucket, entry); err != nil {
-				logger.LogIf(ctx, err)
 				cancel()
 			}
 		},
@@ -114,7 +113,6 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 			}
 
 			if err := healEntry(bucket, *entry); err != nil {
-				logger.LogIf(ctx, err)
 				cancel()
 				return
 			}
@@ -752,7 +750,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		// Attempt a rename now from healed data to final location.
 		partsMetadata[i].SetHealing()
 		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
-			logger.LogIf(ctx, err)
 			return result, err
 		}
 
@@ -905,7 +902,6 @@ func (er *erasureObjects) healObjectDir(ctx context.Context, bucket, object stri
 			case errDiskNotFound:
 				hr.After.Drives[i].State = madmin.DriveStateOffline
 			default:
-				logger.LogIf(ctx, merr)
 				hr.After.Drives[i].State = madmin.DriveStateCorrupt
 			}
 		}
