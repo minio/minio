@@ -1185,7 +1185,7 @@ func (a adminAPIHandlers) ClientDevNullExtraTime(w http.ResponseWriter, r *http.
 	}
 
 	enc := json.NewEncoder(w)
-	if err := enc.Encode(madmin.ClientPerfExtraTime{TimeSpent: globalLastClientPerfExtraTime}); err != nil {
+	if err := enc.Encode(madmin.ClientPerfExtraTime{TimeSpent: atomic.LoadInt64(&globalLastClientPerfExtraTime)}); err != nil {
 		return
 	}
 }
