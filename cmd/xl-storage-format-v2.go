@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -1430,7 +1429,6 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.addVersion(freeVersion)
 			}
 		}
-		logger.LogIf(context.Background(), err)
 
 		if fi.Deleted {
 			err = x.addVersion(ventry)
