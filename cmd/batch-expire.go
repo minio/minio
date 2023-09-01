@@ -40,6 +40,7 @@ import (
 // expire: # Expire objects that match a condition
 //   apiVersion: v1
 //   bucket: mybucket # Bucket where this batch job will expire matching objects from
+//   prefix: myprefix # (Optional) Prefix under which this job will expire objects matching the rules below.
 //   rules:
 //     - type: object  # regular objects with zero ore more older versions
 //       name: NAME # match object names that satisfy the wildcard expression.
@@ -133,10 +134,9 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 
 	if len(ef.Tags) > 0 && !obj.DeleteMarker {
 		// Only parse object tags if tags filter is specified.
-		tagMap := map[string]string{}
-		tagStr := obj.UserDefined[xhttp.AmzObjectTagging]
-		if len(tagStr) != 0 {
-			t, err := tags.ParseObjectTags(tagStr)
+		var tagMap map[string]string
+		if len(obj.UserTags) != 0 {
+			t, err := tags.ParseObjectTags(obj.UserTags)
 			if err != nil {
 				return false
 			}
@@ -278,7 +278,7 @@ func (r *BatchJobExpireV1) Expire(ctx context.Context, api ObjectLayer, objInfo 
 	srcObject := objInfo.Name
 
 	_, err := api.DeleteObject(ctx, srcBucket, srcObject, ObjectOptions{
-		DeletePrefix: true,
+		VersionID: objInfo.VersionID,
 	})
 	return err
 }
@@ -312,18 +312,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		delay = batchExpireJobDefaultRetryDelay
 	}
 
-	vcfg, _ := globalBucketVersioningSys.Get(ri.Bucket)
-
 	now := time.Now().UTC()
-	filter := func(info FileInfo) (ok bool) {
-		versioned := vcfg != nil && vcfg.Versioned(info.Name)
-		for _, rule := range r.Rules {
-			if rule.Matches(info.ToObjectInfo(r.Bucket, info.Name, versioned), now) {
-				return true
-			}
-		}
-		return false
-	}
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_EXPIRE_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
@@ -341,9 +330,9 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 
 	results := make(chan ObjectInfo, workerSize)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, ObjectOptions{
-		WalkMarker:     lastObject,
-		WalkFilter:     filter,
-		WalkLatestOnly: false, // we need to visit all versions of the object to implement purge: retainVersions
+		WalkMarker:       lastObject,
+		WalkLatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
+		WalkVersionsSort: WalkVersionsSortDesc,
 	}); err != nil {
 		cancel()
 		// Do not need to retry if we can't list objects on source.
@@ -367,6 +356,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 				return
 
 			case <-saverQuitCh:
+				fmt.Println("saver quit")
 				// persist in-memory state immediately to disk.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
@@ -381,27 +371,35 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 	)
 	for result := range results {
 		result := result
-		if prevObj.Name != result.Name {
-			prevObj = result
+		// Apply filter to find the matching rule to apply expiry
+		// actions accordingly.
+		// nolint:gocritic
+		if result.IsLatest {
 			var match BatchJobExpireFilter
 			var found bool
 			for _, rule := range r.Rules {
-				if rule.Matches(prevObj, now) {
+				if rule.Matches(result, now) {
 					match = rule
 					found = true
 					break
 				}
 			}
-			if found {
-				matchedFilter = match
-				versionsCount = 1
+			if !found {
+				continue
 			}
+
+			prevObj = result
+			matchedFilter = match
+			versionsCount = 1
+		} else if prevObj.Name == result.Name {
+			versionsCount++
+		} else {
+			continue
 		}
 
-		if prevObj.Name == result.Name {
-			if versionsCount <= matchedFilter.Purge.RetainVersions {
-				continue // retain versions
-			}
+		if versionsCount <= matchedFilter.Purge.RetainVersions {
+			// TODO: we could add versions that were skipped in batch job trace in verbose mode?
+			continue // retain versions
 		}
 
 		wk.Take()

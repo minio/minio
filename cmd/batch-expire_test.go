@@ -28,6 +28,7 @@ func TestParseBatchJobExpire(t *testing.T) {
 expire: # Expire objects that match a condition
   apiVersion: v1
   bucket: mybucket # Bucket where this batch job will expire matching objects from
+  prefix: myprefix # (Optional) Prefix under which this job will expire objects matching the rules below.
   rules:
     - type: object  # regular objects with zero ore more older versions
       name: NAME # match object names that satisfy the wildcard expression.

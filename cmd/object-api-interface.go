@@ -44,6 +44,17 @@ type EvalRetentionBypassFn func(o ObjectInfo, gerr error) error
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 
+// WalkVersionsSortOrder represents the sort order in which versions of an
+// object should be returned by ObjectLayer.Walk method
+type WalkVersionsSortOrder uint8
+
+const (
+	// WalkVersionsSortAsc - Sort in ascending order of ModTime
+	WalkVersionsSortAsc WalkVersionsSortOrder = iota
+	// WalkVersionsSortDesc - Sort in descending order of ModTime
+	WalkVersionsSortDesc
+)
+
 // ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide

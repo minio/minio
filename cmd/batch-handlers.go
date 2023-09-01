@@ -1854,7 +1854,7 @@ func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration t
 		NodeName:  globalLocalNodeName,
 		FuncName:  funcName,
 		Duration:  duration,
-		Path:      info.Name,
+		Path:      fmt.Sprintf("%s (versionID=%s)", info.Name, info.VersionID),
 		Error:     errStr,
 	}
 }
