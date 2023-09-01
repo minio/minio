@@ -620,7 +620,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	diskFailures[15] = "part.1"
 
 	for diskIndex, partName := range diskFailures {
-		for i := range partsMetadata[diskIndex].Erasure.Checksums {
+		for i := range partsMetadata[diskIndex].Parts {
 			if fmt.Sprintf("part.%d", i+1) == partName {
 				filePath := pathJoin(erasureDisks[diskIndex].String(), bucket, object, partsMetadata[diskIndex].DataDir, partName)
 				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)

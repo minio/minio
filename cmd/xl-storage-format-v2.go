@@ -612,17 +612,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 			fi.Parts[i].Index = j.PartIndices[i]
 		}
 	}
-	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
-	for i := range fi.Parts {
-		fi.Erasure.Checksums[i].PartNumber = fi.Parts[i].Number
-		switch j.BitrotChecksumAlgo {
-		case HighwayHash:
-			fi.Erasure.Checksums[i].Algorithm = HighwayHash256S
-			fi.Erasure.Checksums[i].Hash = []byte{}
-		default:
-			return FileInfo{}, fmt.Errorf("unknown BitrotChecksumAlgo: %v", j.BitrotChecksumAlgo)
-		}
-	}
+	// fi.Erasure.Checksums - is left empty since we do not have any
+	// whole checksums for many years now, no need to allocate.
+
 	fi.Metadata = make(map[string]string, len(j.MetaUser)+len(j.MetaSys))
 	for k, v := range j.MetaUser {
 		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
