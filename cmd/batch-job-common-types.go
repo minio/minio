@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 //go:generate msgp -file $GOFILE

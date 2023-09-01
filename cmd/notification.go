@@ -33,8 +33,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
-	"github.com/minio/pkg/sync/errgroup"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // This file contains peer related notifications. For sending notifications to

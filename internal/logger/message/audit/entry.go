@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/pkg/logger/message/audit"
+	"github.com/minio/pkg/v2/logger/message/audit"
 
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"

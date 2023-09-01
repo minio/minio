@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {

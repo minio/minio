@@ -33,15 +33,14 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // SiteReplicationAdd - PUT /minio/admin/v3/site-replication/add
 func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
 	if objectAPI == nil {
 		return
 	}
@@ -75,7 +74,7 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
 	if objectAPI == nil {
 		return
 	}
@@ -97,7 +96,7 @@ func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationOperationAction)
 	if objectAPI == nil {
 		return
 	}
@@ -144,7 +143,7 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationOperationAction)
 	if objectAPI == nil {
 		return
 	}
@@ -163,7 +162,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 		if item.Policy == nil {
 			err = globalSiteReplicationSys.PeerAddPolicyHandler(ctx, item.Name, nil, item.UpdatedAt)
 		} else {
-			policy, perr := iampolicy.ParseConfig(bytes.NewReader(item.Policy))
+			policy, perr := policy.ParseConfig(bytes.NewReader(item.Policy))
 			if perr != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, perr), r.URL)
 				return
@@ -196,7 +195,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationOperationAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationOperationAction)
 	if objectAPI == nil {
 		return
 	}
@@ -220,7 +219,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		if item.Policy == nil {
 			err = globalSiteReplicationSys.PeerBucketPolicyHandler(ctx, item.Bucket, nil, item.UpdatedAt)
 		} else {
-			bktPolicy, berr := policy.ParseConfig(bytes.NewReader(item.Policy), item.Bucket)
+			bktPolicy, berr := policy.ParseBucketPolicyConfig(bytes.NewReader(item.Policy), item.Bucket)
 			if berr != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, berr), r.URL)
 				return
@@ -265,7 +264,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationInfoAction)
 	if objectAPI == nil {
 		return
 	}
@@ -285,7 +284,7 @@ func (a adminAPIHandlers) SiteReplicationInfo(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
 	if objectAPI == nil {
 		return
 	}
@@ -322,7 +321,7 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationInfoAction)
 	if objectAPI == nil {
 		return
 	}
@@ -351,7 +350,7 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationInfoAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationInfoAction)
 	if objectAPI == nil {
 		return
 	}
@@ -373,7 +372,7 @@ func (a adminAPIHandlers) SiteReplicationMetaInfo(w http.ResponseWriter, r *http
 func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
 	if objectAPI == nil {
 		return
 	}
@@ -404,7 +403,7 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationAddAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
 	if objectAPI == nil {
 		return
 	}
@@ -439,7 +438,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationRemoveAction)
 	if objectAPI == nil {
 		return
 	}
@@ -470,7 +469,7 @@ func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.R
 func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationRemoveAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationRemoveAction)
 	if objectAPI == nil {
 		return
 	}
@@ -492,7 +491,7 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SiteReplicationResyncAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationResyncAction)
 	if objectAPI == nil {
 		return
 	}

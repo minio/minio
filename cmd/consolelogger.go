@@ -28,8 +28,8 @@ import (
 	"github.com/minio/minio/internal/logger/target/console"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/pubsub"
-	"github.com/minio/pkg/logger/message/log"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/logger/message/log"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // number of log messages to buffer

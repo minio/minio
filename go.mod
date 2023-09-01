@@ -2,6 +2,8 @@ module github.com/minio/minio
 
 go 1.19
 
+replace github.com/minio/console => github.com/donatello/console v0.12.6-0.20230901213548-4a5f489ac5c9
+
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -52,7 +54,7 @@ require (
 	github.com/minio/madmin-go/v3 v3.0.17
 	github.com/minio/minio-go/v7 v7.0.63
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg v1.7.5
+	github.com/minio/pkg/v2 v2.0.0
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
@@ -183,6 +185,7 @@ require (
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20230726035150-6b8680a2f7ca // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
+	github.com/minio/pkg v1.7.5 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

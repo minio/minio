@@ -36,8 +36,8 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/minio/internal/hash/sha256"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	xnet "github.com/minio/pkg/net"
+	iampolicy "github.com/minio/pkg/v2/policy"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // OpenID keys and envs.

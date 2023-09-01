@@ -40,8 +40,8 @@ import (
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/target/http"
-	xnet "github.com/minio/pkg/net"
-	"github.com/minio/pkg/quick"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/quick"
 )
 
 // Do not edit following message template, please open a GitHub issue to discuss instead.

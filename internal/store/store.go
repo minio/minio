@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (

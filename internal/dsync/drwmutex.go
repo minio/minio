@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/mcontext"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Indicator if logging is enabled.
