@@ -27,14 +27,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"
-	"github.com/tidwall/gjson"
 
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
@@ -241,14 +239,8 @@ func (h *Target) send(entry interface{}) error {
 	if err != nil {
 		return err
 	}
-	requestID := gjson.GetBytes(logJSON, "requestID").Str
-	if requestID == "" {
-		// unsupported data structure
-		return fmt.Errorf("unsupported data structure: %s must be either audit.Entry or log.Entry", reflect.TypeOf(entry))
-	}
 	msg := sarama.ProducerMessage{
 		Topic: h.kconfig.Topic,
-		Key:   sarama.StringEncoder(requestID),
 		Value: sarama.ByteEncoder(logJSON),
 	}
 	_, _, err = h.producer.SendMessage(&msg)
