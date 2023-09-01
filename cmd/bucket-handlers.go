@@ -1290,7 +1290,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		// instead of "copying" from source, we need the stream to be seekable
 		// to ensure that we can make fan-out calls concurrently.
 		buf := bytebufferpool.Get()
-		defer bytebufferpool.Put(buf)
+		defer func() {
+			buf.Reset()
+			bytebufferpool.Put(buf)
+		}()
 
 		md5w := md5.New()
 
