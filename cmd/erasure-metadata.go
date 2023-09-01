@@ -41,17 +41,6 @@ const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
 
-// AddChecksumInfo adds a checksum of a part.
-func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
-	for i, sum := range e.Checksums {
-		if sum.PartNumber == ckSumInfo.PartNumber {
-			e.Checksums[i] = ckSumInfo
-			return
-		}
-	}
-	e.Checksums = append(e.Checksums, ckSumInfo)
-}
-
 // GetChecksumInfo - get checksum of a part.
 func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	for _, sum := range e.Checksums {
@@ -60,7 +49,7 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 			return sum
 		}
 	}
-	return ChecksumInfo{}
+	return ChecksumInfo{Algorithm: DefaultBitrotAlgorithm}
 }
 
 // ShardFileSize - returns final erasure size from original size.
