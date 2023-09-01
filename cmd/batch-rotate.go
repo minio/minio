@@ -379,14 +379,14 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				attempts := attempts
-				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts)
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
-					stopFn(err)
+					stopFn(result, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(result, nil)
 				}
 				ri.trackCurrentBucketObject(r.Bucket, result, success)
 				ri.RetryAttempts = attempts

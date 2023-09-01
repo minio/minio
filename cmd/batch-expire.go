@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/bucket/versioning"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
@@ -272,15 +273,14 @@ func (r BatchJobExpireV1) Notify(ctx context.Context, body io.Reader) error {
 	return nil
 }
 
-// Expire rotates encryption key of an object
-func (r *BatchJobExpireV1) Expire(ctx context.Context, api ObjectLayer, objInfo ObjectInfo) error {
-	srcBucket := r.Bucket
-	srcObject := objInfo.Name
-
-	_, err := api.DeleteObject(ctx, srcBucket, srcObject, ObjectOptions{
-		VersionID: objInfo.VersionID,
-	})
-	return err
+// Expire expires object versions which have already matched supplied filter conditions
+func (r *BatchJobExpireV1) Expire(ctx context.Context, api ObjectLayer, vc *versioning.Versioning, objsToDel []ObjectToDelete) []error {
+	opts := ObjectOptions{
+		PrefixEnabledFn:  vc.PrefixEnabled,
+		VersionSuspended: vc.Suspended(),
+	}
+	_, errs := api.DeleteObjects(ctx, r.Bucket, objsToDel, opts)
+	return errs
 }
 
 const (
@@ -292,6 +292,72 @@ const (
 	batchExpireJobDefaultRetries    = 3
 	batchExpireJobDefaultRetryDelay = 250 * time.Millisecond
 )
+
+func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []ObjectInfo) {
+	defer wk.Give()
+
+	vc, _ := globalBucketVersioningSys.Get(r.Bucket)
+	retryAttempts := r.Retry.Attempts
+	delay := job.Expire.Retry.Delay
+	if delay == 0 {
+		delay = batchExpireJobDefaultRetryDelay
+	}
+
+	var i int
+	for toExpire := range expireCh {
+		i++
+		i := i
+		wk.Take()
+		go func(toExpire []ObjectInfo, i int) {
+			defer wk.Give()
+			toDel := make([]ObjectToDelete, 0, len(toExpire))
+			for _, exp := range toExpire {
+				toDel = append(toDel, ObjectToDelete{
+					ObjectV: ObjectV{
+						ObjectName: exp.Name,
+						VersionID:  exp.VersionID,
+					},
+				})
+			}
+
+			for attempts := 1; attempts <= retryAttempts; attempts++ {
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
+				var failed int
+				errs := r.Expire(ctx, api, vc, toDel)
+				for i, err := range errs {
+					if err != nil {
+						stopFn(toDel[i], err)
+						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
+						failed++
+					} else {
+						stopFn(toDel[i], nil)
+					}
+					ri.trackCurrentBucketObject(r.Bucket, toExpire[i], err == nil)
+				}
+
+				ri.RetryAttempts = attempts
+				globalBatchJobsMetrics.save(ri.JobID, ri)
+				if failed == 0 {
+					break
+				}
+
+				toDel = toDel[:0]
+				for i, exp := range toExpire {
+					if errs[i] != nil {
+						toDel = append(toDel, ObjectToDelete{
+							ObjectV: ObjectV{
+								ObjectName: exp.Name,
+								VersionID:  exp.VersionID,
+							},
+						})
+					}
+				}
+				// Add a delay between retry attempts
+				time.Sleep(delay)
+			}
+		}(toExpire, i)
+	}
+}
 
 // Start the batch expiration job, resumes if there was a pending job via "job.ID"
 func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
@@ -307,11 +373,6 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object
 
-	delay := job.Expire.Retry.Delay
-	if delay == 0 {
-		delay = batchExpireJobDefaultRetryDelay
-	}
-
 	now := time.Now().UTC()
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_EXPIRE_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
@@ -325,8 +386,8 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		return err
 	}
 
-	retryAttempts := ri.RetryAttempts
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	results := make(chan ObjectInfo, workerSize)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, ObjectOptions{
@@ -334,7 +395,6 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		WalkLatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
 		WalkVersionsSort: WalkVersionsSortDesc,
 	}); err != nil {
-		cancel()
 		// Do not need to retry if we can't list objects on source.
 		return err
 	}
@@ -356,7 +416,6 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 				return
 
 			case <-saverQuitCh:
-				fmt.Println("saver quit")
 				// persist in-memory state immediately to disk.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
@@ -364,10 +423,15 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		}
 	}()
 
+	expireCh := make(chan []ObjectInfo, workerSize)
+	wk.Take() // For batchObjsForDelete goroutine
+	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
+
 	var (
 		prevObj       ObjectInfo
 		matchedFilter BatchJobExpireFilter
 		versionsCount int
+		toDel         []ObjectInfo
 	)
 	for result := range results {
 		result := result
@@ -375,6 +439,14 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		// actions accordingly.
 		// nolint:gocritic
 		if result.IsLatest {
+			// send down filtered entries to be deleted using
+			// DeleteObjects method
+			if len(toDel) > 0 {
+				xfer := make([]ObjectInfo, len(toDel))
+				copy(xfer, toDel)
+				expireCh <- xfer
+				toDel = toDel[:0] // resetting toDel
+			}
 			var match BatchJobExpireFilter
 			var found bool
 			for _, rule := range r.Rules {
@@ -401,33 +473,18 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 			// TODO: we could add versions that were skipped in batch job trace in verbose mode?
 			continue // retain versions
 		}
-
-		wk.Take()
-		go func() {
-			defer wk.Give()
-			for attempts := 1; attempts <= retryAttempts; attempts++ {
-				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, job.ID, attempts, result)
-				success := true
-				if err := r.Expire(ctx, api, result); err != nil {
-					stopFn(err)
-					logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", result.Bucket, result.Name, result.VersionID, err, attempts))
-					success = false
-				} else {
-					stopFn(nil)
-				}
-
-				ri.trackCurrentBucketObject(r.Bucket, result, success)
-				ri.RetryAttempts = attempts
-				globalBatchJobsMetrics.save(job.ID, ri)
-				if success {
-					break
-				}
-				// Add a delay between retry attempts
-				time.Sleep(delay)
-			}
-		}()
+		toDel = append(toDel, result)
 	}
-	wk.Wait()
+	// Send any remaining objects downstream
+	if len(toDel) > 0 {
+		select {
+		case <-ctx.Done():
+		case expireCh <- toDel:
+		}
+	}
+	close(expireCh)
+
+	wk.Wait() // waits for all expire goroutines to complete
 
 	ri.Complete = ri.ObjectsFailed == 0
 	ri.Failed = ri.ObjectsFailed > 0
@@ -443,7 +500,6 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
 	}
 
-	cancel()
 	return nil
 }
 

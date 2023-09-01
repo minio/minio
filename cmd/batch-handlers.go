@@ -432,18 +432,18 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 			wk.Take()
 			go func() {
 				defer wk.Give()
-				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts, oi)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts)
 				success := true
 				if err := r.ReplicateFromSource(ctx, api, core, oi, retry); err != nil {
 					// object must be deleted concurrently, allow these failures but do not count them
 					if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
 						return
 					}
-					stopFn(err)
+					stopFn(oi, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(oi, nil)
 				}
 				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
@@ -1132,7 +1132,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			go func() {
 				defer wk.Give()
 
-				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts)
 				success := true
 				if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
 					if miniogo.ToErrorResponse(err).Code == "PreconditionFailed" {
@@ -1143,11 +1143,11 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
 						return
 					}
-					stopFn(err)
+					stopFn(result, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(result, nil)
 				}
 				ri.trackCurrentBucketObject(r.Source.Bucket, result, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
@@ -1832,7 +1832,7 @@ const (
 	batchJobMetricExpire
 )
 
-func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration time.Duration, info ObjectInfo, attempts int, err error) madmin.TraceInfo {
+func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration time.Duration, info objTraceInfoer, attempts int, err error) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -1854,7 +1854,7 @@ func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration t
 		NodeName:  globalLocalNodeName,
 		FuncName:  funcName,
 		Duration:  duration,
-		Path:      fmt.Sprintf("%s (versionID=%s)", info.Name, info.VersionID),
+		Path:      fmt.Sprintf("%s (versionID=%s)", info.TraceObjName(), info.TraceVersionID()),
 		Error:     errStr,
 	}
 }
@@ -1947,9 +1947,34 @@ func (m *batchJobMetrics) save(jobID string, ri *batchJobInfo) {
 	m.metrics[jobID] = ri.clone()
 }
 
-func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int, info ObjectInfo) func(err error) {
+type objTraceInfoer interface {
+	TraceObjName() string
+	TraceVersionID() string
+}
+
+// TraceObjName returns name of object being traced
+func (td ObjectToDelete) TraceObjName() string {
+	return td.ObjectName
+}
+
+// TraceVersionID returns version-id of object being traced
+func (td ObjectToDelete) TraceVersionID() string {
+	return td.VersionID
+}
+
+// TraceObjName returns name of object being traced
+func (oi ObjectInfo) TraceObjName() string {
+	return oi.Name
+}
+
+// TraceVersionID returns version-id of object being traced
+func (oi ObjectInfo) TraceVersionID() string {
+	return oi.VersionID
+}
+
+func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int) func(info objTraceInfoer, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(info objTraceInfoer, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceBatch) > 0 {
 			globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
