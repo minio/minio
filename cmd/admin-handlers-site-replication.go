@@ -528,6 +528,21 @@ func (a adminAPIHandlers) SiteReplicationResyncOp(w http.ResponseWriter, r *http
 	writeSuccessResponseJSON(w, body)
 }
 
+// SiteReplication4KDevNull - everything goes to io.Discard
+// [POST] /minio/admin/v3/site-replication/4kdevnull
+func (a adminAPIHandlers) SiteReplication4KDevNull(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	readCount := int64(0)
+	for {
+		n, err := io.CopyN(io.Discard, r.Body, 4*humanize.KiByte)
+		readCount += n
+		if err != nil || n >= 4*humanize.KiByte || ctx.Err() != nil {
+			break
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // SiteReplicationDevNull - everything goes to io.Discard
 // [POST] /minio/admin/v3/site-replication/devnull
 func (a adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.Request) {

@@ -370,6 +370,31 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 			}()
 		}
 	}
+	selfEndpoint := ""
+	deploymentIDs := []string{}
+	for _, info := range clusterInfos.Sites {
+		// skip self
+		if globalDeploymentID == info.DeploymentID {
+			cli, err := globalSiteReplicationSys.getAdminClient(ctx, info.DeploymentID)
+			if err != nil {
+				break
+			}
+			rp := cli.GetEndpointURL()
+			selfEndpoint = rp.String()
+		} else {
+			deploymentIDs = append(deploymentIDs, info.DeploymentID)
+		}
+	}
+
+	latencyResult, err := perfNet4KRequest(
+		ctx,
+		deploymentIDs,
+		connectionsPerPeer,
+	)
+	latencyResult.Endpoint = selfEndpoint
+	if err != nil {
+		latencyResult.Error = err.Error()
+	}
 
 	time.Sleep(duration)
 	close(r.eof)
@@ -397,6 +422,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		RXTotalDuration: delta,
 		Error:           errStr,
 		TotalConn:       uint64(connectionsPerPeer),
+		Latency:         latencyResult,
 	}
 }
 
@@ -436,4 +462,64 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 		result.Error = err.Error()
 	}
 	return
+}
+
+// perfNet4KRequest - will send a request with 4kb body.
+func perfNet4KRequest(ctx context.Context, deploymentIDs []string, connectionsPerPeer int) (result madmin.SiteNetPerfNodeLatencyResult, err error) {
+	privateLocker := sync.Mutex{}
+	totalResponseTime := int64(0)
+	timeToFirstByte := int64(0)
+	counter := 0
+	wg := sync.WaitGroup{}
+	var gerr error
+	for _, deploymentID := range deploymentIDs {
+		cli, err := globalSiteReplicationSys.getAdminClient(ctx, deploymentID)
+		if err != nil {
+			return result, err
+		}
+		rp := cli.GetEndpointURL()
+		reqURL := &url.URL{
+			Scheme: rp.Scheme,
+			Host:   rp.Host,
+			Path:   adminPathPrefix + adminAPIVersionPrefix + adminAPISiteReplication4KDevNull,
+		}
+		wg.Add(2 * connectionsPerPeer)
+		for i := 0; i < 2*connectionsPerPeer; i++ {
+			go func() {
+				defer wg.Done()
+				reader := &madmin.SiteNetPerfReader{}
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), reader)
+				if err != nil {
+					privateLocker.Lock()
+					defer privateLocker.Unlock()
+					if gerr == nil {
+						gerr = err
+					}
+					return
+				}
+				client := &http.Client{
+					Transport: globalRemoteTargetTransport,
+				}
+				reader.Start()
+				resp, err := client.Do(req)
+				reader.End()
+				privateLocker.Lock()
+				defer privateLocker.Unlock()
+				totalResponseTime += int64(reader.TotalResponseTime)
+				timeToFirstByte += int64(reader.TimeToFirstByte)
+				counter++
+				if gerr == nil {
+					if err != nil {
+						gerr = err
+					}
+				}
+				defer xhttp.DrainBody(resp.Body)
+			}()
+		}
+	}
+	wg.Wait()
+	result.TotalResponseTime = time.Duration(totalResponseTime)
+	result.TimeToFirstByte = time.Duration(timeToFirstByte)
+	result.TotalRequest = counter
+	return result, gerr
 }

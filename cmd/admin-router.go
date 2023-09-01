@@ -31,13 +31,14 @@ import (
 )
 
 const (
-	adminPathPrefix                = minioReservedBucketPath + "/admin"
-	adminAPIVersion                = madmin.AdminAPIVersion
-	adminAPIVersionPrefix          = SlashSeparator + adminAPIVersion
-	adminAPISiteReplicationDevNull = "/site-replication/devnull"
-	adminAPISiteReplicationNetPerf = "/site-replication/netperf"
-	adminAPIClientDevNull          = "/speedtest/client/devnull"
-	adminAPIClientDevExtraTime     = "/speedtest/client/devnull/extratime"
+	adminPathPrefix                  = minioReservedBucketPath + "/admin"
+	adminAPIVersion                  = madmin.AdminAPIVersion
+	adminAPIVersionPrefix            = SlashSeparator + adminAPIVersion
+	adminAPISiteReplicationDevNull   = "/site-replication/devnull"
+	adminAPISiteReplication4KDevNull = "/site-replication/4kdevnull"
+	adminAPISiteReplicationNetPerf   = "/site-replication/netperf"
+	adminAPIClientDevNull            = "/speedtest/client/devnull"
+	adminAPIClientDevExtraTime       = "/speedtest/client/devnull/extratime"
 )
 
 var gzipHandler = func() func(http.Handler) http.HandlerFunc {
@@ -365,6 +366,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/metainfo").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationMetaInfo))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/site-replication/status").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationStatus))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationDevNull).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationDevNull, noObjLayerFlag))
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplication4KDevNull).HandlerFunc(adminMiddleware(adminAPI.SiteReplication4KDevNull, noObjLayerFlag))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + adminAPISiteReplicationNetPerf).HandlerFunc(adminMiddleware(adminAPI.SiteReplicationNetPerf, noObjLayerFlag))
 
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/join").HandlerFunc(adminMiddleware(adminAPI.SRPeerJoin))
