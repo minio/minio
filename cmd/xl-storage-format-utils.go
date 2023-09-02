@@ -23,8 +23,8 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
-	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path)
+func getFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool) (FileInfoVersions, error) {
+	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path, allParts)
 	if err != nil {
 		return fivs, err
 	}
@@ -46,20 +46,20 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	return fivs, nil
 }
 
-func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
+func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool) (FileInfoVersions, error) {
 	var versions []FileInfo
 	var err error
 
 	if buf, _, e := isIndexedMetaV2(xlMetaBuf); e != nil {
 		return FileInfoVersions{}, e
 	} else if buf != nil {
-		versions, err = buf.ListVersions(volume, path)
+		versions, err = buf.ListVersions(volume, path, allParts)
 	} else {
 		var xlMeta xlMetaV2
 		if err := xlMeta.LoadOrConvert(xlMetaBuf); err != nil {
 			return FileInfoVersions{}, err
 		}
-		versions, err = xlMeta.ListVersions(volume, path)
+		versions, err = xlMeta.ListVersions(volume, path, allParts)
 	}
 	if err == nil && len(versions) == 0 {
 		// This special case is needed to handle len(xlMeta.versions) == 0
@@ -85,7 +85,7 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVers
 	}, nil
 }
 
-func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (FileInfo, error) {
+func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allParts bool) (FileInfo, error) {
 	var fi FileInfo
 	var err error
 	var inData xlMetaInlineData
@@ -93,7 +93,7 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 		return FileInfo{}, e
 	} else if buf != nil {
 		inData = data
-		fi, err = buf.ToFileInfo(volume, path, versionID)
+		fi, err = buf.ToFileInfo(volume, path, versionID, allParts)
 		if len(buf) != 0 && errors.Is(err, errFileNotFound) {
 			// This special case is needed to handle len(xlMeta.versions) == 0
 			return FileInfo{
@@ -122,7 +122,7 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data bool) (F
 			}, nil
 		}
 		inData = xlMeta.data
-		fi, err = xlMeta.ToFileInfo(volume, path, versionID, false)
+		fi, err = xlMeta.ToFileInfo(volume, path, versionID, false, allParts)
 	}
 	if !data || err != nil {
 		return fi, err

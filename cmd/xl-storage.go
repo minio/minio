@@ -528,7 +528,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), false)
 		metaDataPoolPut(buf)
 		if err != nil {
 			res["err"] = err.Error()
@@ -1437,7 +1437,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, err
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID, readData)
+	fi, err = getFileInfo(buf, volume, path, versionID, readData, true)
 	if err != nil {
 		return fi, err
 	}
@@ -2410,7 +2410,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	}
 
 	// Replace the data of null version or any other existing version-id
-	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID, false)
+	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID, false, false)
 	if err == nil && !ofi.Deleted {
 		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
 			// Purge the destination path as we are not preserving anything
