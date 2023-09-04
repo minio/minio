@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/ellipses"
+	"github.com/minio/pkg/v2/ellipses"
 )
 
 const (

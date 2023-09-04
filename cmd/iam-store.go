@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -1157,7 +1157,7 @@ func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
 	defer store.runlock()
 
 	policies := newMappedPolicy(name).toSlice()
-	var combinedPolicy iampolicy.Policy
+	var toMerge []iampolicy.Policy
 	for _, policy := range policies {
 		if policy == "" {
 			continue
@@ -1166,9 +1166,9 @@ func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
 		if !ok {
 			return v.Policy, errNoSuchPolicy
 		}
-		combinedPolicy = combinedPolicy.Merge(v.Policy)
+		toMerge = append(toMerge, v.Policy)
 	}
-	return combinedPolicy, nil
+	return iampolicy.MergePolicies(toMerge...), nil
 }
 
 // GetPolicyDoc - gets the policy doc which has the policy and some metadata.
@@ -1292,7 +1292,7 @@ func (store *IAMStoreSys) listPolicyDocs(ctx context.Context, bucketName string)
 func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, iampolicy.Policy) {
 	var policies []string
 	mp := newMappedPolicy(policyName)
-	combinedPolicy := iampolicy.Policy{}
+	var toMerge []iampolicy.Policy
 	for _, policy := range mp.toSlice() {
 		if policy == "" {
 			continue
@@ -1303,10 +1303,10 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 		}
 		if bucketName == "" || p.Policy.MatchResource(bucketName) {
 			policies = append(policies, policy)
-			combinedPolicy = combinedPolicy.Merge(p.Policy)
+			toMerge = append(toMerge, p.Policy)
 		}
 	}
-	return strings.Join(policies, ","), combinedPolicy
+	return strings.Join(policies, ","), iampolicy.MergePolicies(toMerge...)
 }
 
 // FilterPolicies - accepts a comma separated list of policy names as a string

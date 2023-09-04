@@ -29,31 +29,31 @@ import (
 	"testing"
 
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/pkg/bucket/policy"
-	"github.com/minio/pkg/bucket/policy/condition"
+	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy/condition"
 )
 
-func getAnonReadOnlyBucketPolicy(bucketName string) *policy.Policy {
-	return &policy.Policy{
+func getAnonReadOnlyBucketPolicy(bucketName string) *policy.BucketPolicy {
+	return &policy.BucketPolicy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement(
 				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetBucketLocationAction, policy.ListBucketAction),
-				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				policy.NewResourceSet(policy.NewResource(bucketName)),
 				condition.NewFunctions(),
 			),
 		},
 	}
 }
 
-func getAnonWriteOnlyBucketPolicy(bucketName string) *policy.Policy {
-	return &policy.Policy{
+func getAnonWriteOnlyBucketPolicy(bucketName string) *policy.BucketPolicy {
+	return &policy.BucketPolicy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement(
 				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
@@ -61,34 +61,34 @@ func getAnonWriteOnlyBucketPolicy(bucketName string) *policy.Policy {
 					policy.GetBucketLocationAction,
 					policy.ListBucketMultipartUploadsAction,
 				),
-				policy.NewResourceSet(policy.NewResource(bucketName, "")),
+				policy.NewResourceSet(policy.NewResource(bucketName)),
 				condition.NewFunctions(),
 			),
 		},
 	}
 }
 
-func getAnonReadOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
-	return &policy.Policy{
+func getAnonReadOnlyObjectPolicy(bucketName, prefix string) *policy.BucketPolicy {
+	return &policy.BucketPolicy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement(
 				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
 				policy.NewActionSet(policy.GetObjectAction),
-				policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
+				policy.NewResourceSet(policy.NewResource(bucketName+"/"+prefix)),
 				condition.NewFunctions(),
 			),
 		},
 	}
 }
 
-func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
-	return &policy.Policy{
+func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.BucketPolicy {
+	return &policy.BucketPolicy{
 		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
+		Statements: []policy.BPStatement{
+			policy.NewBPStatement(
 				"",
 				policy.Allow,
 				policy.NewPrincipal("*"),
@@ -98,7 +98,7 @@ func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
 					policy.ListMultipartUploadPartsAction,
 					policy.PutObjectAction,
 				),
-				policy.NewResourceSet(policy.NewResource(bucketName, prefix)),
+				policy.NewResourceSet(policy.NewResource(bucketName+"/"+prefix)),
 				condition.NewFunctions(),
 			),
 		},
@@ -493,13 +493,13 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 
 		if recV4.Code != testCase.expectedRespStatus {
 			// Verify whether the bucket policy fetched is same as the one inserted.
-			var expectedPolicy *policy.Policy
-			expectedPolicy, err = policy.ParseConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
+			var expectedPolicy *policy.BucketPolicy
+			expectedPolicy, err = policy.ParseBucketPolicyConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
-			var gotPolicy *policy.Policy
-			gotPolicy, err = policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
+			var gotPolicy *policy.BucketPolicy
+			gotPolicy, err = policy.ParseBucketPolicyConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
@@ -530,11 +530,11 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		}
 		if recV2.Code == http.StatusOK {
 			// Verify whether the bucket policy fetched is same as the one inserted.
-			expectedPolicy, err := policy.ParseConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
+			expectedPolicy, err := policy.ParseBucketPolicyConfig(strings.NewReader(expectedBucketPolicyStr), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
-			gotPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
+			gotPolicy, err := policy.ParseBucketPolicyConfig(bytes.NewReader(bucketPolicyReadBuf), testCase.bucketName)
 			if err != nil {
 				t.Fatalf("unexpected error. %v", err)
 			}

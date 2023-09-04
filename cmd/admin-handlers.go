@@ -55,9 +55,9 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/logger/message/log"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/logger/message/log"
+	xnet "github.com/minio/pkg/v2/net"
+	iampolicy "github.com/minio/pkg/v2/policy"
 	"github.com/secure-io/sio-go"
 )
 

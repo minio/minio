@@ -29,7 +29,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 
 	"github.com/minio/minio/internal/auth"
 	levent "github.com/minio/minio/internal/config/lambda/event"

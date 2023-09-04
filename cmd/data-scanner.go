@@ -41,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/v2/console"
 	uatomic "go.uber.org/atomic"
 )
 

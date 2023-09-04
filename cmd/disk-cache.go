@@ -33,9 +33,9 @@ import (
 	"github.com/minio/minio/internal/disk"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
-	"github.com/minio/pkg/sync/errgroup"
-	"github.com/minio/pkg/wildcard"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 const (

@@ -61,11 +61,11 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/ellipses"
-	"github.com/minio/pkg/env"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/certs"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/ellipses"
+	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // serverDebugLog will enable debug printing
