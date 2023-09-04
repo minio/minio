@@ -462,7 +462,7 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 	if globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          policy.Action(action),
+		Action:          action,
 		BucketName:      bucket,
 		ConditionValues: getConditionValues(r, "", cred),
 		ObjectName:      object,
@@ -760,7 +760,7 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          policy.Action(action),
+			Action:          action,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 			IsOwner:         false,

@@ -25,8 +25,8 @@ import (
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/env"
-	iampolicy "github.com/minio/pkg/v2/policy"
 	xnet "github.com/minio/pkg/v2/net"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 // Env IAM OPA URL

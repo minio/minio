@@ -59,8 +59,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
 	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
