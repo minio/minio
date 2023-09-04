@@ -2943,7 +2943,7 @@ function main() {
 	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
 
 	# Start MinIO instance using the options
-	START_CMD="CI=on minio server ${MINIO_OPTS} &"
+	START_CMD="CI=on _MINIO_AUTO_DISK_HEALING=off minio server ${MINIO_OPTS} &"
 	echo
 	echo "Starting MinIO instance: ${START_CMD}"
 	echo
