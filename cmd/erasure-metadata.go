@@ -382,14 +382,39 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		return FileInfo{}, errErasureReadQuorum
 	}
 
+	// Find the successor mod time in quorum, otherwise leave the
+	// candidate's successor modTime as found
+	succModTimeMap := make(map[time.Time]int)
+	var candidate FileInfo
+	var found bool
 	for i, hash := range metaHashes {
 		if hash == maxHash {
 			if metaArr[i].IsValid() {
-				return metaArr[i], nil
+				if !found {
+					candidate = metaArr[i]
+					found = true
+				}
+				succModTimeMap[metaArr[i].SuccessorModTime]++
 			}
 		}
 	}
+	var succModTime time.Time
+	var smodTimeQuorum bool
+	for smodTime, count := range succModTimeMap {
+		if count >= quorum {
+			smodTimeQuorum = true
+			succModTime = smodTime
+			break
+		}
+	}
 
+	if found {
+		if smodTimeQuorum {
+			candidate.SuccessorModTime = succModTime
+			candidate.IsLatest = succModTime.IsZero()
+		}
+		return candidate, nil
+	}
 	return FileInfo{}, errErasureReadQuorum
 }
 
