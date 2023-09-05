@@ -2085,99 +2085,101 @@ func getReplicationClusterMetrics() *MetricsGroup {
 	)
 
 	mg.RegisterRead(func(_ context.Context) []Metric {
+		var ml []Metric
 		// common operational metrics for bucket replication and site replication - published
 		// at cluster level
-		qs := globalReplicationStats.getNodeQueueStatsSummary()
-		activeWorkersCount := Metric{
-			Description:    getClusterReplActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgActiveWorkersCount := Metric{
-			Description:    getClusterReplAvgActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxActiveWorkersCount := Metric{
-			Description:    getClusterReplMaxActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		currInQueueCount := Metric{
-			Description:    getClusterReplCurrQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		currInQueueBytes := Metric{
-			Description:    getClusterReplCurrQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
+		if globalReplicationStats != nil {
+			qs := globalReplicationStats.getNodeQueueStatsSummary()
+			activeWorkersCount := Metric{
+				Description:    getClusterReplActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgActiveWorkersCount := Metric{
+				Description:    getClusterReplAvgActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxActiveWorkersCount := Metric{
+				Description:    getClusterReplMaxActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueCount := Metric{
+				Description:    getClusterReplCurrQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueBytes := Metric{
+				Description:    getClusterReplCurrQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
 
-		currTransferRate := Metric{
-			Description:    getClusterReplCurrentTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgQueueCount := Metric{
-			Description:    getClusterReplAvgQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgQueueBytes := Metric{
-			Description:    getClusterReplAvgQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxQueueCount := Metric{
-			Description:    getClusterReplMaxQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxQueueBytes := Metric{
-			Description:    getClusterReplMaxQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgTransferRate := Metric{
-			Description:    getClusterReplAvgTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxTransferRate := Metric{
-			Description:    getClusterReplMaxTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		mrfCount := Metric{
-			Description:    getClusterReplMRFFailedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-			Value:          float64(qs.MRFStats.LastFailedCount),
-		}
+			currTransferRate := Metric{
+				Description:    getClusterReplCurrentTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueCount := Metric{
+				Description:    getClusterReplAvgQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueBytes := Metric{
+				Description:    getClusterReplAvgQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueCount := Metric{
+				Description:    getClusterReplMaxQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueBytes := Metric{
+				Description:    getClusterReplMaxQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgTransferRate := Metric{
+				Description:    getClusterReplAvgTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxTransferRate := Metric{
+				Description:    getClusterReplMaxTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			mrfCount := Metric{
+				Description:    getClusterReplMRFFailedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Value:          float64(qs.MRFStats.LastFailedCount),
+			}
 
-		if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
-			qt := qs.QStats
-			currInQueueBytes.Value = qt.Curr.Bytes
-			currInQueueCount.Value = qt.Curr.Count
-			avgQueueBytes.Value = qt.Avg.Bytes
-			avgQueueCount.Value = qt.Avg.Count
-			maxQueueBytes.Value = qt.Max.Bytes
-			maxQueueCount.Value = qt.Max.Count
-		}
-		activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
-		avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
-		maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
+			if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
+				qt := qs.QStats
+				currInQueueBytes.Value = qt.Curr.Bytes
+				currInQueueCount.Value = qt.Curr.Count
+				avgQueueBytes.Value = qt.Avg.Bytes
+				avgQueueCount.Value = qt.Avg.Count
+				maxQueueBytes.Value = qt.Max.Bytes
+				maxQueueCount.Value = qt.Max.Count
+			}
+			activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
+			avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
+			maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
 
-		if len(qs.XferStats) > 0 {
-			tots := qs.XferStats[Total]
-			currTransferRate.Value = tots.Curr
-			avgTransferRate.Value = tots.Avg
-			maxTransferRate.Value = tots.Peak
+			if len(qs.XferStats) > 0 {
+				tots := qs.XferStats[Total]
+				currTransferRate.Value = tots.Curr
+				avgTransferRate.Value = tots.Avg
+				maxTransferRate.Value = tots.Peak
+			}
+			ml = []Metric{
+				activeWorkersCount,
+				avgActiveWorkersCount,
+				maxActiveWorkersCount,
+				currInQueueCount,
+				currInQueueBytes,
+				avgQueueCount,
+				avgQueueBytes,
+				maxQueueCount,
+				maxQueueBytes,
+				currTransferRate,
+				avgTransferRate,
+				maxTransferRate,
+				mrfCount,
+			}
 		}
-		ml := []Metric{
-			activeWorkersCount,
-			avgActiveWorkersCount,
-			maxActiveWorkersCount,
-			currInQueueCount,
-			currInQueueBytes,
-			avgQueueCount,
-			avgQueueBytes,
-			maxQueueCount,
-			maxQueueBytes,
-			currTransferRate,
-			avgTransferRate,
-			maxTransferRate,
-			mrfCount,
-		}
-
 		for ep, health := range globalBucketTargetSys.healthStats() {
 			// link latency current
 			m := Metric{
@@ -3019,17 +3021,21 @@ func getBucketUsageMetrics() *MetricsGroup {
 				})
 			}
 			if !globalSiteReplicationSys.isEnabled() {
-				stats := bucketReplStats[bucket].ReplicationStats
-				metrics = append(metrics, Metric{
-					Description:    getRepReceivedBytesMD(bucketMetricNamespace),
-					Value:          float64(stats.ReplicaSize),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
-				metrics = append(metrics, Metric{
-					Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
-					Value:          float64(stats.ReplicaCount),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
+				var stats BucketReplicationStats
+				s, ok := bucketReplStats[bucket]
+				if ok {
+					stats = s.ReplicationStats
+					metrics = append(metrics, Metric{
+						Description:    getRepReceivedBytesMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaSize),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaCount),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+				}
 				if stats.hasReplicationUsage() {
 					for arn, stat := range stats.Stats {
 						metrics = append(metrics, Metric{
