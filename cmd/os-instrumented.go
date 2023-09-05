@@ -137,7 +137,7 @@ func MkdirAll(dirPath string, mode os.FileMode) (err error) {
 // Rename captures time taken to call os.Rename
 func Rename(src, dst string) (err error) {
 	defer updateOSMetrics(osMetricRename, src, dst)(err)
-	return os.Rename(src, dst)
+	return RenameSys(src, dst)
 }
 
 // OpenFile captures time taken to call os.OpenFile
