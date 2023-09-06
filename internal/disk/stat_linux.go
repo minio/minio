@@ -24,6 +24,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -71,21 +72,34 @@ func GetInfo(path string, firstTime bool) (info Info, err error) {
 	if firstTime {
 		bfs, err := blockdevice.NewDefaultFS()
 		if err == nil {
+			devName := ""
 			diskstats, _ := bfs.ProcDiskstats()
 			for _, dstat := range diskstats {
 				// ignore all loop devices
 				if strings.HasPrefix(dstat.DeviceName, "loop") {
 					continue
 				}
-				qst, err := bfs.SysBlockDeviceQueueStats(dstat.DeviceName)
-				if err != nil {
-					continue
-				}
-				rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
 				if dstat.MajorNumber == info.Major && dstat.MinorNumber == info.Minor {
-					info.Name = dstat.DeviceName
-					info.Rotational = &rot
+					devName = dstat.DeviceName
 					break
+				}
+			}
+			if devName != "" {
+				info.Name = devName
+				qst, err := bfs.SysBlockDeviceQueueStats(devName)
+				if err != nil { // Mostly not found error
+					// Check if there is a parent device:
+					//   e.g. if the mount is based on /dev/nvme0n1p1, let's calculate the
+					//        real device name (nvme0n1) to get its sysfs information
+					parentDevPath, e := os.Readlink("/sys/class/block/" + devName)
+					if e == nil {
+						parentDev := filepath.Base(filepath.Dir(parentDevPath))
+						qst, err = bfs.SysBlockDeviceQueueStats(parentDev)
+					}
+				}
+				if err == nil {
+					rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
+					info.Rotational = &rot
 				}
 			}
 		}
