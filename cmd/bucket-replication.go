@@ -702,10 +702,8 @@ func getCopyObjMetadata(oi ObjectInfo, sc string) map[string]string {
 		meta[xhttp.ContentType] = oi.ContentType
 	}
 
-	if oi.UserTags != "" {
-		meta[xhttp.AmzObjectTagging] = oi.UserTags
-		meta[xhttp.AmzTagDirective] = "REPLACE"
-	}
+	meta[xhttp.AmzObjectTagging] = oi.UserTags
+	meta[xhttp.AmzTagDirective] = "REPLACE"
 
 	if sc == "" {
 		sc = oi.StorageClass
@@ -887,7 +885,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
-	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) || (oi2.UserTagCount != len(t.ToMap())) {
+	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2.UserTags, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
 		return replicateMetadata
 	}
 
