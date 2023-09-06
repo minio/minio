@@ -2531,6 +2531,13 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	workers := make([]chan ReplicateObjectInfo, resyncParallelRoutines)
 	resultCh := make(chan TargetReplicationResyncStatus, 1)
 	defer close(resultCh)
+	go func() {
+		for r := range resultCh {
+			s.incStats(r, opts)
+			globalSiteResyncMetrics.updateMetric(r, opts.resyncID)
+		}
+	}()
+
 	var wg sync.WaitGroup
 	for i := 0; i < resyncParallelRoutines; i++ {
 		wg.Add(1)
@@ -2635,12 +2642,6 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	for i := 0; i < resyncParallelRoutines; i++ {
 		close(workers[i])
 	}
-	go func() {
-		for r := range resultCh {
-			s.incStats(r, opts)
-			globalSiteResyncMetrics.updateMetric(r, opts.resyncID)
-		}
-	}()
 	wg.Wait()
 	resyncStatus = ResyncCompleted
 }
