@@ -107,8 +107,8 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 		return err
 	}
 
-	if q != nil && q.Type == madmin.HardQuota && q.Quota > 0 {
-		if uint64(size) >= q.Quota { // check if file size already exceeds the quota
+	if q != nil && q.Type == madmin.HardQuota && q.Size > 0 {
+		if uint64(size) >= q.Size { // check if file size already exceeds the quota
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 
@@ -117,7 +117,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 			return err
 		}
 
-		if bui.Size > 0 && ((bui.Size + uint64(size)) >= q.Quota) {
+		if bui.Size > 0 && ((bui.Size + uint64(size)) >= q.Size) {
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 	}

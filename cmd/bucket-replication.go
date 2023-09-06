@@ -1217,8 +1217,10 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	}
 
 	opts := &bandwidth.MonitorReaderOptions{
-		Bucket:     objInfo.Bucket,
-		TargetARN:  tgt.ARN,
+		BucketOptions: bandwidth.BucketOptions{
+			Name:           objInfo.Bucket,
+			ReplicationARN: tgt.ARN,
+		},
 		HeaderSize: headerSize,
 	}
 	newCtx := ctx
@@ -1456,8 +1458,10 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 
 		opts := &bandwidth.MonitorReaderOptions{
-			Bucket:     objInfo.Bucket,
-			TargetARN:  tgt.ARN,
+			BucketOptions: bandwidth.BucketOptions{
+				Name:           objInfo.Bucket,
+				ReplicationARN: tgt.ARN,
+			},
 			HeaderSize: headerSize,
 		}
 		newCtx := ctx
