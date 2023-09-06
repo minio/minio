@@ -300,7 +300,8 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		if bucket != "" && bucket != minioReservedBucket {
+		_, err = globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
+		if bucket != "" && bucket != minioReservedBucket && err == nil {
 			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
 		}
 
@@ -316,7 +317,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
 
-			if bucket != "" && bucket != minioReservedBucket {
+			if bucket != "" && bucket != minioReservedBucket && err == nil {
 				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
 				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
 				globalBucketHTTPStats.updateHTTPStats(bucket, api, tc.ResponseRecorder)
