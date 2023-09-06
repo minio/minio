@@ -374,8 +374,8 @@ func (sys *BucketTargetSys) updateBandwidthLimit(bucket, arn string, limit int64
 		globalBucketMonitor.DeleteBucketThrottle(bucket, arn)
 		return
 	}
-	// Setup bandwidth throttling
 
+	// Setup bandwidth throttling
 	globalBucketMonitor.SetBandwidthLimit(bucket, arn, limit)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/bucket/bandwidth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
@@ -539,8 +540,24 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		w.WriteHeader(http.StatusPartialContent)
 	}
 
+	var reader io.Reader
+	reader = gr
+	if globalBucketMonitor.IsThrottled(bucket, "") {
+		opts := &bandwidth.MonitorReaderOptions{
+			BucketOptions: bandwidth.BucketOptions{
+				Name: bucket,
+			},
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, throttleDeadline)
+		defer cancel()
+
+		reader = bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, reader, opts)
+	}
+
 	// Write object content to response body
-	if _, err = xioutil.Copy(httpWriter, gr); err != nil {
+	if _, err = xioutil.Copy(httpWriter, reader); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten {
 			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1160,7 +1177,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	length := actualSize
 
 	if !cpSrcDstSame {
-		if err := enforceBucketQuotaHard(ctx, dstBucket, actualSize); err != nil {
+		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
@@ -1710,10 +1727,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.ReplicateObjectAction); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
@@ -2044,6 +2062,20 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		putObject = objectAPI.PutObject
 	)
 
+	if globalBucketMonitor.IsThrottled(bucket, "") {
+		opts := &bandwidth.MonitorReaderOptions{
+			BucketOptions: bandwidth.BucketOptions{
+				Name: bucket,
+			},
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, throttleDeadline)
+		defer cancel()
+
+		reader = bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, reader, opts)
+	}
+
 	// Check if put is allowed
 	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, policy.PutObjectAction); s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
@@ -2085,7 +2117,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

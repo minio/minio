@@ -74,18 +74,18 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 		need = int(math.Min(float64(b), float64(need)))
 		tokens = need
 	}
+	defer r.m.updateMeasurement(r.opts.BucketOptions, uint64(tokens))
 
-	err = r.throttle.WaitN(r.ctx, tokens)
-	if err != nil {
-		return
-	}
-
-	n, err = r.r.Read(buf[:need])
-	if err != nil {
+	if err = r.throttle.WaitN(r.ctx, tokens); err != nil {
 		r.lastErr = err
 		return
 	}
-	r.m.updateMeasurement(r.opts.BucketOptions, uint64(tokens))
+
+	if n, err = r.r.Read(buf[:need]); err != nil {
+		r.lastErr = err
+		return
+	}
+
 	return
 }
 

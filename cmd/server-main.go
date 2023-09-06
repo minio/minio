@@ -308,6 +308,9 @@ func serverHandleEnvVars() {
 var globalHealStateLK sync.RWMutex
 
 func initAllSubsystems(ctx context.Context) {
+	// Create the bucket bandwidth monitor
+	globalBucketMonitor = bandwidth.NewMonitor(ctx, totalNodeCount())
+
 	globalHealStateLK.Lock()
 	// New global heal state
 	globalAllHealState = newHealState(ctx, true)
@@ -327,9 +330,6 @@ func initAllSubsystems(ctx context.Context) {
 		// Reinitialize safely when testing.
 		globalBucketMetadataSys.Reset()
 	}
-
-	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(ctx, totalNodeCount())
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()

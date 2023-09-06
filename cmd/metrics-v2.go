@@ -228,6 +228,7 @@ const (
 	latencyMilliSec MetricName = "latency_ms"
 	sentBytes       MetricName = "sent_bytes"
 	totalBytes      MetricName = "total_bytes"
+	totalBandwidth  MetricName = "total_bandwidth"
 	usedBytes       MetricName = "used_bytes"
 	writeBytes      MetricName = "write_bytes"
 	wcharBytes      MetricName = "wchar_bytes"
@@ -575,6 +576,16 @@ func getBucketUsageQuotaTotalBytesMD() MetricDescription {
 		Subsystem: quotaSubsystem,
 		Name:      totalBytes,
 		Help:      "Total bucket quota size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketBandwidthQuotaTotalBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: quotaSubsystem,
+		Name:      totalBandwidth,
+		Help:      "Total bucket bandwidh quota in bytes",
 		Type:      gaugeMetric,
 	}
 }
@@ -3013,10 +3024,19 @@ func getBucketUsageMetrics() *MetricsGroup {
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 
-			if quota != nil && quota.Quota > 0 {
+			if quota != nil {
+				quotaSize := quota.Quota
+				if quotaSize <= 0 {
+					quotaSize = quota.Size
+				}
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageQuotaTotalBytesMD(),
-					Value:          float64(quota.Quota),
+					Value:          float64(quotaSize),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+				metrics = append(metrics, Metric{
+					Description:    getBucketBandwidthQuotaTotalBytesMD(),
+					Value:          float64(quota.Rate),
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 			}

@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,6 +33,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/amztime"
+	"github.com/minio/minio/internal/bucket/bandwidth"
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
@@ -392,7 +394,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, dstBucket, actualPartSize); err != nil {
+	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -690,7 +692,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -711,6 +713,20 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+
+	if globalBucketMonitor.IsThrottled(bucket, "") {
+		opts := &bandwidth.MonitorReaderOptions{
+			BucketOptions: bandwidth.BucketOptions{
+				Name: bucket,
+			},
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, throttleDeadline)
+		defer cancel()
+
+		reader = bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, reader, opts)
 	}
 
 	// Read compression metadata preserved in the init multipart for the decision.

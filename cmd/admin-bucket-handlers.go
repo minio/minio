@@ -94,8 +94,15 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		Quota:     data,
 		UpdatedAt: updatedAt,
 	}
-	if quotaConfig.Size == 0 || quotaConfig.Quota == 0 {
+
+	if (quotaConfig.Size == 0 || quotaConfig.Quota == 0) && quotaConfig.Rate == 0 {
 		bucketMeta.Quota = nil
+	}
+
+	if quotaConfig.Rate > 0 {
+		globalBucketMonitor.SetBandwidthLimit(bucket, "", int64(quotaConfig.Rate))
+	} else {
+		globalBucketMonitor.DeleteBucketThrottle(bucket, "")
 	}
 
 	// Call site replication hook.

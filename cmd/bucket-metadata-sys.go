@@ -495,6 +495,9 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 		}
 		globalEventNotifier.set(buckets[i], meta)   // set notification targets
 		globalBucketTargetSys.set(buckets[i], meta) // set remote replication targets
+		if meta.quotaConfig != nil && meta.quotaConfig.Rate > 0 {
+			globalBucketMonitor.SetBandwidthLimit(buckets[i].Name, "", int64(meta.quotaConfig.Rate))
+		}
 	}
 }
 

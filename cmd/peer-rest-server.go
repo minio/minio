@@ -654,6 +654,14 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	if meta.bucketTargetConfig != nil {
 		globalBucketTargetSys.UpdateAllTargets(bucketName, meta.bucketTargetConfig)
 	}
+
+	if q := meta.quotaConfig; q != nil {
+		if q.Rate > 0 {
+			globalBucketMonitor.SetBandwidthLimit(bucketName, "", int64(q.Rate))
+		} else {
+			globalBucketMonitor.DeleteBucketThrottle(bucketName, "")
+		}
+	}
 }
 
 func (s *peerRESTServer) GetMetacacheListingHandler(w http.ResponseWriter, r *http.Request) {

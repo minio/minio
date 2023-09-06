@@ -89,8 +89,8 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 	}
 	if !quotaCfg.IsValid() {
 		if quotaCfg.Type == "fifo" {
-			logger.LogIf(GlobalContext, errors.New("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore. Please clear your quota configs using 'mc admin bucket quota alias/bucket --clear' and use 'mc ilm add' for expiration of objects"))
-			return quotaCfg, fmt.Errorf("invalid quota type 'fifo'")
+			logger.LogIf(GlobalContext, errors.New("Detected older 'fifo' quota config, 'fifo' feature is removed and not supported anymore. Please clear your quota configs using 'mc admin bucket quota alias/bucket --clear' and use 'mc ilm add' to expire the objects"))
+			return quotaCfg, fmt.Errorf("invalid quota type '%s'", quotaCfg.Type)
 		}
 		return quotaCfg, fmt.Errorf("Invalid quota config %#v", quotaCfg)
 	}
@@ -115,6 +115,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 			quotaSize = q.Quota
 		}
 	}
+
 	if quotaSize > 0 {
 		if uint64(size) >= quotaSize { // check if file size already exceeds the quota
 			return BucketQuotaExceeded{Bucket: bucket}
@@ -133,7 +134,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 	return nil
 }
 
-func enforceBucketQuotaHard(ctx context.Context, bucket string, size int64) error {
+func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 	if globalBucketQuotaSys == nil {
 		return nil
 	}

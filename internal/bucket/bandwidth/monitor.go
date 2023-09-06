@@ -197,6 +197,7 @@ func (m *Monitor) throttle(opts BucketOptions) *bucketThrottle {
 func (m *Monitor) SetBandwidthLimit(bucket, arn string, limit int64) {
 	m.tlock.Lock()
 	defer m.tlock.Unlock()
+
 	limitBytes := limit / int64(m.NodeCount)
 	throttle, ok := m.bucketsThrottle[BucketOptions{Name: bucket, ReplicationARN: arn}]
 	if !ok {
@@ -211,6 +212,9 @@ func (m *Monitor) SetBandwidthLimit(bucket, arn string, limit int64) {
 func (m *Monitor) IsThrottled(bucket, arn string) bool {
 	m.tlock.RLock()
 	defer m.tlock.RUnlock()
-	_, ok := m.bucketsThrottle[BucketOptions{Name: bucket, ReplicationARN: arn}]
+	th, ok := m.bucketsThrottle[BucketOptions{Name: bucket, ReplicationARN: arn}]
+	if ok && th.NodeBandwidthPerSec == 0 {
+		return false
+	}
 	return ok
 }
