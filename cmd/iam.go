@@ -849,13 +849,20 @@ func (sys *IAMSys) GetUserInfo(ctx context.Context, name string) (u madmin.UserI
 		return u, errServerNotInitialized
 	}
 
+	loadUserCalled := false
 	select {
 	case <-sys.configLoaded:
 	default:
 		sys.store.LoadUser(ctx, name)
+		loadUserCalled = true
 	}
 
-	return sys.store.GetUserInfo(name)
+	userInfo, err := sys.store.GetUserInfo(name)
+	if err == errNoSuchUser && !loadUserCalled {
+		sys.store.LoadUser(ctx, name)
+		userInfo, err = sys.store.GetUserInfo(name)
+	}
+	return userInfo, err
 }
 
 // QueryPolicyEntities - queries policy associations for builtin users/groups/policies.
@@ -1421,31 +1428,24 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 		return u, false
 	}
 
-	fallback := false
+	if accessKey == globalActiveCred.AccessKey {
+		return newUserIdentity(globalActiveCred), true
+	}
+
+	loadUserCalled := false
 	select {
 	case <-sys.configLoaded:
 	default:
 		sys.store.LoadUser(ctx, accessKey)
-		fallback = true
+		loadUserCalled = true
 	}
 
 	u, ok = sys.store.GetUser(accessKey)
-	if !ok && !fallback {
-		// accessKey not found, also
-		// IAM store is not in fallback mode
-		// we can try to reload again from
-		// the IAM store and see if credential
-		// exists now. If it doesn't proceed to
-		// fail.
+	if !ok && !loadUserCalled {
 		sys.store.LoadUser(ctx, accessKey)
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
-	if !ok {
-		if accessKey == globalActiveCred.AccessKey {
-			return newUserIdentity(globalActiveCred), true
-		}
-	}
 	return u, ok && u.Credentials.IsValid()
 }
 
