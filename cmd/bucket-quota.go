@@ -35,8 +35,8 @@ type BucketQuotaSys struct {
 
 // Get - Get quota configuration.
 func (sys *BucketQuotaSys) Get(ctx context.Context, bucketName string) (*madmin.BucketQuota, error) {
-	qCfg, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
-	return qCfg, err
+	cfg, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucketName)
+	return cfg, err
 }
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys
@@ -107,8 +107,16 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 		return err
 	}
 
-	if q != nil && q.Type == madmin.HardQuota && q.Size > 0 {
-		if uint64(size) >= q.Size { // check if file size already exceeds the quota
+	var quotaSize uint64
+	if q != nil && q.Type == madmin.HardQuota {
+		if q.Size > 0 {
+			quotaSize = q.Size
+		} else if q.Quota > 0 {
+			quotaSize = q.Quota
+		}
+	}
+	if quotaSize > 0 {
+		if uint64(size) >= quotaSize { // check if file size already exceeds the quota
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 
@@ -117,7 +125,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 			return err
 		}
 
-		if bui.Size > 0 && ((bui.Size + uint64(size)) >= q.Size) {
+		if bui.Size > 0 && ((bui.Size + uint64(size)) >= quotaSize) {
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 	}
