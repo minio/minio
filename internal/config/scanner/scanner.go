@@ -127,7 +127,11 @@ func lookupDeprecatedScannerConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS)))
+	cycle := env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS))
+	if cycle == "" {
+		cycle = "1m"
+	}
+	cfg.Cycle, err = time.ParseDuration(cycle)
 	if err != nil {
 		return cfg, err
 	}
