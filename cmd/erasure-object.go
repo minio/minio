@@ -46,6 +46,7 @@ import (
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
+	"github.com/tinylib/msgp/msgp"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -578,6 +579,9 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		errFileVersionNotFound,
 		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
 		io.EOF,              // some times we would read without locks, ignore these errors
+		msgp.ErrShortBytes,
+		context.DeadlineExceeded,
+		context.Canceled,
 	}
 	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
 
