@@ -98,6 +98,7 @@ func GetInfo(path string, firstTime bool) (info Info, err error) {
 					}
 				}
 				if err == nil {
+					info.NRRequests = qst.NRRequests
 					rot := qst.Rotational == 1 // Rotational is '1' if the device is HDD
 					info.Rotational = &rot
 				}

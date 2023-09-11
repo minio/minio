@@ -37,6 +37,7 @@ type Info struct {
 	Minor      uint32
 	Name       string
 	Rotational *bool
+	NRRequests uint64
 }
 
 // DevID is the drive major and minor ids

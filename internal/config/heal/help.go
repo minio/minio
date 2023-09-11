@@ -45,5 +45,11 @@ var (
 			Optional:    true,
 			Type:        "int",
 		},
+		config.HelpKV{
+			Key:         DriveWorkers,
+			Description: `the number of workers per drive to heal a new disk replacement` + defaultHelpPostfix(DriveWorkers),
+			Optional:    true,
+			Type:        "int",
+		},
 	}
 )

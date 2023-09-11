@@ -683,13 +683,6 @@ func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 	}
 }
 
-func (h *healSequence) logHeal(healType madmin.HealItemType) {
-	h.mutex.Lock()
-	h.scannedItemsMap[healType]++
-	h.lastHealActivity = UTCNow()
-	h.mutex.Unlock()
-}
-
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
 	// Send heal request
 	task := healTask{
