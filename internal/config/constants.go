@@ -63,7 +63,8 @@ const (
 
 	EnvMinIOServerURL         = "MINIO_SERVER_URL"
 	EnvBrowserRedirectURL     = "MINIO_BROWSER_REDIRECT_URL"
-	EnvRootDiskThresholdSize  = "MINIO_ROOTDISK_THRESHOLD_SIZE"
+	EnvRootDriveThresholdSize = "MINIO_ROOTDRIVE_THRESHOLD_SIZE"
+	EnvRootDiskThresholdSize  = "MINIO_ROOTDISK_THRESHOLD_SIZE" // Deprecated Sep 2023
 	EnvBrowserLoginAnimation  = "MINIO_BROWSER_LOGIN_ANIMATION"
 	EnvBrowserSessionDuration = "MINIO_BROWSER_SESSION_DURATION"
 
