@@ -246,7 +246,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		diskIndex:  -1,
 	}
 
-	// Sanitaize before setting it
+	// Sanitize before setting it
 	if info.NRRequests > 0 {
 		s.nrRequests = info.NRRequests
 	}

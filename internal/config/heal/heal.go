@@ -31,15 +31,15 @@ import (
 
 // Compression environment variables
 const (
-	Bitrot  = "bitrotscan"
-	Sleep   = "max_sleep"
-	IOCount = "max_io"
-	Workers = "workers"
+	Bitrot       = "bitrotscan"
+	Sleep        = "max_sleep"
+	IOCount      = "max_io"
+	DriveWorkers = "drive_workers"
 
-	EnvBitrot  = "MINIO_HEAL_BITROTSCAN"
-	EnvSleep   = "MINIO_HEAL_MAX_SLEEP"
-	EnvIOCount = "MINIO_HEAL_MAX_IO"
-	EnvWorkers = "MINIO_HEAL_WORKERS"
+	EnvBitrot       = "MINIO_HEAL_BITROTSCAN"
+	EnvSleep        = "MINIO_HEAL_MAX_SLEEP"
+	EnvIOCount      = "MINIO_HEAL_MAX_IO"
+	EnvDriveWorkers = "MINIO_HEAL_DRIVE_WORKERS"
 )
 
 var configMutex sync.RWMutex
@@ -53,7 +53,7 @@ type Config struct {
 	Sleep   time.Duration `json:"sleep"`
 	IOCount int           `json:"iocount"`
 
-	Workers int `json:"workers,omitempty"`
+	DriveWorkers int `json:"drive_workers"`
 
 	// Cached value from Bitrot field
 	cache struct {
@@ -85,7 +85,7 @@ func (opts Config) Clone() (int, time.Duration, string) {
 func (opts Config) GetWorkers() int {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
-	return opts.Workers
+	return opts.DriveWorkers
 }
 
 // Update updates opts with nopts
@@ -96,7 +96,7 @@ func (opts *Config) Update(nopts Config) {
 	opts.Bitrot = nopts.Bitrot
 	opts.IOCount = nopts.IOCount
 	opts.Sleep = nopts.Sleep
-	opts.Workers = nopts.Workers
+	opts.DriveWorkers = nopts.DriveWorkers
 
 	opts.cache.bitrotCycle, _ = parseBitrotConfig(nopts.Bitrot)
 }
@@ -116,9 +116,8 @@ var DefaultKVS = config.KVS{
 		Value: "100",
 	},
 	config.KV{
-		Key:        Workers,
-		Value:      "",
-		Deprecated: true,
+		Key:   DriveWorkers,
+		Value: "",
 	},
 }
 
@@ -171,17 +170,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_io' value invalid: %w", err)
 	}
-	if ws := env.Get(EnvWorkers, kvs.GetWithDefault(Workers, DefaultKVS)); ws != "" {
+	if ws := env.Get(EnvDriveWorkers, kvs.GetWithDefault(DriveWorkers, DefaultKVS)); ws != "" {
 		w, err := strconv.Atoi(ws)
 		if err != nil {
-			return cfg, fmt.Errorf("'heal:workers' value invalid: %w", err)
+			return cfg, fmt.Errorf("'heal:drive_workers' value invalid: %w", err)
 		}
 		if w < 1 {
-			return cfg, fmt.Errorf("'heal:workers' value invalid: zero or negative integer unsupported")
+			return cfg, fmt.Errorf("'heal:drive_workers' value invalid: zero or negative integer unsupported")
 		}
-		cfg.Workers = w
+		cfg.DriveWorkers = w
 	} else {
-		cfg.Workers = -1
+		cfg.DriveWorkers = -1
 	}
 
 	return cfg, nil
