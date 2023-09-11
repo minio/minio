@@ -664,10 +664,14 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
-	if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+	rootDiskSize := env.Get(config.EnvRootDriveThresholdSize, "")
+	if rootDiskSize == "" {
+		rootDiskSize = env.Get(config.EnvRootDiskThresholdSize, "")
+	}
+	if rootDiskSize != "" {
 		size, err := humanize.ParseBytes(rootDiskSize)
 		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Invalid %s value in environment variable", config.EnvRootDiskThresholdSize))
+			logger.Fatal(err, fmt.Sprintf("Invalid %s value in root drive threshold environment variable", rootDiskSize))
 		}
 		globalRootDiskThreshold = size
 	}
