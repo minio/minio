@@ -165,13 +165,15 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	} else {
 		numHealers = info.NRRequests / 4
 	}
-	if numHealers == 0 || numHealers == 1 {
+	if numHealers < 4 {
 		numHealers = 4
 	}
 	// allow overriding this value as well..
 	if v := globalHealConfig.GetWorkers(); v > 0 {
 		numHealers = uint64(v)
 	}
+
+	logger.Info(fmt.Sprintf("Healing drive '%s' - use %d parallel workers.", tracker.disk.String(), numHealers))
 
 	jt, _ := workers.New(int(numHealers))
 
