@@ -254,7 +254,7 @@ func startSFTPServer(c *cli.Context) {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				logger.LogOnceIf(context.Background(), fmt.Errorf("error while accepting connections: %w, retring in %s", err, tempDelay), "accept-limit-sftp")
+				logger.LogOnceIf(context.Background(), fmt.Errorf("error while accepting connections: %w, retrying in %s", err, tempDelay), "accept-limit-sftp")
 				time.Sleep(tempDelay)
 				continue
 			}
