@@ -1790,7 +1790,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && length >= 0
 
 	var file *os.File
 	if odirectEnabled {
@@ -1820,6 +1820,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		default:
 			return nil, err
 		}
+	}
+
+	if length < 0 {
+		return file, nil
 	}
 
 	st, err := file.Stat()
@@ -1889,10 +1893,6 @@ func (c closeWrapper) Close() error {
 
 // CreateFile - creates the file.
 func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSize int64, r io.Reader) (err error) {
-	if fileSize < -1 {
-		return errInvalidArgument
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1929,7 +1929,7 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 		return osErrToFileErr(err)
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && fileSize > 0
 
 	var w *os.File
 	if odirectEnabled {
