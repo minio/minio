@@ -2392,6 +2392,7 @@ https://github.com/IBM/sarama
 # MIT License
 
 Copyright (c) 2013 Shopify
+
 Copyright (c) 2023 IBM Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -3089,7 +3090,7 @@ https://github.com/charmbracelet/lipgloss
 ----------------------------------------------------------------
 MIT License
 
-Copyright (c) 2021 Charmbracelet, Inc
+Copyright (c) 2021-2023 Charmbracelet, Inc
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -11869,6 +11870,8 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 github.com/hashicorp/golang-lru
 https://github.com/hashicorp/golang-lru
 ----------------------------------------------------------------
+Copyright (c) 2014 HashiCorp, Inc.
+
 Mozilla Public License, version 2.0
 
 1. Definitions
