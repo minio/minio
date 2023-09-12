@@ -402,6 +402,9 @@ var (
 
 	// Captures all batch jobs metrics globally
 	globalBatchJobsMetrics batchJobMetrics
+
+	// Indicates if server was started as `--address ":0"`
+	globalDynamicAPIPort bool
 	// Add new variable global values here.
 )
 

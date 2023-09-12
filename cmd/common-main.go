@@ -391,7 +391,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
-			logger.FatalIf(err, "Unable to get free port for console on the host")
+			logger.FatalIf(err, "Unable to get free port for Console UI on the host")
 		}
 		consoleAddr = net.JoinHostPort("", p.String())
 	}
@@ -405,6 +405,15 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	if globalMinioPort == "0" {
+		p, err := xnet.GetFreePort()
+		if err != nil {
+			logger.FatalIf(err, "Unable to get free port for S3 API on the host")
+		}
+		globalMinioPort = p.String()
+		globalDynamicAPIPort = true
+	}
+
 	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 
 	if globalMinioPort == globalMinioConsolePort {
