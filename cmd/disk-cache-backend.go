@@ -604,7 +604,7 @@ func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, met
 	// move part saved in writeback directory and cache.json atomically
 	if finalizeWB {
 		wbdir := getCacheWriteBackSHADir(c.dir, bucket, object)
-		if err = renameAll(pathJoin(wbdir, cacheDataFile), pathJoin(cachedPath, cacheDataFile)); err != nil {
+		if err = renameAll(pathJoin(wbdir, cacheDataFile), pathJoin(cachedPath, cacheDataFile), c.dir); err != nil {
 			return err
 		}
 		removeAll(wbdir) // cleanup writeback/shadir
@@ -1273,7 +1273,7 @@ func (c *diskCache) NewMultipartUpload(ctx context.Context, bucket, object, uID 
 
 	cachePath := getMultipartCacheSHADir(c.dir, bucket, object)
 	uploadIDDir := path.Join(cachePath, uploadID)
-	if err := mkdirAll(uploadIDDir, 0o777); err != nil {
+	if err := mkdirAll(uploadIDDir, 0o777, c.dir); err != nil {
 		return uploadID, err
 	}
 	metaPath := pathJoin(uploadIDDir, cacheMetaJSONFile)
@@ -1570,9 +1570,9 @@ func (c *diskCache) CompleteMultipartUpload(ctx context.Context, bucket, object,
 	jsonSave(f, uploadMeta)
 	for _, pi := range uploadedParts {
 		part := fmt.Sprintf("part.%d", pi.PartNumber)
-		renameAll(pathJoin(uploadIDDir, part), pathJoin(cachePath, part))
+		renameAll(pathJoin(uploadIDDir, part), pathJoin(cachePath, part), c.dir)
 	}
-	renameAll(pathJoin(uploadIDDir, cacheMetaJSONFile), pathJoin(cachePath, cacheMetaJSONFile))
+	renameAll(pathJoin(uploadIDDir, cacheMetaJSONFile), pathJoin(cachePath, cacheMetaJSONFile), c.dir)
 	removeAll(uploadIDDir) // clean up any unused parts in the uploadIDDir
 	return uploadMeta.ToObjectInfo(), nil
 }

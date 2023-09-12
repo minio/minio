@@ -129,9 +129,9 @@ func Mkdir(dirPath string, mode os.FileMode) (err error) {
 }
 
 // MkdirAll captures time taken to call os.MkdirAll
-func MkdirAll(dirPath string, mode os.FileMode) (err error) {
+func MkdirAll(dirPath string, mode os.FileMode, baseDir string) (err error) {
 	defer updateOSMetrics(osMetricMkdirAll, dirPath)(err)
-	return osMkdirAll(dirPath, mode)
+	return osMkdirAll(dirPath, mode, baseDir)
 }
 
 // Rename captures time taken to call os.Rename

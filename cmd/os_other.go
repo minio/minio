@@ -31,7 +31,8 @@ func access(name string) error {
 	return err
 }
 
-func osMkdirAll(dirPath string, perm os.FileMode) error {
+func osMkdirAll(dirPath string, perm os.FileMode, _ string) error {
+	// baseDir is not honored in plan9 and solaris platforms.
 	return os.MkdirAll(dirPath, perm)
 }
 
