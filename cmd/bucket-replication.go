@@ -464,7 +464,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
-		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
+		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry(), "")
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -531,8 +531,16 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		replicationStatus = replication.StatusType(rinfos.VersionPurgeStatus())
 	}
 
+	var (
+		failedEp    string
+		failedCount int
+	)
 	// to decrement pending count later.
 	for _, rinfo := range rinfos.Targets {
+		if rinfo.ReplicationStatus != replication.Completed || (!rinfo.VersionPurgeStatus.Empty() && rinfo.VersionPurgeStatus != Complete) {
+			failedEp = rinfo.endpoint
+			failedCount++
+		}
 		if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
 			globalReplicationStats.Update(dobj.Bucket, rinfo, replicationStatus,
 				prevStatus)
@@ -542,7 +550,11 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	eventName := event.ObjectReplicationComplete
 	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
-		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
+		// avoid setting failed Endpoint if replication failed on all targets.
+		if failedCount > 1 && failedCount == len(rinfos.Targets) {
+			failedEp = ""
+		}
+		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry(), failedEp)
 	}
 	drs := getReplicationState(rinfos, dobj.ReplicationState, dobj.VersionID)
 	if replicationStatus != prevStatus {
@@ -1011,7 +1023,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			UserAgent:  "Internal: [Replication]",
 			Host:       globalLocalNodeName,
 		})
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		globalReplicationPool.queueMRFSave(ri.ToMRFEntry(), "")
 		return
 	}
 	ctx = lkctx.Context()
@@ -1052,6 +1064,10 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	}
 	wg.Wait()
 
+	var (
+		failedEp    string
+		failedCount int
+	)
 	replicationStatus = rinfos.ReplicationStatus() // used in defer function
 	// FIXME: add support for missing replication events
 	// - event.ObjectReplicationMissedThreshold
@@ -1094,6 +1110,11 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			opType = replication.ObjectReplicationType
 		}
 		for _, rinfo := range rinfos.Targets {
+			if rinfo.ReplicationStatus != replication.Completed || (!rinfo.VersionPurgeStatus.Empty() && rinfo.VersionPurgeStatus != Complete) {
+				failedEp = rinfo.endpoint
+				failedCount++
+			}
+
 			if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
 				rinfo.OpType = opType // update optype to reflect correct operation.
 				globalReplicationStats.Update(bucket, rinfo, rinfo.ReplicationStatus, rinfo.PrevReplicationStatus)
@@ -1116,7 +1137,10 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		ri.EventType = ReplicateMRF
 		ri.ReplicationStatusInternal = rinfos.ReplicationStatusInternal()
 		ri.RetryCount++
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		if failedCount > 1 && failedCount == len(rinfos.Targets) { // avoid setting failed Endpoint if replication failed on all targets.
+			failedEp = ""
+		}
+		globalReplicationPool.queueMRFSave(ri.ToMRFEntry(), failedEp)
 	}
 }
 
@@ -1302,7 +1326,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}
 
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline-heal"+tgt.ARN)
+		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", bucket, tgt.ARN), "replication-target-offline-heal"+tgt.ARN)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1706,6 +1730,7 @@ type ReplicationPool struct {
 	mrfSaveCh       chan MRFReplicateEntry
 	mrfStopCh       chan struct{}
 	mrfWorkerSize   int
+	mrfEntries      map[string]MRFReplicateEntry
 }
 
 // ReplicationWorkerOperation is a shared interface of replication operations.
@@ -1990,7 +2015,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case <-p.ctx.Done():
 		case p.lrgworkers[h%LargeWorkerCount] <- ri:
 		default:
-			globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+			globalReplicationPool.queueMRFSave(ri.ToMRFEntry(), "")
 		}
 		return
 	}
@@ -2012,7 +2037,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 	case healCh <- ri:
 	case ch <- ri:
 	default:
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		globalReplicationPool.queueMRFSave(ri.ToMRFEntry(), "")
 		p.mu.RLock()
 		prio := p.priority
 		p.mu.RUnlock()
@@ -2066,7 +2091,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 	case <-p.ctx.Done():
 	case ch <- doi:
 	default:
-		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
+		globalReplicationPool.queueMRFSave(doi.ToMRFEntry(), "")
 		p.mu.RLock()
 		prio := p.priority
 		p.mu.RUnlock()
@@ -3115,12 +3140,12 @@ func (p *ReplicationPool) persistMRF() {
 		return
 	}
 
-	entries := make(map[string]MRFReplicateEntry)
+	p.mrfEntries = make(map[string]MRFReplicateEntry)
 	mTimer := time.NewTimer(mrfSaveInterval)
 	defer mTimer.Stop()
 
 	saveMRFToDisk := func() {
-		if len(entries) == 0 {
+		if len(p.mrfEntries) == 0 {
 			return
 		}
 
@@ -3129,9 +3154,9 @@ func (p *ReplicationPool) persistMRF() {
 			p.queueMRFHeal()
 		}
 
-		p.saveMRFEntries(p.ctx, entries)
+		p.saveMRFEntries(p.ctx, p.mrfEntries)
 
-		entries = make(map[string]MRFReplicateEntry)
+		p.mrfEntries = make(map[string]MRFReplicateEntry)
 	}
 	for {
 		select {
@@ -3148,19 +3173,23 @@ func (p *ReplicationPool) persistMRF() {
 			if !ok {
 				return
 			}
-			if len(entries) >= mrfMaxEntries {
+			if len(p.mrfEntries) >= mrfMaxEntries {
 				saveMRFToDisk()
 			}
-			entries[e.versionID] = e
+			p.mrfEntries[e.versionID] = e
 		}
 	}
 }
 
-func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
+// queueMRFSave queues most recent failures to disk if number of retries not exceed limit and if target
+// is not offline for more than 10 minutes.
+func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry, ep string) {
 	if !p.initialized() {
 		return
 	}
-	if entry.RetryCount > mrfRetryLimit { // let scanner catch up if retry count exceeded
+	// drop if retry count exceeded or target is offline for more than 10 minutes and mrf map is full. Note that we may
+	// not always know the target endpoint if failure is early on in the replication flow
+	if entry.RetryCount > mrfRetryLimit || (len(p.mrfEntries) >= mrfMaxEntries && globalBucketTargetSys.offlineDuration(ep) > 10*time.Minute) { // let scanner catch up if retry count exceeded
 		atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedCount, 1)
 		atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
 		return

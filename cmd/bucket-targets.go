@@ -91,6 +91,18 @@ func (sys *BucketTargetSys) isOffline(ep *url.URL) bool {
 	return false
 }
 
+// offlineDuration returns amount of time remote target has been offline
+func (sys *BucketTargetSys) offlineDuration(epHost string) time.Duration {
+	if epHost != "" {
+		sys.hMutex.RLock()
+		defer sys.hMutex.RUnlock()
+		if h, ok := sys.hc[epHost]; ok && !h.Online {
+			return time.Since(h.lastOnline)
+		}
+	}
+	return time.Duration(0)
+}
+
 // markOffline sets endpoint to offline if network i/o timeout seen.
 func (sys *BucketTargetSys) markOffline(ep *url.URL) {
 	sys.hMutex.Lock()
