@@ -1661,9 +1661,8 @@ type ReplicationPool struct {
 	resyncer *replicationResyncer
 
 	// workers:
-	workers         []chan ReplicationWorkerOperation
-	lrgworkers      []chan ReplicationWorkerOperation
-	existingWorkers chan ReplicationWorkerOperation
+	workers    []chan ReplicationWorkerOperation
+	lrgworkers []chan ReplicationWorkerOperation
 
 	// mrf:
 	mrfWorkerKillCh chan struct{}
@@ -1723,8 +1722,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	pool := &ReplicationPool{
 		workers:         make([]chan ReplicationWorkerOperation, 0, workers),
 		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, LargeWorkerCount),
-		existingWorkers: make(chan ReplicationWorkerOperation, 100000),
-
 		mrfReplicaCh:    make(chan ReplicationWorkerOperation, 100000),
 		mrfWorkerKillCh: make(chan struct{}, failedWorkers),
 		resyncer:        newresyncer(),
@@ -1738,7 +1735,6 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	pool.AddLargeWorkers()
 	pool.ResizeWorkers(workers, 0)
 	pool.ResizeFailedWorkers(failedWorkers)
-	go pool.AddWorker(pool.existingWorkers, nil)
 	go pool.resyncer.PersistToDisk(ctx, o)
 	go pool.processMRF()
 	go pool.persistMRF()
@@ -1965,9 +1961,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 
 	var ch, healCh chan<- ReplicationWorkerOperation
 	switch ri.OpType {
-	case replication.ExistingObjectReplicationType:
-		ch = p.existingWorkers
-	case replication.HealReplicationType:
+	case replication.HealReplicationType, replication.ExistingObjectReplicationType:
 		ch = p.mrfReplicaCh
 		healCh = p.getWorkerCh(ri.Name, ri.Bucket, ri.Size)
 	default:
@@ -2026,9 +2020,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 	}
 	var ch chan<- ReplicationWorkerOperation
 	switch doi.OpType {
-	case replication.ExistingObjectReplicationType:
-		ch = p.existingWorkers
-	case replication.HealReplicationType:
+	case replication.HealReplicationType, replication.ExistingObjectReplicationType:
 		fallthrough
 	default:
 		ch = p.getWorkerCh(doi.Bucket, doi.ObjectName, 0)
