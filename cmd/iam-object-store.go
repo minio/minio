@@ -29,9 +29,9 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -343,6 +343,7 @@ var (
 	policyDBServiceAccountsListKey = "policydb/service-accounts/"
 	policyDBGroupsListKey          = "policydb/groups/"
 
+	// List of directories from which to read iam data into memory.
 	allListKeys = []string{
 		usersListKey,
 		svcAccListKey,
@@ -354,29 +355,29 @@ var (
 		policyDBServiceAccountsListKey,
 		policyDBGroupsListKey,
 	}
+
+	// List of directories to skip: we do not read STS directories for better
+	// performance. STS credentials would be stored in memory when they are
+	// first used.
+	iamLoadSkipListKeySet = set.CreateStringSet(
+		stsListKey,
+		policyDBSTSUsersListKey,
+	)
 )
 
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
-		if item.Err != nil {
-			return nil, item.Err
+	for _, listKey := range allListKeys {
+		if iamLoadSkipListKeySet.Contains(listKey) {
+			continue
 		}
-
-		found := false
-		for _, listKey := range allListKeys {
-			if strings.HasPrefix(item.Item, listKey) {
-				found = true
-				name := strings.TrimPrefix(item.Item, listKey)
-				res[listKey] = append(res[listKey], name)
-				break
+		for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+listKey) {
+			if item.Err != nil {
+				return nil, item.Err
 			}
-		}
-
-		if !found && (item.Item != "format.json") {
-			logger.LogIf(ctx, fmt.Errorf("unknown type of IAM file listed: %v", item.Item))
+			res[listKey] = append(res[listKey], item.Item)
 		}
 	}
 	return res, nil
@@ -452,24 +453,6 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		userName := path.Dir(item)
 		if err := iamOS.loadUser(ctx, userName, svcUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
 			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
-		}
-	}
-
-	bootstrapTraceMsg("loading STS users")
-	stsUsersList := listedConfigItems[stsListKey]
-	for _, item := range stsUsersList {
-		userName := path.Dir(item)
-		if err := iamOS.loadUser(ctx, userName, stsUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-			return fmt.Errorf("unable to load the STS user `%s`: %w", userName, err)
-		}
-	}
-
-	bootstrapTraceMsg("loading STS policy mapping")
-	stsPolicyMappingsList := listedConfigItems[policyDBSTSUsersListKey]
-	for _, item := range stsPolicyMappingsList {
-		stsName := strings.TrimSuffix(item, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", stsName, err)
 		}
 	}
 
