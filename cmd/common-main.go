@@ -150,7 +150,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
+	if globalBrowserRedirectURL != nil {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
@@ -649,6 +649,7 @@ func handleCommonEnvVars() {
 			}
 			globalBrowserRedirectURL = u
 		}
+		globalBrowserRedirect = env.Get(config.EnvBrowserRedirect, config.EnableOn) == config.EnableOn
 	}
 
 	if serverURL := env.Get(config.EnvMinIOServerURL, ""); serverURL != "" {

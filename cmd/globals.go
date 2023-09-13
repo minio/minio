@@ -152,6 +152,9 @@ var (
 	// and it is automatically deduced.
 	globalBrowserRedirectURL *xnet.URL
 
+	// Disable redirect, default is enabled.
+	globalBrowserRedirect bool
+
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
