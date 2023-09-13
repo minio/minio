@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -381,6 +382,32 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 		}
 	}
 	return res, nil
+}
+
+// PurgeExpiredSTS - purge expired STS credentials from object store.
+func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
+	if iamOS.objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	bootstrapTraceMsg("purging expired STS credentials")
+	// Scan STS users on disk and purge expired ones. We do not need to hold a
+	// lock with store.lock() here.
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+stsListKey) {
+		if item.Err != nil {
+			return item.Err
+		}
+		userName := path.Dir(item.Item)
+		// loadUser() will delete expired user during the load - we do not need
+		// to keep the loaded user around in memory, so we reinitialize the map
+		// each time.
+		m := map[string]UserIdentity{}
+		if err := iamOS.loadUser(ctx, userName, stsUser, m); err != nil && err != errNoSuchUser {
+			logger.LogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
+		}
+
+	}
+	return nil
 }
 
 // Assumes cache is locked by caller.

@@ -319,44 +319,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	refreshInterval := sys.iamRefreshInterval
 
-	// Set up polling for expired accounts and credentials purging.
-	switch {
-	case sys.OpenIDConfig.ProviderEnabled():
-		go func() {
-			timer := time.NewTimer(refreshInterval)
-			defer timer.Stop()
-			for {
-				select {
-				case <-timer.C:
-					sys.purgeExpiredCredentialsForExternalSSO(ctx)
-
-					timer.Reset(refreshInterval)
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-	case sys.LDAPConfig.Enabled():
-		go func() {
-			timer := time.NewTimer(refreshInterval)
-			defer timer.Stop()
-
-			for {
-				select {
-				case <-timer.C:
-					sys.purgeExpiredCredentialsForLDAP(ctx)
-					sys.updateGroupMembershipsForLDAP(ctx)
-
-					timer.Reset(refreshInterval)
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-	}
-
-	// Start watching changes to storage.
-	go sys.watch(ctx)
+	go sys.periodicRoutines(ctx, refreshInterval)
 
 	// Load RoleARNs
 	sys.rolesMap = make(map[arn.ARN]string)
@@ -375,6 +338,79 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.printIAMRoles()
 
 	bootstrapTraceMsg("finishing IAM loading")
+}
+
+func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Duration) {
+	// Watch for IAM config changes for iamStorageWatcher.
+	watcher, isWatcher := sys.store.IAMStorageAPI.(iamStorageWatcher)
+	if isWatcher {
+		go func() {
+			ch := watcher.watch(ctx, iamConfigPrefix)
+			for event := range ch {
+				if err := sys.loadWatchedEvent(ctx, event); err != nil {
+					// we simply log errors
+					logger.LogIf(ctx, fmt.Errorf("Failure in loading watch event: %v", err))
+				}
+			}
+		}()
+	}
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Add a random interval of up to 20% of the base interval.
+	randInterval := func() time.Duration {
+		return time.Duration(r.Float64() * float64(baseInterval) * 0.2)
+	}
+
+	var maxDurationSecondsForLog float64 = 5
+	timer := time.NewTimer(baseInterval + randInterval())
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			// Load all IAM items (except STS creds) periodically.
+			refreshStart := time.Now()
+			if err := sys.Load(ctx, false); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
+			} else {
+				took := time.Since(refreshStart).Seconds()
+				if took > maxDurationSecondsForLog {
+					// Log if we took a lot of time to load.
+					logger.Info("IAM refresh took %.2fs", took)
+				}
+			}
+
+			// The following actions are performed about once in 4 times that
+			// IAM is refreshed:
+			if r.Intn(4) == 0 {
+				// Purge expired STS credentials.
+				purgeStart := time.Now()
+				if err := sys.store.PurgeExpiredSTS(ctx); err != nil {
+					logger.LogIf(ctx, fmt.Errorf("Failure in periodic STS purge for IAM (took %.2fs): %v", time.Since(purgeStart).Seconds(), err))
+				} else {
+					took := time.Since(purgeStart).Seconds()
+					if took > maxDurationSecondsForLog {
+						// Log if we took a lot of time to load.
+						logger.Info("IAM expired STS purge took %.2fs", took)
+					}
+				}
+
+				// Poll and remove accounts for those users who were removed
+				// from LDAP/OpenID.
+				if sys.LDAPConfig.Enabled() {
+					sys.purgeExpiredCredentialsForLDAP(ctx)
+					sys.updateGroupMembershipsForLDAP(ctx)
+				}
+				if sys.OpenIDConfig.ProviderEnabled() {
+					sys.purgeExpiredCredentialsForExternalSSO(ctx)
+				}
+			}
+
+			timer.Reset(baseInterval + randInterval())
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
@@ -426,45 +462,6 @@ func (sys *IAMSys) printIAMRoles() {
 // changes.
 func (sys *IAMSys) HasWatcher() bool {
 	return sys.store.HasWatcher()
-}
-
-func (sys *IAMSys) watch(ctx context.Context) {
-	watcher, ok := sys.store.IAMStorageAPI.(iamStorageWatcher)
-	if ok {
-		ch := watcher.watch(ctx, iamConfigPrefix)
-		for event := range ch {
-			if err := sys.loadWatchedEvent(ctx, event); err != nil {
-				// we simply log errors
-				logger.LogIf(ctx, fmt.Errorf("Failure in loading watch event: %v", err))
-			}
-		}
-		return
-	}
-
-	var maxRefreshDurationSecondsForLog float64 = 10
-
-	// Load all items periodically
-	timer := time.NewTimer(sys.iamRefreshInterval)
-	defer timer.Stop()
-	for {
-		select {
-		case <-timer.C:
-			refreshStart := time.Now()
-			if err := sys.Load(ctx, false); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err))
-			} else {
-				took := time.Since(refreshStart).Seconds()
-				if took > maxRefreshDurationSecondsForLog {
-					// Log if we took a lot of time to load.
-					logger.Info("IAM refresh took %.2fs", took)
-				}
-			}
-
-			timer.Reset(sys.iamRefreshInterval)
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 func (sys *IAMSys) loadWatchedEvent(ctx context.Context, event iamWatchEvent) (err error) {
