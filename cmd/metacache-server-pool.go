@@ -38,7 +38,7 @@ func renameAllBucketMetacache(epPath string) error {
 		if typ == os.ModeDir {
 			tmpMetacacheOld := pathutil.Join(epPath, minioMetaTmpDeletedBucket, mustGetUUID())
 			if err := renameAll(pathJoin(epPath, minioMetaBucket, metacachePrefixForID(name, slashSeparator)),
-				tmpMetacacheOld); err != nil && err != errFileNotFound {
+				tmpMetacacheOld, epPath); err != nil && err != errFileNotFound {
 				return fmt.Errorf("unable to rename (%s -> %s) %w",
 					pathJoin(epPath, minioMetaBucket+metacachePrefixForID(minioMetaBucket, slashSeparator)),
 					tmpMetacacheOld,
