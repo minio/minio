@@ -25,7 +25,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )
@@ -633,10 +633,10 @@ func AuthMiddleware(h http.Handler) http.Handler {
 		}
 
 		// For authenticated users apply IAM policy.
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.PrometheusAdminAction,
+			Action:          policy.PrometheusAdminAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
 			Claims:          cred.Claims,

@@ -27,7 +27,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 var (
@@ -72,7 +72,7 @@ var (
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
+	objAPI, cred := validateAdminReq(ctx, w, r, policy.SetTierAction)
 	if objAPI == nil {
 		return
 	}
@@ -128,7 +128,7 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	objAPI, _ := validateAdminReq(ctx, w, r, policy.ListTierAction)
 	if objAPI == nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, cred := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
+	objAPI, cred := validateAdminReq(ctx, w, r, policy.SetTierAction)
 	if objAPI == nil {
 		return
 	}
@@ -190,7 +190,7 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetTierAction)
+	objAPI, _ := validateAdminReq(ctx, w, r, policy.SetTierAction)
 	if objAPI == nil {
 		return
 	}
@@ -219,7 +219,7 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	objAPI, _ := validateAdminReq(ctx, w, r, policy.ListTierAction)
 	if objAPI == nil {
 		return
 	}
@@ -237,7 +237,7 @@ func (api adminAPIHandlers) VerifyTierHandler(w http.ResponseWriter, r *http.Req
 func (api adminAPIHandlers) TierStatsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListTierAction)
+	objAPI, _ := validateAdminReq(ctx, w, r, policy.ListTierAction)
 	if objAPI == nil {
 		return
 	}

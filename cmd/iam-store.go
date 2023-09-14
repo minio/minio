@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -212,12 +212,12 @@ func newMappedPolicy(policy string) MappedPolicy {
 // PolicyDoc represents an IAM policy with some metadata.
 type PolicyDoc struct {
 	Version    int `json:",omitempty"`
-	Policy     iampolicy.Policy
+	Policy     policy.Policy
 	CreateDate time.Time `json:",omitempty"`
 	UpdateDate time.Time `json:",omitempty"`
 }
 
-func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
+func newPolicyDoc(p policy.Policy) PolicyDoc {
 	now := UTCNow().Round(time.Millisecond)
 	return PolicyDoc{
 		Version:    1,
@@ -228,14 +228,14 @@ func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
 }
 
 // defaultPolicyDoc - used to wrap a default policy as PolicyDoc.
-func defaultPolicyDoc(p iampolicy.Policy) PolicyDoc {
+func defaultPolicyDoc(p policy.Policy) PolicyDoc {
 	return PolicyDoc{
 		Version: 1,
 		Policy:  p,
 	}
 }
 
-func (d *PolicyDoc) update(p iampolicy.Policy) {
+func (d *PolicyDoc) update(p policy.Policy) {
 	now := UTCNow().Round(time.Millisecond)
 	d.UpdateDate = now
 	if d.CreateDate.IsZero() {
@@ -248,7 +248,7 @@ func (d *PolicyDoc) update(p iampolicy.Policy) {
 // definitions.
 //
 // The on-disk format of policy definitions has changed (around early 12/2021)
-// from iampolicy.Policy to PolicyDoc. To avoid a migration, loading supports
+// from policy.Policy to PolicyDoc. To avoid a migration, loading supports
 // both the old and the new formats.
 func (d *PolicyDoc) parseJSON(data []byte) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -474,7 +474,7 @@ type iamStorageWatcher interface {
 
 // Set default canned policies only if not already overridden by users.
 func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
-	for _, v := range iampolicy.DefaultPolicies {
+	for _, v := range policy.DefaultPolicies {
 		if _, ok := policies[v.Name]; !ok {
 			policies[v.Name] = defaultPolicyDoc(v.Definition)
 		}
@@ -1192,16 +1192,16 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 
 // GetPolicy - gets the policy definition. Allows specifying multiple comma
 // separated policies - returns a combined policy.
-func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
+func (store *IAMStoreSys) GetPolicy(name string) (policy.Policy, error) {
 	if name == "" {
-		return iampolicy.Policy{}, errInvalidArgument
+		return policy.Policy{}, errInvalidArgument
 	}
 
 	cache := store.rlock()
 	defer store.runlock()
 
 	policies := newMappedPolicy(name).toSlice()
-	var toMerge []iampolicy.Policy
+	var toMerge []policy.Policy
 	for _, policy := range policies {
 		if policy == "" {
 			continue
@@ -1212,7 +1212,7 @@ func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
 		}
 		toMerge = append(toMerge, v.Policy)
 	}
-	return iampolicy.MergePolicies(toMerge...), nil
+	return policy.MergePolicies(toMerge...), nil
 }
 
 // GetPolicyDoc - gets the policy doc which has the policy and some metadata.
@@ -1234,7 +1234,7 @@ func (store *IAMStoreSys) GetPolicyDoc(name string) (r PolicyDoc, err error) {
 }
 
 // SetPolicy - creates a policy with name.
-func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iampolicy.Policy) (time.Time, error) {
+func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy policy.Policy) (time.Time, error) {
 	if policy.IsEmpty() || name == "" {
 		return time.Time{}, errInvalidArgument
 	}
@@ -1264,7 +1264,7 @@ func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iam
 
 // ListPolicies - fetches all policies from storage and updates cache as well.
 // If bucketName is non-empty, returns policies matching the bucket.
-func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (map[string]iampolicy.Policy, error) {
+func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (map[string]policy.Policy, error) {
 	cache := store.lock()
 	defer store.unlock()
 
@@ -1280,7 +1280,7 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 	cache.iamPolicyDocsMap = m
 	cache.updatedAt = time.Now()
 
-	ret := map[string]iampolicy.Policy{}
+	ret := map[string]policy.Policy{}
 	for k, v := range m {
 		if bucketName == "" || v.Policy.MatchResource(bucketName) {
 			ret[k] = v.Policy
@@ -1333,10 +1333,10 @@ func (store *IAMStoreSys) listPolicyDocs(ctx context.Context, bucketName string)
 }
 
 // helper function - does not take locks.
-func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, iampolicy.Policy) {
+func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, policy.Policy) {
 	var policies []string
 	mp := newMappedPolicy(policyName)
-	var toMerge []iampolicy.Policy
+	var toMerge []policy.Policy
 	for _, policy := range mp.toSlice() {
 		if policy == "" {
 			continue
@@ -1350,7 +1350,7 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 			toMerge = append(toMerge, p.Policy)
 		}
 	}
-	return strings.Join(policies, ","), iampolicy.MergePolicies(toMerge...)
+	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
 }
 
 // FilterPolicies - accepts a comma separated list of policy names as a string
@@ -1358,7 +1358,7 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 // bucketName is non-empty, additionally filters policies matching the bucket.
 // The first returned value is the list of currently existing policies, and the
 // second is their combined policy definition.
-func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (string, iampolicy.Policy) {
+func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (string, policy.Policy) {
 	cache := store.rlock()
 	defer store.runlock()
 
@@ -2151,8 +2151,8 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 
 	// sessionPolicy is nil and there is embedded policy attached we remove
 	// embedded policy at that point.
-	if _, ok := m[iampolicy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
-		delete(m, iampolicy.SessionPolicyName)
+	if _, ok := m[policy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
+		delete(m, policy.SessionPolicyName)
 		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
@@ -2171,7 +2171,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		}
 
 		// Overwrite session policy claims.
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
+		m[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	}
 
