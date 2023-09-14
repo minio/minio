@@ -1501,9 +1501,18 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	var uploadedParts []minio.CompletePart
 	// new multipart must not set mtime as it may lead to erroneous cleanups at various intervals.
 	opts.Internal.SourceMTime = time.Time{} // this value is saved properly in CompleteMultipartUpload()
-	nctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-	uploadID, err := c.NewMultipartUpload(nctx, bucket, object, opts)
+	var uploadID string
+	attempts := 1
+	for attempts <= 3 {
+		nctx, cancel := context.WithTimeout(ctx, time.Minute)
+		uploadID, err = c.NewMultipartUpload(nctx, bucket, object, opts)
+		cancel()
+		if err == nil {
+			break
+		}
+		attempts++
+		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
+	}
 	if err != nil {
 		return err
 	}
@@ -1524,7 +1533,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 					fmt.Errorf("trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
 						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
 				attempts++
-				time.Sleep(time.Second)
+				time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 			}
 		}
 	}()
