@@ -142,6 +142,8 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Bucket Notification Metrics
 
+| Name                                          | Description                                                                                                     |
+|:----------------------------------------------|:----------------------------------------------------------------------------------------------------------------|
 | `minio_notify_current_send_in_progress`       | Number of concurrent async Send calls active to all targets.                                                    |
 | `minio_notify_target_queue_length`            | Number of unsent notifications in queue for target.                                                             |
 
@@ -234,7 +236,6 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 # Bucket Metrics
 
-
 MinIO collects the following metrics at the bucket level.
 Each metric includes the ``bucket`` label to identify the corresponding bucket.
 Metrics may include one or more additional labels, such as the server that calculated that metric.
@@ -260,20 +261,20 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 These metrics only populate on deployments with [Bucket Replication](https://min.io/docs/minio/linux/administration/bucket-replication.html) or [Batch Replication](https://min.io/docs/minio/linux/administration/batch-framework.html) configurations.
 For deployments with [Site Replication](https://min.io/docs/minio/linux/operations/install-deploy-manage/multi-site-replication.html) configured, select metrics populate under the [Cluster Metrics](#cluster-metrics) endpoint.
 
-| Name                                              | Description                                                                     |
-|:--------------------------------------------------|:--------------------------------------------------------------------------------|
-| `minio_bucket_replication_last_minute_failed_bytes`           | Total number of bytes failed at least once to replicate in the last full minute.                        |
-| `minio_bucket_replication_last_minute_failed_count`           | Total number of objects which failed replication in the last full minute.                               |
-| `minio_bucket_replication_last_hour_failed_bytes` | Total number of bytes failed at least once to replicate in the last full hour.                          |
-| `minio_bucket_replication_last_hour_failed_count` | Total number of objects which failed replication in the last full hour.                                 |
-| `minio_bucket_replication_total_failed_bytes`     | Total number of bytes failed at least once to replicate since server start.                            |
-| `minio_bucket_replication_total_failed_count`     | Total number of objects which failed replication since server start.                                   |
-| `minio_bucket_replication_latency_ms`             | Replication latency in milliseconds.                                            |
-| `minio_bucket_replication_received_bytes`         | Total number of bytes replicated to this bucket from another source bucket.     |
-| `minio_bucket_replication_received_count`         | Total number of objects received by this bucket from another source bucket.     |
-| `minio_bucket_replication_sent_bytes`             | Total number of bytes replicated to the target bucket. |                         |
-| `minio_bucket_replication_sent_count`             | Total number of objects replicated to the target bucket.  |                        |
-| `minio_bucket_replication_credential_errors`      | Total number of replication credential errors since server start                |
+| Name                                                | Description                                                                      |
+|:----------------------------------------------------|:---------------------------------------------------------------------------------|
+| `minio_bucket_replication_last_minute_failed_bytes` | Total number of bytes failed at least once to replicate in the last full minute. |
+| `minio_bucket_replication_last_minute_failed_count` | Total number of objects which failed replication in the last full minute.        |
+| `minio_bucket_replication_last_hour_failed_bytes`   | Total number of bytes failed at least once to replicate in the last full hour.   |
+| `minio_bucket_replication_last_hour_failed_count`   | Total number of objects which failed replication in the last full hour.          |
+| `minio_bucket_replication_total_failed_bytes`       | Total number of bytes failed at least once to replicate since server start.      |
+| `minio_bucket_replication_total_failed_count`       | Total number of objects which failed replication since server start.             |
+| `minio_bucket_replication_latency_ms`               | Replication latency in milliseconds.                                             |
+| `minio_bucket_replication_received_bytes`           | Total number of bytes replicated to this bucket from another source bucket.      |
+| `minio_bucket_replication_received_count`           | Total number of objects received by this bucket from another source bucket.      |
+| `minio_bucket_replication_sent_bytes`               | Total number of bytes replicated to the target bucket.                           |
+| `minio_bucket_replication_sent_count`               | Total number of objects replicated to the target bucket.                         |
+| `minio_bucket_replication_credential_errors`        | Total number of replication credential errors since server start                 |
 
 ## Traffic Metrics
 
