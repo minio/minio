@@ -728,7 +728,7 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 // DecryptedSize returns the size of the object after decryption in bytes.
 // It returns an error if the object is not encrypted or marked as encrypted
 // but has an invalid size.
-func (o *ObjectInfo) DecryptedSize() (int64, error) {
+func (o ObjectInfo) DecryptedSize() (int64, error) {
 	if _, ok := crypto.IsEncrypted(o.UserDefined); !ok {
 		return 0, errors.New("Cannot compute decrypted size of an unencrypted object")
 	}

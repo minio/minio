@@ -109,6 +109,9 @@ type ObjectInfo struct {
 	// Total object size.
 	Size int64
 
+	// Actual size is the real size of the object uploaded by client.
+	ActualSize *int64
+
 	// IsDir indicates if the object is prefix.
 	IsDir bool
 
@@ -282,9 +285,44 @@ func (o ObjectInfo) tierStats() tierStats {
 	return ts
 }
 
+// ToObjectInfo converts a replication object info to a partial ObjectInfo
+// do not rely on this function to give you correct ObjectInfo, this
+// function is merely and optimization.
+func (ri ReplicateObjectInfo) ToObjectInfo() ObjectInfo {
+	return ObjectInfo{
+		Name:                       ri.Name,
+		Bucket:                     ri.Bucket,
+		VersionID:                  ri.VersionID,
+		ModTime:                    ri.ModTime,
+		UserTags:                   ri.UserTags,
+		Size:                       ri.Size,
+		ActualSize:                 &ri.ActualSize,
+		ReplicationStatus:          ri.ReplicationStatus,
+		ReplicationStatusInternal:  ri.ReplicationStatusInternal,
+		VersionPurgeStatus:         ri.VersionPurgeStatus,
+		VersionPurgeStatusInternal: ri.VersionPurgeStatusInternal,
+		DeleteMarker:               true,
+		UserDefined:                map[string]string{},
+	}
+}
+
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
-	ObjectInfo
+	Name                       string
+	Bucket                     string
+	VersionID                  string
+	Size                       int64
+	ActualSize                 int64
+	ModTime                    time.Time
+	UserTags                   string
+	SSEC                       bool
+	ReplicationStatus          replication.StatusType
+	ReplicationStatusInternal  string
+	VersionPurgeStatusInternal string
+	VersionPurgeStatus         VersionPurgeStatusType
+	ReplicationState           ReplicationState
+	DeleteMarker               bool
+
 	OpType               replication.Type
 	EventType            string
 	RetryCount           uint32
@@ -529,7 +567,7 @@ type PartInfo struct {
 	// Size in bytes of the part.
 	Size int64
 
-	// Decompressed Size.
+	// Real size of the object uploaded by client.
 	ActualSize int64
 
 	// Checksum values
