@@ -61,13 +61,19 @@ const (
 	EnvMinIOCallhomeEnable    = "MINIO_CALLHOME_ENABLE"
 	EnvMinIOCallhomeFrequency = "MINIO_CALLHOME_FREQUENCY"
 
-	EnvMinIOServerURL         = "MINIO_SERVER_URL"
-	EnvBrowserRedirect        = "MINIO_BROWSER_REDIRECT" // On by default
-	EnvBrowserRedirectURL     = "MINIO_BROWSER_REDIRECT_URL"
-	EnvRootDriveThresholdSize = "MINIO_ROOTDRIVE_THRESHOLD_SIZE"
-	EnvRootDiskThresholdSize  = "MINIO_ROOTDISK_THRESHOLD_SIZE" // Deprecated Sep 2023
-	EnvBrowserLoginAnimation  = "MINIO_BROWSER_LOGIN_ANIMATION"
-	EnvBrowserSessionDuration = "MINIO_BROWSER_SESSION_DURATION"
+	EnvMinIOServerURL             = "MINIO_SERVER_URL"
+	EnvBrowserRedirect            = "MINIO_BROWSER_REDIRECT" // On by default
+	EnvBrowserRedirectURL         = "MINIO_BROWSER_REDIRECT_URL"
+	EnvRootDriveThresholdSize     = "MINIO_ROOTDRIVE_THRESHOLD_SIZE"
+	EnvRootDiskThresholdSize      = "MINIO_ROOTDISK_THRESHOLD_SIZE" // Deprecated Sep 2023
+	EnvBrowserLoginAnimation      = "MINIO_BROWSER_LOGIN_ANIMATION"
+	EnvBrowserSessionDuration     = "MINIO_BROWSER_SESSION_DURATION"
+	EnvMinIOLogQueryURL           = "MINIO_LOG_QUERY_URL"
+	EnvMinIOLogQueryAuthToken     = "MINIO_LOG_QUERY_AUTH_TOKEN"
+	EnvMinIOPrometheusURL         = "MINIO_PROMETHEUS_URL"
+	EnvMinIOPrometheusJobID       = "MINIO_PROMETHEUS_JOB_ID"
+	EnvMinIOPrometheusExtraLabels = "MINIO_PROMETHEUS_EXTRA_LABELS"
+	EnvMinIOPrometheusAuthToken   = "MINIO_PROMETHEUS_AUTH_TOKEN"
 
 	EnvUpdate = "MINIO_UPDATE"
 
