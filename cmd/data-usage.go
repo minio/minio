@@ -42,6 +42,7 @@ const (
 
 // storeDataUsageInBackend will store all objects sent on the gui channel until closed.
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan DataUsageInfo) {
+	attempts := 1
 	for dataUsageInfo := range dui {
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
@@ -49,9 +50,14 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			logger.LogIf(ctx, err)
 			continue
 		}
+		if attempts > 10 {
+			saveConfig(ctx, objAPI, dataUsageObjNamePath+".bkp", dataUsageJSON) // Save a backup every 10th update.
+			attempts = 1
+		}
 		if err = saveConfig(ctx, objAPI, dataUsageObjNamePath, dataUsageJSON); err != nil {
 			logger.LogIf(ctx, err)
 		}
+		attempts++
 	}
 }
 
@@ -94,10 +100,13 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
 	buf, err := readConfig(ctx, objAPI, dataUsageObjNamePath)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			return DataUsageInfo{}, nil
+		buf, err = readConfig(ctx, objAPI, dataUsageObjNamePath+".bkp")
+		if err != nil {
+			if errors.Is(err, errConfigNotFound) {
+				return DataUsageInfo{}, nil
+			}
+			return DataUsageInfo{}, toObjectErr(err, minioMetaBucket, dataUsageObjNamePath)
 		}
-		return DataUsageInfo{}, toObjectErr(err, minioMetaBucket, dataUsageObjNamePath)
 	}
 
 	var dataUsageInfo DataUsageInfo
