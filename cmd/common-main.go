@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -54,7 +53,6 @@ import (
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
@@ -71,10 +69,7 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
-var (
-	shardDiskTimeDelta     time.Duration
-	defaultAWSCredProvider []credentials.Provider
-)
+var shardDiskTimeDelta time.Duration
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -111,14 +106,6 @@ func init() {
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
-
-	defaultAWSCredProvider = []credentials.Provider{
-		&credentials.IAM{
-			Client: &http.Client{
-				Transport: NewHTTPTransport(),
-			},
-		},
-	}
 
 	var err error
 	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
