@@ -49,7 +49,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/env"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/minio/pkg/v2/workers"
 	"gopkg.in/yaml.v2"
 )
@@ -1258,7 +1258,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListBatchJobsAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ListBatchJobsAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1308,7 +1308,7 @@ var errNoSuchJob = errors.New("no such job")
 func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DescribeBatchJobAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DescribeBatchJobAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1343,7 +1343,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, creds := validateAdminReq(ctx, w, r, iampolicy.StartBatchJobAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, policy.StartBatchJobAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1397,7 +1397,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.CancelBatchJobAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.CancelBatchJobAction)
 	if objectAPI == nil {
 		return
 	}

@@ -47,7 +47,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 	etcd "go.etcd.io/etcd/client/v3"
 )
 
@@ -536,7 +536,7 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 		return errServerNotInitialized
 	}
 
-	for _, v := range iampolicy.DefaultPolicies {
+	for _, v := range policy.DefaultPolicies {
 		if v.Name == policyName {
 			if err := checkConfig(ctx, globalObjectAPI, getPolicyDocPath(policyName)); err != nil && err == errConfigNotFound {
 				return fmt.Errorf("inbuilt policy `%s` not allowed to be deleted", policyName)
@@ -589,7 +589,7 @@ func (sys *IAMSys) InfoPolicy(policyName string) (*madmin.PolicyInfo, error) {
 }
 
 // ListPolicies - lists all canned policies.
-func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[string]iampolicy.Policy, error) {
+func (sys *IAMSys) ListPolicies(ctx context.Context, bucketName string) (map[string]policy.Policy, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -607,7 +607,7 @@ func (sys *IAMSys) ListPolicyDocs(ctx context.Context, bucketName string) (map[s
 }
 
 // SetPolicy - sets a new named policy.
-func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy.Policy) (time.Time, error) {
+func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p policy.Policy) (time.Time, error) {
 	if !sys.Initialized() {
 		return time.Time{}, errServerNotInitialized
 	}
@@ -922,7 +922,7 @@ func (sys *IAMSys) notifyForServiceAccount(ctx context.Context, accessKey string
 }
 
 type newServiceAccountOpts struct {
-	sessionPolicy              *iampolicy.Policy
+	sessionPolicy              *policy.Policy
 	accessKey                  string
 	secretKey                  string
 	name, description          string
@@ -969,7 +969,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	m[parentClaim] = parentUser
 
 	if len(policyBuf) > 0 {
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
+		m[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	} else {
 		m[iamPolicyClaimNameSA()] = inheritedPolicyType
@@ -1021,7 +1021,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 }
 
 type updateServiceAccountOpts struct {
-	sessionPolicy     *iampolicy.Policy
+	sessionPolicy     *policy.Policy
 	secretKey         string
 	status            string
 	name, description string
@@ -1072,7 +1072,7 @@ func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]Us
 }
 
 // GetServiceAccount - wrapper method to get information about a service account
-func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
+func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *policy.Policy, error) {
 	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
 	if err != nil {
 		return auth.Credentials{}, nil, err
@@ -1083,7 +1083,7 @@ func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (aut
 	return sa.Credentials, embeddedPolicy, nil
 }
 
-func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (UserIdentity, *policy.Policy, error) {
 	sa, jwtClaims, err := sys.getAccountWithClaims(ctx, accessKey)
 	if err != nil {
 		if err == errNoSuchAccount {
@@ -1095,16 +1095,16 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (Use
 		return UserIdentity{}, nil, errNoSuchServiceAccount
 	}
 
-	var embeddedPolicy *iampolicy.Policy
+	var embeddedPolicy *policy.Policy
 
 	pt, ptok := jwtClaims.Lookup(iamPolicyClaimNameSA())
-	sp, spok := jwtClaims.Lookup(iampolicy.SessionPolicyName)
+	sp, spok := jwtClaims.Lookup(policy.SessionPolicyName)
 	if ptok && spok && pt == embeddedPolicyType {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			return UserIdentity{}, nil, err
 		}
-		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		embeddedPolicy, err = policy.ParseConfig(bytes.NewReader(policyBytes))
 		if err != nil {
 			return UserIdentity{}, nil, err
 		}
@@ -1114,7 +1114,7 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (Use
 }
 
 // GetTemporaryAccount - wrapper method to get information about a temporary account
-func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (auth.Credentials, *iampolicy.Policy, error) {
+func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (auth.Credentials, *policy.Policy, error) {
 	tmpAcc, embeddedPolicy, err := sys.getTempAccount(ctx, accessKey)
 	if err != nil {
 		return auth.Credentials{}, nil, err
@@ -1125,7 +1125,7 @@ func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (a
 	return tmpAcc.Credentials, embeddedPolicy, nil
 }
 
-func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserIdentity, *iampolicy.Policy, error) {
+func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserIdentity, *policy.Policy, error) {
 	tmpAcc, claims, err := sys.getAccountWithClaims(ctx, accessKey)
 	if err != nil {
 		if err == errNoSuchAccount {
@@ -1137,15 +1137,15 @@ func (sys *IAMSys) getTempAccount(ctx context.Context, accessKey string) (UserId
 		return UserIdentity{}, nil, errNoSuchTempAccount
 	}
 
-	var embeddedPolicy *iampolicy.Policy
+	var embeddedPolicy *policy.Policy
 
-	sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
+	sp, spok := claims.Lookup(policy.SessionPolicyName)
 	if spok {
 		policyBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			return UserIdentity{}, nil, err
 		}
-		embeddedPolicy, err = iampolicy.ParseConfig(bytes.NewReader(policyBytes))
+		embeddedPolicy, err = policy.ParseConfig(bytes.NewReader(policyBytes))
 		if err != nil {
 			return UserIdentity{}, nil, err
 		}
@@ -1723,11 +1723,11 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]s
 	return sys.store.PolicyDBGet(name, isGroup, groups...)
 }
 
-const sessionPolicyNameExtracted = iampolicy.SessionPolicyName + "-extracted"
+const sessionPolicyNameExtracted = policy.SessionPolicyName + "-extracted"
 
 // IsAllowedServiceAccount - checks if the given service account is allowed to perform
 // actions. The permission of the parent user is checked first
-func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser string) bool {
+func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) bool {
 	// Verify if the parent claim matches the parentUser.
 	p, ok := args.Claims[parentClaim]
 	if ok {
@@ -1778,7 +1778,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		// Finally, if there is no parent policy, check if a policy claim is
 		// present.
 		if len(svcPolicies) == 0 {
-			policySet, _ := iampolicy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
+			policySet, _ := policy.GetPoliciesFromClaims(args.Claims, iamPolicyClaimNameOpenID())
 			svcPolicies = policySet.ToSlice()
 		}
 	}
@@ -1788,7 +1788,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return false
 	}
 
-	var combinedPolicy iampolicy.Policy
+	var combinedPolicy policy.Policy
 	// Policies were found, evaluate all of them.
 	if !isOwnerDerived {
 		availablePoliciesStr, c := sys.store.FilterPolicies(strings.Join(svcPolicies, ","), "")
@@ -1831,7 +1831,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 	}
 
 	// Check if policy is parseable.
-	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	subPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 	if err != nil {
 		// Log any error in input session policy config.
 		logger.LogIf(GlobalContext, err)
@@ -1853,7 +1853,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 // IsAllowedSTS is meant for STS based temporary credentials,
 // which implements claims validation and verification other than
 // applying policies.
-func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
+func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 	// 1. Determine mapped policies
 
 	isOwnerDerived := parentUser == globalActiveCred.AccessKey
@@ -1905,7 +1905,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 
 	// 2. Combine the mapped policies into a single combined policy.
 
-	var combinedPolicy iampolicy.Policy
+	var combinedPolicy policy.Policy
 	if !isOwnerDerived {
 		var err error
 		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
@@ -1937,7 +1937,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	return isOwnerDerived || combinedPolicy.IsAllowed(args)
 }
 
-func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAllowed bool) {
+func isAllowedBySessionPolicy(args policy.Args) (hasSessionPolicy bool, isAllowed bool) {
 	hasSessionPolicy = false
 	isAllowed = false
 
@@ -1957,7 +1957,7 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 	}
 
 	// Check if policy is parseable.
-	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	subPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 	if err != nil {
 		// Log any error in input session policy config.
 		logger.LogIf(GlobalContext, err)
@@ -1974,13 +1974,13 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 }
 
 // GetCombinedPolicy returns a combined policy combining all policies
-func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
+func (sys *IAMSys) GetCombinedPolicy(policies ...string) policy.Policy {
 	_, policy := sys.store.FilterPolicies(strings.Join(policies, ","), "")
 	return policy
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
-func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
+func (sys *IAMSys) IsAllowed(args policy.Args) bool {
 	// If opa is configured, use OPA always.
 	if authz := newGlobalAuthZPluginFn(); authz != nil {
 		ok, err := authz.IsAllowed(args)

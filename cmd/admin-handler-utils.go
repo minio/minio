@@ -27,14 +27,14 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // validateAdminReq will validate request against and return whether it is allowed.
 // If any of the supplied actions are allowed it will be successful.
 // If nil ObjectLayer is returned, the operation is not permitted.
 // When nil ObjectLayer has been returned an error has always been sent to w.
-func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, actions ...iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
+func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request, actions ...policy.AdminAction) (ObjectLayer, auth.Credentials) {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil || globalNotificationSys == nil {
@@ -78,7 +78,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 
 	var apiErr APIError
 	switch e := err.(type) {
-	case iampolicy.Error:
+	case policy.Error:
 		apiErr = APIError{
 			Code:           "XMinioMalformedIAMPolicy",
 			Description:    e.Error(),

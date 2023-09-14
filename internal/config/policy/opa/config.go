@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // Env IAM OPA URL
@@ -162,7 +162,7 @@ func New(args Args) *Opa {
 }
 
 // IsAllowed - checks given policy args is allowed to continue the REST API.
-func (o *Opa) IsAllowed(args iampolicy.Args) (bool, error) {
+func (o *Opa) IsAllowed(args policy.Args) (bool, error) {
 	if o == nil {
 		return false, nil
 	}
