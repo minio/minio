@@ -481,6 +481,16 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 	}
 }
 
+// PurgeExpiredSTS - purges expired STS credentials.
+func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
+	iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore)
+	if !ok {
+		// No purging is done for non-object storage.
+		return nil
+	}
+	return iamOS.PurgeExpiredSTS(ctx)
+}
+
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
@@ -536,13 +546,13 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 
 		bootstrapTraceMsg("loading STS users")
 		// load STS temp users
-		if err := store.loadUsers(ctx, stsUser, newCache.iamUsersMap); err != nil {
+		if err := store.loadUsers(ctx, stsUser, newCache.iamSTSAccountsMap); err != nil {
 			return err
 		}
 
 		bootstrapTraceMsg("loading STS policy mapping")
 		// load STS policy mappings
-		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamUserPolicyMap); err != nil {
+		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamSTSPolicyMap); err != nil {
 			return err
 		}
 
