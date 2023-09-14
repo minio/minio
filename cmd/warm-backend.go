@@ -117,7 +117,7 @@ type tierPermErr struct {
 }
 
 func (te tierPermErr) Error() string {
-	return fmt.Sprintf("failed to perform %s %v", te.Op, te.Err)
+	return fmt.Sprintf("failed to perform %s: %v", te.Op, te.Err)
 }
 
 func errIsTierPermError(err error) bool {
