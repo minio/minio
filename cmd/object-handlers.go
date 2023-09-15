@@ -1182,7 +1182,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
-		reader = etag.NewReader(reader, nil)
+		reader = etag.NewReader(ctx, reader, nil, false, nil)
 		wantEncryption := crypto.Requested(r.Header)
 		s2c, cb := newS2CompressReader(reader, actualSize, wantEncryption)
 		dstOpts.IndexCB = cb
@@ -1195,7 +1195,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize)
+	srcInfo.Reader, err = hash.NewReader(ctx, reader, length, "", "", actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1316,7 +1316,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// do not try to verify encrypted content
-		srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", actualSize)
+		srcInfo.Reader, err = hash.NewReader(ctx, reader, targetSize, "", "", actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -1737,7 +1737,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		actualReader, err := hash.NewReader(ctx, reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -1757,8 +1757,23 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
 	}
-
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+	var hashReader *hash.Reader
+	// SSE-KVM and SSE-C if not request Content-Md5. Simple use md5.Sum(uuid) as etag.
+	if !etag.ContentMD5Requested(r.Header) && (crypto.S3KMS.IsRequested(r.Header) || crypto.SSEC.IsRequested(r.Header)) {
+		hashReader, err = hash.NewReaderWithOpts(ctx, reader, hash.Options{
+			Size:       size,
+			MD5Hex:     md5hex,
+			SHA256Hex:  sha256hex,
+			ActualSize: actualSize,
+			DisableMD5: false,
+			ContentMD5: hash.ContentMD5Opt{
+				NotRequest: true,
+				UUID:       mustGetUUIDBytes(),
+			},
+		})
+	} else {
+		hashReader, err = hash.NewReader(ctx, reader, size, md5hex, sha256hex, actualSize)
+	}
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1856,7 +1871,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
+		hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -2075,7 +2090,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	hreader, err := hash.NewReader(reader, size, md5hex, sha256hex, size)
+	hreader, err := hash.NewReader(ctx, reader, size, md5hex, sha256hex, size)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -2126,7 +2141,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 			metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-			actualReader, err := hash.NewReader(reader, size, "", "", actualSize)
+			actualReader, err := hash.NewReader(ctx, reader, size, "", "", actualSize)
 			if err != nil {
 				return err
 			}
@@ -2140,7 +2155,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			size = -1 // Since compressed size is un-predictable.
 		}
 
-		hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
+		hashReader, err := hash.NewReader(ctx, reader, size, "", "", actualSize)
 		if err != nil {
 			return err
 		}
@@ -2212,7 +2227,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			}
 
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
+			hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
 			if err != nil {
 				return err
 			}

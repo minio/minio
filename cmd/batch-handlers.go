@@ -167,7 +167,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	}
 	defer rd.Close()
 
-	hr, err := hash.NewReader(rd, objInfo.Size, "", "", objInfo.Size)
+	hr, err := hash.NewReader(ctx, rd, objInfo.Size, "", "", objInfo.Size)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 		}
 		defer rd.Close()
 
-		hr, err = hash.NewReader(io.LimitReader(rd, objInfo.Size), objInfo.Size, "", "", objInfo.Size)
+		hr, err = hash.NewReader(ctx, io.LimitReader(rd, objInfo.Size), objInfo.Size, "", "", objInfo.Size)
 		if err != nil {
 			return err
 		}

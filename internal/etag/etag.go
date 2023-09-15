@@ -263,6 +263,12 @@ func FromContentMD5(h http.Header) (ETag, error) {
 	return ETag(b), nil
 }
 
+// ContentMD5Requested - for http.request.header is not request Content-Md5
+func ContentMD5Requested(h http.Header) bool {
+	_, ok := h["Content-Md5"]
+	return ok
+}
+
 // Multipart computes an S3 multipart ETag given a list of
 // S3 singlepart ETags. It returns nil if the list of
 // ETags is empty.

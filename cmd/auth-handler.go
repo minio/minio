@@ -567,7 +567,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
-	reader, err := hash.NewReader(r.Body, -1, clientETag.String(), hex.EncodeToString(contentSHA256), -1)
+	reader, err := hash.NewReader(ctx, r.Body, -1, clientETag.String(), hex.EncodeToString(contentSHA256), -1)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}

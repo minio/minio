@@ -342,6 +342,15 @@ func mustGetUUID() string {
 	return u.String()
 }
 
+// mustGetUUIDBytes - get a random UUID as 16 bytes unencoded.
+func mustGetUUIDBytes() []byte {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
+	}
+	return u[:]
+}
+
 // Create an s3 compatible MD5sum for complete multipart transaction.
 func getCompleteMultipartMD5(parts []CompletePart) string {
 	var finalMD5Bytes []byte

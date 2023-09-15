@@ -734,7 +734,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	defer cLock.Unlock(lkctx)
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, "", "", r.ActualSize())
+	hashReader, err := hash.NewReader(ctx, pipeReader, size, "", "", r.ActualSize())
 	if err != nil {
 		return
 	}
@@ -795,7 +795,7 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 	if st == CommitComplete || st.String() == "" {
 		return
 	}
-	hashReader, err := hash.NewReader(cReader, oi.Size, "", "", oi.Size)
+	hashReader, err := hash.NewReader(ctx, cReader, oi.Size, "", "", oi.Size)
 	if err != nil {
 		return
 	}
@@ -1059,7 +1059,7 @@ func (c *cacheObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	info = PartInfo{}
 	// Initialize pipe to stream data to backend
 	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, "", "", data.ActualSize())
+	hashReader, err := hash.NewReader(ctx, pipeReader, size, "", "", data.ActualSize())
 	if err != nil {
 		return
 	}
