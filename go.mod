@@ -27,6 +27,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.5
 	github.com/go-openapi/loads v0.21.2
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/gobwas/ws v1.2.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/uuid v1.3.1
@@ -52,6 +53,7 @@ require (
 	github.com/minio/madmin-go/v3 v3.0.18
 	github.com/minio/minio-go/v7 v7.0.63
 	github.com/minio/mux v1.9.0
+	github.com/minio/pkg v1.7.5
 	github.com/minio/pkg/v2 v2.0.1
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
@@ -73,6 +75,7 @@ require (
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0
 	github.com/prometheus/procfs v0.11.1
+	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rs/cors v1.10.0
@@ -137,6 +140,8 @@ require (
 	github.com/go-openapi/strfmt v0.21.7 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/go-openapi/validate v0.22.1 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -183,7 +188,6 @@ require (
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20230907224855-9dcef8825fae // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/pkg v1.7.5 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
