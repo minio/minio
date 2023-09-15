@@ -51,11 +51,7 @@ type MuxClient struct {
 	outBlock         chan struct{}
 }
 
-type serverResponse struct {
-	Msg []byte
-	Err *RemoteErr
-}
-
+// Response is a response from the server.
 type Response struct {
 	Msg []byte
 	Err error
@@ -140,7 +136,7 @@ func (m *MuxClient) sendLocked(msg message) error {
 }
 
 // RequestStateless will send a single payload request and stream back results.
-// req may not be read/writen to after calling.
+// req may not be read/written to after calling.
 // TODO: Probably unexport this.
 func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
 	if m.init {
@@ -251,7 +247,7 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 						// Next loop will catch it.
 					}
 				case <-pingTimer:
-					if time.Now().Sub(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
+					if time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
 						m.respMu.Lock()
 						defer m.respMu.Unlock() // We always return in this path.
 						if !m.closed {
@@ -369,7 +365,7 @@ func (m *MuxClient) checkSeq(seq uint32) (ok bool) {
 // Should return whether the next call would block.
 func (m *MuxClient) response(seq uint32, r Response) {
 	if debugPrint {
-		fmt.Printf("mux %d: got msg seqid %d, payload lenght: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
+		fmt.Printf("mux %d: got msg seqid %d, payload length: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
 	}
 	if !m.checkSeq(seq) {
 		PutByteBuffer(r.Msg)

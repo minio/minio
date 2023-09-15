@@ -151,6 +151,9 @@ func TestSingleRoundtrip(t *testing.T) {
 	start = time.Now()
 	resp, err = remoteConn.Request(context.Background(), handlerTest2, []byte(testPayload))
 	t.Log("Roundtrip:", time.Since(start))
+	if len(resp) != 0 {
+		t.Errorf("want nil, got %q", string(resp))
+	}
 	if err != RemoteErr(testPayload) {
 		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
 	}
@@ -194,11 +197,13 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	})
 	// Handles incoming requests, returns a response
 	handler1 := func(req *testRequest) (resp *testResponse, err *RemoteErr) {
-		return &testResponse{
+		resp = h1.NewResponse()
+		*resp = testResponse{
 			OrgNum:    req.Num,
 			OrgString: req.String,
 			Embedded:  *req,
-		}, nil
+		}
+		return resp, nil
 	}
 	// Return error
 	h2 := NewSingleRTHandler[*testRequest, *testResponse](handlerTest2, func() *testRequest {
@@ -249,6 +254,9 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	t.Log("Roundtrip:", time.Since(start))
 	if err != RemoteErr(testPayload) {
 		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+	}
+	if resp != nil {
+		t.Errorf("want nil, got %q", resp)
 	}
 	t.Log("Roundtrip:", time.Since(start))
 }
@@ -428,24 +436,20 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	register := func(manager *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
-				select {
-				case <-ctx.Done():
-					serverCanceled <- struct{}{}
-					t.Log(GetCaller(ctx).Name, "Server Context canceled")
-					return nil
-				}
+				<-ctx.Done()
+				serverCanceled <- struct{}{}
+				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  0,
 		}))
 		errFatal(manager.RegisterStreamingHandler(handlerTest2, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
-				select {
-				case <-ctx.Done():
-					serverCanceled <- struct{}{}
-					t.Log(GetCaller(ctx).Name, "Server Context canceled")
-					return nil
-				}
+				<-ctx.Done()
+				serverCanceled <- struct{}{}
+				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				return nil
 			},
 			OutCapacity: 1,
 			InCapacity:  1,

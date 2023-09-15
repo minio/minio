@@ -133,6 +133,7 @@ const (
 	MaxDeadline = time.Duration(math.MaxUint32) * time.Millisecond
 )
 
+// ContextDialer is a dialer that can be used to dial a remote.
 type ContextDialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
@@ -210,6 +211,7 @@ func (c *Connection) shouldConnect() bool {
 	return h0 < h1
 }
 
+// NewMuxClient returns a mux client for manual use.
 func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
 	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
 	if dl, ok := ctx.Deadline(); ok {
@@ -245,14 +247,15 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 	return client.roundtrip(h, req)
 }
 
-var ErrDone = errors.New("done for now")
-
-var ErrRemoteRestart = errors.New("remote restarted")
-
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
 var ErrDisconnected = errors.New("remote disconnected")
 
 /*
+var ErrDone = errors.New("done for now")
+
+var ErrRemoteRestart = errors.New("remote restarted")
+
+
 // Stateless connects to the remote handler and return all packets sent back.
 // If the remote is restarted will return ErrRemoteRestart.
 // If nil will be returned remote call sent EOF or ErrDone is returned by the callback.
@@ -361,7 +364,7 @@ func (c *Connection) connect() {
 		}
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
-		toDial = toDial + RoutePath
+		toDial += RoutePath
 
 		dialer := ws.DefaultDialer
 		dialer.ReadBufferSize = readBufferSize
@@ -743,13 +746,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 						Err: RemoteErr(m.Payload),
 					})
 					PutByteBuffer(m.Payload)
-				} else {
-					if m.Payload != nil {
-						v.response(m.Seq, Response{
-							Msg: m.Payload,
-							Err: nil,
-						})
-					}
+				} else if m.Payload != nil {
+					v.response(m.Seq, Response{
+						Msg: m.Payload,
+						Err: nil,
+					})
 				}
 				if m.Flags&FlagEOF != 0 {
 					v.close()
@@ -1035,6 +1036,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			case <-ctx.Done():
 				c.connChange.L.Unlock()
 				return
+			default:
 			}
 		}
 		c.connChange.L.Unlock()
@@ -1070,6 +1072,7 @@ func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 	}
 }
 
+// Stats returns the current connection stats.
 func (c *Connection) Stats() ConnectionStats {
 	return ConnectionStats{
 		IncomingStreams: c.inStream.Size(),

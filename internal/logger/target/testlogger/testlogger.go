@@ -45,6 +45,7 @@ const (
 	fatalMessage
 )
 
+// T is the test logger.
 var T = &testLogger{}
 
 func init() {
@@ -136,7 +137,7 @@ func (t *testLogger) Send(ctx context.Context, entry interface{}) error {
 			logf = func(format string, args ...any) {
 				fmt.Fprintf(os.Stderr, format+"\n", args...)
 			}
-			os.Exit(1)
+			defer os.Exit(1)
 		default:
 			logf = func(format string, args ...any) {
 				fmt.Fprintf(os.Stdout, format+"\n", args...)

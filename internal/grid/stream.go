@@ -42,6 +42,7 @@ type Stream struct {
 	ctx context.Context
 }
 
+// Send a payload to the remote server.
 func (s *Stream) Send(b []byte) error {
 	if s.Requests == nil {
 		return errors.New("stream does not accept requests")

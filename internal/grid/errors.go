@@ -23,9 +23,14 @@ import (
 )
 
 var (
-	ErrUnknownHandler       = errors.New("unknown mux handler")
+	// ErrUnknownHandler is returned when an unknown handler is requested.
+	ErrUnknownHandler = errors.New("unknown mux handler")
+
+	// ErrHandlerAlreadyExists is returned when a handler is already registered.
 	ErrHandlerAlreadyExists = errors.New("mux handler already exists")
-	ErrIncorrectSequence    = errors.New("out-of-sequence item received")
+
+	// ErrIncorrectSequence is returned when an out-of-sequence item is received.
+	ErrIncorrectSequence = errors.New("out-of-sequence item received")
 )
 
 // ErrResponse is a remote error response.

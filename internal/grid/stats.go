@@ -17,6 +17,7 @@
 
 package grid
 
+// ConnectionStats contains connection statistics.
 type ConnectionStats struct {
 	OutgoingStreams int
 	IncomingStreams int

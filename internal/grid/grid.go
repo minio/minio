@@ -28,11 +28,17 @@ import (
 )
 
 const (
-	debugPrint = true
+	debugPrint        = true
+	minBufferSize     = 1 << 10
+	defaultBufferSize = 4 << 10
+	maxBufferSize     = 64 << 10
 )
 
 var internalByteBuffer = sync.Pool{
-	New: func() any { return make([]byte, 0, 4096) },
+	New: func() any {
+		m := make([]byte, 0, defaultBufferSize)
+		return &m
+	},
 }
 
 // GetByteBuffer can be replaced with a function that returns a small
@@ -40,13 +46,14 @@ var internalByteBuffer = sync.Pool{
 // When replacing PutByteBuffer should also be replaced
 // There is no minimum size.
 var GetByteBuffer = func() []byte {
-	return internalByteBuffer.Get().([]byte)
+	b := *internalByteBuffer.Get().(*[]byte)
+	return b[:0]
 }
 
 // PutByteBuffer is for returning byte buffers.
 var PutByteBuffer = func(b []byte) {
-	if cap(b) > 1024 && cap(b) < 64<<10 {
-		internalByteBuffer.Put(b)
+	if cap(b) >= minBufferSize && cap(b) < maxBufferSize {
+		internalByteBuffer.Put(&b)
 	}
 }
 

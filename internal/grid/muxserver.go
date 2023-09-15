@@ -35,7 +35,6 @@ type muxServer struct {
 	Resp             chan []byte
 	ctx              context.Context
 	cancel           context.CancelFunc
-	outbound         func(msg message) error
 	inbound          chan []byte
 	parent           *Connection
 	sendMu           sync.Mutex

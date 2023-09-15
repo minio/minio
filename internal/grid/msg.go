@@ -30,13 +30,17 @@ import (
 //go:generate msgp -unexported -file=$GOFILE
 //go:generate stringer -type=Op -output=msg_string.go -trimprefix=Op $GOFILE
 
+// Op is operation type messages.
 type Op uint8
 
 // HandlerID is the ID for the handler of a specific type.
 type HandlerID uint8
 
 const (
+	// OpConnect is a connect request.
 	OpConnect Op = iota + 1
+
+	// OpConnectResponse is a response to a connect request.
 	OpConnectResponse
 
 	// OpPing is a ping request.
@@ -150,18 +154,6 @@ func (m *message) parse(b []byte) error {
 	return nil
 }
 
-func (m *message) setPayload(s sender) error {
-	if len(m.Payload) > 0 {
-		m.Payload = m.Payload[:0]
-	} else if cap(m.Payload) == 0 {
-		m.Payload = GetByteBuffer()[:0]
-	}
-	m.Op = s.Op()
-	var err error
-	m.Payload, err = s.MarshalMsg(m.Payload)
-	return err
-}
-
 // setZeroPayloadFlag will clear or set the FlagPayloadIsZero if
 // m.Payload is length 0, but not nil.
 func (m *message) setZeroPayloadFlag() {
@@ -186,7 +178,7 @@ type connectReq struct {
 	Host string
 }
 
-func (_ connectReq) Op() Op {
+func (connectReq) Op() Op {
 	return OpConnect
 }
 
@@ -196,7 +188,7 @@ type connectResp struct {
 	RejectedReason string
 }
 
-func (_ connectResp) Op() Op {
+func (connectResp) Op() Op {
 	return OpConnectResponse
 }
 
@@ -204,7 +196,7 @@ type muxConnectError struct {
 	Error string
 }
 
-func (_ muxConnectError) Op() Op {
+func (muxConnectError) Op() Op {
 	return OpMuxConnectError
 }
 
@@ -213,6 +205,6 @@ type pongMsg struct {
 	Err      *string `msg:"e,allownil"`
 }
 
-func (_ pongMsg) Op() Op {
+func (pongMsg) Op() Op {
 	return OpPong
 }

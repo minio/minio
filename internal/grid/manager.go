@@ -54,6 +54,7 @@ type Manager struct {
 	local string
 }
 
+// ManagerOptions are options for creating a new grid manager.
 type ManagerOptions struct {
 	Dialer ContextDialer
 	Local  string
@@ -84,13 +85,14 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			continue
 		}
 		m.targets[host] = newConnection(connectionParams{
-			ctx:      ctx,
-			id:       m.ID,
-			local:    o.Local,
-			remote:   host,
-			dial:     o.Dialer,
-			handlers: &m.handlers,
-			auth:     o.Auth,
+			ctx:               ctx,
+			id:                m.ID,
+			local:             o.Local,
+			remote:            host,
+			dial:              o.Dialer,
+			handlers:          &m.handlers,
+			auth:              o.Auth,
+			debugBlockConnect: o.debugBlockConnect,
 		})
 	}
 	if !found {
@@ -100,7 +102,9 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 	return m, nil
 }
 
-func (c *Manager) Handler() http.HandlerFunc {
+// Handler returns a handler that can be used to serve grid requests.
+// This should be connected on RoutePath to the main server.
+func (m *Manager) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if debugPrint {
 			fmt.Printf("grid: Got a %s request for: %v\n", req.Method, req.URL)
@@ -122,11 +126,11 @@ func (c *Manager) Handler() http.HandlerFunc {
 			return
 		}
 		if debugPrint {
-			fmt.Printf("%s handler: Got message, length %v\n", c.local, len(msg))
+			fmt.Printf("%s handler: Got message, length %v\n", m.local, len(msg))
 		}
 
-		var m message
-		err = m.parse(msg)
+		var message message
+		err = message.parse(msg)
 		if err != nil {
 			if debugPrint {
 				fmt.Println("parse err:", err)
@@ -134,15 +138,15 @@ func (c *Manager) Handler() http.HandlerFunc {
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
 			return
 		}
-		if m.Op != OpConnect {
+		if message.Op != OpConnect {
 			if debugPrint {
-				fmt.Println("op err:", m.Op)
+				fmt.Println("op err:", message.Op)
 			}
-			logger.LogIf(ctx, fmt.Errorf("handler: unexpected op: %v", m.Op))
+			logger.LogIf(ctx, fmt.Errorf("handler: unexpected op: %v", message.Op))
 			return
 		}
 		var cReq connectReq
-		_, err = cReq.UnmarshalMsg(m.Payload)
+		_, err = cReq.UnmarshalMsg(message.Payload)
 		if err != nil {
 			if debugPrint {
 				fmt.Println("handler: creq err:", err)
@@ -150,10 +154,10 @@ func (c *Manager) Handler() http.HandlerFunc {
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
 			return
 		}
-		remote := c.targets[cReq.Host]
+		remote := m.targets[cReq.Host]
 		if remote == nil {
 			if debugPrint {
-				fmt.Printf("%s: handler: unknown host: %v. Have %v\n", c.local, cReq.Host, c.targets)
+				fmt.Printf("%s: handler: unknown host: %v. Have %v\n", m.local, cReq.Host, m.targets)
 			}
 			logger.LogIf(ctx, fmt.Errorf("handler: unknown host: %v", cReq.Host))
 			return
@@ -216,12 +220,15 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StreamHandler) error 
 	return nil
 }
 
+// HostName returns the name of the local host.
 func (m *Manager) HostName() string {
 	return m.local
 }
 
 // TestingShutDown will shut down all connections.
 // This should *only* be used by tests.
+//
+//lint:ignore U1000 This is used by tests.
 func (m *Manager) debugMsg(d debugMsg, args ...any) {
 	for _, c := range m.targets {
 		c.debugMsg(d, args...)

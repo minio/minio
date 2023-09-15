@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
@@ -69,14 +70,17 @@ func (r RemoteErr) Error() string {
 }
 
 // Is returns if the string representation matches.
-func (r *RemoteErr) Is(other *RemoteErr) bool {
+func (r *RemoteErr) Is(other error) bool {
 	if r == nil || other == nil {
 		return r == other
 	}
-	return *r == *other
+	var o RemoteErr
+	if errors.As(other, &o) {
+		return r == &o
+	}
+	return false
 }
 
-// TODO: Add type safe handlers and clients.
 type (
 	// SingleHandlerFn is handlers for one to one requests.
 	// A non-nil error value will be returned as RemoteErr(msg) to client.
@@ -144,25 +148,58 @@ type RoundTripper interface {
 	msgp.Marshaler
 }
 
+// SingleHandler is a type safe handler for single roundtrip requests.
 type SingleHandler[Req, Resp RoundTripper] struct {
-	newReq    func() Req
-	newResp   func() Resp
-	id        HandlerID
-	reqReuse  func(req Req)
-	respReuse func(req Resp)
+	id HandlerID
+
+	reqPool  sync.Pool
+	respPool sync.Pool
 }
 
 // NewSingleRTHandler creates a typed handler that can provide Marshal/Unmarshal.
 // Use Register to register a server handler.
 // Use Call to initiate a clientside call.
 func NewSingleRTHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
-	return &SingleHandler[Req, Resp]{id: h, newReq: newReq, newResp: newResp}
+	s := SingleHandler[Req, Resp]{id: h}
+	s.reqPool.New = func() interface{} {
+		return newReq()
+	}
+	s.respPool.New = func() interface{} {
+		return newResp()
+	}
+	return &s
+}
+
+// PutResponse will accept a request for reuse.
+// These should be returned by the caller.
+func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
+	h.respPool.Put(r)
+}
+
+// NewResponse creates a new response.
+// Handlers can use this to create a reusable response.
+// The response may be reused, so caller should clear any fields.
+func (h *SingleHandler[Req, Resp]) NewResponse() Resp {
+	return h.respPool.Get().(Resp)
+}
+
+// PutRequest will accept a request for reuse.
+// These should be returned by the caller.
+func (h *SingleHandler[Req, Resp]) PutRequest(r Req) {
+	h.reqPool.Put(r)
+}
+
+// NewRequest creates a new response.
+// Handlers can use this to create a reusable response.
+// The request may be reused, so caller should clear any fields.
+func (h *SingleHandler[Req, Resp]) NewRequest() Req {
+	return h.reqPool.Get().(Req)
 }
 
 // Register a handler for a Req -> Resp roundtrip.
 func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr)) error {
 	return m.RegisterSingle(h.id, func(payload []byte) ([]byte, *RemoteErr) {
-		req := h.newReq()
+		req := h.NewRequest()
 		_, err := req.UnmarshalMsg(payload)
 		if err != nil {
 			PutByteBuffer(payload)
@@ -174,13 +211,9 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			PutByteBuffer(payload)
 			return nil, rerr
 		}
-		if h.reqReuse != nil {
-			h.reqReuse(req)
-		}
+		h.PutRequest(req)
 		payload, err = resp.MarshalMsg(payload[:0])
-		if h.respReuse != nil {
-			h.respReuse(resp)
-		}
+		h.PutResponse(resp)
 		if err != nil {
 			PutByteBuffer(payload)
 			r := RemoteErr(err.Error())
@@ -188,16 +221,6 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 		}
 		return payload, nil
 	})
-}
-
-// SetReqReuse allows setting a request reuse function.
-func (h *SingleHandler[Req, Resp]) SetReqReuse(fn func(req Req)) {
-	h.reqReuse = fn
-}
-
-// SetRespReuse allows setting a request reuse function.
-func (h *SingleHandler[Req, Resp]) SetRespReuse(fn func(resp Resp)) {
-	h.respReuse = fn
 }
 
 // Call the remove with the request and
@@ -210,7 +233,7 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req 
 	if err != nil {
 		return dst, err
 	}
-	dst = h.newResp()
+	dst = h.NewResponse()
 	_, err = dst.UnmarshalMsg(res)
 	PutByteBuffer(res)
 	return dst, err
@@ -233,16 +256,21 @@ func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
 	return context.WithValue(ctx, ctxCallerKey{}, cl)
 }
 
+// StreamTypeHandler is a type safe handler for streaming requests.
 type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
-	newPayload func() Payload
-	newReq     func() Req
-	newResp    func() Resp
+	reqPool    sync.Pool
+	respPool   sync.Pool
 	id         HandlerID
-	respReuse  func(req Resp)
+	newPayload func() Payload
+
+	WithPayload bool
 
 	// Override the default capacities (1)
 	OutCapacity int
-	InCapacity  int
+
+	// Set to 0 if no input is expected.
+	// Will be 0 if newReq is nil.
+	InCapacity int
 }
 
 // NewStream creates a typed handler that can provide Marshal/Unmarshal.
@@ -251,63 +279,81 @@ type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
 // newPayload can be nil. In that case payloads will always be nil.
 // newReq can be nil. In that case no input stream is expected and the handler will be called with nil 'in' channel.
 func NewStream[Payload, Req, Resp RoundTripper](h HandlerID, newPayload func() Payload, newReq func() Req, newResp func() Resp) *StreamTypeHandler[Payload, Req, Resp] {
-	if newPayload == nil {
-		panic("newPayload missing in NewStream")
-	}
-	if newReq == nil {
-		panic("newReq missing in NewStream")
-	}
 	if newResp == nil {
 		panic("newResp missing in NewStream")
 	}
-	return newStreamHandler[Payload, Req, Resp](h, newPayload, newReq, newResp)
+
+	s := newStreamHandler[Payload, Req, Resp](h)
+	if newReq != nil {
+		s.reqPool.New = func() interface{} {
+			return newReq()
+		}
+	} else {
+		s.InCapacity = 0
+	}
+	s.respPool.New = func() interface{} {
+		return newResp()
+	}
+	s.newPayload = newPayload
+	s.WithPayload = newPayload != nil
+	return s
 }
 
-func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID, newPayload func() Payload, newReq func() Req, newResp func() Resp) *StreamTypeHandler[Payload, Req, Resp] {
-	inC := 1
-	if newReq == nil {
-		inC = 0
+// NewPayload creates a new payload.
+func (h *StreamTypeHandler[Payload, Req, Resp]) NewPayload() Payload {
+	return h.newPayload()
+}
+
+// NewRequest creates a new request.
+// The struct may be reused, so caller should clear any fields.
+func (h *StreamTypeHandler[Payload, Req, Resp]) NewRequest() Req {
+	return h.reqPool.Get().(Req)
+}
+
+// PutRequest will accept a request for reuse.
+// These should be returned by the handler.
+func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
+	h.reqPool.Put(r)
+}
+
+// PutResponse will accept a request for reuse.
+// These should be returned by the caller.
+func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
+	h.respPool.Put(r)
+}
+
+// NewResponse creates a new response.
+// Handlers can use this to create a reusable response.
+func (h *StreamTypeHandler[Payload, Req, Resp]) NewResponse() Resp {
+	r, ok := h.respPool.Get().(*Resp)
+	if !ok {
+		r = new(Resp)
 	}
-	return &StreamTypeHandler[Payload, Req, Resp]{id: h, newReq: newReq, newResp: newResp, newPayload: newPayload, InCapacity: inC, OutCapacity: 1}
+	return *r
+}
+
+func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID) *StreamTypeHandler[Payload, Req, Resp] {
+	return &StreamTypeHandler[Payload, Req, Resp]{id: h, InCapacity: 1, OutCapacity: 1}
 }
 
 // Register a handler for two-way streaming with payload, input stream and output stream.
 func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr) error {
-	if h.newPayload == nil {
-		return errors.New("newPayload missing in NewStream")
-	}
-	if h.newReq == nil {
-		return errors.New("newReq missing in NewStream")
-	}
 	return h.register(m, handle)
-}
-
-type StreamNoPayload[Req, Resp RoundTripper] struct {
-	h *StreamTypeHandler[RoundTripper, Req, Resp]
-}
-
-func NewStreamNoPayload[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *StreamNoPayload[Req, Resp] {
-	handler := NewStream[RoundTripper, Req, Resp](h, nil, newReq, newResp)
-	return &StreamNoPayload[Req, Resp]{h: handler}
-}
-
-// Register registers a handler for two-way streaming with input stream and output stream.
-func (h *StreamNoPayload[Req, Resp]) Register(m *Manager, handle func(in <-chan Req, out chan<- Resp) *RemoteErr) error {
-	if h.h.newReq == nil {
-		return errors.New("newReq missing in NewStream")
-	}
-	return h.h.register(m, func(_ RoundTripper, in <-chan Req, out chan<- Resp) *RemoteErr {
-		return handle(in, out)
-	})
 }
 
 // RegisterNoInput a handler for one-way streaming with payload and output stream.
 func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(p Payload, out chan<- Resp) *RemoteErr) error {
-	if h.newPayload == nil {
-		return errors.New("newPayload missing in NewStream")
-	}
+	h.InCapacity = 0
 	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
 		return handle(p, out)
+	})
+}
+
+// RegisterNoPayload a handler for one-way streaming with payload and output stream.
+func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, handle func(in <-chan Req, out chan<- Resp) *RemoteErr) error {
+	h.WithPayload = false
+	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
+		return handle(in, out)
 	})
 }
 
@@ -316,8 +362,8 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 	return m.RegisterStreamingHandler(h.id, StreamHandler{
 		Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
 			var plT Payload
-			if h.newPayload != nil {
-				plT = h.newPayload()
+			if h.WithPayload {
+				plT = h.NewPayload()
 				_, err := plT.UnmarshalMsg(payload)
 				PutByteBuffer(payload)
 				if err != nil {
@@ -325,8 +371,9 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					return &r
 				}
 			}
+
 			var inT chan Req
-			if h.newReq != nil {
+			if h.InCapacity > 0 {
 				// Don't add extra buffering
 				inT = make(chan Req)
 				go func() {
@@ -336,7 +383,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 						case <-ctx.Done():
 							return
 						case v := <-in:
-							input := h.newReq()
+							input := h.NewRequest()
 							_, err := input.UnmarshalMsg(v)
 							if err != nil {
 								logger.LogOnceIf(ctx, err, err.Error())
@@ -366,9 +413,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					if err != nil {
 						logger.LogOnceIf(ctx, err, err.Error())
 					}
-					if h.respReuse != nil {
-						h.respReuse(v)
-					}
+					h.PutResponse(v)
 					select {
 					case <-ctx.Done():
 						dropOutput = true
@@ -384,16 +429,14 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 	})
 }
 
-// SetRespReuse allows setting a request reuse function.
-func (h *StreamTypeHandler[Payload, Req, Resp]) SetRespReuse(fn func(resp Resp)) {
-	h.respReuse = fn
-}
-
+// TypedResponse is a response from the server.
+// It will either contain a response or an error.
 type TypedResponse[Resp RoundTripper] struct {
 	Msg Resp
 	Err error
 }
 
+// TypedSteam is a stream with specific types.
 type TypedSteam[Req, Resp RoundTripper] struct {
 	// Responses from the remote server.
 	// Channel will be closed after error or when remote closes.
@@ -409,27 +452,37 @@ type TypedSteam[Req, Resp RoundTripper] struct {
 
 // Call the remove with the request and
 func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Connection, payload Payload) (st *TypedSteam[Req, Resp], err error) {
-	b, err := payload.MarshalMsg(GetByteBuffer()[:0])
-	if err != nil {
-		return nil, err
+	var payloadB []byte
+	if h.WithPayload {
+		var err error
+		payloadB, err = payload.MarshalMsg(GetByteBuffer()[:0])
+		if err != nil {
+			return nil, err
+		}
 	}
-	stream, err := c.NewStream(ctx, h.id, b)
+	stream, err := c.NewStream(ctx, h.id, payloadB)
 	if err != nil {
 		return nil, err
 	}
 	respT := make(chan TypedResponse[Resp])
-	reqT := make(chan Req)
-	// Request handler
-	go func() {
-		defer close(stream.Requests)
-		for req := range reqT {
-			b, err := req.MarshalMsg(GetByteBuffer()[:0])
-			if err != nil {
-				logger.LogOnceIf(ctx, err, err.Error())
+	var reqT chan Req
+	if h.InCapacity > 0 {
+		reqT = make(chan Req)
+		// Request handler
+		go func() {
+			defer close(stream.Requests)
+			for req := range reqT {
+				b, err := req.MarshalMsg(GetByteBuffer()[:0])
+				if err != nil {
+					logger.LogOnceIf(ctx, err, err.Error())
+				}
+				h.PutRequest(req)
+				stream.Requests <- b
 			}
-			stream.Requests <- b
-		}
-	}()
+		}()
+	} else {
+		close(stream.Requests)
+	}
 	// Response handler
 	go func() {
 		defer close(respT)
@@ -443,7 +496,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Con
 				errState = true
 				continue
 			}
-			tr := TypedResponse[Resp]{Msg: h.newResp()}
+			tr := TypedResponse[Resp]{Msg: h.NewResponse()}
 			_, err := tr.Msg.UnmarshalMsg(resp.Msg)
 			if err != nil {
 				tr.Err = err
@@ -453,4 +506,17 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Con
 		}
 	}()
 	return &TypedSteam[Req, Resp]{Responses: respT, Requests: reqT}, nil
+}
+
+// NoPayload is a type that can be used for handlers that do not use a payload.
+type NoPayload struct{}
+
+// UnmarshalMsg satisfies the interface, but is a no-op.
+func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
+	return bytes, nil
+}
+
+// MarshalMsg satisfies the interface, but is a no-op.
+func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
+	return bytes, nil
 }
