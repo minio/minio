@@ -75,7 +75,7 @@ type Options struct {
 	ContentMD5 ContentMD5Opt
 }
 
-// ContentMD5Opts - if not request. Use md5.Sum(uuid) instead
+// ContentMD5Opt - if not request. Use md5.Sum(uuid) instead
 type ContentMD5Opt struct {
 	NotRequest bool
 	UUID       []byte
