@@ -64,7 +64,10 @@ func (s3 *warmBackendS3) getDest(object string) string {
 }
 
 func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
-	res, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{StorageClass: s3.StorageClass})
+	res, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{
+		SendContentMd5: true,
+		StorageClass:   s3.StorageClass,
+	})
 	return remoteVersionID(res.VersionID), s3.ToObjectError(err, object)
 }
 

@@ -47,7 +47,7 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // APIError structure

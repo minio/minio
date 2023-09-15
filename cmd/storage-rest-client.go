@@ -36,7 +36,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 	xbufio "github.com/philhofer/fwd"
 	"github.com/tinylib/msgp/msgp"
 )

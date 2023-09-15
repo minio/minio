@@ -61,11 +61,11 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/ellipses"
-	"github.com/minio/pkg/env"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/certs"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/ellipses"
+	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // serverDebugLog will enable debug printing
@@ -150,7 +150,7 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
+	if globalBrowserRedirectURL != nil {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
@@ -391,7 +391,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
-			logger.FatalIf(err, "Unable to get free port for console on the host")
+			logger.FatalIf(err, "Unable to get free port for Console UI on the host")
 		}
 		consoleAddr = net.JoinHostPort("", p.String())
 	}
@@ -405,6 +405,15 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	if globalMinioPort == "0" {
+		p, err := xnet.GetFreePort()
+		if err != nil {
+			logger.FatalIf(err, "Unable to get free port for S3 API on the host")
+		}
+		globalMinioPort = p.String()
+		globalDynamicAPIPort = true
+	}
+
 	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 
 	if globalMinioPort == globalMinioConsolePort {
@@ -640,6 +649,7 @@ func handleCommonEnvVars() {
 			}
 			globalBrowserRedirectURL = u
 		}
+		globalBrowserRedirect = env.Get(config.EnvBrowserRedirect, config.EnableOn) == config.EnableOn
 	}
 
 	if serverURL := env.Get(config.EnvMinIOServerURL, ""); serverURL != "" {
@@ -664,10 +674,14 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
-	if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+	rootDiskSize := env.Get(config.EnvRootDriveThresholdSize, "")
+	if rootDiskSize == "" {
+		rootDiskSize = env.Get(config.EnvRootDiskThresholdSize, "")
+	}
+	if rootDiskSize != "" {
 		size, err := humanize.ParseBytes(rootDiskSize)
 		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Invalid %s value in environment variable", config.EnvRootDiskThresholdSize))
+			logger.Fatal(err, fmt.Sprintf("Invalid %s value in root drive threshold environment variable", rootDiskSize))
 		}
 		globalRootDiskThreshold = size
 	}

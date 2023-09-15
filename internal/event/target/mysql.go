@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (
@@ -312,7 +312,11 @@ func (target *MySQLTarget) Close() error {
 		_ = target.insertStmt.Close()
 	}
 
-	return target.db.Close()
+	if target.db != nil {
+		return target.db.Close()
+	}
+
+	return nil
 }
 
 // Executes the table creation statements.

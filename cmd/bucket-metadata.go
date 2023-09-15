@@ -41,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/minio/sio"
 )
 
@@ -91,7 +91,7 @@ type BucketMetadata struct {
 	LifecycleConfigUpdatedAt    time.Time
 
 	// Unexported fields. Must be updated atomically.
-	policyConfig           *policy.Policy
+	policyConfig           *policy.BucketPolicy
 	notificationConfig     *event.Config
 	lifecycleConfig        *lifecycle.Lifecycle
 	objectLockConfig       *objectlock.Config
@@ -217,7 +217,7 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 // The first error encountered is returned.
 func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLayer) (err error) {
 	if len(b.PolicyConfigJSON) != 0 {
-		b.policyConfig, err = policy.ParseConfig(bytes.NewReader(b.PolicyConfigJSON), b.Name)
+		b.policyConfig, err = policy.ParseBucketPolicyConfig(bytes.NewReader(b.PolicyConfigJSON), b.Name)
 		if err != nil {
 			return err
 		}

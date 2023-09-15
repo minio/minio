@@ -39,8 +39,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 type erasureServerPools struct {

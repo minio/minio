@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // Redis constants
@@ -273,7 +273,10 @@ func (target *RedisTarget) SendFromStore(eventKey string) error {
 // Close - releases the resources used by the pool.
 func (target *RedisTarget) Close() error {
 	close(target.quitCh)
-	return target.pool.Close()
+	if target.pool != nil {
+		return target.pool.Close()
+	}
+	return nil
 }
 
 func (target *RedisTarget) init() error {

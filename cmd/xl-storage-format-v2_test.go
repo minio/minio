@@ -1049,7 +1049,7 @@ func TestXMinIOHealingSkip(t *testing.T) {
 	failOnErr(xl.AddVersion(fi))
 
 	var err error
-	fi, err = xl.ToFileInfo(fi.Volume, fi.Name, fi.VersionID, false)
+	fi, err = xl.ToFileInfo(fi.Volume, fi.Name, fi.VersionID, false, true)
 	if err != nil {
 		t.Fatalf("xl.ToFileInfo failed with %v", err)
 	}
@@ -1057,4 +1057,42 @@ func TestXMinIOHealingSkip(t *testing.T) {
 	if fi.Healing() {
 		t.Fatal("Expected fi.Healing to be false")
 	}
+}
+
+func benchmarkManyPartsOptionally(b *testing.B, allParts bool) {
+	f, err := os.Open("testdata/xl-many-parts.meta")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	buf, _, _ := isIndexedMetaV2(data)
+	if buf == nil {
+		b.Fatal("buf == nil")
+	}
+
+	b.Run("ToFileInfo", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, err = buf.ToFileInfo("volume", "path", "", allParts)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkToFileInfoNoParts(b *testing.B) {
+	benchmarkManyPartsOptionally(b, false)
+}
+
+func BenchmarkToFileInfoWithParts(b *testing.B) {
+	benchmarkManyPartsOptionally(b, true)
 }

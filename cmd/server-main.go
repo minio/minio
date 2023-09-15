@@ -48,8 +48,8 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/certs"
+	"github.com/minio/pkg/v2/env"
 	"golang.org/x/exp/slices"
 )
 
@@ -255,6 +255,16 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	logger.FatalIf(err, "Invalid command line arguments")
 	globalNodes = globalEndpoints.GetNodes()
 
+	globalIsErasure = (setupType == ErasureSetupType)
+	globalIsDistErasure = (setupType == DistErasureSetupType)
+	if globalIsDistErasure {
+		globalIsErasure = true
+	}
+	globalIsErasureSD = (setupType == ErasureSDSetupType)
+	if globalDynamicAPIPort && globalIsDistErasure {
+		logger.FatalIf(errInvalidArgument, "Invalid --address=\"%s\", port '0' is not allowed in a distributed erasure coded setup", ctx.String("address"))
+	}
+
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
@@ -288,13 +298,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
-
-	globalIsErasure = (setupType == ErasureSetupType)
-	globalIsDistErasure = (setupType == DistErasureSetupType)
-	if globalIsDistErasure {
-		globalIsErasure = true
-	}
-	globalIsErasureSD = (setupType == ErasureSDSetupType)
 
 	globalConnReadDeadline = ctx.Duration("conn-read-deadline")
 	globalConnWriteDeadline = ctx.Duration("conn-write-deadline")

@@ -47,8 +47,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/trie"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/trie"
+	"github.com/minio/pkg/v2/wildcard"
+	"github.com/valyala/bytebufferpool"
 	"golang.org/x/exp/slices"
 )
 
@@ -233,25 +234,25 @@ func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
 
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
 func pathJoin(elem ...string) string {
-	trailingSlash := ""
-	if len(elem) > 0 {
-		if hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar) {
-			trailingSlash = SlashSeparator
-		}
-	}
-	return path.Join(elem...) + trailingSlash
+	sb := bytebufferpool.Get()
+	defer func() {
+		sb.Reset()
+		bytebufferpool.Put(sb)
+	}()
+
+	return pathJoinBuf(sb, elem...)
 }
 
 // pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
 // Provide a string builder to reduce allocation.
-func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
+func pathJoinBuf(dst *bytebufferpool.ByteBuffer, elem ...string) string {
 	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar)
 	dst.Reset()
 	added := 0
 	for _, e := range elem {
 		if added > 0 || e != "" {
 			if added > 0 {
-				dst.WriteRune(SlashSeparatorChar)
+				dst.WriteByte(SlashSeparatorChar)
 			}
 			dst.WriteString(e)
 			added += len(e)
@@ -266,7 +267,7 @@ func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
 		return s
 	}
 	if trailingSlash {
-		dst.WriteRune(SlashSeparatorChar)
+		dst.WriteByte(SlashSeparatorChar)
 	}
 	return dst.String()
 }

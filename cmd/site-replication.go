@@ -42,8 +42,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/logger"
-	bktpolicy "github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -989,6 +988,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 				Type:            madmin.ReplicationService,
 				Region:          "",
 				ReplicationSync: peer.SyncState == madmin.SyncEnabled,
+				DeploymentID:    d,
 			}
 			var exists bool // true if ARN already exists
 			bucketTarget.Arn, exists = globalBucketTargetSys.getRemoteARN(bucket, &bucketTarget, peer.DeploymentID)
@@ -1167,7 +1167,7 @@ func (c *SiteReplicationSys) IAMChangeHook(ctx context.Context, item madmin.SRIA
 
 // PeerAddPolicyHandler - copies IAM policy to local. A nil policy argument,
 // causes the named policy to be deleted.
-func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyName string, p *iampolicy.Policy, updatedAt time.Time) error {
+func (c *SiteReplicationSys) PeerAddPolicyHandler(ctx context.Context, policyName string, p *policy.Policy, updatedAt time.Time) error {
 	var err error
 	// skip overwrite of local update if peer sent stale info
 	if !updatedAt.IsZero() {
@@ -1260,10 +1260,10 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 	}
 	switch {
 	case change.Create != nil:
-		var sp *iampolicy.Policy
+		var sp *policy.Policy
 		var err error
 		if len(change.Create.SessionPolicy) > 0 {
-			sp, err = iampolicy.ParseConfig(bytes.NewReader(change.Create.SessionPolicy))
+			sp, err = policy.ParseConfig(bytes.NewReader(change.Create.SessionPolicy))
 			if err != nil {
 				return wrapSRErr(err)
 			}
@@ -1289,10 +1289,10 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		}
 
 	case change.Update != nil:
-		var sp *iampolicy.Policy
+		var sp *policy.Policy
 		var err error
 		if len(change.Update.SessionPolicy) > 0 {
-			sp, err = iampolicy.ParseConfig(bytes.NewReader(change.Update.SessionPolicy))
+			sp, err = policy.ParseConfig(bytes.NewReader(change.Update.SessionPolicy))
 			if err != nil {
 				return wrapSRErr(err)
 			}
@@ -1526,7 +1526,7 @@ func (c *SiteReplicationSys) PeerBucketMetadataUpdateHandler(ctx context.Context
 }
 
 // PeerBucketPolicyHandler - copies/deletes policy to local cluster.
-func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket string, policy *bktpolicy.Policy, updatedAt time.Time) error {
+func (c *SiteReplicationSys) PeerBucketPolicyHandler(ctx context.Context, bucket string, policy *policy.BucketPolicy, updatedAt time.Time) error {
 	// skip overwrite if local update is newer than peer update.
 	if !updatedAt.IsZero() {
 		if _, updateTm, err := globalBucketMetadataSys.GetPolicyConfig(bucket); err == nil && updateTm.After(updatedAt) {
@@ -2511,6 +2511,7 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 		MaxPolicies:  sinfo.MaxPolicies,
 		Sites:        sinfo.Sites,
 		StatsSummary: sinfo.StatsSummary,
+		Metrics:      sinfo.Metrics,
 	}
 	info.BucketStats = make(map[string]map[string]madmin.SRBucketStatsSummary, len(sinfo.Sites))
 	info.PolicyStats = make(map[string]map[string]madmin.SRPolicyStatsSummary)
@@ -2617,7 +2618,6 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		},
 		replicationStatus,
 	)
-
 	if err := errors.Unwrap(metaInfoConcErr); err != nil {
 		return info, errSRBackendIssue(err)
 	}
@@ -2879,10 +2879,10 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	if opts.Policies || opts.Entity == madmin.SRPolicyEntity {
 		// collect IAM policy replication status across sites
 		for p, pslc := range policyStats {
-			var policies []*iampolicy.Policy
+			var policies []*policy.Policy
 			uPolicyCount := 0
 			for _, ps := range pslc {
-				plcy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(ps.SRIAMPolicy.Policy)))
+				plcy, err := policy.ParseConfig(bytes.NewReader([]byte(ps.SRIAMPolicy.Policy)))
 				if err != nil {
 					continue
 				}
@@ -2923,7 +2923,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		for b, slc := range bucketStats {
 			tagSet := set.NewStringSet()
 			olockConfigSet := set.NewStringSet()
-			policies := make([]*bktpolicy.Policy, numSites)
+			policies := make([]*policy.BucketPolicy, numSites)
 			replCfgs := make([]*sreplication.Config, numSites)
 			quotaCfgs := make([]*madmin.BucketQuota, numSites)
 			sseCfgSet := set.NewStringSet()
@@ -2973,7 +2973,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					}
 				}
 				if len(s.Policy) > 0 {
-					plcy, err := bktpolicy.ParseConfig(bytes.NewReader(s.Policy), b)
+					plcy, err := policy.ParseBucketPolicyConfig(bytes.NewReader(s.Policy), b)
 					if err != nil {
 						continue
 					}
@@ -3093,6 +3093,14 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		}
 	}
 
+	if opts.Metrics {
+		m, err := globalSiteReplicationSys.getSiteMetrics(ctx)
+		if err != nil {
+			return info, err
+		}
+		info.Metrics = m
+	}
+
 	// maximum buckets users etc seen across sites
 	info.MaxBuckets = len(bucketStats)
 	info.MaxUsers = len(userInfoStats)
@@ -3116,12 +3124,12 @@ func isReplicated(cntReplicated, total int, valSet set.StringSet) bool {
 
 // isIAMPolicyReplicated returns true if count of replicated IAM policies matches total
 // number of sites and IAM policies are identical.
-func isIAMPolicyReplicated(cntReplicated, total int, policies []*iampolicy.Policy) bool {
+func isIAMPolicyReplicated(cntReplicated, total int, policies []*policy.Policy) bool {
 	if cntReplicated > 0 && cntReplicated != total {
 		return false
 	}
 	// check if policies match between sites
-	var prev *iampolicy.Policy
+	var prev *policy.Policy
 	for i, p := range policies {
 		if i == 0 {
 			prev = p
@@ -3224,7 +3232,7 @@ func isBktQuotaCfgReplicated(total int, quotaCfgs []*madmin.BucketQuota) bool {
 
 // isBktPolicyReplicated returns true if count of replicated bucket policies matches total
 // number of sites and bucket policies are identical.
-func isBktPolicyReplicated(total int, policies []*bktpolicy.Policy) bool {
+func isBktPolicyReplicated(total int, policies []*policy.BucketPolicy) bool {
 	numPolicies := 0
 	for _, p := range policies {
 		if p == nil {
@@ -3236,7 +3244,7 @@ func isBktPolicyReplicated(total int, policies []*bktpolicy.Policy) bool {
 		return false
 	}
 	// check if policies match between sites
-	var prev *bktpolicy.Policy
+	var prev *policy.BucketPolicy
 	for i, p := range policies {
 		if p == nil {
 			continue
@@ -3846,6 +3854,7 @@ type srStatusInfo struct {
 	// GroupStats map of group to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific bucket's stats are requested
 	GroupStats map[string]map[string]srGroupStatsSummary
+	Metrics    madmin.SRMetricsSummary
 }
 
 // SRBucketDeleteOp - type of delete op
@@ -5384,4 +5393,89 @@ func saveSiteResyncMetadata(ctx context.Context, ss SiteResyncStatus, objectAPI 
 
 func getSRResyncFilePath(dID string) string {
 	return pathJoin(siteResyncPrefix, dID+".meta")
+}
+
+func (c *SiteReplicationSys) getDeplIDForEndpoint(ep string) (dID string, err error) {
+	if ep == "" {
+		return dID, fmt.Errorf("no deployment id found for endpoint %s", ep)
+	}
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return dID, errSRNotEnabled
+	}
+	for _, peer := range c.state.Peers {
+		if ep == peer.Endpoint {
+			return peer.DeploymentID, nil
+		}
+	}
+	return dID, fmt.Errorf("no deployment id found for endpoint %s", ep)
+}
+
+func (c *SiteReplicationSys) getSiteMetrics(ctx context.Context) (madmin.SRMetricsSummary, error) {
+	if !c.isEnabled() {
+		return madmin.SRMetricsSummary{}, errSRNotEnabled
+	}
+	peerSMetricsList := globalNotificationSys.GetClusterSiteMetrics(ctx)
+	var sm madmin.SRMetricsSummary
+	sm.Metrics = make(map[string]madmin.SRMetric)
+
+	for _, peer := range peerSMetricsList {
+		sm.ActiveWorkers.Avg += peer.ActiveWorkers.Avg
+		sm.ActiveWorkers.Curr += peer.ActiveWorkers.Curr
+		if peer.ActiveWorkers.Max > sm.ActiveWorkers.Max {
+			sm.ActiveWorkers.Max += peer.ActiveWorkers.Max
+		}
+		sm.Queued.Avg.Bytes += peer.Queued.Avg.Bytes
+		sm.Queued.Avg.Count += peer.Queued.Avg.Count
+		sm.Queued.Curr.Bytes += peer.Queued.Curr.Bytes
+		sm.Queued.Curr.Count += peer.Queued.Curr.Count
+		if peer.Queued.Max.Count > sm.Queued.Max.Count {
+			sm.Queued.Max.Bytes = peer.Queued.Max.Bytes
+			sm.Queued.Max.Count = peer.Queued.Max.Count
+		}
+		sm.ReplicaCount += peer.ReplicaCount
+		sm.ReplicaSize += peer.ReplicaSize
+		for dID, v := range peer.Metrics {
+			v2, ok := sm.Metrics[dID]
+			if !ok {
+				v2 = madmin.SRMetric{}
+				v2.Failed.ErrCounts = make(map[string]int)
+			}
+
+			// use target endpoint metrics from node which has been up the longest
+			if v2.LastOnline.After(v.LastOnline) || v2.LastOnline.IsZero() {
+				v2.Endpoint = v.Endpoint
+				v2.LastOnline = v.LastOnline
+				v2.Latency = v.Latency
+				v2.Online = v.Online
+				v2.TotalDowntime = v.TotalDowntime
+				v2.DeploymentID = v.DeploymentID
+			}
+			v2.ReplicatedCount += v.ReplicatedCount
+			v2.ReplicatedSize += v.ReplicatedSize
+			v2.Failed = v2.Failed.Add(v.Failed)
+			for k, v := range v.Failed.ErrCounts {
+				v2.Failed.ErrCounts[k] += v
+			}
+			if v2.XferStats == nil {
+				v2.XferStats = make(map[replication.MetricName]replication.XferStats)
+			}
+			for rm, x := range v.XferStats {
+				x2, ok := v2.XferStats[replication.MetricName(rm)]
+				if !ok {
+					x2 = replication.XferStats{}
+				}
+				x2.AvgRate += x.Avg
+				x2.CurrRate += x.Curr
+				if x.Peak > x2.PeakRate {
+					x2.PeakRate = x.Peak
+				}
+				v2.XferStats[replication.MetricName(rm)] = x2
+			}
+			sm.Metrics[dID] = v2
+		}
+	}
+	sm.Uptime = UTCNow().Unix() - globalBootTime.Unix()
+	return sm, nil
 }

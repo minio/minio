@@ -32,8 +32,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/minio/zipindex"
 )
 
@@ -103,7 +103,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			// * if you don’t have the s3:ListBucket
 			//   permission, Amazon S3 will return an HTTP
 			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
 				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
@@ -409,7 +409,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 			// * if you don’t have the s3:ListBucket
 			//   permission, Amazon S3 will return an HTTP
 			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
 				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),

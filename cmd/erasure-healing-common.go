@@ -347,13 +347,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 					dataErrs[i] = errFileCorrupt
 					continue
 				}
-
-				// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
-				if meta.Erasure.Distribution[i] != meta.Erasure.Index {
-					partsMetadata[i] = FileInfo{}
-					dataErrs[i] = errFileCorrupt
-					continue
-				}
 			}
 		}
 

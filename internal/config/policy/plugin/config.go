@@ -26,8 +26,8 @@ import (
 
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 // Authorization Plugin config and env variables

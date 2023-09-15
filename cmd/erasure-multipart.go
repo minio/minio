@@ -38,8 +38,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/mimedb"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v2/sync/errgroup"
 	uatomic "go.uber.org/atomic"
 )
 

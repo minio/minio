@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/auth"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 type nullReader struct{}

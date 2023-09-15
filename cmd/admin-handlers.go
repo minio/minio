@@ -55,9 +55,9 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/logger/message/log"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/logger/message/log"
+	xnet "github.com/minio/pkg/v2/net"
+	iampolicy "github.com/minio/pkg/v2/policy"
 	"github.com/secure-io/sio-go"
 )
 
@@ -1185,7 +1185,7 @@ func (a adminAPIHandlers) ClientDevNullExtraTime(w http.ResponseWriter, r *http.
 	}
 
 	enc := json.NewEncoder(w)
-	if err := enc.Encode(madmin.ClientPerfExtraTime{TimeSpent: globalLastClientPerfExtraTime}); err != nil {
+	if err := enc.Encode(madmin.ClientPerfExtraTime{TimeSpent: atomic.LoadInt64(&globalLastClientPerfExtraTime)}); err != nil {
 		return
 	}
 }
@@ -2627,12 +2627,12 @@ func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 	return loggerInfo, auditloggerInfo
 }
 
-func embedFileInZip(zipWriter *zip.Writer, name string, data []byte) error {
+func embedFileInZip(zipWriter *zip.Writer, name string, data []byte, fileMode os.FileMode) error {
 	// Send profiling data to zip as file
 	header, zerr := zip.FileInfoHeader(dummyFileInfo{
 		name:    name,
 		size:    int64(len(data)),
-		mode:    0o600,
+		mode:    fileMode,
 		modTime: UTCNow(),
 		isDir:   false,
 		sys:     nil,
@@ -2863,7 +2863,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		defer inspectZipW.Close()
 
 		if b := getClusterMetaInfo(ctx); len(b) > 0 {
-			logger.LogIf(ctx, embedFileInZip(inspectZipW, "cluster.info", b))
+			logger.LogIf(ctx, embedFileInZip(inspectZipW, "cluster.info", b, 0o600))
 		}
 	}
 
@@ -2927,7 +2927,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		sb.WriteString(pool.CmdLine)
 	}
 	sb.WriteString("\n")
-	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes()))
+	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
 
 	// save MinIO start script to inspect command
 	var scrb bytes.Buffer
@@ -2943,7 +2943,7 @@ function main() {
 	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
 
 	# Start MinIO instance using the options
-	START_CMD="CI=on MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server ${MINIO_OPTS} &"
+	START_CMD="CI=on _MINIO_AUTO_DISK_HEALING=off minio server ${MINIO_OPTS} &"
 	echo
 	echo "Starting MinIO instance: ${START_CMD}"
 	echo
@@ -2957,7 +2957,7 @@ function main() {
 
 main "$@"`,
 	)
-	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes()))
+	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes(), 0o755))
 }
 
 func getSubnetAdminPublicKey() []byte {

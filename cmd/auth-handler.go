@@ -41,8 +41,7 @@ import (
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	"github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // Verify if request has JWT.
@@ -186,15 +185,15 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 // checkAdminRequestAuth checks for authentication and authorization for the incoming
 // request. It only accepts V2 and V4 requests. Presigned, JWT and anonymous requests
 // are automatically rejected.
-func checkAdminRequestAuth(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+func checkAdminRequestAuth(ctx context.Context, r *http.Request, action policy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
 	cred, owner, s3Err := validateAdminSignature(ctx, r, region)
 	if s3Err != ErrNone {
 		return cred, s3Err
 	}
-	if globalIAMSys.IsAllowed(iampolicy.Args{
+	if globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.Action(action),
+		Action:          policy.Action(action),
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -248,7 +247,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 	}
 
 	// Check if a session policy is set. If so, decode it here.
-	sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
+	sp, spok := claims.Lookup(policy.SessionPolicyName)
 	if spok {
 		// Looks like subpolicy is set and is a string, if set then its
 		// base64 encoded, decode it. Decoding fails reject such
@@ -413,7 +412,7 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 
 	if action != policy.ListAllMyBucketsAction && cred.AccessKey == "" {
 		// Anonymous checks are not meant for ListAllBuckets action
-		if globalPolicySys.IsAllowed(policy.Args{
+		if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
 			Action:          action,
@@ -429,7 +428,7 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 		if action == policy.ListBucketVersionsAction {
 			// In AWS S3 s3:ListBucket permission is same as s3:ListBucketVersions permission
 			// verify as a fallback.
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
 				Action:          policy.ListBucketAction,
@@ -446,10 +445,10 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 		return ErrAccessDenied
 	}
 	if action == policy.DeleteObjectAction && versionID != "" {
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.Action(policy.DeleteObjectVersionAction),
+			Action:          policy.Action(policy.DeleteObjectVersionAction),
 			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, "", cred),
 			ObjectName:      object,
@@ -460,10 +459,10 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 			return ErrAccessDenied
 		}
 	}
-	if globalIAMSys.IsAllowed(iampolicy.Args{
+	if globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.Action(action),
+		Action:          action,
 		BucketName:      bucket,
 		ConditionValues: getConditionValues(r, "", cred),
 		ObjectName:      object,
@@ -477,10 +476,10 @@ func authorizeRequest(ctx context.Context, r *http.Request, action policy.Action
 	if action == policy.ListBucketVersionsAction {
 		// In AWS S3 s3:ListBucket permission is same as s3:ListBucketVersions permission
 		// verify as a fallback.
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.ListBucketAction,
+			Action:          policy.ListBucketAction,
 			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, "", cred),
 			ObjectName:      object,
@@ -696,10 +695,10 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
 	}
 	if retMode == objectlock.RetGovernance && byPassSet {
-		byPassSet = globalIAMSys.IsAllowed(iampolicy.Args{
+		byPassSet = globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.BypassGovernanceRetentionAction,
+			Action:          policy.BypassGovernanceRetentionAction,
 			BucketName:      bucketName,
 			ObjectName:      objectName,
 			ConditionValues: conditions,
@@ -707,10 +706,10 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 			Claims:          cred.Claims,
 		})
 	}
-	if globalIAMSys.IsAllowed(iampolicy.Args{
+	if globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.PutObjectRetentionAction,
+		Action:          policy.PutObjectRetentionAction,
 		BucketName:      bucketName,
 		ConditionValues: conditions,
 		ObjectName:      objectName,
@@ -728,7 +727,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
-func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectName string, r *http.Request, action iampolicy.Action) (s3Err APIErrorCode) {
+func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectName string, r *http.Request, action policy.Action) (s3Err APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	region := globalSite.Region
@@ -751,17 +750,17 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 	// Do not check for PutObjectRetentionAction permission,
 	// if mode and retain until date are not set.
 	// Can happen when bucket has default lock config set
-	if action == iampolicy.PutObjectRetentionAction &&
+	if action == policy.PutObjectRetentionAction &&
 		r.Header.Get(xhttp.AmzObjectLockMode) == "" &&
 		r.Header.Get(xhttp.AmzObjectLockRetainUntilDate) == "" {
 		return ErrNone
 	}
 
 	if cred.AccessKey == "" {
-		if globalPolicySys.IsAllowed(policy.Args{
+		if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          policy.Action(action),
+			Action:          action,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
 			IsOwner:         false,
@@ -772,7 +771,7 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return ErrAccessDenied
 	}
 
-	if globalIAMSys.IsAllowed(iampolicy.Args{
+	if globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          action,

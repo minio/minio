@@ -41,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/v2/console"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -846,9 +846,11 @@ type sizeSummary struct {
 	versions        uint64
 	deleteMarkers   uint64
 	replicatedSize  int64
+	replicatedCount int64
 	pendingSize     int64
 	failedSize      int64
 	replicaSize     int64
+	replicaCount    int64
 	pendingCount    uint64
 	failedCount     uint64
 	replTargetStats map[string]replTargetSizeSummary
@@ -857,11 +859,12 @@ type sizeSummary struct {
 
 // replTargetSizeSummary holds summary of replication stats by target
 type replTargetSizeSummary struct {
-	replicatedSize int64
-	pendingSize    int64
-	failedSize     int64
-	pendingCount   uint64
-	failedCount    uint64
+	replicatedSize  int64
+	replicatedCount int64
+	pendingSize     int64
+	failedSize      int64
+	pendingCount    uint64
+	failedCount     uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -899,15 +902,11 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 		Remove:   healDeleteDangling,
 		ScanMode: scanMode,
 	}
-	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
-	if err != nil {
-		if errors.Is(err, NotImplemented{}) || isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-			err = nil
-		}
-		logger.LogIf(ctx, err)
-		return 0
+	res, _ := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
+	if res.ObjectSize > 0 {
+		return res.ObjectSize
 	}
-	return res.ObjectSize
+	return 0
 }
 
 func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (applied bool, size int64) {
@@ -1286,13 +1285,16 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 			sizeS.failedCount++
 		case replication.Completed, replication.CompletedLegacy:
 			tgtSizeS.replicatedSize += oi.Size
+			tgtSizeS.replicatedCount++
 			sizeS.replicatedSize += oi.Size
+			sizeS.replicatedCount++
 		}
 		sizeS.replTargetStats[arn] = tgtSizeS
 	}
 
 	if oi.ReplicationStatus == replication.Replica {
 		sizeS.replicaSize += oi.Size
+		sizeS.replicaCount++
 	}
 }
 

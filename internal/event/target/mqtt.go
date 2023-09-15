@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (
@@ -219,7 +219,9 @@ func (target *MQTTTarget) Save(eventData event.Event) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *MQTTTarget) Close() error {
-	target.client.Disconnect(100)
+	if target.client != nil {
+		target.client.Disconnect(100)
+	}
 	close(target.quitCh)
 	return nil
 }

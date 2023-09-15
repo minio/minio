@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v2/policy"
 )
 
 const (

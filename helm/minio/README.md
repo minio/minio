@@ -1,10 +1,12 @@
-# MinIO Helm Chart
+# MinIO Community Helm Chart
 
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
 
-For more detailed documentation please visit [here](https://min.io/docs/minio/linux/index.html)
+| IMPORTANT |
+| -------------------------- |
+| This Helm chart is community built, maintained, and supported. MinIO does not guarantee support for any given bug, feature request, or update referencing this chart. <br/><br/> MinIO publishes a separate [MinIO Kubernetes Operator and Tenant Helm Chart](https://github.com/minio/operator/tree/master/helm) that is officially maintained and supported. MinIO strongly recommends using the MinIO Kubernetes Operator for production deployments. See [Deploy Operator With Helm](https://min.io/docs/minio/kubernetes/upstream/operations/install-deploy-manage/deploy-operator-helm.html?ref=github) for additional documentation. |
 
 ## Introduction
 

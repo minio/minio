@@ -164,6 +164,7 @@ type replicationStats struct {
 	AfterThresholdSize   uint64
 	MissedThresholdCount uint64
 	AfterThresholdCount  uint64
+	ReplicatedCount      uint64
 }
 
 func (rs replicationStats) Empty() bool {
@@ -173,14 +174,16 @@ func (rs replicationStats) Empty() bool {
 }
 
 type replicationAllStats struct {
-	Targets     map[string]replicationStats `msg:"t,omitempty"`
-	ReplicaSize uint64                      `msg:"r,omitempty"`
+	Targets      map[string]replicationStats `msg:"t,omitempty"`
+	ReplicaSize  uint64                      `msg:"r,omitempty"`
+	ReplicaCount uint64                      `msg:"rc,omitempty"`
 }
 
 //msgp:tuple replicationAllStatsV1
 type replicationAllStatsV1 struct {
-	Targets     map[string]replicationStats
-	ReplicaSize uint64 `msg:"ReplicaSize,omitempty"`
+	Targets      map[string]replicationStats
+	ReplicaSize  uint64 `msg:"ReplicaSize,omitempty"`
+	ReplicaCount uint64 `msg:"ReplicaCount,omitempty"`
 }
 
 // clone creates a deep-copy clone.
@@ -341,6 +344,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 		e.ReplicationStats.Targets = make(map[string]replicationStats)
 	}
 	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
+	e.ReplicationStats.ReplicaCount += uint64(summary.replicaCount)
 
 	if summary.replTargetStats != nil {
 		for arn, st := range summary.replTargetStats {
@@ -351,6 +355,7 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 			tgtStat.PendingSize += uint64(st.pendingSize)
 			tgtStat.FailedSize += uint64(st.failedSize)
 			tgtStat.ReplicatedSize += uint64(st.replicatedSize)
+			tgtStat.ReplicatedCount += uint64(st.replicatedCount)
 			tgtStat.FailedCount += st.failedCount
 			tgtStat.PendingCount += st.pendingCount
 			e.ReplicationStats.Targets[arn] = tgtStat
@@ -377,14 +382,16 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 			e.ReplicationStats.Targets = make(map[string]replicationStats)
 		}
 		e.ReplicationStats.ReplicaSize += other.ReplicationStats.ReplicaSize
+		e.ReplicationStats.ReplicaCount += other.ReplicationStats.ReplicaCount
 		for arn, stat := range other.ReplicationStats.Targets {
 			st := e.ReplicationStats.Targets[arn]
 			e.ReplicationStats.Targets[arn] = replicationStats{
-				PendingSize:    stat.PendingSize + st.PendingSize,
-				FailedSize:     stat.FailedSize + st.FailedSize,
-				ReplicatedSize: stat.ReplicatedSize + st.ReplicatedSize,
-				PendingCount:   stat.PendingCount + st.PendingCount,
-				FailedCount:    stat.FailedCount + st.FailedCount,
+				PendingSize:     stat.PendingSize + st.PendingSize,
+				FailedSize:      stat.FailedSize + st.FailedSize,
+				ReplicatedSize:  stat.ReplicatedSize + st.ReplicatedSize,
+				PendingCount:    stat.PendingCount + st.PendingCount,
+				FailedCount:     stat.FailedCount + st.FailedCount,
+				ReplicatedCount: stat.ReplicatedCount + st.ReplicatedCount,
 			}
 		}
 	}
@@ -815,6 +822,8 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		if flat.ReplicationStats != nil {
 			bui.ReplicaSize = flat.ReplicationStats.ReplicaSize
+			bui.ReplicaCount = flat.ReplicationStats.ReplicaCount
+
 			bui.ReplicationInfo = make(map[string]BucketTargetUsageInfo, len(flat.ReplicationStats.Targets))
 			for arn, stat := range flat.ReplicationStats.Targets {
 				bui.ReplicationInfo[arn] = BucketTargetUsageInfo{
@@ -823,6 +832,7 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 					ReplicationFailedSize:   stat.FailedSize,
 					ReplicationPendingCount: stat.PendingCount,
 					ReplicationFailedCount:  stat.FailedCount,
+					ReplicatedCount:         stat.ReplicatedCount,
 				}
 			}
 		}
@@ -1236,8 +1246,9 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			var replicationStats *replicationAllStats
 			if v.ReplicationStats != nil {
 				replicationStats = &replicationAllStats{
-					Targets:     v.ReplicationStats.Targets,
-					ReplicaSize: v.ReplicationStats.ReplicaSize,
+					Targets:      v.ReplicationStats.Targets,
+					ReplicaSize:  v.ReplicationStats.ReplicaSize,
+					ReplicaCount: v.ReplicationStats.ReplicaCount,
 				}
 			}
 			due := dataUsageEntry{

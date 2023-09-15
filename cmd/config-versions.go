@@ -31,7 +31,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/quick"
+	"github.com/minio/pkg/v2/quick"
 )
 
 type configV1 struct {

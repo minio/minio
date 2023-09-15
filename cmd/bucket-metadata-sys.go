@@ -35,8 +35,8 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
@@ -310,7 +310,7 @@ func (sys *BucketMetadataSys) CreatedAt(bucket string) (time.Time, error) {
 
 // GetPolicyConfig returns configured bucket policy
 // The returned object may not be modified.
-func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.Policy, time.Time, error) {
+func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.BucketPolicy, time.Time, error) {
 	meta, _, err := sys.GetConfig(GlobalContext, bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {

@@ -34,7 +34,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // PutBucketReplicationConfigHandler - PUT Bucket replication configuration.
@@ -193,7 +193,7 @@ func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.Respons
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// GetBucketReplicationMetricsHandler - GET Bucket replication metrics.
+// GetBucketReplicationMetricsHandler - GET Bucket replication metrics.		// Deprecated Aug 2023
 // ----------
 // Gets the replication metrics for a bucket.
 func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseWriter, r *http.Request) {
@@ -227,29 +227,81 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 		return
 	}
 
-	var usageInfo BucketUsageInfo
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err == nil && !dataUsageInfo.LastUpdate.IsZero() {
-		usageInfo = dataUsageInfo.BucketsUsage[bucket]
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+
+	enc := json.NewEncoder(w)
+	stats := globalReplicationStats.getLatestReplicationStats(bucket)
+	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
+	bwMap := bwRpt.BucketStats
+	for arn, st := range stats.ReplicationStats.Stats {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
+				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
+				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
+				stats.ReplicationStats.Stats[arn] = st
+			}
+		}
+	}
+
+	if err := enc.Encode(stats.ReplicationStats); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+}
+
+// GetBucketReplicationMetricsV2Handler - GET Bucket replication metrics.
+// ----------
+// Gets the replication metrics for a bucket.
+func (api objectAPIHandlers) GetBucketReplicationMetricsV2Handler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketReplicationMetricsV2")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	// check if user has permissions to perform this operation
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
 	}
 
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	stats := globalReplicationStats.getLatestReplicationStats(bucket, usageInfo)
+	stats := globalReplicationStats.getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
-	bwMap := bwRpt.BucketStats[bucket]
-	for arn, st := range stats.Stats {
-		if bwMap != nil {
-			if bw, ok := bwMap[arn]; ok {
+	bwMap := bwRpt.BucketStats
+	for arn, st := range stats.ReplicationStats.Stats {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
 				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
 				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
-				stats.Stats[arn] = st
+				stats.ReplicationStats.Stats[arn] = st
 			}
 		}
 	}
-	if err = enc.Encode(stats); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	stats.Uptime = UTCNow().Unix() - globalBootTime.Unix()
+
+	if err := enc.Encode(stats); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 }
@@ -424,27 +476,17 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	var tgtStats map[string]TargetReplicationResyncStatus
-	globalReplicationPool.resyncer.RLock()
-	brs, ok := globalReplicationPool.resyncer.statusMap[bucket]
-	if ok {
-		tgtStats = brs.cloneTgtStats()
-	}
-	globalReplicationPool.resyncer.RUnlock()
-	if !ok {
-		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
-		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-				Bucket: bucket,
-				Err:    fmt.Errorf("No replication resync status available for %s", arn),
-			}), r.URL)
-			return
-		}
-		tgtStats = brs.cloneTgtStats()
+	brs, err := loadBucketResyncMetadata(ctx, bucket, objectAPI)
+	if err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
+			Bucket: bucket,
+			Err:    fmt.Errorf("replication resync status not available for %s (%s)", arn, err.Error()),
+		}), r.URL)
+		return
 	}
 
 	var rinfo ResyncTargetsInfo
-	for tarn, st := range tgtStats {
+	for tarn, st := range brs.TargetsMap {
 		if arn != "" && tarn != arn {
 			continue
 		}
@@ -533,7 +575,7 @@ func (api objectAPIHandlers) ValidateBucketReplicationCredsHandler(w http.Respon
 		if rule.Status == replication.Disabled {
 			continue
 		}
-		clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rule.Destination.Bucket)
+		clnt := globalBucketTargetSys.GetRemoteTargetClient(rule.Destination.Bucket)
 		if clnt == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetNotFoundError, fmt.Errorf("replication config with rule ID %s has a stale target", rule.ID)), r.URL)
 			return

@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -182,7 +182,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				DiskIndex: endpoints[index].DiskIdx,
 			}
 			if disks[index] == OfflineDisk {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline-"+di.Endpoint)
 				di.State = diskErrToDriveState(errDiskNotFound)
 				disksInfo[index] = di
 				return nil

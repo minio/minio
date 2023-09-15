@@ -59,9 +59,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -154,7 +153,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			// * if you don’t have the s3:ListBucket
 			//   permission, Amazon S3 will return an HTTP
 			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
 				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
@@ -344,7 +343,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			// * if you don’t have the s3:ListBucket
 			//   permission, Amazon S3 will return an HTTP
 			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
 				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
@@ -643,7 +642,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			// * if you don’t have the s3:ListBucket
 			//   permission, Amazon S3 will return an HTTP
 			//   status code 403 ("access denied") error.`
-			if globalPolicySys.IsAllowed(policy.Args{
+			if globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
 				ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
@@ -1374,8 +1373,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	srcInfo.UserDefined = filterReplicationStatusMetadata(srcInfo.UserDefined)
 	srcInfo.UserDefined = objectlock.FilterObjectLockMetadata(srcInfo.UserDefined, true, true)
-	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectRetentionAction)
-	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectLegalHoldAction)
+	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, policy.PutObjectRetentionAction)
+	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, policy.PutObjectLegalHoldAction)
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
 		getObjectInfo = api.CacheAPI().GetObjectInfo
@@ -1668,7 +1667,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	)
 
 	// Check if put is allowed
-	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, iampolicy.PutObjectAction); s3Err != ErrNone {
+	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, policy.PutObjectAction); s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
@@ -1716,7 +1715,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-		if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.ReplicateObjectAction); s3Err != ErrNone {
+		if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.ReplicateObjectAction); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
 		}
@@ -1796,8 +1795,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		putObject = api.CacheAPI().PutObject
 	}
 
-	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)
-	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectLegalHoldAction)
+	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.PutObjectRetentionAction)
+	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.PutObjectLegalHoldAction)
 
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -2046,7 +2045,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	)
 
 	// Check if put is allowed
-	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, iampolicy.PutObjectAction); s3Err != ErrNone {
+	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, policy.PutObjectAction); s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
@@ -2097,8 +2096,8 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		AutoEncrypt: globalAutoEncryption,
 	})
 
-	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)
-	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectLegalHoldAction)
+	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.PutObjectRetentionAction)
+	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.PutObjectLegalHoldAction)
 
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
@@ -2150,7 +2149,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		pReader := NewPutObjReader(rawReader)
 
 		if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-			if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.ReplicateObjectAction); s3Err != ErrNone {
+			if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.ReplicateObjectAction); s3Err != ErrNone {
 				return err
 			}
 			metadata[ReservedMetadataPrefixLower+ReplicaStatus] = replication.Replica.String()
