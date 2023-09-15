@@ -450,7 +450,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	actualPartSize = length
-	var reader io.Reader = etag.NewReader(ctx, gr, nil, false, nil)
+	var reader io.Reader = etag.NewReader(ctx, gr, nil, nil)
 
 	mi, err := objectAPI.GetMultipartInfo(ctx, dstBucket, dstObject, uploadID, dstOpts)
 	if err != nil {

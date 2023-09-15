@@ -72,20 +72,14 @@ type Options struct {
 	Size       int64
 	ActualSize int64
 	DisableMD5 bool
-	ContentMD5 ContentMD5Opt
-}
-
-// ContentMD5Opt - if not request. Use md5.Sum(uuid) instead
-type ContentMD5Opt struct {
-	NotRequest bool
-	UUID       []byte
+	ForceMD5   []byte
 }
 
 // NewReaderWithOpts is like NewReader but takes `Options` as argument, allowing
 // callers to indicate if they want to disable md5sum checksum.
 func NewReaderWithOpts(ctx context.Context, src io.Reader, opts Options) (*Reader, error) {
 	// return hard limited reader
-	return newReader(ctx, src, opts.Size, opts.MD5Hex, opts.SHA256Hex, opts.ActualSize, opts.DisableMD5, opts.ContentMD5)
+	return newReader(ctx, src, opts.Size, opts.MD5Hex, opts.SHA256Hex, opts.ActualSize, opts.DisableMD5, opts.ForceMD5)
 }
 
 // NewReader returns a new Reader that wraps src and computes
@@ -104,10 +98,10 @@ func NewReaderWithOpts(ctx context.Context, src io.Reader, opts Options) (*Reade
 // NewReader enforces S3 compatibility strictly by ensuring caller
 // does not send more content than specified size.
 func NewReader(ctx context.Context, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
-	return newReader(ctx, src, size, md5Hex, sha256Hex, actualSize, false, ContentMD5Opt{})
+	return newReader(ctx, src, size, md5Hex, sha256Hex, actualSize, false, nil)
 }
 
-func newReader(ctx context.Context, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, disableMD5 bool, md5Opt ContentMD5Opt) (*Reader, error) {
+func newReader(ctx context.Context, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, disableMD5 bool, forceMD5 []byte) (*Reader, error) {
 	MD5, err := hex.DecodeString(md5Hex)
 	if err != nil {
 		return nil, BadDigest{ // TODO(aead): Return an error that indicates that an invalid ETag has been specified
@@ -161,7 +155,7 @@ func newReader(ctx context.Context, src io.Reader, size int64, md5Hex, sha256Hex
 		r := ioutil.HardLimitReader(src, size)
 		if !disableMD5 {
 			if _, ok := src.(etag.Tagger); !ok {
-				src = etag.NewReader(ctx, r, MD5, md5Opt.NotRequest, md5Opt.UUID)
+				src = etag.NewReader(ctx, r, MD5, forceMD5)
 			} else {
 				src = etag.Wrap(r, src)
 			}
@@ -170,7 +164,7 @@ func newReader(ctx context.Context, src io.Reader, size int64, md5Hex, sha256Hex
 		}
 	} else if _, ok := src.(etag.Tagger); !ok {
 		if !disableMD5 {
-			src = etag.NewReader(ctx, src, MD5, md5Opt.NotRequest, md5Opt.UUID)
+			src = etag.NewReader(ctx, src, MD5, forceMD5)
 		}
 	}
 	var h hash.Hash

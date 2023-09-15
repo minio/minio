@@ -1182,7 +1182,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
-		reader = etag.NewReader(ctx, reader, nil, false, nil)
+		reader = etag.NewReader(ctx, reader, nil, nil)
 		wantEncryption := crypto.Requested(r.Header)
 		s2c, cb := newS2CompressReader(reader, actualSize, wantEncryption)
 		dstOpts.IndexCB = cb
@@ -1766,10 +1766,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			SHA256Hex:  sha256hex,
 			ActualSize: actualSize,
 			DisableMD5: false,
-			ContentMD5: hash.ContentMD5Opt{
-				NotRequest: true,
-				UUID:       mustGetUUIDBytes(),
-			},
+			ForceMD5:   mustGetUUIDBytes(),
 		})
 	} else {
 		hashReader, err = hash.NewReader(ctx, reader, size, md5hex, sha256hex, actualSize)

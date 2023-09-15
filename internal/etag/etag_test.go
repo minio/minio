@@ -138,7 +138,7 @@ var readerTests = []struct { // Reference values computed by: echo <content> | m
 
 func TestReader(t *testing.T) {
 	for i, test := range readerTests {
-		reader := NewReader(context.Background(), strings.NewReader(test.Content), test.ETag, false, nil)
+		reader := NewReader(context.Background(), strings.NewReader(test.Content), test.ETag, nil)
 		if _, err := io.Copy(io.Discard, reader); err != nil {
 			t.Fatalf("Test %d: read failed: %v", i, err)
 		}

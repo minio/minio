@@ -103,16 +103,16 @@ type Reader struct {
 // If the provided etag is not nil the returned
 // Reader compares the etag with the computed
 // MD5 sum once the r returns io.EOF.
-func NewReader(ctx context.Context, r io.Reader, etag ETag, contentMD5NotRequest bool, contentMD5UUID []byte) *Reader {
+func NewReader(ctx context.Context, r io.Reader, etag ETag, forceMD5 []byte) *Reader {
 	if er, ok := r.(*Reader); ok {
 		if er.readN == 0 && Equal(etag, er.checksum) {
 			return er
 		}
 	}
-	if contentMD5NotRequest {
+	if len(forceMD5) != 0 {
 		return &Reader{
 			src:      r,
-			md5:      NewUUIDHash(contentMD5UUID),
+			md5:      NewUUIDHash(forceMD5),
 			checksum: etag,
 		}
 	}
@@ -186,7 +186,7 @@ func (u UUIDHash) Reset() {
 
 // Size -  implement hash.Hash Size
 func (u UUIDHash) Size() int {
-	return md5.Size
+	return len(u.uuid)
 }
 
 // BlockSize -  implement hash.Hash BlockSize
