@@ -130,9 +130,9 @@ func minioConfigToConsoleFeatures() {
 		// This will save users from providing a certificate with IP or FQDN SAN that points to the local host.
 		os.Setenv("CONSOLE_MINIO_SERVER", fmt.Sprintf("%s://127.0.0.1:%s", getURLScheme(globalIsTLS), globalMinioPort))
 	}
-	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
+	if value := env.Get(config.EnvMinIOLogQueryURL, ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
-		if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
+		if value := env.Get(config.EnvMinIOLogQueryAuthToken, ""); value != "" {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
@@ -144,14 +144,18 @@ func minioConfigToConsoleFeatures() {
 		}
 	}
 	// Enable if prometheus URL is set.
-	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
+	if value := env.Get(config.EnvMinIOPrometheusURL, ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
-		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
+		if value := env.Get(config.EnvMinIOPrometheusJobID, "minio-job"); value != "" {
 			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
 			// Support additional labels for more granular filtering.
-			if value := env.Get("MINIO_PROMETHEUS_EXTRA_LABELS", ""); value != "" {
+			if value := env.Get(config.EnvMinIOPrometheusExtraLabels, ""); value != "" {
 				os.Setenv("CONSOLE_PROMETHEUS_EXTRA_LABELS", value)
 			}
+		}
+		// Support Prometheus Auth Token
+		if value := env.Get(config.EnvMinIOPrometheusAuthToken, ""); value != "" {
+			os.Setenv("CONSOLE_PROMETHEUS_AUTH_TOKEN", value)
 		}
 	}
 	// Enable if LDAP is enabled.
