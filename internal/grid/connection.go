@@ -705,6 +705,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		var msg []byte
 		for {
 			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+				cancel(ErrDisconnected)
 				return
 			}
 
