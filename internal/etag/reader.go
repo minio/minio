@@ -174,9 +174,7 @@ func (u UUIDHash) Write(p []byte) (n int, err error) {
 
 // Sum -  implement md5.Sum
 func (u UUIDHash) Sum(b []byte) []byte {
-	hasher := md5.New()
-	hasher.Write(u.uuid)
-	return hasher.Sum(nil)
+	return u.uuid
 }
 
 // Reset -  implement hash.Hash Reset
