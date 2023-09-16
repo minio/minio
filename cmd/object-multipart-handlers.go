@@ -164,9 +164,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
-	if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(ObjectInfo{
-		UserDefined: metadata,
-	}, replication.ObjectReplicationType, ObjectOptions{})); dsc.ReplicateAny() {
+	if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(metadata, "", "", replication.ObjectReplicationType, ObjectOptions{})); dsc.ReplicateAny() {
 		metadata[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 		metadata[ReservedMetadataPrefixLower+ReplicationStatus] = dsc.PendingStatus()
 	}
@@ -997,8 +995,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(objInfo, replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
-		scheduleReplication(ctx, objInfo.Clone(), objectAPI, dsc, replication.ObjectReplicationType)
+	if dsc := mustReplicate(ctx, bucket, object, objInfo.getMustReplicateOptions(replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
+		scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 	}
 	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		actualSize, _ := objInfo.GetActualSize()

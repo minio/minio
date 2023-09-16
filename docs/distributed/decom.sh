@@ -18,7 +18,7 @@ export CI=true
 (minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/tmp/decom.log) &
 pid=$!
 
-sleep 2
+sleep 10
 
 export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 
@@ -48,26 +48,30 @@ policy_count=$(./mc admin policy list myminio/ | wc -l)
 
 ## create a warm tier instance
 (minio server /tmp/xltier/{1...4}/disk{0...1} --address :9001 2>&1 >/dev/null) &
-sleep 2
+sleep 10
 export MC_HOST_mytier="http://minioadmin:minioadmin@localhost:9001/"
 
 ./mc mb -l myminio/bucket2
 ./mc mb -l mytier/tiered
+
 ## create a tier and set up ilm policy to tier immediately
 ./mc admin tier add minio myminio TIER1 --endpoint http://localhost:9001 --access-key minioadmin --secret-key minioadmin --bucket tiered --prefix prefix5/
 ./mc ilm add myminio/bucket2 --transition-days 0 --transition-tier TIER1 --transition-days 0
+
 ## mirror some content to bucket2 and capture versions tiered
 ./mc mirror internal myminio/bucket2/ --quiet >/dev/null
 ./mc ls -r myminio/bucket2/ >bucket2_ns.txt
 ./mc ls -r --versions myminio/bucket2/ >bucket2_ns_versions.txt
-sleep 2
+
+sleep 10
+
 ./mc ls -r --versions mytier/tiered/ >tiered_ns_versions.txt
 
 kill $pid
 (minio server /tmp/xl/{1...10}/disk{0...1} /tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded.log) &
 pid=$!
 
-sleep 2
+sleep 10
 
 expanded_user_count=$(./mc admin user list myminio/ | wc -l)
 expanded_policy_count=$(./mc admin policy list myminio/ | wc -l)
@@ -106,7 +110,7 @@ kill $pid
 (minio server /tmp/xl/{11...30}/disk{0...3} 2>&1 >/dev/null) &
 pid=$!
 
-sleep 2
+sleep 10
 
 decom_user_count=$(./mc admin user list myminio/ | wc -l)
 decom_policy_count=$(./mc admin policy list myminio/ | wc -l)
