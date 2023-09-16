@@ -113,9 +113,10 @@ func init() {
 		shardDiskTimeDelta = 1 * time.Minute
 	}
 
-	// All minio-go API operations shall be performed only once,
+	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
 	minio.MaxRetry = 1
+	madmin.MaxRetry = 1
 }
 
 const consolePrefix = "CONSOLE_"
