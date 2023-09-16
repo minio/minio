@@ -409,9 +409,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 		var existingFolders, newFolders []cachedFolder
 		var foundObjects bool
-		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
+		err := readDirFn(pathJoin(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
-			entName = pathClean(path.Join(folder.name, entName))
+			entName = pathClean(pathJoin(folder.name, entName))
 			if entName == "" || entName == folder.name {
 				if f.dataUsageScannerDebug {
 					console.Debugf(scannerLogPrefix+" no entity (%s,%s)\n", f.root, entName)
@@ -461,7 +461,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 			// Get file size, ignore errors.
 			item := scannerItem{
-				Path:        path.Join(f.root, entName),
+				Path:        pathJoin(f.root, entName),
 				Typ:         typ,
 				bucket:      bucket,
 				prefix:      path.Dir(prefix),
@@ -496,7 +496,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// Object already accounted for, remove from heal map,
 			// simply because getSize() function already heals the
 			// object.
-			delete(abandonedChildren, path.Join(item.bucket, item.objectPath()))
+			delete(abandonedChildren, pathJoin(item.bucket, item.objectPath()))
 
 			into.addSizes(sz)
 			into.Objects++
@@ -873,7 +873,7 @@ type getSizeFn func(item scannerItem) (sizeSummary, error)
 func (i *scannerItem) transformMetaDir() {
 	split := strings.Split(i.prefix, SlashSeparator)
 	if len(split) > 1 {
-		i.prefix = path.Join(split[:len(split)-1]...)
+		i.prefix = pathJoin(split[:len(split)-1]...)
 	} else {
 		i.prefix = ""
 	}
@@ -1247,7 +1247,7 @@ func applyLifecycleAction(event lifecycle.Event, src lcEventSrc, obj ObjectInfo)
 
 // objectPath returns the prefix and object name.
 func (i *scannerItem) objectPath() string {
-	return path.Join(i.prefix, i.objectName)
+	return pathJoin(i.prefix, i.objectName)
 }
 
 // healReplication will heal a scanned item that has failed replication.
