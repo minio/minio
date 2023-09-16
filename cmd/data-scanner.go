@@ -54,11 +54,10 @@ const (
 	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
-	healDeleteDangling    = true
-	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
-	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+	healDeleteDangling   = true
+	healObjectSelectProb = 512 // Overall probability of a file being scanned; one in n.
 
-	dataScannerExcessiveVersionsThreshold = 1000  // Issue a warning when a single object has more versions than this
+	dataScannerExcessiveVersionsThreshold = 100   // Issue a warning when a single object has more versions than this
 	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
 )
 
@@ -66,7 +65,7 @@ var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper = newDynamicSleeper(10, 10*time.Second, true)
+	scannerSleeper = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
 	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
 )
 
@@ -274,7 +273,6 @@ type folderScanner struct {
 // rarer if the bloom filter for the path is clean and no lifecycles are applied.
 // Skipped leaves have their totals transferred from the previous cycle.
 //
-// A clean leaf will be included once every healFolderIncludeProb for partial heal scans.
 // When selected there is a one in healObjectSelectProb that any object will be chosen for heal scan.
 //
 // Compaction happens when either:
