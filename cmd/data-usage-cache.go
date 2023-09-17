@@ -347,20 +347,18 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
 	e.ReplicationStats.ReplicaCount += uint64(summary.replicaCount)
 
-	if summary.replTargetStats != nil {
-		for arn, st := range summary.replTargetStats {
-			tgtStat, ok := e.ReplicationStats.Targets[arn]
-			if !ok {
-				tgtStat = replicationStats{}
-			}
-			tgtStat.PendingSize += uint64(st.pendingSize)
-			tgtStat.FailedSize += uint64(st.failedSize)
-			tgtStat.ReplicatedSize += uint64(st.replicatedSize)
-			tgtStat.ReplicatedCount += uint64(st.replicatedCount)
-			tgtStat.FailedCount += st.failedCount
-			tgtStat.PendingCount += st.pendingCount
-			e.ReplicationStats.Targets[arn] = tgtStat
+	for arn, st := range summary.replTargetStats {
+		tgtStat, ok := e.ReplicationStats.Targets[arn]
+		if !ok {
+			tgtStat = replicationStats{}
 		}
+		tgtStat.PendingSize += uint64(st.pendingSize)
+		tgtStat.FailedSize += uint64(st.failedSize)
+		tgtStat.ReplicatedSize += uint64(st.replicatedSize)
+		tgtStat.ReplicatedCount += uint64(st.replicatedCount)
+		tgtStat.FailedCount += st.failedCount
+		tgtStat.PendingCount += st.pendingCount
+		e.ReplicationStats.Targets[arn] = tgtStat
 	}
 	if summary.tiers != nil {
 		if e.AllTierStats == nil {
