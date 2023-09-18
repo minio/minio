@@ -28,7 +28,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -114,7 +113,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	srcObject := srcObjInfo.Name
 	tgtObject := srcObjInfo.Name
 	if r.Target.Prefix != "" {
-		tgtObject = path.Join(r.Target.Prefix, srcObjInfo.Name)
+		tgtObject = pathJoin(r.Target.Prefix, srcObjInfo.Name)
 	}
 
 	versionID := srcObjInfo.VersionID
@@ -182,7 +181,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 	srcObject := srcObjInfo.Name
 	tgtObject := srcObjInfo.Name
 	if r.Target.Prefix != "" {
-		tgtObject = path.Join(r.Target.Prefix, srcObjInfo.Name)
+		tgtObject = pathJoin(r.Target.Prefix, srcObjInfo.Name)
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		opts.VersionID = ""

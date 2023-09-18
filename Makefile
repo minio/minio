@@ -49,18 +49,18 @@ test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue ./...
 
-test-root-disable: install
+test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
 	@env bash $(PWD)/buildscripts/disable-root.sh
 
-test-decom: install
+test-decom: install-race
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
 	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
 
-test-upgrade: build
+test-upgrade: install-race
 	@echo "Running minio upgrade tests"
 	@(env bash $(PWD)/buildscripts/minio-upgrade.sh)
 
@@ -86,18 +86,18 @@ test-replication-3site:
 test-delete-replication:
 	@(env bash $(PWD)/docs/bucket/replication/delete-replication.sh)
 
-test-replication: install test-replication-2site test-replication-3site test-delete-replication test-sio-error ## verify multi site replication
+test-replication: install-race test-replication-2site test-replication-3site test-delete-replication test-sio-error ## verify multi site replication
 	@echo "Running tests for replicating three sites"
 
-test-site-replication-ldap: install ## verify automatic site replication
+test-site-replication-ldap: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with LDAP)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-ldap.sh)
 
-test-site-replication-oidc: install ## verify automatic site replication
+test-site-replication-oidc: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with OIDC)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-oidc.sh)
 
-test-site-replication-minio: install ## verify automatic site replication
+test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with MinIO IDP)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-minio-idp.sh)
 
@@ -158,6 +158,12 @@ docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix t
 docker: build ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
+
+install-race: checks ## builds minio to $(PWD)
+	@echo "Building minio binary to './minio'"
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
+	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
 
 install: build ## builds minio and installs it to $GOPATH/bin.
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"

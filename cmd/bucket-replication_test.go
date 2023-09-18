@@ -88,7 +88,7 @@ var replicationConfigTests = []struct {
 func TestReplicationResync(t *testing.T) {
 	ctx := context.Background()
 	for i, test := range replicationConfigTests {
-		if sync := test.rcfg.Resync(ctx, test.info, &test.dsc, test.tgtStatuses); sync.mustResync() != test.expectedSync {
+		if sync := test.rcfg.Resync(ctx, test.info, test.dsc, test.tgtStatuses); sync.mustResync() != test.expectedSync {
 			t.Errorf("Test%d (%s): Resync  got %t , want %t", i+1, test.name, sync.mustResync(), test.expectedSync)
 		}
 	}
@@ -283,7 +283,7 @@ var (
 
 func TestReplicationResyncwrapper(t *testing.T) {
 	for i, test := range replicationConfigTests2 {
-		if sync := test.rcfg.resync(test.info, &test.dsc, test.tgtStatuses); sync.mustResync() != test.expectedSync {
+		if sync := test.rcfg.resync(test.info, test.dsc, test.tgtStatuses); sync.mustResync() != test.expectedSync {
 			t.Errorf("%s (%s): Replicationresync  got %t , want %t", fmt.Sprintf("Test%d - %s", i+1, time.Now().Format(http.TimeFormat)), test.name, sync.mustResync(), test.expectedSync)
 		}
 	}

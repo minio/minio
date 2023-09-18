@@ -516,7 +516,10 @@ func (o *ObjectInfo) IsCompressedOK() (bool, error) {
 }
 
 // GetActualSize - returns the actual size of the stored object
-func (o *ObjectInfo) GetActualSize() (int64, error) {
+func (o ObjectInfo) GetActualSize() (int64, error) {
+	if o.ActualSize != nil {
+		return *o.ActualSize, nil
+	}
 	if o.IsCompressed() {
 		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
 		if !ok {

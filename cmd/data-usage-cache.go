@@ -347,20 +347,18 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 	e.ReplicationStats.ReplicaSize += uint64(summary.replicaSize)
 	e.ReplicationStats.ReplicaCount += uint64(summary.replicaCount)
 
-	if summary.replTargetStats != nil {
-		for arn, st := range summary.replTargetStats {
-			tgtStat, ok := e.ReplicationStats.Targets[arn]
-			if !ok {
-				tgtStat = replicationStats{}
-			}
-			tgtStat.PendingSize += uint64(st.pendingSize)
-			tgtStat.FailedSize += uint64(st.failedSize)
-			tgtStat.ReplicatedSize += uint64(st.replicatedSize)
-			tgtStat.ReplicatedCount += uint64(st.replicatedCount)
-			tgtStat.FailedCount += st.failedCount
-			tgtStat.PendingCount += st.pendingCount
-			e.ReplicationStats.Targets[arn] = tgtStat
+	for arn, st := range summary.replTargetStats {
+		tgtStat, ok := e.ReplicationStats.Targets[arn]
+		if !ok {
+			tgtStat = replicationStats{}
 		}
+		tgtStat.PendingSize += uint64(st.pendingSize)
+		tgtStat.FailedSize += uint64(st.failedSize)
+		tgtStat.ReplicatedSize += uint64(st.replicatedSize)
+		tgtStat.ReplicatedCount += uint64(st.replicatedCount)
+		tgtStat.FailedCount += st.failedCount
+		tgtStat.PendingCount += st.pendingCount
+		e.ReplicationStats.Targets[arn] = tgtStat
 	}
 	if summary.tiers != nil {
 		if e.AllTierStats == nil {
@@ -928,6 +926,9 @@ type objectIO interface {
 // The loader is optimistic and has no locking, but tries 5 times before giving up.
 // If the object is not found or unable to deserialize d is cleared and nil error is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
+	// By defaut, empty data usage cache
+	*d = dataUsageCache{}
+
 	load := func(name string, timeout time.Duration) (bool, error) {
 		// Abandon if more than time.Minute, so we don't hold up scanner.
 		// drive timeout by default is 2 minutes, we do not need to wait longer.
@@ -938,10 +939,11 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		if err != nil {
 			switch err.(type) {
 			case ObjectNotFound, BucketNotFound:
+				return false, nil
 			case InsufficientReadQuorum, StorageErr:
 				return true, nil
 			}
-			return false, toObjectErr(err, dataUsageBucket, name)
+			return false, err
 		}
 		err = d.deserialize(r)
 		r.Close()
@@ -953,20 +955,18 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	for retries < 5 {
 		retry, err := load(name, time.Minute)
 		if err != nil {
-			return err
+			return toObjectErr(err, dataUsageBucket, name)
 		}
-		if retry {
-			retry, _ = load(name+".bkp", 30*time.Second)
-			if !retry {
-				break
-			}
-			retries++
-			time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
-			continue
+		if !retry {
+			break
 		}
-		return nil
+		retry, _ = load(name+".bkp", 30*time.Second)
+		if !retry {
+			break
+		}
+		retries++
+		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 	}
-	*d = dataUsageCache{}
 	return nil
 }
 
