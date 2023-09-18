@@ -251,6 +251,8 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 	return err
 }
 
+const s3StorageClassGlacier = "GLACIER"
+
 // StartFromSource starts the batch replication job from remote source, resumes if there was a pending job via "job.ID"
 func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
 	ri := &batchJobInfo{
@@ -381,6 +383,12 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		skipReplicate := false
 
 		for obj := range objInfoCh {
+			if s3Type && obj.StorageClass == s3StorageClassGlacier {
+				// Skip GLACIER tiered objects for AWS S3 or any S3
+				// compatible object storage vendors.
+				continue
+			}
+
 			oi := toObjectInfo(r.Source.Bucket, obj.Key, obj)
 			if !minioSrc {
 				oi2, err := c.StatObject(ctx, r.Source.Bucket, obj.Key, miniogo.StatObjectOptions{})
