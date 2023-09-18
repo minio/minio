@@ -119,6 +119,7 @@ import (
 
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash/sha256"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/sio"
 )
 
@@ -265,7 +266,7 @@ func FromContentMD5(h http.Header) (ETag, error) {
 
 // ContentMD5Requested - for http.request.header is not request Content-Md5
 func ContentMD5Requested(h http.Header) bool {
-	_, ok := h["Content-Md5"]
+	_, ok := h[xhttp.ContentMD5]
 	return ok
 }
 

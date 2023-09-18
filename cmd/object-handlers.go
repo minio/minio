@@ -1764,7 +1764,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 	}
 	var hashReader *hash.Reader
-	// SSE-KVM and SSE-C if not request Content-Md5. Simple use md5.Sum(uuid) as etag.
+	// Optimization: If SSE-KMS and SSE-C did not request Content-Md5. Use uuid as etag
 	if !etag.ContentMD5Requested(r.Header) && (crypto.S3KMS.IsRequested(r.Header) || crypto.SSEC.IsRequested(r.Header)) {
 		hashReader, err = hash.NewReaderWithOpts(ctx, reader, hash.Options{
 			Size:       size,
