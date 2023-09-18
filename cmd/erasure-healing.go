@@ -760,7 +760,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 		// Attempt a rename now from healed data to final location.
 		partsMetadata[i].SetHealing()
-		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
+
+		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object, RenameOptions{}); err != nil {
 			return result, err
 		}
 

@@ -266,12 +266,12 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context, metrics bool) Sto
 	return getStorageInfo(localDisks, localEndpoints, metrics)
 }
 
-// getOnlineDisksWithHealing - returns online disks and overall healing status.
+// getOnlineDisksWithHealingAndInfo - returns online disks and overall healing status.
 // Disks are randomly ordered, but in the following groups:
 // - Non-scanning disks
 // - Non-healing disks
 // - Healing disks (if inclHealing is true)
-func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks []StorageAPI, healing bool) {
+func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (newDisks []StorageAPI, newInfos []DiskInfo, healing bool) {
 	var wg sync.WaitGroup
 	disks := er.getDisks()
 	infos := make([]DiskInfo, len(disks))
@@ -284,32 +284,24 @@ func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks [
 
 			disk := disks[i]
 			if disk == nil {
-				infos[i].Error = "offline drive"
+				infos[i].Error = errDiskNotFound.Error()
 				return
 			}
 
 			di, err := disk.DiskInfo(context.Background(), false)
+			infos[i] = di
 			if err != nil {
 				// - Do not consume disks which are not reachable
 				//   unformatted or simply not accessible for some reason.
-				//
-				//
-				// - Future: skip busy disks
-				if err != nil {
-					infos[i].Error = err.Error()
-				}
-				return
+				infos[i].Error = err.Error()
 			}
-			if !inclHealing && di.Healing {
-				return
-			}
-
-			infos[i] = di
 		}()
 	}
 	wg.Wait()
 
 	var scanningDisks, healingDisks []StorageAPI
+	var scanningInfos, healingInfos []DiskInfo
+
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
 		// this information is used by scanner to skip healing
@@ -321,23 +313,34 @@ func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks [
 			healing = true
 			if inclHealing {
 				healingDisks = append(healingDisks, disks[i])
+				healingInfos = append(healingInfos, infos[i])
 			}
 			continue
 		}
 
 		if !info.Scanning {
 			newDisks = append(newDisks, disks[i])
+			newInfos = append(newInfos, infos[i])
 		} else {
 			scanningDisks = append(scanningDisks, disks[i])
+			scanningInfos = append(scanningInfos, infos[i])
 		}
 	}
 
 	// Prefer non-scanning disks over disks which are currently being scanned.
 	newDisks = append(newDisks, scanningDisks...)
+	newInfos = append(newInfos, scanningInfos...)
+
 	/// Then add healing disks.
 	newDisks = append(newDisks, healingDisks...)
+	newInfos = append(newInfos, healingInfos...)
 
-	return newDisks, healing
+	return newDisks, newInfos, healing
+}
+
+func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks []StorageAPI, healing bool) {
+	newDisks, _, healing = er.getOnlineDisksWithHealingAndInfo(inclHealing)
+	return
 }
 
 // Clean-up previously deleted objects. from .minio.sys/tmp/.trash/

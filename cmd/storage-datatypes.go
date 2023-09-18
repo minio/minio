@@ -23,8 +23,19 @@ import (
 
 // DeleteOptions represents the disk level delete options available for the APIs
 type DeleteOptions struct {
+	BaseOptions
 	Recursive bool `msg:"r"`
 	Immediate bool `msg:"i"`
+}
+
+// BaseOptions represents common options for all Storage API calls
+type BaseOptions struct {
+	Remote bool `msg:"rm"` // Indicates if the incoming request is for a remote call.
+}
+
+// RenameOptions represents rename API options, currently its same as BaseOptions
+type RenameOptions struct {
+	BaseOptions
 }
 
 //go:generate msgp -file=$GOFILE
@@ -65,6 +76,8 @@ type DiskMetrics struct {
 	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
 	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
 	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
+	TotalWrites             uint64             `json:"totalWrites"`
+	TotalDeletes            uint64             `json:"totalDeletes"`
 }
 
 // VolsInfo is a collection of volume(bucket) information
@@ -360,11 +373,12 @@ type ReadMultipleResp struct {
 
 // DeleteVersionHandlerParams are parameters for DeleteVersionHandler
 type DeleteVersionHandlerParams struct {
-	DiskID         string   `msg:"id"`
-	Volume         string   `msg:"v"`
-	FilePath       string   `msg:"fp"`
-	ForceDelMarker bool     `msg:"fdm"`
-	FI             FileInfo `msg:"fi"`
+	DiskID         string        `msg:"id"`
+	Volume         string        `msg:"v"`
+	FilePath       string        `msg:"fp"`
+	ForceDelMarker bool          `msg:"fdm"`
+	Opts           DeleteOptions `msg:"do"`
+	FI             FileInfo      `msg:"fi"`
 }
 
 // MetadataHandlerParams is request info for UpdateMetadataHandle and WriteMetadataHandler.
@@ -399,12 +413,13 @@ type DeleteFileHandlerParams struct {
 
 // RenameDataHandlerParams are parameters for RenameDataHandler.
 type RenameDataHandlerParams struct {
-	DiskID    string   `msg:"id"`
-	SrcVolume string   `msg:"sv"`
-	SrcPath   string   `msg:"sp"`
-	DstVolume string   `msg:"dv"`
-	DstPath   string   `msg:"dp"`
-	FI        FileInfo `msg:"fi"`
+	DiskID    string        `msg:"id"`
+	SrcVolume string        `msg:"sv"`
+	SrcPath   string        `msg:"sp"`
+	DstVolume string        `msg:"dv"`
+	DstPath   string        `msg:"dp"`
+	FI        FileInfo      `msg:"fi"`
+	Opts      RenameOptions `msg:"ro"`
 }
 
 // RenameDataResp - RenameData()'s response.
