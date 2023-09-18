@@ -311,6 +311,7 @@ type ReplicateObjectInfo struct {
 	Name                       string
 	Bucket                     string
 	VersionID                  string
+	ETag                       string
 	Size                       int64
 	ActualSize                 int64
 	ModTime                    time.Time

@@ -2274,6 +2274,7 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 		ActualSize:                 asz,
 		Bucket:                     oi.Bucket,
 		VersionID:                  oi.VersionID,
+		ETag:                       oi.ETag,
 		ModTime:                    oi.ModTime,
 		ReplicationStatus:          oi.ReplicationStatus,
 		ReplicationStatusInternal:  oi.ReplicationStatusInternal,
@@ -2287,6 +2288,8 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 		TargetStatuses:       tgtStatuses,
 		TargetPurgeStatuses:  purgeStatuses,
 		ReplicationTimestamp: tm,
+		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
+		UserTags:             oi.UserTags,
 	}
 
 	if dsc.Synchronous() {
