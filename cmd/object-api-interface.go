@@ -146,6 +146,7 @@ type DeleteBucketOptions struct {
 // BucketOptions provides options for ListBuckets and GetBucketInfo call.
 type BucketOptions struct {
 	Deleted bool // true only when site replication is enabled
+	Cached  bool // true only when we are requesting a cached response instead of hitting the disk for example ListBuckets() call.
 }
 
 // SetReplicaStatus sets replica status and timestamp for delete operations in ObjectOptions

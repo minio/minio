@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1192,7 +1193,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
-// AccountInfoHandler returns usage
+// AccountInfoHandler returns usage, permissions and other bucket metadata for incoming us
 func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1261,12 +1262,30 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	// Load the latest calculated data usage
-	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
+	bucketStorageCache.Once.Do(func() {
+		// Set this to 10 secs since its enough, as scanner
+		// does not update the bucket usage values frequently.
+		bucketStorageCache.TTL = 10 * time.Second
+
+		// Rely on older value if usage loading fails from disk.
+		bucketStorageCache.Relax = true
+		bucketStorageCache.Update = func() (interface{}, error) {
+			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+			defer done()
+
+			return loadDataUsageFromBackend(ctx, objectAPI)
+		}
+	})
+
+	var dataUsageInfo DataUsageInfo
+	v, _ := bucketStorageCache.Get()
+	if v != nil {
+		dataUsageInfo, _ = v.(DataUsageInfo)
+	}
 
 	// If etcd, dns federation configured list buckets from etcd.
-	var buckets []BucketInfo
 	var err error
+	var buckets []BucketInfo
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
@@ -1285,7 +1304,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return buckets[i].Name < buckets[j].Name
 		})
 	} else {
-		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{})
+		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{Cached: true})
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
