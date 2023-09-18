@@ -1571,7 +1571,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	)
 
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
 		if err != nil {
 			return err
 		}

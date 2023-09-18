@@ -736,7 +736,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(ctx, io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}
@@ -766,7 +766,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		return err
 	}
 
-	hr, err := hash.NewReader(gr, oi.Size, "", "", actualSize)
+	hr, err := hash.NewReader(ctx, gr, oi.Size, "", "", actualSize)
 	if err != nil {
 		return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 	}

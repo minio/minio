@@ -998,7 +998,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return err
 	}
 
-	hr, err := hash.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
+	hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
 	if err != nil {
 		return err
 	}
