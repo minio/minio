@@ -476,11 +476,37 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 
 	bootstrapTraceMsg("loading service accounts")
 	svcAccList := listedConfigItems[svcAccListKey]
+	svcUsersMap := make(map[string]UserIdentity, len(svcAccList))
 	for _, item := range svcAccList {
 		userName := path.Dir(item)
-		if err := iamOS.loadUser(ctx, userName, svcUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+		if err := iamOS.loadUser(ctx, userName, svcUser, svcUsersMap); err != nil && err != errNoSuchUser {
 			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
 		}
+	}
+	for _, svcAcc := range svcUsersMap {
+		svcParent := svcAcc.Credentials.ParentUser
+		if _, ok := cache.iamUsersMap[svcParent]; !ok {
+			// If a service account's parent user is not in iamUsersMap, the
+			// parent is an STS account. Such accounts may have a policy mapped
+			// on the parent user, so we load them. This is not needed for the
+			// initial server startup, however, it is needed for the case where
+			// the STS account's policy mapping (for example in LDAP mode) may
+			// be changed and the user's policy mapping in memory is stale
+			// (because the policy change notification was missed by the current
+			// server).
+			//
+			// The "policy not found" error is ignored because the STS account may
+			// not have a policy mapped via its parent (for e.g. in
+			// OIDC/AssumeRoleWithCustomToken/AssumeRoleWithCertificate).
+			err := iamOS.loadMappedPolicy(ctx, svcParent, stsUser, false, cache.iamSTSPolicyMap)
+			if err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", svcParent, err)
+			}
+		}
+	}
+	// Copy svcUsersMap to cache.iamUsersMap
+	for k, v := range svcUsersMap {
+		cache.iamUsersMap[k] = v
 	}
 
 	cache.buildUserGroupMemberships()
