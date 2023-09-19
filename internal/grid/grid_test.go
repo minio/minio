@@ -91,7 +91,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  localHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },
@@ -111,7 +111,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	}))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  remoteHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },
@@ -182,7 +182,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  localHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },
@@ -219,7 +219,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(h2.Register(local, handler2))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  remoteHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },
@@ -284,7 +284,7 @@ func TestStreamSuite(t *testing.T) {
 	remoteHost := hosts[1]
 
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  localHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },
@@ -293,7 +293,7 @@ func TestStreamSuite(t *testing.T) {
 	errFatal(err)
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer,
+		Dialer: dialer.DialContext,
 		Local:  remoteHost,
 		Hosts:  hosts,
 		Auth:   func(aud string) string { return aud },

@@ -19,6 +19,7 @@ package grid
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -54,7 +55,7 @@ type Connection struct {
 	LastPong int64
 
 	// State of the connection (atomic)
-	State State
+	state State
 
 	// Non-atomic
 	Remote string
@@ -97,6 +98,7 @@ type Connection struct {
 	auth               AuthFn
 	clientPingInterval time.Duration
 	connPingInterval   time.Duration
+	tlsConfig          *tls.Config
 
 	// For testing only
 	debugInConn  net.Conn
@@ -134,8 +136,10 @@ const (
 )
 
 // ContextDialer is a dialer that can be used to dial a remote.
-type ContextDialer interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+type ContextDialer func(ctx context.Context, network, address string) (net.Conn, error)
+
+func (c ContextDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return c(ctx, network, address)
 }
 
 const (
@@ -153,6 +157,7 @@ type connectionParams struct {
 	dial          ContextDialer
 	handlers      *handlers
 	auth          AuthFn
+	tlsConfig     *tls.Config
 
 	debugBlockConnect chan struct{}
 }
@@ -160,7 +165,7 @@ type connectionParams struct {
 // newConnection will create an unconnected connection to a remote.
 func newConnection(o connectionParams) *Connection {
 	c := &Connection{
-		State:              StateUnconnected,
+		state:              StateUnconnected,
 		Remote:             o.remote,
 		Local:              o.local,
 		id:                 o.id,
@@ -177,6 +182,7 @@ func newConnection(o connectionParams) *Connection {
 		remote:             &RemoteClient{Name: o.remote},
 		clientPingInterval: clientPingInterval,
 		connPingInterval:   connPingInterval,
+		tlsConfig:          o.tlsConfig,
 	}
 
 	if o.local == o.remote {
@@ -359,7 +365,7 @@ func (c *Connection) connect() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Runs until the server is shut down.
 	for {
-		if atomic.LoadUint32((*uint32)(&c.State)) == StateShutdown {
+		if atomic.LoadUint32((*uint32)(&c.state)) == StateShutdown {
 			return
 		}
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
@@ -376,6 +382,7 @@ func (c *Connection) connect() {
 		if len(c.header) > 0 {
 			dialer.Header = ws.HandshakeHeaderHTTP(c.header)
 		}
+		dialer.TLSConfig = c.tlsConfig
 		dialStarted := time.Now()
 		if debugPrint {
 			fmt.Println(c.Local, "Connecting to ", toDial)
@@ -397,7 +404,7 @@ func (c *Connection) connect() {
 			if sleep < 0 {
 				sleep = 0
 			}
-			gotState := atomic.LoadUint32((*uint32)(&c.State))
+			gotState := atomic.LoadUint32((*uint32)(&c.state))
 			if gotState == StateShutdown {
 				return
 			}
@@ -464,7 +471,7 @@ func (c *Connection) connect() {
 		c.connChange.L.Lock()
 		for {
 			c.connChange.Wait()
-			newState := atomic.LoadUint32((*uint32)(&c.State))
+			newState := atomic.LoadUint32((*uint32)(&c.state))
 			if newState != StateConnected {
 				c.connChange.L.Unlock()
 				if newState == StateShutdown {
@@ -512,7 +519,7 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 // the context is canceled, in which case the context error is returned.
 func (c *Connection) WaitForConnect(ctx context.Context) error {
 	c.connChange.L.Lock()
-	if atomic.LoadUint32((*uint32)(&c.State)) == StateConnected {
+	if atomic.LoadUint32((*uint32)(&c.state)) == StateConnected {
 		c.connChange.L.Unlock()
 		// Happy path.
 		return nil
@@ -524,7 +531,7 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		defer close(changed)
 		for {
 			c.connChange.Wait()
-			newState := c.State
+			newState := c.state
 			select {
 			case changed <- newState:
 				if newState == StateConnected {
@@ -633,14 +640,14 @@ func (c *Connection) updateState(s State) {
 	defer c.connChange.L.Unlock()
 
 	// We may have reads that aren't locked, so update atomically.
-	gotState := atomic.LoadUint32((*uint32)(&c.State))
+	gotState := atomic.LoadUint32((*uint32)(&c.state))
 	if gotState == StateShutdown || State(gotState) == s {
 		return
 	}
 	if s == StateConnected {
 		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 	}
-	atomic.StoreUint32((*uint32)(&c.State), uint32(s))
+	atomic.StoreUint32((*uint32)(&c.state), uint32(s))
 	if debugPrint {
 		fmt.Println(c.Local, "updateState:", gotState, "->", s)
 	}
@@ -658,7 +665,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				debug.PrintStack()
 			}
 			c.connChange.L.Lock()
-			if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
+			if atomic.CompareAndSwapUint32((*uint32)(&c.state), StateConnected, StateConnectionError) {
 				c.connChange.Broadcast()
 			}
 			c.connChange.L.Unlock()
@@ -704,7 +711,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		// Keep reusing the same buffer.
 		var msg []byte
 		for {
-			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 				cancel(ErrDisconnected)
 				return
 			}
@@ -974,7 +981,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		}
 		cancel(ErrDisconnected)
 		c.connChange.L.Lock()
-		if atomic.CompareAndSwapUint32((*uint32)(&c.State), StateConnected, StateConnectionError) {
+		if atomic.CompareAndSwapUint32((*uint32)(&c.state), StateConnected, StateConnectionError) {
 			c.connChange.Broadcast()
 		}
 		c.connChange.L.Unlock()
@@ -1000,7 +1007,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		case <-ctx.Done():
 			return
 		case <-ping.C:
-			if atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 				continue
 			}
 			lastPong := atomic.LoadInt64(&c.LastPong)
@@ -1028,7 +1035,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 		}
 		c.connChange.L.Lock()
-		for atomic.LoadUint32((*uint32)(&c.State)) != StateConnected {
+		for atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 			if debugPrint {
 				fmt.Println("Waiting for connection")
 			}
@@ -1071,6 +1078,11 @@ func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectServerMux, MuxID: muxID}, nil))
 		}
 	}
+}
+
+// State returns the current connection status.
+func (c *Connection) State() State {
+	return State(atomic.LoadUint32((*uint32)(&c.state)))
 }
 
 // Stats returns the current connection stats.

@@ -20,6 +20,7 @@ package cmd
 import (
 	"net/http"
 
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/mux"
 )
 
@@ -38,7 +39,11 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	registerBootstrapRESTHandlers(router)
 
 	// Register distributed namespace lock routers.
-	registerLockRESTHandlers(router)
+	registerLockRESTHandlers()
+
+	// Add grid to router
+	// TODO(klaus): REQUESTS MUST BE VALIDATED.
+	router.Handle(grid.RoutePath, globalGrid.Load().Handler())
 }
 
 // List of some generic middlewares which are applied for all incoming requests.

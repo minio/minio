@@ -96,6 +96,10 @@ func (endpoint Endpoint) HTTPS() bool {
 	return endpoint.Scheme == "https"
 }
 
+func (endpoint Endpoint) GridHost() string {
+	return fmt.Sprintf("%s://%s", endpoint.Scheme, endpoint.Host)
+}
+
 // UpdateIsLocal - resolves the host and updates if it is local or not.
 func (endpoint *Endpoint) UpdateIsLocal() (err error) {
 	if !endpoint.IsLocal {

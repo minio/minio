@@ -30,6 +30,12 @@ import (
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
+	HandlerLockLock
+	HandlerLockRLock
+	HandlerLockUnlock
+	HandlerLockRUnlock
+	HandlerLockRefresh
+	HandlerLockForceUnlock
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -223,7 +229,7 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 	})
 }
 
-// Call the remove with the request and
+// Call the remove with the request and return the response.
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (dst Resp, err error) {
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {

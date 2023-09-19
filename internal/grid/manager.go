@@ -19,13 +19,16 @@ package grid
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/mux"
 )
 
 const (
@@ -56,10 +59,11 @@ type Manager struct {
 
 // ManagerOptions are options for creating a new grid manager.
 type ManagerOptions struct {
-	Dialer ContextDialer
-	Local  string
-	Hosts  []string
-	Auth   AuthFn
+	Dialer    ContextDialer
+	Local     string
+	Hosts     []string
+	Auth      AuthFn
+	TLSConfig *tls.Config
 
 	debugBlockConnect chan struct{}
 }
@@ -102,16 +106,34 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 	return m, nil
 }
 
+// AddToMux will add the grid manager to the given mux.
+func (m *Manager) AddToMux(router *mux.Router) {
+	router.Handle(RoutePath, m.Handler())
+}
+
 // Handler returns a handler that can be used to serve grid requests.
 // This should be connected on RoutePath to the main server.
 func (m *Manager) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if debugPrint {
+				fmt.Printf("grid: Handler returning from: %v %v\n", req.Method, req.URL)
+			}
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				fmt.Printf("grid: panic: %v\n", r)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
 		if debugPrint {
 			fmt.Printf("grid: Got a %s request for: %v\n", req.Method, req.URL)
 		}
 		ctx := req.Context()
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
+			if debugPrint {
+				fmt.Printf("grid: Unable to upgrade: %v. http.ResponseWriter is type %T\n", err, w)
+			}
 			w.WriteHeader(http.StatusUpgradeRequired)
 			return
 		}
