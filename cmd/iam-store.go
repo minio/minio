@@ -364,9 +364,9 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
-func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]string, time.Time, error) {
+func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([]string, time.Time, error) {
 	if isGroup {
-		if mode == MinIOUsersSysType {
+		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
 				return nil, time.Time{}, errNoSuchGroup
@@ -398,7 +398,12 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 	if !ok {
 		// Since user "name" could be a parent user of an STS account, we lookup
 		// mappings for those too.
-		mp = c.iamSTSPolicyMap[name]
+		mp, ok = c.iamSTSPolicyMap[name]
+		if !ok {
+			// Attempt to load parent user mapping for STS accounts
+			store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap)
+			mp = c.iamSTSPolicyMap[name]
+		}
 	}
 
 	// returned policy could be empty
@@ -544,18 +549,6 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 			return err
 		}
 
-		bootstrapTraceMsg("loading STS users")
-		// load STS temp users
-		if err := store.loadUsers(ctx, stsUser, newCache.iamSTSAccountsMap); err != nil {
-			return err
-		}
-
-		bootstrapTraceMsg("loading STS policy mapping")
-		// load STS policy mappings
-		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamSTSPolicyMap); err != nil {
-			return err
-		}
-
 		newCache.buildUserGroupMemberships()
 	}
 
@@ -671,14 +664,14 @@ func (store *IAMStoreSys) PolicyDBGet(name string, isGroup bool, groups ...strin
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store.getUsersSysType(), name, isGroup)
+	policies, _, err := cache.policyDBGet(store, name, isGroup)
 	if err != nil {
 		return nil, err
 	}
 
 	if !isGroup {
 		for _, group := range groups {
-			ps, _, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+			ps, _, err := cache.policyDBGet(store, group, true)
 			if err != nil {
 				return nil, err
 			}
@@ -864,7 +857,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	cache := store.rlock()
 	defer store.runlock()
 
-	ps, updatedAt, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+	ps, updatedAt, err := cache.policyDBGet(store, group, true)
 	if err != nil {
 		return gd, err
 	}
@@ -965,7 +958,13 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	var mp MappedPolicy
 	if !isGroup {
 		if userType == stsUser {
-			mp = cache.iamSTSPolicyMap[name]
+			var ok bool
+			mp, ok = cache.iamSTSPolicyMap[name]
+			if !ok {
+				// Attempt to load parent user mapping for STS accounts
+				store.loadMappedPolicy(context.TODO(), name, stsUser, false, cache.iamSTSPolicyMap)
+				mp = cache.iamSTSPolicyMap[name]
+			}
 		} else {
 			mp = cache.iamUserPolicyMap[name]
 		}
@@ -1620,7 +1619,11 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 	}
 
 	if userType != svcUser {
-		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
+		if userType == stsUser {
+			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamSTSPolicyMap)
+		} else {
+			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
+		}
 		// Ignore policy not mapped error
 		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
