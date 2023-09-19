@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/logger"
@@ -61,6 +62,8 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 	}
 }
 
+var prefixUsageCache timedValue
+
 // loadPrefixUsageFromBackend returns prefix usages found in passed buckets
 //
 //	e.g.:  /testbucket/prefix => 355601334
@@ -73,28 +76,45 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 
 	cache := dataUsageCache{}
 
-	m := make(map[string]uint64)
-	for _, pool := range z.serverPools {
-		for _, er := range pool.sets {
-			// Load bucket usage prefixes
-			if err := cache.load(ctx, er, bucket+slashSeparator+dataUsageCacheName); err == nil {
-				root := cache.find(bucket)
-				if root == nil {
-					// We dont have usage information for this bucket in this
-					// set, go to the next set
-					continue
-				}
+	prefixUsageCache.Once.Do(func() {
+		prefixUsageCache.TTL = 30 * time.Second
 
-				for id, usageInfo := range cache.flattenChildrens(*root) {
-					prefix := decodeDirObject(strings.TrimPrefix(id, bucket+slashSeparator))
-					// decodeDirObject to avoid any __XLDIR__ objects
-					m[prefix] += uint64(usageInfo.Size)
+		// No need to fail upon Update() error, fallback to old value.
+		prefixUsageCache.Relax = true
+		prefixUsageCache.Update = func() (interface{}, error) {
+			m := make(map[string]uint64)
+			for _, pool := range z.serverPools {
+				for _, er := range pool.sets {
+					// Load bucket usage prefixes
+					ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+					ok := cache.load(ctx, er, bucket+slashSeparator+dataUsageCacheName) == nil
+					done()
+					if ok {
+						root := cache.find(bucket)
+						if root == nil {
+							// We dont have usage information for this bucket in this
+							// set, go to the next set
+							continue
+						}
+
+						for id, usageInfo := range cache.flattenChildrens(*root) {
+							prefix := decodeDirObject(strings.TrimPrefix(id, bucket+slashSeparator))
+							// decodeDirObject to avoid any __XLDIR__ objects
+							m[prefix] += uint64(usageInfo.Size)
+						}
+					}
 				}
 			}
+			return m, nil
 		}
+	})
+
+	v, _ := prefixUsageCache.Get()
+	if v != nil {
+		return v.(map[string]uint64), nil
 	}
 
-	return m, nil
+	return map[string]uint64{}, nil
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
