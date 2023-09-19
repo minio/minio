@@ -958,13 +958,12 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	var mp MappedPolicy
 	if !isGroup {
 		if userType == stsUser {
-			var ok bool
-			mp, ok = cache.iamSTSPolicyMap[name]
-			if !ok {
-				// Attempt to load parent user mapping for STS accounts
-				store.loadMappedPolicy(context.TODO(), name, stsUser, false, cache.iamSTSPolicyMap)
-				mp = cache.iamSTSPolicyMap[name]
-			}
+			stsMap := map[string]MappedPolicy{}
+
+			// Attempt to load parent user mapping for STS accounts
+			store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
+
+			mp = stsMap[name]
 		} else {
 			mp = cache.iamUserPolicyMap[name]
 		}
@@ -1888,6 +1887,25 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, users []string
 		})
 	}
 
+	stsMap := map[string]MappedPolicy{}
+	for _, user := range users {
+		// Attempt to load parent user mapping for STS accounts
+		store.loadMappedPolicy(context.TODO(), user, stsUser, false, stsMap)
+	}
+
+	for user, mappedPolicy := range stsMap {
+		if userPredicate != nil && !userPredicate(user) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.UserPolicyEntities{
+			User:     user,
+			Policies: ps,
+		})
+	}
+
 	sort.Slice(r, func(i, j int) bool {
 		return r[i].User < r[j].User
 	})
@@ -1948,6 +1966,32 @@ func (store *IAMStoreSys) listPolicyMappings(cache *iamCache, policies []string,
 			} else {
 				s.Add(user)
 				policyToUsersMap[policy] = s
+			}
+		}
+	}
+
+	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
+		for item := range listIAMConfigItems(context.Background(), iamOS.objAPI, iamConfigPrefix+SlashSeparator+policyDBSTSUsersListKey) {
+			user := strings.TrimSuffix(item.Item, ".json")
+			if userPredicate != nil && !userPredicate(user) {
+				continue
+			}
+
+			var mappedPolicy MappedPolicy
+			store.loadIAMConfig(context.Background(), &mappedPolicy, getMappedPolicyPath(user, stsUser, false))
+
+			commonPolicySet := mappedPolicy.policySet()
+			if !queryPolSet.IsEmpty() {
+				commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+			}
+			for _, policy := range commonPolicySet.ToSlice() {
+				s, ok := policyToUsersMap[policy]
+				if !ok {
+					policyToUsersMap[policy] = set.CreateStringSet(user)
+				} else {
+					s.Add(user)
+					policyToUsersMap[policy] = s
+				}
 			}
 		}
 	}
@@ -2243,19 +2287,10 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 	cache := store.rlock()
 	defer store.runlock()
 
-	userExists := false
 	var serviceAccounts []auth.Credentials
 	for _, u := range cache.iamUsersMap {
-		isDerived := false
 		v := u.Credentials
-		if v.IsServiceAccount() || v.IsTemp() {
-			isDerived = true
-		}
-
-		if !isDerived && v.AccessKey == accessKey {
-			userExists = true
-		} else if isDerived && v.ParentUser == accessKey {
-			userExists = true
+		if accessKey != "" && v.ParentUser == accessKey {
 			if v.IsServiceAccount() {
 				// Hide secret key & session key here
 				v.SecretKey = ""
@@ -2263,12 +2298,6 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 				serviceAccounts = append(serviceAccounts, v)
 			}
 		}
-	}
-
-	// If root user has no STS/Service Accounts, userExists would be false here,
-	// so we handle this exception.
-	if !userExists && globalActiveCred.AccessKey != accessKey {
-		return nil, errNoSuchUser
 	}
 
 	return serviceAccounts, nil

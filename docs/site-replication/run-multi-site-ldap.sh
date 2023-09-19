@@ -117,6 +117,20 @@ fi
 
 sleep 10
 
+./mc idp ldap policy entities minio1
+./mc idp ldap policy entities minio2
+./mc idp ldap policy entities minio3
+
+./mc admin service restart minio1
+./mc admin service restart minio2
+./mc admin service restart minio3
+
+sleep 10
+
+./mc idp ldap policy entities minio1
+./mc idp ldap policy entities minio2
+./mc idp ldap policy entities minio3
+
 ./mc admin user svcacct info minio1 testsvc
 if [ $? -ne 0 ]; then
 	echo "svc account not mirrored, exiting.."
@@ -129,13 +143,42 @@ if [ $? -ne 0 ]; then
 	exit_1
 fi
 
+./mc admin user svcacct info minio3 testsvc
+if [ $? -ne 0 ]; then
+	echo "svc account not mirrored, exiting.."
+	exit_1
+fi
+
+MC_HOST_svc1=http://testsvc:testsvc123@localhost:9001 ./mc ls svc1
+MC_HOST_svc2=http://testsvc:testsvc123@localhost:9002 ./mc ls svc2
+MC_HOST_svc3=http://testsvc:testsvc123@localhost:9003 ./mc ls svc3
+
 ./mc admin user svcacct rm minio1 testsvc
 if [ $? -ne 0 ]; then
 	echo "removing svc account failed, exiting.."
 	exit_1
 fi
 
+./mc admin user info minio1 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+if [ $? -ne 0 ]; then
+	echo "policy mapping missing, exiting.."
+	exit_1
+fi
+
+./mc admin user info minio2 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+if [ $? -ne 0 ]; then
+	echo "policy mapping missing, exiting.."
+	exit_1
+fi
+
+./mc admin user info minio3 "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+if [ $? -ne 0 ]; then
+	echo "policy mapping missing, exiting.."
+	exit_1
+fi
+
 sleep 10
+
 ./mc admin user svcacct info minio2 testsvc
 if [ $? -eq 0 ]; then
 	echo "svc account found after delete, exiting.."
