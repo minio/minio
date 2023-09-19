@@ -99,10 +99,11 @@ func getMajorMinor(path string) (string, error) {
 		return "", fmt.Errorf("unable to stat `%s`: %w", path, err)
 	}
 
-	major := (stat.Dev & 0x00000000000fff00) >> 8
-	major |= (stat.Dev & 0xfffff00000000000) >> 32
-	minor := (stat.Dev & 0x00000000000000ff) >> 0
-	minor |= (stat.Dev & 0x00000ffffff00000) >> 12
+	devID := uint64(stat.Dev)
+	major := (devID & 0x00000000000fff00) >> 8
+	major |= (devID & 0xfffff00000000000) >> 32
+	minor := (devID & 0x00000000000000ff) >> 0
+	minor |= (devID & 0x00000ffffff00000) >> 12
 
 	return fmt.Sprintf("%d:%d", major, minor), nil
 }
