@@ -31,6 +31,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -539,6 +540,7 @@ func getHealReplicateObjectInfo(oi ObjectInfo, rcfg replicationConfig) Replicate
 		ActualSize:                 asz,
 		Bucket:                     oi.Bucket,
 		VersionID:                  oi.VersionID,
+		ETag:                       oi.ETag,
 		ModTime:                    oi.ModTime,
 		ReplicationStatus:          oi.ReplicationStatus,
 		ReplicationStatusInternal:  oi.ReplicationStatusInternal,
@@ -553,6 +555,8 @@ func getHealReplicateObjectInfo(oi ObjectInfo, rcfg replicationConfig) Replicate
 		TargetStatuses:       tgtStatuses,
 		TargetPurgeStatuses:  purgeStatuses,
 		ReplicationTimestamp: tm,
+		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
+		UserTags:             oi.UserTags,
 	}
 }
 
