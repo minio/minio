@@ -3670,7 +3670,9 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 
 					if err != nil {
 						// Enable for debugging
-						// logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
+						if serverDebugLog {
+							logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
+						}
 					} else {
 						out <- pmetric
 					}
@@ -3695,7 +3697,9 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				values...)
 			if err != nil {
 				// Enable for debugging
-				// logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
+				if serverDebugLog {
+					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
+				}
 			} else {
 				out <- pmetric
 			}
