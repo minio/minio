@@ -616,7 +616,7 @@ func AuthMiddleware(h http.Handler) http.Handler {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		claims, groups, owner, authErr := metricsRequestAuthenticate(r)
-		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
+		if authErr != nil || (claims != nil && !claims.VerifyIssuer("prometheus", true)) {
 			if ok {
 				tc.FuncName = "handler.MetricsAuth"
 				tc.ResponseRecorder.LogErrBody = true

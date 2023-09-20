@@ -3667,8 +3667,12 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 						prometheus.GaugeValue,
 						float64(v),
 						append(values, k)...)
+
 					if err != nil {
-						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
+						// Enable for debugging
+						if serverDebugLog {
+							logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
+						}
 					} else {
 						out <- pmetric
 					}
@@ -3692,7 +3696,10 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 				metric.Value,
 				values...)
 			if err != nil {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
+				// Enable for debugging
+				if serverDebugLog {
+					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
+				}
 			} else {
 				out <- pmetric
 			}
@@ -3890,11 +3897,9 @@ func metricsServerHandler() http.Handler {
 		}
 
 		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
+		if err != nil && len(mfs) == 0 {
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+			return
 		}
 
 		contentType := expfmt.Negotiate(r.Header)
