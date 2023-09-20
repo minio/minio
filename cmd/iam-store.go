@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -212,12 +212,12 @@ func newMappedPolicy(policy string) MappedPolicy {
 // PolicyDoc represents an IAM policy with some metadata.
 type PolicyDoc struct {
 	Version    int `json:",omitempty"`
-	Policy     iampolicy.Policy
+	Policy     policy.Policy
 	CreateDate time.Time `json:",omitempty"`
 	UpdateDate time.Time `json:",omitempty"`
 }
 
-func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
+func newPolicyDoc(p policy.Policy) PolicyDoc {
 	now := UTCNow().Round(time.Millisecond)
 	return PolicyDoc{
 		Version:    1,
@@ -228,14 +228,14 @@ func newPolicyDoc(p iampolicy.Policy) PolicyDoc {
 }
 
 // defaultPolicyDoc - used to wrap a default policy as PolicyDoc.
-func defaultPolicyDoc(p iampolicy.Policy) PolicyDoc {
+func defaultPolicyDoc(p policy.Policy) PolicyDoc {
 	return PolicyDoc{
 		Version: 1,
 		Policy:  p,
 	}
 }
 
-func (d *PolicyDoc) update(p iampolicy.Policy) {
+func (d *PolicyDoc) update(p policy.Policy) {
 	now := UTCNow().Round(time.Millisecond)
 	d.UpdateDate = now
 	if d.CreateDate.IsZero() {
@@ -248,7 +248,7 @@ func (d *PolicyDoc) update(p iampolicy.Policy) {
 // definitions.
 //
 // The on-disk format of policy definitions has changed (around early 12/2021)
-// from iampolicy.Policy to PolicyDoc. To avoid a migration, loading supports
+// from policy.Policy to PolicyDoc. To avoid a migration, loading supports
 // both the old and the new formats.
 func (d *PolicyDoc) parseJSON(data []byte) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -364,9 +364,9 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
-func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]string, time.Time, error) {
+func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([]string, time.Time, error) {
 	if isGroup {
-		if mode == MinIOUsersSysType {
+		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
 				return nil, time.Time{}, errNoSuchGroup
@@ -398,7 +398,12 @@ func (c *iamCache) policyDBGet(mode UsersSysType, name string, isGroup bool) ([]
 	if !ok {
 		// Since user "name" could be a parent user of an STS account, we lookup
 		// mappings for those too.
-		mp = c.iamSTSPolicyMap[name]
+		mp, ok = c.iamSTSPolicyMap[name]
+		if !ok {
+			// Attempt to load parent user mapping for STS accounts
+			store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap)
+			mp = c.iamSTSPolicyMap[name]
+		}
 	}
 
 	// returned policy could be empty
@@ -474,11 +479,21 @@ type iamStorageWatcher interface {
 
 // Set default canned policies only if not already overridden by users.
 func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
-	for _, v := range iampolicy.DefaultPolicies {
+	for _, v := range policy.DefaultPolicies {
 		if _, ok := policies[v.Name]; !ok {
 			policies[v.Name] = defaultPolicyDoc(v.Definition)
 		}
 	}
+}
+
+// PurgeExpiredSTS - purges expired STS credentials.
+func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
+	iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore)
+	if !ok {
+		// No purging is done for non-object storage.
+		return nil
+	}
+	return iamOS.PurgeExpiredSTS(ctx)
 }
 
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
@@ -534,18 +549,6 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 			return err
 		}
 
-		bootstrapTraceMsg("loading STS users")
-		// load STS temp users
-		if err := store.loadUsers(ctx, stsUser, newCache.iamUsersMap); err != nil {
-			return err
-		}
-
-		bootstrapTraceMsg("loading STS policy mapping")
-		// load STS policy mappings
-		if err := store.loadMappedPolicies(ctx, stsUser, false, newCache.iamUserPolicyMap); err != nil {
-			return err
-		}
-
 		newCache.buildUserGroupMemberships()
 	}
 
@@ -557,9 +560,9 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	// were changes to the in-memory cache we should wait for the next
 	// cycle until we can safely update the in-memory cache.
 	//
-	// An in-memory cache must be replaced only if we know for sure that
-	// the values loaded from disk are not stale. They might be stale
-	// if the cached.updatedAt is recent than the refresh cycle began.
+	// An in-memory cache must be replaced only if we know for sure that the
+	// values loaded from disk are not stale. They might be stale if the
+	// cached.updatedAt is more recent than the refresh cycle began.
 	if cache.updatedAt.Before(loadedAt) {
 		// No one has updated anything since the config was loaded,
 		// so we just replace whatever is on the disk into memory.
@@ -569,6 +572,15 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 		cache.iamUserGroupMemberships = newCache.iamUserGroupMemberships
 		cache.iamUserPolicyMap = newCache.iamUserPolicyMap
 		cache.iamUsersMap = newCache.iamUsersMap
+		// For STS policy map, we need to merge the new cache with the existing
+		// cache because the periodic IAM reload is partial. The periodic load
+		// here is to account for STS policy mapping changes that should apply
+		// for service accounts derived from such STS accounts (i.e. LDAP STS
+		// accounts).
+		for k, v := range newCache.iamSTSPolicyMap {
+			cache.iamSTSPolicyMap[k] = v
+		}
+
 		cache.updatedAt = time.Now()
 	}
 
@@ -661,14 +673,14 @@ func (store *IAMStoreSys) PolicyDBGet(name string, isGroup bool, groups ...strin
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store.getUsersSysType(), name, isGroup)
+	policies, _, err := cache.policyDBGet(store, name, isGroup)
 	if err != nil {
 		return nil, err
 	}
 
 	if !isGroup {
 		for _, group := range groups {
-			ps, _, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+			ps, _, err := cache.policyDBGet(store, group, true)
 			if err != nil {
 				return nil, err
 			}
@@ -854,7 +866,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	cache := store.rlock()
 	defer store.runlock()
 
-	ps, updatedAt, err := cache.policyDBGet(store.getUsersSysType(), group, true)
+	ps, updatedAt, err := cache.policyDBGet(store, group, true)
 	if err != nil {
 		return gd, err
 	}
@@ -955,7 +967,12 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	var mp MappedPolicy
 	if !isGroup {
 		if userType == stsUser {
-			mp = cache.iamSTSPolicyMap[name]
+			stsMap := map[string]MappedPolicy{}
+
+			// Attempt to load parent user mapping for STS accounts
+			store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
+
+			mp = stsMap[name]
 		} else {
 			mp = cache.iamUserPolicyMap[name]
 		}
@@ -1192,16 +1209,16 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 
 // GetPolicy - gets the policy definition. Allows specifying multiple comma
 // separated policies - returns a combined policy.
-func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
+func (store *IAMStoreSys) GetPolicy(name string) (policy.Policy, error) {
 	if name == "" {
-		return iampolicy.Policy{}, errInvalidArgument
+		return policy.Policy{}, errInvalidArgument
 	}
 
 	cache := store.rlock()
 	defer store.runlock()
 
 	policies := newMappedPolicy(name).toSlice()
-	var toMerge []iampolicy.Policy
+	var toMerge []policy.Policy
 	for _, policy := range policies {
 		if policy == "" {
 			continue
@@ -1212,7 +1229,7 @@ func (store *IAMStoreSys) GetPolicy(name string) (iampolicy.Policy, error) {
 		}
 		toMerge = append(toMerge, v.Policy)
 	}
-	return iampolicy.MergePolicies(toMerge...), nil
+	return policy.MergePolicies(toMerge...), nil
 }
 
 // GetPolicyDoc - gets the policy doc which has the policy and some metadata.
@@ -1234,7 +1251,7 @@ func (store *IAMStoreSys) GetPolicyDoc(name string) (r PolicyDoc, err error) {
 }
 
 // SetPolicy - creates a policy with name.
-func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iampolicy.Policy) (time.Time, error) {
+func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy policy.Policy) (time.Time, error) {
 	if policy.IsEmpty() || name == "" {
 		return time.Time{}, errInvalidArgument
 	}
@@ -1264,7 +1281,7 @@ func (store *IAMStoreSys) SetPolicy(ctx context.Context, name string, policy iam
 
 // ListPolicies - fetches all policies from storage and updates cache as well.
 // If bucketName is non-empty, returns policies matching the bucket.
-func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (map[string]iampolicy.Policy, error) {
+func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (map[string]policy.Policy, error) {
 	cache := store.lock()
 	defer store.unlock()
 
@@ -1280,7 +1297,7 @@ func (store *IAMStoreSys) ListPolicies(ctx context.Context, bucketName string) (
 	cache.iamPolicyDocsMap = m
 	cache.updatedAt = time.Now()
 
-	ret := map[string]iampolicy.Policy{}
+	ret := map[string]policy.Policy{}
 	for k, v := range m {
 		if bucketName == "" || v.Policy.MatchResource(bucketName) {
 			ret[k] = v.Policy
@@ -1333,10 +1350,10 @@ func (store *IAMStoreSys) listPolicyDocs(ctx context.Context, bucketName string)
 }
 
 // helper function - does not take locks.
-func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, iampolicy.Policy) {
+func filterPolicies(cache *iamCache, policyName string, bucketName string) (string, policy.Policy) {
 	var policies []string
 	mp := newMappedPolicy(policyName)
-	var toMerge []iampolicy.Policy
+	var toMerge []policy.Policy
 	for _, policy := range mp.toSlice() {
 		if policy == "" {
 			continue
@@ -1350,7 +1367,7 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 			toMerge = append(toMerge, p.Policy)
 		}
 	}
-	return strings.Join(policies, ","), iampolicy.MergePolicies(toMerge...)
+	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
 }
 
 // FilterPolicies - accepts a comma separated list of policy names as a string
@@ -1358,7 +1375,7 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 // bucketName is non-empty, additionally filters policies matching the bucket.
 // The first returned value is the list of currently existing policies, and the
 // second is their combined policy definition.
-func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (string, iampolicy.Policy) {
+func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (string, policy.Policy) {
 	cache := store.rlock()
 	defer store.runlock()
 
@@ -1610,7 +1627,11 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 	}
 
 	if userType != svcUser {
-		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
+		if userType == stsUser {
+			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamSTSPolicyMap)
+		} else {
+			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
+		}
 		// Ignore policy not mapped error
 		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
@@ -1875,6 +1896,25 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, users []string
 		})
 	}
 
+	stsMap := map[string]MappedPolicy{}
+	for _, user := range users {
+		// Attempt to load parent user mapping for STS accounts
+		store.loadMappedPolicy(context.TODO(), user, stsUser, false, stsMap)
+	}
+
+	for user, mappedPolicy := range stsMap {
+		if userPredicate != nil && !userPredicate(user) {
+			continue
+		}
+
+		ps := mappedPolicy.toSlice()
+		sort.Strings(ps)
+		r = append(r, madmin.UserPolicyEntities{
+			User:     user,
+			Policies: ps,
+		})
+	}
+
 	sort.Slice(r, func(i, j int) bool {
 		return r[i].User < r[j].User
 	})
@@ -1935,6 +1975,32 @@ func (store *IAMStoreSys) listPolicyMappings(cache *iamCache, policies []string,
 			} else {
 				s.Add(user)
 				policyToUsersMap[policy] = s
+			}
+		}
+	}
+
+	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
+		for item := range listIAMConfigItems(context.Background(), iamOS.objAPI, iamConfigPrefix+SlashSeparator+policyDBSTSUsersListKey) {
+			user := strings.TrimSuffix(item.Item, ".json")
+			if userPredicate != nil && !userPredicate(user) {
+				continue
+			}
+
+			var mappedPolicy MappedPolicy
+			store.loadIAMConfig(context.Background(), &mappedPolicy, getMappedPolicyPath(user, stsUser, false))
+
+			commonPolicySet := mappedPolicy.policySet()
+			if !queryPolSet.IsEmpty() {
+				commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+			}
+			for _, policy := range commonPolicySet.ToSlice() {
+				s, ok := policyToUsersMap[policy]
+				if !ok {
+					policyToUsersMap[policy] = set.CreateStringSet(user)
+				} else {
+					s.Add(user)
+					policyToUsersMap[policy] = s
+				}
 			}
 		}
 	}
@@ -2151,8 +2217,8 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 
 	// sessionPolicy is nil and there is embedded policy attached we remove
 	// embedded policy at that point.
-	if _, ok := m[iampolicy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
-		delete(m, iampolicy.SessionPolicyName)
+	if _, ok := m[policy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
+		delete(m, policy.SessionPolicyName)
 		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
@@ -2171,7 +2237,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 		}
 
 		// Overwrite session policy claims.
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
+		m[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = embeddedPolicyType
 	}
 
@@ -2230,19 +2296,10 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 	cache := store.rlock()
 	defer store.runlock()
 
-	userExists := false
 	var serviceAccounts []auth.Credentials
 	for _, u := range cache.iamUsersMap {
-		isDerived := false
 		v := u.Credentials
-		if v.IsServiceAccount() || v.IsTemp() {
-			isDerived = true
-		}
-
-		if !isDerived && v.AccessKey == accessKey {
-			userExists = true
-		} else if isDerived && v.ParentUser == accessKey {
-			userExists = true
+		if accessKey != "" && v.ParentUser == accessKey {
 			if v.IsServiceAccount() {
 				// Hide secret key & session key here
 				v.SecretKey = ""
@@ -2250,12 +2307,6 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 				serviceAccounts = append(serviceAccounts, v)
 			}
 		}
-	}
-
-	// If root user has no STS/Service Accounts, userExists would be false here,
-	// so we handle this exception.
-	if !userExists && globalActiveCred.AccessKey != accessKey {
-		return nil, errNoSuchUser
 	}
 
 	return serviceAccounts, nil
@@ -2391,8 +2442,12 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 			// Load parent user and mapped policies.
 			if store.getUsersSysType() == MinIOUsersSysType {
 				store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
+				store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap)
+			} else {
+				// In case of LDAP the parent user's policy mapping needs to be
+				// loaded into sts map
+				store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap)
 			}
-			store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap)
 		}
 	}
 

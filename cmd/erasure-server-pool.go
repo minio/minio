@@ -1716,10 +1716,42 @@ func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix strin
 	}
 }
 
+var listBucketsCache timedValue
+
 // List all buckets from one of the serverPools, we are not doing merge
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all serverPools.
 func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
+	if opts.Cached {
+		listBucketsCache.Once.Do(func() {
+			listBucketsCache.TTL = time.Second
+
+			listBucketsCache.Relax = true
+			listBucketsCache.Update = func() (interface{}, error) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				buckets, err = z.s3Peer.ListBuckets(ctx, opts)
+				cancel()
+				if err != nil {
+					return nil, err
+				}
+				for i := range buckets {
+					createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+					if err == nil {
+						buckets[i].Created = createdAt
+					}
+				}
+				return buckets, nil
+			}
+		})
+
+		v, _ := listBucketsCache.Get()
+		if v != nil {
+			return v.([]BucketInfo), nil
+		}
+
+		return buckets, nil
+	}
+
 	buckets, err = z.s3Peer.ListBuckets(ctx, opts)
 	if err != nil {
 		return nil, err

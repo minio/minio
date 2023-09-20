@@ -31,7 +31,7 @@ import (
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
 	xnet "github.com/minio/pkg/v2/net"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 type publicKeys struct {
@@ -198,7 +198,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	// array of case sensitive strings. In the common special case
 	// when there is one audience, the aud value MAY be a single
 	// case sensitive
-	audValues, ok := iampolicy.GetValuesFromClaims(claims, audClaim)
+	audValues, ok := policy.GetValuesFromClaims(claims, audClaim)
 	if !ok {
 		return errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID")
 	}
@@ -212,7 +212,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		// be included even when the authorized party is the same
 		// as the sole audience. The azp value is a case sensitive
 		// string containing a StringOrURI value
-		azpValues, ok := iampolicy.GetValuesFromClaims(claims, azpClaim)
+		azpValues, ok := policy.GetValuesFromClaims(claims, azpClaim)
 		if !ok {
 			return errors.New("STS JWT Token has `azp` claim invalid, `azp` must match configured OpenID Client ID")
 		}

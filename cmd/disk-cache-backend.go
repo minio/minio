@@ -1441,7 +1441,7 @@ func newCachePartEncryptReader(ctx context.Context, bucket, object string, partI
 		info := ObjectInfo{Size: size}
 		wantSize = info.EncryptedSize()
 	}
-	hReader, err := hash.NewReader(content, wantSize, "", "", size)
+	hReader, err := hash.NewReader(ctx, content, wantSize, "", "", size)
 	if err != nil {
 		return nil, err
 	}

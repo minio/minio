@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,14 +35,14 @@ import (
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // RemoveUser - DELETE /minio/admin/v3/remove-user?accessKey=<access_key>
 func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.DeleteUserAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.DeleteUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -85,7 +86,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ListUsersAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ListUsersAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -119,7 +120,7 @@ func (a adminAPIHandlers) ListBucketUsers(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ListUsersAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ListUsersAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -186,10 +187,10 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		checkDenyOnly = true
 	}
 
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
+	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.GetUserAdminAction,
+		Action:          policy.GetUserAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -218,7 +219,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AddUserToGroupAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.AddUserToGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -288,7 +289,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetGroupAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.GetGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -315,7 +316,7 @@ func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListGroupsAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ListGroupsAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -339,7 +340,7 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.EnableGroupAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.EnableGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -382,7 +383,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, creds := validateAdminReq(ctx, w, r, iampolicy.EnableUserAdminAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, policy.EnableUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -470,10 +471,10 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		checkDenyOnly = true
 	}
 
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
+	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.CreateUserAdminAction,
+		Action:          policy.CreateUserAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -544,10 +545,10 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
+	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.ListTemporaryAccountsAdminAction,
+		Action:          policy.ListTemporaryAccountsAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -556,16 +557,16 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	stsAccount, policy, err := globalIAMSys.GetTemporaryAccount(ctx, accessKey)
+	stsAccount, sessionPolicy, err := globalIAMSys.GetTemporaryAccount(ctx, accessKey)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	var stsAccountPolicy iampolicy.Policy
+	var stsAccountPolicy policy.Policy
 
-	if policy != nil {
-		stsAccountPolicy = *policy
+	if sessionPolicy != nil {
+		stsAccountPolicy = *sessionPolicy
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(stsAccount.ParentUser, false)
 		if err != nil {
@@ -584,7 +585,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 	infoResp := madmin.TemporaryAccountInfoResp{
 		ParentUser:    stsAccount.ParentUser,
 		AccountStatus: stsAccount.Status,
-		ImpliedPolicy: policy == nil,
+		ImpliedPolicy: sessionPolicy == nil,
 		Policy:        string(policyJSON),
 		Expiration:    &stsAccount.Expiration,
 	}
@@ -709,10 +710,10 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		//
 		// This allows turning off service accounts for request sender,
 		// if there is no deny statement this call is implicitly enabled.
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     requestorUser,
 			Groups:          requestorGroups,
-			Action:          iampolicy.CreateServiceAccountAdminAction,
+			Action:          policy.CreateServiceAccountAdminAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
 			Claims:          cred.Claims,
@@ -743,10 +744,10 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	} else {
 		// Need permission if we are creating a service account for a
 		// user <> to the request sender
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     requestorUser,
 			Groups:          requestorGroups,
-			Action:          iampolicy.CreateServiceAccountAdminAction,
+			Action:          policy.CreateServiceAccountAdminAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
 			Claims:          cred.Claims,
@@ -773,9 +774,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// latter, a group notion is not supported.
 	}
 
-	var sp *iampolicy.Policy
+	var sp *policy.Policy
 	if len(createReq.Policy) > 0 {
-		sp, err = iampolicy.ParseConfig(bytes.NewReader(createReq.Policy))
+		sp, err = policy.ParseConfig(bytes.NewReader(createReq.Policy))
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -864,10 +865,10 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
+	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.UpdateServiceAccountAdminAction,
+		Action:          policy.UpdateServiceAccountAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -903,9 +904,9 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var sp *iampolicy.Policy
+	var sp *policy.Policy
 	if len(updateReq.NewPolicy) > 0 {
-		sp, err = iampolicy.ParseConfig(bytes.NewReader(updateReq.NewPolicy))
+		sp, err = policy.ParseConfig(bytes.NewReader(updateReq.NewPolicy))
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -970,16 +971,16 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	svcAccount, policy, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
+	svcAccount, sessionPolicy, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if !globalIAMSys.IsAllowed(iampolicy.Args{
+	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.ListServiceAccountsAdminAction,
+		Action:          policy.ListServiceAccountsAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -995,10 +996,10 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	var svcAccountPolicy iampolicy.Policy
+	var svcAccountPolicy policy.Policy
 
-	if policy != nil {
-		svcAccountPolicy = *policy
+	if sessionPolicy != nil {
+		svcAccountPolicy = *sessionPolicy
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
 		if err != nil {
@@ -1024,7 +1025,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		Name:          svcAccount.Name,
 		Description:   svcAccount.Description,
 		AccountStatus: svcAccount.Status,
-		ImpliedPolicy: policy == nil,
+		ImpliedPolicy: sessionPolicy == nil,
 		Policy:        string(policyJSON),
 		Expiration:    expiration,
 	}
@@ -1067,10 +1068,10 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 	// sender), check that the user has permissions.
 	user := r.Form.Get("user")
 	if user != "" && user != cred.AccessKey {
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.ListServiceAccountsAdminAction,
+			Action:          policy.ListServiceAccountsAdminAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
 			Claims:          cred.Claims,
@@ -1148,10 +1149,10 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	// since this is a delete call we shall allow it to be deleted if possible.
 	svcAccount, _, _ := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
 
-	adminPrivilege := globalIAMSys.IsAllowed(iampolicy.Args{
+	adminPrivilege := globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
-		Action:          iampolicy.RemoveServiceAccountAdminAction,
+		Action:          policy.RemoveServiceAccountAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
@@ -1192,7 +1193,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
-// AccountInfoHandler returns usage
+// AccountInfoHandler returns usage, permissions and other bucket metadata for incoming us
 func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1219,10 +1220,10 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	enablePrefixUsage := r.Form.Get("prefix-usage") == "true"
 
 	isAllowedAccess := func(bucketName string) (rd, wr bool) {
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.ListBucketAction,
+			Action:          policy.ListBucketAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
@@ -1232,10 +1233,10 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			rd = true
 		}
 
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.GetBucketLocationAction,
+			Action:          policy.GetBucketLocationAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
@@ -1245,10 +1246,10 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			rd = true
 		}
 
-		if globalIAMSys.IsAllowed(iampolicy.Args{
+		if globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.PutObjectAction,
+			Action:          policy.PutObjectAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
@@ -1261,12 +1262,30 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	// Load the latest calculated data usage
-	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
+	bucketStorageCache.Once.Do(func() {
+		// Set this to 10 secs since its enough, as scanner
+		// does not update the bucket usage values frequently.
+		bucketStorageCache.TTL = 10 * time.Second
+
+		// Rely on older value if usage loading fails from disk.
+		bucketStorageCache.Relax = true
+		bucketStorageCache.Update = func() (interface{}, error) {
+			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+			defer done()
+
+			return loadDataUsageFromBackend(ctx, objectAPI)
+		}
+	})
+
+	var dataUsageInfo DataUsageInfo
+	v, _ := bucketStorageCache.Get()
+	if v != nil {
+		dataUsageInfo, _ = v.(DataUsageInfo)
+	}
 
 	// If etcd, dns federation configured list buckets from etcd.
-	var buckets []BucketInfo
 	var err error
+	var buckets []BucketInfo
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && !IsErrIgnored(err,
@@ -1285,7 +1304,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return buckets[i].Name < buckets[j].Name
 		})
 	} else {
-		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{})
+		buckets, err = objectAPI.ListBuckets(ctx, BucketOptions{Cached: true})
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -1298,14 +1317,14 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		accountName = cred.ParentUser
 	}
 
-	roleArn := iampolicy.Args{Claims: cred.Claims}.GetRoleArn()
-	policySetFromClaims, hasPolicyClaim := iampolicy.GetPoliciesFromClaims(cred.Claims, iamPolicyClaimNameOpenID())
-	var effectivePolicy iampolicy.Policy
+	roleArn := policy.Args{Claims: cred.Claims}.GetRoleArn()
+	policySetFromClaims, hasPolicyClaim := policy.GetPoliciesFromClaims(cred.Claims, iamPolicyClaimNameOpenID())
+	var effectivePolicy policy.Policy
 
 	var buf []byte
 	switch {
 	case accountName == globalActiveCred.AccessKey:
-		for _, policy := range iampolicy.DefaultPolicies {
+		for _, policy := range policy.DefaultPolicies {
 			if policy.Name == "consoleAdmin" {
 				effectivePolicy = policy.Definition
 				break
@@ -1417,7 +1436,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.GetPolicyAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.GetPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1463,7 +1482,7 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListUserPoliciesAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ListUserPoliciesAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1475,7 +1494,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newPolicies := make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]policy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
@@ -1494,7 +1513,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListUserPoliciesAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ListUserPoliciesAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1505,7 +1524,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newPolicies := make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]policy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
@@ -1524,7 +1543,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DeletePolicyAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DeletePolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1550,7 +1569,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.CreatePolicyAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.CreatePolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1582,7 +1601,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	iamPolicy, err := iampolicy.ParseConfig(bytes.NewReader(iamPolicyBytes))
+	iamPolicy, err := policy.ParseConfig(bytes.NewReader(iamPolicyBytes))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1614,7 +1633,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.AttachPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1688,7 +1707,7 @@ func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *ht
 
 	// Check authorization.
 	objectAPI, cred := validateAdminReq(ctx, w, r,
-		iampolicy.ListGroupsAdminAction, iampolicy.ListUsersAdminAction, iampolicy.ListUserPoliciesAdminAction)
+		policy.ListGroupsAdminAction, policy.ListUsersAdminAction, policy.ListUserPoliciesAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1726,8 +1745,8 @@ func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *ht
 func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.UpdatePolicyAssociationAction,
-		iampolicy.AttachPolicyAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.UpdatePolicyAssociationAction,
+		policy.AttachPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1826,7 +1845,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ExportIAMAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ExportIAMAction)
 	if objectAPI == nil {
 		return
 	}
@@ -2096,7 +2115,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			defer f.Close()
-			var allPolicies map[string]iampolicy.Policy
+			var allPolicies map[string]policy.Policy
 			data, err = io.ReadAll(f)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, allPoliciesFile, ""), r.URL)
@@ -2177,10 +2196,10 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					checkDenyOnly = true
 				}
 
-				if !globalIAMSys.IsAllowed(iampolicy.Args{
+				if !globalIAMSys.IsAllowed(policy.Args{
 					AccountName:     cred.AccessKey,
 					Groups:          cred.Groups,
-					Action:          iampolicy.CreateUserAdminAction,
+					Action:          policy.CreateUserAdminAction,
 					ConditionValues: getConditionValues(r, "", cred),
 					IsOwner:         owner,
 					Claims:          cred.Claims,
@@ -2257,10 +2276,10 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for user, svcAcctReq := range serviceAcctReqs {
-				var sp *iampolicy.Policy
+				var sp *policy.Policy
 				var err error
 				if len(svcAcctReq.SessionPolicy) > 0 {
-					sp, err = iampolicy.ParseConfig(bytes.NewReader(svcAcctReq.SessionPolicy))
+					sp, err = policy.ParseConfig(bytes.NewReader(svcAcctReq.SessionPolicy))
 					if err != nil {
 						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
 						return
@@ -2271,10 +2290,10 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
 					return
 				}
-				if !globalIAMSys.IsAllowed(iampolicy.Args{
+				if !globalIAMSys.IsAllowed(policy.Args{
 					AccountName:     cred.AccessKey,
 					Groups:          cred.Groups,
-					Action:          iampolicy.CreateServiceAccountAdminAction,
+					Action:          policy.CreateServiceAccountAdminAction,
 					ConditionValues: getConditionValues(r, "", cred),
 					IsOwner:         owner,
 					Claims:          cred.Claims,

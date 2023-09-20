@@ -115,7 +115,11 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 	}
 	var creds *credentials.Credentials
 	if conf.AWSRole {
-		creds = credentials.NewChainCredentials(defaultAWSCredProvider)
+		creds = credentials.New(&credentials.IAM{
+			Client: &http.Client{
+				Transport: NewHTTPTransport(),
+			},
+		})
 	} else {
 		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
 	}

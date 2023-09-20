@@ -269,7 +269,13 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 
 	var uploadIDs []string
 	var disk StorageAPI
-	for _, disk = range er.getLoadBalancedDisks(true) {
+	disks := er.getLoadBalancedLocalDisks()
+	if len(disks) == 0 {
+		// using er.getLoadBalancedLocalDisks() has one side-affect where
+		// on a pooled setup all disks are remote, add a fallback
+		disks = er.getOnlineDisks()
+	}
+	for _, disk = range disks {
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if errors.Is(err, errDiskNotFound) {

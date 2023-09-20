@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -383,6 +384,32 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 	return res, nil
 }
 
+// PurgeExpiredSTS - purge expired STS credentials from object store.
+func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
+	if iamOS.objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	bootstrapTraceMsg("purging expired STS credentials")
+	// Scan STS users on disk and purge expired ones. We do not need to hold a
+	// lock with store.lock() here.
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+stsListKey) {
+		if item.Err != nil {
+			return item.Err
+		}
+		userName := path.Dir(item.Item)
+		// loadUser() will delete expired user during the load - we do not need
+		// to keep the loaded user around in memory, so we reinitialize the map
+		// each time.
+		m := map[string]UserIdentity{}
+		if err := iamOS.loadUser(ctx, userName, stsUser, m); err != nil && err != errNoSuchUser {
+			logger.LogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
+		}
+
+	}
+	return nil
+}
+
 // Assumes cache is locked by caller.
 func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
 	if iamOS.objAPI == nil {
@@ -449,11 +476,37 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 
 	bootstrapTraceMsg("loading service accounts")
 	svcAccList := listedConfigItems[svcAccListKey]
+	svcUsersMap := make(map[string]UserIdentity, len(svcAccList))
 	for _, item := range svcAccList {
 		userName := path.Dir(item)
-		if err := iamOS.loadUser(ctx, userName, svcUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+		if err := iamOS.loadUser(ctx, userName, svcUser, svcUsersMap); err != nil && err != errNoSuchUser {
 			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
 		}
+	}
+	for _, svcAcc := range svcUsersMap {
+		svcParent := svcAcc.Credentials.ParentUser
+		if _, ok := cache.iamUsersMap[svcParent]; !ok {
+			// If a service account's parent user is not in iamUsersMap, the
+			// parent is an STS account. Such accounts may have a policy mapped
+			// on the parent user, so we load them. This is not needed for the
+			// initial server startup, however, it is needed for the case where
+			// the STS account's policy mapping (for example in LDAP mode) may
+			// be changed and the user's policy mapping in memory is stale
+			// (because the policy change notification was missed by the current
+			// server).
+			//
+			// The "policy not found" error is ignored because the STS account may
+			// not have a policy mapped via its parent (for e.g. in
+			// OIDC/AssumeRoleWithCustomToken/AssumeRoleWithCertificate).
+			err := iamOS.loadMappedPolicy(ctx, svcParent, stsUser, false, cache.iamSTSPolicyMap)
+			if err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", svcParent, err)
+			}
+		}
+	}
+	// Copy svcUsersMap to cache.iamUsersMap
+	for k, v := range svcUsersMap {
+		cache.iamUsersMap[k] = v
 	}
 
 	cache.buildUserGroupMemberships()
