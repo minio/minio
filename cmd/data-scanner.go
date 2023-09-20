@@ -246,9 +246,6 @@ type folderScanner struct {
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
-	disks       []StorageAPI
-	disksQuorum int
-
 	// If set updates will be sent regularly to this channel.
 	// Will not be closed when returned.
 	updates    chan<- dataUsageEntry
@@ -299,7 +296,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
@@ -318,8 +315,6 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		scanMode:              scanMode,
 		updates:               cache.Info.updates,
 		updateCurrentPath:     updatePath,
-		disks:                 disks,
-		disksQuorum:           len(disks) / 2,
 	}
 
 	// Enable healing in XL mode.
@@ -383,10 +378,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			return ctx.Err()
 		default:
 		}
-		var abandonedChildren dataUsageHashMap
-		if !into.Compacted {
-			abandonedChildren = f.oldCache.findChildrenCopy(thisHash)
-		}
 
 		// If there are lifecycle rules for the prefix.
 		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
@@ -444,7 +435,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					return nil
 				}
 				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-				delete(abandonedChildren, h.Key()) // h.Key() already accounted for.
 				if exists {
 					existingFolders = append(existingFolders, this)
 					f.updateCache.copyWithChildren(&f.oldCache, h, &thisHash)
@@ -488,14 +478,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 			// successfully read means we have a valid object.
 			foundObjects = true
+
 			// Remove filename i.e is the meta file to construct object name
 			item.transformMetaDir()
-
-			// Object already accounted for, remove from heal map,
-			// simply because getSize() function already heals the
-			// object.
-			delete(abandonedChildren, pathJoin(item.bucket, item.objectPath()))
-
 			into.addSizes(sz)
 			into.Objects++
 
@@ -627,147 +612,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			stopFn(map[string]string{"type": "existing"})
 		}
 
-		// Scan for healing
-		if f.healObjectSelect == 0 || len(abandonedChildren) == 0 {
-			// If we are not heal scanning, return now.
-			break
-		}
-
-		if len(f.disks) == 0 || f.disksQuorum == 0 {
-			break
-		}
-
-		bgSeq, found := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if !found {
-			break
-		}
-
-		// Whatever remains in 'abandonedChildren' are folders at this level
-		// that existed in the previous run but wasn't found now.
-		//
-		// This may be because of 2 reasons:
-		//
-		// 1) The folder/object was deleted.
-		// 2) We come from another disk and this disk missed the write.
-		//
-		// We therefore perform a heal check.
-		// If that doesn't bring it back we remove the folder and assume it was deleted.
-		// This means that the next run will not look for it.
-		// How to resolve results.
-		resolver := metadataResolutionParams{
-			dirQuorum: f.disksQuorum,
-			objQuorum: f.disksQuorum,
-			bucket:    "",
-			strict:    false,
-		}
-
-		healObjectsPrefix := color.Green("healObjects:")
-		for k := range abandonedChildren {
-			bucket, prefix := path2BucketObject(k)
-			stopFn := globalScannerMetrics.time(scannerMetricCheckMissing)
-			f.updateCurrentPath(k)
-
-			if bucket != resolver.bucket {
-				// Bucket might be missing as well with abandoned children.
-				// make sure it is created first otherwise healing won't proceed
-				// for objects.
-				bgSeq.queueHealTask(healSource{
-					bucket: bucket,
-				}, madmin.HealItemBucket)
-			}
-
-			resolver.bucket = bucket
-
-			foundObjs := false
-			ctx, cancel := context.WithCancel(ctx)
-
-			err := listPathRaw(ctx, listPathRawOptions{
-				disks:          f.disks,
-				bucket:         bucket,
-				path:           prefix,
-				recursive:      true,
-				reportNotFound: true,
-				minDisks:       f.disksQuorum,
-				agreed: func(entry metaCacheEntry) {
-					if f.dataUsageScannerDebug {
-						console.Debugf(healObjectsPrefix+" got agreement: %v\n", entry.name)
-					}
-				},
-				// Some disks have data for this.
-				partial: func(entries metaCacheEntries, errs []error) {
-					entry, ok := entries.resolve(&resolver)
-					if !ok {
-						// check if we can get one entry atleast
-						// proceed to heal nonetheless, since
-						// this object might be dangling.
-						entry, _ = entries.firstFound()
-					}
-
-					if f.dataUsageScannerDebug {
-						console.Debugf(healObjectsPrefix+" resolved to: %v, dir: %v\n", entry.name, entry.isDir())
-					}
-
-					if entry.isDir() {
-						return
-					}
-
-					// wait on timer per object.
-					wait := scannerSleeper.Timer(ctx)
-
-					// We got an entry which we should be able to heal.
-					fiv, err := entry.fileInfoVersions(bucket)
-					if err != nil {
-						wait()
-						err := bgSeq.queueHealTask(healSource{
-							bucket:    bucket,
-							object:    entry.name,
-							versionID: "",
-						}, madmin.HealItemObject)
-						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
-						}
-						foundObjs = foundObjs || err == nil
-						return
-					}
-
-					for _, ver := range fiv.Versions {
-						// Sleep and reset.
-						wait()
-						wait = scannerSleeper.Timer(ctx)
-
-						err := bgSeq.queueHealTask(healSource{
-							bucket:    bucket,
-							object:    fiv.Name,
-							versionID: ver.VersionID,
-						}, madmin.HealItemObject)
-						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
-						}
-						foundObjs = foundObjs || err == nil
-					}
-				},
-				// Too many disks failed.
-				finished: func(errs []error) {
-					if f.dataUsageScannerDebug {
-						console.Debugf(healObjectsPrefix+" too many errors: %v\n", errs)
-					}
-					cancel()
-				},
-			})
-
-			stopFn()
-			if f.dataUsageScannerDebug && err != nil && err != errFileNotFound {
-				console.Debugf(healObjectsPrefix+" checking returned value %v (%T)\n", err, err)
-			}
-
-			// Add unless healing returned an error.
-			if foundObjs {
-				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: 1}
-				stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, this.name, "HEALED")
-				scanFolder(this)
-				stopFn(map[string]string{"type": "healed"})
-			}
-		}
 		break
 	}
 	if !wasCompacted {
@@ -1059,14 +903,12 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]ObjectInfo, error) {
-	if i.heal.enabled {
-		if healDeleteDangling {
-			done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
-			err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
-			done()
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
-			}
+	if i.heal.enabled && healDeleteDangling {
+		done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+		err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+		done()
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
 		}
 	}
 

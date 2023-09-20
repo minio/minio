@@ -484,16 +484,6 @@ func (d *dataUsageCache) isCompacted(h dataUsageHash) bool {
 	return due.Compacted
 }
 
-// findChildrenCopy returns a copy of the children of the supplied hash.
-func (d *dataUsageCache) findChildrenCopy(h dataUsageHash) dataUsageHashMap {
-	ch := d.Cache[h.String()].Children
-	res := make(dataUsageHashMap, len(ch))
-	for k := range ch {
-		res[k] = struct{}{}
-	}
-	return res
-}
-
 // searchParent will search for the parent of h.
 // This is an O(N*N) operation if there is no parent or it cannot be guessed.
 func (d *dataUsageCache) searchParent(h dataUsageHash) *dataUsageHash {
