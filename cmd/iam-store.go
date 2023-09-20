@@ -560,9 +560,9 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 	// were changes to the in-memory cache we should wait for the next
 	// cycle until we can safely update the in-memory cache.
 	//
-	// An in-memory cache must be replaced only if we know for sure that
-	// the values loaded from disk are not stale. They might be stale
-	// if the cached.updatedAt is recent than the refresh cycle began.
+	// An in-memory cache must be replaced only if we know for sure that the
+	// values loaded from disk are not stale. They might be stale if the
+	// cached.updatedAt is more recent than the refresh cycle began.
 	if cache.updatedAt.Before(loadedAt) {
 		// No one has updated anything since the config was loaded,
 		// so we just replace whatever is on the disk into memory.
@@ -572,6 +572,15 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
 		cache.iamUserGroupMemberships = newCache.iamUserGroupMemberships
 		cache.iamUserPolicyMap = newCache.iamUserPolicyMap
 		cache.iamUsersMap = newCache.iamUsersMap
+		// For STS policy map, we need to merge the new cache with the existing
+		// cache because the periodic IAM reload is partial. The periodic load
+		// here is to account for STS policy mapping changes that should apply
+		// for service accounts derived from such STS accounts (i.e. LDAP STS
+		// accounts).
+		for k, v := range newCache.iamSTSPolicyMap {
+			cache.iamSTSPolicyMap[k] = v
+		}
+
 		cache.updatedAt = time.Now()
 	}
 
@@ -2433,8 +2442,12 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 			// Load parent user and mapped policies.
 			if store.getUsersSysType() == MinIOUsersSysType {
 				store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
+				store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap)
+			} else {
+				// In case of LDAP the parent user's policy mapping needs to be
+				// loaded into sts map
+				store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap)
 			}
-			store.loadMappedPolicy(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap)
 		}
 	}
 
