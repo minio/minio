@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"math"
 	"math/rand"
@@ -55,7 +54,7 @@ const (
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling   = true
-	healObjectSelectProb = 1024 // Overall probability of a file being scanned; one in n.
+	healObjectSelectProb = 256 // Overall probability of a file being scanned; one in n.
 
 	dataScannerExcessiveVersionsThreshold = 100   // Issue a warning when a single object has more versions than this
 	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
@@ -748,6 +747,7 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 	if res.ObjectSize > 0 {
 		return res.ObjectSize
 	}
+
 	return 0
 }
 
@@ -903,15 +903,6 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]ObjectInfo, error) {
-	if i.heal.enabled && healDeleteDangling {
-		done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
-		err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
-		done()
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
-		}
-	}
-
 	objInfos, err := i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 	if err != nil {
 		return nil, err
@@ -952,6 +943,12 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 			done := globalScannerMetrics.time(scannerMetricHealCheck)
 			size = i.applyHealing(ctx, o, oi)
 			done()
+
+			if healDeleteDangling {
+				done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+				o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+				done()
+			}
 		}
 		// replicate only if lifecycle rules are not applied.
 		done := globalScannerMetrics.time(scannerMetricCheckReplication)
