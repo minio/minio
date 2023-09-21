@@ -321,19 +321,19 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Drive Resource Metrics
 
-| Name                                | Description                                              |
-| :---------------------------------- | :------------------------------------------------------- |
-| `minio_node_drive_total_bytes`      | Total bytes on a drive.                                  |
-| `minio_node_drive_used_bytes`       | Used bytes on a drive.                                   |
-| `minio_node_drive_total_inodes`     | Total inodes on a drive.                                 |
-| `minio_node_drive_used_inodes`      | Total inodes used on a drive.                            |
-| `minio_node_drive_reads_per_sec`    | Reads per second on a drive.                             |
-| `minio_node_drive_read_kb_per_sec`  | Kilobytes read per second on a drive.                    |
-| `minio_node_drive_reads_await`      | Average time for read requests to be served on a drive.  |
-| `minio_node_drive_writes_per_sec`   | Writes per second on a drive.                            |
-| `minio_node_drive_write_kb_per_sec` | Kilobytes written per second on a drive.                 |
-| `minio_node_drive_writes_await`     | Average time for write requests to be served on a drive. |
-| `minio_node_drive_perc_util`        | Percentage of time the disk was busy since uptime.       |
+| Name                                 | Description                                              |
+| :----------------------------------- | :------------------------------------------------------- |
+| `minio_node_drive_total_bytes`       | Total bytes on a drive.                                  |
+| `minio_node_drive_used_bytes`        | Used bytes on a drive.                                   |
+| `minio_node_drive_total_inodes`      | Total inodes on a drive.                                 |
+| `minio_node_drive_used_inodes`       | Total inodes used on a drive.                            |
+| `minio_node_drive_reads_per_sec`     | Reads per second on a drive.                             |
+| `minio_node_drive_reads_kb_per_sec`  | Kilobytes read per second on a drive.                    |
+| `minio_node_drive_reads_await`       | Average time for read requests to be served on a drive.  |
+| `minio_node_drive_writes_per_sec`    | Writes per second on a drive.                            |
+| `minio_node_drive_writes_kb_per_sec` | Kilobytes written per second on a drive.                 |
+| `minio_node_drive_writes_await`      | Average time for write requests to be served on a drive. |
+| `minio_node_drive_perc_util`         | Percentage of time the disk was busy since uptime.       |
 
 ## Network Interface Metrics
 

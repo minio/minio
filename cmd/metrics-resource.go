@@ -35,15 +35,15 @@ const (
 	resourceMetricsCacheInterval      = time.Minute
 
 	// drive stats
-	totalInodes   MetricName = "total_inodes"
-	readsPerSec   MetricName = "reads_per_sec"
-	writesPerSec  MetricName = "writes_per_sec"
-	readKBPerSec  MetricName = "read_kb_per_sec"
-	writeKBPerSec MetricName = "write_kb_per_sec"
-	readsAwait    MetricName = "reads_await"
-	writesAwait   MetricName = "writes_await"
-	percUtil      MetricName = "perc_util"
-	usedInodes    MetricName = "used_inodes"
+	totalInodes    MetricName = "total_inodes"
+	readsPerSec    MetricName = "reads_per_sec"
+	writesPerSec   MetricName = "writes_per_sec"
+	readsKBPerSec  MetricName = "reads_kb_per_sec"
+	writesKBPerSec MetricName = "writes_kb_per_sec"
+	readsAwait     MetricName = "reads_await"
+	writesAwait    MetricName = "writes_await"
+	percUtil       MetricName = "perc_util"
+	usedInodes     MetricName = "used_inodes"
 
 	// network stats
 	interfaceRxBytes  MetricName = "rx_bytes"
@@ -132,8 +132,8 @@ func init() {
 		memAvailable:      "Available memory on the node",
 		readsPerSec:       "Reads per second on a drive",
 		writesPerSec:      "Writes per second on a drive",
-		readKBPerSec:      "Kilobytes read per second on a drive",
-		writeKBPerSec:     "Kilobytes written per second on a drive",
+		readsKBPerSec:     "Kilobytes read per second on a drive",
+		writesKBPerSec:    "Kilobytes written per second on a drive",
 		readsAwait:        "Average time for read requests to be served on a drive",
 		writesAwait:       "Average time for write requests to be served on a drive",
 		percUtil:          "Percentage of time the disk was busy since uptime",
@@ -216,14 +216,14 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 		readBytes := stats.ReadSectors * sectorSize
 		readKib := float64(readBytes) / float64(kib)
 		readKibPerSec := readKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, readKBPerSec, readKibPerSec, labels, false)
+		updateResourceMetrics(driveSubsystem, readsKBPerSec, readKibPerSec, labels, false)
 
 		updateResourceMetrics(driveSubsystem, writesPerSec, float64(stats.WriteIOs)/float64(upt), labels, false)
 
 		writeBytes := stats.WriteSectors * sectorSize
 		writeKib := float64(writeBytes) / float64(kib)
 		writeKibPerSec := writeKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, writeKBPerSec, writeKibPerSec, labels, false)
+		updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKibPerSec, labels, false)
 
 		rdAwait := 0.0
 		if stats.ReadIOs > 0 {
