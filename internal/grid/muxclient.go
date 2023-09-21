@@ -49,6 +49,7 @@ type MuxClient struct {
 	init             bool
 	deadline         time.Duration
 	outBlock         chan struct{}
+	subroute         *subHandlerID
 }
 
 // Response is a response from the server.
@@ -84,6 +85,9 @@ func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 		Flags:      m.BaseFlags | FlagEOF,
 		Payload:    req,
 		DeadlineMS: uint32(m.deadline.Milliseconds()),
+	}
+	if m.subroute != nil {
+		msg.Flags |= FlagSubroute
 	}
 	ch := make(chan Response, 1)
 	m.respWait = ch
@@ -128,6 +132,17 @@ func (m *MuxClient) sendLocked(msg message) error {
 	if err != nil {
 		return err
 	}
+	if msg.Flags&FlagSubroute != 0 {
+		if m.subroute == nil {
+			return fmt.Errorf("internal error: subroute not defined on client")
+		}
+		hid := m.subroute.withHandler(msg.Handler)
+		before := len(dst)
+		dst = append(dst, hid[:]...)
+		if debugPrint {
+			fmt.Println("Added subroute", hid.String(), "to message", msg, "len", len(dst)-before)
+		}
+	}
 	if msg.Flags&FlagCRCxxh3 != 0 {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
@@ -154,6 +169,9 @@ func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 		DeadlineMS: uint32(m.deadline.Milliseconds()),
 	}
 	msg.setZeroPayloadFlag()
+	if m.subroute != nil {
+		msg.Flags |= FlagSubroute
+	}
 
 	// Send...
 	err := m.send(msg)
@@ -194,6 +212,9 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	msg.setZeroPayloadFlag()
 	if requests == nil {
 		msg.Flags |= FlagEOF
+	}
+	if m.subroute != nil {
+		msg.Flags |= FlagSubroute
 	}
 
 	// Send...

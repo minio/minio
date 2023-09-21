@@ -76,6 +76,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 		targets: make(map[string]*Connection, len(o.Hosts)),
 		local:   o.Local,
 	}
+	m.handlers.init()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -152,7 +153,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 		}
 
 		var message message
-		err = message.parse(msg)
+		_, err = message.parse(msg)
 		if err != nil {
 			if debugPrint {
 				fmt.Println("parse err:", err)
@@ -235,10 +236,23 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StreamHandler) error 
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	if m.handlers.hasAny(id) && !id.isTestHandler() {
+	if h.SubRoute == "" {
+		if m.handlers.hasAny(id) && !id.isTestHandler() {
+			return ErrHandlerAlreadyExists
+		}
+		m.handlers.streams[id] = &h
+		return nil
+	}
+	if debugPrint {
+		fmt.Println("RegisterStreamingHandler: subroute:", h.SubRoute)
+	}
+	subID := makeSubHandlerID(id, h.SubRoute)
+	if m.handlers.hasSubhandler(subID) && !id.isTestHandler() {
 		return ErrHandlerAlreadyExists
 	}
-	m.handlers.streams[id] = &h
+	m.handlers.subStreams[subID] = &h
+	// Copy so clients can also pick it up for other subpaths.
+	m.handlers.subStreams[makeZeroSubHandlerID(id)] = &h
 	return nil
 }
 

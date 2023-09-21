@@ -91,8 +91,7 @@ type Connection struct {
 	// connChange will be signaled whenever State has been updated, or at regular intervals.
 	// Holding the lock allows safe reads of State, and guarantees that changes will be detected.
 	connChange *sync.Cond
-
-	handlers *handlers
+	handlers   *handlers
 
 	remote             *RemoteClient
 	auth               AuthFn
@@ -104,6 +103,12 @@ type Connection struct {
 	debugInConn  net.Conn
 	debugOutConn net.Conn
 	connMu       sync.Mutex
+}
+
+type Subroute struct {
+	*Connection
+	route string
+	subID subHandlerID
 }
 
 // State is a connection state.
@@ -205,16 +210,16 @@ func newConnection(o connectionParams) *Connection {
 	return c
 }
 
-// shouldConnect returns a deterministic bool whether the local should initiate the connection.
-func (c *Connection) shouldConnect() bool {
-	// We xor the two hashes, so result isn't order dependent.
-	h0 := xxh3.HashString(c.Local)
-	h1 := xxh3.HashString(c.Remote)
-	if h0 == h1 {
-		// Tiebreak on unlikely tie.
-		return c.Local < c.Remote
+func (c *Connection) Subroute(s string) *Subroute {
+	return &Subroute{
+		Connection: c,
+		route:      s,
+		subID:      makeSubHandlerID(0, s),
 	}
-	return h0 < h1
+}
+
+func (c *Subroute) Subroute(_ string) *Subroute {
+	panic("grid: subroutes cannot be nested")
 }
 
 // NewMuxClient returns a mux client for manual use.
@@ -236,10 +241,23 @@ func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
 	return client, nil
 }
 
+// NewMuxClient returns a mux client for manual use.
+func (c *Subroute) NewMuxClient(ctx context.Context) (*MuxClient, error) {
+	cl, err := c.Connection.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cl.subroute = &c.subID
+	return cl, nil
+}
+
 // Request allows to do a single remote request.
 func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
+	}
+	if c.State() != StateConnected {
+		return nil, ErrDisconnected
 	}
 	handler := c.handlers.single[h]
 	if handler == nil {
@@ -251,6 +269,134 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 	}
 	defer c.outgoing.Delete(client.MuxID)
 	return client.roundtrip(h, req)
+}
+
+// Request allows to do a single remote request.
+func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
+	if !h.valid() {
+		return nil, ErrUnknownHandler
+	}
+	if c.State() != StateConnected {
+		return nil, ErrDisconnected
+	}
+	handler := c.handlers.subSingle[makeZeroSubHandlerID(h)]
+	if handler == nil {
+		return nil, ErrUnknownHandler
+	}
+	client, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	client.subroute = &c.subID
+	defer c.outgoing.Delete(client.MuxID)
+	return client.roundtrip(h, req)
+}
+
+// NewStream creates a new stream
+func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
+	if !h.valid() {
+		return nil, ErrUnknownHandler
+	}
+	if c.State() != StateConnected {
+		return nil, ErrDisconnected
+	}
+	handler := c.handlers.streams[h]
+	if handler == nil {
+		return nil, ErrUnknownHandler
+	}
+
+	var requests chan []byte
+	var responses chan Response
+	if handler.InCapacity > 0 {
+		requests = make(chan []byte, handler.InCapacity)
+	}
+	if handler.OutCapacity > 0 {
+		responses = make(chan Response, handler.OutCapacity)
+	} else {
+		responses = make(chan Response, 1)
+	}
+
+	cl, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return cl.RequestStream(h, payload, requests, responses)
+}
+
+func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
+	if !h.valid() {
+		return nil, ErrUnknownHandler
+	}
+	if c.State() != StateConnected {
+		return nil, ErrDisconnected
+	}
+	handler := c.handlers.subStreams[makeZeroSubHandlerID(h)]
+	if handler == nil {
+		fmt.Println("want", makeZeroSubHandlerID(h), c.route, "got", c.handlers.subStreams)
+		return nil, ErrUnknownHandler
+	}
+
+	var requests chan []byte
+	var responses chan Response
+	if handler.InCapacity > 0 {
+		requests = make(chan []byte, handler.InCapacity)
+	}
+	if handler.OutCapacity > 0 {
+		responses = make(chan Response, handler.OutCapacity)
+	} else {
+		responses = make(chan Response, 1)
+	}
+
+	cl, err := c.NewMuxClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cl.subroute = &c.subID
+
+	return cl.RequestStream(h, payload, requests, responses)
+}
+
+// WaitForConnect will block until a connection has been established or
+// the context is canceled, in which case the context error is returned.
+func (c *Connection) WaitForConnect(ctx context.Context) error {
+	c.connChange.L.Lock()
+	if atomic.LoadUint32((*uint32)(&c.state)) == StateConnected {
+		c.connChange.L.Unlock()
+		// Happy path.
+		return nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	changed := make(chan State, 1)
+	go func() {
+		defer close(changed)
+		for {
+			c.connChange.Wait()
+			newState := c.state
+			select {
+			case changed <- newState:
+				if newState == StateConnected {
+					c.connChange.L.Unlock()
+					return
+				}
+			case <-ctx.Done():
+				c.connChange.L.Unlock()
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case newState := <-changed:
+			if newState == StateConnected {
+				return nil
+			}
+		}
+	}
 }
 
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
@@ -292,6 +438,18 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 	return nil
 }
 */
+
+// shouldConnect returns a deterministic bool whether the local should initiate the connection.
+func (c *Connection) shouldConnect() bool {
+	// We xor the two hashes, so result isn't order dependent.
+	h0 := xxh3.HashString(c.Local)
+	h1 := xxh3.HashString(c.Remote)
+	if h0 == h1 {
+		// Tiebreak on unlikely tie.
+		return c.Local < c.Remote
+	}
+	return h0 < h1
+}
 
 func (c *Connection) send(msg []byte) error {
 	select {
@@ -486,77 +644,6 @@ func (c *Connection) connect() {
 	}
 }
 
-// NewStream creates a new stream
-func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
-	if !h.valid() {
-		return nil, ErrUnknownHandler
-	}
-	handler := c.handlers.streams[h]
-	if handler == nil {
-		return nil, ErrUnknownHandler
-	}
-
-	var requests chan []byte
-	var responses chan Response
-	if handler.InCapacity > 0 {
-		requests = make(chan []byte, handler.InCapacity)
-	}
-	if handler.OutCapacity > 0 {
-		responses = make(chan Response, handler.OutCapacity)
-	} else {
-		responses = make(chan Response, 1)
-	}
-
-	cl, err := c.NewMuxClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return cl.RequestStream(h, payload, requests, responses)
-}
-
-// WaitForConnect will block until a connection has been established or
-// the context is canceled, in which case the context error is returned.
-func (c *Connection) WaitForConnect(ctx context.Context) error {
-	c.connChange.L.Lock()
-	if atomic.LoadUint32((*uint32)(&c.state)) == StateConnected {
-		c.connChange.L.Unlock()
-		// Happy path.
-		return nil
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	changed := make(chan State, 1)
-	go func() {
-		defer close(changed)
-		for {
-			c.connChange.Wait()
-			newState := c.state
-			select {
-			case changed <- newState:
-				if newState == StateConnected {
-					c.connChange.L.Unlock()
-					return
-				}
-			case <-ctx.Done():
-				c.connChange.L.Unlock()
-				return
-			}
-		}
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case newState := <-changed:
-			if newState == StateConnected {
-				return nil
-			}
-		}
-	}
-}
-
 func (c *Connection) disconnected() {
 	c.outgoing.Range(func(key uint64, client *MuxClient) bool {
 		if !client.stateless {
@@ -575,7 +662,7 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 		return fmt.Errorf("unexpected connect response type %v", op)
 	}
 	var m message
-	err = m.parse(b)
+	_, err = m.parse(b)
 	if err != nil {
 		return err
 	}
@@ -726,7 +813,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 
 			// Parse the received message
-			err = m.parse(msg)
+			subID, err := m.parse(msg)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws parse package: %w", err))
 				cancel(ErrDisconnected)
@@ -880,7 +967,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					continue
 				}
 				// Singleshot message
-				handler := c.handlers.single[m.Handler]
+				var handler SingleHandlerFn
+				if subID == nil {
+					handler = c.handlers.single[m.Handler]
+				} else {
+					handler = c.handlers.subSingle[*subID]
+				}
 				if handler == nil {
 					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
 					continue
@@ -914,6 +1006,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 							fmt.Println("returning payload:", string(b))
 						}
 					}
+					m.Flags = 0
 					logger.LogIf(ctx, c.queueMsg(m, nil))
 				}(m)
 				continue
@@ -931,13 +1024,14 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 				v.ack(m.Seq)
 			case OpConnectMux:
-				if !m.Handler.valid() {
-					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
-					continue
-				}
 				// Stateless stream:
 				if m.Flags&FlagStateless != 0 {
-					handler := c.handlers.stateless[m.Handler]
+					var handler *StatelessHandler
+					if subID == nil {
+						handler = c.handlers.stateless[m.Handler]
+					} else {
+						handler = c.handlers.subStateless[*subID]
+					}
 					if handler == nil {
 						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
 						continue
@@ -947,7 +1041,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					})
 				} else {
 					// Stream:
-					handler := c.handlers.streams[m.Handler]
+					var handler *StreamHandler
+					if subID == nil {
+						handler = c.handlers.streams[m.Handler]
+					} else {
+						handler = c.handlers.subStreams[*subID]
+					}
 					if handler == nil {
 						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
 						continue
@@ -963,6 +1062,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 				// Acknowledge Mux created.
 				m.Op = OpAckMux
+				m.Flags = 0
 				m.Payload = nil
 				logger.LogIf(ctx, c.queueMsg(m, nil))
 				continue

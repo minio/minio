@@ -139,6 +139,7 @@ func TestSingleRoundtrip(t *testing.T) {
 	// local to remote
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
+	remoteConn.WaitForConnect(context.Background())
 
 	start := time.Now()
 	resp, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
@@ -239,6 +240,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	// local to remote connection
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
+	remoteConn.WaitForConnect(context.Background())
 
 	start := time.Now()
 	req := testRequest{Num: 1, String: testPayload}
@@ -614,7 +616,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 					case resp <- []byte{i}:
 					// ok
 					case <-ctx.Done():
-						return NewRemoteErr(ctx.Err().Error())
+						return NewRemoteErr(ctx.Err())
 					}
 					if i == 0 {
 						close(serverSent)
@@ -691,12 +693,12 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 							return nil
 						}
 						if in[0] != n {
-							return NewRemoteErr(fmt.Sprintf("expected incoming %d, got %d", n, in[0]))
+							return NewRemoteErrString(fmt.Sprintf("expected incoming %d, got %d", n, in[0]))
 						}
 						n++
 						resp <- append([]byte{}, in...)
 					case <-ctx.Done():
-						return NewRemoteErr(ctx.Err().Error())
+						return NewRemoteErr(ctx.Err())
 					}
 				}
 			},

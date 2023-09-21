@@ -19,10 +19,12 @@ package grid
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/minio/minio/internal/hash/sha256"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -36,6 +38,7 @@ const (
 	HandlerLockRUnlock
 	HandlerLockRefresh
 	HandlerLockForceUnlock
+	HandlerWalkDir
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -66,7 +69,17 @@ func (h HandlerID) isTestHandler() bool {
 type RemoteErr string
 
 // NewRemoteErr creates a new remote error.
-func NewRemoteErr(msg string) *RemoteErr {
+// The error type is not preserved.
+func NewRemoteErr(err error) *RemoteErr {
+	if err == nil {
+		return nil
+	}
+	r := RemoteErr(err.Error())
+	return &r
+}
+
+// NewRemoteErrString creates a new remote error from a string.
+func NewRemoteErrString(msg string) *RemoteErr {
 	r := RemoteErr(msg)
 	return &r
 }
@@ -126,6 +139,11 @@ type (
 		// Any non-nil error sent as response means no more responses are sent.
 		Handle StreamHandlerFn
 
+		// SubRoute for handler.
+		// Subroute must be static and clients should specify a matching subroute.
+		// Should not be set unless there are different handlers for the same HandlerID.
+		SubRoute string
+
 		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
 		OutCapacity int
 
@@ -135,10 +153,46 @@ type (
 	}
 )
 
+type subHandlerID [32]byte
+
+func makeSubHandlerID(id HandlerID, subRoute string) subHandlerID {
+	b := subHandlerID(sha256.Sum256([]byte(subRoute)))
+	b[0] = byte(id)
+	b[1] = 0 // Reserved
+	return b
+}
+
+func (s subHandlerID) withHandler(id HandlerID) subHandlerID {
+	s[1] = 0 // Reserved
+	s[0] = byte(id)
+	return s
+}
+
+func (s *subHandlerID) String() string {
+	if s == nil {
+		return ""
+	}
+	return hex.EncodeToString(s[:])
+}
+
+func makeZeroSubHandlerID(id HandlerID) subHandlerID {
+	return subHandlerID{byte(id)}
+}
+
 type handlers struct {
 	single    [handlerLast]SingleHandlerFn
 	stateless [handlerLast]*StatelessHandler
 	streams   [handlerLast]*StreamHandler
+
+	subSingle    map[subHandlerID]SingleHandlerFn
+	subStateless map[subHandlerID]*StatelessHandler
+	subStreams   map[subHandlerID]*StreamHandler
+}
+
+func (h *handlers) init() {
+	h.subSingle = make(map[subHandlerID]SingleHandlerFn)
+	h.subStateless = make(map[subHandlerID]*StatelessHandler)
+	h.subStreams = make(map[subHandlerID]*StreamHandler)
 }
 
 func (h *handlers) hasAny(id HandlerID) bool {
@@ -146,6 +200,10 @@ func (h *handlers) hasAny(id HandlerID) bool {
 		return false
 	}
 	return h.single[id] != nil || h.stateless[id] != nil || h.streams[id] != nil
+}
+
+func (h *handlers) hasSubhandler(id subHandlerID) bool {
+	return h.subSingle[id] != nil || h.subStateless[id] != nil || h.subStreams[id] != nil
 }
 
 // RoundTripper provides an interface for type roundtrip serialization.
@@ -241,6 +299,9 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req 
 	}
 	dst = h.NewResponse()
 	_, err = dst.UnmarshalMsg(res)
+	if err != nil {
+		fmt.Println("input:", res)
+	}
 	PutByteBuffer(res)
 	return dst, err
 }

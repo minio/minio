@@ -88,3 +88,17 @@ func getDeadline(d time.Duration) time.Duration {
 	}
 	return d
 }
+
+type writerWrapper struct {
+	ch chan<- []byte
+}
+
+func (w *writerWrapper) Write(p []byte) (n int, err error) {
+	w.ch <- p
+	return len(p), nil
+}
+
+// WriterToChannel will return an io.Writer that writes to the given channel.
+func WriterToChannel(ch chan<- []byte) io.Writer {
+	return &writerWrapper{ch: ch}
+}

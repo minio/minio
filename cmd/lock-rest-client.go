@@ -59,7 +59,7 @@ func (c *lockRESTClient) String() string {
 func (c *lockRESTClient) call(ctx context.Context, h *grid.SingleHandler[*dsync.LockArgs, *dsync.LockResp], args *dsync.LockArgs) (ok bool, err error) {
 	r, err := h.Call(ctx, c.connection, args)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIfNot(ctx, err, grid.ErrDisconnected)
 		return false, err
 	}
 	defer h.PutResponse(r)

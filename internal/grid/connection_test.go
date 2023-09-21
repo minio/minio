@@ -33,7 +33,7 @@ func TestDisconnect(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:            dialer,
+		Dialer:            dialer.DialContext,
 		Local:             localHost,
 		Hosts:             hosts,
 		Auth:              func(aud string) string { return aud },
@@ -55,7 +55,7 @@ func TestDisconnect(t *testing.T) {
 	}))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:            dialer,
+		Dialer:            dialer.DialContext,
 		Local:             remoteHost,
 		Hosts:             hosts,
 		Auth:              func(aud string) string { return aud },

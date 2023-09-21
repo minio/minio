@@ -29,6 +29,7 @@ import (
 //
 //go:generate msgp -unexported -file=$GOFILE
 //go:generate stringer -type=Op -output=msg_string.go -trimprefix=Op $GOFILE
+//go:generate stringer -type=HandlerID -output=handlers_string.go -trimprefix=Handler $GOFILE handlers.go
 
 // Op is operation type messages.
 type Op uint8
@@ -112,6 +113,10 @@ const (
 
 	// FlagPayloadIsZero means that payload is 0-length slice and not nil.
 	FlagPayloadIsZero
+
+	// FlagSubroute indicates that the message has subroute.
+	// Subroute will be 32 bytes long and added before any CRC.
+	FlagSubroute
 )
 
 // This struct cannot be changed and retain backwards compatibility.
@@ -129,29 +134,41 @@ type message struct {
 }
 
 // parse an handleIncoming message
-func (m *message) parse(b []byte) error {
+func (m *message) parse(b []byte) (*subHandlerID, error) {
+	var sub *subHandlerID
 	if m.Payload == nil {
 		m.Payload = GetByteBuffer()[:0]
 	}
 	h, err := m.UnmarshalMsg(b)
 	if err != nil {
-		return fmt.Errorf("read write: %v", err)
+		return nil, fmt.Errorf("read write: %v", err)
 	}
 	if len(m.Payload) == 0 && m.Flags&FlagPayloadIsZero == 0 {
 		PutByteBuffer(m.Payload)
 		m.Payload = nil
 	}
 	if m.Flags&FlagCRCxxh3 != 0 {
-		if len(h) < 4 {
-			return fmt.Errorf("want crc len 4, got %v", len(h))
+		const hashLen = 4
+		if len(h) < hashLen {
+			return nil, fmt.Errorf("want crc len 4, got %v", len(h))
 		}
-		got := uint32(xxh3.Hash(b[:len(b)-len(h)]))
+		got := uint32(xxh3.Hash(b[:len(b)-hashLen]))
 		want := binary.LittleEndian.Uint32(h)
 		if got != want {
-			return fmt.Errorf("crc mismatch: %08x (given) != %08x (bytes)", want, got)
+			return nil, fmt.Errorf("crc mismatch: %08x (given) != %08x (bytes)", want, got)
 		}
+		h = h[:len(h)-hashLen]
 	}
-	return nil
+	// Extract subroute if any.
+	if m.Flags&FlagSubroute != 0 {
+		if len(h) < 32 {
+			return nil, fmt.Errorf("want subroute len 32, got %v", len(h))
+		}
+		subID := (*[32]byte)(h[len(h)-32:])
+		sub = (*subHandlerID)(subID)
+		h = h[:len(h)-32]
+	}
+	return sub, nil
 }
 
 // setZeroPayloadFlag will clear or set the FlagPayloadIsZero if
