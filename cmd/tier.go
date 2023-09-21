@@ -287,7 +287,7 @@ func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err erro
 // using a PutObject API. PutObjReader encrypts json encoded tier configurations
 // if KMS is enabled, otherwise simply yields the json encoded bytes as is.
 // Similarly, ObjectOptions value depends on KMS' status.
-func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, error) {
+func (config *TierConfigMgr) configReader(ctx context.Context) (*PutObjReader, *ObjectOptions, error) {
 	b, err := config.Bytes()
 	if err != nil {
 		return nil, nil, err
@@ -295,7 +295,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	payloadSize := int64(len(b))
 	br := bytes.NewReader(b)
-	hr, err := hash.NewReader(br, payloadSize, "", "", payloadSize)
+	hr, err := hash.NewReader(ctx, br, payloadSize, "", "", payloadSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -318,7 +318,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 		Size: payloadSize,
 	}
 	encSize := info.EncryptedSize()
-	encHr, err := hash.NewReader(encBr, encSize, "", "", encSize)
+	encHr, err := hash.NewReader(ctx, encBr, encSize, "", "", encSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -371,7 +371,7 @@ func (config *TierConfigMgr) Save(ctx context.Context, objAPI ObjectLayer) error
 		return errServerNotInitialized
 	}
 
-	pr, opts, err := globalTierConfigMgr.configReader()
+	pr, opts, err := globalTierConfigMgr.configReader(ctx)
 	if err != nil {
 		return err
 	}

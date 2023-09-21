@@ -31,7 +31,8 @@ func access(name string) error {
 	return err
 }
 
-func osMkdirAll(dirPath string, perm os.FileMode) error {
+func osMkdirAll(dirPath string, perm os.FileMode, _ string) error {
+	// baseDir is not honored in windows platform
 	return os.MkdirAll(dirPath, perm)
 }
 

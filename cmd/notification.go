@@ -297,7 +297,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		profilingDataFound = true
 
 		for typ, data := range data {
-			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data)
+			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data, 0o600)
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
@@ -325,11 +325,11 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 	// Send profiling data to zip as file
 	for typ, data := range data {
-		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data)
+		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data, 0o600)
 		logger.LogIf(ctx, err)
 	}
 	if b := getClusterMetaInfo(ctx); len(b) > 0 {
-		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b))
+		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
 	}
 
 	return
@@ -1099,35 +1099,24 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 	}
 	reports = append(reports, globalBucketMonitor.GetReport(bandwidth.SelectBuckets(buckets...)))
 	consolidatedReport := bandwidth.BucketBandwidthReport{
-		BucketStats: make(map[string]map[string]bandwidth.Details),
+		BucketStats: make(map[bandwidth.BucketOptions]bandwidth.Details),
 	}
 	for _, report := range reports {
 		if report == nil || report.BucketStats == nil {
 			continue
 		}
-		for bucket := range report.BucketStats {
-			d, ok := consolidatedReport.BucketStats[bucket]
+		for opts := range report.BucketStats {
+			d, ok := consolidatedReport.BucketStats[opts]
 			if !ok {
-				consolidatedReport.BucketStats[bucket] = make(map[string]bandwidth.Details)
-				d = consolidatedReport.BucketStats[bucket]
-				for arn := range d {
-					d[arn] = bandwidth.Details{
-						LimitInBytesPerSecond: report.BucketStats[bucket][arn].LimitInBytesPerSecond,
-					}
+				d = bandwidth.Details{
+					LimitInBytesPerSecond: report.BucketStats[opts].LimitInBytesPerSecond,
 				}
 			}
-			for arn, st := range report.BucketStats[bucket] {
-				bwDet := bandwidth.Details{}
-				if bw, ok := d[arn]; ok {
-					bwDet = bw
-				}
-				if bwDet.LimitInBytesPerSecond < st.LimitInBytesPerSecond {
-					bwDet.LimitInBytesPerSecond = st.LimitInBytesPerSecond
-				}
-				bwDet.CurrentBandwidthInBytesPerSecond += st.CurrentBandwidthInBytesPerSecond
-				d[arn] = bwDet
-				consolidatedReport.BucketStats[bucket] = d
+			dt, ok := report.BucketStats[opts]
+			if ok {
+				d.CurrentBandwidthInBytesPerSecond += dt.CurrentBandwidthInBytesPerSecond
 			}
+			consolidatedReport.BucketStats[opts] = d
 		}
 	}
 	return consolidatedReport

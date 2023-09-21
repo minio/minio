@@ -29,14 +29,14 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // KMSStatusHandler - GET /minio/kms/v1/status
 func (a kmsAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSStatus")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSStatusAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSStatusAction)
 	if objectAPI == nil {
 		return
 	}
@@ -74,7 +74,7 @@ func (a kmsAPIHandlers) KMSMetricsHandler(w http.ResponseWriter, r *http.Request
 	ctx := newContext(r, w, "KMSMetrics")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSMetricsAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSMetricsAction)
 	if objectAPI == nil {
 		return
 	}
@@ -106,7 +106,7 @@ func (a kmsAPIHandlers) KMSAPIsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSAPIs")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSAPIAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSAPIAction)
 	if objectAPI == nil {
 		return
 	}
@@ -143,7 +143,7 @@ func (a kmsAPIHandlers) KMSVersionHandler(w http.ResponseWriter, r *http.Request
 	ctx := newContext(r, w, "KMSVersion")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSVersionAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSVersionAction)
 	if objectAPI == nil {
 		return
 	}
@@ -183,7 +183,7 @@ func (a kmsAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Reque
 	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSCreateKeyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSCreateKeyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -211,7 +211,7 @@ func (a kmsAPIHandlers) KMSDeleteKeyHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "KMSDeleteKey")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDeleteKeyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeleteKeyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -246,7 +246,7 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSListKeysAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListKeysAction)
 	if objectAPI == nil {
 		return
 	}
@@ -297,7 +297,7 @@ func (a kmsAPIHandlers) KMSImportKeyHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "KMSImportKey")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSImportKeyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSImportKeyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -328,7 +328,7 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "KMSKeyStatus")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSKeyStatusAction)
 	if objectAPI == nil {
 		return
 	}
@@ -404,7 +404,7 @@ func (a kmsAPIHandlers) KMSDescribePolicyHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "KMSDescribePolicy")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDescribePolicyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribePolicyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -440,7 +440,7 @@ func (a kmsAPIHandlers) KMSAssignPolicyHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "KMSAssignPolicy")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSAssignPolicyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSAssignPolicyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -472,7 +472,7 @@ func (a kmsAPIHandlers) KMSDeletePolicyHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "KMSDeletePolicy")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDeletePolicyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeletePolicyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -499,7 +499,7 @@ func (a kmsAPIHandlers) KMSListPoliciesHandler(w http.ResponseWriter, r *http.Re
 	ctx := newContext(r, w, "KMSListPolicies")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSListPoliciesAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListPoliciesAction)
 	if objectAPI == nil {
 		return
 	}
@@ -546,7 +546,7 @@ func (a kmsAPIHandlers) KMSGetPolicyHandler(w http.ResponseWriter, r *http.Reque
 	ctx := newContext(r, w, "KMSGetPolicy")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSGetPolicyAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSGetPolicyAction)
 	if objectAPI == nil {
 		return
 	}
@@ -578,7 +578,7 @@ func (a kmsAPIHandlers) KMSDescribeIdentityHandler(w http.ResponseWriter, r *htt
 	ctx := newContext(r, w, "KMSDescribeIdentity")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDescribeIdentityAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribeIdentityAction)
 	if objectAPI == nil {
 		return
 	}
@@ -619,7 +619,7 @@ func (a kmsAPIHandlers) KMSDescribeSelfIdentityHandler(w http.ResponseWriter, r 
 	ctx := newContext(r, w, "KMSDescribeSelfIdentity")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDescribeSelfIdentityAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribeSelfIdentityAction)
 	if objectAPI == nil {
 		return
 	}
@@ -659,7 +659,7 @@ func (a kmsAPIHandlers) KMSDeleteIdentityHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "KMSDeleteIdentity")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSDeleteIdentityAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeleteIdentityAction)
 	if objectAPI == nil {
 		return
 	}
@@ -686,7 +686,7 @@ func (a kmsAPIHandlers) KMSListIdentitiesHandler(w http.ResponseWriter, r *http.
 	ctx := newContext(r, w, "KMSListIdentities")
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSListIdentitiesAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListIdentitiesAction)
 	if objectAPI == nil {
 		return
 	}

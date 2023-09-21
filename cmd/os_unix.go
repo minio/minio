@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -47,7 +48,13 @@ func access(name string) error {
 // directories that MkdirAll creates.
 // If path is already a directory, MkdirAll does nothing
 // and returns nil.
-func osMkdirAll(dirPath string, perm os.FileMode) error {
+func osMkdirAll(dirPath string, perm os.FileMode, baseDir string) error {
+	if baseDir != "" {
+		if strings.HasPrefix(baseDir, dirPath) {
+			return nil
+		}
+	}
+
 	// Slow path: make sure parent exists and then call Mkdir for path.
 	i := len(dirPath)
 	for i > 0 && os.IsPathSeparator(dirPath[i-1]) { // Skip trailing path separator.
@@ -61,7 +68,7 @@ func osMkdirAll(dirPath string, perm os.FileMode) error {
 
 	if j > 1 {
 		// Create parent.
-		if err := osMkdirAll(dirPath[:j-1], perm); err != nil {
+		if err := osMkdirAll(dirPath[:j-1], perm, baseDir); err != nil {
 			return err
 		}
 	}

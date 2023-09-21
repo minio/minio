@@ -273,9 +273,12 @@ Once set the scanner settings are automatically applied without the need for ser
 
 ### Healing
 
-Healing is enabled by default. The following configuration settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses up to '1sec' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_sleep` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ heal max_sleep=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ heal max_io=30` . By default the wait delay is `1sec` beyond 10 concurrent operations. This means the healer will sleep *1 second* at max for each heal operation if there are more than *10* concurrent client requests.
+Healing is enabled by default. The following configuration settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses up to '250ms' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_sleep` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ heal max_sleep=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ heal max_io=30` . By default the wait delay is `250ms` beyond 100 concurrent operations. This means the healer will sleep *250 milliseconds* at max for each heal operation if there are more than *100* concurrent client requests.
 
 In most setups this is sufficient to heal the content after drive replacements. Setting `max_sleep` to a *lower* value and setting `max_io` to a *higher* value would make heal go faster.
+
+Each node is responsible of healing its local drives; Each drive will have multiple heal workers which is the quarter of the number of CPU cores of the node or the quarter of the configured nr_requests of the drive (https://www.kernel.org/doc/Documentation/block/queue-sysfs.txt). It is also possible to provide a custom number of workers by using this command: `mc admin config set alias/ heal drive_workers=100` .
+
 
 ```
 ~ mc admin config set alias/ heal
@@ -283,9 +286,10 @@ KEY:
 heal  manage object healing frequency and bitrot verification checks
 
 ARGS:
-bitrotscan  (on|off)    perform bitrot scan on drives when checking objects during scanner
-max_sleep   (duration)  maximum sleep duration between objects to slow down heal operation. eg. 2s
-max_io      (int)       maximum IO requests allowed between objects to slow down heal operation. eg. 3
+bitrotscan     (on|off)    perform bitrot scan on drives when checking objects during scanner
+max_sleep      (duration)  maximum sleep duration between objects to slow down heal operation. eg. 2s
+max_io         (int)       maximum IO requests allowed between objects to slow down heal operation. eg. 3
+drive_workers  (int)       the number of workers per drive to heal a new disk replacement.
 ```
 
 Example: The following settings will increase the heal operation speed by allowing healing operation to run without delay up to `100` concurrent requests, and the maximum delay between each heal operation is set to `300ms`.

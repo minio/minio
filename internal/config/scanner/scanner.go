@@ -99,7 +99,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	case "fast":
 		cfg.Delay, cfg.MaxWait, cfg.Cycle = 1, 100*time.Millisecond, time.Minute
 	case "default":
-		cfg.Delay, cfg.MaxWait, cfg.Cycle = 2, 5*time.Second, time.Minute
+		cfg.Delay, cfg.MaxWait, cfg.Cycle = 2, time.Second, time.Minute
 	case "slow":
 		cfg.Delay, cfg.MaxWait, cfg.Cycle = 10, 15*time.Second, time.Minute
 	case "slowest":
@@ -127,7 +127,11 @@ func lookupDeprecatedScannerConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS)))
+	cycle := env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS))
+	if cycle == "" {
+		cycle = "1m"
+	}
+	cfg.Cycle, err = time.ParseDuration(cycle)
 	if err != nil {
 		return cfg, err
 	}

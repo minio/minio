@@ -182,7 +182,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				DiskIndex: endpoints[index].DiskIdx,
 			}
 			if disks[index] == OfflineDisk {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]), "get-disks-info-offline-"+di.Endpoint)
 				di.State = diskErrToDriveState(errDiskNotFound)
 				disksInfo[index] = di
 				return nil

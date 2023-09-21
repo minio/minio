@@ -275,7 +275,7 @@ func formatErasureMigrateV2ToV3(data []byte, export, version string) ([]byte, er
 
 	tmpOld := pathJoin(export, minioMetaTmpDeletedBucket, mustGetUUID())
 	if err := renameAll(pathJoin(export, minioMetaMultipartBucket),
-		tmpOld); err != nil && err != errFileNotFound {
+		tmpOld, export); err != nil && err != errFileNotFound {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
 			pathJoin(export, minioMetaMultipartBucket),
 			tmpOld,

@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio-go/v7"
 	minioClient "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/replication"
@@ -2119,6 +2120,13 @@ func (c *SiteReplicationSys) concDo(selfActionFn func() error, peerActionFn func
 	errMap := make(map[string]error, len(c.state.Peers))
 	for i, depID := range depIDs {
 		errMap[depID] = errs[i]
+		if errs[i] != nil && minio.IsNetworkOrHostDown(errs[i], true) {
+			ep := c.state.Peers[depID].Endpoint
+			epURL, _ := url.Parse(ep)
+			if !globalBucketTargetSys.isOffline(epURL) {
+				globalBucketTargetSys.markOffline(epURL)
+			}
+		}
 	}
 	return c.newConcErr(errMap, actionName)
 }

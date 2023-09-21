@@ -1139,7 +1139,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(reader, fileSize, "", "", fileSize)
+	hashReader, err := hash.NewReader(ctx, reader, fileSize, "", "", fileSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1254,7 +1254,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 			// do not try to verify encrypted content/
-			hashReader, err = hash.NewReader(reader, -1, "", "", -1)
+			hashReader, err = hash.NewReader(ctx, reader, -1, "", "", -1)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return

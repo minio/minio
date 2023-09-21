@@ -94,7 +94,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		Quota:     data,
 		UpdatedAt: updatedAt,
 	}
-	if quotaConfig.Quota == 0 {
+	if quotaConfig.Size == 0 || quotaConfig.Quota == 0 {
 		bucketMeta.Quota = nil
 	}
 

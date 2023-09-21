@@ -21,6 +21,8 @@
 package cmd
 
 import (
+	"syscall"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -28,4 +30,9 @@ import (
 func Rename2(src, dst string) (err error) {
 	defer updateOSMetrics(osMetricRename2, src, dst)(err)
 	return unix.Renameat2(unix.AT_FDCWD, src, unix.AT_FDCWD, dst, uint(2)) // RENAME_EXCHANGE from 'man renameat2'
+}
+
+// RenameSys is low level call in case of Linux this uses syscall.Rename() directly.
+func RenameSys(src, dst string) (err error) {
+	return syscall.Rename(src, dst)
 }

@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -54,7 +53,6 @@ import (
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/color"
@@ -71,10 +69,7 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
-var (
-	shardDiskTimeDelta     time.Duration
-	defaultAWSCredProvider []credentials.Provider
-)
+var shardDiskTimeDelta time.Duration
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -112,23 +107,16 @@ func init() {
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
 
-	defaultAWSCredProvider = []credentials.Provider{
-		&credentials.IAM{
-			Client: &http.Client{
-				Transport: NewHTTPTransport(),
-			},
-		},
-	}
-
 	var err error
 	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
 	if err != nil {
 		shardDiskTimeDelta = 1 * time.Minute
 	}
 
-	// All minio-go API operations shall be performed only once,
+	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
 	minio.MaxRetry = 1
+	madmin.MaxRetry = 1
 }
 
 const consolePrefix = "CONSOLE_"
@@ -143,28 +131,32 @@ func minioConfigToConsoleFeatures() {
 		// This will save users from providing a certificate with IP or FQDN SAN that points to the local host.
 		os.Setenv("CONSOLE_MINIO_SERVER", fmt.Sprintf("%s://127.0.0.1:%s", getURLScheme(globalIsTLS), globalMinioPort))
 	}
-	if value := env.Get("MINIO_LOG_QUERY_URL", ""); value != "" {
+	if value := env.Get(config.EnvMinIOLogQueryURL, ""); value != "" {
 		os.Setenv("CONSOLE_LOG_QUERY_URL", value)
-		if value := env.Get("MINIO_LOG_QUERY_AUTH_TOKEN", ""); value != "" {
+		if value := env.Get(config.EnvMinIOLogQueryAuthToken, ""); value != "" {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
 	// pass the console subpath configuration
-	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
+	if globalBrowserRedirectURL != nil {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
 		if subPath != SlashSeparator {
 			os.Setenv("CONSOLE_SUBPATH", subPath)
 		}
 	}
 	// Enable if prometheus URL is set.
-	if value := env.Get("MINIO_PROMETHEUS_URL", ""); value != "" {
+	if value := env.Get(config.EnvMinIOPrometheusURL, ""); value != "" {
 		os.Setenv("CONSOLE_PROMETHEUS_URL", value)
-		if value := env.Get("MINIO_PROMETHEUS_JOB_ID", "minio-job"); value != "" {
+		if value := env.Get(config.EnvMinIOPrometheusJobID, "minio-job"); value != "" {
 			os.Setenv("CONSOLE_PROMETHEUS_JOB_ID", value)
 			// Support additional labels for more granular filtering.
-			if value := env.Get("MINIO_PROMETHEUS_EXTRA_LABELS", ""); value != "" {
+			if value := env.Get(config.EnvMinIOPrometheusExtraLabels, ""); value != "" {
 				os.Setenv("CONSOLE_PROMETHEUS_EXTRA_LABELS", value)
 			}
+		}
+		// Support Prometheus Auth Token
+		if value := env.Get(config.EnvMinIOPrometheusAuthToken, ""); value != "" {
+			os.Setenv("CONSOLE_PROMETHEUS_AUTH_TOKEN", value)
 		}
 	}
 	// Enable if LDAP is enabled.
@@ -391,7 +383,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
-			logger.FatalIf(err, "Unable to get free port for console on the host")
+			logger.FatalIf(err, "Unable to get free port for Console UI on the host")
 		}
 		consoleAddr = net.JoinHostPort("", p.String())
 	}
@@ -405,6 +397,15 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
+	if globalMinioPort == "0" {
+		p, err := xnet.GetFreePort()
+		if err != nil {
+			logger.FatalIf(err, "Unable to get free port for S3 API on the host")
+		}
+		globalMinioPort = p.String()
+		globalDynamicAPIPort = true
+	}
+
 	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 
 	if globalMinioPort == globalMinioConsolePort {
@@ -640,6 +641,7 @@ func handleCommonEnvVars() {
 			}
 			globalBrowserRedirectURL = u
 		}
+		globalBrowserRedirect = env.Get(config.EnvBrowserRedirect, config.EnableOn) == config.EnableOn
 	}
 
 	if serverURL := env.Get(config.EnvMinIOServerURL, ""); serverURL != "" {
@@ -664,10 +666,14 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
-	if rootDiskSize := env.Get(config.EnvRootDiskThresholdSize, ""); rootDiskSize != "" {
+	rootDiskSize := env.Get(config.EnvRootDriveThresholdSize, "")
+	if rootDiskSize == "" {
+		rootDiskSize = env.Get(config.EnvRootDiskThresholdSize, "")
+	}
+	if rootDiskSize != "" {
 		size, err := humanize.ParseBytes(rootDiskSize)
 		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Invalid %s value in environment variable", config.EnvRootDiskThresholdSize))
+			logger.Fatal(err, fmt.Sprintf("Invalid %s value in root drive threshold environment variable", rootDiskSize))
 		}
 		globalRootDiskThreshold = size
 	}

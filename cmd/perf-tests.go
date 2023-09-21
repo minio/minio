@@ -306,7 +306,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 					defer wg.Done()
 					err := globalNotificationSys.peerClients[index].DevNull(ctx, r)
 					if err != nil {
-						errStr = err.Error()
+						errStr = fmt.Sprintf("error with %s: %s", globalNotificationSys.peerClients[index].String(), err.Error())
 					}
 				}()
 			}

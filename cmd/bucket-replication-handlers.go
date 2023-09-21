@@ -232,10 +232,10 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	enc := json.NewEncoder(w)
 	stats := globalReplicationStats.getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
-	bwMap := bwRpt.BucketStats[bucket]
+	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
-		if bwMap != nil {
-			if bw, ok := bwMap[arn]; ok {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
 				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
 				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
 				stats.ReplicationStats.Stats[arn] = st
@@ -288,10 +288,10 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsV2Handler(w http.Respons
 	enc := json.NewEncoder(w)
 	stats := globalReplicationStats.getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
-	bwMap := bwRpt.BucketStats[bucket]
+	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
-		if bwMap != nil {
-			if bw, ok := bwMap[arn]; ok {
+		for opts, bw := range bwMap {
+			if opts.ReplicationARN != "" && opts.ReplicationARN == arn {
 				st.BandWidthLimitInBytesPerSecond = bw.LimitInBytesPerSecond
 				st.CurrentBandwidthInBytesPerSecond = bw.CurrentBandwidthInBytesPerSecond
 				stats.ReplicationStats.Stats[arn] = st
@@ -476,27 +476,17 @@ func (api objectAPIHandlers) ResetBucketReplicationStatusHandler(w http.Response
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	var tgtStats map[string]TargetReplicationResyncStatus
-	globalReplicationPool.resyncer.RLock()
-	brs, ok := globalReplicationPool.resyncer.statusMap[bucket]
-	if ok {
-		tgtStats = brs.cloneTgtStats()
-	}
-	globalReplicationPool.resyncer.RUnlock()
-	if !ok {
-		brs, err = loadBucketResyncMetadata(ctx, bucket, objectAPI)
-		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
-				Bucket: bucket,
-				Err:    fmt.Errorf("No replication resync status available for %s", arn),
-			}), r.URL)
-			return
-		}
-		tgtStats = brs.cloneTgtStats()
+	brs, err := loadBucketResyncMetadata(ctx, bucket, objectAPI)
+	if err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrBadRequest, InvalidArgument{
+			Bucket: bucket,
+			Err:    fmt.Errorf("replication resync status not available for %s (%s)", arn, err.Error()),
+		}), r.URL)
+		return
 	}
 
 	var rinfo ResyncTargetsInfo
-	for tarn, st := range tgtStats {
+	for tarn, st := range brs.TargetsMap {
 		if arn != "" && tarn != arn {
 			continue
 		}
