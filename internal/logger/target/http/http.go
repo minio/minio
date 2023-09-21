@@ -127,8 +127,13 @@ func (h *Target) String() string {
 	return h.config.Name
 }
 
-// IsOnline returns true if the target is reachable.
+// IsOnline returns true if the target is reachable using a cached value
 func (h *Target) IsOnline(ctx context.Context) bool {
+	return atomic.LoadInt32(&h.status) == statusOnline
+}
+
+// ping returns true if the target is reachable.
+func (h *Target) ping(ctx context.Context) bool {
 	if err := h.send(ctx, []byte(`{}`), webhookCallTimeout); err != nil {
 		return !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnRefusedErr(err)
 	}
@@ -179,7 +184,7 @@ func (h *Target) init(ctx context.Context) (err error) {
 		return errors.New("target is closed")
 	}
 
-	if !h.IsOnline(ctx) {
+	if !h.ping(ctx) {
 		// Start a goroutine that will continue to check if we can reach
 		h.revive.Do(func() {
 			go func() {
@@ -191,7 +196,7 @@ func (h *Target) init(ctx context.Context) (err error) {
 					if atomic.LoadInt32(&h.status) != statusOffline {
 						return
 					}
-					if h.IsOnline(ctx) {
+					if h.ping(ctx) {
 						// We are online.
 						if atomic.CompareAndSwapInt32(&h.status, statusOffline, statusOnline) {
 							h.workerStartMu.Lock()
@@ -219,6 +224,14 @@ func (h *Target) init(ctx context.Context) (err error) {
 }
 
 func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration) (err error) {
+	defer func() {
+		if err != nil {
+			atomic.StoreInt32(&h.status, statusOffline)
+		} else {
+			atomic.StoreInt32(&h.status, statusOnline)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
