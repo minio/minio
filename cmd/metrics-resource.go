@@ -46,10 +46,10 @@ const (
 	usedInodes    MetricName = "used_inodes"
 
 	// network stats
-	interfaceRxBytes  MetricName = "if_rx_bytes"
-	interfaceRxErrors MetricName = "if_rx_errors"
-	interfaceTxBytes  MetricName = "if_tx_bytes"
-	interfaceTxErrors MetricName = "if_tx_errors"
+	interfaceRxBytes  MetricName = "rx_bytes"
+	interfaceRxErrors MetricName = "rx_errors"
+	interfaceTxBytes  MetricName = "tx_bytes"
+	interfaceTxErrors MetricName = "tx_errors"
 
 	// memory stats
 	memUsed      MetricName = "used"
@@ -64,6 +64,8 @@ const (
 	cpuSystem MetricName = "system"
 	cpuIOWait MetricName = "iowait"
 	cpuIdle   MetricName = "idle"
+	cpuNice   MetricName = "nice"
+	cpuSteal  MetricName = "steal"
 	cpuLoad1  MetricName = "load1"
 	cpuLoad5  MetricName = "load5"
 	cpuLoad15 MetricName = "load15"
@@ -143,6 +145,8 @@ func init() {
 		cpuSystem:         "CPU system time",
 		cpuIdle:           "CPU idle time",
 		cpuIOWait:         "CPU ioWait time",
+		cpuSteal:          "CPU steam time",
+		cpuNice:           "CPU nice time",
 		cpuLoad1:          "CPU load average 1min",
 		cpuLoad5:          "CPU load average 5min",
 		cpuLoad15:         "CPU load average 15min",
@@ -266,10 +270,10 @@ func collectLocalResourceMetrics() {
 			if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
 				stats := hm.Net.NetStats
 				labels := map[string]string{"inerface": stats.Name}
-				updateResourceMetrics(netSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
-				updateResourceMetrics(netSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
-				updateResourceMetrics(netSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
-				updateResourceMetrics(netSubsystem, interfaceTxErrors, float64(stats.TxErrors), labels, true)
+				updateResourceMetrics(interfaceSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
+				updateResourceMetrics(interfaceSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
+				updateResourceMetrics(interfaceSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
+				updateResourceMetrics(interfaceSubsystem, interfaceTxErrors, float64(stats.TxErrors), labels, true)
 			}
 			if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
 				labels := map[string]string{}
@@ -286,7 +290,7 @@ func collectLocalResourceMetrics() {
 				labels := map[string]string{}
 				ts := hm.CPU.TimesStat
 				if ts != nil {
-					tot := ts.User + ts.System + ts.Idle + ts.Iowait
+					tot := ts.User + ts.System + ts.Idle + ts.Iowait + ts.Nice + ts.Steal
 					cpuUserVal := math.Round(ts.User/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuUser, cpuUserVal, labels, false)
 					cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
@@ -295,6 +299,10 @@ func collectLocalResourceMetrics() {
 					updateResourceMetrics(cpuSubsystem, cpuIdle, cpuIdleVal, labels, false)
 					cpuIOWaitVal := math.Round(ts.Iowait/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuIOWait, cpuIOWaitVal, labels, false)
+					cpuNiceVal := math.Round(ts.Nice/tot*100*100) / 100
+					updateResourceMetrics(cpuSubsystem, cpuNice, cpuNiceVal, labels, false)
+					cpuStealVal := math.Round(ts.Steal/tot*100*100) / 100
+					updateResourceMetrics(cpuSubsystem, cpuSteal, cpuStealVal, labels, false)
 				}
 				ls := hm.CPU.LoadStat
 				if ls != nil {
@@ -420,7 +428,7 @@ func getResourceMetrics() *MetricsGroup {
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		metrics := make([]Metric, 0, 50)
 
-		subSystems := []MetricSubsystem{netSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
+		subSystems := []MetricSubsystem{interfaceSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
 		for _, subSys := range subSystems {
 			stats, found := resourceMetricsMap[subSys]
 			if found {

@@ -132,7 +132,7 @@ const (
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
 	driveSubsystem            MetricSubsystem = "drive"
-	netSubsystem              MetricSubsystem = "net"
+	interfaceSubsystem        MetricSubsystem = "if"
 	memSubsystem              MetricSubsystem = "mem"
 	cpuSubsystem              MetricSubsystem = "cpu_avg"
 	storageClassSubsystem     MetricSubsystem = "storage_class"
