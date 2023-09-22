@@ -272,7 +272,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 
 	isTags := len(r.Flags.Filter.Tags) != 0
 	isMetadata := len(r.Flags.Filter.Metadata) != 0
-	isStorageClassOnly := len(r.Flags.Filter.Metadata) == 1 && strings.ToLower(r.Flags.Filter.Metadata[0].Key) == xhttp.AmzStorageClass
+	isStorageClassOnly := len(r.Flags.Filter.Metadata) == 1 && strings.EqualFold(r.Flags.Filter.Metadata[0].Key, xhttp.AmzStorageClass)
 
 	skip := func(oi ObjectInfo) (ok bool) {
 		if r.Flags.Filter.OlderThan > 0 && time.Since(oi.ModTime) < r.Flags.Filter.OlderThan {
