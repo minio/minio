@@ -1059,17 +1059,6 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]ObjectInfo, error) {
-	if i.heal.enabled {
-		if healDeleteDangling {
-			done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
-			err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
-			done()
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
-			}
-		}
-	}
-
 	objInfos, err := i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 	if err != nil {
 		return nil, err
@@ -1110,7 +1099,17 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 			done := globalScannerMetrics.time(scannerMetricHealCheck)
 			size = i.applyHealing(ctx, o, oi)
 			done()
+
+			if healDeleteDangling {
+				done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+				err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+				done()
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
+				}
+			}
 		}
+
 		// replicate only if lifecycle rules are not applied.
 		done := globalScannerMetrics.time(scannerMetricCheckReplication)
 		i.healReplication(ctx, o, oi.Clone(), sizeS)
