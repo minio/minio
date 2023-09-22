@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -59,13 +60,12 @@ type Manager struct {
 
 // ManagerOptions are options for creating a new grid manager.
 type ManagerOptions struct {
-	Dialer    ContextDialer
-	Local     string
-	Hosts     []string
-	Auth      AuthFn
-	TLSConfig *tls.Config
-
-	debugBlockConnect chan struct{}
+	Dialer       ContextDialer
+	Local        string
+	Hosts        []string
+	Auth         AuthFn
+	TLSConfig    *tls.Config
+	BlockConnect chan struct{} // If set, incoming and outgoing connections will be blocked until closed.
 }
 
 // NewManager creates a new grid manager
@@ -90,14 +90,14 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			continue
 		}
 		m.targets[host] = newConnection(connectionParams{
-			ctx:               ctx,
-			id:                m.ID,
-			local:             o.Local,
-			remote:            host,
-			dial:              o.Dialer,
-			handlers:          &m.handlers,
-			auth:              o.Auth,
-			debugBlockConnect: o.debugBlockConnect,
+			ctx:          ctx,
+			id:           m.ID,
+			local:        o.Local,
+			remote:       host,
+			dial:         o.Dialer,
+			handlers:     &m.handlers,
+			auth:         o.Auth,
+			blockConnect: o.BlockConnect,
 		})
 	}
 	if !found {
@@ -204,18 +204,35 @@ func (m *Manager) Connection(host string) *Connection {
 
 // RegisterSingle will register a stateless handler that serves
 // []byte -> ([]byte, error) requests.
-func (m *Manager) RegisterSingle(id HandlerID, h SingleHandlerFn) error {
+// subroutes are joined with "/" to a single subroute.
+func (m *Manager) RegisterSingle(id HandlerID, h SingleHandlerFn, subroute ...string) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
-	if m.handlers.hasAny(id) && !id.isTestHandler() {
-		return ErrHandlerAlreadyExists
+	s := strings.Join(subroute, "/")
+	if debugPrint {
+		fmt.Println("RegisterSingle: ", id.String(), "subroute:", s)
 	}
 
-	m.handlers.single[id] = h
+	if len(subroute) == 0 {
+		if m.handlers.hasAny(id) && !id.isTestHandler() {
+			return ErrHandlerAlreadyExists
+		}
+
+		m.handlers.single[id] = h
+		return nil
+	}
+	subID := makeSubHandlerID(id, s)
+	if m.handlers.hasSubhandler(subID) && !id.isTestHandler() {
+		return ErrHandlerAlreadyExists
+	}
+	m.handlers.subSingle[subID] = h
+	// Copy so clients can also pick it up for other subpaths.
+	m.handlers.subSingle[makeZeroSubHandlerID(id)] = h
 	return nil
 }
 
+/*
 // RegisterStateless will register a stateless handler that serves
 // []byte -> stream of ([]byte, error) requests.
 func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
@@ -229,6 +246,7 @@ func (m *Manager) RegisterStateless(id HandlerID, h StatelessHandler) error {
 	m.handlers.stateless[id] = &h
 	return nil
 }
+*/
 
 // RegisterStreamingHandler will register a stateless handler that serves
 // two-way streaming requests.
@@ -236,15 +254,15 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StreamHandler) error 
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
+	if debugPrint {
+		fmt.Println("RegisterStreamingHandler: subroute:", h.SubRoute)
+	}
 	if h.SubRoute == "" {
 		if m.handlers.hasAny(id) && !id.isTestHandler() {
 			return ErrHandlerAlreadyExists
 		}
 		m.handlers.streams[id] = &h
 		return nil
-	}
-	if debugPrint {
-		fmt.Println("RegisterStreamingHandler: subroute:", h.SubRoute)
 	}
 	subID := makeSubHandlerID(id, h.SubRoute)
 	if m.handlers.hasSubhandler(subID) && !id.isTestHandler() {

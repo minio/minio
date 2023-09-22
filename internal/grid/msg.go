@@ -20,6 +20,7 @@ package grid
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
@@ -133,6 +134,53 @@ type message struct {
 	Payload    []byte    // Optional payload.
 }
 
+func (m message) String() string {
+	var res []string
+	if m.MuxID != 0 {
+		res = append(res, fmt.Sprintf("MuxID: %v", m.MuxID))
+	}
+	if m.Seq != 0 {
+		res = append(res, fmt.Sprintf("Seq: %v", m.Seq))
+	}
+	if m.DeadlineMS != 0 {
+		res = append(res, fmt.Sprintf("Deadline: %vms", m.DeadlineMS))
+	}
+	if m.Handler != handlerInvalid {
+		res = append(res, fmt.Sprintf("Handler: %v", m.Handler))
+	}
+	if m.Op != 0 {
+		res = append(res, fmt.Sprintf("Op: %v", m.Op))
+	}
+	res = append(res, fmt.Sprintf("Flags: %v", flagAsString(m.Flags)))
+	if len(m.Payload) != 0 {
+		res = append(res, fmt.Sprintf("Payload: %v", bytesOrLength(m.Payload)))
+	}
+	return "{" + strings.Join(res, ", ") + "}"
+}
+
+func flagAsString(f uint8) string {
+	var res []string
+	if f&FlagCRCxxh3 != 0 {
+		res = append(res, "CRC")
+	}
+	if f&FlagEOF != 0 {
+		res = append(res, "EOF")
+	}
+	if f&FlagStateless != 0 {
+		res = append(res, "SL")
+	}
+	if f&FlagPayloadIsErr != 0 {
+		res = append(res, "ERR")
+	}
+	if f&FlagPayloadIsZero != 0 {
+		res = append(res, "ZERO")
+	}
+	if f&FlagSubroute != 0 {
+		res = append(res, "SUB")
+	}
+	return "[" + strings.Join(res, ",") + "]"
+}
+
 // parse an handleIncoming message
 func (m *message) parse(b []byte) (*subHandlerID, error) {
 	var sub *subHandlerID
@@ -166,7 +214,8 @@ func (m *message) parse(b []byte) (*subHandlerID, error) {
 		}
 		subID := (*[32]byte)(h[len(h)-32:])
 		sub = (*subHandlerID)(subID)
-		h = h[:len(h)-32]
+		// Add if more modifications to h is needed
+		// h = h[:len(h)-32]
 	}
 	return sub, nil
 }

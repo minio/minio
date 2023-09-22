@@ -29,6 +29,9 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// HandlerID is a handler identifier.
+// It is used to determine request routing on the server.
+// Handlers can be registered with a static subroute.
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
@@ -288,22 +291,25 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 }
 
 // Call the remove with the request and return the response.
-func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (dst Resp, err error) {
+// The response should be returned with PutResponse when no error.
+func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (resp Resp, err error) {
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {
-		return dst, err
+		return resp, err
 	}
 	res, err := c.Request(ctx, h.id, payload)
+	PutByteBuffer(payload)
 	if err != nil {
-		return dst, err
+		return resp, err
 	}
-	dst = h.NewResponse()
-	_, err = dst.UnmarshalMsg(res)
+	r := h.NewResponse()
+	_, err = r.UnmarshalMsg(res)
 	if err != nil {
-		fmt.Println("input:", res)
+		h.PutResponse(r)
+		return resp, err
 	}
 	PutByteBuffer(res)
-	return dst, err
+	return r, err
 }
 
 // RemoteClient contains information about the caller.

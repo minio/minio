@@ -32,6 +32,9 @@ import (
 // globalGrid is the global grid manager.
 var globalGrid atomic.Pointer[grid.Manager]
 
+// globalGridStart is a channel that will block startup of grid connections until closed.
+var globalGridStart = make(chan struct{})
+
 func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 	seenHosts := set.NewStringSet()
 	var hosts []string
@@ -56,10 +59,11 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 		lookupHost = nil
 	}
 	g, err := grid.NewManager(ctx, grid.ManagerOptions{
-		Dialer: grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
-		Local:  local,
-		Hosts:  hosts,
-		Auth:   newCachedAuthToken(),
+		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
+		Local:        local,
+		Hosts:        hosts,
+		Auth:         newCachedAuthToken(),
+		BlockConnect: globalGridStart,
 		TLSConfig: &tls.Config{
 			RootCAs:          globalRootCAs,
 			CipherSuites:     fips.TLSCiphers(),

@@ -31,11 +31,6 @@ type lockRESTClient struct {
 	connection *grid.Connection
 }
 
-// String stringer *dsync.NetLocker* interface compatible method.
-func (c *lockRESTClient) lockRESTClient() string {
-	return c.connection.Remote
-}
-
 // IsOnline - returns whether REST client failed to connect or not.
 func (c *lockRESTClient) IsOnline() bool {
 	return c.connection.State() == grid.StateConnected
@@ -77,32 +72,32 @@ func (c *lockRESTClient) call(ctx context.Context, h *grid.SingleHandler[*dsync.
 
 // RLock calls read lock REST API.
 func (c *lockRESTClient) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcRLock, &args)
+	return c.call(ctx, lockRPCRLock, &args)
 }
 
 // Lock calls lock REST API.
 func (c *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcLock, &args)
+	return c.call(ctx, lockRPCLock, &args)
 }
 
 // RUnlock calls read unlock REST API.
 func (c *lockRESTClient) RUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcRUnlock, &args)
+	return c.call(ctx, lockRPCRUnlock, &args)
 }
 
 // Refresh calls Refresh REST API.
 func (c *lockRESTClient) Refresh(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcRefresh, &args)
+	return c.call(ctx, lockRPCRefresh, &args)
 }
 
 // Unlock calls write unlock RPC.
 func (c *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcUnlock, &args)
+	return c.call(ctx, lockRPCUnlock, &args)
 }
 
 // ForceUnlock calls force unlock handler to forcibly unlock an active lock.
 func (c *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRpcRLock, &args)
+	return c.call(ctx, lockRPCRLock, &args)
 }
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {

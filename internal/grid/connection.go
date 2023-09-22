@@ -98,6 +98,7 @@ type Connection struct {
 	clientPingInterval time.Duration
 	connPingInterval   time.Duration
 	tlsConfig          *tls.Config
+	blockConnect       chan struct{}
 
 	// For testing only
 	debugInConn  net.Conn
@@ -105,6 +106,7 @@ type Connection struct {
 	connMu       sync.Mutex
 }
 
+// Subroute is a connection subroute that can be used to route to a specific handler with the same handler ID.
 type Subroute struct {
 	*Connection
 	route string
@@ -143,6 +145,7 @@ const (
 // ContextDialer is a dialer that can be used to dial a remote.
 type ContextDialer func(ctx context.Context, network, address string) (net.Conn, error)
 
+// DialContext implements the Dialer interface.
 func (c ContextDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return c(ctx, network, address)
 }
@@ -164,7 +167,7 @@ type connectionParams struct {
 	auth          AuthFn
 	tlsConfig     *tls.Config
 
-	debugBlockConnect chan struct{}
+	blockConnect chan struct{}
 }
 
 // newConnection will create an unconnected connection to a remote.
@@ -198,8 +201,8 @@ func newConnection(o connectionParams) *Connection {
 		c.side = ws.StateClientSide
 
 		go func() {
-			if o.debugBlockConnect != nil {
-				<-o.debugBlockConnect
+			if o.blockConnect != nil {
+				<-o.blockConnect
 			}
 			c.connect()
 		}()
@@ -210,6 +213,7 @@ func newConnection(o connectionParams) *Connection {
 	return c
 }
 
+// Subroute returns a static subroute for the connection.
 func (c *Connection) Subroute(s string) *Subroute {
 	return &Subroute{
 		Connection: c,
@@ -218,8 +222,15 @@ func (c *Connection) Subroute(s string) *Subroute {
 	}
 }
 
-func (c *Subroute) Subroute(_ string) *Subroute {
-	panic("grid: subroutes cannot be nested")
+// Subroute adds a subroute to the subroute.
+// The subroutes are combined with '/'.
+func (c *Subroute) Subroute(s string) *Subroute {
+	route := strings.Join([]string{c.route, s}, "/")
+	return &Subroute{
+		Connection: c.Connection,
+		route:      route,
+		subID:      makeSubHandlerID(0, route),
+	}
 }
 
 // NewMuxClient returns a mux client for manual use.
@@ -272,6 +283,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 }
 
 // Request allows to do a single remote request.
+// 'req' will not be used after the call and caller can reuse.
 func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -292,7 +304,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 	return client.roundtrip(h, req)
 }
 
-// NewStream creates a new stream
+// NewStream creates a new stream.
 func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -324,6 +336,7 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 	return cl.RequestStream(h, payload, requests, responses)
 }
 
+// NewStream creates a new stream.
 func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -397,6 +410,13 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func bytesOrLength(b []byte) string {
+	if len(b) > 100 {
+		return fmt.Sprintf("%d bytes", len(b))
+	}
+	return fmt.Sprint(b)
 }
 
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
@@ -677,7 +697,10 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	c.connMu.Lock()
 	c.debugInConn = conn
 	c.connMu.Unlock()
-
+	if c.blockConnect != nil {
+		// Block until we are allowed to connect.
+		<-c.blockConnect
+	}
 	if req.Host != c.Remote {
 		err := fmt.Errorf("expected remote '%s', got '%s'", c.Remote, req.Host)
 		if debugPrint {
@@ -803,7 +826,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				return
 			}
 
-			var m message
 			var err error
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
@@ -813,6 +835,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 
 			// Parse the received message
+			var m message
 			subID, err := m.parse(msg)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws parse package: %w", err))
@@ -820,12 +843,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				return
 			}
 			if debugPrint {
-				fmt.Printf("%s Got msg: %+v\n", c.Local, m)
+				fmt.Printf("%s Got msg: %v\n", c.Local, m)
 			}
 			switch m.Op {
 			case OpMuxServerMsg:
 				if debugPrint {
-					fmt.Printf("%s Got mux msg: %+v\n", c.Local, m)
+					fmt.Printf("%s Got mux msg: %v\n", c.Local, m)
 				}
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
@@ -853,7 +876,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 			case OpResponse:
 				if debugPrint {
-					fmt.Printf("%s Got mux response: %+v\n", c.Local, m)
+					fmt.Printf("%s Got mux response: %v\n", c.Local, m)
 				}
 				v, ok := c.outgoing.Load(m.MuxID)
 				if !ok {
@@ -983,6 +1006,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 						start = time.Now()
 					}
 					b, err := handler(m.Payload)
+					if debugPrint {
+						fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
+					}
 					// TODO: Maybe recycle m.Payload - should be free here.
 					if m.DeadlineMS > 0 && time.Since(start).Milliseconds() > int64(m.DeadlineMS) {
 						// No need to return result
@@ -1001,12 +1027,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					} else {
 						m.Payload = b
 						m.setZeroPayloadFlag()
-
-						if debugPrint {
-							fmt.Println("returning payload:", string(b))
-						}
 					}
-					m.Flags = 0
 					logger.LogIf(ctx, c.queueMsg(m, nil))
 				}(m)
 				continue

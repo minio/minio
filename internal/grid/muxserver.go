@@ -109,7 +109,11 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}
 	var handlerErr *RemoteErr
 	go func() {
+		start := time.Now()
 		defer func() {
+			if debugPrint {
+				fmt.Println("Mux", m.ID, "Handler took", time.Since(start).Round(time.Millisecond))
+			}
 			if r := recover(); r != nil {
 				logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
 				err := RemoteErr(fmt.Sprintf("panic: %v", r))

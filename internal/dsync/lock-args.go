@@ -42,6 +42,7 @@ type LockArgs struct {
 // ResponseCode is the response code for a locking request.
 type ResponseCode uint8
 
+// Response codes for a locking request.
 const (
 	RespOK ResponseCode = iota
 	RespLockConflict

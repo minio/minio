@@ -94,7 +94,14 @@ type writerWrapper struct {
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
-	w.ch <- p
+	buf := GetByteBuffer()
+	if cap(buf) < len(p) {
+		PutByteBuffer(buf)
+		buf = make([]byte, len(p))
+	}
+	buf = buf[:len(p)]
+	copy(buf, p)
+	w.ch <- buf
 	return len(p), nil
 }
 

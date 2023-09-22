@@ -666,6 +666,8 @@ func serverMain(ctx *cli.Context) {
 		if err != nil {
 			logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 		}
+		// Allow grid to start after registering all services.
+		close(globalGridStart)
 
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).

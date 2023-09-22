@@ -44,7 +44,7 @@ func (l *lockRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 // RefreshHandler - refresh the current lock
 func (l *lockRESTServer) RefreshHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcRefresh.NewResponse()
+	resp := lockRPCRefresh.NewResponse()
 	refreshed, err := l.ll.Refresh(context.Background(), *args)
 	if err != nil {
 		return l.makeResp(resp, err)
@@ -57,7 +57,7 @@ func (l *lockRESTServer) RefreshHandler(args *dsync.LockArgs) (*dsync.LockResp, 
 
 // LockHandler - Acquires a lock.
 func (l *lockRESTServer) LockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcLock.NewResponse()
+	resp := lockRPCLock.NewResponse()
 	success, err := l.ll.Lock(context.Background(), *args)
 	if err == nil && !success {
 		return l.makeResp(resp, errLockConflict)
@@ -67,7 +67,7 @@ func (l *lockRESTServer) LockHandler(args *dsync.LockArgs) (*dsync.LockResp, *gr
 
 // UnlockHandler - releases the acquired lock.
 func (l *lockRESTServer) UnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcUnlock.NewResponse()
+	resp := lockRPCUnlock.NewResponse()
 	_, err := l.ll.Unlock(context.Background(), *args)
 	// Ignore the Unlock() "reply" return value because if err == nil, "reply" is always true
 	// Consequently, if err != nil, reply is always false
@@ -76,7 +76,7 @@ func (l *lockRESTServer) UnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *
 
 // RLockHandler - Acquires an RLock.
 func (l *lockRESTServer) RLockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcRLock.NewResponse()
+	resp := lockRPCRLock.NewResponse()
 	success, err := l.ll.RLock(context.Background(), *args)
 	if err == nil && !success {
 		err = errLockConflict
@@ -86,7 +86,7 @@ func (l *lockRESTServer) RLockHandler(args *dsync.LockArgs) (*dsync.LockResp, *g
 
 // RUnlockHandler - releases the acquired read lock.
 func (l *lockRESTServer) RUnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcRUnlock.NewResponse()
+	resp := lockRPCRUnlock.NewResponse()
 
 	// Ignore the RUnlock() "reply" return value because if err == nil, "reply" is always true.
 	// Consequently, if err != nil, reply is always false
@@ -96,7 +96,7 @@ func (l *lockRESTServer) RUnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, 
 
 // ForceUnlockHandler - query expired lock status.
 func (l *lockRESTServer) ForceUnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
-	resp := lockRpcForceUnlock.NewResponse()
+	resp := lockRPCForceUnlock.NewResponse()
 
 	_, err := l.ll.ForceUnlock(context.Background(), *args)
 	return l.makeResp(resp, err)
@@ -105,12 +105,12 @@ func (l *lockRESTServer) ForceUnlockHandler(args *dsync.LockArgs) (*dsync.LockRe
 var (
 	// Static lock handlers.
 	// All have the same signature.
-	lockRpcForceUnlock = newLockHandler(grid.HandlerLockForceUnlock)
-	lockRpcRefresh     = newLockHandler(grid.HandlerLockRefresh)
-	lockRpcLock        = newLockHandler(grid.HandlerLockLock)
-	lockRpcUnlock      = newLockHandler(grid.HandlerLockUnlock)
-	lockRpcRLock       = newLockHandler(grid.HandlerLockRLock)
-	lockRpcRUnlock     = newLockHandler(grid.HandlerLockRUnlock)
+	lockRPCForceUnlock = newLockHandler(grid.HandlerLockForceUnlock)
+	lockRPCRefresh     = newLockHandler(grid.HandlerLockRefresh)
+	lockRPCLock        = newLockHandler(grid.HandlerLockLock)
+	lockRPCUnlock      = newLockHandler(grid.HandlerLockUnlock)
+	lockRPCRLock       = newLockHandler(grid.HandlerLockRLock)
+	lockRPCRUnlock     = newLockHandler(grid.HandlerLockRUnlock)
 )
 
 func newLockHandler(h grid.HandlerID) *grid.SingleHandler[*dsync.LockArgs, *dsync.LockResp] {
@@ -132,12 +132,12 @@ func registerLockRESTHandlers() {
 		ll: newLocker(),
 	}
 
-	logger.FatalIf(lockRpcForceUnlock.Register(globalGrid.Load(), lockServer.ForceUnlockHandler), "unable to register handler")
-	logger.FatalIf(lockRpcRefresh.Register(globalGrid.Load(), lockServer.RefreshHandler), "unable to register handler")
-	logger.FatalIf(lockRpcLock.Register(globalGrid.Load(), lockServer.LockHandler), "unable to register handler")
-	logger.FatalIf(lockRpcUnlock.Register(globalGrid.Load(), lockServer.UnlockHandler), "unable to register handler")
-	logger.FatalIf(lockRpcRLock.Register(globalGrid.Load(), lockServer.RLockHandler), "unable to register handler")
-	logger.FatalIf(lockRpcRUnlock.Register(globalGrid.Load(), lockServer.RUnlockHandler), "unable to register handler")
+	logger.FatalIf(lockRPCForceUnlock.Register(globalGrid.Load(), lockServer.ForceUnlockHandler), "unable to register handler")
+	logger.FatalIf(lockRPCRefresh.Register(globalGrid.Load(), lockServer.RefreshHandler), "unable to register handler")
+	logger.FatalIf(lockRPCLock.Register(globalGrid.Load(), lockServer.LockHandler), "unable to register handler")
+	logger.FatalIf(lockRPCUnlock.Register(globalGrid.Load(), lockServer.UnlockHandler), "unable to register handler")
+	logger.FatalIf(lockRPCRLock.Register(globalGrid.Load(), lockServer.RLockHandler), "unable to register handler")
+	logger.FatalIf(lockRPCRUnlock.Register(globalGrid.Load(), lockServer.RUnlockHandler), "unable to register handler")
 
 	globalLockServer = lockServer.ll
 

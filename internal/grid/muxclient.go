@@ -123,7 +123,7 @@ func (m *MuxClient) sendLocked(msg message) error {
 	msg.MuxID = m.MuxID
 	msg.Flags |= m.BaseFlags
 	if debugPrint {
-		fmt.Println("Client sending", msg)
+		fmt.Println("Client sending", &msg, "to", m.parent.Remote)
 	}
 
 	m.SendSeq++
@@ -197,7 +197,12 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if m.init {
 		return nil, errors.New("mux client already used")
 	}
+	if responses == nil {
+		return nil, errors.New("RequestStream: responses channel is nil")
+	}
 	m.init = true
+	m.respWait = responses // Route directly to output.
+
 	// Try to grab an initial block.
 	m.singleResp = false
 	if cap(requests) > 0 {
@@ -223,23 +228,26 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 		return nil, err
 	}
 	if debugPrint {
-		fmt.Println("Connecting to", m.parent.Remote)
+		fmt.Println("Connecting Mux", m.MuxID, ",to", m.parent.Remote)
 	}
-
-	// Route directly to output.
-	m.respWait = responses
 	responseCh := make(chan Response, 1)
 
 	// Spawn simple disconnect
 	if requests == nil {
+		start := time.Now()
 		go func() {
+			if debugPrint {
+				defer func() {
+					fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
+				}()
+			}
 			defer close(responseCh)
 			var pingTimer <-chan time.Time
 			if m.deadline == 0 || m.deadline > clientPingInterval {
 				ticker := time.NewTicker(clientPingInterval)
 				defer ticker.Stop()
 				pingTimer = ticker.C
-				m.LastPong = time.Now().Unix()
+				atomic.StoreInt64(&m.LastPong, time.Now().Unix())
 			}
 			defer m.parent.deleteMux(false, m.MuxID)
 			for {
@@ -299,7 +307,13 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	// Listen for client messages.
 	go func() {
 		var errState bool
+		start := time.Now()
 		for {
+			defer func() {
+				if debugPrint {
+					fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
+				}
+			}()
 			select {
 			case <-m.ctx.Done():
 				if debugPrint {
@@ -475,7 +489,7 @@ func (m *MuxClient) addResponse(r Response) (ok bool) {
 
 func (m *MuxClient) close() {
 	if debugPrint {
-		fmt.Println("closing mux", m.MuxID)
+		fmt.Println("closing outgoing mux", m.MuxID)
 	}
 	m.respMu.Lock()
 	defer m.respMu.Unlock()

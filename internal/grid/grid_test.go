@@ -18,6 +18,7 @@
 package grid
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -138,27 +139,58 @@ func TestSingleRoundtrip(t *testing.T) {
 
 	// local to remote
 	remoteConn := local.Connection(remoteHost)
-	const testPayload = "Hello Grid World!"
 	remoteConn.WaitForConnect(context.Background())
+	t.Run("localToRemote", func(t *testing.T) {
+		const testPayload = "Hello Grid World!"
 
-	start := time.Now()
-	resp, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
-	errFatal(err)
-	if string(resp) != testPayload {
-		t.Errorf("want %q, got %q", testPayload, string(resp))
-	}
-	t.Log("Roundtrip:", time.Since(start))
+		start := time.Now()
+		resp, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
+		errFatal(err)
+		if string(resp) != testPayload {
+			t.Errorf("want %q, got %q", testPayload, string(resp))
+		}
+		t.Log("Roundtrip:", time.Since(start))
+	})
 
-	start = time.Now()
-	resp, err = remoteConn.Request(context.Background(), handlerTest2, []byte(testPayload))
-	t.Log("Roundtrip:", time.Since(start))
-	if len(resp) != 0 {
-		t.Errorf("want nil, got %q", string(resp))
-	}
-	if err != RemoteErr(testPayload) {
-		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
-	}
-	t.Log("Roundtrip:", time.Since(start))
+	t.Run("localToRemoteErr", func(t *testing.T) {
+		const testPayload = "Hello Grid World!"
+		start := time.Now()
+		resp, err := remoteConn.Request(context.Background(), handlerTest2, []byte(testPayload))
+		t.Log("Roundtrip:", time.Since(start))
+		if len(resp) != 0 {
+			t.Errorf("want nil, got %q", string(resp))
+		}
+		if err != RemoteErr(testPayload) {
+			t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+		}
+		t.Log("Roundtrip:", time.Since(start))
+	})
+
+	t.Run("localToRemoteHuge", func(t *testing.T) {
+		testPayload := bytes.Repeat([]byte("?"), 1<<20)
+
+		start := time.Now()
+		resp, err := remoteConn.Request(context.Background(), handlerTest, testPayload)
+		errFatal(err)
+		if string(resp) != string(testPayload) {
+			t.Errorf("want %q, got %q", testPayload, string(resp))
+		}
+		t.Log("Roundtrip:", time.Since(start))
+	})
+
+	t.Run("localToRemoteErrHuge", func(t *testing.T) {
+		testPayload := bytes.Repeat([]byte("!"), 1<<10)
+
+		start := time.Now()
+		resp, err := remoteConn.Request(context.Background(), handlerTest2, testPayload)
+		if len(resp) != 0 {
+			t.Errorf("want nil, got %q", string(resp))
+		}
+		if err != RemoteErr(testPayload) {
+			t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+		}
+		t.Log("Roundtrip:", time.Since(start))
+	})
 }
 
 func TestSingleRoundtripGenerics(t *testing.T) {
@@ -654,7 +686,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	// Drain responses
 	got := 0
 	for resp := range st.Responses {
-		t.Log("got response", resp)
+		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {
 			t.Error("expected response", got, "got", resp.Msg[0])
@@ -739,7 +771,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 	// Drain responses
 	got := 0
 	for resp := range st.Responses {
-		t.Log("got response", resp)
+		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {
 			t.Error("expected response", got, "got", resp.Msg[0])
