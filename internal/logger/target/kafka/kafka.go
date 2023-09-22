@@ -43,6 +43,12 @@ import (
 // the suffix for the configured queue dir where the logs will be persisted.
 const kafkaLoggerExtension = ".kafka.log"
 
+const (
+	statusClosed = iota
+	statusOffline
+	statusOnline
+)
+
 // Config - kafka target arguments.
 type Config struct {
 	Enabled bool        `json:"enable"`
@@ -102,6 +108,8 @@ func (k Config) pingBrokers() (err error) {
 
 // Target - Kafka target.
 type Target struct {
+	status int32
+
 	totalMessages  int64
 	failedMessages int64
 
@@ -244,6 +252,11 @@ func (h *Target) send(entry interface{}) error {
 		Value: sarama.ByteEncoder(logJSON),
 	}
 	_, _, err = h.producer.SendMessage(&msg)
+	if err != nil {
+		atomic.StoreInt32(&h.status, statusOffline)
+	} else {
+		atomic.StoreInt32(&h.status, statusOnline)
+	}
 	return err
 }
 
@@ -307,15 +320,13 @@ func (h *Target) init() error {
 	}
 
 	h.producer = producer
+	atomic.StoreInt32(&h.status, statusOnline)
 	return nil
 }
 
 // IsOnline returns true if the target is online.
 func (h *Target) IsOnline(_ context.Context) bool {
-	if err := h.initKafkaOnce.Do(h.init); err != nil {
-		return false
-	}
-	return h.kconfig.pingBrokers() == nil
+	return atomic.LoadInt32(&h.status) == statusOnline
 }
 
 // Send log message 'e' to kafka target.
@@ -399,6 +410,7 @@ func New(config Config) *Target {
 	target := &Target{
 		logCh:   make(chan interface{}, config.QueueSize),
 		kconfig: config,
+		status:  statusOffline,
 	}
 	return target
 }

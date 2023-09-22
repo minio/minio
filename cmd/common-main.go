@@ -808,6 +808,9 @@ func handleKMSConfig() {
 				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
 			}
 		}
+		if !env.IsSet(kms.EnvKESKeyName) {
+			logger.Fatal(errors.New("Invalid KES configuration"), fmt.Sprintf("The mandatory environment variable %q not set", kms.EnvKESKeyName))
+		}
 
 		var endpoints []string
 		for _, endpoint := range strings.Split(env.Get(kms.EnvKESEndpoint, ""), ",") {
