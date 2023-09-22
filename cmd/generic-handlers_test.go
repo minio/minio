@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -53,6 +54,14 @@ func TestGuessIsRPC(t *testing.T) {
 	}
 	if guessIsRPCReq(r) {
 		t.Fatal("Test shouldn't report as net/rpc for a non net/rpc request.")
+	}
+	r = &http.Request{
+		Proto:  "HTTP/1.1",
+		Method: http.MethodGet,
+		URL:    &url.URL{Path: grid.RoutePath},
+	}
+	if !guessIsRPCReq(r) {
+		t.Fatal("Grid RPC path not detected")
 	}
 }
 

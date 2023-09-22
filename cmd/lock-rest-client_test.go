@@ -26,14 +26,27 @@ import (
 
 // Tests lock rpc client.
 func TestLockRESTlient(t *testing.T) {
-	endpoint, err := NewEndpoint("http://localhost:9000")
+	// These should not be conbectable.
+	endpoint, err := NewEndpoint("http://localhost:9876")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
+	endpointLocal, err := NewEndpoint("http://localhost:9012")
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	endpointLocal.IsLocal = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err = initGlobalGrid(ctx, []PoolEndpoints{{Endpoints: Endpoints{endpoint, endpointLocal}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	lkClient := newlockRESTClient(endpoint)
-	if !lkClient.IsOnline() {
-		t.Fatalf("unexpected error. connection failed")
+	if lkClient.IsOnline() {
+		t.Fatalf("unexpected result. connection was online")
 	}
 
 	// Attempt all calls.
