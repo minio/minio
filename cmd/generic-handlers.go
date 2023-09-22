@@ -240,7 +240,7 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	if req.Method == http.MethodGet && req.URL.Path == grid.RoutePath {
+	if req.Method == http.MethodGet && req.URL != nil && req.URL.Path == grid.RoutePath {
 		return true
 	}
 
