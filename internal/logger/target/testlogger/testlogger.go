@@ -160,7 +160,7 @@ func (t *testLogger) Send(ctx context.Context, entry interface{}) error {
 			logf("%s", msg)
 		}
 	default:
-		logf("%+v", v)
+		logf("%+v (%T)", v, v)
 	}
 	return nil
 }

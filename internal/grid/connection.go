@@ -656,7 +656,9 @@ func (c *Connection) connect() {
 					conn.Close()
 					return
 				}
-				fmt.Println(c.Local, "Disconnected")
+				if debugPrint {
+					fmt.Println(c.Local, "Disconnected")
+				}
 				// Reconnect
 				break
 			}
@@ -1156,10 +1158,19 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 		}
 		c.connChange.L.Lock()
-		for atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
+		for {
+			state := atomic.LoadUint32((*uint32)(&c.state))
+			if state != StateConnected {
+				break
+			}
 			if debugPrint {
 				fmt.Println("Waiting for connection")
 			}
+			if state == StateShutdown {
+				c.connChange.L.Unlock()
+				return
+			}
+			fmt.Println("waiting while in state", state)
 			c.connChange.Wait()
 			select {
 			case <-ctx.Done():

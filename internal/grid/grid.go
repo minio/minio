@@ -28,7 +28,6 @@ import (
 )
 
 const (
-	debugPrint        = false
 	minBufferSize     = 1 << 10
 	defaultBufferSize = 4 << 10
 	maxBufferSize     = 64 << 10
