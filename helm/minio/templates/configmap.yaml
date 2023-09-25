@@ -19,6 +19,13 @@ data:
   policy_{{ $idx }}.json: |-
     {{- include (print $.Template.BasePath "/_helper_policy.tpl") . | nindent 4 }}
   {{ end }}
+  {{- range $idx, $bucket := .Values.buckets }}
+  {{- if eq $bucket.policy "custom"}}
+  # Bucket policy: {{ $bucket.name }}
+  bucketpolicy_{{ $bucket.name }}.json: |-
+    {{- $bucket.policyJson | nindent 4 }}
+  {{- end }}
+  {{ end }}
   {{- range $idx, $svc := .Values.svcaccts }}
   {{- if $svc.policy }}
   # SVC: {{ $svc.accessKey }}
