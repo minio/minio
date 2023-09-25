@@ -1583,9 +1583,15 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		m = cache.iamUsersMap
 	}
 	err := store.loadUser(ctx, accessKey, userType, m)
+
 	if err == errNoSuchUser {
 		// User was deleted - we update the cache.
 		delete(m, accessKey)
+
+		// Since cache was updated, we update the timestamp.
+		defer func() {
+			cache.updatedAt = time.Now()
+		}()
 
 		// 1. Start with updating user-group memberships
 		if store.getUsersSysType() == MinIOUsersSysType {
@@ -1618,7 +1624,6 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		// 3. Delete any mapped policy
 		delete(cache.iamUserPolicyMap, accessKey)
 
-		cache.updatedAt = time.Now()
 		return nil
 	}
 
@@ -1626,37 +1631,43 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		return err
 	}
 
-	if userType != svcUser {
-		if userType == stsUser {
-			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamSTSPolicyMap)
-		} else {
-			err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
-		}
-		// Ignore policy not mapped error
-		if err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
-		}
-	}
+	// Since cache was updated, we update the timestamp.
+	defer func() {
+		cache.updatedAt = time.Now()
+	}()
 
-	// We are on purpose not persisting the policy map for parent
-	// user, although this is a hack, it is a good enough hack
-	// at this point in time - we need to overhaul our OIDC
-	// usage with service accounts with a more cleaner implementation
-	//
-	// This mapping is necessary to ensure that valid credentials
-	// have necessary ParentUser present - this is mainly for only
-	// webIdentity based STS tokens.
-	if userType == stsUser {
-		u, ok := cache.iamSTSAccountsMap[accessKey]
-		if ok {
-			cred := u.Credentials
-			if cred.ParentUser != "" && cred.ParentUser != globalActiveCred.AccessKey {
-				if _, ok := cache.iamUserPolicyMap[cred.ParentUser]; !ok {
-					cache.iamUserPolicyMap[cred.ParentUser] = cache.iamSTSPolicyMap[accessKey]
-					cache.updatedAt = time.Now()
-				}
-			}
+	cred := m[accessKey].Credentials
+	switch userType {
+	case stsUser:
+		// For STS accounts a policy is mapped to the parent user (if a mapping exists).
+		err = store.loadMappedPolicy(ctx, cred.ParentUser, userType, false, cache.iamSTSPolicyMap)
+	case svcUser:
+		// For service accounts, the parent may be a regular (internal) IDP
+		// user or a "virtual" user (parent of an STS account).
+		//
+		// If parent is a regular user => policy mapping is done on that parent itself.
+		//
+		// If parent is "virtual" => policy mapping is done on the virtual
+		// parent and that virtual parent is an stsUser.
+		//
+		// To load the appropriate mapping, we check the parent user type.
+		_, parentIsRegularUser := cache.iamUsersMap[cred.ParentUser]
+		if parentIsRegularUser {
+			err = store.loadMappedPolicy(ctx, cred.ParentUser, regUser, false, cache.iamUserPolicyMap)
+		} else {
+			err = store.loadMappedPolicy(ctx, cred.ParentUser, stsUser, false, cache.iamSTSPolicyMap)
 		}
+	case regUser:
+		// For regular users, we load the mapped policy.
+		err = store.loadMappedPolicy(ctx, accessKey, userType, false, cache.iamUserPolicyMap)
+	default:
+		// This is just to ensure that we have covered all cases for new
+		// code in future.
+		panic("unknown user type")
+	}
+	// Ignore policy not mapped error
+	if err != nil && !errors.Is(err, errNoSuchPolicy) {
+		return err
 	}
 
 	return nil
