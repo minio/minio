@@ -60,6 +60,10 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 	if err := checkListObjsArgs(ctx, o.Bucket, o.Prefix, o.Marker, z); err != nil {
 		return entries, err
 	}
+	// Marker points to before the prefix, just ignore it.
+	if o.Marker < o.Prefix {
+		o.Marker = ""
+	}
 
 	// Marker is set validate pre-condition.
 	if o.Marker != "" && o.Prefix != "" {
