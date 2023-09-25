@@ -348,15 +348,6 @@ func (e InvalidUploadIDKeyCombination) Error() string {
 	return fmt.Sprintf("Invalid combination of uploadID marker '%s' and marker '%s'", e.UploadIDMarker, e.KeyMarker)
 }
 
-// InvalidMarkerPrefixCombination - invalid marker and prefix combination.
-type InvalidMarkerPrefixCombination struct {
-	Marker, Prefix string
-}
-
-func (e InvalidMarkerPrefixCombination) Error() string {
-	return fmt.Sprintf("Invalid combination of marker '%s' and prefix '%s'", e.Marker, e.Prefix)
-}
-
 // BucketPolicyNotFound - no bucket policy found.
 type BucketPolicyNotFound GenericError
 
