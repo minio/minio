@@ -689,6 +689,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				reportNotFound: true,
 				minDisks:       f.disksQuorum,
 				agreed: func(entry metaCacheEntry) {
+					f.updateCurrentPath(entry.name)
 					if f.dataUsageScannerDebug {
 						console.Debugf(healObjectsPrefix+" got agreement: %v\n", entry.name)
 					}
@@ -702,6 +703,13 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						// this object might be dangling.
 						entry, _ = entries.firstFound()
 					}
+					// wait timer per object.
+					wait := scannerSleeper.Timer(ctx)
+					defer wait()
+					f.updateCurrentPath(entry.name)
+					stopFn := globalScannerMetrics.log(scannerMetricHealAbandonedObject, f.root, entry.name)
+					custom := make(map[string]string)
+					defer stopFn(custom)
 
 					if f.dataUsageScannerDebug {
 						console.Debugf(healObjectsPrefix+" resolved to: %v, dir: %v\n", entry.name, entry.isDir())
@@ -711,13 +719,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						return
 					}
 
-					// wait on timer per object.
-					wait := scannerSleeper.Timer(ctx)
-
 					// We got an entry which we should be able to heal.
 					fiv, err := entry.fileInfoVersions(bucket)
 					if err != nil {
-						wait()
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    entry.name,
@@ -730,21 +734,28 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						return
 					}
 
+					custom["versions"] = fmt.Sprint(len(fiv.Versions))
+					var successVersions, failVersions int
 					for _, ver := range fiv.Versions {
-						// Sleep and reset.
-						wait()
-						wait = scannerSleeper.Timer(ctx)
-
+						stopFn := globalScannerMetrics.timeSize(scannerMetricHealAbandonedVersion)
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
+						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 							logger.LogIf(ctx, err)
 						}
+						if err == nil {
+							successVersions++
+						} else {
+							failVersions++
+						}
 						foundObjs = foundObjs || err == nil
 					}
+					custom["success_versions"] = fmt.Sprint(successVersions)
+					custom["failed_versions"] = fmt.Sprint(failVersions)
 				},
 				// Too many disks failed.
 				finished: func(errs []error) {
