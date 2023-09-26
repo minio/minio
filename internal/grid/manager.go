@@ -56,6 +56,9 @@ type Manager struct {
 	handlers handlers
 
 	local string
+
+	// Validate incoming requests.
+	authRequest func(r *http.Request) error
 }
 
 // ManagerOptions are options for creating a new grid manager.
@@ -63,7 +66,8 @@ type ManagerOptions struct {
 	Dialer       ContextDialer
 	Local        string
 	Hosts        []string
-	Auth         AuthFn
+	AddAuth      AuthFn
+	AuthRequest  func(r *http.Request) error
 	TLSConfig    *tls.Config
 	BlockConnect chan struct{} // If set, incoming and outgoing connections will be blocked until closed.
 }
@@ -71,10 +75,14 @@ type ManagerOptions struct {
 // NewManager creates a new grid manager
 func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 	found := false
+	if o.AuthRequest == nil {
+		return nil, fmt.Errorf("grid: AuthRequest must be set")
+	}
 	m := &Manager{
-		ID:      uuid.New(),
-		targets: make(map[string]*Connection, len(o.Hosts)),
-		local:   o.Local,
+		ID:          uuid.New(),
+		targets:     make(map[string]*Connection, len(o.Hosts)),
+		local:       o.Local,
+		authRequest: o.AuthRequest,
 	}
 	m.handlers.init()
 	if ctx == nil {
@@ -96,7 +104,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			remote:       host,
 			dial:         o.Dialer,
 			handlers:     &m.handlers,
-			auth:         o.Auth,
+			auth:         o.AddAuth,
 			blockConnect: o.BlockConnect,
 		})
 	}
@@ -128,6 +136,14 @@ func (m *Manager) Handler() http.HandlerFunc {
 		}()
 		if debugPrint {
 			fmt.Printf("grid: Got a %s request for: %v\n", req.Method, req.URL)
+		}
+		if err := m.authRequest(req); err != nil {
+			fmt.Printf("grid: auth error: %v\n", err)
+			if debugPrint {
+				fmt.Printf("grid: auth error: %v\n", err)
+			}
+			w.WriteHeader(http.StatusForbidden)
+			return
 		}
 		ctx := req.Context()
 		conn, _, _, err := ws.UpgradeHTTP(req, w)

@@ -92,10 +92,11 @@ func TestSingleRoundtrip(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  localHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       localHost,
+		Hosts:       hosts,
+		AuthRequest: dummyRequestValidate,
+		AddAuth:     func(aud string) string { return aud },
 	})
 	errFatal(err)
 
@@ -112,10 +113,11 @@ func TestSingleRoundtrip(t *testing.T) {
 	}))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  remoteHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       remoteHost,
+		Hosts:       hosts,
+		AuthRequest: dummyRequestValidate,
+		AddAuth:     func(aud string) string { return aud },
 	})
 	errFatal(err)
 	defer shutdownManagers(t, local, remote)
@@ -215,10 +217,11 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  localHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       localHost,
+		Hosts:       hosts,
+		AddAuth:     func(aud string) string { return aud },
+		AuthRequest: dummyRequestValidate,
 	})
 	errFatal(err)
 
@@ -252,10 +255,11 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(h2.Register(local, handler2))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  remoteHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       remoteHost,
+		Hosts:       hosts,
+		AddAuth:     func(aud string) string { return aud },
+		AuthRequest: dummyRequestValidate,
 	})
 
 	errFatal(err)
@@ -318,19 +322,21 @@ func TestStreamSuite(t *testing.T) {
 	remoteHost := hosts[1]
 
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  localHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       localHost,
+		Hosts:       hosts,
+		AddAuth:     func(aud string) string { return aud },
+		AuthRequest: dummyRequestValidate,
 	})
 
 	errFatal(err)
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer: dialer.DialContext,
-		Local:  remoteHost,
-		Hosts:  hosts,
-		Auth:   func(aud string) string { return aud },
+		Dialer:      dialer.DialContext,
+		Local:       remoteHost,
+		Hosts:       hosts,
+		AddAuth:     func(aud string) string { return aud },
+		AuthRequest: dummyRequestValidate,
 	})
 	errFatal(err)
 	defer shutdownManagers(t, local, remote)
@@ -834,4 +840,27 @@ func assertNoActive(t *testing.T, c *Connection) {
 		}
 		return
 	}
+}
+
+// Inserted manually.
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[StateUnconnected-0]
+	_ = x[StateConnecting-1]
+	_ = x[StateConnected-2]
+	_ = x[StateConnectionError-3]
+	_ = x[StateShutdown-4]
+}
+
+const _State_name = "UnconnectedConnectingConnectedConnectionErrorShutdown"
+
+var _State_index = [...]uint8{0, 11, 21, 30, 45, 53}
+
+func (i State) String() string {
+	if i >= State(len(_State_index)-1) {
+		return "State(" + strconv.FormatInt(int64(i), 10) + ")"
+	}
+	return _State_name[_State_index[i]:_State_index[i+1]]
 }

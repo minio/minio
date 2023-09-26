@@ -62,7 +62,8 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
 		Local:        local,
 		Hosts:        hosts,
-		Auth:         newCachedAuthToken(),
+		AddAuth:      newCachedAuthToken(),
+		AuthRequest:  storageServerRequestValidate,
 		BlockConnect: globalGridStart,
 		TLSConfig: &tls.Config{
 			RootCAs:          globalRootCAs,

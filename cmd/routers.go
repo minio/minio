@@ -42,8 +42,7 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	registerLockRESTHandlers()
 
 	// Add grid to router
-	// TODO(klaus): REQUESTS MUST BE VALIDATED.
-	router.Handle(grid.RoutePath, globalGrid.Load().Handler())
+	router.Handle(grid.RoutePath, adminMiddleware(globalGrid.Load().Handler(), noGZFlag))
 }
 
 // List of some generic middlewares which are applied for all incoming requests.

@@ -116,6 +116,8 @@ type Subroute struct {
 // State is a connection state.
 type State uint32
 
+// MANUAL go:generate stringer -type=State -output=state_string.go -trimprefix=State $GOFILE
+
 const (
 	// StateUnconnected is the initial state of a connection.
 	// When the first message is sent it will attempt to connect.
@@ -196,7 +198,6 @@ func newConnection(o connectionParams) *Connection {
 	if o.local == o.remote {
 		panic("equal hosts")
 	}
-	c.header.Set("Authorization", "Bearer "+o.auth(o.remote+RoutePath))
 	if c.shouldConnect() {
 		c.side = ws.StateClientSide
 
@@ -557,6 +558,12 @@ func (c *Connection) connect() {
 		if c.dialer != nil {
 			dialer.NetDial = c.dialer.DialContext
 		}
+		if c.header == nil {
+			c.header = make(http.Header, 2)
+		}
+		c.header.Set("Authorization", "Bearer "+c.auth(""))
+		c.header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+
 		if len(c.header) > 0 {
 			dialer.Header = ws.HandshakeHeaderHTTP(c.header)
 		}
@@ -1160,17 +1167,16 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		c.connChange.L.Lock()
 		for {
 			state := atomic.LoadUint32((*uint32)(&c.state))
-			if state != StateConnected {
+			if state == StateConnected {
 				break
 			}
 			if debugPrint {
-				fmt.Println("Waiting for connection")
+				fmt.Println(c.Local, "Waiting for connection ->", c.Remote)
 			}
 			if state == StateShutdown {
 				c.connChange.L.Unlock()
 				return
 			}
-			fmt.Println("waiting while in state", state)
 			c.connChange.Wait()
 			select {
 			case <-ctx.Done():

@@ -36,7 +36,8 @@ func TestDisconnect(t *testing.T) {
 		Dialer:       dialer.DialContext,
 		Local:        localHost,
 		Hosts:        hosts,
-		Auth:         func(aud string) string { return aud },
+		AddAuth:      func(aud string) string { return aud },
+		AuthRequest:  dummyRequestValidate,
 		BlockConnect: connReady,
 	})
 	errFatal(err)
@@ -58,7 +59,8 @@ func TestDisconnect(t *testing.T) {
 		Dialer:       dialer.DialContext,
 		Local:        remoteHost,
 		Hosts:        hosts,
-		Auth:         func(aud string) string { return aud },
+		AddAuth:      func(aud string) string { return aud },
+		AuthRequest:  dummyRequestValidate,
 		BlockConnect: connReady,
 	})
 	errFatal(err)
@@ -138,4 +140,8 @@ func TestDisconnect(t *testing.T) {
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall
+}
+
+func dummyRequestValidate(r *http.Request) error {
+	return nil
 }
