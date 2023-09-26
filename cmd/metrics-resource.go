@@ -145,7 +145,7 @@ func init() {
 		cpuSystem:         "CPU system time",
 		cpuIdle:           "CPU idle time",
 		cpuIOWait:         "CPU ioWait time",
-		cpuSteal:          "CPU steam time",
+		cpuSteal:          "CPU steal time",
 		cpuNice:           "CPU nice time",
 		cpuLoad1:          "CPU load average 1min",
 		cpuLoad5:          "CPU load average 5min",
@@ -269,7 +269,7 @@ func collectLocalResourceMetrics() {
 		if len(host) > 0 {
 			if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
 				stats := hm.Net.NetStats
-				labels := map[string]string{"inerface": stats.Name}
+				labels := map[string]string{"interface": stats.Name}
 				updateResourceMetrics(interfaceSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
 				updateResourceMetrics(interfaceSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
 				updateResourceMetrics(interfaceSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
@@ -426,7 +426,7 @@ func getResourceMetrics() *MetricsGroup {
 		cacheInterval: resourceMetricsCacheInterval,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		metrics := make([]Metric, 0, 50)
+		metrics := []Metric{}
 
 		subSystems := []MetricSubsystem{interfaceSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
 		for _, subSys := range subSystems {
