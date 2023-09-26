@@ -854,13 +854,13 @@ func _() {
 	_ = x[StateShutdown-4]
 }
 
-const _State_name = "UnconnectedConnectingConnectedConnectionErrorShutdown"
+const stateName = "UnconnectedConnectingConnectedConnectionErrorShutdown"
 
-var _State_index = [...]uint8{0, 11, 21, 30, 45, 53}
+var stateIndex = [...]uint8{0, 11, 21, 30, 45, 53}
 
 func (i State) String() string {
-	if i >= State(len(_State_index)-1) {
+	if i >= State(len(stateIndex)-1) {
 		return "State(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _State_name[_State_index[i]:_State_index[i+1]]
+	return stateName[stateIndex[i]:stateIndex[i+1]]
 }
