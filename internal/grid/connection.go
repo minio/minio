@@ -71,7 +71,7 @@ type Connection struct {
 	ctx context.Context
 
 	// Active mux connections.
-	outgoing *xsync.MapOf[uint64, *MuxClient]
+	outgoing *xsync.MapOf[uint64, *muxClient]
 
 	// Incoming streams
 	inStream *xsync.MapOf[uint64, *muxServer]
@@ -180,7 +180,7 @@ func newConnection(o connectionParams) *Connection {
 		Local:              o.local,
 		id:                 o.id,
 		ctx:                o.ctx,
-		outgoing:           xsync.NewIntegerMapOfPresized[uint64, *MuxClient](1000),
+		outgoing:           xsync.NewIntegerMapOfPresized[uint64, *muxClient](1000),
 		inStream:           xsync.NewIntegerMapOfPresized[uint64, *muxServer](1000),
 		outQueue:           make(chan []byte, defaultOutQueue),
 		dialer:             o.dial,
@@ -234,8 +234,8 @@ func (c *Subroute) Subroute(s string) *Subroute {
 	}
 }
 
-// NewMuxClient returns a mux client for manual use.
-func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
+// newMuxClient returns a mux client for manual use.
+func (c *Connection) newMuxClient(ctx context.Context) (*muxClient, error) {
 	client := newMuxClient(ctx, atomic.AddUint64(&c.NextID, 1), c)
 	if dl, ok := ctx.Deadline(); ok {
 		client.deadline = getDeadline(time.Until(dl))
@@ -253,9 +253,9 @@ func (c *Connection) NewMuxClient(ctx context.Context) (*MuxClient, error) {
 	return client, nil
 }
 
-// NewMuxClient returns a mux client for manual use.
-func (c *Subroute) NewMuxClient(ctx context.Context) (*MuxClient, error) {
-	cl, err := c.Connection.NewMuxClient(ctx)
+// newMuxClient returns a mux client for manual use.
+func (c *Subroute) newMuxClient(ctx context.Context) (*muxClient, error) {
+	cl, err := c.Connection.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 	if handler == nil {
 		return nil, ErrUnknownHandler
 	}
-	client, err := c.NewMuxClient(ctx)
+	client, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +296,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 	if handler == nil {
 		return nil, ErrUnknownHandler
 	}
-	client, err := c.NewMuxClient(ctx)
+	client, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 		responses = make(chan Response, 1)
 	}
 
-	cl, err := c.NewMuxClient(ctx)
+	cl, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (
 		responses = make(chan Response, 1)
 	}
 
-	cl, err := c.NewMuxClient(ctx)
+	cl, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +434,7 @@ var ErrRemoteRestart = errors.New("remote restarted")
 // If nil will be returned remote call sent EOF or ErrDone is returned by the callback.
 // If ErrDone is returned on cb nil will be returned.
 func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb func([]byte) error) error {
-	client, err := c.NewMuxClient(ctx)
+	client, err := c.newMuxClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -636,7 +636,7 @@ func (c *Connection) connect() {
 		}
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil && remoteUUID != *c.remoteID {
-			c.outgoing.Range(func(key uint64, client *MuxClient) bool {
+			c.outgoing.Range(func(key uint64, client *muxClient) bool {
 				client.close()
 				return true
 			})
@@ -674,7 +674,7 @@ func (c *Connection) connect() {
 }
 
 func (c *Connection) disconnected() {
-	c.outgoing.Range(func(key uint64, client *MuxClient) bool {
+	c.outgoing.Range(func(key uint64, client *muxClient) bool {
 		if !client.stateless {
 			client.cancelFn(ErrDisconnected)
 		}
@@ -731,7 +731,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		c.updateState(StateConnectionError)
 		// Remote ID changed.
 		// Close all active requests.
-		c.outgoing.Range(func(key uint64, client *MuxClient) bool {
+		c.outgoing.Range(func(key uint64, client *muxClient) bool {
 			client.close()
 			return true
 		})

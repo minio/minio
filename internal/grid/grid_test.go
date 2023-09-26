@@ -832,7 +832,7 @@ func assertNoActive(t *testing.T, c *Connection) {
 				continue
 			}
 			var found []uint64
-			c.outgoing.Range(func(key uint64, value *MuxClient) bool {
+			c.outgoing.Range(func(key uint64, value *muxClient) bool {
 				found = append(found, key)
 				return true
 			})

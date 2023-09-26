@@ -30,8 +30,8 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-// MuxClient is a stateful
-type MuxClient struct {
+// muxClient is a stateful connection to a remote.
+type muxClient struct {
 	MuxID            uint64
 	SendSeq, RecvSeq uint32
 	LastPong         int64
@@ -58,9 +58,9 @@ type Response struct {
 	Err error
 }
 
-func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxClient {
+func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *muxClient {
 	ctx, cancelFn := context.WithCancelCause(ctx)
-	return &MuxClient{
+	return &muxClient{
 		MuxID:    muxID,
 		Resp:     make(chan []byte, 1),
 		ctx:      ctx,
@@ -72,7 +72,7 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *MuxCli
 
 // roundtrip performs a roundtrip, returning the first response.
 // This cannot be used concurrently.
-func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
+func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	if m.init {
 		return nil, errors.New("mux client already used")
 	}
@@ -106,7 +106,7 @@ func (m *MuxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 }
 
 // send the message. msg.Seq and msg.MuxID will be set
-func (m *MuxClient) send(msg message) error {
+func (m *muxClient) send(msg message) error {
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
@@ -117,7 +117,7 @@ func (m *MuxClient) send(msg message) error {
 
 // sendLocked the message. msg.Seq and msg.MuxID will be set.
 // m.respMu must be held.
-func (m *MuxClient) sendLocked(msg message) error {
+func (m *muxClient) sendLocked(msg message) error {
 	dst := GetByteBuffer()[:0]
 	msg.Seq = m.SendSeq
 	msg.MuxID = m.MuxID
@@ -153,7 +153,7 @@ func (m *MuxClient) sendLocked(msg message) error {
 // RequestStateless will send a single payload request and stream back results.
 // req may not be read/written to after calling.
 // TODO: Probably unexport this.
-func (m *MuxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
+func (m *muxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
 	if m.init {
 		out <- Response{Err: errors.New("mux client already used")}
 	}
@@ -193,7 +193,7 @@ const clientPingInterval = time.Second * 15
 // 'requests' can be nil, in which case only req is sent as input.
 // It will however take less resources.
 // TODO: Probably unexport this.
-func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan Response) (*Stream, error) {
+func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan Response) (*Stream, error) {
 	if m.init {
 		return nil, errors.New("mux client already used")
 	}
@@ -383,7 +383,7 @@ func (m *MuxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 }
 
 // checkSeq will check if sequence number is correct and increment it by 1.
-func (m *MuxClient) checkSeq(seq uint32) (ok bool) {
+func (m *muxClient) checkSeq(seq uint32) (ok bool) {
 	if seq != m.RecvSeq {
 		if debugPrint {
 			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
@@ -398,7 +398,7 @@ func (m *MuxClient) checkSeq(seq uint32) (ok bool) {
 // response will send handleIncoming response to client.
 // may never block.
 // Should return whether the next call would block.
-func (m *MuxClient) response(seq uint32, r Response) {
+func (m *muxClient) response(seq uint32, r Response) {
 	if debugPrint {
 		fmt.Printf("mux %d: got msg seqid %d, payload length: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
 	}
@@ -414,14 +414,14 @@ func (m *MuxClient) response(seq uint32, r Response) {
 }
 
 // error is a message from the server to disconnect.
-func (m *MuxClient) error(err RemoteErr) {
+func (m *muxClient) error(err RemoteErr) {
 	if debugPrint {
 		fmt.Printf("mux %d: got remote err:%v\n", m.MuxID, string(err))
 	}
 	m.addResponse(Response{Err: &err})
 }
 
-func (m *MuxClient) ack(seq uint32) {
+func (m *muxClient) ack(seq uint32) {
 	if !m.checkSeq(seq) {
 		return
 	}
@@ -435,7 +435,7 @@ func (m *MuxClient) ack(seq uint32) {
 	m.acked = true
 }
 
-func (m *MuxClient) unblockSend(seq uint32) {
+func (m *muxClient) unblockSend(seq uint32) {
 	if !m.checkSeq(seq) {
 		return
 	}
@@ -446,7 +446,7 @@ func (m *MuxClient) unblockSend(seq uint32) {
 	}
 }
 
-func (m *MuxClient) pong(msg pongMsg) {
+func (m *muxClient) pong(msg pongMsg) {
 	if msg.NotFound || msg.Err != nil {
 		err := errors.New("remote terminated call")
 		if msg.Err != nil {
@@ -460,7 +460,7 @@ func (m *MuxClient) pong(msg pongMsg) {
 
 // addResponse will add a response to the response channel.
 // This function will never block
-func (m *MuxClient) addResponse(r Response) (ok bool) {
+func (m *muxClient) addResponse(r Response) (ok bool) {
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
@@ -487,7 +487,7 @@ func (m *MuxClient) addResponse(r Response) (ok bool) {
 	}
 }
 
-func (m *MuxClient) close() {
+func (m *muxClient) close() {
 	if debugPrint {
 		fmt.Println("closing outgoing mux", m.MuxID)
 	}
@@ -496,7 +496,7 @@ func (m *MuxClient) close() {
 	m.closeLocked()
 }
 
-func (m *MuxClient) closeLocked() {
+func (m *muxClient) closeLocked() {
 	if m.closed {
 		return
 	}
