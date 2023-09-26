@@ -1051,12 +1051,11 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Valid, existing bucket, delimiter not supported, returns empty values (Test number 8-9).
 		{bucketNames[0], "", "", "", "*", 0, ListMultipartsInfo{Delimiter: "*"}, nil, true},
 		{bucketNames[0], "", "", "", "-", 0, ListMultipartsInfo{Delimiter: "-"}, nil, true},
-		// Testing for failure cases with both perfix and marker (Test number 10).
-		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
+		// If marker is *after* the last possible object from the prefix it should return an empty list.
 		{
-			bucketNames[0], "asia", "europe-object", "", "", 0,
-			ListMultipartsInfo{},
-			fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false,
+			bucketNames[0], "Asia", "europe-object", "", "", 0,
+			ListMultipartsInfo{KeyMarker: "europe-object", Prefix: "Asia", IsTruncated: false},
+			nil, true,
 		},
 		// Setting an invalid combination of uploadIDMarker and Marker (Test number 11-12).
 		{

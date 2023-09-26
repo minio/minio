@@ -49,7 +49,7 @@ const probeObject = "probeobject"
 // to perform all operations defined in the WarmBackend interface.
 func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	var empty bytes.Reader
-	rv, err := w.Put(ctx, probeObject, &empty, 0)
+	_, err := w.Put(ctx, probeObject, &empty, 0)
 	if err != nil {
 		if _, ok := err.(BackendDown); ok {
 			return err
@@ -60,7 +60,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 		}
 	}
 
-	r, err := w.Get(ctx, probeObject, rv, WarmBackendGetOpts{})
+	r, err := w.Get(ctx, probeObject, "", WarmBackendGetOpts{})
 	xhttp.DrainBody(r)
 	if err != nil {
 		if _, ok := err.(BackendDown); ok {
@@ -78,7 +78,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 			}
 		}
 	}
-	if err = w.Remove(ctx, probeObject, rv); err != nil {
+	if err = w.Remove(ctx, probeObject, ""); err != nil {
 		if _, ok := err.(BackendDown); ok {
 			return err
 		}

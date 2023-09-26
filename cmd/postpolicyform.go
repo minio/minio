@@ -30,7 +30,9 @@ import (
 	"time"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/set"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -49,6 +51,18 @@ var startsWithConds = map[string]bool{
 	"$x-amz-algorithm":         false,
 	"$x-amz-credential":        false,
 	"$x-amz-date":              false,
+}
+
+var postPolicyIgnoreKeys = map[string]bool{
+	"Policy":              true,
+	xhttp.AmzSignature:    true,
+	xhttp.ContentEncoding: true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumAlgo):   true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32):  true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32C): true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumSHA1):   true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumSHA256): true,
+	http.CanonicalHeaderKey(xhttp.AmzChecksumMode):   true,
 }
 
 // Add policy conditionals.
@@ -265,6 +279,22 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return fmt.Errorf("Invalid according to Policy: Policy expired")
 	}
+	// check all formValues appear in postPolicyForm or return error. #https://github.com/minio/minio/issues/17391
+	checkHeader := map[string][]string{}
+	ignoreKeys := map[string]bool{}
+	for key, value := range formValues {
+		switch {
+		case ignoreKeys[key], postPolicyIgnoreKeys[key], strings.HasPrefix(key, encrypt.SseGenericHeader):
+			continue
+		case strings.HasPrefix(key, "X-Amz-Ignore-"):
+			ignoreKey := strings.Replace(key, "X-Amz-Ignore-", "", 1)
+			ignoreKeys[ignoreKey] = true
+			// if it have already
+			delete(checkHeader, ignoreKey)
+		default:
+			checkHeader[key] = value
+		}
+	}
 	// map to store the metadata
 	metaMap := make(map[string]string)
 	for _, policy := range postPolicyForm.Conditions.Policies {
@@ -292,6 +322,10 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 		formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(policy.Key, "$"))
 		// Operator for the current policy condition
 		op := policy.Operator
+		// Multiple values should not occur
+		if len(checkHeader[formCanonicalName]) >= 2 {
+			return fmt.Errorf("Invalid according to Policy: Policy Condition failed: [%s, %s, %s]. FormValues have multiple values: [%s]", op, policy.Key, policy.Value, strings.Join(checkHeader[formCanonicalName], ", "))
+		}
 		// If the current policy condition is known
 		if startsWithSupported, condFound := startsWithConds[policy.Key]; condFound {
 			// Check if the current condition supports starts-with operator
@@ -311,6 +345,15 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed: [%s, %s, %s]", op, policy.Key, policy.Value)
 			}
 		}
+		delete(checkHeader, formCanonicalName)
+	}
+
+	if len(checkHeader) != 0 {
+		logKeys := make([]string, 0, len(checkHeader))
+		for key := range checkHeader {
+			logKeys = append(logKeys, key)
+		}
+		return fmt.Errorf("Each form field that you specify in a form (except %s) must appear in the list of conditions.", strings.Join(logKeys, ", "))
 	}
 
 	return nil

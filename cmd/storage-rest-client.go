@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -135,6 +136,8 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
+	scanning int32
+
 	endpoint   Endpoint
 	restClient *rest.Client
 	gridConn   *grid.Subroute
@@ -209,6 +212,9 @@ func (client *storageRESTClient) Healing() *healingTracker {
 }
 
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+	atomic.AddInt32(&client.scanning, 1)
+	defer atomic.AddInt32(&client.scanning, -1)
+
 	defer close(updates)
 	pr, pw := io.Pipe()
 	go func() {
@@ -283,6 +289,8 @@ func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info
 		// transport is already down.
 		return info, errDiskNotFound
 	}
+	// Do not cache results from atomic variables
+	scanning := atomic.LoadInt32(&client.scanning) == 1
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
@@ -308,8 +316,9 @@ func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info
 	})
 	val, err := client.diskInfoCache.Get()
 	if val != nil {
-		return val.(DiskInfo), err
+		info = val.(DiskInfo)
 	}
+	info.Scanning = scanning
 	return info, err
 }
 
