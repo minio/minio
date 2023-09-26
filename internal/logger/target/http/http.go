@@ -224,14 +224,6 @@ func (h *Target) init(ctx context.Context) (err error) {
 }
 
 func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration) (err error) {
-	defer func() {
-		if err != nil {
-			atomic.StoreInt32(&h.status, statusOffline)
-		} else {
-			atomic.StoreInt32(&h.status, statusOnline)
-		}
-	}()
-
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -253,6 +245,7 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 
 	resp, err := h.client.Do(req)
 	if err != nil {
+		atomic.StoreInt32(&h.status, statusOffline)
 		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.Endpoint(), err)
 	}
 
