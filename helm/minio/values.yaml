@@ -405,7 +405,7 @@ buckets: []
   #   # Name of the bucket
   # - name: bucket1
   #   # Policy to be set on the
-  #   # bucket [none|download|upload|public]
+  #   # bucket [none|download|upload|public|custom]
   #   policy: none
   #   # Purge if bucket exists already
   #   purge: false
@@ -421,6 +421,42 @@ buckets: []
   #   versioning: true
   #   # set objectlocking for
   #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
+  #   objectlocking: false
+  # - name: bucket3
+  #   # A policy of 'custom' allows you to set a custom JSON formatted policy in policyJson
+  #   # that is applied to the bucket via 'mc anonymous set-json'
+  #   policy: custom
+  #   policyJson: |-
+  #     {
+  #         "Version": "2012-10-17",
+  #         "Statement": [
+  #             {
+  #                 "Effect": "Allow",
+  #                 "Principal": {
+  #                     "AWS": [
+  #                         "*"
+  #                     ]
+  #                 },
+  #                 "Action": [
+  #                     "s3:GetObject",
+  #                     "s3:ListBucket"
+  #                 ],
+  #                 "Resource": [
+  #                     "arn:aws:s3:::bucket3",
+  #                     "arn:aws:s3:::bucket3/*"
+  #                 ],
+  #                 "Condition": {
+  #                     "IpAddress": {
+  #                         "aws:SourceIp": [
+  #                             "10.42.0.0/16",
+  #                         ]
+  #                     }
+  #                 }
+  #             }
+  #         ]
+  #     }
+  #   purge: false
+  #   versioning: true
   #   objectlocking: false
 
 ## Additional Annotations for the Kubernetes Job makeBucketJob
