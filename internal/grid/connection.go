@@ -1014,10 +1014,22 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					if m.DeadlineMS > 0 {
 						start = time.Now()
 					}
-					b, err := handler(m.Payload)
-					if debugPrint {
-						fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
-					}
+					var b []byte
+					var err *RemoteErr
+					func() {
+						defer func() {
+							if rec := recover(); rec != nil {
+								err = NewRemoteErrString(fmt.Sprintf("handleMessages: panic recovered: %v", rec))
+								debug.PrintStack()
+								logger.LogIf(ctx, err)
+							}
+						}()
+						b, err := handler(m.Payload)
+						if debugPrint {
+							fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
+						}
+					}()
+
 					// TODO: Maybe recycle m.Payload - should be free here.
 					if m.DeadlineMS > 0 && time.Since(start).Milliseconds() > int64(m.DeadlineMS) {
 						// No need to return result
@@ -1189,7 +1201,8 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 		err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("ws write: %v", err))
+			// TODO: Probably too noisy for long term use.
+			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
 			cancel(ErrDisconnected)
 			return
 		}

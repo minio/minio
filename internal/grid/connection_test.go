@@ -107,7 +107,6 @@ func TestDisconnect(t *testing.T) {
 	remoteConn := local.Connection(remoteHost)
 	errFatal(remoteConn.WaitForConnect(context.Background()))
 	const testPayload = "Hello Grid World!"
-	t.Log(remoteConn.handlers.streams)
 
 	gotResp := make(chan struct{})
 	go func() {
