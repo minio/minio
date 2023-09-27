@@ -137,6 +137,7 @@ func (h *Target) ping(ctx context.Context) bool {
 	if err := h.send(ctx, []byte(`{}`), webhookCallTimeout); err != nil {
 		return !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnRefusedErr(err)
 	}
+	go h.startHTTPLogger(ctx)
 	return true
 }
 
