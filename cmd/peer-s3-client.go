@@ -153,17 +153,18 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (resu
 		return nil, err
 	}
 
-	bucketsMap := make(map[string]struct{})
+	bucketsCounter := make(map[string]int)
 	for idx, buckets := range nodeBuckets {
 		if errs[idx] != nil {
 			continue
 		}
 		for _, bi := range buckets {
-			_, ok := bucketsMap[bi.Name]
-			if !ok {
-				bucketsMap[bi.Name] = struct{}{}
+			n := bucketsCounter[bi.Name] + 1
+			if n == quorum {
+				// Add each as we reach quorum.
 				result = append(result, bi)
 			}
+			bucketsCounter[bi.Name] = n
 		}
 	}
 
