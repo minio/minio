@@ -274,3 +274,9 @@ type pongMsg struct {
 func (pongMsg) Op() Op {
 	return OpPong
 }
+
+// MSS is a map[string]string that can be serialized.
+// It is not very efficient, but it is only used for easy parameter passing.
+type MSS struct {
+	Values map[string]string `msg:"v,allownil"`
+}

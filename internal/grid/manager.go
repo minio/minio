@@ -69,6 +69,8 @@ type ManagerOptions struct {
 	AddAuth      AuthFn
 	AuthRequest  func(r *http.Request) error
 	TLSConfig    *tls.Config
+	Incoming     func(n int64) // Record incoming bytes.
+	Outgoing     func(n int64) // Record outgoing bytes.
 	BlockConnect chan struct{} // If set, incoming and outgoing connections will be blocked until closed.
 }
 

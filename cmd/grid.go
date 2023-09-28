@@ -70,6 +70,9 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 			CipherSuites:     fips.TLSCiphers(),
 			CurvePreferences: fips.TLSCurveIDs(),
 		},
+		// Record incoming and outgoing bytes.
+		Incoming: globalConnStats.incInternodeInputBytes,
+		Outgoing: globalConnStats.incInternodeOutputBytes,
 	})
 	if err != nil {
 		return err

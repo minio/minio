@@ -123,11 +123,6 @@ func newLockHandler(h grid.HandlerID) *grid.SingleHandler[*dsync.LockArgs, *dsyn
 
 // registerLockRESTHandlers - register lock rest router.
 func registerLockRESTHandlers() {
-	// TODO:
-	// h := func(f http.HandlerFunc) http.HandlerFunc {
-	//	return collectInternodeStats(httpTraceHdrs(f))
-	// }
-
 	lockServer := &lockRESTServer{
 		ll: newLocker(),
 	}

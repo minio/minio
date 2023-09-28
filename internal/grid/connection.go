@@ -100,6 +100,9 @@ type Connection struct {
 	tlsConfig          *tls.Config
 	blockConnect       chan struct{}
 
+	incomingBytes func(n int64) // Record incoming bytes.
+	outgoingBytes func(n int64) // Record outgoing bytes.
+
 	// For testing only
 	debugInConn  net.Conn
 	debugOutConn net.Conn
@@ -168,6 +171,8 @@ type connectionParams struct {
 	handlers      *handlers
 	auth          AuthFn
 	tlsConfig     *tls.Config
+	incomingBytes func(n int64) // Record incoming bytes.
+	outgoingBytes func(n int64) // Record outgoing bytes.
 
 	blockConnect chan struct{}
 }
@@ -193,6 +198,8 @@ func newConnection(o connectionParams) *Connection {
 		clientPingInterval: clientPingInterval,
 		connPingInterval:   connPingInterval,
 		tlsConfig:          o.tlsConfig,
+		incomingBytes:      o.incomingBytes,
+		outgoingBytes:      o.outgoingBytes,
 	}
 
 	if o.local == o.remote {
@@ -536,6 +543,9 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 	if debugPrint {
 		fmt.Println(c.Local, "sendMsg: Sending", msg.Op, "as", len(dst), "bytes")
 	}
+	if c.outgoingBytes != nil {
+		c.outgoingBytes(int64(len(dst)))
+	}
 	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
 
@@ -842,7 +852,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
-
+			if c.incomingBytes != nil {
+				c.incomingBytes(int64(len(msg)))
+			}
 			// Parse the received message
 			var m message
 			subID, err := m.parse(msg)
