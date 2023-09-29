@@ -6,7 +6,7 @@ GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
 VERSION ?= $(shell git describe --tags)
-TAG ?= "minio/minio:$(VERSION)"
+TAG ?= "quay.io/minio/minio:$(VERSION)"
 
 GOLANGCI_VERSION = v1.51.2
 GOLANGCI_DIR = .bin/golangci/$(GOLANGCI_VERSION)
