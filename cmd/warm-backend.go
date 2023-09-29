@@ -49,7 +49,7 @@ const probeObject = "probeobject"
 // to perform all operations defined in the WarmBackend interface.
 func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 	var empty bytes.Reader
-	_, err := w.Put(ctx, probeObject, &empty, 0)
+	remoteVersionID, err := w.Put(ctx, probeObject, &empty, 0)
 	if err != nil {
 		if _, ok := err.(BackendDown); ok {
 			return err
@@ -78,7 +78,7 @@ func checkWarmBackend(ctx context.Context, w WarmBackend) error {
 			}
 		}
 	}
-	if err = w.Remove(ctx, probeObject, ""); err != nil {
+	if err = w.Remove(ctx, probeObject, remoteVersionID); err != nil {
 		if _, ok := err.(BackendDown); ok {
 			return err
 		}
