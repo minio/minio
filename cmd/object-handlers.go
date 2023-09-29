@@ -2416,7 +2416,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			writeSuccessNoContent(w)
 			return
 		}

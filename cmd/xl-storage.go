@@ -1945,7 +1945,6 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	if err != nil {
 		return osErrToFileErr(err)
 	}
-	defer w.Close()
 
 	var bufp *[]byte
 	switch {
@@ -1968,17 +1967,33 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 		written, err = io.CopyBuffer(diskHealthWriter(ctx, w), r, *bufp)
 	}
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if written < fileSize && fileSize >= 0 {
+		w.Close()
 		return errLessData
 	} else if written > fileSize && fileSize >= 0 {
+		w.Close()
 		return errMoreData
 	}
 
 	// Only interested in flushing the size_t not mtime/atime
-	return Fdatasync(w)
+	if err = Fdatasync(w); err != nil {
+		w.Close()
+		return err
+	}
+
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
@@ -2016,18 +2031,27 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 	if err != nil {
 		return err
 	}
-	defer w.Close()
 
 	n, err := w.Write(b)
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if n != len(b) {
+		w.Close()
 		return io.ErrShortWrite
 	}
 
-	return nil
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {

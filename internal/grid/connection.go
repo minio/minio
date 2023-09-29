@@ -737,14 +737,15 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		Op: OpConnectResponse,
 	}
 
-	if c.remoteID != nil && *c.remoteID != req.ID {
+	if c.remoteID != nil {
 		c.updateState(StateConnectionError)
-		// Remote ID changed.
 		// Close all active requests.
 		c.outgoing.Range(func(key uint64, client *muxClient) bool {
 			client.close()
 			return true
 		})
+		// Wait for existing to exit
+		c.connWg.Wait()
 	}
 	rid := uuid.UUID(req.ID)
 	c.remoteID = &rid
@@ -757,7 +758,6 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		fmt.Printf("grid: Queued Response %+v Side: %v\n", resp, c.side)
 	}
 	if err == nil {
-		c.connWg.Wait()
 		c.updateState(StateConnected)
 		c.handleMessages(ctx, conn)
 	}

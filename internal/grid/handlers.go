@@ -87,8 +87,8 @@ func NewRemoteErrString(msg string) *RemoteErr {
 	return &r
 }
 
-func (r *RemoteErr) Error() string {
-	return string(*r)
+func (r RemoteErr) Error() string {
+	return string(r)
 }
 
 // Is returns if the string representation matches.

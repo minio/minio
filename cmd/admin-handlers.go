@@ -2929,9 +2929,14 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	sb.WriteString("\n")
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
 
+	scheme := "https"
+	if !globalIsTLS {
+		scheme = "http"
+	}
+
 	// save MinIO start script to inspect command
 	var scrb bytes.Buffer
-	scrb.WriteString(`#!/usr/bin/env bash
+	fmt.Fprintf(&scrb, `#!/usr/bin/env bash
 
 function main() {
 	for file in $(ls -1); do
@@ -2940,10 +2945,10 @@ function main() {
 	done
 
 	# Read content of inspect-input.txt
-	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
+	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#%s:\/\/#\.\/#g")
 
 	# Start MinIO instance using the options
-	START_CMD="CI=on _MINIO_AUTO_DISK_HEALING=off minio server ${MINIO_OPTS} &"
+	START_CMD="CI=on _MINIO_AUTO_DRIVE_HEALING=off minio server ${MINIO_OPTS} &"
 	echo
 	echo "Starting MinIO instance: ${START_CMD}"
 	echo
@@ -2955,8 +2960,7 @@ function main() {
 	sleep 10
 }
 
-main "$@"`,
-	)
+main "$@"`, scheme)
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes(), 0o755))
 }
 
