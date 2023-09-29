@@ -955,6 +955,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	opts.Versioned = versioned
+	opts.VersionSuspended = suspended
 
 	// First, we compute the ETag of the multipart object.
 	// The ETag of a multi-part object is always:
