@@ -57,6 +57,7 @@ const (
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
 	KafkaVersion       = "version"
+	KafkaBatchSize     = "batch_size"
 
 	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -73,6 +74,9 @@ const (
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
+	EnvKafkaBatchSize     = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
+
+	maxBatchLimit = 100
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -83,6 +87,7 @@ type KafkaArgs struct {
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
 	Version    string      `json:"version"`
+	BatchSize  uint32      `json:"batchSize"`
 	TLS        struct {
 		Enable        bool               `json:"enable"`
 		RootCAs       *x509.CertPool     `json:"-"`
@@ -122,7 +127,20 @@ func (k KafkaArgs) Validate() error {
 			return err
 		}
 	}
+	if k.BatchSize > 1 {
+		if k.QueueDir == "" {
+			return errors.New("batch should be enabled only if queue dir is enabled")
+		}
+		if k.BatchSize > maxBatchLimit {
+			return fmt.Errorf("batch limit should not exceed %d", maxBatchLimit)
+		}
+	}
 	return nil
+}
+
+type batchItem struct {
+	key     string
+	message *sarama.ProducerMessage
 }
 
 // KafkaTarget - Kafka target.
@@ -134,6 +152,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      store.Store[event.Event]
+	batch      *store.Batch[batchItem]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -188,30 +207,16 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 	if target.producer == nil {
 		return store.ErrNotConnected
 	}
-	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
+	msg, err := target.toProducerMessage(eventData)
 	if err != nil {
 		return err
 	}
-	key := eventData.S3.Bucket.Name + "/" + objectName
-
-	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
-	if err != nil {
-		return err
-	}
-
-	msg := sarama.ProducerMessage{
-		Topic: target.args.Topic,
-		Key:   sarama.StringEncoder(key),
-		Value: sarama.ByteEncoder(data),
-	}
-
-	_, _, err = target.producer.SendMessage(&msg)
-
+	_, _, err = target.producer.SendMessage(msg)
 	return err
 }
 
 // SendFromStore - reads an event from store and sends it to Kafka.
-func (target *KafkaTarget) SendFromStore(eventKey string) error {
+func (target *KafkaTarget) SendFromStore(key store.Key) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -236,7 +241,7 @@ func (target *KafkaTarget) SendFromStore(eventKey string) error {
 		}
 	}
 
-	eventData, eErr := target.store.Get(eventKey)
+	eventData, eErr := target.store.Get(key.Name)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -246,17 +251,80 @@ func (target *KafkaTarget) SendFromStore(eventKey string) error {
 		return eErr
 	}
 
+	// If batch is enabled, the event will be batched and
+	// will be committed once the batch is full.
+	if target.batch != nil {
+		msg, err := target.toProducerMessage(eventData)
+		if err != nil {
+			return err
+		}
+		err = target.batch.Add(batchItem{key.Name, msg})
+		if err != nil {
+			if errors.Is(err, store.ErrBatchFull) {
+				// This should not happen, just commit
+				// the batch and return the error.
+				if targetErr := target.commitBatch(); targetErr != nil {
+					err = targetErr
+				}
+			}
+			return err
+		}
+		// commit the batch if the key is the last one present in the store.
+		if key.IsLast || target.batch.IsFull() {
+			return target.commitBatch()
+		}
+		return nil
+	}
+
 	err = target.send(eventData)
 	if err != nil {
-		// Sarama opens the ciruit breaker after 3 consecutive connection failures.
-		if err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open" {
+		if isKafkaConnErr(err) {
 			return store.ErrNotConnected
 		}
 		return err
 	}
 
 	// Delete the event from store.
-	return target.store.Del(eventKey)
+	return target.store.Del(key.Name)
+}
+
+func (target *KafkaTarget) commitBatch() error {
+	var keysToDelete []string
+	var msgs []*sarama.ProducerMessage
+
+	for _, item := range target.batch.Get() {
+		keysToDelete = append(keysToDelete, item.key)
+		msgs = append(msgs, item.message)
+	}
+
+	err := target.producer.SendMessages(msgs)
+	if err != nil {
+		if isKafkaConnErr(err) {
+			return store.ErrNotConnected
+		}
+		return err
+	}
+
+	return target.store.DelList(keysToDelete)
+}
+
+func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.ProducerMessage, error) {
+	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	key := eventData.S3.Bucket.Name + "/" + objectName
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
+	if err != nil {
+		return nil, err
+	}
+
+	return &sarama.ProducerMessage{
+		Topic: target.args.Topic,
+		Key:   sarama.StringEncoder(key),
+		Value: sarama.ByteEncoder(data),
+	}, nil
 }
 
 // Close - closes underneath kafka connection.
@@ -394,8 +462,16 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	}
 
 	if target.store != nil {
+		if args.BatchSize > 1 {
+			target.batch = store.NewBatch[batchItem](args.BatchSize)
+		}
 		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil
+}
+
+func isKafkaConnErr(err error) bool {
+	// Sarama opens the ciruit breaker after 3 consecutive connection failures.
+	return err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open"
 }
