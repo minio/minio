@@ -246,6 +246,8 @@ type folderScanner struct {
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
+	fullThrottle func() bool
+
 	disks       []StorageAPI
 	disksQuorum int
 
@@ -299,7 +301,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, fullThrottle func() bool) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
@@ -316,6 +318,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		dataUsageScannerDebug: false,
 		healObjectSelect:      0,
 		scanMode:              scanMode,
+		fullThrottle:          fullThrottle,
 		updates:               cache.Info.updates,
 		updateCurrentPath:     updatePath,
 		disks:                 disks,
@@ -372,6 +375,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
 
+	noWait := func() {}
+
 	thisHash := hashPath(folder.name)
 	// Store initial compaction state.
 	wasCompacted := into.Compacted
@@ -401,8 +406,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		if !f.oldCache.Info.replication.Empty() && f.oldCache.Info.replication.Config.HasActiveRules(prefix, true) {
 			replicationCfg = f.oldCache.Info.replication
 		}
-		// Check if we can skip it due to bloom filter...
-		scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
+
+		if !f.fullThrottle() {
+			scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
+		}
 
 		var existingFolders, newFolders []cachedFolder
 		var foundObjects bool
@@ -453,8 +460,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				return nil
 			}
 
-			// Dynamic time delay.
-			wait := scannerSleeper.Timer(ctx)
+			wait := noWait
+			if !f.fullThrottle() {
+				// Dynamic time delay.
+				wait = scannerSleeper.Timer(ctx)
+			}
 
 			// Get file size, ignore errors.
 			item := scannerItem{
@@ -704,8 +714,11 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						// this object might be dangling.
 						entry, _ = entries.firstFound()
 					}
-					// wait timer per object.
-					wait := scannerSleeper.Timer(ctx)
+					wait := noWait
+					if !f.fullThrottle() {
+						// wait timer per object.
+						wait = scannerSleeper.Timer(ctx)
+					}
 					defer wait()
 					f.updateCurrentPath(entry.name)
 					stopFn := globalScannerMetrics.log(scannerMetricHealAbandonedObject, f.root, entry.name)

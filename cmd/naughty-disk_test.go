@@ -112,8 +112,9 @@ func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }
 
-func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (info dataUsageCache, err error) {
-	return d.disk.NSScanner(ctx, cache, updates, scanMode)
+func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (info dataUsageCache, err error) {
+	throttle := func() bool { return false }
+	return d.disk.NSScanner(ctx, cache, updates, scanMode, throttle)
 }
 
 func (d *naughtyDisk) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {

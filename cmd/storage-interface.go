@@ -66,7 +66,7 @@ type StorageAPI interface {
 	// has never been replaced.
 	Healing() *healingTracker
 	DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error)
-	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, shouldSleep func() bool) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)
@@ -147,7 +147,7 @@ func (p *unrecognizedDisk) Healing() *healingTracker {
 	return nil
 }
 
-func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, shouldSleep func() bool) (dataUsageCache, error) {
 	return dataUsageCache{}, errDiskNotFound
 }
 
