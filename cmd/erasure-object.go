@@ -498,7 +498,14 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["parity"] = m.Erasure.ParityBlocks
+		tags["merrs"] = errors.Join(errs...)
+		tags["derrs"] = errors.Join(dataErrs...)
+		if m.IsValid() {
+			tags["size"] = m.Size
+			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
+			tags["parity"] = m.Erasure.ParityBlocks
+		}
+
 		if cok {
 			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
 		}
