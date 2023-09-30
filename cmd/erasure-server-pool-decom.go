@@ -735,8 +735,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bi.Name)
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	for setIdx, set := range pool.sets {
 		set := set
 
@@ -947,11 +945,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						go decommissionEntry(entry)
 					},
 				)
-				if err == nil {
+				if err == nil || errors.Is(err, context.Canceled) {
 					break
 				}
 				setN := humanize.Ordinal(setIdx + 1)
-				retryDur := time.Duration(r.Float64() * float64(5*time.Second))
+				retryDur := time.Duration(rand.Float64() * float64(5*time.Second))
 				logger.LogOnceIf(ctx, fmt.Errorf("listing objects from %s set failed with %v, retrying in %v", setN, err, retryDur), "decom-listing-failed"+setN)
 				time.Sleep(retryDur)
 			}
