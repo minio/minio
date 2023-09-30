@@ -486,6 +486,9 @@ oidc:
   configUrl: "https://identity-provider-url/.well-known/openid-configuration"
   clientId: "minio"
   clientSecret: ""
+  # Provide existing client secret from the Kubernetes Secret resource, existing secret will have priority over `clientSecret`
+  existingClientSecretName: ""
+  existingClientSecretKey: ""
   claimName: "policy"
   scopes: "openid,profile,email"
   redirectUri: "https://console-endpoint-url/oauth_callback"
