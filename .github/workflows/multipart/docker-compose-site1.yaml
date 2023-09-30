@@ -1,0 +1,66 @@
+version: '3.7'
+
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  image: quay.io/minio/minio:${RELEASE}
+  command: server http://site1-minio{1...4}/data{1...2}
+  environment:
+    - MINIO_PROMETHEUS_AUTH_TYPE=public
+    - CI=true
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  site1-minio1:
+    <<: *minio-common
+    hostname: site1-minio1
+    volumes:
+      - site1-data1-1:/data1
+      - site1-data1-2:/data2
+
+  site1-minio2:
+    <<: *minio-common
+    hostname: site1-minio2
+    volumes:
+      - site1-data2-1:/data1
+      - site1-data2-2:/data2
+
+  site1-minio3:
+    <<: *minio-common
+    hostname: site1-minio3
+    volumes:
+      - site1-data3-1:/data1
+      - site1-data3-2:/data2
+
+  site1-minio4:
+    <<: *minio-common
+    hostname: site1-minio4
+    volumes:
+      - site1-data4-1:/data1
+      - site1-data4-2:/data2
+
+  site1-nginx:
+    image: nginx:1.19.2-alpine
+    hostname: site1-nginx
+    volumes:
+      - ./nginx-site1.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9001:9001"
+    depends_on:
+      - site1-minio1
+      - site1-minio2
+      - site1-minio3
+      - site1-minio4
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  site1-data1-1:
+  site1-data1-2:
+  site1-data2-1:
+  site1-data2-2:
+  site1-data3-1:
+  site1-data3-2:
+  site1-data4-1:
+  site1-data4-2:
