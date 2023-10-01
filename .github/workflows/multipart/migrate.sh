@@ -26,10 +26,10 @@ export RELEASE=RELEASE.2023-08-29T23-07-35Z
 docker-compose -f docker-compose-site1.yaml up -d
 docker-compose -f docker-compose-site2.yaml up -d
 
-sleep 30
+sleep 30s
 
-mc alias set site1 http://site1-nginx:9001 minioadmin minioadmin --api s3v4
-mc alias set site2 http://site2-nginx:9002 minioadmin minioadmin --api s3v4
+./mc alias set site1 http://site1-nginx:9001 minioadmin minioadmin --api s3v4
+./mc alias set site2 http://site2-nginx:9002 minioadmin minioadmin --api s3v4
 
 ./mc ready site1/
 ./mc ready site2/
@@ -81,8 +81,12 @@ docker-compose -f docker-compose-site2.yaml up -d
 ./mc ready site1/
 ./mc ready site2/
 
-./mc admin heal -r --remove --json site1/ 2>&1 >/dev/null
-./mc admin heal -r --remove --json site2/ 2>&1 >/dev/null
+for i in $(seq 1 10); do
+	# mc admin heal -r --remove when used against a LB endpoint
+	# behaves flaky, let this run 10 times before giving up
+	./mc admin heal -r --remove --json site1/ 2>&1 >/dev/null
+	./mc admin heal -r --remove --json site2/ 2>&1 >/dev/null
+done
 
 failed_count_site1=$(s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://site1-nginx:9001 -bucket testbucket 2>&1 | grep FAILED | wc -l)
 failed_count_site2=$(s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://site2-nginx:9002 -bucket testbucket 2>&1 | grep FAILED | wc -l)
