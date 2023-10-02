@@ -195,7 +195,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	// Configure 'mc', following block prints platform specific information for minio client.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logger.Info(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
-		mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
+		mcMessage := fmt.Sprintf("$ mc alias set '%s' '%s' '%s' '%s'", alias,
 			endPoint, cred.AccessKey, cred.SecretKey)
 		logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
