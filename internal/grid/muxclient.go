@@ -98,7 +98,10 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 
 	// Wait for response or context.
 	select {
-	case v := <-ch:
+	case v, ok := <-ch:
+		if !ok {
+			return nil, ErrDisconnected
+		}
 		return v.Msg, v.Err
 	case <-m.ctx.Done():
 		return nil, m.ctx.Err()

@@ -381,6 +381,10 @@ func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (
 // WaitForConnect will block until a connection has been established or
 // the context is canceled, in which case the context error is returned.
 func (c *Connection) WaitForConnect(ctx context.Context) error {
+	if debugPrint {
+		fmt.Println(c.Local, "->", c.Remote, "WaitForConnect")
+		defer fmt.Println(c.Local, "->", c.Remote, "WaitForConnect done")
+	}
 	c.connChange.L.Lock()
 	if atomic.LoadUint32((*uint32)(&c.state)) == StateConnected {
 		c.connChange.L.Unlock()
@@ -645,17 +649,8 @@ func (c *Connection) connect() {
 			continue
 		}
 		remoteUUID := uuid.UUID(r.ID)
-		if c.remoteID != nil && remoteUUID != *c.remoteID {
-			c.outgoing.Range(func(key uint64, client *muxClient) bool {
-				client.close()
-				return true
-			})
-			c.inStream.Range(func(key uint64, value *muxServer) bool {
-				value.close()
-				return true
-			})
-			c.inStream.Clear()
-			c.outgoing.Clear()
+		if c.remoteID != nil {
+			c.reconnected()
 		}
 		c.remoteID = &remoteUUID
 		if debugPrint {
@@ -738,14 +733,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	}
 
 	if c.remoteID != nil {
-		c.updateState(StateConnectionError)
-		// Close all active requests.
-		c.outgoing.Range(func(key uint64, client *muxClient) bool {
-			client.close()
-			return true
-		})
-		// Wait for existing to exit
-		c.connWg.Wait()
+		c.reconnected()
 	}
 	rid := uuid.UUID(req.ID)
 	c.remoteID = &rid
@@ -762,6 +750,25 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		c.handleMessages(ctx, conn)
 	}
 	return err
+}
+
+func (c *Connection) reconnected() {
+	c.updateState(StateConnectionError)
+	// Close all active requests.
+	c.outgoing.Range(func(key uint64, client *muxClient) bool {
+		client.close()
+		return true
+	})
+	c.inStream.Range(func(key uint64, value *muxServer) bool {
+		value.close()
+		return true
+	})
+
+	c.inStream.Clear()
+	c.outgoing.Clear()
+
+	// Wait for existing to exit
+	c.connWg.Wait()
 }
 
 func (c *Connection) updateState(s State) {
@@ -1036,7 +1043,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 								logger.LogIf(ctx, err)
 							}
 						}()
-						b, err := handler(m.Payload)
+						b, err = handler(m.Payload)
 						if debugPrint {
 							fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
 						}

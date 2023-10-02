@@ -23,7 +23,7 @@ package grid
 // may only be used for tests.
 type debugMsg int
 
-const debugPrint = false
+const debugPrint = true
 
 const (
 	debugShutdown debugMsg = iota
