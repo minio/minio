@@ -21,12 +21,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"runtime"
 	"strings"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
-	color "github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/v2/net"
 )
@@ -129,10 +128,10 @@ func printServerCommonMsg(apiEndpoints []string) {
 	// Colorize the message and print.
 	logger.Info(color.Blue("S3-API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
 	if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
-		logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s \n", cred.SecretKey)))
+		logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
+		logger.Info(color.Blue("RootPass: ") + color.Bold("%s \n", cred.SecretKey))
 		if region != "" {
-			logger.Info(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
+			logger.Info(color.Blue("Region: ") + color.Bold("%s", fmt.Sprintf(getFormatStr(len(region), 2), region)))
 		}
 	}
 
@@ -140,8 +139,8 @@ func printServerCommonMsg(apiEndpoints []string) {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
 		if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
-			logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+			logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
+			logger.Info(color.Blue("RootPass: ") + color.Bold("%s ", cred.SecretKey))
 		}
 	}
 
@@ -196,15 +195,9 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	// Configure 'mc', following block prints platform specific information for minio client.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logger.Info(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
-		if runtime.GOOS == globalWindowsOSName {
-			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
-				endPoint, cred.AccessKey, cred.SecretKey)
-			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-		} else {
-			mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
-				endPoint, cred.AccessKey, cred.SecretKey)
-			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-		}
+		mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
+			endPoint, cred.AccessKey, cred.SecretKey)
+		logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }
 
