@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "DEBUGGING.."
+
 set -x
 
 ## change working directory
