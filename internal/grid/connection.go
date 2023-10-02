@@ -103,6 +103,8 @@ type Connection struct {
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
 
+	baseFlags Flags
+
 	// For testing only
 	debugInConn  net.Conn
 	debugOutConn net.Conn
@@ -203,6 +205,12 @@ func newConnection(o connectionParams) *Connection {
 		outgoingBytes:      o.outgoingBytes,
 	}
 
+	if !strings.HasPrefix(o.remote, "https://") && !strings.HasPrefix(o.remote, "wss://") {
+		c.baseFlags |= FlagCRCxxh3
+	}
+	if !strings.HasPrefix(o.local, "https://") && !strings.HasPrefix(o.local, "wss://") {
+		c.baseFlags |= FlagCRCxxh3
+	}
 	if o.local == o.remote {
 		panic("equal hosts")
 	}
@@ -496,6 +504,7 @@ func (c *Connection) send(msg []byte) error {
 // queueMsg queues a message, with an optional payload.
 // sender should not reference msg.Payload
 func (c *Connection) queueMsg(msg message, payload sender) error {
+	msg.Flags |= c.baseFlags
 	if payload != nil {
 		if cap(msg.Payload) < payload.Msgsize() {
 			old := msg.Payload

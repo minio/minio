@@ -33,6 +33,7 @@ type muxServer struct {
 	LastPing         int64
 	SendSeq, RecvSeq uint32
 	Resp             chan []byte
+	BaseFlags        Flags
 	ctx              context.Context
 	cancel           context.CancelFunc
 	inbound          chan []byte
@@ -51,13 +52,14 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 		ctx, cancel = context.WithCancel(ctx)
 	}
 	m := muxServer{
-		ID:       msg.MuxID,
-		RecvSeq:  msg.Seq + 1,
-		SendSeq:  msg.Seq,
-		ctx:      ctx,
-		cancel:   cancel,
-		parent:   c,
-		LastPing: time.Now().Unix(),
+		ID:        msg.MuxID,
+		RecvSeq:   msg.Seq + 1,
+		SendSeq:   msg.Seq,
+		ctx:       ctx,
+		cancel:    cancel,
+		parent:    c,
+		LastPing:  time.Now().Unix(),
+		BaseFlags: c.baseFlags,
 	}
 	go func() {
 		// TODO: Handle
@@ -81,15 +83,16 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}
 
 	m := muxServer{
-		ID:       msg.MuxID,
-		RecvSeq:  msg.Seq + 1,
-		SendSeq:  msg.Seq,
-		ctx:      ctx,
-		cancel:   cancel,
-		parent:   c,
-		inbound:  nil,
-		outBlock: make(chan struct{}, outboundCap),
-		LastPing: time.Now().Unix(),
+		ID:        msg.MuxID,
+		RecvSeq:   msg.Seq + 1,
+		SendSeq:   msg.Seq,
+		ctx:       ctx,
+		cancel:    cancel,
+		parent:    c,
+		inbound:   nil,
+		outBlock:  make(chan struct{}, outboundCap),
+		LastPing:  time.Now().Unix(),
+		BaseFlags: c.baseFlags,
 	}
 	var handlerIn chan []byte
 	if inboundCap > 0 {
@@ -99,7 +102,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			// Send unblocks when we have delivered the message to the handler.
 			for in := range inbound {
 				handlerIn <- in
-				m.send(message{Op: OpUnblockClMux, MuxID: m.ID})
+				m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
 			}
 			close(handlerIn)
 		}(m.inbound)
@@ -142,6 +145,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			msg := message{
 				MuxID: m.ID,
 				Op:    OpMuxServerMsg,
+				Flags: c.baseFlags,
 			}
 			if !ok {
 				if debugPrint {

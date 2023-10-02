@@ -35,8 +35,8 @@ type muxClient struct {
 	MuxID            uint64
 	SendSeq, RecvSeq uint32
 	LastPong         int64
-	BaseFlags        uint8
 	Resp             chan []byte
+	BaseFlags        Flags
 	ctx              context.Context
 	cancelFn         context.CancelCauseFunc
 	parent           *Connection
@@ -61,12 +61,13 @@ type Response struct {
 func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *muxClient {
 	ctx, cancelFn := context.WithCancelCause(ctx)
 	return &muxClient{
-		MuxID:    muxID,
-		Resp:     make(chan []byte, 1),
-		ctx:      ctx,
-		cancelFn: cancelFn,
-		parent:   parent,
-		LastPong: time.Now().Unix(),
+		MuxID:     muxID,
+		Resp:      make(chan []byte, 1),
+		ctx:       ctx,
+		cancelFn:  cancelFn,
+		parent:    parent,
+		LastPong:  time.Now().Unix(),
+		BaseFlags: parent.baseFlags,
 	}
 }
 
@@ -195,7 +196,6 @@ const clientPingInterval = time.Second * 15
 // RequestStream will send a single payload request and stream back results.
 // 'requests' can be nil, in which case only req is sent as input.
 // It will however take less resources.
-// TODO: Probably unexport this.
 func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []byte, responses chan Response) (*Stream, error) {
 	if m.init {
 		return nil, errors.New("mux client already used")

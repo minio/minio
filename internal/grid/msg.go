@@ -130,9 +130,11 @@ type message struct {
 	DeadlineMS uint32    // If non-zero, milliseconds until deadline (max 1193h2m47.295s, ~49 days)
 	Handler    HandlerID // ID of handler if invoking a remote handler.
 	Op         Op        // Operation. Other fields change based on this value.
-	Flags      uint8     // Optional flags.
+	Flags      Flags     // Optional flags.
 	Payload    []byte    // Optional payload.
 }
+
+type Flags uint8
 
 func (m message) String() string {
 	var res []string
@@ -158,7 +160,7 @@ func (m message) String() string {
 	return "{" + strings.Join(res, ", ") + "}"
 }
 
-func flagAsString(f uint8) string {
+func flagAsString(f Flags) string {
 	var res []string
 	if f&FlagCRCxxh3 != 0 {
 		res = append(res, "CRC")

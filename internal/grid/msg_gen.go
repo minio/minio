@@ -7,6 +7,58 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
+func (z *Flags) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 uint8
+		zb0001, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Flags(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z Flags) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteUint8(uint8(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z Flags) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Flags) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = Flags(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Flags) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *HandlerID) DecodeMsg(dc *msgp.Reader) (err error) {
 	{
 		var zb0001 uint8
@@ -634,10 +686,14 @@ func (z *message) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		z.Op = Op(zb0003)
 	}
-	z.Flags, err = dc.ReadUint8()
-	if err != nil {
-		err = msgp.WrapError(err, "Flags")
-		return
+	{
+		var zb0004 uint8
+		zb0004, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = Flags(zb0004)
 	}
 	z.Payload, err = dc.ReadBytes(z.Payload)
 	if err != nil {
@@ -679,7 +735,7 @@ func (z *message) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Op")
 		return
 	}
-	err = en.WriteUint8(z.Flags)
+	err = en.WriteUint8(uint8(z.Flags))
 	if err != nil {
 		err = msgp.WrapError(err, "Flags")
 		return
@@ -702,7 +758,7 @@ func (z *message) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendUint32(o, z.DeadlineMS)
 	o = msgp.AppendUint8(o, uint8(z.Handler))
 	o = msgp.AppendUint8(o, uint8(z.Op))
-	o = msgp.AppendUint8(o, z.Flags)
+	o = msgp.AppendUint8(o, uint8(z.Flags))
 	o = msgp.AppendBytes(o, z.Payload)
 	return
 }
@@ -752,10 +808,14 @@ func (z *message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		z.Op = Op(zb0003)
 	}
-	z.Flags, bts, err = msgp.ReadUint8Bytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err, "Flags")
-		return
+	{
+		var zb0004 uint8
+		zb0004, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = Flags(zb0004)
 	}
 	z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
 	if err != nil {
