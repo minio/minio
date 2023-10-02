@@ -935,6 +935,10 @@ func serverMain(ctx *cli.Context) {
 		logger.FatalIf(err, "Unable to initialize MinIO client")
 	})
 
+	go bootstrapTrace("startResourceMetricsCollection", func() {
+		startResourceMetricsCollection()
+	})
+
 	// Add User-Agent to differentiate the requests.
 	globalMinioClient.SetAppInfo("minio-perf-test", ReleaseTag)
 

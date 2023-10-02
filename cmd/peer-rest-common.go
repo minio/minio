@@ -77,6 +77,7 @@ const (
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodMetrics                     = "/metrics"
+	peerRESTMethodResourceMetrics             = "/resourcemetrics"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
 	peerRESTMethodGetSRMetrics                = "/getsrmetrics"
 )
