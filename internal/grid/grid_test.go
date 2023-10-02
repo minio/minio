@@ -594,6 +594,11 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 	}
 	register(local)
 	register(remote)
+	// Double remote DL
+	local.debugMsg(debugAddToDeadline, wantDL)
+	defer local.debugMsg(debugAddToDeadline, time.Duration(0))
+	remote.debugMsg(debugAddToDeadline, wantDL)
+	defer remote.debugMsg(debugAddToDeadline, time.Duration(0))
 
 	testHandler := func(t *testing.T, handler HandlerID) {
 		remoteConn := local.Connection(remoteHost)
@@ -617,7 +622,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		t.Log("server cancel time:", serverEnd)
 		t.Log("client cancel time:", clientEnd)
 		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Error("expected context.Canceled, got", err)
+			t.Error("expected context.DeadlineExceeded, got", err)
 		}
 	}
 	// local to remote, unbuffered

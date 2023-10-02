@@ -106,6 +106,7 @@ type Connection struct {
 	// For testing only
 	debugInConn  net.Conn
 	debugOutConn net.Conn
+	addDeadline  time.Duration
 	connMu       sync.Mutex
 }
 
@@ -1050,7 +1051,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					}()
 
 					// TODO: Maybe recycle m.Payload - should be free here.
-					if m.DeadlineMS > 0 && time.Since(start).Milliseconds() > int64(m.DeadlineMS) {
+					if m.DeadlineMS > 0 && time.Since(start).Milliseconds()+c.addDeadline.Milliseconds() > int64(m.DeadlineMS) {
 						// No need to return result
 						PutByteBuffer(b)
 						return
@@ -1297,5 +1298,7 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.connPingInterval = args[0].(time.Duration)
 	case debugSetClientPingDuration:
 		c.clientPingInterval = args[0].(time.Duration)
+	case debugAddToDeadline:
+		c.addDeadline = args[0].(time.Duration)
 	}
 }

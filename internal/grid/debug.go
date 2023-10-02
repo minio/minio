@@ -23,7 +23,7 @@ package grid
 // may only be used for tests.
 type debugMsg int
 
-const debugPrint = true
+const debugPrint = false
 
 const (
 	debugShutdown debugMsg = iota
@@ -32,4 +32,5 @@ const (
 	debugWaitForExit
 	debugSetConnPingDuration
 	debugSetClientPingDuration
+	debugAddToDeadline
 )

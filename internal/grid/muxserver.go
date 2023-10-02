@@ -70,7 +70,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	var cancel context.CancelFunc
 	ctx = setCaller(ctx, c.remote)
 	if msg.DeadlineMS > 0 {
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond+c.addDeadline)
 	} else {
 		ctx, cancel = context.WithCancel(ctx)
 	}
