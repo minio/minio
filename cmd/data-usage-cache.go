@@ -924,7 +924,7 @@ type objectIO interface {
 // load the cache content with name from minioMetaBackgroundOpsBucket.
 // Only backend errors are returned as errors.
 // The loader is optimistic and has no locking, but tries 5 times before giving up.
-// If the object is not found or unable to deserialize d is cleared and nil error is returned.
+// If the object is not found, a nil error with empty data usage cache is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
 	// By defaut, empty data usage cache
 	*d = dataUsageCache{}
@@ -960,13 +960,19 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		if !retry {
 			break
 		}
-		retry, _ = load(name+".bkp", 30*time.Second)
-		if !retry {
+		retry, err = load(name+".bkp", 30*time.Second)
+		if err == nil && !retry {
+			// Only return when we have valid data from the backup
 			break
 		}
 		retries++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 	}
+
+	if retries == 5 {
+		logger.LogOnceIf(ctx, fmt.Errorf("maximum retry reached to load the data usage cache `%s`", name), "retry-loading-data-usage-cache")
+	}
+
 	return nil
 }
 
