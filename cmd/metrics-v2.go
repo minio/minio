@@ -2556,7 +2556,7 @@ func getNotificationMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		nstats := globalNotifyTargetList.Stats()
+		nstats := globalEventNotifier.targetList.Stats()
 		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
 		metrics = append(metrics, Metric{
 			Description: MetricDescription{
