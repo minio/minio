@@ -1146,7 +1146,11 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// We do not care if service account is readable or not at this point,
 	// since this is a delete call we shall allow it to be deleted if possible.
-	svcAccount, _, _ := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
+	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
+	if errors.Is(err, errNoSuchServiceAccount) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminServiceAccountNotFound), r.URL)
+		return
+	}
 
 	adminPrivilege := globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
