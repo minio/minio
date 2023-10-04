@@ -37,7 +37,11 @@ jobs:
 
       - name: build-minio
         run: |
-          TAG="minio/minio:${{ steps.vars.outputs.sha_short }}" make docker
+          TAG="quay.io/minio/minio:${{ steps.vars.outputs.sha_short }}" make docker
+
+      - name: multipart uploads test
+        run: |
+          ${GITHUB_WORKSPACE}/.github/workflows/multipart/migrate.sh "${{ steps.vars.outputs.sha_short }}"
 
       - name: compress and encrypt
         run: |
@@ -59,7 +63,14 @@ jobs:
              docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml down || true
              docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/mint/minio-${mode}.yaml rm || true
           done
-          docker rmi -f minio/minio:${{ steps.vars.outputs.sha_short }}
+
+          docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/multipart/docker-compose-site1.yaml rm -s -f || true
+          docker-compose -f ${GITHUB_WORKSPACE}/.github/workflows/multipart/docker-compose-site2.yaml rm -s -f || true
+          for volume in $(docker volume ls -q | grep minio); do
+            docker volume rm ${volume} || true
+          done
+
+          docker rmi -f quay.io/minio/minio:${{ steps.vars.outputs.sha_short }}
           docker system prune -f || true
           docker volume prune -f || true
           docker volume rm $(docker volume ls -q -f dangling=true) || true

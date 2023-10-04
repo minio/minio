@@ -13,7 +13,6 @@ linters:
   enable:
     - durationcheck
     - gocritic
-    - gofmt
     - gofumpt
     - goimports
     - gomodguard

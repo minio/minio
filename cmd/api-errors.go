@@ -2236,8 +2236,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDownWrite
 	case InsufficientReadQuorum:
 		apiErr = ErrSlowDownRead
-	case InvalidMarkerPrefixCombination:
-		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
 		apiErr = ErrNotImplemented
 	case MalformedUploadID:

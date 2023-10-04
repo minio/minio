@@ -26,7 +26,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 var (
@@ -37,7 +37,7 @@ var (
 func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -113,7 +113,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -159,7 +159,7 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerInfoAdminAction, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -200,7 +200,7 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerInfoAdminAction, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -233,7 +233,7 @@ func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -304,7 +304,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -344,7 +344,7 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}

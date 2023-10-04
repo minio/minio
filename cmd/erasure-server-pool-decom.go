@@ -68,6 +68,34 @@ type PoolDecommissionInfo struct {
 	BytesFailed             int64 `json:"bytesDecommissionedFailed" msg:"bf"`
 }
 
+// Clone make a copy of PoolDecommissionInfo
+func (pd *PoolDecommissionInfo) Clone() *PoolDecommissionInfo {
+	if pd == nil {
+		return nil
+	}
+	if pd.StartTime.IsZero() {
+		return nil
+	}
+	return &PoolDecommissionInfo{
+		StartTime:               pd.StartTime,
+		StartSize:               pd.StartSize,
+		TotalSize:               pd.TotalSize,
+		CurrentSize:             pd.CurrentSize,
+		Complete:                pd.Complete,
+		Failed:                  pd.Failed,
+		Canceled:                pd.Canceled,
+		QueuedBuckets:           pd.QueuedBuckets,
+		DecommissionedBuckets:   pd.DecommissionedBuckets,
+		Bucket:                  pd.Bucket,
+		Prefix:                  pd.Prefix,
+		Object:                  pd.Object,
+		ItemsDecommissioned:     pd.ItemsDecommissioned,
+		ItemsDecommissionFailed: pd.ItemsDecommissionFailed,
+		BytesDone:               pd.BytesDone,
+		BytesFailed:             pd.BytesFailed,
+	}
+}
+
 // bucketPop should be called when a bucket is done decommissioning.
 // Adds the bucket to the list of decommissioned buckets and updates resume numbers.
 func (pd *PoolDecommissionInfo) bucketPop(bucket string) {
@@ -116,6 +144,16 @@ type PoolStatus struct {
 	CmdLine      string                `json:"cmdline" msg:"cl"`
 	LastUpdate   time.Time             `json:"lastUpdate" msg:"lu"`
 	Decommission *PoolDecommissionInfo `json:"decommissionInfo,omitempty" msg:"dec"`
+}
+
+// Clone returns a copy of PoolStatus
+func (ps PoolStatus) Clone() PoolStatus {
+	return PoolStatus{
+		ID:           ps.ID,
+		CmdLine:      ps.CmdLine,
+		LastUpdate:   ps.LastUpdate,
+		Decommission: ps.Decommission.Clone(),
+	}
 }
 
 //go:generate msgp -file $GOFILE -unexported
@@ -375,16 +413,17 @@ func (p *poolMeta) load(ctx context.Context, pool *erasureSets, pools []*erasure
 
 func (p *poolMeta) CountItem(idx int, size int64, failed bool) {
 	pd := p.Pools[idx].Decommission
-	if pd != nil {
-		if failed {
-			pd.ItemsDecommissionFailed++
-			pd.BytesFailed += size
-		} else {
-			pd.ItemsDecommissioned++
-			pd.BytesDone += size
-		}
-		p.Pools[idx].Decommission = pd
+	if pd == nil {
+		return
 	}
+	if failed {
+		pd.ItemsDecommissionFailed++
+		pd.BytesFailed += size
+	} else {
+		pd.ItemsDecommissioned++
+		pd.BytesDone += size
+	}
+	p.Pools[idx].Decommission = pd
 }
 
 func (p *poolMeta) updateAfter(ctx context.Context, idx int, pools []*erasureSets, duration time.Duration) (bool, error) {
@@ -569,7 +608,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		defer z.AbortMultipartUpload(ctx, bucket, objInfo.Name, res.UploadID, ObjectOptions{})
 		parts := make([]CompletePart, len(objInfo.Parts))
 		for i, part := range objInfo.Parts {
-			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(ctx, io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 			}
@@ -603,7 +642,7 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 		return err
 	}
 
-	hr, err := hash.NewReader(io.LimitReader(gr, objInfo.Size), objInfo.Size, "", "", actualSize)
+	hr, err := hash.NewReader(ctx, io.LimitReader(gr, objInfo.Size), objInfo.Size, "", "", actualSize)
 	if err != nil {
 		return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 	}
@@ -695,8 +734,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bi.Name)
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for setIdx, set := range pool.sets {
 		set := set
@@ -908,11 +945,11 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						go decommissionEntry(entry)
 					},
 				)
-				if err == nil {
+				if err == nil || errors.Is(err, context.Canceled) {
 					break
 				}
 				setN := humanize.Ordinal(setIdx + 1)
-				retryDur := time.Duration(r.Float64() * float64(5*time.Second))
+				retryDur := time.Duration(rand.Float64() * float64(5*time.Second))
 				logger.LogOnceIf(ctx, fmt.Errorf("listing objects from %s set failed with %v, retrying in %v", setN, err, retryDur), "decom-listing-failed"+setN)
 				time.Sleep(retryDur)
 			}
@@ -1185,15 +1222,15 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 		return PoolStatus{}, errInvalidArgument
 	}
 
-	z.poolMetaMutex.RLock()
-	defer z.poolMetaMutex.RUnlock()
-
 	pi, err := z.getDecommissionPoolSpaceInfo(idx)
 	if err != nil {
 		return PoolStatus{}, err
 	}
 
-	poolInfo := z.poolMeta.Pools[idx]
+	z.poolMetaMutex.RLock()
+	defer z.poolMetaMutex.RUnlock()
+
+	poolInfo := z.poolMeta.Pools[idx].Clone()
 	if poolInfo.Decommission != nil {
 		poolInfo.Decommission.TotalSize = pi.Total
 		if poolInfo.Decommission.Failed || poolInfo.Decommission.Canceled {

@@ -152,6 +152,9 @@ var (
 	// and it is automatically deduced.
 	globalBrowserRedirectURL *xnet.URL
 
+	// Disable redirect, default is enabled.
+	globalBrowserRedirect bool
+
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
@@ -402,6 +405,9 @@ var (
 
 	// Captures all batch jobs metrics globally
 	globalBatchJobsMetrics batchJobMetrics
+
+	// Indicates if server was started as `--address ":0"`
+	globalDynamicAPIPort bool
 	// Add new variable global values here.
 )
 

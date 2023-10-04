@@ -25,7 +25,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	iampolicy "github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/policy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )
@@ -616,7 +616,7 @@ func AuthMiddleware(h http.Handler) http.Handler {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 
 		claims, groups, owner, authErr := metricsRequestAuthenticate(r)
-		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
+		if authErr != nil || (claims != nil && !claims.VerifyIssuer("prometheus", true)) {
 			if ok {
 				tc.FuncName = "handler.MetricsAuth"
 				tc.ResponseRecorder.LogErrBody = true
@@ -633,10 +633,10 @@ func AuthMiddleware(h http.Handler) http.Handler {
 		}
 
 		// For authenticated users apply IAM policy.
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.PrometheusAdminAction,
+			Action:          policy.PrometheusAdminAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			IsOwner:         owner,
 			Claims:          cred.Claims,

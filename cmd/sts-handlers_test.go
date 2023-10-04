@@ -611,6 +611,8 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	}
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
+	time.Sleep(2 * time.Second) // wait for listbuckets cache to be invalidated
+
 	accInfo, err := userAdmClient.AccountInfo(ctx, madmin.AccountOpts{})
 	if err != nil {
 		c.Fatalf("root user STS should be able to get account info: %v", err)

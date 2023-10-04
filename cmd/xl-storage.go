@@ -114,6 +114,8 @@ type xlStorage struct {
 
 	formatData []byte
 
+	nrRequests uint64
+
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
 	walkMu     *sync.Mutex
@@ -178,7 +180,7 @@ func getValidPath(path string) (string, error) {
 	}
 	if osIsNotExist(err) {
 		// Disk not found create it.
-		if err = mkdirAll(path, 0o777); err != nil {
+		if err = mkdirAll(path, 0o777, ""); err != nil {
 			return path, err
 		}
 	}
@@ -242,6 +244,11 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		poolIndex:  -1,
 		setIndex:   -1,
 		diskIndex:  -1,
+	}
+
+	// Sanitize before setting it
+	if info.NRRequests > 0 {
+		s.nrRequests = info.NRRequests
 	}
 
 	// We stagger listings only on HDDs.
@@ -390,6 +397,11 @@ func (s *xlStorage) checkODirectDiskSupport() error {
 	// Check if backend is writable and supports O_DIRECT
 	uuid := mustGetUUID()
 	filePath := pathJoin(s.drivePath, minioMetaTmpDeletedBucket, ".writable-check-"+uuid+".tmp")
+
+	// Create top level directories if they don't exist.
+	// with mode 0o777 mkdir honors system umask.
+	mkdirAll(pathutil.Dir(filePath), 0o777, s.drivePath) // don't need to fail here
+
 	w, err := s.openFileDirect(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL)
 	if err != nil {
 		return err
@@ -450,6 +462,7 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	atomic.AddInt32(&s.scanning, 1)
 	defer atomic.AddInt32(&s.scanning, -1)
+
 	var err error
 	stopFn := globalScannerMetrics.log(scannerMetricScanBucketDrive, s.drivePath, cache.Info.Name)
 	defer func() {
@@ -638,6 +651,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
+	// Do not cache results from atomic variables
+	scanning := atomic.LoadInt32(&s.scanning) == 1
+
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -658,13 +674,13 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
+			dcinfo.NRRequests = s.nrRequests
 			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
 			// - if we found healing tracker 'healing.bin'
 			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
-			dcinfo.Scanning = atomic.LoadInt32(&s.scanning) == 1
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
@@ -674,6 +690,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	if v != nil {
 		info = v.(DiskInfo)
 	}
+	info.Scanning = scanning
 	return info, err
 }
 
@@ -814,7 +831,7 @@ func (s *xlStorage) MakeVol(ctx context.Context, volume string) error {
 		// Volume does not exist we proceed to create.
 		if osIsNotExist(err) {
 			// Make a volume entry, with mode 0777 mkdir honors system umask.
-			err = mkdirAll(volumeDir, 0o777)
+			err = mkdirAll(volumeDir, 0o777, s.drivePath)
 		}
 		if osIsPermission(err) {
 			return errDiskAccessDenied
@@ -1081,16 +1098,16 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) error {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
-	var renameFn func(source, target string) error
 	if recursive {
-		renameFn = renameAll
+		if err := renameAll(filePath, targetPath, s.drivePath); err != nil {
+			return err
+		}
 	} else {
-		renameFn = Rename
+		if err := Rename(filePath, targetPath); err != nil {
+			return err
+		}
 	}
 
-	if err := renameFn(filePath, targetPath); err != nil {
-		return err
-	}
 	// immediately purge the target
 	if force {
 		removeAll(targetPath)
@@ -1709,10 +1726,6 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 }
 
 func (s *xlStorage) openFileDirect(path string, mode int) (f *os.File, err error) {
-	// Create top level directories if they don't exist.
-	// with mode 0o777 mkdir honors system umask.
-	mkdirAll(pathutil.Dir(path), 0o777) // don't need to fail here
-
 	w, err := OpenFileDirectIO(path, mode, 0o666)
 	if err != nil {
 		switch {
@@ -1739,7 +1752,7 @@ func (s *xlStorage) openFileSync(filePath string, mode int) (f *os.File, err err
 func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) {
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0o777); err != nil {
+	if err = mkdirAll(pathutil.Dir(filePath), 0o777, s.drivePath); err != nil {
 		return nil, osErrToFileErr(err)
 	}
 
@@ -1782,7 +1795,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && length >= 0
 
 	var file *os.File
 	if odirectEnabled {
@@ -1812,6 +1825,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		default:
 			return nil, err
 		}
+	}
+
+	if length < 0 {
+		return file, nil
 	}
 
 	st, err := file.Stat()
@@ -1881,10 +1898,6 @@ func (c closeWrapper) Close() error {
 
 // CreateFile - creates the file.
 func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSize int64, r io.Reader) (err error) {
-	if fileSize < -1 {
-		return errInvalidArgument
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1917,11 +1930,11 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	parentFilePath := pathutil.Dir(filePath)
-	if err = mkdirAll(parentFilePath, 0o777); err != nil {
+	if err = mkdirAll(parentFilePath, 0o777, s.drivePath); err != nil {
 		return osErrToFileErr(err)
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && fileSize > 0
 
 	var w *os.File
 	if odirectEnabled {
@@ -1932,7 +1945,6 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	if err != nil {
 		return osErrToFileErr(err)
 	}
-	defer w.Close()
 
 	var bufp *[]byte
 	switch {
@@ -1955,17 +1967,33 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 		written, err = io.CopyBuffer(diskHealthWriter(ctx, w), r, *bufp)
 	}
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if written < fileSize && fileSize >= 0 {
+		w.Close()
 		return errLessData
 	} else if written > fileSize && fileSize >= 0 {
+		w.Close()
 		return errMoreData
 	}
 
 	// Only interested in flushing the size_t not mtime/atime
-	return Fdatasync(w)
+	if err = Fdatasync(w); err != nil {
+		w.Close()
+		return err
+	}
+
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
@@ -2003,18 +2031,27 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 	if err != nil {
 		return err
 	}
-	defer w.Close()
 
 	n, err := w.Write(b)
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if n != len(b) {
+		w.Close()
 		return io.ErrShortWrite
 	}
 
-	return nil
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
@@ -2380,7 +2417,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 
 		// legacy data dir means its old content, honor system umask.
-		if err = mkdirAll(legacyDataPath, 0o777); err != nil {
+		if err = mkdirAll(legacyDataPath, 0o777, s.drivePath); err != nil {
 			// any failed mkdir-calls delete them.
 			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 			return 0, osErrToFileErr(err)
@@ -2497,7 +2534,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				// on a versioned bucket.
 				s.moveToTrash(legacyDataPath, true, false)
 			}
-			if err = renameAll(srcDataPath, dstDataPath); err != nil {
+			if err = renameAll(srcDataPath, dstDataPath, s.drivePath); err != nil {
 				if legacyPreserved {
 					// Any failed rename calls un-roll previous transaction.
 					s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
@@ -2508,7 +2545,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 
 		// Commit meta-file
-		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+		if err = renameAll(srcFilePath, dstFilePath, s.drivePath); err != nil {
 			if legacyPreserved {
 				// Any failed rename calls un-roll previous transaction.
 				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
@@ -2618,7 +2655,7 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 		}
 	}
 
-	if err = renameAll(srcFilePath, dstFilePath); err != nil {
+	if err = renameAll(srcFilePath, dstFilePath, s.drivePath); err != nil {
 		if isSysErrNotEmpty(err) || isSysErrNotDir(err) {
 			return errFileAccessDenied
 		}

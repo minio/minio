@@ -46,6 +46,7 @@ import (
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
+	"github.com/tinylib/msgp/msgp"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -497,7 +498,14 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["parity"] = m.Erasure.ParityBlocks
+		tags["merrs"] = errors.Join(errs...)
+		tags["derrs"] = errors.Join(dataErrs...)
+		if m.IsValid() {
+			tags["size"] = m.Size
+			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
+			tags["parity"] = m.Erasure.ParityBlocks
+		}
+
 		if cok {
 			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
 		}
@@ -578,6 +586,9 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 		errFileVersionNotFound,
 		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
 		io.EOF,              // some times we would read without locks, ignore these errors
+		msgp.ErrShortBytes,
+		context.DeadlineExceeded,
+		context.Canceled,
 	}
 	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
 
@@ -2151,7 +2162,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 			return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 		}
 		defer gr.Close()
-		hashReader, err := hash.NewReader(gr, gr.ObjInfo.Size, "", "", gr.ObjInfo.Size)
+		hashReader, err := hash.NewReader(ctx, gr, gr.ObjInfo.Size, "", "", gr.ObjInfo.Size)
 		if err != nil {
 			return setRestoreHeaderFn(oi, toObjectErr(err, bucket, object))
 		}
@@ -2176,7 +2187,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 
 	// rehydrate the parts back on disk as per the original xl.meta prior to transition
 	for _, partInfo := range oi.Parts {
-		hr, err := hash.NewReader(io.LimitReader(gr, partInfo.Size), partInfo.Size, "", "", partInfo.Size)
+		hr, err := hash.NewReader(ctx, io.LimitReader(gr, partInfo.Size), partInfo.Size, "", "", partInfo.Size)
 		if err != nil {
 			return setRestoreHeaderFn(oi, err)
 		}
