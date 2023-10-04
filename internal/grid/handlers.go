@@ -142,10 +142,10 @@ type (
 		// Any non-nil error sent as response means no more responses are sent.
 		Handle StreamHandlerFn
 
-		// SubRoute for handler.
+		// Subroute for handler.
 		// Subroute must be static and clients should specify a matching subroute.
 		// Should not be set unless there are different handlers for the same HandlerID.
-		SubRoute string
+		Subroute string
 
 		// OutCapacity is the output capacity. If <= 0 capacity will be 1.
 		OutCapacity int
@@ -350,6 +350,10 @@ type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
 	// Will be 0 if newReq is nil.
 	InCapacity int
 
+	// Subroute must be static and clients should specify a matching subroute.
+	// Should not be set unless there are different handlers for the same HandlerID.
+	Subroute string
+
 	reqPool    sync.Pool
 	respPool   sync.Pool
 	id         HandlerID
@@ -513,7 +517,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 			close(outT)
 			<-outDone
 			return rErr
-		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity,
+		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: h.Subroute,
 	})
 }
 
@@ -548,10 +552,21 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Con
 			return nil, err
 		}
 	}
-	stream, err := c.NewStream(ctx, h.id, payloadB)
-	if err != nil {
-		return nil, err
+	var stream *Stream
+	if h.Subroute == "" {
+		var err error
+		stream, err = c.NewStream(ctx, h.id, payloadB)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		stream, err = c.Subroute(h.Subroute).NewStream(ctx, h.id, payloadB)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	respT := make(chan TypedResponse[Resp])
 	var reqT chan Req
 	if h.InCapacity > 0 {

@@ -1411,7 +1411,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
 
 			logger.FatalIf(gr.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
-				SubRoute:    endpoint.Path,
+				Subroute:    endpoint.Path,
 				Handle:      server.WalkDirHandler,
 				OutCapacity: 1,
 			}), "unable to register handler")

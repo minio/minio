@@ -273,16 +273,16 @@ func (m *Manager) RegisterStreamingHandler(id HandlerID, h StreamHandler) error 
 		return ErrUnknownHandler
 	}
 	if debugPrint {
-		fmt.Println("RegisterStreamingHandler: subroute:", h.SubRoute)
+		fmt.Println("RegisterStreamingHandler: subroute:", h.Subroute)
 	}
-	if h.SubRoute == "" {
+	if h.Subroute == "" {
 		if m.handlers.hasAny(id) && !id.isTestHandler() {
 			return ErrHandlerAlreadyExists
 		}
 		m.handlers.streams[id] = &h
 		return nil
 	}
-	subID := makeSubHandlerID(id, h.SubRoute)
+	subID := makeSubHandlerID(id, h.Subroute)
 	if m.handlers.hasSubhandler(subID) && !id.isTestHandler() {
 		return ErrHandlerAlreadyExists
 	}

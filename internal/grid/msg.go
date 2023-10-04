@@ -204,9 +204,9 @@ func (m *message) parse(b []byte) (*subHandlerID, error) {
 			return nil, fmt.Errorf("want crc len 4, got %v", len(h))
 		}
 		got := uint32(xxh3.Hash(b[:len(b)-hashLen]))
-		want := binary.LittleEndian.Uint32(h)
+		want := binary.LittleEndian.Uint32(h[len(h)-hashLen:])
 		if got != want {
-			return nil, fmt.Errorf("crc mismatch: %08x (given) != %08x (bytes)", want, got)
+			return nil, fmt.Errorf("crc mismatch: 0x%08x (given) != 0x%08x (bytes)", want, got)
 		}
 		h = h[:len(h)-hashLen]
 	}

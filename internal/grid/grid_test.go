@@ -394,6 +394,12 @@ func TestStreamSuite(t *testing.T) {
 		assertNoActive(t, connRemoteLocal)
 		assertNoActive(t, connLocalToRemote)
 	})
+	t.Run("testGenericsStreamRoundtripSubroute", func(t *testing.T) {
+		defer timeout(1 * time.Minute)()
+		testGenericsStreamRoundtripSubroute(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
+	})
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -823,6 +829,86 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	})
 	handler.InCapacity = 1
 	handler.OutCapacity = 1
+	const payloads = 10
+
+	// 1: Echo
+	register := func(manager *Manager) {
+		errFatal(handler.Register(manager, func(pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+			n := 0
+			for i := range in {
+				if n > payloads {
+					panic("too many requests")
+				}
+
+				// t.Log("Got request:", *i)
+				out <- &testResponse{
+					OrgNum:    i.Num + pp.Num,
+					OrgString: pp.String + i.String,
+					Embedded:  *i,
+				}
+				n++
+			}
+			return nil
+		}))
+	}
+	register(local)
+	register(remote)
+
+	// local to remote
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	start := time.Now()
+	stream, err := handler.Call(context.Background(), remoteConn, &testRequest{Num: 1, String: testPayload})
+	errFatal(err)
+	go func() {
+		defer close(stream.Requests)
+		for i := 0; i < payloads; i++ {
+			// t.Log("sending new client request")
+			stream.Requests <- &testRequest{Num: i, String: testPayload}
+		}
+	}()
+	var n int
+	for resp := range stream.Responses {
+		errFatal(resp.Err)
+		// t.Logf("got resp: %+v", *resp.Msg)
+		const wantString = testPayload + testPayload
+		if resp.Msg.OrgString != testPayload+testPayload {
+			t.Errorf("want %q, got %q", wantString, resp.Msg.OrgString)
+		}
+		if resp.Msg.OrgNum != n+1 {
+			t.Errorf("want %d, got %d", n+1, resp.Msg.OrgNum)
+		}
+		if resp.Msg != nil {
+			handler.PutResponse(resp.Msg)
+		}
+		n++
+	}
+	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
+}
+
+func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
+	defer testlogger.T.SetErrorTB(t)()
+	defer timeout(5 * time.Second)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
+	handler := NewStream[*testRequest, *testRequest, *testResponse](handlerTest, func() *testRequest {
+		return &testRequest{}
+	}, func() *testRequest {
+		return &testRequest{}
+	}, func() *testResponse {
+		return &testResponse{}
+	})
+	handler.InCapacity = 1
+	handler.OutCapacity = 1
+	handler.Subroute = "some/subroute"
 	const payloads = 10
 
 	// 1: Echo
