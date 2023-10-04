@@ -398,11 +398,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
 // NewResponse creates a new response.
 // Handlers can use this to create a reusable response.
 func (h *StreamTypeHandler[Payload, Req, Resp]) NewResponse() Resp {
-	r, ok := h.respPool.Get().(*Resp)
-	if !ok {
-		r = new(Resp)
-	}
-	return *r
+	return h.respPool.Get().(Resp)
 }
 
 func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID) *StreamTypeHandler[Payload, Req, Resp] {
@@ -455,7 +451,10 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 						select {
 						case <-ctx.Done():
 							return
-						case v := <-in:
+						case v, ok := <-in:
+							if !ok {
+								return
+							}
 							input := h.NewRequest()
 							_, err := input.UnmarshalMsg(v)
 							if err != nil {
@@ -575,7 +574,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Con
 				tr.Err = err
 				errState = true
 			}
-			respT <- TypedResponse[Resp]{Err: resp.Err}
+			respT <- tr
 		}
 	}()
 	return &TypedSteam[Req, Resp]{Responses: respT, Requests: reqT}, nil

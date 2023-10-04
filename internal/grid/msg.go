@@ -98,7 +98,7 @@ const (
 const (
 	// FlagCRCxxh3 indicates that, the lower 32 bits of xxhash3 of the serialized
 	// message will be sent after the serialized message as little endian.
-	FlagCRCxxh3 = 1 << iota
+	FlagCRCxxh3 Flags = 1 << iota
 
 	// FlagEOF the stream (either direction) is at EOF.
 	FlagEOF
@@ -134,6 +134,7 @@ type message struct {
 	Payload    []byte    // Optional payload.
 }
 
+// Flags is a set of flags set on a message.
 type Flags uint8
 
 func (m message) String() string {
@@ -153,14 +154,14 @@ func (m message) String() string {
 	if m.Op != 0 {
 		res = append(res, fmt.Sprintf("Op: %v", m.Op))
 	}
-	res = append(res, fmt.Sprintf("Flags: %v", flagAsString(m.Flags)))
+	res = append(res, fmt.Sprintf("Flags: %s", m.Flags.String()))
 	if len(m.Payload) != 0 {
 		res = append(res, fmt.Sprintf("Payload: %v", bytesOrLength(m.Payload)))
 	}
 	return "{" + strings.Join(res, ", ") + "}"
 }
 
-func flagAsString(f Flags) string {
+func (f Flags) String() string {
 	var res []string
 	if f&FlagCRCxxh3 != 0 {
 		res = append(res, "CRC")

@@ -1097,6 +1097,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			case OpConnectMux:
 				// Stateless stream:
 				if m.Flags&FlagStateless != 0 {
+					// Reject for now, so we can safely add it later.
+					if true {
+						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Stateless streams not supported"}))
+						return
+					}
+
 					var handler *StatelessHandler
 					if subID == nil {
 						handler = c.handlers.stateless[m.Handler]
