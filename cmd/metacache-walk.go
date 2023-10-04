@@ -56,6 +56,10 @@ type WalkDirOptions struct {
 
 	// Limit the number of returned objects if > 0.
 	Limit int
+
+	// DiskID contains the disk ID of the disk.
+	// Leave empty to not check disk ID.
+	DiskID string
 }
 
 // WalkDir will traverse a directory and return all entries found.
@@ -390,6 +394,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 }
 
 func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
+	if opts.DiskID != "" && opts.DiskID != p.diskID {
+		return fmt.Errorf("WalkDir: Disk ID %s does not match. want %s", opts.DiskID, p.diskID)
+	}
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWalkDir, opts.Bucket, opts.BaseDir)
 	if err != nil {
 		return err
@@ -402,6 +409,8 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 // WalkDir will traverse a directory and return all entries found.
 // On success a meta cache stream will be returned, that should be closed when done.
 func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
+	// Ensure remote has the same disk ID.
+	opts.DiskID = client.diskID
 	b, err := opts.MarshalMsg(grid.GetByteBuffer()[:0])
 	if err != nil {
 		return err
@@ -440,46 +449,3 @@ func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, 
 	}()
 	return grid.NewRemoteErr(s.storage.WalkDir(ctx, opts, grid.WriterToChannel(out)))
 }
-
-/*
-// WalkDirHandler - remote caller to list files and folders in a requested directory path.
-func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	volume := r.Form.Get(storageRESTVolume)
-	dirPath := r.Form.Get(storageRESTDirPath)
-	recursive, err := strconv.ParseBool(r.Form.Get(storageRESTRecursive))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	var reportNotFound bool
-	if v := r.Form.Get(storageRESTReportNotFound); v != "" {
-		reportNotFound, err = strconv.ParseBool(v)
-		if err != nil {
-			s.writeErrorResponse(w, err)
-			return
-		}
-	}
-
-	prefix := r.Form.Get(storageRESTPrefixFilter)
-	forward := r.Form.Get(storageRESTForwardFilter)
-	writer := streamHTTPResponse(w)
-	defer func() {
-		if r := recover(); r != nil {
-			debug.PrintStack()
-			writer.CloseWithError(fmt.Errorf("panic: %v", r))
-		}
-	}()
-	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
-		Bucket:         volume,
-		BaseDir:        dirPath,
-		Recursive:      recursive,
-		ReportNotFound: reportNotFound,
-		FilterPrefix:   prefix,
-		ForwardTo:      forward,
-	}, writer))
-}
-*/

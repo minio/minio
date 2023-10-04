@@ -71,7 +71,7 @@ func shutdownManagers(t testing.TB, servers ...*Manager) {
 }
 
 func TestSingleRoundtrip(t *testing.T) {
-	defer testlogger.T.SetErrorTB(t)()
+	defer testlogger.T.SetLogTB(t)()
 	hosts, listeners := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 5 * time.Second,
@@ -142,6 +142,8 @@ func TestSingleRoundtrip(t *testing.T) {
 	// local to remote
 	remoteConn := local.Connection(remoteHost)
 	remoteConn.WaitForConnect(context.Background())
+	defer testlogger.T.SetErrorTB(t)()
+
 	t.Run("localToRemote", func(t *testing.T) {
 		const testPayload = "Hello Grid World!"
 
@@ -226,7 +228,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(err)
 
 	// 1: Echo
-	h1 := NewSingleRTHandler[*testRequest, *testResponse](handlerTest, func() *testRequest {
+	h1 := NewSingleHandler[*testRequest, *testResponse](handlerTest, func() *testRequest {
 		return &testRequest{}
 	}, func() *testResponse {
 		return &testResponse{}
@@ -242,7 +244,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		return resp, nil
 	}
 	// Return error
-	h2 := NewSingleRTHandler[*testRequest, *testResponse](handlerTest2, func() *testRequest {
+	h2 := NewSingleHandler[*testRequest, *testResponse](handlerTest2, func() *testRequest {
 		return &testRequest{}
 	}, func() *testResponse {
 		return &testResponse{}
@@ -832,7 +834,7 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 					panic("too many requests")
 				}
 
-				//t.Log("Got request:", *i)
+				// t.Log("Got request:", *i)
 				out <- &testResponse{
 					OrgNum:    i.Num + pp.Num,
 					OrgString: pp.String + i.String,

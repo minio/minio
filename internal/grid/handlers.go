@@ -213,6 +213,9 @@ func (h *handlers) hasSubhandler(id subHandlerID) bool {
 type RoundTripper interface {
 	msgp.Unmarshaler
 	msgp.Marshaler
+	msgp.Sizer
+
+	comparable
 }
 
 // SingleHandler is a type safe handler for single roundtrip requests.
@@ -221,12 +224,15 @@ type SingleHandler[Req, Resp RoundTripper] struct {
 
 	reqPool  sync.Pool
 	respPool sync.Pool
+
+	nilReq  Req
+	nilResp Resp
 }
 
-// NewSingleRTHandler creates a typed handler that can provide Marshal/Unmarshal.
+// NewSingleHandler creates a typed handler that can provide Marshal/Unmarshal.
 // Use Register to register a server handler.
 // Use Call to initiate a clientside call.
-func NewSingleRTHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
+func NewSingleHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
 	s := SingleHandler[Req, Resp]{id: h}
 	s.reqPool.New = func() interface{} {
 		return newReq()
@@ -240,7 +246,9 @@ func NewSingleRTHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, 
 // PutResponse will accept a request for reuse.
 // These should be returned by the caller.
 func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
-	h.respPool.Put(r)
+	if r != h.nilResp {
+		h.respPool.Put(r)
+	}
 }
 
 // NewResponse creates a new response.
@@ -253,7 +261,9 @@ func (h *SingleHandler[Req, Resp]) NewResponse() Resp {
 // PutRequest will accept a request for reuse.
 // These should be returned by the caller.
 func (h *SingleHandler[Req, Resp]) PutRequest(r Req) {
-	h.reqPool.Put(r)
+	if r != h.nilReq {
+		h.reqPool.Put(r)
+	}
 }
 
 // NewRequest creates a new response.
@@ -331,11 +341,6 @@ func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
 
 // StreamTypeHandler is a type safe handler for streaming requests.
 type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
-	reqPool    sync.Pool
-	respPool   sync.Pool
-	id         HandlerID
-	newPayload func() Payload
-
 	WithPayload bool
 
 	// Override the default capacities (1)
@@ -344,6 +349,13 @@ type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
 	// Set to 0 if no input is expected.
 	// Will be 0 if newReq is nil.
 	InCapacity int
+
+	reqPool    sync.Pool
+	respPool   sync.Pool
+	id         HandlerID
+	newPayload func() Payload
+	nilReq     Req
+	nilResp    Resp
 }
 
 // NewStream creates a typed handler that can provide Marshal/Unmarshal.
@@ -386,13 +398,17 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) NewRequest() Req {
 // PutRequest will accept a request for reuse.
 // These should be returned by the handler.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
-	h.reqPool.Put(r)
+	if r != h.nilReq {
+		h.reqPool.Put(r)
+	}
 }
 
 // PutResponse will accept a request for reuse.
 // These should be returned by the caller.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
-	h.respPool.Put(r)
+	if r != h.nilResp {
+		h.respPool.Put(r)
+	}
 }
 
 // NewResponse creates a new response.

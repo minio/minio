@@ -66,6 +66,12 @@ func (z *WalkDirOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Limit")
 				return
 			}
+		case "DiskID":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -79,9 +85,9 @@ func (z *WalkDirOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *WalkDirOptions) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 7
+	// map header, size 8
 	// write "Bucket"
-	err = en.Append(0x87, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	err = en.Append(0x88, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	if err != nil {
 		return
 	}
@@ -150,15 +156,25 @@ func (z *WalkDirOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Limit")
 		return
 	}
+	// write "DiskID"
+	err = en.Append(0xa6, 0x44, 0x69, 0x73, 0x6b, 0x49, 0x44)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *WalkDirOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 7
+	// map header, size 8
 	// string "Bucket"
-	o = append(o, 0x87, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	o = append(o, 0x88, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	o = msgp.AppendString(o, z.Bucket)
 	// string "BaseDir"
 	o = append(o, 0xa7, 0x42, 0x61, 0x73, 0x65, 0x44, 0x69, 0x72)
@@ -178,6 +194,9 @@ func (z *WalkDirOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Limit"
 	o = append(o, 0xa5, 0x4c, 0x69, 0x6d, 0x69, 0x74)
 	o = msgp.AppendInt(o, z.Limit)
+	// string "DiskID"
+	o = append(o, 0xa6, 0x44, 0x69, 0x73, 0x6b, 0x49, 0x44)
+	o = msgp.AppendString(o, z.DiskID)
 	return
 }
 
@@ -241,6 +260,12 @@ func (z *WalkDirOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Limit")
 				return
 			}
+		case "DiskID":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -255,6 +280,6 @@ func (z *WalkDirOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *WalkDirOptions) Msgsize() (s int) {
-	s = 1 + 7 + msgp.StringPrefixSize + len(z.Bucket) + 8 + msgp.StringPrefixSize + len(z.BaseDir) + 10 + msgp.BoolSize + 15 + msgp.BoolSize + 13 + msgp.StringPrefixSize + len(z.FilterPrefix) + 10 + msgp.StringPrefixSize + len(z.ForwardTo) + 6 + msgp.IntSize
+	s = 1 + 7 + msgp.StringPrefixSize + len(z.Bucket) + 8 + msgp.StringPrefixSize + len(z.BaseDir) + 10 + msgp.BoolSize + 15 + msgp.BoolSize + 13 + msgp.StringPrefixSize + len(z.FilterPrefix) + 10 + msgp.StringPrefixSize + len(z.ForwardTo) + 6 + msgp.IntSize + 7 + msgp.StringPrefixSize + len(z.DiskID)
 	return
 }
