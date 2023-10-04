@@ -47,12 +47,13 @@ func (b *Batch[T]) Add(item T) error {
 }
 
 // Get fetches the items and resets the batch
+// Returned items are not referenced by the batch.
 func (b *Batch[T]) Get() (items []T) {
 	b.Lock()
 	defer b.Unlock()
 
 	items = append([]T(nil), b.items...)
-	b.items = make([]T, 0, b.limit)
+	b.items = b.items[:0]
 
 	return
 }
