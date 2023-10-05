@@ -138,11 +138,6 @@ func (k KafkaArgs) Validate() error {
 	return nil
 }
 
-type batchItem struct {
-	key     string
-	message *sarama.ProducerMessage
-}
-
 // KafkaTarget - Kafka target.
 type KafkaTarget struct {
 	initOnce once.Init
@@ -152,7 +147,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      store.Store[event.Event]
-	batch      *store.Batch[batchItem]
+	batch      *store.Batch[string, *sarama.ProducerMessage]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -221,24 +216,16 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
+	// If batch is enabled, the event will be batched in memory
+	// and will be committed once the batch is full.
+	if target.batch != nil {
+		return target.addToBatch(key)
+	}
+
 	var err error
 	_, err = target.isActive()
 	if err != nil {
 		return err
-	}
-
-	if target.producer == nil {
-		brokers := []string{}
-		for _, broker := range target.args.Brokers {
-			brokers = append(brokers, broker.String())
-		}
-		target.producer, err = sarama.NewSyncProducer(brokers, target.config)
-		if err != nil {
-			if err != sarama.ErrOutOfBrokers {
-				return err
-			}
-			return store.ErrNotConnected
-		}
 	}
 
 	eventData, eErr := target.store.Get(key.Name)
@@ -249,31 +236,6 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 			return nil
 		}
 		return eErr
-	}
-
-	// If batch is enabled, the event will be batched and
-	// will be committed once the batch is full.
-	if target.batch != nil {
-		msg, err := target.toProducerMessage(eventData)
-		if err != nil {
-			return err
-		}
-		err = target.batch.Add(batchItem{key.Name, msg})
-		if err != nil {
-			if errors.Is(err, store.ErrBatchFull) {
-				// This should not happen, just commit
-				// the batch and return the error.
-				if targetErr := target.commitBatch(); targetErr != nil {
-					err = targetErr
-				}
-			}
-			return err
-		}
-		// commit the batch if the key is the last one present in the store.
-		if key.IsLast || target.batch.IsFull() {
-			return target.commitBatch()
-		}
-		return nil
 	}
 
 	err = target.send(eventData)
@@ -288,24 +250,50 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 	return target.store.Del(key.Name)
 }
 
-func (target *KafkaTarget) commitBatch() error {
-	var keysToDelete []string
-	var msgs []*sarama.ProducerMessage
-
-	for _, item := range target.batch.Get() {
-		keysToDelete = append(keysToDelete, item.key)
-		msgs = append(msgs, item.message)
+func (target *KafkaTarget) addToBatch(key store.Key) error {
+	if target.batch.IsFull() {
+		if err := target.commitBatch(); err != nil {
+			return err
+		}
 	}
+	if _, ok := target.batch.GetByKey(key.Name); !ok {
+		eventData, err := target.store.Get(key.Name)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		msg, err := target.toProducerMessage(eventData)
+		if err != nil {
+			return err
+		}
+		if err = target.batch.Add(key.Name, msg); err != nil {
+			return err
+		}
+	}
+	// commit the batch if the key is the last one present in the store.
+	if key.IsLast || target.batch.IsFull() {
+		return target.commitBatch()
+	}
+	return nil
+}
 
-	err := target.producer.SendMessages(msgs)
+func (target *KafkaTarget) commitBatch() error {
+	if _, err := target.isActive(); err != nil {
+		return err
+	}
+	keys, msgs, err := target.batch.GetAll()
 	if err != nil {
+		return err
+	}
+	if err = target.producer.SendMessages(msgs); err != nil {
 		if isKafkaConnErr(err) {
 			return store.ErrNotConnected
 		}
 		return err
 	}
-
-	return target.store.DelList(keysToDelete)
+	return target.store.DelList(keys)
 }
 
 func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.ProducerMessage, error) {
@@ -463,7 +451,7 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 
 	if target.store != nil {
 		if args.BatchSize > 1 {
-			target.batch = store.NewBatch[batchItem](args.BatchSize)
+			target.batch = store.NewBatch[string, *sarama.ProducerMessage](args.BatchSize)
 		}
 		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
