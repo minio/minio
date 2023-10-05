@@ -1581,7 +1581,9 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan madmin.TraceInfo, 4000)
+
+	// Keep 100k buffered channel, should be sufficient to ensure we do not lose any events.
+	traceCh := make(chan madmin.TraceInfo, 100000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
@@ -1605,7 +1607,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		peer.Trace(traceCh, ctx.Done(), traceOpts)
 	}
 
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
