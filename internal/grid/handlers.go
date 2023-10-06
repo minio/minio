@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/internal/hash/sha256"
@@ -274,7 +275,7 @@ func (h *SingleHandler[Req, Resp]) NewRequest() Req {
 }
 
 // Register a handler for a Req -> Resp roundtrip.
-func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr)) error {
+func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr), subroute ...string) error {
 	return m.RegisterSingle(h.id, func(payload []byte) ([]byte, *RemoteErr) {
 		req := h.NewRequest()
 		_, err := req.UnmarshalMsg(payload)
@@ -297,12 +298,17 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			return nil, &r
 		}
 		return payload, nil
-	})
+	}, subroute...)
+}
+
+// Requester is able to send requests to a remote.
+type Requester interface {
+	Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error)
 }
 
 // Call the remove with the request and return the response.
 // The response should be returned with PutResponse when no error.
-func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c *Connection, req Req) (resp Resp, err error) {
+func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Req) (resp Resp, err error) {
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {
 		return resp, err
@@ -349,10 +355,6 @@ type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
 	// Set to 0 if no input is expected.
 	// Will be 0 if newReq is nil.
 	InCapacity int
-
-	// Subroute must be static and clients should specify a matching subroute.
-	// Should not be set unless there are different handlers for the same HandlerID.
-	Subroute string
 
 	reqPool    sync.Pool
 	respPool   sync.Pool
@@ -426,28 +428,28 @@ func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID) *StreamTypeH
 }
 
 // Register a handler for two-way streaming with payload, input stream and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr) error {
-	return h.register(m, handle)
+func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
+	return h.register(m, handle, subroute...)
 }
 
 // RegisterNoInput a handler for one-way streaming with payload and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(p Payload, out chan<- Resp) *RemoteErr) error {
+func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(p Payload, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	h.InCapacity = 0
 	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
 		return handle(p, out)
-	})
+	}, subroute...)
 }
 
 // RegisterNoPayload a handler for one-way streaming with payload and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, handle func(in <-chan Req, out chan<- Resp) *RemoteErr) error {
+func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, handle func(in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	h.WithPayload = false
 	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
 		return handle(in, out)
-	})
+	}, subroute...)
 }
 
 // Register a handler for two-way streaming with optional payload and input stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr) error {
+func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	return m.RegisterStreamingHandler(h.id, StreamHandler{
 		Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
 			var plT Payload
@@ -517,7 +519,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 			close(outT)
 			<-outDone
 			return rErr
-		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: h.Subroute,
+		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: strings.Join(subroute, "/"),
 	})
 }
 
@@ -542,8 +544,13 @@ type TypedSteam[Req, Resp RoundTripper] struct {
 	Requests chan<- Req
 }
 
+// Streamer creates a stream.
+type Streamer interface {
+	NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error)
+}
+
 // Call the remove with the request and
-func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Connection, payload Payload) (st *TypedSteam[Req, Resp], err error) {
+func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Streamer, payload Payload) (st *TypedSteam[Req, Resp], err error) {
 	var payloadB []byte
 	if h.WithPayload {
 		var err error
@@ -552,19 +559,9 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c *Con
 			return nil, err
 		}
 	}
-	var stream *Stream
-	if h.Subroute == "" {
-		var err error
-		stream, err = c.NewStream(ctx, h.id, payloadB)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		var err error
-		stream, err = c.Subroute(h.Subroute).NewStream(ctx, h.id, payloadB)
-		if err != nil {
-			return nil, err
-		}
+	stream, err := c.NewStream(ctx, h.id, payloadB)
+	if err != nil {
+		return nil, err
 	}
 
 	respT := make(chan TypedResponse[Resp])

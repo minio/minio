@@ -908,7 +908,6 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 	})
 	handler.InCapacity = 1
 	handler.OutCapacity = 1
-	handler.Subroute = "some/subroute"
 	const payloads = 10
 
 	// 1: Echo
