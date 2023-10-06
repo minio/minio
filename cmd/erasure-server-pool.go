@@ -1390,7 +1390,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, path.Dir(prefix), ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, opts.Replication.Config, objInfo)
 				if evt.Action.Delete() {
 					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {
@@ -1414,7 +1414,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		objInfo, err := z.GetObjectInfo(ctx, bucket, prefix, ObjectOptions{NoLock: true})
 		if err == nil {
 			if opts.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, objInfo)
+				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, opts.Replication.Config, objInfo)
 				if evt.Action.Delete() {
 					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {

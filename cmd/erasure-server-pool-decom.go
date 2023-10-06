@@ -734,6 +734,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bi.Name)
+	rcfg, _ := getReplicationConfig(ctx, bi.Name)
 
 	for setIdx, set := range pool.sets {
 		set := set
@@ -745,7 +746,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
-			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 			switch {
 			case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
 				applyExpiryOnTransitionedObject(ctx, z, objInfo, evt, lcEventSrc_Decom)
@@ -1048,6 +1049,7 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 
 			// Check if bucket is object locked.
 			lr, _ := globalBucketObjectLockSys.Get(bi.Name)
+			rcfg, _ := getReplicationConfig(ctx, bi.Name)
 
 			filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 				if lc == nil {
@@ -1056,7 +1058,7 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 				versioned := vc != nil && vc.Versioned(object)
 				objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
-				evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+				evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 				switch {
 				case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
 					applyExpiryOnTransitionedObject(ctx, z, objInfo, evt, lcEventSrc_Decom)

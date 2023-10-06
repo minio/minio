@@ -370,7 +370,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 
 			objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
 			if o.Lifecycle != nil {
-				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo).Action
+				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo).Action
 				skip = act.Delete()
 				if act.DeleteRestored() {
 					// do not skip DeleteRestored* actions
@@ -398,7 +398,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
 
 			if o.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
+				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo)
 				if evt.Action.Delete() {
 					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {

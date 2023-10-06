@@ -929,7 +929,8 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 
 	versionID := oi.VersionID
 	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
-	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi)
+	replcfg, _ := getReplicationConfig(ctx, i.bucket)
+	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, replcfg, oi)
 	if i.debug {
 		if versionID != "" {
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, lcEvt.Action)
@@ -1129,7 +1130,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 	return size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) lifecycle.Event {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, rcfg *replication.Config, obj ObjectInfo) lifecycle.Event {
 	event := lc.Eval(obj.ToLifecycleOpts())
 	if serverDebugLog {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
@@ -1159,6 +1160,9 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 					console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
 				}
 			}
+			return lifecycle.Event{Action: lifecycle.NoneAction}
+		}
+		if rcfg != nil && !obj.VersionPurgeStatus.Empty() && rcfg.HasActiveRules(obj.Name, true) {
 			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
 	}

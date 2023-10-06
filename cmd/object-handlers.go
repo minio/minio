@@ -474,7 +474,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			replcfg, _ := getReplicationConfig(ctx, bucket)
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
 				applyExpiryRule(event, lcEventSrc_s3GetObject, objInfo)
@@ -732,7 +733,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// Automatically remove the object/version if an expiry lifecycle rule can be applied
 		if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 			rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-			event := evalActionFromLifecycle(ctx, *lc, rcfg, objInfo)
+			replcfg, _ := getReplicationConfig(ctx, bucket)
+			event := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, objInfo)
 			if event.Action.Delete() {
 				// apply whatever the expiry rule is.
 				applyExpiryRule(event, lcEventSrc_s3HeadObject, objInfo)
