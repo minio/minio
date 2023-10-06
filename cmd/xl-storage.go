@@ -290,18 +290,16 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	}
 
-	if globalAPIConfig.odirectEnabled() {
-		// Return an error if ODirect is not supported
-		// unless it is a single erasure disk mode
-		if err := s.checkODirectDiskSupport(); err == nil {
-			s.oDirect = true
+	// Return an error if ODirect is not supported unless it is a single erasure
+	// disk mode
+	if err := s.checkODirectDiskSupport(); err == nil {
+		s.oDirect = true
+	} else {
+		// Allow if unsupported platform or single disk.
+		if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
+			s.oDirect = false
 		} else {
-			// Allow if unsupported platform or single disk.
-			if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
-				s.oDirect = false
-			} else {
-				return s, err
-			}
+			return s, err
 		}
 	}
 
