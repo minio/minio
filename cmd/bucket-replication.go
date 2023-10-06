@@ -376,8 +376,10 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			} else {
 				// can be the case that other cluster is down and duplicate `mc rm --vid`
 				// is issued - this still needs to be replicated back to the other target
-				replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
-				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
+				if !oi.VersionPurgeStatus.Empty() {
+					replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
+					dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
+				}
 				continue
 			}
 		}
