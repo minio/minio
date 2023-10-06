@@ -955,7 +955,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan event.Event, 2000)
+	ch := make(chan event.Event, globalAPIConfig.getRequestsPoolCapacity())
 
 	err := globalHTTPListen.Subscribe(mask, ch, doneCh, func(ev event.Event) bool {
 		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
@@ -1010,7 +1010,7 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan madmin.TraceInfo, 2000)
+	ch := make(chan madmin.TraceInfo, 100000)
 	err = globalTrace.Subscribe(traceOpts.TraceTypes(), ch, r.Context().Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
 	})
@@ -1159,13 +1159,13 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	ch := make(chan log.Info, 2000)
+	ch := make(chan log.Info, 100000)
 	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
 	enc := gob.NewEncoder(w)
