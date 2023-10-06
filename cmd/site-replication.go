@@ -203,7 +203,7 @@ type SiteReplicationSys struct {
 	iamMetaCache srIAMCache
 }
 
-type srState srStateV1
+type srState srStateV2
 
 // srStateV1 represents version 1 of the site replication state persistence
 // format.
@@ -215,11 +215,24 @@ type srStateV1 struct {
 	ServiceAccountAccessKey string                     `json:"serviceAccountAccessKey"`
 }
 
+// srStateV2 represents version 2 of the site replication state persistence
+// format.
+type srStateV2 struct {
+	Name string `json:"name"`
+
+	// Peers maps peers by their deploymentID
+	Peers                   map[string]madmin.PeerInfo `json:"peers"`
+	ServiceAccountAccessKey string                     `json:"serviceAccountAccessKey"`
+
+	// If replication of ILM expiry enabled
+	ReplicateILMExpiry bool `json:"replicateILMExpiry"`
+}
+
 // srStateData represents the format of the current `srStateFile`.
 type srStateData struct {
 	Version int `json:"version"`
 
-	SRState srStateV1 `json:"srState"`
+	SRState srStateV2 `json:"srState"`
 }
 
 // Init - initialize the site replication manager.
@@ -281,7 +294,7 @@ func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLaye
 func (c *SiteReplicationSys) saveToDisk(ctx context.Context, state srState) error {
 	sdata := srStateData{
 		Version: srStateFormatVersion1,
-		SRState: srStateV1(state),
+		SRState: srStateV2(state),
 	}
 	buf, err := json.Marshal(sdata)
 	if err != nil {
@@ -379,7 +392,7 @@ func (c *SiteReplicationSys) getSiteStatuses(ctx context.Context, sites ...madmi
 }
 
 // AddPeerClusters - add cluster sites for replication configuration.
-func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmin.PeerSite) (madmin.ReplicateAddStatus, error) {
+func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmin.PeerSite, opts madmin.SRAddOptions) (madmin.ReplicateAddStatus, error) {
 	sites, serr := c.getSiteStatuses(ctx, psites...)
 	if serr != nil {
 		return madmin.ReplicateAddStatus{}, serr
@@ -548,6 +561,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		Name:                    sites[selfIdx].Name,
 		Peers:                   joinReq.Peers,
 		ServiceAccountAccessKey: svcCred.AccessKey,
+		ReplicateILMExpiry:      opts.ReplicateILMExpiry,
 	}
 
 	if err = c.saveToDisk(ctx, state); err != nil {
@@ -562,7 +576,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		Status:  madmin.ReplicateAddStatusSuccess,
 	}
 
-	if err := c.syncToAllPeers(ctx); err != nil {
+	if err := c.syncToAllPeers(ctx, opts); err != nil {
 		result.InitialSyncErrorMessage = err.Error()
 	}
 
@@ -722,6 +736,7 @@ func (c *SiteReplicationSys) GetClusterInfo(ctx context.Context) (info madmin.Si
 	})
 
 	info.ServiceAccountAccessKey = c.state.ServiceAccountAccessKey
+	info.ReplicateILMExpiry = c.state.ReplicateILMExpiry
 	return info, nil
 }
 
@@ -1681,6 +1696,35 @@ func (c *SiteReplicationSys) PeerBucketQuotaConfigHandler(ctx context.Context, b
 	return nil
 }
 
+// PeerBucketExpiryLCConfigHandler - copies/deletes expiry lifecycle config to local cluster
+func (c *SiteReplicationSys) PeerBucketExpiryLCConfigHandler(ctx context.Context, bucket string, expLCConfig *string, updatedAt time.Time) error {
+	// skip overwrite if local update is newer than peer update.
+	if !updatedAt.IsZero() {
+		if _, updateTm, err := globalBucketMetadataSys.GetExpLifecycleConfig(bucket); err == nil && updateTm.After(updatedAt) {
+			return nil
+		}
+	}
+
+	if expLCConfig != nil {
+		configData, err := base64.StdEncoding.DecodeString(*expLCConfig)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		_, err = globalBucketMetadataSys.Update(ctx, bucket, expiryBucketLifecycleConfig, configData)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		return nil
+	}
+
+	// Delete ILM config
+	_, err := globalBucketMetadataSys.Delete(ctx, bucket, expiryBucketLifecycleConfig)
+	if err != nil {
+		return wrapSRErr(err)
+	}
+	return nil
+}
+
 // getAdminClient - NOTE: ensure to take at least a read lock on SiteReplicationSys
 // before calling this.
 func (c *SiteReplicationSys) getAdminClient(ctx context.Context, deploymentID string) (*madmin.AdminClient, error) {
@@ -1733,7 +1777,7 @@ func (c *SiteReplicationSys) listBuckets(ctx context.Context) ([]BucketInfo, err
 
 // syncToAllPeers is used for syncing local data to all remote peers, it is
 // called once during initial "AddPeerClusters" request.
-func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
+func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.SRAddOptions) error {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errSRObjectLayerNotReady
@@ -1822,6 +1866,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			}
 		}
 
+		// Replicate existing bucket quotas settings
 		quotaConfigJSON, tm := meta.QuotaConfigJSON, meta.QuotaConfigUpdatedAt
 		if len(quotaConfigJSON) > 0 {
 			err = c.BucketMetaHook(ctx, madmin.SRBucketMeta{
@@ -1832,6 +1877,23 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context) error {
 			})
 			if err != nil {
 				return errSRBucketMetaError(err)
+			}
+		}
+
+		// Replicate ILM expiry rules if neeed
+		if addOpts.ReplicateILMExpiry {
+			ilmConfigData, tm := meta.ExpiryLifecycleConfigXML, meta.ExpiryLifecycleConfigUpdatedAt
+			if len(ilmConfigData) > 0 {
+				configStr := base64.StdEncoding.EncodeToString(ilmConfigData)
+				err = c.BucketMetaHook(ctx, madmin.SRBucketMeta{
+					Type:           madmin.SRBucketMetaExpLCConfig,
+					Bucket:         bucket,
+					ExpiryLCConfig: &configStr,
+					UpdatedAt:      tm,
+				})
+				if err != nil {
+					return errSRBucketMetaError(err)
+				}
 			}
 		}
 	}
@@ -3438,6 +3500,12 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				bms.ReplicationConfigUpdatedAt = meta.ReplicationConfigUpdatedAt
 			}
 
+			if len(meta.ExpiryLifecycleConfigXML) > 0 {
+				expLclCfgStr := base64.StdEncoding.EncodeToString(meta.ExpiryLifecycleConfigXML)
+				bms.ExpiryLCConfig = &expLclCfgStr
+				bms.ExpiryLCConfigUpdatedAt = meta.ExpiryLifecycleConfigUpdatedAt
+			}
+
 			info.Buckets[bucket] = bms
 		}
 	}
@@ -3602,7 +3670,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 }
 
 // EditPeerCluster - edits replication configuration and updates peer endpoint.
-func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.PeerInfo) (madmin.ReplicateEditStatus, error) {
+func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.PeerInfo, opts madmin.SREditOptions) (madmin.ReplicateEditStatus, error) {
 	sites, err := c.GetClusterInfo(ctx)
 	if err != nil {
 		return madmin.ReplicateEditStatus{}, errSRBackendIssue(err)
@@ -3623,7 +3691,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	for _, v := range sites.Sites {
 		if peer.DeploymentID == v.DeploymentID {
 			found = true
-			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated
+			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet || opts.DisableILMExpiryReplication) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated or disabling ILM expiry
 				break
 			}
 			if peer.Endpoint == v.Endpoint && peer.SyncState.Empty() && !peer.DefaultBandwidth.IsSet {
@@ -3696,6 +3764,11 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		if err != nil {
 			return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err))
 		}
+	}
+
+	// If ILM expiry replications disabled, set accordingly
+	if opts.DisableILMExpiryReplication {
+		state.ReplicateILMExpiry = false
 	}
 
 	// we can now save the cluster replication configuration state.
@@ -3911,21 +3984,30 @@ func getSRBucketDeleteOp(isSiteReplicated bool) SRBucketDeleteOp {
 }
 
 func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer) error {
+	info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
+		Users:    true,
+		Policies: true,
+		Groups:   true,
+		Buckets:  true,
+	})
+	if err != nil {
+		return err
+	}
 	buckets, err := c.listBuckets(ctx)
 	if err != nil {
 		return err
 	}
 	for _, bi := range buckets {
 		bucket := bi.Name
-		info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
-			Entity:      madmin.SRBucketEntity,
-			EntityValue: bucket,
-			ShowDeleted: true,
-		})
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
+		// info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
+		// 	Entity:      madmin.SRBucketEntity,
+		// 	EntityValue: bucket,
+		// 	ShowDeleted: true,
+		// })
+		// if err != nil {
+		// 	logger.LogIf(ctx, err)
+		// 	continue
+		// }
 
 		c.healBucket(ctx, objAPI, bucket, info)
 
@@ -3937,8 +4019,82 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 			c.healBucketPolicies(ctx, objAPI, bucket, info)
 			c.healTagMetadata(ctx, objAPI, bucket, info)
 			c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
+			if c.state.ReplicateILMExpiry {
+				c.healBucketILMExpiry(ctx, objAPI, bucket, info)
+			}
 		}
 		// Notification and ILM are site specific settings.
+	}
+	return nil
+}
+
+func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+	bs := info.BucketStats[bucket]
+
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return nil
+	}
+
+	var (
+		latestID, latestPeerName string
+		lastUpdate               time.Time
+		latestExpLCConfig        *string
+	)
+
+	for dID, ss := range bs {
+		if lastUpdate.IsZero() {
+			lastUpdate = ss.meta.ExpiryLCConfigUpdatedAt
+			latestID = dID
+			latestExpLCConfig = ss.meta.ExpiryLCConfig
+		}
+		// avoid considering just created buckets as latest. Perhaps this site
+		// just joined cluster replication and yet to be sync'd
+		if ss.meta.CreatedAt.Equal(ss.meta.ExpiryLCConfigUpdatedAt) {
+			continue
+		}
+		if ss.meta.ExpiryLCConfigUpdatedAt.After(lastUpdate) {
+			lastUpdate = ss.meta.ExpiryLCConfigUpdatedAt
+			latestID = dID
+			latestExpLCConfig = ss.meta.ExpiryLCConfig
+		}
+	}
+	latestPeerName = info.Sites[latestID].Name
+	var latestExpLCConfigBytes []byte
+	var err error
+	if latestExpLCConfig != nil {
+		latestExpLCConfigBytes, err = base64.StdEncoding.DecodeString(*latestExpLCConfig)
+		if err != nil {
+			return err
+		}
+	}
+	for dID, bStatus := range bs {
+		if bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(string(*latestExpLCConfig), string(*bStatus.meta.ExpiryLCConfig)) {
+			continue
+		}
+		if dID == globalDeploymentID {
+			if _, err := globalBucketMetadataSys.Update(ctx, bucket, expiryBucketLifecycleConfig, latestExpLCConfigBytes); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to heal bucket ILM expiry data from peer site %s : %w", latestPeerName, err))
+			}
+			continue
+		}
+
+		admClient, err := c.getAdminClient(ctx, dID)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		peerName := info.Sites[dID].Name
+		if err = admClient.SRPeerReplicateBucketMeta(ctx, madmin.SRBucketMeta{
+			Type:           madmin.SRBucketMetaExpLCConfig,
+			Bucket:         bucket,
+			ExpiryLCConfig: latestExpLCConfig,
+			UpdatedAt:      lastUpdate,
+		}); err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+				fmt.Errorf("Unable to heal bucket ILM expiry data for peer %s from peer %s : %w",
+					peerName, latestPeerName, err)))
+		}
 	}
 	return nil
 }

@@ -67,33 +67,36 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
-	Name                        string
-	Created                     time.Time
-	LockEnabled                 bool // legacy not used anymore.
-	PolicyConfigJSON            []byte
-	NotificationConfigXML       []byte
-	LifecycleConfigXML          []byte
-	ObjectLockConfigXML         []byte
-	VersioningConfigXML         []byte
-	EncryptionConfigXML         []byte
-	TaggingConfigXML            []byte
-	QuotaConfigJSON             []byte
-	ReplicationConfigXML        []byte
-	BucketTargetsConfigJSON     []byte
-	BucketTargetsConfigMetaJSON []byte
-	PolicyConfigUpdatedAt       time.Time
-	ObjectLockConfigUpdatedAt   time.Time
-	EncryptionConfigUpdatedAt   time.Time
-	TaggingConfigUpdatedAt      time.Time
-	QuotaConfigUpdatedAt        time.Time
-	ReplicationConfigUpdatedAt  time.Time
-	VersioningConfigUpdatedAt   time.Time
-	LifecycleConfigUpdatedAt    time.Time
+	Name                           string
+	Created                        time.Time
+	LockEnabled                    bool // legacy not used anymore.
+	PolicyConfigJSON               []byte
+	NotificationConfigXML          []byte
+	LifecycleConfigXML             []byte
+	ExpiryLifecycleConfigXML       []byte
+	ObjectLockConfigXML            []byte
+	VersioningConfigXML            []byte
+	EncryptionConfigXML            []byte
+	TaggingConfigXML               []byte
+	QuotaConfigJSON                []byte
+	ReplicationConfigXML           []byte
+	BucketTargetsConfigJSON        []byte
+	BucketTargetsConfigMetaJSON    []byte
+	PolicyConfigUpdatedAt          time.Time
+	ObjectLockConfigUpdatedAt      time.Time
+	EncryptionConfigUpdatedAt      time.Time
+	TaggingConfigUpdatedAt         time.Time
+	QuotaConfigUpdatedAt           time.Time
+	ReplicationConfigUpdatedAt     time.Time
+	VersioningConfigUpdatedAt      time.Time
+	LifecycleConfigUpdatedAt       time.Time
+	ExpiryLifecycleConfigUpdatedAt time.Time
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig           *policy.BucketPolicy
 	notificationConfig     *event.Config
 	lifecycleConfig        *lifecycle.Lifecycle
+	expiryLCConfig         *lifecycle.Lifecycle
 	objectLockConfig       *objectlock.Config
 	versioningConfig       *versioning.Versioning
 	sseConfig              *bucketsse.BucketSSEConfig
@@ -238,6 +241,15 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		}
 	} else {
 		b.lifecycleConfig = nil
+	}
+
+	if len(b.ExpiryLifecycleConfigXML) != 0 {
+		b.expiryLCConfig, err = lifecycle.ParseLifecycleConfig(bytes.NewReader(b.ExpiryLifecycleConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.expiryLCConfig = nil
 	}
 
 	if len(b.EncryptionConfigXML) != 0 {

@@ -52,7 +52,8 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites)
+	opts := getSRAddOptions(r)
+	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites, opts)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -66,6 +67,12 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeSuccessResponseJSON(w, body)
+}
+
+func getSRAddOptions(r *http.Request) (opts madmin.SRAddOptions) {
+	q := r.Form
+	opts.ReplicateILMExpiry = q.Get("replicateILMExpiry") == "true"
+	return
 }
 
 // SRPeerJoin - PUT /minio/admin/v3/site-replication/join
@@ -192,7 +199,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 	}
 }
 
-// SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
+// SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/peer/bucket-meta
 func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -253,6 +260,8 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeSSEConfig:
 		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig, item.UpdatedAt)
+	case madmin.SRBucketMetaExpLCConfig:
+		err = globalSiteReplicationSys.PeerBucketExpiryLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -383,7 +392,9 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site)
+
+	opts := getSREditOptions(r)
+	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site, opts)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -396,6 +407,12 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 	}
 
 	writeSuccessResponseJSON(w, body)
+}
+
+func getSREditOptions(r *http.Request) (opts madmin.SREditOptions) {
+	q := r.Form
+	opts.DisableILMExpiryReplication = q.Get("disableILMExpiryReplication") == "true"
+	return
 }
 
 // SRPeerEdit - PUT /minio/admin/v3/site-replication/peer/edit

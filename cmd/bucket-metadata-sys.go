@@ -121,6 +121,9 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
 		meta.LifecycleConfigUpdatedAt = updatedAt
+	case expiryBucketLifecycleConfig:
+		meta.ExpiryLifecycleConfigXML = configData
+		meta.ExpiryLifecycleConfigUpdatedAt = updatedAt
 	case bucketSSEConfig:
 		meta.EncryptionConfigXML = configData
 		meta.EncryptionConfigUpdatedAt = updatedAt
@@ -271,6 +274,22 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 		return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 	}
 	return meta.lifecycleConfig, meta.LifecycleConfigUpdatedAt, nil
+}
+
+// GetExpLifecycleConfig returns configured expiry lifecycle config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetExpLifecycleConfig(bucket string) (*lifecycle.Lifecycle, time.Time, error) {
+	meta, _, err := sys.GetConfig(GlobalContext, bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
+		}
+		return nil, time.Time{}, err
+	}
+	// if meta.expiryLCConfig == nil {
+	// 	return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
+	// }
+	return meta.expiryLCConfig, meta.ExpiryLifecycleConfigUpdatedAt, nil
 }
 
 // GetNotificationConfig returns configured notification config

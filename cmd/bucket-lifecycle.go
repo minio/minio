@@ -64,7 +64,29 @@ type LifecycleSys struct{}
 
 // Get - gets lifecycle config associated to a given bucket name.
 func (sys *LifecycleSys) Get(bucketName string) (lc *lifecycle.Lifecycle, err error) {
+	expLclConfig, _, _ := globalBucketMetadataSys.GetExpLifecycleConfig(bucketName)
 	lc, _, err = globalBucketMetadataSys.GetLifecycleConfig(bucketName)
+	if lc != nil {
+		if expLclConfig != nil {
+			for _, expRule := range expLclConfig.Rules {
+				var found bool
+				for _, rule := range lc.Rules {
+					if expRule.ID == rule.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					lc.Rules = append(lc.Rules, expRule)
+				}
+			}
+		}
+	} else {
+		if expLclConfig == nil {
+			return nil, BucketLifecycleNotFound{Bucket: bucketName}
+		}
+		lc = expLclConfig
+	}
 	return lc, err
 }
 
