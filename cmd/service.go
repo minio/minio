@@ -104,11 +104,11 @@ func unfreezeServices() {
 	// Close when we reach 0
 	globalServiceFreezeCnt--
 	if globalServiceFreezeCnt <= 0 {
-		// Ensure we only close once.
-		if val := globalServiceFreeze.Load(); val != nil {
-			var _ch chan struct{}
-			if ch, ok := val.(chan struct{}); ok {
-				globalServiceFreeze.Store(_ch)
+		// Set to a nil channel.
+		var _ch chan struct{}
+		if val := globalServiceFreeze.Swap(_ch); val != nil {
+			if ch, ok := val.(chan struct{}); ok && ch != nil {
+				// Close previous non-nil channel.
 				close(ch)
 			}
 		}
