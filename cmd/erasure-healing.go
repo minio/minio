@@ -29,7 +29,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
@@ -563,11 +563,26 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	}
 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
-		// When disk to heal count is greater than parity blocks we should simply error out.
-		err := fmt.Errorf("(%d > %d) more drives are expected to heal than parity, returned errors: %v (dataErrs %v) -> %s/%s(%s)", disksToHealCount, latestMeta.Erasure.ParityBlocks, errs, dataErrs, bucket, object, versionID)
-		logger.LogOnceIf(ctx, err, "heal-object-count-gt-parity")
-		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
-			bucket, object, versionID), err
+		// Allow for dangling deletes, on versions that have DataDir missing etc.
+		// this would end up restoring the correct readable versions.
+		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, dataErrs, ObjectOptions{
+			VersionID: versionID,
+		})
+		errs = make([]error, len(errs))
+		for i := range errs {
+			errs[i] = err
+		}
+		if err == nil {
+			// Dangling object successfully purged, size is '0'
+			m.Size = 0
+		}
+		// Generate file/version not found with default heal result
+		err = errFileNotFound
+		if versionID != "" {
+			err = errFileVersionNotFound
+		}
+		return er.defaultHealResult(m, storageDisks, storageEndpoints,
+			errs, bucket, object, versionID), err
 	}
 
 	cleanFileInfo := func(fi FileInfo) FileInfo {
@@ -714,11 +729,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 				partsMetadata[i].DataDir = dstDataDir
 				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
-				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
-					PartNumber: partNumber,
-					Algorithm:  checksumAlgo,
-					Hash:       bitrotWriterSum(writers[i]),
-				})
 				if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
 					partsMetadata[i].Data = inlineBuffers[i].Bytes()
 					partsMetadata[i].SetInlineData()
@@ -1082,6 +1092,22 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	}
 
 	if !validMeta.IsValid() {
+		// validMeta is invalid because notFoundPartsErrs is
+		// greater than parity blocks, thus invalidating the FileInfo{}
+		// every dataErrs[i], metaArr[i] is an empty FileInfo{}
+		dataBlocks := (len(ndataErrs) + 1) / 2
+		if notFoundPartsErrs > dataBlocks {
+			// Not using parity to ensure that we do not delete
+			// any valid content, if any is recoverable. But if
+			// notFoundDataDirs are already greater than the data
+			// blocks all bets are off and it is safe to purge.
+			//
+			// This is purely a defensive code, ideally parityBlocks
+			// is sufficient, however we can't know that since we
+			// do have the FileInfo{}.
+			return validMeta, true
+		}
+
 		// We have no idea what this file is, leave it as is.
 		return validMeta, false
 	}

@@ -27,23 +27,27 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"
-	"github.com/tidwall/gjson"
 
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // the suffix for the configured queue dir where the logs will be persisted.
 const kafkaLoggerExtension = ".kafka.log"
+
+const (
+	statusClosed = iota
+	statusOffline
+	statusOnline
+)
 
 // Config - kafka target arguments.
 type Config struct {
@@ -104,6 +108,8 @@ func (k Config) pingBrokers() (err error) {
 
 // Target - Kafka target.
 type Target struct {
+	status int32
+
 	totalMessages  int64
 	failedMessages int64
 
@@ -241,17 +247,16 @@ func (h *Target) send(entry interface{}) error {
 	if err != nil {
 		return err
 	}
-	requestID := gjson.GetBytes(logJSON, "requestID").Str
-	if requestID == "" {
-		// unsupported data structure
-		return fmt.Errorf("unsupported data structure: %s must be either audit.Entry or log.Entry", reflect.TypeOf(entry))
-	}
 	msg := sarama.ProducerMessage{
 		Topic: h.kconfig.Topic,
-		Key:   sarama.StringEncoder(requestID),
 		Value: sarama.ByteEncoder(logJSON),
 	}
 	_, _, err = h.producer.SendMessage(&msg)
+	if err != nil {
+		atomic.StoreInt32(&h.status, statusOffline)
+	} else {
+		atomic.StoreInt32(&h.status, statusOnline)
+	}
 	return err
 }
 
@@ -315,15 +320,13 @@ func (h *Target) init() error {
 	}
 
 	h.producer = producer
+	atomic.StoreInt32(&h.status, statusOnline)
 	return nil
 }
 
 // IsOnline returns true if the target is online.
 func (h *Target) IsOnline(_ context.Context) bool {
-	if err := h.initKafkaOnce.Do(h.init); err != nil {
-		return false
-	}
-	return h.kconfig.pingBrokers() == nil
+	return atomic.LoadInt32(&h.status) == statusOnline
 }
 
 // Send log message 'e' to kafka target.
@@ -407,6 +410,7 @@ func New(config Config) *Target {
 	target := &Target{
 		logCh:   make(chan interface{}, config.QueueSize),
 		kconfig: config,
+		status:  statusOffline,
 	}
 	return target
 }

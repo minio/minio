@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/minio/pkg/certs"
+	"github.com/minio/pkg/v2/certs"
 )
 
 func TestNewServer(t *testing.T) {

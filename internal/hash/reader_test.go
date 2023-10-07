@@ -19,6 +19,7 @@ package hash
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -30,7 +31,7 @@ import (
 
 // Tests functions like Size(), MD5*(), SHA256*()
 func TestHashReaderHelperMethods(t *testing.T) {
-	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
+	r, err := NewReader(context.Background(), bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +195,7 @@ func TestHashReaderVerification(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("case-%d", i+1), func(t *testing.T) {
-			r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+			r, err := NewReader(context.Background(), testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 			if err != nil {
 				t.Fatalf("Test %q: Initializing reader failed %s", testCase.desc, err)
 			}
@@ -213,7 +214,7 @@ func TestHashReaderVerification(t *testing.T) {
 }
 
 func mustReader(t *testing.T, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) *Reader {
-	r, err := NewReader(src, size, md5Hex, sha256Hex, actualSize)
+	r, err := NewReader(context.Background(), src, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +304,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("case-%d", i+1), func(t *testing.T) {
-			_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+			_, err := NewReader(context.Background(), testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 			if err != nil && testCase.success {
 				t.Errorf("Test %q: Expected success, but got error %s instead", testCase.desc, err)
 			}

@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 //go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
@@ -725,7 +725,10 @@ var diskMaxTimeout = 2 * time.Minute
 var diskActiveMonitoring = true
 
 func init() {
-	s := env.Get("_MINIO_DISK_MAX_CONCURRENT", "")
+	s := env.Get("_MINIO_DRIVE_MAX_CONCURRENT", "")
+	if s == "" {
+		s = env.Get("_MINIO_DISK_MAX_CONCURRENT", "")
+	}
 	if s != "" {
 		diskMaxConcurrent, _ = strconv.Atoi(s)
 		if diskMaxConcurrent <= 0 {
@@ -734,7 +737,10 @@ func init() {
 		}
 	}
 
-	d := env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
+	d := env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
+	if d == "" {
+		d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
+	}
 	if d != "" {
 		timeoutOperation, _ := time.ParseDuration(d)
 		if timeoutOperation < time.Second {
@@ -744,7 +750,8 @@ func init() {
 		}
 	}
 
-	diskActiveMonitoring = env.Get("_MINIO_DISK_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn
+	diskActiveMonitoring = (env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn) ||
+		(env.Get("_MINIO_DISK_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn)
 
 	diskStartChecking = 16 + diskMaxConcurrent/8
 	if diskStartChecking > diskMaxConcurrent {

@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/sio"
 )
 
@@ -40,17 +40,6 @@ import (
 const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
-
-// AddChecksumInfo adds a checksum of a part.
-func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
-	for i, sum := range e.Checksums {
-		if sum.PartNumber == ckSumInfo.PartNumber {
-			e.Checksums[i] = ckSumInfo
-			return
-		}
-	}
-	e.Checksums = append(e.Checksums, ckSumInfo)
-}
 
 // GetChecksumInfo - get checksum of a part.
 func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
@@ -60,7 +49,7 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 			return sum
 		}
 	}
-	return ChecksumInfo{}
+	return ChecksumInfo{Algorithm: DefaultBitrotAlgorithm}
 }
 
 // ShardFileSize - returns final erasure size from original size.
@@ -393,14 +382,39 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		return FileInfo{}, errErasureReadQuorum
 	}
 
+	// Find the successor mod time in quorum, otherwise leave the
+	// candidate's successor modTime as found
+	succModTimeMap := make(map[time.Time]int)
+	var candidate FileInfo
+	var found bool
 	for i, hash := range metaHashes {
 		if hash == maxHash {
 			if metaArr[i].IsValid() {
-				return metaArr[i], nil
+				if !found {
+					candidate = metaArr[i]
+					found = true
+				}
+				succModTimeMap[metaArr[i].SuccessorModTime]++
 			}
 		}
 	}
+	var succModTime time.Time
+	var smodTimeQuorum bool
+	for smodTime, count := range succModTimeMap {
+		if count >= quorum {
+			smodTimeQuorum = true
+			succModTime = smodTime
+			break
+		}
+	}
 
+	if found {
+		if smodTimeQuorum {
+			candidate.SuccessorModTime = succModTime
+			candidate.IsLatest = succModTime.IsZero()
+		}
+		return candidate, nil
+	}
 	return FileInfo{}, errErasureReadQuorum
 }
 

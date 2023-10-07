@@ -38,7 +38,7 @@ import (
 	"github.com/minio/minio/internal/s3select/parquet"
 	"github.com/minio/minio/internal/s3select/simdj"
 	"github.com/minio/minio/internal/s3select/sql"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 	"github.com/minio/simdjson-go"
 	"github.com/pierrec/lz4"
 )

@@ -38,8 +38,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/mimedb"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v2/sync/errgroup"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -269,7 +269,13 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 
 	var uploadIDs []string
 	var disk StorageAPI
-	for _, disk = range er.getLoadBalancedDisks(true) {
+	disks := er.getLoadBalancedLocalDisks()
+	if len(disks) == 0 {
+		// using er.getLoadBalancedLocalDisks() has one side-affect where
+		// on a pooled setup all disks are remote, add a fallback
+		disks = er.getOnlineDisks()
+	}
+	for _, disk = range disks {
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if errors.Is(err, errDiskNotFound) {
@@ -1242,7 +1248,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	defer er.deleteAll(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+	defer func() {
+		if err == nil {
+			er.deleteAll(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+		}
+	}()
 
 	// Rename the multipart object to final location.
 	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,

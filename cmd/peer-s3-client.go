@@ -23,11 +23,12 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"sort"
 	"strconv"
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/rest"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 	"golang.org/x/exp/slices"
 )
 
@@ -123,8 +124,10 @@ func NewS3PeerSys(endpoints EndpointServerPools) *S3PeerSys {
 	}
 }
 
-// ListBuckets lists buckets across all servers and returns a possible consistent view
-func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (result []BucketInfo, err error) {
+// ListBuckets lists buckets across all nodes and returns a consistent view:
+//   - Return an error when a pool cannot return N/2+1 valid bucket information
+//   - For each pool, check if the bucket exists in N/2+1 nodes before including it in the final result
+func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
 	nodeBuckets := make([][]BucketInfo, len(sys.peerClients))
@@ -148,24 +151,51 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (resu
 
 	errs = append(errs, g.Wait()...)
 
-	quorum := len(sys.peerClients)/2 + 1
-	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return nil, err
-	}
+	// The list of buckets in a map to avoid duplication
+	resultMap := make(map[string]BucketInfo)
 
-	bucketsMap := make(map[string]struct{})
-	for idx, buckets := range nodeBuckets {
-		if errs[idx] != nil {
-			continue
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
 		}
-		for _, bi := range buckets {
-			_, ok := bucketsMap[bi.Name]
-			if !ok {
-				bucketsMap[bi.Name] = struct{}{}
-				result = append(result, bi)
+		quorum := len(perPoolErrs)/2 + 1
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
+			return nil, poolErr
+		}
+
+		bucketsMap := make(map[string]int)
+		for idx, buckets := range nodeBuckets {
+			if buckets == nil {
+				continue
+			}
+			if !slices.Contains(sys.peerClients[idx].GetPools(), poolIdx) {
+				continue
+			}
+			for _, bi := range buckets {
+				_, ok := resultMap[bi.Name]
+				if ok {
+					// Skip it, this bucket is found in another pool
+					continue
+				}
+				bucketsMap[bi.Name]++
+				if bucketsMap[bi.Name] == quorum {
+					resultMap[bi.Name] = bi
+				}
 			}
 		}
 	}
+
+	result := make([]BucketInfo, 0, len(resultMap))
+	for _, bi := range resultMap {
+		result = append(result, bi)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
 
 	return result, nil
 }

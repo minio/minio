@@ -22,6 +22,7 @@ package ioutil
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -348,6 +349,10 @@ const DirectioAlignSize = 4096
 // input writer *os.File not a generic io.Writer. Make sure to have
 // the file opened for writes with syscall.O_DIRECT flag.
 func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, file *os.File) (int64, error) {
+	if totalSize == 0 {
+		return 0, nil
+	}
+
 	// Writes remaining bytes in the buffer.
 	writeUnaligned := func(w io.Writer, buf []byte) (remainingWritten int64, err error) {
 		// Disable O_DIRECT on fd's on unaligned buffer
@@ -364,17 +369,19 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 	var written int64
 	for {
 		buf := alignedBuf
-		if totalSize != -1 {
+		if totalSize > 0 {
 			remaining := totalSize - written
 			if remaining < int64(len(buf)) {
 				buf = buf[:remaining]
 			}
 		}
+
 		nr, err := io.ReadFull(r, buf)
-		eof := err == io.EOF || err == io.ErrUnexpectedEOF
+		eof := errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 		if err != nil && !eof {
 			return written, err
 		}
+
 		buf = buf[:nr]
 		var nw int64
 		if len(buf)%DirectioAlignSize == 0 {
@@ -386,22 +393,30 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 			// buf is not aligned, hence use writeUnaligned()
 			nw, err = writeUnaligned(w, buf)
 		}
+
 		if nw > 0 {
 			written += nw
 		}
+
 		if err != nil {
 			return written, err
 		}
+
 		if nw != int64(len(buf)) {
 			return written, io.ErrShortWrite
 		}
 
-		if totalSize != -1 {
-			if written == totalSize {
-				return written, nil
-			}
+		if totalSize > 0 && written == totalSize {
+			// we have written the entire stream, return right here.
+			return written, nil
 		}
+
 		if eof {
+			// We reached EOF prematurely but we did not write everything
+			// that we promised that we would write.
+			if totalSize > 0 && written != totalSize {
+				return written, io.ErrUnexpectedEOF
+			}
 			return written, nil
 		}
 	}

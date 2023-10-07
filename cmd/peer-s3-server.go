@@ -22,11 +22,10 @@ import (
 	"encoding/gob"
 	"errors"
 	"net/http"
-	"sort"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 const (
@@ -123,10 +122,6 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 			})
 		}
 	}
-
-	sort.Slice(buckets, func(i, j int) bool {
-		return buckets[i].Name < buckets[j].Name
-	})
 
 	return buckets, nil
 }

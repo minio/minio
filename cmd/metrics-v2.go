@@ -132,6 +132,9 @@ const (
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
 	driveSubsystem            MetricSubsystem = "drive"
+	interfaceSubsystem        MetricSubsystem = "if"
+	memSubsystem              MetricSubsystem = "mem"
+	cpuSubsystem              MetricSubsystem = "cpu_avg"
 	storageClassSubsystem     MetricSubsystem = "storage_class"
 	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
 	goRoutines                MetricSubsystem = "go_routine"
@@ -539,12 +542,12 @@ func getNodeRRSParityMD() MetricDescription {
 	}
 }
 
-func getNodeDrivesFreeInodes() MetricDescription {
+func getNodeDrivesFreeInodesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      freeInodes,
-		Help:      "Total free inodes",
+		Help:      "Free inodes on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -2085,99 +2088,101 @@ func getReplicationClusterMetrics() *MetricsGroup {
 	)
 
 	mg.RegisterRead(func(_ context.Context) []Metric {
+		var ml []Metric
 		// common operational metrics for bucket replication and site replication - published
 		// at cluster level
-		qs := globalReplicationStats.getNodeQueueStatsSummary()
-		activeWorkersCount := Metric{
-			Description:    getClusterReplActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgActiveWorkersCount := Metric{
-			Description:    getClusterReplAvgActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxActiveWorkersCount := Metric{
-			Description:    getClusterReplMaxActiveWorkersCountMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		currInQueueCount := Metric{
-			Description:    getClusterReplCurrQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		currInQueueBytes := Metric{
-			Description:    getClusterReplCurrQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
+		if globalReplicationStats != nil {
+			qs := globalReplicationStats.getNodeQueueStatsSummary()
+			activeWorkersCount := Metric{
+				Description:    getClusterReplActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgActiveWorkersCount := Metric{
+				Description:    getClusterReplAvgActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxActiveWorkersCount := Metric{
+				Description:    getClusterReplMaxActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueCount := Metric{
+				Description:    getClusterReplCurrQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueBytes := Metric{
+				Description:    getClusterReplCurrQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
 
-		currTransferRate := Metric{
-			Description:    getClusterReplCurrentTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgQueueCount := Metric{
-			Description:    getClusterReplAvgQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgQueueBytes := Metric{
-			Description:    getClusterReplAvgQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxQueueCount := Metric{
-			Description:    getClusterReplMaxQueuedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxQueueBytes := Metric{
-			Description:    getClusterReplMaxQueuedBytesMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		avgTransferRate := Metric{
-			Description:    getClusterReplAvgTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		maxTransferRate := Metric{
-			Description:    getClusterReplMaxTransferRateMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-		}
-		mrfCount := Metric{
-			Description:    getClusterReplMRFFailedOperationsMD(),
-			VariableLabels: map[string]string{serverName: qs.NodeName},
-			Value:          float64(qs.MRFStats.LastFailedCount),
-		}
+			currTransferRate := Metric{
+				Description:    getClusterReplCurrentTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueCount := Metric{
+				Description:    getClusterReplAvgQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueBytes := Metric{
+				Description:    getClusterReplAvgQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueCount := Metric{
+				Description:    getClusterReplMaxQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueBytes := Metric{
+				Description:    getClusterReplMaxQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgTransferRate := Metric{
+				Description:    getClusterReplAvgTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxTransferRate := Metric{
+				Description:    getClusterReplMaxTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			mrfCount := Metric{
+				Description:    getClusterReplMRFFailedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Value:          float64(qs.MRFStats.LastFailedCount),
+			}
 
-		if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
-			qt := qs.QStats
-			currInQueueBytes.Value = qt.Curr.Bytes
-			currInQueueCount.Value = qt.Curr.Count
-			avgQueueBytes.Value = qt.Avg.Bytes
-			avgQueueCount.Value = qt.Avg.Count
-			maxQueueBytes.Value = qt.Max.Bytes
-			maxQueueCount.Value = qt.Max.Count
-		}
-		activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
-		avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
-		maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
+			if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
+				qt := qs.QStats
+				currInQueueBytes.Value = qt.Curr.Bytes
+				currInQueueCount.Value = qt.Curr.Count
+				avgQueueBytes.Value = qt.Avg.Bytes
+				avgQueueCount.Value = qt.Avg.Count
+				maxQueueBytes.Value = qt.Max.Bytes
+				maxQueueCount.Value = qt.Max.Count
+			}
+			activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
+			avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
+			maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
 
-		if len(qs.XferStats) > 0 {
-			tots := qs.XferStats[Total]
-			currTransferRate.Value = tots.Curr
-			avgTransferRate.Value = tots.Avg
-			maxTransferRate.Value = tots.Peak
+			if len(qs.XferStats) > 0 {
+				tots := qs.XferStats[Total]
+				currTransferRate.Value = tots.Curr
+				avgTransferRate.Value = tots.Avg
+				maxTransferRate.Value = tots.Peak
+			}
+			ml = []Metric{
+				activeWorkersCount,
+				avgActiveWorkersCount,
+				maxActiveWorkersCount,
+				currInQueueCount,
+				currInQueueBytes,
+				avgQueueCount,
+				avgQueueBytes,
+				maxQueueCount,
+				maxQueueBytes,
+				currTransferRate,
+				avgTransferRate,
+				maxTransferRate,
+				mrfCount,
+			}
 		}
-		ml := []Metric{
-			activeWorkersCount,
-			avgActiveWorkersCount,
-			maxActiveWorkersCount,
-			currInQueueCount,
-			currInQueueBytes,
-			avgQueueCount,
-			avgQueueBytes,
-			maxQueueCount,
-			maxQueueBytes,
-			currTransferRate,
-			avgTransferRate,
-			maxTransferRate,
-			mrfCount,
-		}
-
 		for ep, health := range globalBucketTargetSys.healthStats() {
 			// link latency current
 			m := Metric{
@@ -3019,17 +3024,21 @@ func getBucketUsageMetrics() *MetricsGroup {
 				})
 			}
 			if !globalSiteReplicationSys.isEnabled() {
-				stats := bucketReplStats[bucket].ReplicationStats
-				metrics = append(metrics, Metric{
-					Description:    getRepReceivedBytesMD(bucketMetricNamespace),
-					Value:          float64(stats.ReplicaSize),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
-				metrics = append(metrics, Metric{
-					Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
-					Value:          float64(stats.ReplicaCount),
-					VariableLabels: map[string]string{"bucket": bucket},
-				})
+				var stats BucketReplicationStats
+				s, ok := bucketReplStats[bucket]
+				if ok {
+					stats = s.ReplicationStats
+					metrics = append(metrics, Metric{
+						Description:    getRepReceivedBytesMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaSize),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaCount),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+				}
 				if stats.hasReplicationUsage() {
 					for arn, stat := range stats.Stats {
 						metrics = append(metrics, Metric{
@@ -3201,7 +3210,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getNodeDrivesFreeInodes(),
+				Description:    getNodeDrivesFreeInodesMD(),
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
@@ -3540,6 +3549,61 @@ func getKMSMetrics() *MetricsGroup {
 	return mg
 }
 
+func collectMetric(metric Metric, labels []string, values []string, metricName string, out chan<- prometheus.Metric) {
+	if metric.Description.Type == histogramMetric {
+		if metric.Histogram == nil {
+			return
+		}
+		for k, v := range metric.Histogram {
+			pmetric, err := prometheus.NewConstMetric(
+				prometheus.NewDesc(
+					prometheus.BuildFQName(string(metric.Description.Namespace),
+						string(metric.Description.Subsystem),
+						string(metric.Description.Name)),
+					metric.Description.Help,
+					append(labels, metric.HistogramBucketLabel),
+					metric.StaticLabels,
+				),
+				prometheus.GaugeValue,
+				float64(v),
+				append(values, k)...)
+			if err != nil {
+				// Enable for debugging
+				if serverDebugLog {
+					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), metricName+"-metrics-histogram")
+				}
+			} else {
+				out <- pmetric
+			}
+		}
+		return
+	}
+	metricType := prometheus.GaugeValue
+	if metric.Description.Type == counterMetric {
+		metricType = prometheus.CounterValue
+	}
+	pmetric, err := prometheus.NewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(string(metric.Description.Namespace),
+				string(metric.Description.Subsystem),
+				string(metric.Description.Name)),
+			metric.Description.Help,
+			labels,
+			metric.StaticLabels,
+		),
+		metricType,
+		metric.Value,
+		values...)
+	if err != nil {
+		// Enable for debugging
+		if serverDebugLog {
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), metricName+"-metrics")
+		}
+	} else {
+		out <- pmetric
+	}
+}
+
 type minioBucketCollector struct {
 	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
@@ -3564,52 +3628,7 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-			if metric.Description.Type == histogramMetric {
-				if metric.Histogram == nil {
-					continue
-				}
-				for k, v := range metric.Histogram {
-					pmetric, err := prometheus.NewConstMetric(
-						prometheus.NewDesc(
-							prometheus.BuildFQName(string(metric.Description.Namespace),
-								string(metric.Description.Subsystem),
-								string(metric.Description.Name)),
-							metric.Description.Help,
-							append(labels, metric.HistogramBucketLabel),
-							metric.StaticLabels,
-						),
-						prometheus.GaugeValue,
-						float64(v),
-						append(values, k)...)
-					if err != nil {
-						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), "bucket-metrics-histogram")
-					} else {
-						out <- pmetric
-					}
-				}
-				continue
-			}
-			metricType := prometheus.GaugeValue
-			if metric.Description.Type == counterMetric {
-				metricType = prometheus.CounterValue
-			}
-			pmetric, err := prometheus.NewConstMetric(
-				prometheus.NewDesc(
-					prometheus.BuildFQName(string(metric.Description.Namespace),
-						string(metric.Description.Subsystem),
-						string(metric.Description.Name)),
-					metric.Description.Help,
-					labels,
-					metric.StaticLabels,
-				),
-				metricType,
-				metric.Value,
-				values...)
-			if err != nil {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "bucket-metrics")
-			} else {
-				out <- pmetric
-			}
+			collectMetric(metric, labels, values, "bucket", out)
 		}
 	}
 
@@ -3644,52 +3663,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-			if metric.Description.Type == histogramMetric {
-				if metric.Histogram == nil {
-					continue
-				}
-				for k, v := range metric.Histogram {
-					pmetric, err := prometheus.NewConstMetric(
-						prometheus.NewDesc(
-							prometheus.BuildFQName(string(metric.Description.Namespace),
-								string(metric.Description.Subsystem),
-								string(metric.Description.Name)),
-							metric.Description.Help,
-							append(labels, metric.HistogramBucketLabel),
-							metric.StaticLabels,
-						),
-						prometheus.GaugeValue,
-						float64(v),
-						append(values, k)...)
-					if err != nil {
-						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
-					} else {
-						out <- pmetric
-					}
-				}
-				continue
-			}
-			metricType := prometheus.GaugeValue
-			if metric.Description.Type == counterMetric {
-				metricType = prometheus.CounterValue
-			}
-			pmetric, err := prometheus.NewConstMetric(
-				prometheus.NewDesc(
-					prometheus.BuildFQName(string(metric.Description.Namespace),
-						string(metric.Description.Subsystem),
-						string(metric.Description.Name)),
-					metric.Description.Help,
-					labels,
-					metric.StaticLabels,
-				),
-				metricType,
-				metric.Value,
-				values...)
-			if err != nil {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
-			} else {
-				out <- pmetric
-			}
+			collectMetric(metric, labels, values, "cluster", out)
 		}
 	}
 
@@ -3822,11 +3796,11 @@ func newMinioCollectorNode(metricsGroups []*MetricsGroup) *minioNodeCollector {
 	}
 }
 
-func metricsBucketHandler() http.Handler {
+func metricsHTTPHandler(c prometheus.Collector, funcName string) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	// Report all other metrics
-	logger.CriticalIf(GlobalContext, registry.Register(bucketCollector))
+	logger.CriticalIf(GlobalContext, registry.Register(c))
 
 	// DefaultGatherers include golang metrics and process metrics.
 	gatherers := prometheus.Gatherers{
@@ -3836,16 +3810,14 @@ func metricsBucketHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.FuncName = "handler.MetricsBucket"
+			tc.FuncName = funcName
 			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
+		if err != nil && len(mfs) == 0 {
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+			return
 		}
 
 		contentType := expfmt.Negotiate(r.Header)
@@ -3863,6 +3835,10 @@ func metricsBucketHandler() http.Handler {
 			closer.Close()
 		}
 	})
+}
+
+func metricsBucketHandler() http.Handler {
+	return metricsHTTPHandler(bucketCollector, "handler.MetricsBucket")
 }
 
 func metricsServerHandler() http.Handler {
@@ -3884,11 +3860,9 @@ func metricsServerHandler() http.Handler {
 		}
 
 		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
+		if err != nil && len(mfs) == 0 {
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+			return
 		}
 
 		contentType := expfmt.Negotiate(r.Header)

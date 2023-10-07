@@ -21,14 +21,15 @@ import (
 	"strings"
 
 	"github.com/minio/mux"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 const (
-	prometheusMetricsPathLegacy    = "/prometheus/metrics"
-	prometheusMetricsV2ClusterPath = "/v2/metrics/cluster"
-	prometheusMetricsV2BucketPath  = "/v2/metrics/bucket"
-	prometheusMetricsV2NodePath    = "/v2/metrics/node"
+	prometheusMetricsPathLegacy     = "/prometheus/metrics"
+	prometheusMetricsV2ClusterPath  = "/v2/metrics/cluster"
+	prometheusMetricsV2BucketPath   = "/v2/metrics/bucket"
+	prometheusMetricsV2NodePath     = "/v2/metrics/node"
+	prometheusMetricsV2ResourcePath = "/v2/metrics/resource"
 )
 
 // Standard env prometheus auth type
@@ -57,4 +58,5 @@ func registerMetricsRouter(router *mux.Router) {
 	metricsRouter.Handle(prometheusMetricsV2ClusterPath, auth(metricsServerHandler()))
 	metricsRouter.Handle(prometheusMetricsV2BucketPath, auth(metricsBucketHandler()))
 	metricsRouter.Handle(prometheusMetricsV2NodePath, auth(metricsNodeHandler()))
+	metricsRouter.Handle(prometheusMetricsV2ResourcePath, auth(metricsResourceHandler()))
 }

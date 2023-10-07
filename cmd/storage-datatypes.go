@@ -46,6 +46,7 @@ type DiskInfo struct {
 	FreeInodes uint64
 	Major      uint32
 	Minor      uint32
+	NRRequests uint64
 	FSType     string
 	RootDisk   bool
 	Healing    bool

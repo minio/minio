@@ -489,31 +489,27 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 	defer sys.Unlock()
 
 	// Remove existingtarget and arn association
-	if tgts, ok := sys.targetsMap[bucket]; ok {
-		for _, t := range tgts {
+	if stgts, ok := sys.targetsMap[bucket]; ok {
+		for _, t := range stgts {
 			delete(sys.arnRemotesMap, t.Arn)
 		}
 		delete(sys.targetsMap, bucket)
 	}
 
-	// No need for more if not adding anything
-	if tgts == nil || tgts.Empty() {
-		globalBucketMonitor.DeleteBucket(bucket)
-		return
-	}
-
-	if len(tgts.Targets) > 0 {
-		sys.targetsMap[bucket] = tgts.Targets
-	}
-	for _, tgt := range tgts.Targets {
-		tgtClient, err := sys.getRemoteTargetClient(&tgt)
-		if err != nil {
-			continue
+	if tgts != nil {
+		for _, tgt := range tgts.Targets {
+			tgtClient, err := sys.getRemoteTargetClient(&tgt)
+			if err != nil {
+				continue
+			}
+			sys.arnRemotesMap[tgt.Arn] = tgtClient
+			sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 		}
-		sys.arnRemotesMap[tgt.Arn] = tgtClient
-		sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
+
+		if !tgts.Empty() {
+			sys.targetsMap[bucket] = tgts.Targets
+		}
 	}
-	sys.targetsMap[bucket] = tgts.Targets
 }
 
 // create minio-go clients for buckets having remote targets
@@ -524,9 +520,6 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 	}
 	sys.Lock()
 	defer sys.Unlock()
-	if len(cfg.Targets) > 0 {
-		sys.targetsMap[bucket.Name] = cfg.Targets
-	}
 	for _, tgt := range cfg.Targets {
 		tgtClient, err := sys.getRemoteTargetClient(&tgt)
 		if err != nil {

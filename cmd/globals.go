@@ -52,8 +52,8 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
-	"github.com/minio/pkg/certs"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/certs"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // minio configuration related constants.
@@ -151,6 +151,9 @@ var (
 	// Custom browser redirect URL, not set by default
 	// and it is automatically deduced.
 	globalBrowserRedirectURL *xnet.URL
+
+	// Disable redirect, default is enabled.
+	globalBrowserRedirect bool
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
@@ -402,6 +405,9 @@ var (
 
 	// Captures all batch jobs metrics globally
 	globalBatchJobsMetrics batchJobMetrics
+
+	// Indicates if server was started as `--address ":0"`
+	globalDynamicAPIPort bool
 	// Add new variable global values here.
 )
 

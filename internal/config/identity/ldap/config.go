@@ -25,7 +25,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/ldap"
+	"github.com/minio/pkg/v2/ldap"
 )
 
 const (

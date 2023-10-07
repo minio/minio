@@ -25,8 +25,8 @@ import (
 
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/logger/message/log"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/logger/message/log"
 )
 
 // Target implements loggerTarget to send log

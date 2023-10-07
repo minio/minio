@@ -36,8 +36,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 const (
@@ -243,7 +243,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -273,7 +273,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -408,7 +408,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		// JWT. This is a MinIO STS API specific value, this value
 		// should be set and configured on your identity provider as
 		// part of JWT custom claims.
-		policySet, ok := iampolicy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
+		policySet, ok := policy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
 		policies := strings.Join(policySet.ToSlice(), ",")
 		if ok {
 			policyName = globalIAMSys.CurrentPolicies(policies)
@@ -438,7 +438,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -450,7 +450,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -604,7 +604,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -649,7 +649,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	claims[ldapUserN] = ldapUsername
 
 	if len(sessionPolicyStr) > 0 {
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey

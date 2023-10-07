@@ -33,8 +33,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
-	"github.com/minio/pkg/sync/errgroup"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -297,7 +297,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		profilingDataFound = true
 
 		for typ, data := range data {
-			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data)
+			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data, 0o600)
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
@@ -325,11 +325,11 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 	// Send profiling data to zip as file
 	for typ, data := range data {
-		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data)
+		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data, 0o600)
 		logger.LogIf(ctx, err)
 	}
 	if b := getClusterMetaInfo(ctx); len(b) > 0 {
-		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b))
+		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
 	}
 
 	return
@@ -783,6 +783,27 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 	return reply
 }
 
+// GetResourceMetrics - gets the resource metrics from all nodes excluding self.
+func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) <-chan Metric {
+	if sys == nil {
+		return nil
+	}
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	for index := range sys.peerClients {
+		index := index
+		g.Go(func() error {
+			if sys.peerClients[index] == nil {
+				return errPeerNotReachable
+			}
+			var err error
+			peerChannels[index], err = sys.peerClients[index].GetResourceMetrics(ctx)
+			return err
+		}, index)
+	}
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
+}
+
 // GetSysConfig - Get information about system config
 // (only the config that are of concern to minio)
 func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig {
@@ -1099,38 +1120,68 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 	}
 	reports = append(reports, globalBucketMonitor.GetReport(bandwidth.SelectBuckets(buckets...)))
 	consolidatedReport := bandwidth.BucketBandwidthReport{
-		BucketStats: make(map[string]map[string]bandwidth.Details),
+		BucketStats: make(map[bandwidth.BucketOptions]bandwidth.Details),
 	}
 	for _, report := range reports {
 		if report == nil || report.BucketStats == nil {
 			continue
 		}
-		for bucket := range report.BucketStats {
-			d, ok := consolidatedReport.BucketStats[bucket]
+		for opts := range report.BucketStats {
+			d, ok := consolidatedReport.BucketStats[opts]
 			if !ok {
-				consolidatedReport.BucketStats[bucket] = make(map[string]bandwidth.Details)
-				d = consolidatedReport.BucketStats[bucket]
-				for arn := range d {
-					d[arn] = bandwidth.Details{
-						LimitInBytesPerSecond: report.BucketStats[bucket][arn].LimitInBytesPerSecond,
-					}
+				d = bandwidth.Details{
+					LimitInBytesPerSecond: report.BucketStats[opts].LimitInBytesPerSecond,
 				}
 			}
-			for arn, st := range report.BucketStats[bucket] {
-				bwDet := bandwidth.Details{}
-				if bw, ok := d[arn]; ok {
-					bwDet = bw
-				}
-				if bwDet.LimitInBytesPerSecond < st.LimitInBytesPerSecond {
-					bwDet.LimitInBytesPerSecond = st.LimitInBytesPerSecond
-				}
-				bwDet.CurrentBandwidthInBytesPerSecond += st.CurrentBandwidthInBytesPerSecond
-				d[arn] = bwDet
-				consolidatedReport.BucketStats[bucket] = d
+			dt, ok := report.BucketStats[opts]
+			if ok {
+				d.CurrentBandwidthInBytesPerSecond += dt.CurrentBandwidthInBytesPerSecond
 			}
+			consolidatedReport.BucketStats[opts] = d
 		}
 	}
 	return consolidatedReport
+}
+
+func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels []<-chan Metric, g *errgroup.Group) <-chan Metric {
+	ch := make(chan Metric)
+	var wg sync.WaitGroup
+	for index, err := range g.Wait() {
+		if err != nil {
+			if sys.peerClients[index] != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+					sys.peerClients[index].host.String())
+				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+			} else {
+				logger.LogOnceIf(ctx, err, "peer-offline")
+			}
+			continue
+		}
+		wg.Add(1)
+		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				select {
+				case m, ok := <-peerChannel:
+					if !ok {
+						return
+					}
+					select {
+					case ch <- m:
+					case <-ctx.Done():
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(ctx, peerChannels[index], &wg)
+	}
+	go func(wg *sync.WaitGroup, ch chan Metric) {
+		wg.Wait()
+		close(ch)
+	}(&wg, ch)
+	return ch
 }
 
 // GetBucketMetrics - gets the cluster level bucket metrics from all nodes excluding self.
@@ -1151,45 +1202,7 @@ func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric 
 			return err
 		}, index)
 	}
-
-	ch := make(chan Metric)
-	var wg sync.WaitGroup
-	for index, err := range g.Wait() {
-		if err != nil {
-			if sys.peerClients[index] != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
-					sys.peerClients[index].host.String())
-				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
-			} else {
-				logger.LogOnceIf(ctx, err, "peer-offline")
-			}
-			continue
-		}
-		wg.Add(1)
-		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
-			defer wg.Done()
-			for {
-				select {
-				case m, ok := <-peerChannel:
-					if !ok {
-						return
-					}
-					select {
-					case ch <- m:
-					case <-ctx.Done():
-						return
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(ctx, peerChannels[index], &wg)
-	}
-	go func(wg *sync.WaitGroup, ch chan Metric) {
-		wg.Wait()
-		close(ch)
-	}(&wg, ch)
-	return ch
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
 }
 
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
@@ -1210,45 +1223,7 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 			return err
 		}, index)
 	}
-
-	ch := make(chan Metric)
-	var wg sync.WaitGroup
-	for index, err := range g.Wait() {
-		if err != nil {
-			if sys.peerClients[index] != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
-					sys.peerClients[index].host.String())
-				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
-			} else {
-				logger.LogOnceIf(ctx, err, "peer-offline")
-			}
-			continue
-		}
-		wg.Add(1)
-		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
-			defer wg.Done()
-			for {
-				select {
-				case m, ok := <-peerChannel:
-					if !ok {
-						return
-					}
-					select {
-					case ch <- m:
-					case <-ctx.Done():
-						return
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(ctx, peerChannels[index], &wg)
-	}
-	go func(wg *sync.WaitGroup, ch chan Metric) {
-		wg.Wait()
-		close(ch)
-	}(&wg, ch)
-	return ch
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
 }
 
 // ServiceFreeze freezes all S3 API calls when 'freeze' is true,

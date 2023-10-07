@@ -85,7 +85,7 @@ if ! checkBucketExists $BUCKET ; then
 
 
   # set versioning for bucket if objectlocking is disabled or not set
-  if [ -z $OBJECTLOCKING ] ; then
+  if [ $OBJECTLOCKING = false ] ; then
   if [ ! -z $VERSIONING ] ; then
     if [ $VERSIONING = true ] ; then
         echo "Enabling versioning for '$BUCKET'"

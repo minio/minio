@@ -35,7 +35,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -440,6 +440,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	lc, _ := globalLifecycleSys.Get(bucket)
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bucket)
+	rcfg, _ := getReplicationConfig(ctx, bucket)
 
 	pool := z.serverPools[poolIdx]
 	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
@@ -467,7 +468,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
-			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 			if evt.Action.Delete() {
 				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
@@ -736,7 +737,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(ctx, io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}
@@ -766,7 +767,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		return err
 	}
 
-	hr, err := hash.NewReader(gr, oi.Size, "", "", actualSize)
+	hr, err := hash.NewReader(ctx, gr, oi.Size, "", "", actualSize)
 	if err != nil {
 		return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 	}

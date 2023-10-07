@@ -26,18 +26,20 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Compression environment variables
 const (
-	Bitrot  = "bitrotscan"
-	Sleep   = "max_sleep"
-	IOCount = "max_io"
+	Bitrot       = "bitrotscan"
+	Sleep        = "max_sleep"
+	IOCount      = "max_io"
+	DriveWorkers = "drive_workers"
 
-	EnvBitrot  = "MINIO_HEAL_BITROTSCAN"
-	EnvSleep   = "MINIO_HEAL_MAX_SLEEP"
-	EnvIOCount = "MINIO_HEAL_MAX_IO"
+	EnvBitrot       = "MINIO_HEAL_BITROTSCAN"
+	EnvSleep        = "MINIO_HEAL_MAX_SLEEP"
+	EnvIOCount      = "MINIO_HEAL_MAX_IO"
+	EnvDriveWorkers = "MINIO_HEAL_DRIVE_WORKERS"
 )
 
 var configMutex sync.RWMutex
@@ -50,6 +52,8 @@ type Config struct {
 	// maximum sleep duration between objects to slow down heal operation.
 	Sleep   time.Duration `json:"sleep"`
 	IOCount int           `json:"iocount"`
+
+	DriveWorkers int `json:"drive_workers"`
 
 	// Cached value from Bitrot field
 	cache struct {
@@ -77,6 +81,13 @@ func (opts Config) Clone() (int, time.Duration, string) {
 	return opts.IOCount, opts.Sleep, opts.Bitrot
 }
 
+// GetWorkers returns the number of workers, -1 is none configured
+func (opts Config) GetWorkers() int {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return opts.DriveWorkers
+}
+
 // Update updates opts with nopts
 func (opts *Config) Update(nopts Config) {
 	configMutex.Lock()
@@ -85,6 +96,7 @@ func (opts *Config) Update(nopts Config) {
 	opts.Bitrot = nopts.Bitrot
 	opts.IOCount = nopts.IOCount
 	opts.Sleep = nopts.Sleep
+	opts.DriveWorkers = nopts.DriveWorkers
 
 	opts.cache.bitrotCycle, _ = parseBitrotConfig(nopts.Bitrot)
 }
@@ -102,6 +114,10 @@ var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   IOCount,
 		Value: "100",
+	},
+	config.KV{
+		Key:   DriveWorkers,
+		Value: "",
 	},
 }
 
@@ -154,5 +170,18 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_io' value invalid: %w", err)
 	}
+	if ws := env.Get(EnvDriveWorkers, kvs.GetWithDefault(DriveWorkers, DefaultKVS)); ws != "" {
+		w, err := strconv.Atoi(ws)
+		if err != nil {
+			return cfg, fmt.Errorf("'heal:drive_workers' value invalid: %w", err)
+		}
+		if w < 1 {
+			return cfg, fmt.Errorf("'heal:drive_workers' value invalid: zero or negative integer unsupported")
+		}
+		cfg.DriveWorkers = w
+	} else {
+		cfg.DriveWorkers = -1
+	}
+
 	return cfg, nil
 }

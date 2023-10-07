@@ -60,9 +60,8 @@ import (
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 const (
@@ -367,10 +366,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
 		for _, bucketInfo := range bucketsInfo {
-			if globalIAMSys.IsAllowed(iampolicy.Args{
+			if globalIAMSys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
-				Action:          iampolicy.ListBucketAction,
+				Action:          policy.ListBucketAction,
 				BucketName:      bucketInfo.Name,
 				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
@@ -379,10 +378,10 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			}) {
 				bucketsInfo[n] = bucketInfo
 				n++
-			} else if globalIAMSys.IsAllowed(iampolicy.Args{
+			} else if globalIAMSys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
-				Action:          iampolicy.GetBucketLocationAction,
+				Action:          policy.GetBucketLocationAction,
 				BucketName:      bucketInfo.Name,
 				ConditionValues: getConditionValues(r, "", cred),
 				IsOwner:         owner,
@@ -770,8 +769,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if objectLockEnabled {
 		// Creating a bucket with locking requires the user having more permissions
-		for _, action := range []iampolicy.Action{iampolicy.PutBucketObjectLockConfigurationAction, iampolicy.PutBucketVersioningAction} {
-			if !globalIAMSys.IsAllowed(iampolicy.Args{
+		for _, action := range []policy.Action{policy.PutBucketObjectLockConfigurationAction, policy.PutBucketVersioningAction} {
+			if !globalIAMSys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
 				Groups:          cred.Groups,
 				Action:          action,
@@ -1103,10 +1102,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if len(fanOutEntries) > 0 {
 		// Once signature is validated, check if the user has
 		// explicit permissions for the user.
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.PutObjectFanOutAction,
+			Action:          policy.PutObjectFanOutAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			BucketName:      bucket,
 			ObjectName:      object,
@@ -1119,10 +1118,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	} else {
 		// Once signature is validated, check if the user has
 		// explicit permissions for the user.
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
+		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
-			Action:          iampolicy.PutObjectAction,
+			Action:          policy.PutObjectAction,
 			ConditionValues: getConditionValues(r, "", cred),
 			BucketName:      bucket,
 			ObjectName:      object,
@@ -1140,7 +1139,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(reader, fileSize, "", "", fileSize)
+	hashReader, err := hash.NewReader(ctx, reader, fileSize, "", "", fileSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1255,7 +1254,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 			// do not try to verify encrypted content/
-			hashReader, err = hash.NewReader(reader, -1, "", "", -1)
+			hashReader, err = hash.NewReader(ctx, reader, -1, "", "", -1)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
@@ -1501,7 +1500,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	}
 
 	// Check if anonymous (non-owner) has access to list objects.
-	readable := globalPolicySys.IsAllowed(policy.Args{
+	readable := globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 		Action:          policy.ListBucketAction,
 		BucketName:      bucket,
 		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),
@@ -1509,7 +1508,7 @@ func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter,
 	})
 
 	// Check if anonymous (non-owner) has access to upload objects.
-	writable := globalPolicySys.IsAllowed(policy.Args{
+	writable := globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
 		Action:          policy.PutObjectAction,
 		BucketName:      bucket,
 		ConditionValues: getConditionValues(r, "", auth.AnonymousCredentials),

@@ -47,8 +47,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/trie"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/trie"
+	"github.com/minio/pkg/v2/wildcard"
 	"github.com/valyala/bytebufferpool"
 	"golang.org/x/exp/slices"
 )
@@ -342,6 +342,15 @@ func mustGetUUID() string {
 	return u.String()
 }
 
+// mustGetUUIDBytes - get a random UUID as 16 bytes unencoded.
+func mustGetUUIDBytes() []byte {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
+	}
+	return u[:]
+}
+
 // Create an s3 compatible MD5sum for complete multipart transaction.
 func getCompleteMultipartMD5(parts []CompletePart) string {
 	var finalMD5Bytes []byte
@@ -507,7 +516,10 @@ func (o *ObjectInfo) IsCompressedOK() (bool, error) {
 }
 
 // GetActualSize - returns the actual size of the stored object
-func (o *ObjectInfo) GetActualSize() (int64, error) {
+func (o ObjectInfo) GetActualSize() (int64, error) {
+	if o.ActualSize != nil {
+		return *o.ActualSize, nil
+	}
 	if o.IsCompressed() {
 		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
 		if !ok {
