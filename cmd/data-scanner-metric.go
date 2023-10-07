@@ -66,10 +66,12 @@ const (
 	scannerMetricYield
 	scannerMetricCleanAbandoned
 	scannerMetricApplyNonCurrent
+	scannerMetricHealAbandonedVersion
 
 	// START Trace metrics:
 	scannerMetricStartTrace
 	scannerMetricScanObject // Scan object. All operations included.
+	scannerMetricHealAbandonedObject
 
 	// END realtime metrics:
 	scannerMetricLastRealtime

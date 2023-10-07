@@ -474,6 +474,22 @@ func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Reques
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
+func (s *peerRESTServer) GetResourceMetrics(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	enc := gob.NewEncoder(w)
+
+	for m := range ReportMetrics(r.Context(), resourceMetricsGroups) {
+		if err := enc.Encode(m); err != nil {
+			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
+			return
+		}
+	}
+}
+
 // GetSysConfigHandler - returns system config information.
 // (only the config that are of concern to minio)
 func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Request) {
@@ -939,7 +955,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan event.Event, 2000)
+	ch := make(chan event.Event, globalAPIConfig.getRequestsPoolCapacity())
 
 	err := globalHTTPListen.Subscribe(mask, ch, doneCh, func(ev event.Event) bool {
 		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
@@ -994,7 +1010,7 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan madmin.TraceInfo, 2000)
+	ch := make(chan madmin.TraceInfo, 100000)
 	err = globalTrace.Subscribe(traceOpts.TraceTypes(), ch, r.Context().Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
 	})
@@ -1143,13 +1159,13 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	ch := make(chan log.Info, 2000)
+	ch := make(chan log.Info, 100000)
 	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
 	enc := gob.NewEncoder(w)
@@ -1438,6 +1454,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(h(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(h(server.GetMemInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(h(server.GetMetricsHandler)).Queries(restQueries(peerRESTMetricsTypes)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodResourceMetrics).HandlerFunc(h(server.GetResourceMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysErrors).HandlerFunc(h(server.GetSysErrorsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysServices).HandlerFunc(h(server.GetSysServicesHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(h(server.GetSysConfigHandler))

@@ -498,7 +498,14 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["parity"] = m.Erasure.ParityBlocks
+		tags["merrs"] = errors.Join(errs...)
+		tags["derrs"] = errors.Join(dataErrs...)
+		if m.IsValid() {
+			tags["size"] = m.Size
+			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
+			tags["parity"] = m.Erasure.ParityBlocks
+		}
+
 		if cok {
 			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
 		}
@@ -1621,10 +1628,12 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	var lc *lifecycle.Lifecycle
 	var rcfg lock.Retention
+	var replcfg *replication.Config
 	if opts.Expiration.Expire {
 		// Check if the current bucket has a configured lifecycle policy
 		lc, _ = globalLifecycleSys.Get(bucket)
 		rcfg, _ = globalBucketObjectLockSys.Get(bucket)
+		replcfg, _ = getReplicationConfig(ctx, bucket)
 	}
 
 	// expiration attempted on a bucket with no lifecycle
@@ -1677,7 +1686,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	if opts.Expiration.Expire {
 		if gerr == nil {
-			evt := evalActionFromLifecycle(ctx, *lc, rcfg, goi)
+			evt := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, goi)
 			var isErr bool
 			switch evt.Action {
 			case lifecycle.NoneAction:

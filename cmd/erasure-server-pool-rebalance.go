@@ -440,6 +440,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	lc, _ := globalLifecycleSys.Get(bucket)
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bucket)
+	rcfg, _ := getReplicationConfig(ctx, bucket)
 
 	pool := z.serverPools[poolIdx]
 	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
@@ -467,7 +468,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
-			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 			if evt.Action.Delete() {
 				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
