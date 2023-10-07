@@ -57,6 +57,7 @@ const (
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
 	KafkaVersion       = "version"
+	KafkaBatchSize     = "batch_size"
 
 	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -73,6 +74,9 @@ const (
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
+	EnvKafkaBatchSize     = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
+
+	maxBatchLimit = 100
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -83,6 +87,7 @@ type KafkaArgs struct {
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
 	Version    string      `json:"version"`
+	BatchSize  uint32      `json:"batchSize"`
 	TLS        struct {
 		Enable        bool               `json:"enable"`
 		RootCAs       *x509.CertPool     `json:"-"`
@@ -122,6 +127,14 @@ func (k KafkaArgs) Validate() error {
 			return err
 		}
 	}
+	if k.BatchSize > 1 {
+		if k.QueueDir == "" {
+			return errors.New("batch should be enabled only if queue dir is enabled")
+		}
+		if k.BatchSize > maxBatchLimit {
+			return fmt.Errorf("batch limit should not exceed %d", maxBatchLimit)
+		}
+	}
 	return nil
 }
 
@@ -134,6 +147,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      store.Store[event.Event]
+	batch      *store.Batch[string, *sarama.ProducerMessage]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -188,32 +202,24 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 	if target.producer == nil {
 		return store.ErrNotConnected
 	}
-	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
+	msg, err := target.toProducerMessage(eventData)
 	if err != nil {
 		return err
 	}
-	key := eventData.S3.Bucket.Name + "/" + objectName
-
-	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
-	if err != nil {
-		return err
-	}
-
-	msg := sarama.ProducerMessage{
-		Topic: target.args.Topic,
-		Key:   sarama.StringEncoder(key),
-		Value: sarama.ByteEncoder(data),
-	}
-
-	_, _, err = target.producer.SendMessage(&msg)
-
+	_, _, err = target.producer.SendMessage(msg)
 	return err
 }
 
 // SendFromStore - reads an event from store and sends it to Kafka.
-func (target *KafkaTarget) SendFromStore(eventKey string) error {
+func (target *KafkaTarget) SendFromStore(key store.Key) error {
 	if err := target.init(); err != nil {
 		return err
+	}
+
+	// If batch is enabled, the event will be batched in memory
+	// and will be committed once the batch is full.
+	if target.batch != nil {
+		return target.addToBatch(key)
 	}
 
 	var err error
@@ -222,21 +228,7 @@ func (target *KafkaTarget) SendFromStore(eventKey string) error {
 		return err
 	}
 
-	if target.producer == nil {
-		brokers := []string{}
-		for _, broker := range target.args.Brokers {
-			brokers = append(brokers, broker.String())
-		}
-		target.producer, err = sarama.NewSyncProducer(brokers, target.config)
-		if err != nil {
-			if err != sarama.ErrOutOfBrokers {
-				return err
-			}
-			return store.ErrNotConnected
-		}
-	}
-
-	eventData, eErr := target.store.Get(eventKey)
+	eventData, eErr := target.store.Get(key.Name)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -248,15 +240,79 @@ func (target *KafkaTarget) SendFromStore(eventKey string) error {
 
 	err = target.send(eventData)
 	if err != nil {
-		// Sarama opens the ciruit breaker after 3 consecutive connection failures.
-		if err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open" {
+		if isKafkaConnErr(err) {
 			return store.ErrNotConnected
 		}
 		return err
 	}
 
 	// Delete the event from store.
-	return target.store.Del(eventKey)
+	return target.store.Del(key.Name)
+}
+
+func (target *KafkaTarget) addToBatch(key store.Key) error {
+	if target.batch.IsFull() {
+		if err := target.commitBatch(); err != nil {
+			return err
+		}
+	}
+	if _, ok := target.batch.GetByKey(key.Name); !ok {
+		eventData, err := target.store.Get(key.Name)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		msg, err := target.toProducerMessage(eventData)
+		if err != nil {
+			return err
+		}
+		if err = target.batch.Add(key.Name, msg); err != nil {
+			return err
+		}
+	}
+	// commit the batch if the key is the last one present in the store.
+	if key.IsLast || target.batch.IsFull() {
+		return target.commitBatch()
+	}
+	return nil
+}
+
+func (target *KafkaTarget) commitBatch() error {
+	if _, err := target.isActive(); err != nil {
+		return err
+	}
+	keys, msgs, err := target.batch.GetAll()
+	if err != nil {
+		return err
+	}
+	if err = target.producer.SendMessages(msgs); err != nil {
+		if isKafkaConnErr(err) {
+			return store.ErrNotConnected
+		}
+		return err
+	}
+	return target.store.DelList(keys)
+}
+
+func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.ProducerMessage, error) {
+	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	key := eventData.S3.Bucket.Name + "/" + objectName
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
+	if err != nil {
+		return nil, err
+	}
+
+	return &sarama.ProducerMessage{
+		Topic: target.args.Topic,
+		Key:   sarama.StringEncoder(key),
+		Value: sarama.ByteEncoder(data),
+	}, nil
 }
 
 // Close - closes underneath kafka connection.
@@ -335,16 +391,16 @@ func (target *KafkaTarget) initKafka() error {
 	// These settings are needed to ensure that kafka client doesn't hang on brokers
 	// refer https://github.com/IBM/sarama/issues/765#issuecomment-254333355
 	config.Producer.Retry.Max = 2
-	config.Producer.Retry.Backoff = (10 * time.Second)
+	config.Producer.Retry.Backoff = (1 * time.Second)
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	config.Producer.RequiredAcks = 1
-	config.Producer.Timeout = (10 * time.Second)
-	config.Net.ReadTimeout = (10 * time.Second)
-	config.Net.DialTimeout = (10 * time.Second)
-	config.Net.WriteTimeout = (10 * time.Second)
+	config.Producer.Timeout = (5 * time.Second)
+	config.Net.ReadTimeout = (5 * time.Second)
+	config.Net.DialTimeout = (5 * time.Second)
+	config.Net.WriteTimeout = (5 * time.Second)
 	config.Metadata.Retry.Max = 1
-	config.Metadata.Retry.Backoff = (10 * time.Second)
+	config.Metadata.Retry.Backoff = (1 * time.Second)
 	config.Metadata.RefreshFrequency = (15 * time.Minute)
 
 	target.config = config
@@ -394,8 +450,16 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	}
 
 	if target.store != nil {
+		if args.BatchSize > 1 {
+			target.batch = store.NewBatch[string, *sarama.ProducerMessage](args.BatchSize)
+		}
 		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}
 
 	return target, nil
+}
+
+func isKafkaConnErr(err error) bool {
+	// Sarama opens the ciruit breaker after 3 consecutive connection failures.
+	return err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open"
 }
