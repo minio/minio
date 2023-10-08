@@ -59,7 +59,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/mux"
-	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 )
 
@@ -547,9 +546,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogOnceIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err), "get-object-handler-write")
-		}
 		return
 	}
 
@@ -557,9 +553,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
-		}
-		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogOnceIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err), "get-object-handler-close")
 		}
 		return
 	}
@@ -780,8 +773,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
 				return
 			}
-
-			logger.LogIf(ctx, err, logger.Application)
 		}
 	}
 
@@ -1067,7 +1058,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var srcOpts, dstOpts ObjectOptions
 	srcOpts, err = copySrcOpts(ctx, r, srcBucket, srcObject)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1086,7 +1076,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1572,7 +1561,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		objInfo.ETag = origETag
 		enqueueTransitionImmediate(objInfo, lcEventSrc_s3CopyObject)
 		// Remove the transitioned object whose object version is being overwritten.
-		logger.LogIf(ctx, os.Sweep())
+		os.Sweep()
 	}
 }
 
@@ -1972,7 +1961,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
 		enqueueTransitionImmediate(objInfo, lcEventSrc_s3PutObject)
-		logger.LogIf(ctx, os.Sweep())
+		os.Sweep()
 	}
 }
 
@@ -3144,7 +3133,6 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 		}, ObjectOptions{
 			VersionID: objInfo.VersionID,
 		}); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s: %s", objInfo.VersionID, err))
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL)
 			return
 		}
@@ -3224,7 +3212,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}
 		if err := objectAPI.RestoreTransitionedObject(rctx, bucket, object, opts); err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, fmt.Errorf("Unable to restore transitioned bucket/object %s/%s: %w", bucket, object, err))
 			return
 		}
 

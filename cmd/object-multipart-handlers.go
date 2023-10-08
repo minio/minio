@@ -356,7 +356,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return true
 		}
 		if parseRangeErr != nil {
-			logger.LogIf(ctx, parseRangeErr)
 			writeCopyPartErr(ctx, w, parseRangeErr, r.URL)
 			// Range header mismatch is pre-condition like failure
 			// so return true to indicate Range precondition failed.
@@ -1035,7 +1034,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		enqueueTransitionImmediate(objInfo, lcEventSrc_s3CompleteMultipartUpload)
-		logger.LogIf(ctx, os.Sweep())
+		os.Sweep()
 	}
 }
 

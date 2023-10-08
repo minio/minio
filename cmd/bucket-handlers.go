@@ -716,7 +716,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
 			continue
 		}
-		logger.LogIf(ctx, os.Sweep())
+		os.Sweep()
 	}
 }
 
@@ -794,7 +794,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		logger.LogIf(ctx, fmt.Errorf("An attempt to create %d buckets beyond recommended %d", currBuckets+1, maxBuckets))
+		logger.LogIf(ctx, fmt.Errorf("Please avoid creating more buckets %d beyond recommended %d", currBuckets+1, maxBuckets))
 	}
 
 	opts := MakeBucketOptions{
@@ -1141,7 +1141,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	hashReader, err := hash.NewReader(ctx, reader, fileSize, "", "", fileSize)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
