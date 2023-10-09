@@ -78,17 +78,6 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj g
 			Object: prefix,
 		}
 	}
-	// Verify if marker has prefix.
-	if marker != "" && !HasPrefix(marker, prefix) {
-		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
-			Marker: marker,
-			Prefix: prefix,
-		})
-		return InvalidMarkerPrefixCombination{
-			Marker: marker,
-			Prefix: prefix,
-		}
-	}
 	return nil
 }
 

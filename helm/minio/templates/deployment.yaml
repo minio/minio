@@ -120,7 +120,14 @@ spec:
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
               value: {{ .Values.oidc.clientId }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
+            {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientSecretKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.existingClientSecretName }}
+                  key: {{ .Values.oidc.existingClientSecretKey }}
+            {{- else }}
               value: {{ .Values.oidc.clientSecret }}
+            {{- end }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
               value: {{ .Values.oidc.claimName }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_PREFIX

@@ -290,18 +290,16 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	}
 
-	if globalAPIConfig.odirectEnabled() {
-		// Return an error if ODirect is not supported
-		// unless it is a single erasure disk mode
-		if err := s.checkODirectDiskSupport(); err == nil {
-			s.oDirect = true
+	// Return an error if ODirect is not supported unless it is a single erasure
+	// disk mode
+	if err := s.checkODirectDiskSupport(); err == nil {
+		s.oDirect = true
+	} else {
+		// Allow if unsupported platform or single disk.
+		if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
+			s.oDirect = false
 		} else {
-			// Allow if unsupported platform or single disk.
-			if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
-				s.oDirect = false
-			} else {
-				return s, err
-			}
+			return s, err
 		}
 	}
 
@@ -462,6 +460,7 @@ func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	atomic.AddInt32(&s.scanning, 1)
 	defer atomic.AddInt32(&s.scanning, -1)
+
 	var err error
 	stopFn := globalScannerMetrics.log(scannerMetricScanBucketDrive, s.drivePath, cache.Info.Name)
 	defer func() {
@@ -650,6 +649,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
+	// Do not cache results from atomic variables
+	scanning := atomic.LoadInt32(&s.scanning) == 1
+
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -677,7 +679,6 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 			// - if we found an unformatted disk (no 'format.json')
 			// - if we found healing tracker 'healing.bin'
 			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
-			dcinfo.Scanning = atomic.LoadInt32(&s.scanning) == 1
 			dcinfo.ID = diskID
 			return dcinfo, err
 		}
@@ -687,6 +688,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	if v != nil {
 		info = v.(DiskInfo)
 	}
+	info.Scanning = scanning
 	return info, err
 }
 
@@ -1941,7 +1943,6 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	if err != nil {
 		return osErrToFileErr(err)
 	}
-	defer w.Close()
 
 	var bufp *[]byte
 	switch {
@@ -1964,17 +1965,33 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 		written, err = io.CopyBuffer(diskHealthWriter(ctx, w), r, *bufp)
 	}
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if written < fileSize && fileSize >= 0 {
+		w.Close()
 		return errLessData
 	} else if written > fileSize && fileSize >= 0 {
+		w.Close()
 		return errMoreData
 	}
 
 	// Only interested in flushing the size_t not mtime/atime
-	return Fdatasync(w)
+	if err = Fdatasync(w); err != nil {
+		w.Close()
+		return err
+	}
+
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
@@ -2012,18 +2029,27 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 	if err != nil {
 		return err
 	}
-	defer w.Close()
 
 	n, err := w.Write(b)
 	if err != nil {
+		w.Close()
 		return err
 	}
 
 	if n != len(b) {
+		w.Close()
 		return io.ErrShortWrite
 	}
 
-	return nil
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	return w.Close()
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {

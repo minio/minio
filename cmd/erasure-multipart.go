@@ -1248,7 +1248,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	defer er.deleteAll(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+	defer func() {
+		if err == nil {
+			er.deleteAll(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+		}
+	}()
 
 	// Rename the multipart object to final location.
 	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,

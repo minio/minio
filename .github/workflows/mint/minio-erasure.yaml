@@ -2,7 +2,7 @@ version: '3.7'
 
 # Settings and configurations that are common for all containers
 x-minio-common: &minio-common
-  image: minio/minio:${JOB_NAME}
+  image: quay.io/minio/minio:${JOB_NAME}
   command: server --console-address ":9001" edata{1...4}
   expose:
     - "9000"

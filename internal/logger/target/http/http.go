@@ -127,11 +127,17 @@ func (h *Target) String() string {
 	return h.config.Name
 }
 
-// IsOnline returns true if the target is reachable.
+// IsOnline returns true if the target is reachable using a cached value
 func (h *Target) IsOnline(ctx context.Context) bool {
+	return atomic.LoadInt32(&h.status) == statusOnline
+}
+
+// ping returns true if the target is reachable.
+func (h *Target) ping(ctx context.Context) bool {
 	if err := h.send(ctx, []byte(`{}`), webhookCallTimeout); err != nil {
 		return !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnRefusedErr(err)
 	}
+	go h.startHTTPLogger(ctx)
 	return true
 }
 
@@ -179,7 +185,7 @@ func (h *Target) init(ctx context.Context) (err error) {
 		return errors.New("target is closed")
 	}
 
-	if !h.IsOnline(ctx) {
+	if !h.ping(ctx) {
 		// Start a goroutine that will continue to check if we can reach
 		h.revive.Do(func() {
 			go func() {
@@ -191,7 +197,7 @@ func (h *Target) init(ctx context.Context) (err error) {
 					if atomic.LoadInt32(&h.status) != statusOffline {
 						return
 					}
-					if h.IsOnline(ctx) {
+					if h.ping(ctx) {
 						// We are online.
 						if atomic.CompareAndSwapInt32(&h.status, statusOffline, statusOnline) {
 							h.workerStartMu.Lock()
@@ -219,6 +225,14 @@ func (h *Target) init(ctx context.Context) (err error) {
 }
 
 func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration) (err error) {
+	defer func() {
+		if err != nil {
+			atomic.StoreInt32(&h.status, statusOffline)
+		} else {
+			atomic.StoreInt32(&h.status, statusOnline)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -335,9 +349,9 @@ func New(config Config) *Target {
 }
 
 // SendFromStore - reads the log from store and sends it to webhook.
-func (h *Target) SendFromStore(key string) (err error) {
+func (h *Target) SendFromStore(key store.Key) (err error) {
 	var eventData interface{}
-	eventData, err = h.store.Get(key)
+	eventData, err = h.store.Get(key.Name)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -358,7 +372,7 @@ func (h *Target) SendFromStore(key string) (err error) {
 		return err
 	}
 	// Delete the event from store.
-	return h.store.Del(key)
+	return h.store.Del(key.Name)
 }
 
 // Send the log message 'entry' to the http target.

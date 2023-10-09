@@ -1581,7 +1581,9 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	traceCh := make(chan madmin.TraceInfo, 4000)
+
+	// Keep 100k buffered channel, should be sufficient to ensure we do not lose any events.
+	traceCh := make(chan madmin.TraceInfo, 100000)
 
 	peers, _ := newPeerRestClients(globalEndpoints)
 
@@ -1605,7 +1607,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		peer.Trace(traceCh, ctx.Done(), traceOpts)
 	}
 
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
@@ -2929,9 +2931,14 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	sb.WriteString("\n")
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
 
+	scheme := "https"
+	if !globalIsTLS {
+		scheme = "http"
+	}
+
 	// save MinIO start script to inspect command
 	var scrb bytes.Buffer
-	scrb.WriteString(`#!/usr/bin/env bash
+	fmt.Fprintf(&scrb, `#!/usr/bin/env bash
 
 function main() {
 	for file in $(ls -1); do
@@ -2940,10 +2947,10 @@ function main() {
 	done
 
 	# Read content of inspect-input.txt
-	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#https:\/\/#\.\/#g")
+	MINIO_OPTS=$(grep "Server command line args" <./inspect-input.txt | sed "s/Server command line args: //g" | sed -r "s#%s:\/\/#\.\/#g")
 
 	# Start MinIO instance using the options
-	START_CMD="CI=on _MINIO_AUTO_DISK_HEALING=off minio server ${MINIO_OPTS} &"
+	START_CMD="CI=on _MINIO_AUTO_DRIVE_HEALING=off minio server ${MINIO_OPTS} &"
 	echo
 	echo "Starting MinIO instance: ${START_CMD}"
 	echo
@@ -2955,8 +2962,7 @@ function main() {
 	sleep 10
 }
 
-main "$@"`,
-	)
+main "$@"`, scheme)
 	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes(), 0o755))
 }
 
