@@ -394,8 +394,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 }
 
 func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
-	if opts.DiskID != "" && p.diskID != "" && opts.DiskID != p.diskID {
-		return fmt.Errorf("WalkDir: Disk ID %s does not match. want %s", opts.DiskID, p.diskID)
+	if err := p.checkID(opts.DiskID); err != nil {
+		return err
 	}
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWalkDir, opts.Bucket, opts.BaseDir)
 	if err != nil {
@@ -440,7 +440,6 @@ func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, 
 	if err != nil {
 		return grid.NewRemoteErr(err)
 	}
-
 	defer func() {
 		if r := recover(); r != nil {
 			debug.PrintStack()
