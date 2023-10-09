@@ -777,7 +777,7 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 
 	for index, err := range g.Wait() {
 		if err != nil {
-			reply[index].Errors = []string{err.Error()}
+			reply[index].Errors = []string{fmt.Sprintf("%s: %s (rpc)", sys.peerClients[index].String(), err.Error())}
 		}
 	}
 	return reply
