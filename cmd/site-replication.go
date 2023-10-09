@@ -205,16 +205,6 @@ type SiteReplicationSys struct {
 
 type srState srStateV2
 
-// srStateV1 represents version 1 of the site replication state persistence
-// format.
-type srStateV1 struct {
-	Name string `json:"name"`
-
-	// Peers maps peers by their deploymentID
-	Peers                   map[string]madmin.PeerInfo `json:"peers"`
-	ServiceAccountAccessKey string                     `json:"serviceAccountAccessKey"`
-}
-
 // srStateV2 represents version 2 of the site replication state persistence
 // format.
 type srStateV2 struct {
@@ -4070,7 +4060,7 @@ func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI Obj
 		}
 	}
 	for dID, bStatus := range bs {
-		if bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(string(*latestExpLCConfig), string(*bStatus.meta.ExpiryLCConfig)) {
+		if bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(*latestExpLCConfig, *bStatus.meta.ExpiryLCConfig) {
 			continue
 		}
 		if dID == globalDeploymentID {
