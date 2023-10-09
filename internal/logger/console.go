@@ -49,8 +49,16 @@ func consoleLog(console Logger, msg string, args ...interface{}) {
 		msg = ansiRE.ReplaceAllLiteralString(msg, "")
 		console.json(msg, args...)
 	case quietFlag:
+		if len(msg) != 0 && len(args) == 0 {
+			args = append(args, msg)
+			msg = "%s"
+		}
 		console.quiet(msg+"\n", args...)
 	default:
+		if len(msg) != 0 && len(args) == 0 {
+			args = append(args, msg)
+			msg = "%s"
+		}
 		console.pretty(msg+"\n", args...)
 	}
 }
