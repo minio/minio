@@ -333,7 +333,10 @@ type RemoteClient struct {
 	Name string
 }
 
-type ctxCallerKey = struct{}
+type (
+	ctxCallerKey   = struct{}
+	ctxSubrouteKey = struct{}
+)
 
 // GetCaller returns caller information from contexts provided to handlers.
 func GetCaller(ctx context.Context) *RemoteClient {
@@ -341,8 +344,18 @@ func GetCaller(ctx context.Context) *RemoteClient {
 	return val
 }
 
+// GetSubroute returns caller information from contexts provided to handlers.
+func GetSubroute(ctx context.Context) string {
+	val, _ := ctx.Value(ctxSubrouteKey{}).(string)
+	return val
+}
+
 func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
 	return context.WithValue(ctx, ctxCallerKey{}, cl)
+}
+
+func setSubroute(ctx context.Context, s string) context.Context {
+	return context.WithValue(ctx, ctxSubrouteKey{}, s)
 }
 
 // StreamTypeHandler is a type safe handler for streaming requests.
@@ -428,28 +441,31 @@ func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID) *StreamTypeH
 }
 
 // Register a handler for two-way streaming with payload, input stream and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
+// An optional subroute can be given. Multiple entries are joined with '/'.
+func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	return h.register(m, handle, subroute...)
 }
 
 // RegisterNoInput a handler for one-way streaming with payload and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(p Payload, out chan<- Resp) *RemoteErr, subroute ...string) error {
+// An optional subroute can be given. Multiple entries are joined with '/'.
+func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(ctx context.Context, p Payload, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	h.InCapacity = 0
-	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
-		return handle(p, out)
+	return h.register(m, func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
+		return handle(ctx, p, out)
 	}, subroute...)
 }
 
 // RegisterNoPayload a handler for one-way streaming with payload and output stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, handle func(in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
+// An optional subroute can be given. Multiple entries are joined with '/'.
+func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, handle func(ctx context.Context, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	h.WithPayload = false
-	return h.register(m, func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
-		return handle(in, out)
+	return h.register(m, func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr {
+		return handle(ctx, in, out)
 	}, subroute...)
 }
 
 // Register a handler for two-way streaming with optional payload and input stream.
-func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func(p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
+func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	return m.RegisterStreamingHandler(h.id, StreamHandler{
 		Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
 			var plT Payload
@@ -515,7 +531,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					}
 				}
 			}()
-			rErr := handle(plT, inT, outT)
+			rErr := handle(ctx, plT, inT, outT)
 			close(outT)
 			<-outDone
 			return rErr

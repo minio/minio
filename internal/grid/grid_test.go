@@ -28,6 +28,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -833,7 +834,7 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 
 	// 1: Echo
 	register := func(manager *Manager) {
-		errFatal(handler.Register(manager, func(pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+		errFatal(handler.Register(manager, func(ctx context.Context, pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
 			n := 0
 			for i := range in {
 				if n > payloads {
@@ -912,7 +913,11 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 
 	// 1: Echo
 	register := func(manager *Manager) {
-		errFatal(handler.Register(manager, func(pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+		errFatal(handler.Register(manager, func(ctx context.Context, pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+			sub := GetSubroute(ctx)
+			if sub != "subroute/1" {
+				t.Fatal("expected subroute/1, got", sub)
+			}
 			n := 0
 			for i := range in {
 				if n > payloads {
@@ -928,7 +933,7 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 				n++
 			}
 			return nil
-		}))
+		}, "subroute", "1"))
 	}
 	register(local)
 	register(remote)
@@ -936,9 +941,11 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 	// local to remote
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
+	// Add subroute
+	remoteSub := remoteConn.Subroute(strings.Join([]string{"subroute", "1"}, "/"))
 
 	start := time.Now()
-	stream, err := handler.Call(context.Background(), remoteConn, &testRequest{Num: 1, String: testPayload})
+	stream, err := handler.Call(context.Background(), remoteSub, &testRequest{Num: 1, String: testPayload})
 	errFatal(err)
 	go func() {
 		defer close(stream.Requests)

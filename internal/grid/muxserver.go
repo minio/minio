@@ -71,6 +71,9 @@ func newMuxStateless(ctx context.Context, msg message, c *Connection, handler St
 func newMuxStream(ctx context.Context, msg message, c *Connection, handler StreamHandler) *muxServer {
 	var cancel context.CancelFunc
 	ctx = setCaller(ctx, c.remote)
+	if len(handler.Subroute) > 0 {
+		ctx = setSubroute(ctx, handler.Subroute)
+	}
 	if msg.DeadlineMS > 0 {
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond+c.addDeadline)
 	} else {
