@@ -2124,12 +2124,12 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	if sc == "" {
+		sc = storageclass.STANDARD
+	}
+
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-
-		if sc == "" {
-			sc = storageclass.STANDARD
-		}
 
 		metadata := map[string]string{
 			xhttp.AmzStorageClass: sc, // save same storage-class as incoming stream.
