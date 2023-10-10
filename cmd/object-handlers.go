@@ -2124,6 +2124,12 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
+	// These are static for all objects extracted.
+	reqParams := extractReqParams(r)
+	respElements := map[string]string{
+		"requestId": w.Header().Get(xhttp.AmzRequestID),
+		"nodeId":    w.Header().Get(xhttp.AmzRequestHostID),
+	}
 	if sc == "" {
 		sc = storageclass.STANDARD
 	}
@@ -2258,8 +2264,8 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
 			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
+			ReqParams:    reqParams,
+			RespElements: respElements,
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
 		}
