@@ -270,6 +270,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			cacheReader.Close()
 			c.cacheStats.incMiss()
 			bReader, err := c.InnerGetObjectNInfoFn(ctx, bucket, object, rs, h, opts)
+			if err != nil {
+				return nil, err
+			}
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
 			bReader.ObjInfo.CacheStatus = CacheMiss
 			return bReader, err
