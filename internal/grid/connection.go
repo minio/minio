@@ -481,12 +481,12 @@ func (c *Connection) Stateless(ctx context.Context, h HandlerID, req []byte, cb 
 */
 
 // shouldConnect returns a deterministic bool whether the local should initiate the connection.
+// It should be 50% chance of any host initiating the connection.
 func (c *Connection) shouldConnect() bool {
-	// We xor the two hashes, so result isn't order dependent.
-	h0 := xxh3.HashString(c.Local)
-	h1 := xxh3.HashString(c.Remote)
+	// The remote should have the opposite result.
+	h0 := xxh3.HashString(c.Local + c.Remote)
+	h1 := xxh3.HashString(c.Remote + c.Local)
 	if h0 == h1 {
-		// Tiebreak on unlikely tie.
 		return c.Local < c.Remote
 	}
 	return h0 < h1

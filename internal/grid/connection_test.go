@@ -161,3 +161,31 @@ func TestDisconnect(t *testing.T) {
 func dummyRequestValidate(r *http.Request) error {
 	return nil
 }
+
+func TestShouldConnect(t *testing.T) {
+	var c Connection
+	var cReverse Connection
+	hosts := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	for x := range hosts {
+		should := 0
+		for y := range hosts {
+			if x == y {
+				continue
+			}
+			c.Local = hosts[x]
+			c.Remote = hosts[y]
+			cReverse.Local = hosts[y]
+			cReverse.Remote = hosts[x]
+			if c.shouldConnect() == cReverse.shouldConnect() {
+				t.Errorf("shouldConnect(%q, %q) != shouldConnect(%q, %q)", hosts[x], hosts[y], hosts[y], hosts[x])
+			}
+			if c.shouldConnect() {
+				should++
+			}
+		}
+		if should < 10 {
+			t.Errorf("host %q only connects to %d hosts", hosts[x], should)
+		}
+		t.Logf("host %q should connect to %d hosts", hosts[x], should)
+	}
+}
