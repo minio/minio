@@ -2634,16 +2634,18 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 					roi.EventType = ReplicateExisting
 					replicateObject(ctx, roi, objectAPI)
 				}
-				_, err = tgt.StatObject(ctx, tgt.Bucket, roi.Name, minio.StatObjectOptions{
+
+				st := TargetReplicationResyncStatus{
+					Object: roi.Name,
+					Bucket: roi.Bucket,
+				}
+
+				_, err := tgt.StatObject(ctx, tgt.Bucket, roi.Name, minio.StatObjectOptions{
 					VersionID: roi.VersionID,
 					Internal: minio.AdvancedGetOptions{
 						ReplicationProxyRequest: "false",
 					},
 				})
-				st := TargetReplicationResyncStatus{
-					Object: roi.Name,
-					Bucket: roi.Bucket,
-				}
 				if err != nil {
 					if roi.DeleteMarker && isErrMethodNotAllowed(ErrorRespToObjectError(err, opts.bucket, roi.Name)) {
 						st.ReplicatedCount++
