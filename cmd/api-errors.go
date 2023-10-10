@@ -2337,6 +2337,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case dns.ErrBucketConflict:
 		apiErr = ErrBucketAlreadyExists
 	default:
+		if _, ok := err.(tags.Error); ok {
+			// tag errors are not exported, so we check their custom interface to avoid logging.
+			// The correct type is inserted by toAPIError.
+			apiErr = ErrInternalError
+			break
+		}
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
 		//nolint:gocritic
