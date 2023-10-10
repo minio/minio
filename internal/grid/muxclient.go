@@ -92,7 +92,7 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	}
 	ch := make(chan Response, 1)
 	m.respWait = ch
-	// Send...
+	// Send... (no need for lock yet)
 	if err := m.sendLocked(msg); err != nil {
 		return nil, err
 	}
@@ -273,7 +273,11 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 					}
 					select {
 					case responseCh <- resp:
-						logger.LogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
+						m.respMu.Lock()
+						if !m.closed {
+							logger.LogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
+						}
+						m.respMu.Unlock()
 					case <-m.ctx.Done():
 						// Client canceled. Don't block.
 						// Next loop will catch it.
