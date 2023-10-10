@@ -1086,6 +1086,21 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 	}
 }
 
+// checkID will check if the disk ID matches the provided ID.
+func (p *xlStorageDiskIDCheck) checkID(wantID string) (err error) {
+	if wantID == "" {
+		return nil
+	}
+	id, err := p.storage.GetDiskID()
+	if err != nil {
+		return err
+	}
+	if id != wantID {
+		return fmt.Errorf("disk ID %s does not match. disk reports %s", wantID, id)
+	}
+	return nil
+}
+
 // diskHealthCheckOK will check if the provided error is nil
 // and update disk status if good.
 // For convenience a bool is returned to indicate any error state

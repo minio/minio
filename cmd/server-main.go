@@ -655,12 +655,19 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
+	// Initialize grid
+	bootstrapTrace("initGrid", func() {
+		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
+	})
+
 	// Configure server.
 	bootstrapTrace("configureServer", func() {
 		handler, err := configureServerHandler(globalEndpoints)
 		if err != nil {
 			logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 		}
+		// Allow grid to start after registering all services.
+		close(globalGridStart)
 
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).

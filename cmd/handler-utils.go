@@ -389,12 +389,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
-	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-		writeErrorResponseString(r.Context(), w, APIError{
-			Code:           "XMinioLockVersionMismatch",
-			Description:    desc,
-			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, adminPathPrefix):
 		var desc string
 		version := extractAPIVersion(r)

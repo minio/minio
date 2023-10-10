@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,14 +15,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package grid
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
-	errLockConflict       = errors.New("lock conflict")
-	errLockNotInitialized = errors.New("lock not initialized")
-	errLockNotFound       = errors.New("lock not found")
+	// ErrUnknownHandler is returned when an unknown handler is requested.
+	ErrUnknownHandler = errors.New("unknown mux handler")
+
+	// ErrHandlerAlreadyExists is returned when a handler is already registered.
+	ErrHandlerAlreadyExists = errors.New("mux handler already exists")
+
+	// ErrIncorrectSequence is returned when an out-of-sequence item is received.
+	ErrIncorrectSequence = errors.New("out-of-sequence item received")
 )
+
+// ErrResponse is a remote error response.
+type ErrResponse struct {
+	msg string
+}
+
+func (e ErrResponse) Error() string {
+	return fmt.Sprintf("remote: %s", e.msg)
+}
