@@ -241,7 +241,7 @@ func (l Config) GetExpiryDuration(dsecs string) (time.Duration, error) {
 // IsLDAPUserDN determines if the given string could be a user DN from LDAP.
 func (l Config) IsLDAPUserDN(user string) bool {
 	for _, baseDN := range l.LDAP.UserDNSearchBaseDistNames {
-		if strings.HasSuffix(user, ","+baseDN) {
+		if strings.HasSuffix(strings.ToLower(user), strings.ToLower(","+baseDN)) {
 			return true
 		}
 	}
@@ -251,7 +251,7 @@ func (l Config) IsLDAPUserDN(user string) bool {
 // IsLDAPGroupDN determines if the given string could be a group DN from LDAP.
 func (l Config) IsLDAPGroupDN(user string) bool {
 	for _, baseDN := range l.LDAP.GroupSearchBaseDistNames {
-		if strings.HasSuffix(user, ","+baseDN) {
+		if strings.HasSuffix(strings.ToLower(user), strings.ToLower(","+baseDN)) {
 			return true
 		}
 	}
