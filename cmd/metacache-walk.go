@@ -21,18 +21,17 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"runtime/debug"
 	"sort"
-	"strconv"
 	"strings"
 
-	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/valyala/bytebufferpool"
 )
+
+//go:generate msgp -file $GOFILE
 
 // WalkDirOptions provides options for WalkDir operations.
 type WalkDirOptions struct {
@@ -57,6 +56,10 @@ type WalkDirOptions struct {
 
 	// Limit the number of returned objects if > 0.
 	Limit int
+
+	// DiskID contains the disk ID of the disk.
+	// Leave empty to not check disk ID.
+	DiskID string
 }
 
 // WalkDir will traverse a directory and return all entries found.
@@ -387,6 +390,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 }
 
 func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
+	if err := p.checkID(opts.DiskID); err != nil {
+		return err
+	}
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWalkDir, opts.Bucket, opts.BaseDir)
 	if err != nil {
 		return err
@@ -399,59 +405,42 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 // WalkDir will traverse a directory and return all entries found.
 // On success a meta cache stream will be returned, that should be closed when done.
 func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, opts.Bucket)
-	values.Set(storageRESTDirPath, opts.BaseDir)
-	values.Set(storageRESTRecursive, strconv.FormatBool(opts.Recursive))
-	values.Set(storageRESTReportNotFound, strconv.FormatBool(opts.ReportNotFound))
-	values.Set(storageRESTPrefixFilter, opts.FilterPrefix)
-	values.Set(storageRESTForwardFilter, opts.ForwardTo)
-	respBody, err := client.call(ctx, storageRESTMethodWalkDir, values, nil, -1)
+	// Ensure remote has the same disk ID.
+	opts.DiskID = client.diskID
+	b, err := opts.MarshalMsg(grid.GetByteBuffer()[:0])
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return err
 	}
-	defer xhttp.DrainBody(respBody)
-	return waitForHTTPStream(respBody, wr)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	st, err := client.gridConn.NewStream(ctx, grid.HandlerWalkDir, b)
+	if err != nil {
+		return err
+	}
+	for in := range st.Responses {
+		if in.Err != nil {
+			return in.Err
+		}
+		if _, err = wr.Write(in.Msg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // WalkDirHandler - remote caller to list files and folders in a requested directory path.
-func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	volume := r.Form.Get(storageRESTVolume)
-	dirPath := r.Form.Get(storageRESTDirPath)
-	recursive, err := strconv.ParseBool(r.Form.Get(storageRESTRecursive))
+func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) *grid.RemoteErr {
+	var opts WalkDirOptions
+	_, err := opts.UnmarshalMsg(payload)
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		return grid.NewRemoteErr(err)
 	}
-
-	var reportNotFound bool
-	if v := r.Form.Get(storageRESTReportNotFound); v != "" {
-		reportNotFound, err = strconv.ParseBool(v)
-		if err != nil {
-			s.writeErrorResponse(w, err)
-			return
-		}
-	}
-
-	prefix := r.Form.Get(storageRESTPrefixFilter)
-	forward := r.Form.Get(storageRESTForwardFilter)
-	writer := streamHTTPResponse(w)
 	defer func() {
 		if r := recover(); r != nil {
 			debug.PrintStack()
-			writer.CloseWithError(fmt.Errorf("panic: %v", r))
+			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
-	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
-		Bucket:         volume,
-		BaseDir:        dirPath,
-		Recursive:      recursive,
-		ReportNotFound: reportNotFound,
-		FilterPrefix:   prefix,
-		ForwardTo:      forward,
-	}, writer))
+	return grid.NewRemoteErr(s.storage.WalkDir(ctx, opts, grid.WriterToChannel(out)))
 }

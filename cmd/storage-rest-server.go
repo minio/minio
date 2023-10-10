@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/internal/grid"
 	"github.com/tinylib/msgp/msgp"
 
 	jwtreq "github.com/golang-jwt/jwt/v4/request"
@@ -1379,6 +1380,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 	h := func(f http.HandlerFunc) http.HandlerFunc {
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
+	gr := globalGrid.Load()
 
 	for _, setDisks := range storageDisks {
 		for _, storage := range setDisks {
@@ -1422,10 +1424,15 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodRenameFile).HandlerFunc(h(server.RenameFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(h(server.WalkDirHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+
+			logger.FatalIf(gr.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
+				Subroute:    endpoint.Path,
+				Handle:      server.WalkDirHandler,
+				OutCapacity: 1,
+			}), "unable to register handler")
 		}
 	}
 }

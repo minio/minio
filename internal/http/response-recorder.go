@@ -18,10 +18,12 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -48,6 +50,15 @@ type ResponseRecorder struct {
 	body    bytes.Buffer
 	// Indicate if headers are written in the log
 	headersLogged bool
+}
+
+// Hijack - hijacks the underlying connection
+func (lrw *ResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := lrw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking. Type is %T", lrw.ResponseWriter)
+	}
+	return hj.Hijack()
 }
 
 // NewResponseRecorder - returns a wrapped response writer to trap
