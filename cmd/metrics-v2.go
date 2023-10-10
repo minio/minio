@@ -2556,30 +2556,33 @@ func getNotificationMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		nstats := globalNotifyTargetList.Stats()
-		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
-		metrics = append(metrics, Metric{
-			Description: MetricDescription{
-				Namespace: minioNamespace,
-				Subsystem: notifySubsystem,
-				Name:      "current_send_in_progress",
-				Help:      "Number of concurrent async Send calls active to all targets",
-				Type:      gaugeMetric,
-			},
-			Value: float64(nstats.CurrentSendCalls),
-		})
-		for _, st := range nstats.TargetStats {
+		metrics := make([]Metric, 0, 3)
+
+		if globalEventNotifier != nil {
+			nstats := globalEventNotifier.targetList.Stats()
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
-					Name:      "target_queue_length",
-					Help:      "Number of unsent notifications in queue for target",
+					Name:      "current_send_in_progress",
+					Help:      "Number of concurrent async Send calls active to all targets",
 					Type:      gaugeMetric,
 				},
-				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
-				Value:          float64(st.CurrentQueue),
+				Value: float64(nstats.CurrentSendCalls),
 			})
+			for _, st := range nstats.TargetStats {
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_queue_length",
+						Help:      "Number of unsent notifications in queue for target",
+						Type:      gaugeMetric,
+					},
+					VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+					Value:          float64(st.CurrentQueue),
+				})
+			}
 		}
 
 		lstats := globalLambdaTargetList.Stats()
