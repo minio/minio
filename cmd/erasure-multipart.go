@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
-	uatomic "go.uber.org/atomic"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -273,9 +272,15 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 	if len(disks) == 0 {
 		// using er.getLoadBalancedLocalDisks() has one side-affect where
 		// on a pooled setup all disks are remote, add a fallback
-		disks = er.getOnlineDisks()
+		disks = er.getDisks()
 	}
 	for _, disk = range disks {
+		if disk == nil {
+			continue
+		}
+		if !disk.IsOnline() {
+			continue
+		}
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if errors.Is(err, errDiskNotFound) {
@@ -399,47 +404,31 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// If we have offline disks upgrade the number of erasure codes for this object.
 	parityOrig := parityDrives
 
-	atomicParityDrives := uatomic.NewInt64(0)
-	atomicOfflineDrives := uatomic.NewInt64(0)
-
-	// Start with current parityDrives
-	atomicParityDrives.Store(int64(parityDrives))
-
-	var wg sync.WaitGroup
+	var offlineDrives int
 	for _, disk := range onlineDisks {
 		if disk == nil {
-			atomicParityDrives.Inc()
-			atomicOfflineDrives.Inc()
+			parityDrives++
+			offlineDrives++
 			continue
 		}
 		if !disk.IsOnline() {
-			atomicParityDrives.Inc()
-			atomicOfflineDrives.Inc()
+			parityDrives++
+			offlineDrives++
 			continue
 		}
-		wg.Add(1)
-		go func(disk StorageAPI) {
-			defer wg.Done()
-			di, err := disk.DiskInfo(ctx, false)
-			if err != nil || di.ID == "" {
-				atomicOfflineDrives.Inc()
-				atomicParityDrives.Inc()
-			}
-		}(disk)
 	}
-	wg.Wait()
 
-	if int(atomicOfflineDrives.Load()) >= (len(onlineDisks)+1)/2 {
+	if offlineDrives >= (len(onlineDisks)+1)/2 {
 		// if offline drives are more than 50% of the drives
 		// we have no quorum, we shouldn't proceed just
 		// fail at that point.
 		return nil, toObjectErr(errErasureWriteQuorum, bucket, object)
 	}
 
-	parityDrives = int(atomicParityDrives.Load())
 	if parityDrives >= len(onlineDisks)/2 {
 		parityDrives = len(onlineDisks) / 2
 	}
+
 	if parityOrig != parityDrives {
 		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
