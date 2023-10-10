@@ -18,121 +18,86 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"io"
-	"net/url"
+	"errors"
 
 	"github.com/minio/minio/internal/dsync"
-	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/rest"
+	"github.com/minio/minio/internal/grid"
+	"github.com/minio/minio/internal/logger"
 )
 
 // lockRESTClient is authenticable lock REST client
 type lockRESTClient struct {
-	restClient *rest.Client
-	u          *url.URL
-}
-
-func toLockError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	switch err.Error() {
-	case errLockConflict.Error():
-		return errLockConflict
-	case errLockNotFound.Error():
-		return errLockNotFound
-	}
-	return err
-}
-
-// String stringer *dsync.NetLocker* interface compatible method.
-func (client *lockRESTClient) String() string {
-	return client.u.String()
-}
-
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
-// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
-// after verifying format.json
-func (client *lockRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if values == nil {
-		values = make(url.Values)
-	}
-
-	respBody, err = client.restClient.Call(ctx, method, values, body, length)
-	if err == nil {
-		return respBody, nil
-	}
-
-	return nil, toLockError(err)
+	connection *grid.Connection
 }
 
 // IsOnline - returns whether REST client failed to connect or not.
-func (client *lockRESTClient) IsOnline() bool {
-	return client.restClient.IsOnline()
+func (c *lockRESTClient) IsOnline() bool {
+	return c.connection.State() == grid.StateConnected
 }
 
 // Not a local locker
-func (client *lockRESTClient) IsLocal() bool {
+func (c *lockRESTClient) IsLocal() bool {
 	return false
 }
 
 // Close - marks the client as closed.
-func (client *lockRESTClient) Close() error {
-	client.restClient.Close()
+func (c *lockRESTClient) Close() error {
 	return nil
 }
 
-// restCall makes a call to the lock REST server.
-func (client *lockRESTClient) restCall(ctx context.Context, call string, args dsync.LockArgs) (reply bool, err error) {
-	argsBytes, err := args.MarshalMsg(metaDataPoolGet()[:0])
+// Close - marks the client as closed.
+func (c *lockRESTClient) String() string {
+	return c.connection.Remote
+}
+
+func (c *lockRESTClient) call(ctx context.Context, h *grid.SingleHandler[*dsync.LockArgs, *dsync.LockResp], args *dsync.LockArgs) (ok bool, err error) {
+	r, err := h.Call(ctx, c.connection, args)
 	if err != nil {
+		logger.LogIfNot(ctx, err, grid.ErrDisconnected)
 		return false, err
 	}
-	defer metaDataPoolPut(argsBytes)
-	body := bytes.NewReader(argsBytes)
-	respBody, err := client.callWithContext(ctx, call, nil, body, body.Size())
-	defer xhttp.DrainBody(respBody)
-	switch err {
-	case nil:
-		return true, nil
-	case errLockConflict, errLockNotFound:
-		return false, nil
+	defer h.PutResponse(r)
+	ok = r.Code == dsync.RespOK
+	switch r.Code {
+	case dsync.RespLockConflict, dsync.RespLockNotFound, dsync.RespOK:
+	// no error
+	case dsync.RespLockNotInitialized:
+		err = errLockNotInitialized
 	default:
-		return false, err
+		err = errors.New(r.Err)
 	}
+	return ok, err
 }
 
 // RLock calls read lock REST API.
-func (client *lockRESTClient) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodRLock, args)
+func (c *lockRESTClient) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCRLock, &args)
 }
 
 // Lock calls lock REST API.
-func (client *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodLock, args)
+func (c *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCLock, &args)
 }
 
 // RUnlock calls read unlock REST API.
-func (client *lockRESTClient) RUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodRUnlock, args)
+func (c *lockRESTClient) RUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCRUnlock, &args)
 }
 
-// RUnlock calls read unlock REST API.
-func (client *lockRESTClient) Refresh(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodRefresh, args)
+// Refresh calls Refresh REST API.
+func (c *lockRESTClient) Refresh(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCRefresh, &args)
 }
 
 // Unlock calls write unlock RPC.
-func (client *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodUnlock, args)
+func (c *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCUnlock, &args)
 }
 
 // ForceUnlock calls force unlock handler to forcibly unlock an active lock.
-func (client *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(ctx, lockRESTMethodForceUnlock, args)
+func (c *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return c.call(ctx, lockRPCRLock, &args)
 }
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {
@@ -143,27 +108,6 @@ func newLockAPI(endpoint Endpoint) dsync.NetLocker {
 }
 
 // Returns a lock rest client.
-func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
-	serverURL := &url.URL{
-		Scheme: endpoint.Scheme,
-		Host:   endpoint.Host,
-		Path:   pathJoin(lockRESTPrefix, lockRESTVersion),
-	}
-
-	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	// Use a separate client to avoid recursive calls.
-	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.NoMetrics = true
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
-		defer cancel()
-		respBody, err := healthClient.Call(ctx, lockRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		return !isNetworkError(err)
-	}
-
-	return &lockRESTClient{u: &url.URL{
-		Scheme: endpoint.Scheme,
-		Host:   endpoint.Host,
-	}, restClient: restClient}
+func newlockRESTClient(ep Endpoint) *lockRESTClient {
+	return &lockRESTClient{globalGrid.Load().Connection(ep.GridHost())}
 }

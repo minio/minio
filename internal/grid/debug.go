@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,14 +15,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package grid
 
-import (
-	"errors"
-)
+//go:generate stringer -type=debugMsg $GOFILE
 
-var (
-	errLockConflict       = errors.New("lock conflict")
-	errLockNotInitialized = errors.New("lock not initialized")
-	errLockNotFound       = errors.New("lock not found")
+// debugMsg is a debug message for testing purposes.
+// may only be used for tests.
+type debugMsg int
+
+const debugPrint = false
+
+const (
+	debugShutdown debugMsg = iota
+	debugKillInbound
+	debugKillOutbound
+	debugWaitForExit
+	debugSetConnPingDuration
+	debugSetClientPingDuration
+	debugAddToDeadline
 )

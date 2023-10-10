@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -139,6 +140,7 @@ type storageRESTClient struct {
 
 	endpoint   Endpoint
 	restClient *rest.Client
+	gridConn   *grid.Subroute
 	diskID     string
 
 	// Indexes, will be -1 until assigned a set.
@@ -859,6 +861,8 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool) *storageRESTClien
 			return toStorageErr(err) != errDiskNotFound
 		}
 	}
-
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1}
+	return &storageRESTClient{
+		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
+		gridConn: globalGrid.Load().Connection(endpoint.GridHost()).Subroute(endpoint.Path),
+	}
 }

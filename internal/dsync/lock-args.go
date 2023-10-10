@@ -38,3 +38,21 @@ type LockArgs struct {
 	// Quorum represents the expected quorum for this lock type.
 	Quorum int
 }
+
+// ResponseCode is the response code for a locking request.
+type ResponseCode uint8
+
+// Response codes for a locking request.
+const (
+	RespOK ResponseCode = iota
+	RespLockConflict
+	RespLockNotInitialized
+	RespLockNotFound
+	RespErr
+)
+
+// LockResp is a locking request response.
+type LockResp struct {
+	Code ResponseCode
+	Err  string
+}
