@@ -84,7 +84,7 @@ remote_arn=$(./mc replicate ls sitea/bucket --json | jq -r .rule.Destination.Buc
 sleep 1
 
 ./mc replicate resync start sitea/bucket/ --remote-bucket "${remote_arn}"
-sleep 10s ## sleep for 10s idea is that we give 100ms per object.
+sleep 30s ## sleep for 30s idea is that we give 300ms per object.
 
 ./mc ls -r --versions sitea/bucket >/tmp/sitea.txt
 ./mc ls -r --versions siteb/bucket >/tmp/siteb.txt

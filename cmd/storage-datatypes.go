@@ -239,6 +239,16 @@ type FileInfo struct {
 	Versioned bool `msg:"vs"`
 }
 
+// ShallowCopy - copies minimal information for READ MRF checks.
+func (fi FileInfo) ShallowCopy() (n FileInfo) {
+	n.Volume = fi.Volume
+	n.Name = fi.Name
+	n.VersionID = fi.VersionID
+	n.Deleted = fi.Deleted
+	n.Erasure = fi.Erasure
+	return
+}
+
 // WriteQuorum returns expected write quorum for this FileInfo
 func (fi FileInfo) WriteQuorum(dquorum int) int {
 	if fi.Deleted {

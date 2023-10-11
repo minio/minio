@@ -840,7 +840,9 @@ func serverMain(ctx *cli.Context) {
 
 		// Initialize data scanner.
 		bootstrapTrace("initDataScanner", func() {
-			initDataScanner(GlobalContext, newObject)
+			if v := env.Get("_MINIO_SCANNER", config.EnableOn); v == config.EnableOn {
+				initDataScanner(GlobalContext, newObject)
+			}
 		})
 
 		// Initialize background replication
