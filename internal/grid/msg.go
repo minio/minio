@@ -93,6 +93,9 @@ const (
 
 	// OpDisconnect instructs that remote wants to disconnect
 	OpDisconnect
+
+	// OpMerged is several operations merged into one.
+	OpMerged
 )
 
 const (
@@ -184,15 +187,15 @@ func (f Flags) String() string {
 	return "[" + strings.Join(res, ",") + "]"
 }
 
-// parse an handleIncoming message
-func (m *message) parse(b []byte) (*subHandlerID, error) {
+// parse an handleIncoming message.
+func (m *message) parse(b []byte) (*subHandlerID, []byte, error) {
 	var sub *subHandlerID
 	if m.Payload == nil {
 		m.Payload = GetByteBuffer()[:0]
 	}
 	h, err := m.UnmarshalMsg(b)
 	if err != nil {
-		return nil, fmt.Errorf("read write: %v", err)
+		return nil, nil, fmt.Errorf("read write: %v", err)
 	}
 	if len(m.Payload) == 0 && m.Flags&FlagPayloadIsZero == 0 {
 		PutByteBuffer(m.Payload)
@@ -201,26 +204,26 @@ func (m *message) parse(b []byte) (*subHandlerID, error) {
 	if m.Flags&FlagCRCxxh3 != 0 {
 		const hashLen = 4
 		if len(h) < hashLen {
-			return nil, fmt.Errorf("want crc len 4, got %v", len(h))
+			return nil, nil, fmt.Errorf("want crc len 4, got %v", len(h))
 		}
 		got := uint32(xxh3.Hash(b[:len(b)-hashLen]))
 		want := binary.LittleEndian.Uint32(h[len(h)-hashLen:])
 		if got != want {
-			return nil, fmt.Errorf("crc mismatch: 0x%08x (given) != 0x%08x (bytes)", want, got)
+			return nil, nil, fmt.Errorf("crc mismatch: 0x%08x (given) != 0x%08x (bytes)", want, got)
 		}
 		h = h[:len(h)-hashLen]
 	}
 	// Extract subroute if any.
 	if m.Flags&FlagSubroute != 0 {
 		if len(h) < 32 {
-			return nil, fmt.Errorf("want subroute len 32, got %v", len(h))
+			return nil, nil, fmt.Errorf("want subroute len 32, got %v", len(h))
 		}
 		subID := (*[32]byte)(h[len(h)-32:])
 		sub = (*subHandlerID)(subID)
 		// Add if more modifications to h is needed
-		// h = h[:len(h)-32]
+		h = h[:len(h)-32]
 	}
-	return sub, nil
+	return sub, h, nil
 }
 
 // setZeroPayloadFlag will clear or set the FlagPayloadIsZero if

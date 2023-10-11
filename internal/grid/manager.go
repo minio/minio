@@ -171,7 +171,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 		}
 
 		var message message
-		_, err = message.parse(msg)
+		_, _, err = message.parse(msg)
 		if err != nil {
 			if debugPrint {
 				fmt.Println("parse err:", err)
