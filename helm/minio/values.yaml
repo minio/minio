@@ -448,7 +448,7 @@ buckets: []
   #                 "Condition": {
   #                     "IpAddress": {
   #                         "aws:SourceIp": [
-  #                             "10.42.0.0/16",
+  #                             "10.42.0.0/16"
   #                         ]
   #                     }
   #                 }
