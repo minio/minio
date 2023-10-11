@@ -1,0 +1,136 @@
+// Copyright (c) 2015-2023 MinIO, Inc.
+//
+// This file is part of MinIO Object Storage stack
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package grid
+
+import (
+	"context"
+	"math/rand"
+	"net"
+	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/minio/minio/internal/logger/target/testlogger"
+)
+
+func BenchmarkGrid(b *testing.B) {
+	for n := 2; n <= 64; n *= 2 {
+		b.Run("servers="+strconv.Itoa(n), func(b *testing.B) {
+			benchmarkGridServers(b, n)
+		})
+	}
+}
+
+func benchmarkGridServers(b *testing.B, n int) {
+	defer testlogger.T.SetErrorTB(b)()
+	hosts, listeners := getHosts(n)
+	dialer := &net.Dialer{
+		Timeout: 1 * time.Second,
+	}
+	errFatal := func(err error) {
+		b.Helper()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// Create n managers.
+	var managers []*Manager
+	for _, remoteHost := range hosts {
+		remote, err := NewManager(context.Background(), ManagerOptions{
+			Dialer:      dialer.DialContext,
+			Local:       remoteHost,
+			Hosts:       hosts,
+			AddAuth:     func(aud string) string { return aud },
+			AuthRequest: dummyRequestValidate,
+		})
+		// Register a single handler which echos the payload.
+		errFatal(remote.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+			return append(GetByteBuffer()[:0], payload...), nil
+		}))
+		errFatal(err)
+		managers = append(managers, remote)
+	}
+	defer shutdownManagers(b, managers...)
+	var servers []*httptest.Server
+	for i, manager := range managers {
+		s := startServer(b, listeners[i], manager.Handler())
+		servers = append(servers, s)
+		defer s.Close()
+	}
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	payload := make([]byte, 512)
+	_, err := rng.Read(payload)
+	errFatal(err)
+
+	// Wait for all to connect
+	for i, manager := range managers {
+		for j, host := range hosts {
+			if i == j {
+				continue
+			}
+			// Connect to all other managers.
+			conn := manager.Connection(host)
+			conn.WaitForConnect(context.Background())
+		}
+	}
+	// Parallel writes per server.
+	for par := 1; par <= 32; par *= 2 {
+		b.Run("par="+strconv.Itoa(par), func(b *testing.B) {
+			defer timeout(10 * time.Second)()
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(payload)))
+			b.ResetTimer()
+			t := time.Now()
+			var ops int64
+			b.SetParallelism(n * par)
+			b.RunParallel(func(pb *testing.PB) {
+				n := 0
+				for pb.Next() {
+					// Pick a random manager.
+					src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
+					if src == dst {
+						dst = (dst + 1) % len(managers)
+					}
+					local := managers[src]
+					conn := local.Connection(hosts[dst])
+					if conn == nil {
+						b.Fatal("No connection")
+					}
+					// Send the payload.
+					resp, err := conn.Request(context.Background(), handlerTest, payload)
+					if err != nil {
+						b.Fatal(err)
+					}
+					PutByteBuffer(resp)
+					n++
+				}
+				atomic.AddInt64(&ops, int64(n))
+			})
+			spent := time.Since(t)
+			if spent > 0 {
+				// Since we are benchmarking n parallel servers we need to multiply by n.
+				// This will give an estimate of the total ops/s.
+				b.ReportMetric(float64(n)*float64(ops)/spent.Seconds(), "vops/s")
+			}
+		})
+	}
+}
