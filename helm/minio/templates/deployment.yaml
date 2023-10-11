@@ -170,6 +170,7 @@ spec:
           lifecycle:
             {{- toYaml .Values.lifecycle | nindent 12 }}
           {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
 {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
