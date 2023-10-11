@@ -118,11 +118,11 @@ func (sm *siteResyncMetrics) load(ctx context.Context, objAPI ObjectLayer) error
 			return err
 		}
 		sm.Lock()
-		defer sm.Unlock()
 		if _, ok := sm.peerResyncMap[peer.DeploymentID]; !ok {
 			sm.peerResyncMap[peer.DeploymentID] = resyncState{resyncID: rs.ResyncID, LastSaved: time.Time{}}
 			sm.resyncStatus[rs.ResyncID] = rs
 		}
+		sm.Unlock()
 	}
 	return nil
 }
