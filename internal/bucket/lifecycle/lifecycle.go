@@ -97,14 +97,25 @@ func (a Action) Delete() bool {
 
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
-	XMLName xml.Name `xml:"LifecycleConfiguration"`
-	Rules   []Rule   `xml:"Rule"`
+	XMLName         xml.Name  `xml:"LifecycleConfiguration"`
+	Rules           []Rule    `xml:"Rule"`
+	ExpiryUpdatedAt time.Time `xml:"ExpiryUpdatedAt"`
 }
 
 // HasTransition returns 'true' if lifecycle document has Transition enabled.
 func (lc Lifecycle) HasTransition() bool {
 	for _, rule := range lc.Rules {
 		if rule.Transition.IsEnabled() {
+			return true
+		}
+	}
+	return false
+}
+
+// HasExpiry returns 'true' if lifecycle document has Expiry enabled.
+func (lc Lifecycle) HasExpiry() bool {
+	for _, rule := range lc.Rules {
+		if !rule.Expiration.IsNull() {
 			return true
 		}
 	}
@@ -137,6 +148,12 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 					return err
 				}
 				lc.Rules = append(lc.Rules, r)
+			case "ExpiryUpdatedAt":
+				var t time.Time
+				if err = d.DecodeElement(&t, &start); err != nil {
+					return err
+				}
+				lc.ExpiryUpdatedAt = t
 			default:
 				return xml.UnmarshalError(fmt.Sprintf("expected element type <Rule> but have <%s>", se.Name.Local))
 			}

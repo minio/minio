@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
@@ -33,8 +34,6 @@ import (
 const (
 	// Lifecycle configuration file.
 	bucketLifecycleConfig = "lifecycle.xml"
-	// Expiry Lifecycle configuration file
-	expiryBucketLifecycleConfig = "expiry-lifecycle.xml"
 )
 
 // PutBucketLifecycleHandler - This HTTP handler stores given bucket lifecycle configuration as per
@@ -88,28 +87,17 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	var expLclCfg lifecycle.Lifecycle
-	for _, rule := range bucketLifecycle.Rules {
-		if !rule.Expiration.IsNull() {
-			expLclCfg.Rules = append(expLclCfg.Rules, rule)
-		}
+	if bucketLifecycle.HasExpiry() {
+		bucketLifecycle.ExpiryUpdatedAt = time.Now()
 	}
+
 	configData, err := xml.Marshal(bucketLifecycle)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	expConfig, err := xml.Marshal(&expLclCfg)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
 	if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, configData); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if _, err = globalBucketMetadataSys.Update(ctx, bucket, expiryBucketLifecycleConfig, expConfig); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -154,40 +142,10 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	expLclConfig, expLclUpdatedAt, err := globalBucketMetadataSys.GetExpLifecycleConfig(bucket)
+	config, updatedAt, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
-	}
-
-	config, updatedAt, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
-	// if err != nil {
-	// 	writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-	// 	return
-	// }
-	if config != nil {
-		if expLclConfig != nil {
-			for _, expRule := range expLclConfig.Rules {
-				var found bool
-				for _, rule := range config.Rules {
-					if expRule.ID == rule.ID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					config.Rules = append(config.Rules, expRule)
-				}
-			}
-			if expLclUpdatedAt.After(updatedAt) {
-				updatedAt = expLclUpdatedAt
-			}
-		}
-	} else {
-		if expLclConfig == nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		}
-		config = expLclConfig
 	}
 	configData, err := xml.Marshal(config)
 	if err != nil {
@@ -229,10 +187,6 @@ func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter,
 	}
 
 	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, bucketLifecycleConfig); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	if _, err := globalBucketMetadataSys.Delete(ctx, bucket, expiryBucketLifecycleConfig); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

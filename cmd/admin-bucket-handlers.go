@@ -415,7 +415,6 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 		bucketPolicyConfig,
 		bucketNotificationConfig,
 		bucketLifecycleConfig,
-		expiryBucketLifecycleConfig,
 		bucketSSEConfig,
 		bucketTaggingConfig,
 		bucketQuotaConfigFile,
@@ -444,22 +443,6 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketLifecycleConfig:
 				config, _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
-				if err != nil {
-					if errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
-						continue
-					}
-					logger.LogIf(ctx, err)
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
-				configData, err := xml.Marshal(config)
-				if err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
-				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
-			case expiryBucketLifecycleConfig:
-				config, _, err := globalBucketMetadataSys.GetExpLifecycleConfig(bucket)
 				if err != nil {
 					if errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
 						continue
@@ -883,34 +866,6 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			bucketMap[bucket].LifecycleConfigXML = configData
 			bucketMap[bucket].LifecycleConfigUpdatedAt = updatedAt
-			rpt.SetStatus(bucket, fileName, nil)
-		case expiryBucketLifecycleConfig:
-			bucketLifecycle, err := lifecycle.ParseLifecycleConfig(io.LimitReader(reader, sz))
-			if err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			// Validate the received bucket policy document
-			if err = bucketLifecycle.Validate(); err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			// Validate the transition storage ARNs
-			if err = validateTransitionTier(bucketLifecycle); err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			configData, err := xml.Marshal(bucketLifecycle)
-			if err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
-			}
-
-			bucketMap[bucket].ExpiryLifecycleConfigXML = configData
-			bucketMap[bucket].ExpiryLifecycleConfigUpdatedAt = updatedAt
 			rpt.SetStatus(bucket, fileName, nil)
 		case bucketSSEConfig:
 			// Parse bucket encryption xml

@@ -260,8 +260,8 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeSSEConfig:
 		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig, item.UpdatedAt)
-	case madmin.SRBucketMetaExpLCConfig:
-		err = globalSiteReplicationSys.PeerBucketExpiryLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
+	case madmin.SRBucketMetaLCConfig:
+		err = globalSiteReplicationSys.PeerBucketLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
