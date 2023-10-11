@@ -18,6 +18,7 @@
 package grid
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -160,8 +161,8 @@ func (c ContextDialer) DialContext(ctx context.Context, network, address string)
 
 const (
 	defaultOutQueue    = 10000
-	readBufferSize     = 4 << 10
-	writeBufferSize    = 4 << 10
+	readBufferSize     = 16 << 10
+	writeBufferSize    = 16 << 10
 	defaultDialTimeout = time.Second
 	connPingInterval   = 5 * time.Second
 )
@@ -280,6 +281,7 @@ func (c *Subroute) newMuxClient(ctx context.Context) (*muxClient, error) {
 }
 
 // Request allows to do a single remote request.
+// 'req' will not be used after the call and caller can reuse.
 func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -706,7 +708,7 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 		return fmt.Errorf("unexpected connect response type %v", op)
 	}
 	var m message
-	_, err = m.parse(b)
+	_, _, err = m.parse(b)
 	if err != nil {
 		return err
 	}
@@ -874,7 +876,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			// Parse the received message
 			var m message
-			subID, err := m.parse(msg)
+			subID, remain, err := m.parse(msg)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws parse package: %w", err))
 				cancel(ErrDisconnected)
@@ -883,266 +885,33 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if debugPrint {
 				fmt.Printf("%s Got msg: %v\n", c.Local, m)
 			}
-			switch m.Op {
-			case OpMuxServerMsg:
-				if debugPrint {
-					fmt.Printf("%s Got mux msg: %v\n", c.Local, m)
-				}
-				v, ok := c.outgoing.Load(m.MuxID)
-				if !ok {
-					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
-					}
-					PutByteBuffer(m.Payload)
-					continue
-				}
-				if m.Flags&FlagPayloadIsErr != 0 {
-					v.response(m.Seq, Response{
-						Msg: nil,
-						Err: RemoteErr(m.Payload),
-					})
-					PutByteBuffer(m.Payload)
-				} else if m.Payload != nil {
-					v.response(m.Seq, Response{
-						Msg: m.Payload,
-						Err: nil,
-					})
-				}
-				if m.Flags&FlagEOF != 0 {
-					v.close()
-					c.outgoing.Delete(m.MuxID)
-				}
-			case OpResponse:
-				if debugPrint {
-					fmt.Printf("%s Got mux response: %v\n", c.Local, m)
-				}
-				v, ok := c.outgoing.Load(m.MuxID)
-				if !ok {
-					PutByteBuffer(m.Payload)
-					continue
-				}
-				if m.Flags&FlagPayloadIsErr != 0 {
-					v.response(m.Seq, Response{
-						Msg: nil,
-						Err: RemoteErr(m.Payload),
-					})
-					PutByteBuffer(m.Payload)
-				} else {
-					v.response(m.Seq, Response{
-						Msg: m.Payload,
-						Err: nil,
-					})
-				}
-				v.close()
-				c.outgoing.Delete(m.MuxID)
-			case OpMuxClientMsg:
-				v, ok := c.inStream.Load(m.MuxID)
-				if !ok {
-					if debugPrint {
-						fmt.Println(c.Local, "OpMuxClientMsg: Unknown Mux:", m.MuxID)
-					}
-					logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
-					PutByteBuffer(m.Payload)
-					continue
-				}
-				v.message(m)
-			case OpUnblockSrvMux:
-				PutByteBuffer(m.Payload)
-				m.Payload = nil
-				if v, ok := c.inStream.Load(m.MuxID); ok {
-					v.unblockSend(m.Seq)
-					continue
-				}
-				if debugPrint {
-					fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
-				}
-				// We can expect to receive unblocks for closed muxes
+			if m.Op != OpMerged {
+				c.handleMsg(ctx, m, subID)
 				continue
-			case OpUnblockClMux:
-				PutByteBuffer(m.Payload)
-				m.Payload = nil
-				v, ok := c.outgoing.Load(m.MuxID)
-				if !ok {
-					if debugPrint {
-						fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
-					}
-					// We can expect to receive unblocks for closed muxes
-					continue
+			}
+			// Handle merged messages.
+			messages := int(m.Seq)
+			for i := 0; i < messages; i++ {
+				if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
+					cancel(ErrDisconnected)
+					return
 				}
-				v.unblockSend(m.Seq)
-				continue
-			case OpDisconnectServerMux:
-				if debugPrint {
-					fmt.Println(c.Local, "Disconnect server mux:", m.MuxID)
+				var next []byte
+				next, remain, err = msgp.ReadBytesZC(remain)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("ws read merged: %w", err))
+					cancel(ErrDisconnected)
+					return
 				}
-				PutByteBuffer(m.Payload)
-				m.Payload = nil
-				if v, ok := c.inStream.Load(m.MuxID); ok {
-					v.close()
-					continue
-				}
-			case OpDisconnectClientMux:
-				if v, ok := c.outgoing.Load(m.MuxID); ok {
-					if m.Flags&FlagPayloadIsErr != 0 {
-						v.error(RemoteErr(m.Payload))
-					} else {
-						v.error("remote disconnected")
-					}
-					continue
-				}
-				PutByteBuffer(m.Payload)
-			case OpPing:
-				PutByteBuffer(m.Payload)
-				if m.MuxID == 0 {
-					logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
-					continue
-				}
-				// Single calls do not support pinging.
-				if v, ok := c.inStream.Load(m.MuxID); ok {
-					pong := v.ping()
-					logger.LogIf(ctx, c.queueMsg(m, &pong))
-				} else {
-					pong := pongMsg{NotFound: true}
-					logger.LogIf(ctx, c.queueMsg(m, &pong))
-				}
-				continue
-			case OpPong:
-				var pong pongMsg
-				_, err := pong.UnmarshalMsg(m.Payload)
-				PutByteBuffer(m.Payload)
-				logger.LogIf(ctx, err)
-				if m.MuxID == 0 {
-					atomic.StoreInt64(&c.LastPong, time.Now().Unix())
-				} else {
-					if v, ok := c.outgoing.Load(m.MuxID); ok {
-						v.pong(pong)
-					} else {
-						// We don't care if the client was removed in the meantime,
-						// but we send a disconnect message to the server just in case.
-						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
-					}
-				}
-			case OpRequest:
-				if !m.Handler.valid() {
-					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
-					continue
-				}
-				// Singleshot message
-				var handler SingleHandlerFn
-				if subID == nil {
-					handler = c.handlers.single[m.Handler]
-				} else {
-					handler = c.handlers.subSingle[*subID]
-				}
-				if handler == nil {
-					logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
-					continue
-				}
-				go func(m message) {
-					var start time.Time
-					if m.DeadlineMS > 0 {
-						start = time.Now()
-					}
-					var b []byte
-					var err *RemoteErr
-					func() {
-						defer func() {
-							if rec := recover(); rec != nil {
-								err = NewRemoteErrString(fmt.Sprintf("handleMessages: panic recovered: %v", rec))
-								debug.PrintStack()
-								logger.LogIf(ctx, err)
-							}
-						}()
-						b, err = handler(m.Payload)
-						if debugPrint {
-							fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
-						}
-					}()
 
-					// TODO: Maybe recycle m.Payload - should be free here.
-					if m.DeadlineMS > 0 && time.Since(start).Milliseconds()+c.addDeadline.Milliseconds() > int64(m.DeadlineMS) {
-						// No need to return result
-						PutByteBuffer(b)
-						return
-					}
-					m = message{
-						MuxID: m.MuxID,
-						Seq:   m.Seq,
-						Op:    OpResponse,
-						Flags: FlagEOF,
-					}
-					if err != nil {
-						m.Flags |= FlagPayloadIsErr
-						m.Payload = []byte(*err)
-					} else {
-						m.Payload = b
-						m.setZeroPayloadFlag()
-					}
-					logger.LogIf(ctx, c.queueMsg(m, nil))
-				}(m)
-				continue
-			case OpAckMux:
-				v, ok := c.outgoing.Load(m.MuxID)
-				if !ok {
-					if m.Flags&FlagEOF == 0 {
-						logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
-					}
-					PutByteBuffer(m.Payload)
-					continue
-				}
-				if debugPrint {
-					fmt.Println(c.Local, "Mux", m.MuxID, "Acknowledged")
-				}
-				v.ack(m.Seq)
-			case OpConnectMux:
-				// Stateless stream:
-				if m.Flags&FlagStateless != 0 {
-					// Reject for now, so we can safely add it later.
-					if true {
-						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Stateless streams not supported"}))
-						return
-					}
-
-					var handler *StatelessHandler
-					if subID == nil {
-						handler = c.handlers.stateless[m.Handler]
-					} else {
-						handler = c.handlers.subStateless[*subID]
-					}
-					if handler == nil {
-						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
-						continue
-					}
-					_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
-						return newMuxStateless(ctx, m, c, *handler)
-					})
-				} else {
-					// Stream:
-					var handler *StreamHandler
-					if subID == nil {
-						handler = c.handlers.streams[m.Handler]
-					} else {
-						handler = c.handlers.subStreams[*subID]
-					}
-					if handler == nil {
-						logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
-						continue
-					}
-
-					// Start a new server handler if none exists.
-					_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
-						return newMuxStream(ctx, m, c, *handler)
-					})
-					if debugPrint {
-						fmt.Println("connected stream mux:", m.MuxID)
-					}
-				}
-				// Acknowledge Mux created.
-				m.Op = OpAckMux
-				m.Flags = 0
 				m.Payload = nil
-				logger.LogIf(ctx, c.queueMsg(m, nil))
-				continue
+				subID, _, err = m.parse(next)
+				if err != nil {
+					logger.LogIf(ctx, fmt.Errorf("ws parse merged: %w", err))
+					cancel(ErrDisconnected)
+					return
+				}
+				c.handleMsg(ctx, m, subID)
 			}
 		}
 	}()
@@ -1177,7 +946,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		DeadlineMS: 1000,
 	}
 
+	const mergeItems = 20
 	defer ping.Stop()
+	queue := make([][]byte, 0, mergeItems)
+	var queueSize int
+	var buf bytes.Buffer
 	for {
 		var toSend []byte
 		select {
@@ -1211,6 +984,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				continue
 			}
 		}
+		if len(queue) < mergeItems && queueSize+len(toSend) < writeBufferSize-1024 && len(c.outQueue) > 0 {
+			queue = append(queue, toSend)
+			queueSize += len(toSend)
+			continue
+		}
 		c.connChange.L.Lock()
 		for {
 			state := atomic.LoadUint32((*uint32)(&c.state))
@@ -1233,14 +1011,356 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 		}
 		c.connChange.L.Unlock()
+		if len(queue) > 0 {
+			// Merge entries and send
+			queue = append(queue, toSend)
+			if debugPrint {
+				fmt.Println("Merging", len(queue)+1, "messages")
+			}
 
-		err := wsutil.WriteMessage(conn, c.side, ws.OpBinary, toSend)
+			toSend = GetByteBuffer()[:0]
+			m := message{Op: OpMerged, Seq: uint32(len(queue))}
+			var err error
+			toSend, err = m.MarshalMsg(toSend)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("msg.MarshalMsg: %w", err))
+				cancel(ErrDisconnected)
+				return
+			}
+			// Append as byte slices.
+			for _, q := range queue {
+				toSend = msgp.AppendBytes(toSend, q)
+			}
+			queue = queue[:0]
+			queueSize = 0
+		}
+		// Combine writes.
+		buf.Reset()
+		err := wsutil.WriteMessage(&buf, c.side, ws.OpBinary, toSend)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
+			cancel(ErrDisconnected)
+			return
+		}
+		_, err = buf.WriteTo(conn)
 		if err != nil {
 			// TODO: Probably too noisy for long term use.
 			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
 			cancel(ErrDisconnected)
 			return
 		}
+		if buf.Cap() > writeBufferSize*4 {
+			// Reset buffer if it gets too big, so we don't keep it around.
+			buf = bytes.Buffer{}
+		}
+	}
+}
+
+func (c *Connection) handleMsg(ctx context.Context, m message, subID *subHandlerID) {
+	switch m.Op {
+	case OpMuxServerMsg:
+		c.handleMuxServerMsg(m, ctx)
+	case OpResponse:
+		c.handleResponse(m)
+	case OpMuxClientMsg:
+		c.handleMuxClientMsg(m, ctx)
+	case OpUnblockSrvMux:
+		c.handleUnblockSrvMux(m)
+	case OpUnblockClMux:
+		c.handleUnblockClMux(m)
+	case OpDisconnectServerMux:
+		c.handleDisconnectServerMux(m)
+	case OpDisconnectClientMux:
+		c.handleDisconnectClientMux(m)
+	case OpPing:
+		c.handlePing(m, ctx)
+	case OpPong:
+		c.handlePong(m, ctx)
+	case OpRequest:
+		c.handleRequest(m, ctx, subID)
+	case OpAckMux:
+		c.handleAckMux(m, ctx)
+	case OpConnectMux:
+		c.handleConnectMux(m, ctx, subID)
+	default:
+		logger.LogIf(ctx, fmt.Errorf("unknown message type: %v", m.Op))
+	}
+}
+
+func (c *Connection) handleConnectMux(m message, ctx context.Context, subID *subHandlerID) {
+	// Stateless stream:
+	if m.Flags&FlagStateless != 0 {
+		// Reject for now, so we can safely add it later.
+		if true {
+			logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Stateless streams not supported"}))
+			return
+		}
+
+		var handler *StatelessHandler
+		if subID == nil {
+			handler = c.handlers.stateless[m.Handler]
+		} else {
+			handler = c.handlers.subStateless[*subID]
+		}
+		if handler == nil {
+			logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+			return
+		}
+		_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
+			return newMuxStateless(ctx, m, c, *handler)
+		})
+	} else {
+		// Stream:
+		var handler *StreamHandler
+		if subID == nil {
+			handler = c.handlers.streams[m.Handler]
+		} else {
+			handler = c.handlers.subStreams[*subID]
+		}
+		if handler == nil {
+			logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+			return
+		}
+
+		// Start a new server handler if none exists.
+		_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
+			return newMuxStream(ctx, m, c, *handler)
+		})
+		if debugPrint {
+			fmt.Println("connected stream mux:", m.MuxID)
+		}
+	}
+	// Acknowledge Mux created.
+	m.Op = OpAckMux
+	m.Flags = 0
+	m.Payload = nil
+	logger.LogIf(ctx, c.queueMsg(m, nil))
+}
+
+func (c *Connection) handleAckMux(m message, ctx context.Context) {
+	PutByteBuffer(m.Payload)
+	v, ok := c.outgoing.Load(m.MuxID)
+	if !ok {
+		if m.Flags&FlagEOF == 0 {
+			logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+		}
+		return
+	}
+	if debugPrint {
+		fmt.Println(c.Local, "Mux", m.MuxID, "Acknowledged")
+	}
+	v.ack(m.Seq)
+}
+
+func (c *Connection) handleRequest(m message, ctx context.Context, subID *subHandlerID) {
+	if !m.Handler.valid() {
+		logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
+		return
+	}
+	// Singleshot message
+	var handler SingleHandlerFn
+	if subID == nil {
+		handler = c.handlers.single[m.Handler]
+	} else {
+		handler = c.handlers.subSingle[*subID]
+	}
+	if handler == nil {
+		logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+		return
+	}
+	go func(m message) {
+		var start time.Time
+		if m.DeadlineMS > 0 {
+			start = time.Now()
+		}
+		var b []byte
+		var err *RemoteErr
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					err = NewRemoteErrString(fmt.Sprintf("handleMessages: panic recovered: %v", rec))
+					debug.PrintStack()
+					logger.LogIf(ctx, err)
+				}
+			}()
+			b, err = handler(m.Payload)
+			if debugPrint {
+				fmt.Println(c.Local, "Handler returned payload:", bytesOrLength(b), "err:", err)
+			}
+		}()
+
+		// TODO: Maybe recycle m.Payload - should be free here.
+		if m.DeadlineMS > 0 && time.Since(start).Milliseconds()+c.addDeadline.Milliseconds() > int64(m.DeadlineMS) {
+			// No need to return result
+			PutByteBuffer(b)
+			return
+		}
+		m = message{
+			MuxID: m.MuxID,
+			Seq:   m.Seq,
+			Op:    OpResponse,
+			Flags: FlagEOF,
+		}
+		if err != nil {
+			m.Flags |= FlagPayloadIsErr
+			m.Payload = []byte(*err)
+		} else {
+			m.Payload = b
+			m.setZeroPayloadFlag()
+		}
+		logger.LogIf(ctx, c.queueMsg(m, nil))
+	}(m)
+}
+
+func (c *Connection) handlePong(m message, ctx context.Context) {
+	var pong pongMsg
+	_, err := pong.UnmarshalMsg(m.Payload)
+	PutByteBuffer(m.Payload)
+	logger.LogIf(ctx, err)
+	if m.MuxID == 0 {
+		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		return
+	}
+	if v, ok := c.outgoing.Load(m.MuxID); ok {
+		v.pong(pong)
+	} else {
+		// We don't care if the client was removed in the meantime,
+		// but we send a disconnect message to the server just in case.
+		logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+	}
+}
+
+func (c *Connection) handlePing(m message, ctx context.Context) {
+	if m.MuxID == 0 {
+		logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
+		return
+	}
+	// Single calls do not support pinging.
+	if v, ok := c.inStream.Load(m.MuxID); ok {
+		pong := v.ping()
+		logger.LogIf(ctx, c.queueMsg(m, &pong))
+	} else {
+		pong := pongMsg{NotFound: true}
+		logger.LogIf(ctx, c.queueMsg(m, &pong))
+	}
+	return
+}
+
+func (c *Connection) handleDisconnectClientMux(m message) {
+	if v, ok := c.outgoing.Load(m.MuxID); ok {
+		if m.Flags&FlagPayloadIsErr != 0 {
+			v.error(RemoteErr(m.Payload))
+		} else {
+			v.error("remote disconnected")
+		}
+		return
+	}
+	PutByteBuffer(m.Payload)
+}
+
+func (c *Connection) handleDisconnectServerMux(m message) {
+	if debugPrint {
+		fmt.Println(c.Local, "Disconnect server mux:", m.MuxID)
+	}
+	PutByteBuffer(m.Payload)
+	m.Payload = nil
+	if v, ok := c.inStream.Load(m.MuxID); ok {
+		v.close()
+	}
+}
+
+func (c *Connection) handleUnblockClMux(m message) {
+	PutByteBuffer(m.Payload)
+	m.Payload = nil
+	v, ok := c.outgoing.Load(m.MuxID)
+	if !ok {
+		if debugPrint {
+			fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
+		}
+		// We can expect to receive unblocks for closed muxes
+		return
+	}
+	v.unblockSend(m.Seq)
+}
+
+func (c *Connection) handleUnblockSrvMux(m message) {
+	PutByteBuffer(m.Payload)
+	m.Payload = nil
+	if v, ok := c.inStream.Load(m.MuxID); ok {
+		v.unblockSend(m.Seq)
+		return
+	}
+	// We can expect to receive unblocks for closed muxes
+	if debugPrint {
+		fmt.Println(c.Local, "Unblock: Unknown Mux:", m.MuxID)
+	}
+}
+
+func (c *Connection) handleMuxClientMsg(m message, ctx context.Context) {
+	v, ok := c.inStream.Load(m.MuxID)
+	if !ok {
+		if debugPrint {
+			fmt.Println(c.Local, "OpMuxClientMsg: Unknown Mux:", m.MuxID)
+		}
+		logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+		PutByteBuffer(m.Payload)
+		return
+	}
+	v.message(m)
+}
+
+func (c *Connection) handleResponse(m message) {
+	if debugPrint {
+		fmt.Printf("%s Got mux response: %v\n", c.Local, m)
+	}
+	v, ok := c.outgoing.Load(m.MuxID)
+	if !ok {
+		PutByteBuffer(m.Payload)
+		return
+	}
+	if m.Flags&FlagPayloadIsErr != 0 {
+		v.response(m.Seq, Response{
+			Msg: nil,
+			Err: RemoteErr(m.Payload),
+		})
+		PutByteBuffer(m.Payload)
+	} else {
+		v.response(m.Seq, Response{
+			Msg: m.Payload,
+			Err: nil,
+		})
+	}
+	v.close()
+	c.outgoing.Delete(m.MuxID)
+}
+
+func (c *Connection) handleMuxServerMsg(m message, ctx context.Context) {
+	if debugPrint {
+		fmt.Printf("%s Got mux msg: %v\n", c.Local, m)
+	}
+	v, ok := c.outgoing.Load(m.MuxID)
+	if !ok {
+		if m.Flags&FlagEOF == 0 {
+			logger.LogIf(ctx, c.queueMsg(message{Op: OpDisconnectClientMux, MuxID: m.MuxID}, nil))
+		}
+		PutByteBuffer(m.Payload)
+		return
+	}
+	if m.Flags&FlagPayloadIsErr != 0 {
+		v.response(m.Seq, Response{
+			Msg: nil,
+			Err: RemoteErr(m.Payload),
+		})
+		PutByteBuffer(m.Payload)
+	} else if m.Payload != nil {
+		v.response(m.Seq, Response{
+			Msg: m.Payload,
+			Err: nil,
+		})
+	}
+	if m.Flags&FlagEOF != 0 {
+		v.close()
+		c.outgoing.Delete(m.MuxID)
 	}
 }
 
