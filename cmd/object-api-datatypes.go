@@ -149,11 +149,6 @@ type ObjectInfo struct {
 	// Date and time at which the object is no longer able to be cached
 	Expires time.Time
 
-	// CacheStatus sets status of whether this is a cache hit/miss
-	CacheStatus CacheStatusType
-	// CacheLookupStatus sets whether a cacheable response is present in the cache
-	CacheLookupStatus CacheStatusType
-
 	// Specify object storage class
 	StorageClass string
 
@@ -245,8 +240,6 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		ContentType:                o.ContentType,
 		ContentEncoding:            o.ContentEncoding,
 		Expires:                    o.Expires,
-		CacheStatus:                o.CacheStatus,
-		CacheLookupStatus:          o.CacheLookupStatus,
 		StorageClass:               o.StorageClass,
 		ReplicationStatus:          o.ReplicationStatus,
 		UserTags:                   o.UserTags,

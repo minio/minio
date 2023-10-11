@@ -22,7 +22,6 @@ import (
 
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/compress"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
@@ -589,9 +588,6 @@ type serverConfigV23 struct {
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
 
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
@@ -609,9 +605,6 @@ type serverConfigV24 struct {
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
-
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -634,9 +627,6 @@ type serverConfigV25 struct {
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
 
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
@@ -658,9 +648,6 @@ type serverConfigV26 struct {
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
 
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
@@ -681,9 +668,6 @@ type serverConfigV27 struct {
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
-
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -707,9 +691,6 @@ type serverConfigV28 struct {
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
 
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
-
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 
@@ -730,9 +711,6 @@ type serverConfigV33 struct {
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
-
-	// Cache configuration
-	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notify.Config `json:"notify"`
