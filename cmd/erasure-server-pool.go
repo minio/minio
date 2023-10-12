@@ -2127,11 +2127,6 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			continue
 		}
 
-		// Check if the erasureSet.sets slice is empty. If it's empty, skip this iteration.
-		if len(erasureSet.sets) == 0 {
-			continue
-		}
-
 		errs := make([]error, len(erasureSet.sets))
 		var wg sync.WaitGroup
 		for idx, set := range erasureSet.sets {
