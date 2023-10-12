@@ -92,11 +92,20 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	}
 	ch := make(chan Response, 1)
 	m.respWait = ch
+	ctx := m.ctx
+
+	// Add deadline if none.
+	if msg.DeadlineMS == 0 {
+		msg.DeadlineMS = 60 * 1000
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond)
+		defer cancel()
+	}
 	// Send... (no need for lock yet)
 	if err := m.sendLocked(msg); err != nil {
 		return nil, err
 	}
-
+	defer m.parent.outgoing.Delete(m.MuxID)
 	// Wait for response or context.
 	select {
 	case v, ok := <-ch:
