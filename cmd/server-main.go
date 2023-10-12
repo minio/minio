@@ -853,16 +853,6 @@ func serverMain(ctx *cli.Context) {
 			})
 		}()
 
-		// initialize the new disk cache objects.
-		if globalCacheConfig.Enabled {
-			logger.Info(color.Yellow("WARNING: Drive caching is deprecated for single/multi drive MinIO setups."))
-			var cacheAPI CacheObjectLayer
-			cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
-			logger.FatalIf(err, "Unable to initialize drive caching")
-
-			setCacheObjectLayer(cacheAPI)
-		}
-
 		// Initialize bucket notification system.
 		bootstrapTrace("initBucketTargets", func() {
 			logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
