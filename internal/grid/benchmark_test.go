@@ -32,7 +32,7 @@ import (
 )
 
 func BenchmarkGrid(b *testing.B) {
-	for n := 2; n <= 16; n++ {
+	for n := 2; n <= 32; n *= 2 {
 		b.Run("servers="+strconv.Itoa(n), func(b *testing.B) {
 			benchmarkGridServers(b, n)
 		})

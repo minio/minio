@@ -308,6 +308,7 @@ type Requester interface {
 
 // Call the remove with the request and return the response.
 // The response should be returned with PutResponse when no error.
+// If no deadline is set, a 1-minute deadline is added.
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Req) (resp Resp, err error) {
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {
