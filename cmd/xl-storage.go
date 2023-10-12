@@ -2442,19 +2442,20 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	}
 
 	// Replace the data of null version or any other existing version-id
-	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID, false, false)
-	if err == nil && !ofi.Deleted {
-		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
+	_, ver, err := xlMeta.findVersionStr(reqVID)
+	if err == nil {
+		dataDir := ver.getDataDir()
+		if dataDir != "" && (xlMeta.SharedDataDirCountStr(reqVID, dataDir) == 0) {
 			// Purge the destination path as we are not preserving anything
 			// versioned object was not requested.
-			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, dataDir)
 			// if old destination path is same as new destination path
 			// there is nothing to purge, this is true in case of healing
 			// avoid setting oldDstDataPath at that point.
 			if oldDstDataPath == dstDataPath {
 				oldDstDataPath = ""
 			} else {
-				xlMeta.data.remove(reqVID, ofi.DataDir)
+				xlMeta.data.remove(reqVID, dataDir)
 			}
 		}
 	}
