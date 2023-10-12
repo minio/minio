@@ -88,7 +88,8 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	}
 
 	if bucketLifecycle.HasExpiry() {
-		bucketLifecycle.ExpiryUpdatedAt = time.Now()
+		currtime := time.Now()
+		bucketLifecycle.ExpiryUpdatedAt = &currtime
 	}
 
 	configData, err := xml.Marshal(bucketLifecycle)

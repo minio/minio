@@ -1881,7 +1881,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 					expLclCfg.Rules = append(expLclCfg.Rules, rule)
 				}
 			}
-			expLclCfg.ExpiryUpdatedAt = time.Now()
+			currtime := time.Now()
+			expLclCfg.ExpiryUpdatedAt = &currtime
 			ilmConfigData, err := xml.Marshal(expLclCfg)
 			if err != nil {
 				return errSRBucketMetaError(err)
@@ -3519,7 +3520,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 				expLclCfgStr := base64.StdEncoding.EncodeToString(ilmConfigData)
 				bms.ExpiryLCConfig = &expLclCfgStr
-				bms.ExpiryLCConfigUpdatedAt = meta.lifecycleConfig.ExpiryUpdatedAt
+				bms.ExpiryLCConfigUpdatedAt = *(meta.lifecycleConfig.ExpiryUpdatedAt)
 			}
 
 			info.Buckets[bucket] = bms
