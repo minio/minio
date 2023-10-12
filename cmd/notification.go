@@ -1012,16 +1012,6 @@ func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int)
 	return
 }
 
-// NewNotificationSys - creates new notification system object.
-func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
-	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
-	remote, all := newPeerRestClients(endpoints)
-	return &NotificationSys{
-		peerClients:    remote,
-		allPeerClients: all,
-	}
-}
-
 // GetBandwidthReports - gets the bandwidth report from all nodes including self.
 func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) madmin.BucketBandwidthReport {
 	reports := make([]*madmin.BucketBandwidthReport, len(sys.peerClients))

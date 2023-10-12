@@ -3,8 +3,8 @@ FROM registry.services.ubble.ai/public/golang:1.19.3-alpine as build
 LABEL name="MinIO" \
       vendor="MinIO Inc <dev@min.io>" \
       maintainer="Ubble <dev@ubble.ai>" \
-      version="RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.0" \
-      release="RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.0" \
+      version="RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.2" \
+      release="RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.2" \
       summary="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service." \
       description="MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads."
 

@@ -252,7 +252,7 @@ func initAllSubsystems(ctx context.Context) {
 	globalHealStateLK.Unlock()
 
 	// Initialize notification peer targets
-	globalNotificationSys = NewNotificationSys(globalEndpoints)
+	globalNotificationSys = nil
 
 	// Create new notification system
 	globalEventNotifier = NewEventNotifier()
