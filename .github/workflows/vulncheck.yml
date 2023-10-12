@@ -3,9 +3,11 @@ on:
   pull_request:
     branches:
       - master
+      - next
   push:
     branches:
       - master
+      - next
 
 permissions:
   contents: read # to fetch code (actions/checkout)
