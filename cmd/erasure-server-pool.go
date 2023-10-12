@@ -2159,6 +2159,10 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
+	if obj := newObjectLayerFn(); obj == nil {
+		return madmin.HealResultItem{}, errServerNotInitialized
+	}
+
 	errs := make([]error, len(z.serverPools))
 	results := make([]madmin.HealResultItem, len(z.serverPools))
 	var wg sync.WaitGroup

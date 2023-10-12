@@ -308,6 +308,13 @@ func (p *poolMeta) Decommission(idx int, pi poolSpaceInfo) error {
 }
 
 func (p poolMeta) IsSuspended(idx int) bool {
+	// Check if idx is within the bounds of the Pools slice.
+	if idx < 0 || idx >= len(p.Pools) {
+		// If idx is out of range, return false (not suspended).
+		return false
+	}
+
+	// Check if the Decommission field at the specified index is not nil.
 	return p.Pools[idx].Decommission != nil
 }
 
