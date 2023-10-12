@@ -143,6 +143,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
 
+	// Initialize the pool meta, but set it to not save.
+	// When z.Init below has loaded the poolmeta will be initialized,
+	// and allowed to save.
+	z.poolMeta = newPoolMeta(z, poolMeta{})
+	z.poolMeta.dontSave = true
+
 	// initialize the object layer.
 	setObjectLayer(z)
 
