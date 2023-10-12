@@ -121,7 +121,7 @@ func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	// IDP config is not dynamic. Sanity check.
 	if dynamic {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), "", r.URL)
 		return
 	}
 
