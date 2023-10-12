@@ -2075,7 +2075,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	}
 
 	getAndWritePartitions := func() {
-		if query.Get("sysdrivehw") == "true" {
+		if query.Get(string(madmin.HealthDataTypeSysDriveHw)) == "true" {
 			localPartitions := madmin.GetPartitions(healthCtx, globalLocalNodeName)
 			anonymizeAddr(&localPartitions)
 			healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, localPartitions)
@@ -2084,6 +2084,20 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 			for _, p := range peerPartitions {
 				anonymizeAddr(&p)
 				healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, p)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
+	getAndWriteNetInfo := func() {
+		if query.Get(string(madmin.HealthDataTypeSysNet)) == "true" {
+			localNetInfo := madmin.GetNetInfo(globalLocalNodeName, globalInternodeInterface)
+			healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, localNetInfo)
+
+			peerNetInfos := globalNotificationSys.GetNetInfo(healthCtx)
+			for _, n := range peerNetInfos {
+				anonymizeAddr(&n)
+				healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, n)
 			}
 			partialWrite(healthInfo)
 		}
@@ -2310,6 +2324,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWritePlatformInfo()
 		getAndWriteCPUs()
 		getAndWritePartitions()
+		getAndWriteNetInfo()
 		getAndWriteOSInfo()
 		getAndWriteMemInfo()
 		getAndWriteProcInfo()
