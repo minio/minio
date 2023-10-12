@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -380,6 +381,9 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
 
+	if versionID == nullVersionID {
+		versionID = ""
+	}
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
@@ -1200,6 +1204,10 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 			"remove":   fmt.Sprint(opts.Remove),
 			"recreate": fmt.Sprint(opts.Recreate),
 			"mode":     fmt.Sprint(opts.ScanMode),
+		}
+		if result != nil {
+			tr.Custom["version-id"] = result.VersionID
+			tr.Custom["disks"] = strconv.Itoa(result.DiskCount)
 		}
 	}
 	if err != nil {
