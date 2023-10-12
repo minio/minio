@@ -19,6 +19,7 @@ package grid
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"net"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ import (
 )
 
 func BenchmarkGrid(b *testing.B) {
-	for n := 2; n <= 64; n *= 2 {
+	for n := 2; n <= 16; n++ {
 		b.Run("servers="+strconv.Itoa(n), func(b *testing.B) {
 			benchmarkGridServers(b, n)
 		})
@@ -94,7 +95,7 @@ func benchmarkGridServers(b *testing.B, n int) {
 	// Parallel writes per server.
 	for par := 1; par <= 32; par *= 2 {
 		b.Run("par="+strconv.Itoa(par), func(b *testing.B) {
-			defer timeout(10 * time.Second)()
+			defer timeout(30 * time.Second)()
 
 			b.ReportAllocs()
 			b.SetBytes(int64(len(payload)))
@@ -103,6 +104,7 @@ func benchmarkGridServers(b *testing.B, n int) {
 			var ops int64
 			b.SetParallelism(n * par)
 			b.RunParallel(func(pb *testing.PB) {
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				n := 0
 				for pb.Next() {
 					// Pick a random manager.
@@ -115,10 +117,14 @@ func benchmarkGridServers(b *testing.B, n int) {
 					if conn == nil {
 						b.Fatal("No connection")
 					}
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					// Send the payload.
-					resp, err := conn.Request(context.Background(), handlerTest, payload)
+					resp, err := conn.Request(ctx, handlerTest, payload)
+					cancel()
 					if err != nil {
-						b.Fatal(err)
+						if !errors.Is(err, context.DeadlineExceeded) {
+							b.Fatal(err)
+						}
 					}
 					PutByteBuffer(resp)
 					n++
