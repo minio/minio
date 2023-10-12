@@ -579,13 +579,13 @@ func serverMain(ctx *cli.Context) {
 
 	setDefaultProfilerRates()
 
-	// Handle all server environment vars.
-	serverHandleEnvVars()
-
 	// Handle all server command args.
 	bootstrapTrace("serverHandleCmdArgs", func() {
 		serverHandleCmdArgs(ctx)
 	})
+
+	// Handle all server environment vars.
+	serverHandleEnvVars()
 
 	// Initialize globalConsoleSys system
 	bootstrapTrace("newConsoleLogger", func() {
