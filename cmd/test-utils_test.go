@@ -2049,9 +2049,6 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 		ObjectAPI: func() ObjectLayer {
 			return globalObjectAPI
 		},
-		CacheAPI: func() CacheObjectLayer {
-			return globalCacheObjectAPI
-		},
 	}
 
 	// Register ListBuckets	handler.

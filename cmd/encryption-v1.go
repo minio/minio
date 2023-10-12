@@ -478,10 +478,7 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 func decryptObjectMeta(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch kind, _ := crypto.IsEncrypted(metadata); kind {
 	case crypto.S3:
-		var KMS kms.KMS = GlobalKMS
-		if isCacheEncrypted(metadata) {
-			KMS = globalCacheKMS
-		}
+		KMS := GlobalKMS
 		if KMS == nil {
 			return nil, errKMSNotConfigured
 		}

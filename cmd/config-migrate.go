@@ -29,7 +29,6 @@ import (
 
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/compress"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
@@ -1997,11 +1996,6 @@ func migrateV22ToV23() error {
 	srvConfig.StorageClass.RRS = cv22.StorageClass.RRS
 	srvConfig.StorageClass.Standard = cv22.StorageClass.Standard
 
-	// Init cache config.For future migration, Cache config needs to be copied over from previous version.
-	srvConfig.Cache.Drives = []string{}
-	srvConfig.Cache.Exclude = []string{}
-	srvConfig.Cache.Expiry = 90
-
 	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv22.Version, srvConfig.Version, err)
 	}
@@ -2109,11 +2103,6 @@ func migrateV23ToV24() error {
 	// Load storage class config from existing storage class config in the file.
 	srvConfig.StorageClass.RRS = cv23.StorageClass.RRS
 	srvConfig.StorageClass.Standard = cv23.StorageClass.Standard
-
-	// Load cache config from existing cache config in the file.
-	srvConfig.Cache.Drives = cv23.Cache.Drives
-	srvConfig.Cache.Exclude = cv23.Cache.Exclude
-	srvConfig.Cache.Expiry = cv23.Cache.Expiry
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv23.Version, srvConfig.Version, err)
@@ -2228,11 +2217,6 @@ func migrateV24ToV25() error {
 	srvConfig.StorageClass.RRS = cv24.StorageClass.RRS
 	srvConfig.StorageClass.Standard = cv24.StorageClass.Standard
 
-	// Load cache config from existing cache config in the file.
-	srvConfig.Cache.Drives = cv24.Cache.Drives
-	srvConfig.Cache.Exclude = cv24.Cache.Exclude
-	srvConfig.Cache.Expiry = cv24.Cache.Expiry
-
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv24.Version, srvConfig.Version, err)
 	}
@@ -2343,14 +2327,6 @@ func migrateV25ToV26() error {
 	// Load storage class config from existing storage class config in the file.
 	srvConfig.StorageClass.RRS = cv25.StorageClass.RRS
 	srvConfig.StorageClass.Standard = cv25.StorageClass.Standard
-
-	// Load cache config from existing cache config in the file.
-	srvConfig.Cache.Drives = cv25.Cache.Drives
-	srvConfig.Cache.Exclude = cv25.Cache.Exclude
-	srvConfig.Cache.Expiry = cv25.Cache.Expiry
-
-	// Add predefined value to new server config.
-	srvConfig.Cache.MaxUse = 80
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv25.Version, srvConfig.Version, err)
@@ -2574,7 +2550,6 @@ func readConfigWithoutMigrate(ctx context.Context, objAPI ObjectLayer) (config.C
 
 	xldap.SetIdentityLDAP(newCfg, cfg.LDAPServerConfig)
 	opa.SetPolicyOPAConfig(newCfg, cfg.Policy.OPA)
-	cache.SetCacheConfig(newCfg, cfg.Cache)
 	compress.SetCompressionConfig(newCfg, cfg.Compression)
 
 	for k, args := range cfg.Notify.AMQP {
