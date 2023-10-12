@@ -105,7 +105,8 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 
 func updateOSMetrics(s osMetric, paths ...string) func(err error) {
 	if globalTrace.NumSubscribers(madmin.TraceOS) == 0 {
-		return func(err error) { globalOSMetrics.time(s)() }
+		osAction := globalOSMetrics.time(s)
+		return func(err error) { osAction() }
 	}
 
 	startTime := time.Now()
