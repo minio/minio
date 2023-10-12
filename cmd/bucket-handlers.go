@@ -474,9 +474,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	deleteObjectsFn := objectAPI.DeleteObjects
-	if api.CacheAPI() != nil {
-		deleteObjectsFn = api.CacheAPI().DeleteObjects
-	}
 
 	// Return Malformed XML as S3 spec if the number of objects is empty
 	if len(deleteObjectsReq.Objects) == 0 || len(deleteObjectsReq.Objects) > maxDeleteList {
@@ -486,9 +483,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	objectsToDelete := map[ObjectToDelete]int{}
 	getObjectInfoFn := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfoFn = api.CacheAPI().GetObjectInfo
-	}
 
 	var (
 		hasLockEnabled bool
