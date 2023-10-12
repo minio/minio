@@ -27,7 +27,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
@@ -46,7 +45,6 @@ import (
 	"github.com/minio/minio/internal/config/subnet"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
@@ -54,7 +52,6 @@ import (
 func initHelp() {
 	kvs := map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
-		config.CacheSubSys:          cache.DefaultKVS,
 		config.CompressionSubSys:    compress.DefaultKVS,
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
@@ -209,10 +206,6 @@ func initHelp() {
 			Key:         config.EtcdSubSys,
 			Description: "persist IAM assets externally to etcd",
 		},
-		config.HelpKV{
-			Key:         config.CacheSubSys,
-			Description: "[DEPRECATED] add caching storage tier",
-		},
 	}
 
 	if globalIsErasure {
@@ -232,7 +225,6 @@ func initHelp() {
 		config.APISubSys:            api.Help,
 		config.StorageClassSubSys:   storageclass.Help,
 		config.EtcdSubSys:           etcd.Help,
-		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
 		config.ScannerSubSys:        scanner.Help,
@@ -301,10 +293,6 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 			if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
 				return err
 			}
-		}
-	case config.CacheSubSys:
-		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
-			return err
 		}
 	case config.CompressionSubSys:
 		if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
@@ -491,20 +479,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
-	}
-
-	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
-	}
-
-	if globalCacheConfig.Enabled {
-		if cacheEncKey := env.Get(cache.EnvCacheEncryptionKey, ""); cacheEncKey != "" {
-			globalCacheKMS, err = kms.Parse(cacheEncKey)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to setup encryption cache: %w", err))
-			}
-		}
 	}
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
