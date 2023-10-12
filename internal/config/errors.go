@@ -61,66 +61,6 @@ var (
 		"WORM can only accept `on` and `off` values. To enable WORM, set this value to `on`",
 	)
 
-	ErrInvalidCacheDrivesValue = newErrFn(
-		"Invalid cache drive value",
-		"Please check the value in this ENV variable",
-		"MINIO_CACHE_DRIVES: Mounted drives or directories are delimited by `,`",
-	)
-
-	ErrInvalidCacheExcludesValue = newErrFn(
-		"Invalid cache excludes value",
-		"Please check the passed value",
-		"MINIO_CACHE_EXCLUDE: Cache exclusion patterns are delimited by `,`",
-	)
-
-	ErrInvalidCacheExpiryValue = newErrFn(
-		"Invalid cache expiry value",
-		"Please check the passed value",
-		"MINIO_CACHE_EXPIRY: Valid cache expiry duration must be in days",
-	)
-
-	ErrInvalidCacheQuota = newErrFn(
-		"Invalid cache quota value",
-		"Please check the passed value",
-		"MINIO_CACHE_QUOTA: Valid cache quota value must be between 0-100",
-	)
-
-	ErrInvalidCacheAfter = newErrFn(
-		"Invalid cache after value",
-		"Please check the passed value",
-		"MINIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
-	)
-
-	ErrInvalidCacheWatermarkLow = newErrFn(
-		"Invalid cache low watermark value",
-		"Please check the passed value",
-		"MINIO_CACHE_WATERMARK_LOW: Valid cache low watermark value must be between 0-100",
-	)
-
-	ErrInvalidCacheWatermarkHigh = newErrFn(
-		"Invalid cache high watermark value",
-		"Please check the passed value",
-		"MINIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
-	)
-
-	ErrInvalidCacheRange = newErrFn(
-		"Invalid cache range value",
-		"Please check the passed value",
-		"MINIO_CACHE_RANGE: Valid expected value is `on` or `off`",
-	)
-
-	ErrInvalidCacheCommitValue = newErrFn(
-		"Invalid cache commit value",
-		"Please check the passed value",
-		"MINIO_CACHE_COMMIT: Valid expected value is `writeback` or `writethrough`",
-	)
-
-	ErrInvalidCacheSetting = newErrFn(
-		"Incompatible cache setting",
-		"Please check the passed value",
-		"MINIO_CACHE_AFTER cannot be used with MINIO_CACHE_COMMIT setting",
-	)
-
 	ErrInvalidConfigDecryptionKey = newErrFn(
 		"Incorrect encryption key to decrypt internal data",
 		"Please set the correct default KMS key value or the correct root credentials for older MinIO versions.",

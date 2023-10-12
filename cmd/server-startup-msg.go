@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
@@ -52,11 +51,6 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	}
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
-	// If cache layer is enabled, print cache capacity.
-	cachedObjAPI := newCachedObjectLayerFn()
-	if cachedObjAPI != nil {
-		printCacheStorageInfo(cachedObjAPI.StorageInfo(GlobalContext))
-	}
 
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
@@ -225,11 +219,4 @@ func printStorageInfo(storageInfo StorageInfo) {
 	if msg := getStorageInfoMsg(storageInfo); msg != "" {
 		logger.Info(msg)
 	}
-}
-
-func printCacheStorageInfo(storageInfo CacheStorageInfo) {
-	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
-		humanize.IBytes(storageInfo.Free),
-		humanize.IBytes(storageInfo.Total))
-	logger.Info(msg)
 }
