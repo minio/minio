@@ -701,6 +701,31 @@ func (sys *NotificationSys) GetCPUs(ctx context.Context) []madmin.CPUs {
 	return reply
 }
 
+// GetNetInfo - Network information
+func (sys *NotificationSys) GetNetInfo(ctx context.Context) []madmin.NetInfo {
+	reply := make([]madmin.NetInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetNetInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
 // GetPartitions - Disk partition information
 func (sys *NotificationSys) GetPartitions(ctx context.Context) []madmin.Partitions {
 	reply := make([]madmin.Partitions, len(sys.peerClients))
