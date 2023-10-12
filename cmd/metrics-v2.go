@@ -2446,6 +2446,26 @@ func getNotificationMetrics() *MetricsGroup {
 				},
 				Value: float64(nstats.CurrentSendCalls),
 			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_skipped_total",
+					Help:      "Events that were skipped due to full queue",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsSkipped),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_sent_total",
+					Help:      "Total number of events sent since start",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.TotalEvents),
+			})
 			for _, st := range nstats.TargetStats {
 				metrics = append(metrics, Metric{
 					Description: MetricDescription{
