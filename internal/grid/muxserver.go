@@ -236,7 +236,11 @@ func (m *muxServer) unblockSend(seq uint32) {
 	}
 }
 
-func (m *muxServer) ping() pongMsg {
+func (m *muxServer) ping(seq uint32) pongMsg {
+	if !m.checkSeq(seq) {
+		msg := fmt.Sprintf("receive sequence number mismatch. want %d, got %d", m.RecvSeq, seq)
+		return pongMsg{Err: &msg}
+	}
 	select {
 	case <-m.ctx.Done():
 		err := m.ctx.Err().Error()
