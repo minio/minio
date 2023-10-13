@@ -134,17 +134,6 @@ func (client *peerRESTClient) GetCPUs(ctx context.Context) (info madmin.CPUs, er
 	return info, err
 }
 
-// GetNetInfo - fetch network information for a remote node.
-func (client *peerRESTClient) GetNetInfo(ctx context.Context) (info madmin.NetInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodNetHwInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer xhttp.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
 // GetPartitions - fetch disk partition information for a remote node.
 func (client *peerRESTClient) GetPartitions(ctx context.Context) (info madmin.Partitions, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDiskHwInfo, nil, nil, -1)

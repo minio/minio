@@ -17,7 +17,6 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cosnicolaou/pbzip2 v1.0.2
 	github.com/dchest/siphash v1.2.3
-	github.com/djherbis/atime v1.1.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/elastic/go-elasticsearch/v7 v7.17.10
@@ -49,7 +48,7 @@ require (
 	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
-	github.com/minio/madmin-go/v3 v3.0.24
+	github.com/minio/madmin-go/v3 v3.0.21
 	github.com/minio/minio-go/v7 v7.0.64-0.20230920204636-e783c9ba11b3
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.2
@@ -210,7 +209,6 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/rs/xid v1.5.0 // indirect
-	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
