@@ -31,7 +31,6 @@ const (
 	peerRESTMethodLocalStorageInfo            = "/localstorageinfo"
 	peerRESTMethodCPUInfo                     = "/cpuinfo"
 	peerRESTMethodDiskHwInfo                  = "/diskhwinfo"
-	peerRESTMethodNetHwInfo                   = "/nethwinfo"
 	peerRESTMethodOsInfo                      = "/osinfo"
 	peerRESTMethodMemInfo                     = "/meminfo"
 	peerRESTMethodProcInfo                    = "/procinfo"

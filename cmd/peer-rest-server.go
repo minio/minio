@@ -375,21 +375,6 @@ func (s *peerRESTServer) GetCPUsHandler(w http.ResponseWriter, r *http.Request) 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
-// GetNetInfoHandler - returns network information.
-func (s *peerRESTServer) GetNetInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetNetInfo(r.Host, globalInternodeInterface)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
-}
-
 // GetPartitionsHandler - returns disk partition information.
 func (s *peerRESTServer) GetPartitionsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1475,7 +1460,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(h(server.GetSysConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodOsInfo).HandlerFunc(h(server.GetOSInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDiskHwInfo).HandlerFunc(h(server.GetPartitionsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetHwInfo).HandlerFunc(h(server.GetNetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCPUInfo).HandlerFunc(h(server.GetCPUsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetAllBucketStats).HandlerFunc(h(server.GetAllBucketStatsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(h(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
