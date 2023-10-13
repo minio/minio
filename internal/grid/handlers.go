@@ -43,6 +43,8 @@ const (
 	HandlerLockRefresh
 	HandlerLockForceUnlock
 	HandlerWalkDir
+	HandlerStatVol
+	HandlerDiskInfo
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -259,9 +261,9 @@ func (h *SingleHandler[Req, Resp]) NewResponse() Resp {
 	return h.respPool.Get().(Resp)
 }
 
-// PutRequest will accept a request for reuse.
-// These should be returned by the caller.
-func (h *SingleHandler[Req, Resp]) PutRequest(r Req) {
+// putRequest will accept a request for reuse.
+// This is not exported, since it shouldn't be needed.
+func (h *SingleHandler[Req, Resp]) putRequest(r Req) {
 	if r != h.nilReq {
 		h.reqPool.Put(r)
 	}
@@ -285,11 +287,11 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			return nil, &r
 		}
 		resp, rerr := handle(req)
+		h.putRequest(req)
 		if rerr != nil {
 			PutByteBuffer(payload)
 			return nil, rerr
 		}
-		h.PutRequest(req)
 		payload, err = resp.MarshalMsg(payload[:0])
 		h.PutResponse(resp)
 		if err != nil {
