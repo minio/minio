@@ -1061,12 +1061,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Move xl.meta to trash
-	err = s.moveToTrash(pathJoin(volumeDir, path, xlStorageFormatFile), false, false)
-	if err == nil || err == errFileNotFound {
-		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false, false)
-	}
-	return err
+	return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true, false)
 }
 
 // DeleteVersions deletes slice of versions, it can be same object

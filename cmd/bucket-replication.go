@@ -2487,7 +2487,7 @@ func newresyncer() *replicationResyncer {
 }
 
 // mark status of replication resync on remote target for the bucket
-func (s *replicationResyncer) markStatus(status ResyncStatusType, opts resyncOpts) {
+func (s *replicationResyncer) markStatus(status ResyncStatusType, opts resyncOpts, objAPI ObjectLayer) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -2498,6 +2498,10 @@ func (s *replicationResyncer) markStatus(status ResyncStatusType, opts resyncOpt
 	m.TargetsMap[opts.arn] = st
 	m.LastUpdate = UTCNow()
 	s.statusMap[opts.bucket] = m
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	saveResyncStatus(ctx, opts.bucket, m, objAPI)
 }
 
 // update replication resync stats for bucket's remote target
@@ -2527,7 +2531,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 
 	resyncStatus := ResyncFailed
 	defer func() {
-		s.markStatus(resyncStatus, opts)
+		s.markStatus(resyncStatus, opts, objectAPI)
 		globalSiteResyncMetrics.incBucket(opts, resyncStatus)
 		s.workerCh <- struct{}{}
 	}()
@@ -2563,7 +2567,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}
 	// mark resync status as resync started
 	if !heal {
-		s.markStatus(ResyncStarted, opts)
+		s.markStatus(ResyncStarted, opts, objectAPI)
 	}
 
 	// Walk through all object versions - Walk() is always in ascending order needed to ensure
