@@ -136,6 +136,8 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
             {{- end }}
             {{- if .Values.etcd.endpoints }}
             - name: MINIO_ETCD_ENDPOINTS
