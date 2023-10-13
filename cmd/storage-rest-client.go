@@ -279,9 +279,8 @@ func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
 }
 
-// DiskInfo - fetch disk information for a remote disk.
-func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info DiskInfo, err error) {
-	if !client.IsOnline() {
+func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
+	if client.gridConn.State() != grid.StateConnected {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -290,22 +289,16 @@ func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info
 		return info, errDiskNotFound
 	}
 	// Do not cache results from atomic variables
-	scanning := atomic.LoadInt32(&client.scanning) == 1
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
-			var info DiskInfo
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-
-			vals := make(url.Values)
-			vals.Set(storageRESTMetrics, strconv.FormatBool(metrics))
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, vals, nil, -1)
+			info, err := storageDiskInfoHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
+				storageRESTDiskID:  client.diskID,
+				storageRESTMetrics: strconv.FormatBool(metrics),
+			}))
 			if err != nil {
-				return info, err
-			}
-			defer xhttp.DrainBody(respBody)
-			if err = msgp.Decode(respBody, &info); err != nil {
 				return info, err
 			}
 			if info.Error != "" {
@@ -315,10 +308,10 @@ func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info
 		}
 	})
 	val, err := client.diskInfoCache.Get()
-	if val != nil {
-		info = val.(DiskInfo)
+	if di, ok := val.(*DiskInfo); di != nil && ok {
+		info = *di
 	}
-	info.Scanning = scanning
+	logger.LogIf(ctx, err)
 	return info, err
 }
 
@@ -354,15 +347,17 @@ func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, 
 
 // StatVol - get volume info over the network.
 func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	respBody, err := client.call(ctx, storageRESTMethodStatVol, values, nil, -1)
+	v, err := storageStatVolHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
+		storageRESTDiskID: client.diskID,
+		storageRESTVolume: volume,
+	}))
 	if err != nil {
-		return
+		logger.LogIf(ctx, err)
+		return vol, err
 	}
-	defer xhttp.DrainBody(respBody)
-	err = msgp.Decode(respBody, &vol)
-	return vol, err
+	vol = *v
+	storageStatVolHandler.PutResponse(v)
+	return vol, nil
 }
 
 // DeleteVol - Deletes a volume over the network.

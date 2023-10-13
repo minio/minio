@@ -28,9 +28,27 @@ import (
 )
 
 const (
-	minBufferSize     = 1 << 10
+	// minBufferSize is the minimum buffer size.
+	// Buffers below this is not reused.
+	minBufferSize = 1 << 10
+
+	// defaultBufferSize is the default buffer allocation size.
 	defaultBufferSize = 4 << 10
-	maxBufferSize     = 64 << 10
+
+	// maxBufferSize is the maximum buffer size.
+	// Buffers larger than this is not reused.
+	maxBufferSize = 64 << 10
+
+	// If there is a queue, merge up to this many messages.
+	maxMergeMessages = 20
+
+	// clientPingInterval will ping the remote handler every 15 seconds.
+	// Clients disconnect when we exceed 2 intervals.
+	clientPingInterval = 15 * time.Second
+
+	// Deadline for single (non-streaming) requests to complete.
+	// Used if no deadline is provided on context.
+	defaultSingleRequestTimeout = time.Minute
 )
 
 var internalByteBuffer = sync.Pool{

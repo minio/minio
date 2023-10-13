@@ -96,9 +96,9 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 
 	// Add deadline if none.
 	if msg.DeadlineMS == 0 {
-		msg.DeadlineMS = 60 * 1000
+		msg.DeadlineMS = uint32(defaultSingleRequestTimeout / time.Millisecond)
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(msg.DeadlineMS)*time.Millisecond)
+		ctx, cancel = context.WithTimeout(ctx, defaultSingleRequestTimeout)
 		defer cancel()
 	}
 	// Send... (no need for lock yet)
@@ -138,7 +138,6 @@ func (m *muxClient) sendLocked(msg message) error {
 	if debugPrint {
 		fmt.Println("Client sending", &msg, "to", m.parent.Remote)
 	}
-
 	m.SendSeq++
 
 	dst, err := msg.MarshalMsg(dst)
@@ -198,10 +197,6 @@ func (m *muxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 	m.respWait = out
 }
 
-// clientPingInterval will ping the remote handler every 15 seconds.
-// We disconnect when we exceed 2 intervals.
-const clientPingInterval = time.Second * 15
-
 // RequestStream will send a single payload request and stream back results.
 // 'requests' can be nil, in which case only req is sent as input.
 // It will however take less resources.
@@ -242,160 +237,168 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if debugPrint {
 		fmt.Println("Connecting Mux", m.MuxID, ",to", m.parent.Remote)
 	}
+
+	// Space for one message and an error.
 	responseCh := make(chan Response, 1)
 
 	// Spawn simple disconnect
 	if requests == nil {
 		start := time.Now()
-		go func() {
-			if debugPrint {
-				defer func() {
-					fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
-				}()
-			}
-			defer close(responseCh)
-			var pingTimer <-chan time.Time
-			if m.deadline == 0 || m.deadline > clientPingInterval {
-				ticker := time.NewTicker(clientPingInterval)
-				defer ticker.Stop()
-				pingTimer = ticker.C
-				atomic.StoreInt64(&m.LastPong, time.Now().Unix())
-			}
-			defer m.parent.deleteMux(false, m.MuxID)
-			for {
-				select {
-				case <-m.ctx.Done():
-					if debugPrint {
-						fmt.Println("Client sending disconnect to mux", m.MuxID)
-					}
-					m.respMu.Lock()
-					defer m.respMu.Unlock() // We always return in this path.
-					if !m.closed {
-						responseCh <- Response{Err: m.ctx.Err()}
-						logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
-						m.closeLocked()
-					}
-					return
-				case resp, ok := <-responses:
-					if !ok {
-						return
-					}
-					select {
-					case responseCh <- resp:
-						m.respMu.Lock()
-						if !m.closed {
-							logger.LogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
-						}
-						m.respMu.Unlock()
-					case <-m.ctx.Done():
-						// Client canceled. Don't block.
-						// Next loop will catch it.
-					}
-				case <-pingTimer:
-					if time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
-						m.respMu.Lock()
-						defer m.respMu.Unlock() // We always return in this path.
-						if !m.closed {
-							responseCh <- Response{Err: ErrDisconnected}
-							logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
-							m.closeLocked()
-						}
-						return
-					}
-					// Send new ping.
-					logger.LogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
-				}
-			}
-		}()
+		go m.handleOneWayStream(start, responseCh, responses)
 		return &Stream{Responses: responseCh, Requests: nil, ctx: m.ctx}, nil
 	}
 
 	// Deliver responses and send unblocks back to the server.
-	go func() {
-		defer m.parent.deleteMux(false, m.MuxID)
-		defer close(responseCh)
-		for resp := range responses {
-			responseCh <- resp
-			m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
-		}
-	}()
+	go m.handleTwowayResponses(responseCh, responses)
+	go m.handleTwowayRequests(responses, requests)
 
-	// Listen for client messages.
-	go func() {
-		var errState bool
-		start := time.Now()
-		for {
-			defer func() {
-				if debugPrint {
-					fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
-				}
-			}()
-			select {
-			case <-m.ctx.Done():
-				if debugPrint {
-					fmt.Println("Client sending disconnect to mux", m.MuxID)
-				}
-				m.respMu.Lock()
-				defer m.respMu.Unlock()
+	return &Stream{Responses: responseCh, Requests: requests, ctx: m.ctx}, nil
+}
+
+func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Response, respServer <-chan Response) {
+	if debugPrint {
+		defer func() {
+			fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
+		}()
+	}
+	defer close(respHandler)
+	var pingTimer <-chan time.Time
+	if m.deadline == 0 || m.deadline > clientPingInterval {
+		ticker := time.NewTicker(clientPingInterval)
+		defer ticker.Stop()
+		pingTimer = ticker.C
+		atomic.StoreInt64(&m.LastPong, time.Now().Unix())
+	}
+	defer m.parent.deleteMux(false, m.MuxID)
+	for {
+		select {
+		case <-m.ctx.Done():
+			if debugPrint {
+				fmt.Println("Client sending disconnect to mux", m.MuxID)
+			}
+			m.respMu.Lock()
+			defer m.respMu.Unlock() // We always return in this path.
+			if !m.closed {
+				respHandler <- Response{Err: m.ctx.Err()}
 				logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+				m.closeLocked()
+			}
+			return
+		case resp, ok := <-respServer:
+			if !ok {
+				return
+			}
+			select {
+			case respHandler <- resp:
+				m.respMu.Lock()
 				if !m.closed {
-					responses <- Response{Err: m.ctx.Err()}
+					logger.LogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
+				}
+				m.respMu.Unlock()
+			case <-m.ctx.Done():
+				// Client canceled. Don't block.
+				// Next loop will catch it.
+			}
+		case <-pingTimer:
+			if time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
+				m.respMu.Lock()
+				defer m.respMu.Unlock() // We always return in this path.
+				if !m.closed {
+					respHandler <- Response{Err: ErrDisconnected}
+					logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 					m.closeLocked()
 				}
 				return
-			case req, ok := <-requests:
-				if !ok {
-					// Done send EOF
-					if debugPrint {
-						fmt.Println("Client done, sending EOF to mux", m.MuxID)
-					}
-					msg := message{
-						Op:    OpMuxClientMsg,
-						MuxID: m.MuxID,
-						Seq:   1,
-						Flags: FlagEOF,
-					}
-					msg.setZeroPayloadFlag()
-					err := m.send(msg)
-					if err != nil {
-						m.respMu.Lock()
-						responses <- Response{Err: err}
-						m.closeLocked()
-						m.respMu.Unlock()
-					}
-					return
-				}
-				if errState {
-					continue
-				}
-				// Grab a send token.
-				select {
-				case <-m.ctx.Done():
-					errState = true
-					continue
-				case <-m.outBlock:
+			}
+			// Send new ping.
+			logger.LogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
+		}
+	}
+}
+
+func (m *muxClient) handleTwowayResponses(responseCh chan Response, responses chan Response) {
+	defer m.parent.deleteMux(false, m.MuxID)
+	defer close(responseCh)
+	for resp := range responses {
+		responseCh <- resp
+		m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
+	}
+}
+
+func (m *muxClient) handleTwowayRequests(responses chan<- Response, requests chan []byte) {
+	var errState bool
+	start := time.Now()
+	if debugPrint {
+		defer func() {
+			fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
+		}()
+	}
+
+	// Listen for client messages.
+	for {
+		select {
+		case <-m.ctx.Done():
+			if debugPrint {
+				fmt.Println("Client sending disconnect to mux", m.MuxID)
+			}
+			m.respMu.Lock()
+			defer m.respMu.Unlock()
+			logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+			if !m.closed {
+				responses <- Response{Err: m.ctx.Err()}
+				m.closeLocked()
+			}
+			return
+		case req, ok := <-requests:
+			if !ok {
+				// Done send EOF
+				if debugPrint {
+					fmt.Println("Client done, sending EOF to mux", m.MuxID)
 				}
 				msg := message{
-					Op:      OpMuxClientMsg,
-					MuxID:   m.MuxID,
-					Seq:     1,
-					Payload: req,
+					Op:    OpMuxClientMsg,
+					MuxID: m.MuxID,
+					Seq:   1,
+					Flags: FlagEOF,
 				}
 				msg.setZeroPayloadFlag()
 				err := m.send(msg)
 				if err != nil {
-					PutByteBuffer(req)
+					m.respMu.Lock()
 					responses <- Response{Err: err}
-					m.close()
-					errState = true
-					continue
+					m.closeLocked()
+					m.respMu.Unlock()
 				}
-				msg.Seq++
+				return
 			}
+			if errState {
+				continue
+			}
+			// Grab a send token.
+			select {
+			case <-m.ctx.Done():
+				errState = true
+				continue
+			case <-m.outBlock:
+			}
+			msg := message{
+				Op:      OpMuxClientMsg,
+				MuxID:   m.MuxID,
+				Seq:     1,
+				Payload: req,
+			}
+			msg.setZeroPayloadFlag()
+			err := m.send(msg)
+			if err != nil {
+				PutByteBuffer(req)
+				responses <- Response{Err: err}
+				m.close()
+				errState = true
+				continue
+			}
+			msg.Seq++
 		}
-	}()
-
-	return &Stream{Responses: responseCh, Requests: requests, ctx: m.ctx}, nil
+	}
 }
 
 // checkSeq will check if sequence number is correct and increment it by 1.

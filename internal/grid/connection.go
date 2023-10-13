@@ -948,9 +948,8 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		DeadlineMS: 1000,
 	}
 
-	const mergeItems = 20
 	defer ping.Stop()
-	queue := make([][]byte, 0, mergeItems)
+	queue := make([][]byte, 0, maxMergeMessages)
 	var queueSize int
 	var buf bytes.Buffer
 	for {
@@ -986,7 +985,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				continue
 			}
 		}
-		if len(queue) < mergeItems && queueSize+len(toSend) < writeBufferSize-1024 && len(c.outQueue) > 0 {
+		if len(queue) < maxMergeMessages && queueSize+len(toSend) < writeBufferSize-1024 && len(c.outQueue) > 0 {
 			queue = append(queue, toSend)
 			queueSize += len(toSend)
 			continue
@@ -1239,7 +1238,7 @@ func (c *Connection) handlePing(m message, ctx context.Context) {
 	}
 	// Single calls do not support pinging.
 	if v, ok := c.inStream.Load(m.MuxID); ok {
-		pong := v.ping()
+		pong := v.ping(m.Seq)
 		logger.LogIf(ctx, c.queueMsg(m, &pong))
 	} else {
 		pong := pongMsg{NotFound: true}
