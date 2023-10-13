@@ -489,6 +489,24 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 	auditLogInternal(ctx, opts)
 }
 
+func joinErrors(errs ...error) error {
+	s := make([]string, 0, len(errs))
+	nonNilErrs := make([]any, 0, len(errs))
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		s = append(s, "[%w]")
+		nonNilErrs = append(nonNilErrs, err)
+	}
+	// If all the errors were nil, return nil.
+	if len(nonNilErrs) == 0 {
+		return nil
+	}
+	allErrs := strings.Join(s, "\n")
+	return fmt.Errorf(allErrs, nonNilErrs...)
+}
+
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
 	_, file, line, cok := runtime.Caller(1)
 	var err error
@@ -497,8 +515,8 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["merrs"] = errors.Join(errs...)
-		tags["derrs"] = errors.Join(dataErrs...)
+		tags["merrs"] = joinErrors(errs...)     // errors.Join(errs...)
+		tags["derrs"] = joinErrors(dataErrs...) // errors.Join(dataErrs...)
 		if m.IsValid() {
 			tags["size"] = m.Size
 			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
