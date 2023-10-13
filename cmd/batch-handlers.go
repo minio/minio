@@ -1900,6 +1900,13 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 				Objects:       job.Objects,
 				ObjectsFailed: job.ObjectsFailed,
 			}
+		case string(madmin.BatchJobExpire):
+			m.Expired = &madmin.ExpirationInfo{
+				Bucket:        job.Bucket,
+				Object:        job.Object,
+				Objects:       job.Objects,
+				ObjectsFailed: job.ObjectsFailed,
+			}
 		}
 
 		metrics.Jobs[id] = m
