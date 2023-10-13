@@ -267,6 +267,9 @@ lifecycle: {}
 ## Configure Pod terminationGracePeriodSeconds, that should match the expected preStop lifecycle hook if any
 terminationGracePeriodSeconds: 30
 
+## Set the MINIO_ROOT env var to the default ones
+useDefaultRootCreds: true
+
 ## List of policies to be created after minio install
 ##
 ## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]

@@ -139,6 +139,7 @@ spec:
             - name: {{ $scheme }}-console
               containerPort: {{ .Values.minioConsolePort }}
           env:
+            {{- if .Values.useDefaultRootCreds }}
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
@@ -149,6 +150,7 @@ spec:
                 secretKeyRef:
                   name: {{ template "minio.secretName" . }}
                   key: rootPassword
+            {{- end}}
             {{- if .Values.extraSecret }}
             - name: MINIO_CONFIG_ENV_FILE
               value: "/tmp/minio-config-env/config.env"
