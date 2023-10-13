@@ -381,9 +381,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	dryRun := opts.DryRun
 	scanMode := opts.ScanMode
 
-	if versionID == nullVersionID {
-		versionID = ""
-	}
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
