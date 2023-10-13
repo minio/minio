@@ -418,15 +418,22 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	if err != nil {
 		return err
 	}
+	// TODO: Refactor this...
+	var retErr error
 	for in := range st.Responses {
+		if retErr != nil {
+			continue
+		}
 		if in.Err != nil {
-			return in.Err
+			retErr = in.Err
+			continue
 		}
 		if _, err = wr.Write(in.Msg); err != nil {
-			return err
+			retErr = in.Err
+			continue
 		}
 	}
-	return nil
+	return retErr
 }
 
 // WalkDirHandler - remote caller to list files and folders in a requested directory path.

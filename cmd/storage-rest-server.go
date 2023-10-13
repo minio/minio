@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/internal/grid"
@@ -166,21 +167,39 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 	return true
 }
 
+// IsValid - To authenticate and check if the disk-id in the request corresponds to the underlying disk.
+func (s *storageRESTServer) checkID(wantID string) bool {
+	if s.storage == nil {
+		return false
+	}
+	storedDiskID, err := s.storage.GetDiskID()
+	if err != nil {
+		return false
+	}
+
+	return wantID == storedDiskID
+}
+
 // HealthHandler handler checks if disk is stale
 func (s *storageRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsValid(w, r)
 }
 
+// diskinfo types.
+var storageDiskInfoHandler = grid.NewSingleHandler[*grid.MSS, *DiskInfo](grid.HandlerDiskInfo, grid.NewMSS, func() *DiskInfo { return &DiskInfo{} })
+
 // DiskInfoHandler - returns disk info.
-func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsAuthValid(w, r) {
-		return
+func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.RemoteErr) {
+	if !s.checkID(params.Get(storageRESTDiskID)) {
+		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
-	info, err := s.storage.DiskInfo(r.Context(), r.Form.Get(storageRESTMetrics) == "true")
+	withMetrics := params.Get(storageRESTMetrics) == "true"
+	info, err := s.storage.DiskInfo(context.Background(), withMetrics)
 	if err != nil {
-		info.Error = err.Error()
+		return nil, grid.NewRemoteErr(err)
 	}
-	logger.LogIf(r.Context(), msgp.Encode(w, &info))
+	info.Scanning = s.storage != nil && s.storage.storage != nil && atomic.LoadInt32(&s.storage.storage.scanning) > 0
+	return &info, nil
 }
 
 func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Request) {
@@ -292,18 +311,19 @@ func (s *storageRESTServer) ListVolsHandler(w http.ResponseWriter, r *http.Reque
 	logger.LogIf(r.Context(), msgp.Encode(w, VolsInfo(infos)))
 }
 
+// statvol types.
+var storageStatVolHandler = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerStatVol, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
+
 // StatVolHandler - stat a volume.
-func (s *storageRESTServer) StatVolHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
+func (s *storageRESTServer) StatVolHandler(params *grid.MSS) (*VolInfo, *grid.RemoteErr) {
+	if !s.checkID(params.Get(storageRESTDiskID)) {
+		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
-	volume := r.Form.Get(storageRESTVolume)
-	info, err := s.storage.StatVol(r.Context(), volume)
+	info, err := s.storage.StatVol(context.Background(), params.Get(storageRESTVolume))
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		return nil, grid.NewRemoteErr(err)
 	}
-	logger.LogIf(r.Context(), msgp.Encode(w, &info))
+	return &info, nil
 }
 
 // DeleteVolumeHandler - delete a volume.
@@ -1378,11 +1398,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(h(server.DiskInfoHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodNSScanner).HandlerFunc(h(server.NSScannerHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(h(server.MakeVolHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(h(server.MakeVolBulkHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatVol).HandlerFunc(h(server.StatVolHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVol).HandlerFunc(h(server.DeleteVolHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListVols).HandlerFunc(h(server.ListVolsHandler))
 
@@ -1410,6 +1428,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
 
+			logger.FatalIf(storageDiskInfoHandler.Register(gr, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageStatVolHandler.Register(gr, server.StatVolHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(gr.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
 				Subroute:    endpoint.Path,
 				Handle:      server.WalkDirHandler,

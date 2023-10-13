@@ -108,6 +108,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			handlers:     &m.handlers,
 			auth:         o.AddAuth,
 			blockConnect: o.BlockConnect,
+			tlsConfig:    o.TLSConfig,
 		})
 	}
 	if !found {
