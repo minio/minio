@@ -1039,11 +1039,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		break
 	}
 
-	if _, ok := formValues["Key"]; !ok {
+	if keyName, ok := formValues["Key"]; !ok {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The name of the uploaded key is missing"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
+	} else if fileName == "" && len(keyName) >= 1 {
+		// if we can't get fileName. We use keyName[0] to fileName
+		fileName = keyName[0]
 	}
 
 	if fileName == "" {
