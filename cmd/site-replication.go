@@ -5157,8 +5157,7 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 		}
 	}()
 
-	globalSiteResyncMetrics.updateState(rs)
-	if err := saveSiteResyncMetadata(ctx, rs, objAPI); err != nil {
+	if err := globalSiteResyncMetrics.updateState(rs); err != nil {
 		return res, err
 	}
 
@@ -5408,6 +5407,9 @@ func loadSiteResyncMetadata(ctx context.Context, objAPI ObjectLayer, dID string)
 
 // save resync status of peer to resync/depl-id.meta
 func saveSiteResyncMetadata(ctx context.Context, ss SiteResyncStatus, objectAPI ObjectLayer) error {
+	if objectAPI == nil {
+		return errSRObjectLayerNotReady
+	}
 	data := make([]byte, 4, ss.Msgsize()+4)
 
 	// Initialize the resync meta header.
