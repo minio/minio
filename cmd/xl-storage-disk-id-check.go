@@ -86,6 +86,15 @@ type xlStorageDiskIDCheck struct {
 	diskID       string
 	storage      *xlStorage
 	health       *diskHealthTracker
+
+	// diskStartChecking is a threshold above which we will start to check
+	// the state of disks, generally this value is less than diskMaxConcurrent
+	diskStartChecking int
+
+	// diskMaxConcurrent represents maximum number of running concurrent
+	// operations for local and (incoming) remote disk operations.
+	diskMaxConcurrent int
+
 	metricsCache timedValue
 	diskCtx      context.Context
 	cancel       context.CancelFunc
@@ -169,9 +178,22 @@ func (e *lockedLastMinuteLatency) total() AccElem {
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDiskIDCheck {
+	if diskMaxConcurrent <= 0 {
+		diskMaxConcurrent = 512
+		if storage.rotational {
+			diskMaxConcurrent = 32
+		}
+	}
+	diskStartChecking := 16 + diskMaxConcurrent/8
+	if diskStartChecking > diskMaxConcurrent {
+		diskStartChecking = diskMaxConcurrent
+	}
+
 	xl := xlStorageDiskIDCheck{
-		storage: storage,
-		health:  newDiskHealthTracker(),
+		storage:           storage,
+		health:            newDiskHealthTracker(diskMaxConcurrent),
+		diskMaxConcurrent: diskMaxConcurrent,
+		diskStartChecking: diskStartChecking,
 	}
 	xl.diskCtx, xl.cancel = context.WithCancel(context.TODO())
 	for i := range xl.apiLatencies[:] {
@@ -709,20 +731,19 @@ const (
 	diskHealthFaulty
 )
 
-// diskMaxConcurrent is the maximum number of running concurrent operations
-// for local and (incoming) remote disk ops respectively.
-var diskMaxConcurrent = 512
-
-// diskStartChecking is a threshold above which we will start to check
-// the state of disks.
-var diskStartChecking = 32
-
 // diskMaxTimeoutOperation maximum wait time before we consider a drive
 // offline under active monitoring.
 var diskMaxTimeout = 2 * time.Minute
 
 // diskActiveMonitoring indicates if we have enabled "active" disk monitoring
 var diskActiveMonitoring = true
+
+// diskMaxConcurrent represents maximum number of running concurrent
+// operations for local and (incoming) remote disk operations.
+//
+// this value is a placeholder it is overridden via ENV for custom settings
+// or this default value is used to pick the correct value HDDs v/s NVMe's
+var diskMaxConcurrent = -1
 
 func init() {
 	s := env.Get("_MINIO_DRIVE_MAX_CONCURRENT", "")
@@ -731,10 +752,6 @@ func init() {
 	}
 	if s != "" {
 		diskMaxConcurrent, _ = strconv.Atoi(s)
-		if diskMaxConcurrent <= 0 {
-			logger.Info("invalid _MINIO_DISK_MAX_CONCURRENT value: %s, defaulting to '512'", s)
-			diskMaxConcurrent = 512
-		}
 	}
 
 	d := env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
@@ -752,11 +769,6 @@ func init() {
 
 	diskActiveMonitoring = (env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn) ||
 		(env.Get("_MINIO_DISK_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn)
-
-	diskStartChecking = 16 + diskMaxConcurrent/8
-	if diskStartChecking > diskMaxConcurrent {
-		diskStartChecking = diskMaxConcurrent
-	}
 }
 
 type diskHealthTracker struct {
@@ -777,7 +789,7 @@ type diskHealthTracker struct {
 }
 
 // newDiskHealthTracker creates a new disk health tracker.
-func newDiskHealthTracker() *diskHealthTracker {
+func newDiskHealthTracker(diskMaxConcurrent int) *diskHealthTracker {
 	d := diskHealthTracker{
 		lastSuccess: time.Now().UnixNano(),
 		lastStarted: time.Now().UnixNano(),
@@ -912,7 +924,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 		return errFaultyDisk
 	}
 	// Check if there are tokens.
-	if diskMaxConcurrent-len(p.health.tokens) < diskStartChecking {
+	if p.diskMaxConcurrent-len(p.health.tokens) < p.diskStartChecking {
 		return nil
 	}
 
