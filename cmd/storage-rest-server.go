@@ -172,6 +172,13 @@ func (s *storageRESTServer) checkID(wantID string) bool {
 	if s.storage == nil {
 		return false
 	}
+	if wantID == "" {
+		// Request sent empty disk-id, we allow the request
+		// as the peer might be coming up and trying to read format.json
+		// or create format.json
+		return true
+	}
+
 	storedDiskID, err := s.storage.GetDiskID()
 	if err != nil {
 		return false
@@ -196,7 +203,7 @@ func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.
 	withMetrics := params.Get(storageRESTMetrics) == "true"
 	info, err := s.storage.DiskInfo(context.Background(), withMetrics)
 	if err != nil {
-		return nil, grid.NewRemoteErr(err)
+		info.Error = err.Error()
 	}
 	info.Scanning = s.storage != nil && s.storage.storage != nil && atomic.LoadInt32(&s.storage.storage.scanning) > 0
 	return &info, nil

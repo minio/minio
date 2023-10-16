@@ -311,7 +311,6 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 	if di, ok := val.(*DiskInfo); di != nil && ok {
 		info = *di
 	}
-	logger.LogIf(ctx, err)
 	return info, err
 }
 

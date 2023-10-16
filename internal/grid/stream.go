@@ -27,11 +27,12 @@ import (
 // If the call is canceled though the context,
 // the appropriate error will be returned.
 type Stream struct {
-	// Responses from the remote server.
+	// responses from the remote server.
 	// Channel will be closed after error or when remote closes.
 	// All responses *must* be read by the caller until either an error is returned or the channel is closed.
 	// Canceling the context will cause the context cancellation error to be returned.
-	Responses <-chan Response
+	responses <-chan Response
+	cancel    context.CancelCauseFunc
 
 	// Requests sent to the server.
 	// If the handler is defined with 0 incoming capacity this will be nil.
@@ -52,5 +53,41 @@ func (s *Stream) Send(b []byte) error {
 		return nil
 	case <-s.ctx.Done():
 		return s.ctx.Err()
+	}
+}
+
+// Results returns the results from the remote server one by one.
+// If any error is returned by the callback, the stream will be canceled.
+// If the context is canceled, the stream will be canceled.
+func (s *Stream) Results(next func(b []byte) error) (err error) {
+	done := false
+	defer func() {
+		if !done {
+			if s.cancel != nil {
+				s.cancel(err)
+			}
+			// Drain channel.
+			// A goroutine shouldn't be needed.
+			for range s.responses {
+			}
+		}
+	}()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		case resp, ok := <-s.responses:
+			if !ok {
+				done = true
+				return nil
+			}
+			if resp.Err != nil {
+				return resp.Err
+			}
+			err = next(resp.Msg)
+			if err != nil {
+				return err
+			}
+		}
 	}
 }

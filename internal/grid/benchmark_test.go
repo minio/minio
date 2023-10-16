@@ -22,7 +22,6 @@ import (
 	"errors"
 	"math/rand"
 	"net"
-	"net/http/httptest"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -70,10 +69,8 @@ func benchmarkGridServers(b *testing.B, n int) {
 		managers = append(managers, remote)
 	}
 	defer shutdownManagers(b, managers...)
-	var servers []*httptest.Server
 	for i, manager := range managers {
 		s := startServer(b, listeners[i], manager.Handler())
-		servers = append(servers, s)
 		defer s.Close()
 	}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
