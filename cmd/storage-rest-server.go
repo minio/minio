@@ -203,7 +203,7 @@ func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.
 	withMetrics := params.Get(storageRESTMetrics) == "true"
 	info, err := s.storage.DiskInfo(context.Background(), withMetrics)
 	if err != nil {
-		return nil, grid.NewRemoteErr(err)
+		info.Error = err.Error()
 	}
 	info.Scanning = s.storage != nil && s.storage.storage != nil && atomic.LoadInt32(&s.storage.storage.scanning) > 0
 	return &info, nil
