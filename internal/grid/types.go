@@ -27,6 +27,7 @@ import (
 // It is not very efficient, but it is only used for easy parameter passing.
 type MSS map[string]string
 
+// Get returns the value for the given key.
 func (m *MSS) Get(key string) string {
 	if m == nil {
 		return ""
@@ -34,6 +35,8 @@ func (m *MSS) Get(key string) string {
 	return (*m)[key]
 }
 
+// UnmarshalMsg deserializes b from the provided byte slice and returns the
+// remainder of bytes.
 func (m *MSS) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	if m == nil {
 		return bts, errors.New("MSS: UnmarshalMsg on nil pointer")
@@ -77,6 +80,7 @@ func (m *MSS) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return bts, nil
 }
 
+// MarshalMsg appends the bytes representation of b to the provided byte slice.
 func (m *MSS) MarshalMsg(bytes []byte) (o []byte, err error) {
 	if m == nil || *m == nil {
 		return msgp.AppendNil(bytes), nil
@@ -89,6 +93,7 @@ func (m *MSS) MarshalMsg(bytes []byte) (o []byte, err error) {
 	return o, nil
 }
 
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message.
 func (m *MSS) Msgsize() int {
 	if m == nil || *m == nil {
 		return msgp.NilSize
@@ -100,18 +105,23 @@ func (m *MSS) Msgsize() int {
 	return s
 }
 
+// NewMSS returns a new MSS.
 func NewMSS() *MSS {
 	m := MSS(make(map[string]string))
 	return &m
 }
 
+// NewMSSWith returns a new MSS with the given map.
 func NewMSSWith(m map[string]string) *MSS {
 	m2 := MSS(m)
 	return &m2
 }
 
+// Bytes provides a byte slice that can be serialized.
 type Bytes []byte
 
+// UnmarshalMsg deserializes b from the provided byte slice and returns the
+// remainder of bytes.
 func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 	if b == nil {
 		return bytes, errors.New("Bytes: UnmarshalMsg on nil pointer")
@@ -133,6 +143,7 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 	return bytes, nil
 }
 
+// MarshalMsg appends the bytes representation of b to the provided byte slice.
 func (b *Bytes) MarshalMsg(bytes []byte) ([]byte, error) {
 	if b == nil || *b == nil {
 		return msgp.AppendNil(bytes), nil
@@ -140,6 +151,7 @@ func (b *Bytes) MarshalMsg(bytes []byte) ([]byte, error) {
 	return msgp.AppendBytes(bytes, *b), nil
 }
 
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message.
 func (b *Bytes) Msgsize() int {
 	if b == nil || *b == nil {
 		return msgp.NilSize

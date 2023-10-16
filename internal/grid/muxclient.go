@@ -113,8 +113,8 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 			return nil, ErrDisconnected
 		}
 		return v.Msg, v.Err
-	case <-m.ctx.Done():
-		return nil, m.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 

@@ -607,10 +607,8 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 				stream.Requests <- b
 			}
 		}()
-	} else {
-		if stream.Requests != nil {
-			close(stream.Requests)
-		}
+	} else if stream.Requests != nil {
+		close(stream.Requests)
 	}
 
 	return &TypedSteam[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil

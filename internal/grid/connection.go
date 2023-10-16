@@ -1060,11 +1060,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 func (c *Connection) handleMsg(ctx context.Context, m message, subID *subHandlerID) {
 	switch m.Op {
 	case OpMuxServerMsg:
-		c.handleMuxServerMsg(m, ctx)
+		c.handleMuxServerMsg(ctx, m)
 	case OpResponse:
 		c.handleResponse(m)
 	case OpMuxClientMsg:
-		c.handleMuxClientMsg(m, ctx)
+		c.handleMuxClientMsg(ctx, m)
 	case OpUnblockSrvMux:
 		c.handleUnblockSrvMux(m)
 	case OpUnblockClMux:
@@ -1074,21 +1074,21 @@ func (c *Connection) handleMsg(ctx context.Context, m message, subID *subHandler
 	case OpDisconnectClientMux:
 		c.handleDisconnectClientMux(m)
 	case OpPing:
-		c.handlePing(m, ctx)
+		c.handlePing(ctx, m)
 	case OpPong:
-		c.handlePong(m, ctx)
+		c.handlePong(ctx, m)
 	case OpRequest:
-		c.handleRequest(m, ctx, subID)
+		c.handleRequest(ctx, m, subID)
 	case OpAckMux:
-		c.handleAckMux(m, ctx)
+		c.handleAckMux(ctx, m)
 	case OpConnectMux:
-		c.handleConnectMux(m, ctx, subID)
+		c.handleConnectMux(ctx, m, subID)
 	default:
 		logger.LogIf(ctx, fmt.Errorf("unknown message type: %v", m.Op))
 	}
 }
 
-func (c *Connection) handleConnectMux(m message, ctx context.Context, subID *subHandlerID) {
+func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *subHandlerID) {
 	// Stateless stream:
 	if m.Flags&FlagStateless != 0 {
 		// Reject for now, so we can safely add it later.
@@ -1138,7 +1138,7 @@ func (c *Connection) handleConnectMux(m message, ctx context.Context, subID *sub
 	logger.LogIf(ctx, c.queueMsg(m, nil))
 }
 
-func (c *Connection) handleAckMux(m message, ctx context.Context) {
+func (c *Connection) handleAckMux(ctx context.Context, m message) {
 	PutByteBuffer(m.Payload)
 	v, ok := c.outgoing.Load(m.MuxID)
 	if !ok {
@@ -1153,7 +1153,7 @@ func (c *Connection) handleAckMux(m message, ctx context.Context) {
 	v.ack(m.Seq)
 }
 
-func (c *Connection) handleRequest(m message, ctx context.Context, subID *subHandlerID) {
+func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHandlerID) {
 	if !m.Handler.valid() {
 		logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
 		return
@@ -1213,7 +1213,7 @@ func (c *Connection) handleRequest(m message, ctx context.Context, subID *subHan
 	}(m)
 }
 
-func (c *Connection) handlePong(m message, ctx context.Context) {
+func (c *Connection) handlePong(ctx context.Context, m message) {
 	var pong pongMsg
 	_, err := pong.UnmarshalMsg(m.Payload)
 	PutByteBuffer(m.Payload)
@@ -1231,7 +1231,7 @@ func (c *Connection) handlePong(m message, ctx context.Context) {
 	}
 }
 
-func (c *Connection) handlePing(m message, ctx context.Context) {
+func (c *Connection) handlePing(ctx context.Context, m message) {
 	if m.MuxID == 0 {
 		logger.LogIf(ctx, c.queueMsg(m, &pongMsg{}))
 		return
@@ -1297,7 +1297,7 @@ func (c *Connection) handleUnblockSrvMux(m message) {
 	}
 }
 
-func (c *Connection) handleMuxClientMsg(m message, ctx context.Context) {
+func (c *Connection) handleMuxClientMsg(ctx context.Context, m message) {
 	v, ok := c.inStream.Load(m.MuxID)
 	if !ok {
 		if debugPrint {
@@ -1335,7 +1335,7 @@ func (c *Connection) handleResponse(m message) {
 	c.outgoing.Delete(m.MuxID)
 }
 
-func (c *Connection) handleMuxServerMsg(m message, ctx context.Context) {
+func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
 	if debugPrint {
 		fmt.Printf("%s Got mux msg: %v\n", c.Local, m)
 	}
