@@ -172,6 +172,13 @@ func (s *storageRESTServer) checkID(wantID string) bool {
 	if s.storage == nil {
 		return false
 	}
+	if wantID == "" {
+		// Request sent empty disk-id, we allow the request
+		// as the peer might be coming up and trying to read format.json
+		// or create format.json
+		return true
+	}
+
 	storedDiskID, err := s.storage.GetDiskID()
 	if err != nil {
 		return false
