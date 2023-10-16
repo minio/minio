@@ -144,7 +144,7 @@ func TestDisconnect(t *testing.T) {
 	stream, err := remoteConn.NewStream(context.Background(), handlerTest2, []byte(testPayload))
 	errFatal(err)
 	go func() {
-		for resp := range stream.Responses {
+		for resp := range stream.responses {
 			t.Log("Resp:", resp, err)
 		}
 		gotResp <- struct{}{}

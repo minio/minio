@@ -457,7 +457,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	errFatal(err)
 	var n int
 	stream.Requests <- []byte(strconv.Itoa(n))
-	for resp := range stream.Responses {
+	for resp := range stream.responses {
 		errFatal(resp.Err)
 		t.Logf("got resp: %+v", string(resp.Msg))
 		if string(resp.Msg) != testPayload+strconv.Itoa(n) {
@@ -524,7 +524,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 		clientCanceled := make(chan time.Time, 1)
 		err = nil
 		go func(t *testing.T) {
-			for resp := range st.Responses {
+			for resp := range st.responses {
 				t.Log("got resp:", string(resp.Msg), "err:", resp.Err)
 				if err != nil {
 					t.Log("ERROR: got second error:", resp.Err, "first:", err)
@@ -626,7 +626,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		clientCanceled := make(chan time.Duration, 1)
 		go func() {
 			started := time.Now()
-			for resp := range st.Responses {
+			for resp := range st.responses {
 				err = resp.Err
 			}
 			clientCanceled <- time.Since(started)
@@ -711,7 +711,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	}
 	// Drain responses
 	got := 0
-	for resp := range st.Responses {
+	for resp := range st.responses {
 		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {
@@ -796,7 +796,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 
 	// Drain responses
 	got := 0
-	for resp := range st.Responses {
+	for resp := range st.responses {
 		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {
@@ -870,21 +870,19 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 		}
 	}()
 	var n int
-	for resp := range stream.Responses {
-		errFatal(resp.Err)
-		// t.Logf("got resp: %+v", *resp.Msg)
+	err = stream.Results(func(resp *testResponse) error {
 		const wantString = testPayload + testPayload
-		if resp.Msg.OrgString != testPayload+testPayload {
-			t.Errorf("want %q, got %q", wantString, resp.Msg.OrgString)
+		if resp.OrgString != testPayload+testPayload {
+			t.Errorf("want %q, got %q", wantString, resp.OrgString)
 		}
-		if resp.Msg.OrgNum != n+1 {
-			t.Errorf("want %d, got %d", n+1, resp.Msg.OrgNum)
+		if resp.OrgNum != n+1 {
+			t.Errorf("want %d, got %d", n+1, resp.OrgNum)
 		}
-		if resp.Msg != nil {
-			handler.PutResponse(resp.Msg)
-		}
+		handler.PutResponse(resp)
 		n++
-	}
+		return nil
+	})
+	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
 }
 
@@ -955,21 +953,21 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 		}
 	}()
 	var n int
-	for resp := range stream.Responses {
-		errFatal(resp.Err)
+	err = stream.Results(func(resp *testResponse) error {
 		// t.Logf("got resp: %+v", *resp.Msg)
 		const wantString = testPayload + testPayload
-		if resp.Msg.OrgString != testPayload+testPayload {
-			t.Errorf("want %q, got %q", wantString, resp.Msg.OrgString)
+		if resp.OrgString != testPayload+testPayload {
+			t.Errorf("want %q, got %q", wantString, resp.OrgString)
 		}
-		if resp.Msg.OrgNum != n+1 {
-			t.Errorf("want %d, got %d", n+1, resp.Msg.OrgNum)
+		if resp.OrgNum != n+1 {
+			t.Errorf("want %d, got %d", n+1, resp.OrgNum)
 		}
-		if resp.Msg != nil {
-			handler.PutResponse(resp.Msg)
-		}
+		handler.PutResponse(resp)
 		n++
-	}
+		return nil
+	})
+
+	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
 }
 

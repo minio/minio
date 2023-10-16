@@ -113,8 +113,8 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 			return nil, ErrDisconnected
 		}
 		return v.Msg, v.Err
-	case <-m.ctx.Done():
-		return nil, m.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -245,14 +245,14 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if requests == nil {
 		start := time.Now()
 		go m.handleOneWayStream(start, responseCh, responses)
-		return &Stream{Responses: responseCh, Requests: nil, ctx: m.ctx}, nil
+		return &Stream{responses: responseCh, Requests: nil, ctx: m.ctx, cancel: m.cancelFn}, nil
 	}
 
 	// Deliver responses and send unblocks back to the server.
 	go m.handleTwowayResponses(responseCh, responses)
 	go m.handleTwowayRequests(responses, requests)
 
-	return &Stream{Responses: responseCh, Requests: requests, ctx: m.ctx}, nil
+	return &Stream{responses: responseCh, Requests: requests, ctx: m.ctx, cancel: m.cancelFn}, nil
 }
 
 func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Response, respServer <-chan Response) {
