@@ -575,7 +575,7 @@ func TestHasActiveRules(t *testing.T) {
 			want:        true,
 		},
 		{ // empty prefix
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
 			want:        true,
 		},
@@ -600,13 +600,23 @@ func TestHasActiveRules(t *testing.T) {
 			want:        false,
 		},
 		{
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
 			want:        true,
 		},
 		{
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
+			want:        true,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "",
+			want:        true,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><Days>42</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "",
 			want:        true,
 		},
 	}
@@ -618,8 +628,12 @@ func TestHasActiveRules(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
+			// To ensure input lifecycle configurations are valid
+			if err := lc.Validate(); err != nil {
+				t.Fatalf("Invalid test case: %d %v", i+1, err)
+			}
 			if got := lc.HasActiveRules(tc.prefix); got != tc.want {
-				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.want, got)
+				t.Fatalf("Expected result: `%v`, got: `%v`", tc.want, got)
 			}
 		})
 	}
