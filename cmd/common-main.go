@@ -619,8 +619,6 @@ func loadEnvVarsFromFiles() {
 }
 
 func handleCommonEnvVars() {
-	loadEnvVarsFromFiles()
-
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
