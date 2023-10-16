@@ -606,7 +606,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	go func() {
 		defer close(respT)
 		errState := false
-		for resp := range stream.Responses {
+		for resp := range stream.responses {
 			if errState {
 				continue
 			}

@@ -457,7 +457,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	errFatal(err)
 	var n int
 	stream.Requests <- []byte(strconv.Itoa(n))
-	for resp := range stream.Responses {
+	for resp := range stream.responses {
 		errFatal(resp.Err)
 		t.Logf("got resp: %+v", string(resp.Msg))
 		if string(resp.Msg) != testPayload+strconv.Itoa(n) {
@@ -524,7 +524,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 		clientCanceled := make(chan time.Time, 1)
 		err = nil
 		go func(t *testing.T) {
-			for resp := range st.Responses {
+			for resp := range st.responses {
 				t.Log("got resp:", string(resp.Msg), "err:", resp.Err)
 				if err != nil {
 					t.Log("ERROR: got second error:", resp.Err, "first:", err)
@@ -626,7 +626,7 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 		clientCanceled := make(chan time.Duration, 1)
 		go func() {
 			started := time.Now()
-			for resp := range st.Responses {
+			for resp := range st.responses {
 				err = resp.Err
 			}
 			clientCanceled <- time.Since(started)
@@ -711,7 +711,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	}
 	// Drain responses
 	got := 0
-	for resp := range st.Responses {
+	for resp := range st.responses {
 		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {
@@ -796,7 +796,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 
 	// Drain responses
 	got := 0
-	for resp := range st.Responses {
+	for resp := range st.responses {
 		// t.Log("got response", resp)
 		errFatal(resp.Err)
 		if resp.Msg[0] != byte(got) {

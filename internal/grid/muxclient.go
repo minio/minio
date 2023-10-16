@@ -245,14 +245,14 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 	if requests == nil {
 		start := time.Now()
 		go m.handleOneWayStream(start, responseCh, responses)
-		return &Stream{Responses: responseCh, Requests: nil, ctx: m.ctx}, nil
+		return &Stream{responses: responseCh, Requests: nil, ctx: m.ctx, cancel: m.cancelFn}, nil
 	}
 
 	// Deliver responses and send unblocks back to the server.
 	go m.handleTwowayResponses(responseCh, responses)
 	go m.handleTwowayRequests(responses, requests)
 
-	return &Stream{Responses: responseCh, Requests: requests, ctx: m.ctx}, nil
+	return &Stream{responses: responseCh, Requests: requests, ctx: m.ctx, cancel: m.cancelFn}, nil
 }
 
 func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Response, respServer <-chan Response) {
