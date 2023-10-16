@@ -542,25 +542,33 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 	})
 }
 
-// TypedResponse is a response from the server.
-// It will either contain a response or an error.
-type TypedResponse[Resp RoundTripper] struct {
-	Msg Resp
-	Err error
-}
-
 // TypedSteam is a stream with specific types.
 type TypedSteam[Req, Resp RoundTripper] struct {
-	// Responses from the remote server.
+	// responses from the remote server.
 	// Channel will be closed after error or when remote closes.
-	// Responses *must* be read to either an error is returned or the channel is closed.
-	Responses <-chan TypedResponse[Resp]
+	// responses *must* be read to either an error is returned or the channel is closed.
+	responses *Stream
+	newResp   func() Resp
 
 	// Requests sent to the server.
 	// If the handler is defined with 0 incoming capacity this will be nil.
 	// Channel *must* be closed to signal the end of the stream.
 	// If the request context is canceled, the stream will no longer process requests.
 	Requests chan<- Req
+}
+
+// Results returns the results from the remote server one by one.
+// If any error is returned by the callback, the stream will be canceled.
+// If the context is canceled, the stream will be canceled.
+func (s *TypedSteam[Req, Resp]) Results(next func(resp Resp) error) (err error) {
+	return s.responses.Results(func(b []byte) error {
+		resp := s.newResp()
+		_, err := resp.UnmarshalMsg(b)
+		if err != nil {
+			return err
+		}
+		return next(resp)
+	})
 }
 
 // Streamer creates a stream.
@@ -583,7 +591,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 		return nil, err
 	}
 
-	respT := make(chan TypedResponse[Resp])
+	// respT := make(chan TypedResponse[Resp])
 	var reqT chan Req
 	if h.InCapacity > 0 {
 		reqT = make(chan Req)
@@ -600,31 +608,12 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 			}
 		}()
 	} else {
-		close(stream.Requests)
-	}
-	// Response handler
-	go func() {
-		defer close(respT)
-		errState := false
-		for resp := range stream.responses {
-			if errState {
-				continue
-			}
-			if resp.Err != nil {
-				respT <- TypedResponse[Resp]{Err: resp.Err}
-				errState = true
-				continue
-			}
-			tr := TypedResponse[Resp]{Msg: h.NewResponse()}
-			_, err := tr.Msg.UnmarshalMsg(resp.Msg)
-			if err != nil {
-				tr.Err = err
-				errState = true
-			}
-			respT <- tr
+		if stream.Requests != nil {
+			close(stream.Requests)
 		}
-	}()
-	return &TypedSteam[Req, Resp]{Responses: respT, Requests: reqT}, nil
+	}
+
+	return &TypedSteam[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil
 }
 
 // NoPayload is a type that can be used for handlers that do not use a payload.

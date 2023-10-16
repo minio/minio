@@ -870,21 +870,19 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 		}
 	}()
 	var n int
-	for resp := range stream.Responses {
-		errFatal(resp.Err)
-		// t.Logf("got resp: %+v", *resp.Msg)
+	err = stream.Results(func(resp *testResponse) error {
 		const wantString = testPayload + testPayload
-		if resp.Msg.OrgString != testPayload+testPayload {
-			t.Errorf("want %q, got %q", wantString, resp.Msg.OrgString)
+		if resp.OrgString != testPayload+testPayload {
+			t.Errorf("want %q, got %q", wantString, resp.OrgString)
 		}
-		if resp.Msg.OrgNum != n+1 {
-			t.Errorf("want %d, got %d", n+1, resp.Msg.OrgNum)
+		if resp.OrgNum != n+1 {
+			t.Errorf("want %d, got %d", n+1, resp.OrgNum)
 		}
-		if resp.Msg != nil {
-			handler.PutResponse(resp.Msg)
-		}
+		handler.PutResponse(resp)
 		n++
-	}
+		return nil
+	})
+	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
 }
 
@@ -955,21 +953,21 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 		}
 	}()
 	var n int
-	for resp := range stream.Responses {
-		errFatal(resp.Err)
+	err = stream.Results(func(resp *testResponse) error {
 		// t.Logf("got resp: %+v", *resp.Msg)
 		const wantString = testPayload + testPayload
-		if resp.Msg.OrgString != testPayload+testPayload {
-			t.Errorf("want %q, got %q", wantString, resp.Msg.OrgString)
+		if resp.OrgString != testPayload+testPayload {
+			t.Errorf("want %q, got %q", wantString, resp.OrgString)
 		}
-		if resp.Msg.OrgNum != n+1 {
-			t.Errorf("want %d, got %d", n+1, resp.Msg.OrgNum)
+		if resp.OrgNum != n+1 {
+			t.Errorf("want %d, got %d", n+1, resp.OrgNum)
 		}
-		if resp.Msg != nil {
-			handler.PutResponse(resp.Msg)
-		}
+		handler.PutResponse(resp)
 		n++
-	}
+		return nil
+	})
+
+	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
 }
 
