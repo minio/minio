@@ -579,6 +579,9 @@ func serverMain(ctx *cli.Context) {
 
 	setDefaultProfilerRates()
 
+	// Always load ENV variables from files first.
+	loadEnvVarsFromFiles()
+
 	// Handle all server command args.
 	bootstrapTrace("serverHandleCmdArgs", func() {
 		serverHandleCmdArgs(ctx)
