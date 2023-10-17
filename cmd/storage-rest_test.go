@@ -20,11 +20,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"runtime"
 	"testing"
 
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/mux"
 	xnet "github.com/minio/pkg/v2/net"
 )
@@ -468,7 +470,39 @@ func newStorageRESTHTTPServerClient(t *testing.T) *storageRESTClient {
 		Endpoints: Endpoints{endpoint},
 	}})
 
-	restClient := newStorageRESTClient(endpoint, false)
+	// local
+	localRouter := mux.NewRouter()
+	localHttpServer := httptest.NewServer(localRouter)
+	t.Cleanup(localHttpServer.Close)
+	lURL, err := xnet.ParseHTTPURL(localHttpServer.URL)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	lURL.Path = t.TempDir()
+
+	localEP, err := NewEndpoint(lURL.String())
+	if err != nil {
+		t.Fatalf("NewEndpoint failed %v", endpoint)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	g, err := grid.NewManager(ctx, grid.ManagerOptions{
+		Dialer: nil,
+		Local:  localEP.GridHost(),
+		Hosts:  []string{localEP.GridHost(), endpoint.GridHost()},
+		AddAuth: func(aud string) string {
+			return aud
+		},
+		AuthRequest: func(r *http.Request) error {
+			return nil
+		},
+		TLSConfig: nil,
+	})
+	if err != nil {
+		t.Fatalf("grid.NewManager failed %v", err)
+	}
+	t.Cleanup(cancel)
+
+	restClient := newStorageRESTClient(endpoint, false, g)
 
 	return restClient
 }

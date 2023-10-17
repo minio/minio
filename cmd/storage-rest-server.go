@@ -192,8 +192,9 @@ func (s *storageRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request
 	s.IsValid(w, r)
 }
 
-// diskinfo types.
-var storageDiskInfoHandler = grid.NewSingleHandler[*grid.MSS, *DiskInfo](grid.HandlerDiskInfo, grid.NewMSS, func() *DiskInfo { return &DiskInfo{} })
+// DiskInfo types.
+// DiskInfo.Metrics elements are shared, so we cannot reuse.
+var storageDiskInfoHandler = grid.NewSingleHandler[*grid.MSS, *DiskInfo](grid.HandlerDiskInfo, grid.NewMSS, func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse()
 
 // DiskInfoHandler - returns disk info.
 func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.RemoteErr) {
@@ -209,38 +210,19 @@ func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.
 	return &info, nil
 }
 
-func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
+// diskinfo types.
+var storageNSScannerHandler = grid.NewStream[*nsScannerOptions, grid.NoPayload, *nsScannerResp](grid.HandlerNSScanner,
+	func() *nsScannerOptions { return &nsScannerOptions{} },
+	nil,
+	func() *nsScannerResp { return &nsScannerResp{} })
+
+func (s *storageRESTServer) NSScannerHandler(ctx context.Context, params *nsScannerOptions, out chan<- *nsScannerResp) *grid.RemoteErr {
+	if !s.checkID(params.DiskID) {
+		return grid.NewRemoteErr(errDiskNotFound)
 	}
-
-	scanMode, err := strconv.Atoi(r.Form.Get(storageRESTScanMode))
-	if err != nil {
-		logger.LogIf(r.Context(), err)
-		s.writeErrorResponse(w, err)
-		return
+	if params.Cache == nil {
+		return grid.NewRemoteErrString("NSScannerHandler: provided cache is nil")
 	}
-
-	setEventStreamHeaders(w)
-
-	var cache dataUsageCache
-	err = cache.deserialize(r.Body)
-	if err != nil {
-		logger.LogIf(r.Context(), err)
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	resp := streamHTTPResponse(w)
-	defer func() {
-		if r := recover(); r != nil {
-			debug.PrintStack()
-			resp.CloseWithError(fmt.Errorf("panic: %v", r))
-		}
-	}()
-	respW := msgp.NewWriter(resp)
 
 	// Collect updates, stream them before the full cache is sent.
 	updates := make(chan dataUsageEntry, 1)
@@ -249,36 +231,21 @@ func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Requ
 	go func() {
 		defer wg.Done()
 		for update := range updates {
-			// Write true bool to indicate update.
-			var err error
-			if err = respW.WriteBool(true); err == nil {
-				err = update.EncodeMsg(respW)
-			}
-			respW.Flush()
-			if err != nil {
-				cancel()
-				resp.CloseWithError(err)
-				return
-			}
+			resp := storageNSScannerHandler.NewResponse()
+			resp.Update = &update
+			out <- resp
 		}
 	}()
-	usageInfo, err := s.storage.NSScanner(ctx, cache, updates, madmin.HealScanMode(scanMode))
-	if err != nil {
-		respW.Flush()
-		resp.CloseWithError(err)
-		return
-	}
-
-	// Write false bool to indicate we finished.
+	ui, err := s.storage.NSScanner(ctx, *params.Cache, updates, madmin.HealScanMode(params.ScanMode))
 	wg.Wait()
-	if err = respW.WriteBool(false); err == nil {
-		err = usageInfo.EncodeMsg(respW)
-	}
 	if err != nil {
-		resp.CloseWithError(err)
-		return
+		return grid.NewRemoteErr(err)
 	}
-	resp.CloseWithError(respW.Flush())
+	// Send final response.
+	resp := storageNSScannerHandler.NewResponse()
+	resp.Final = &ui
+	out <- resp
+	return nil
 }
 
 // MakeVolHandler - make a volume.
@@ -576,6 +543,30 @@ func (s *storageRESTServer) ReadXLHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	logger.LogIf(r.Context(), msgp.Encode(w, &rf))
+}
+
+var storageReadXLHandler = grid.NewSingleHandler[*grid.MSS, *RawFileInfo](grid.HandlerReadXL, grid.NewMSS, func() *RawFileInfo {
+	return &RawFileInfo{}
+})
+
+// ReadXLHandlerWS - read xl.meta for an object at path.
+func (s *storageRESTServer) ReadXLHandlerWS(params *grid.MSS) (*RawFileInfo, *grid.RemoteErr) {
+	if !s.checkID(params.Get(storageRESTDiskID)) {
+		return nil, grid.NewRemoteErr(errDiskNotFound)
+	}
+	volume := params.Get(storageRESTVolume)
+	filePath := params.Get(storageRESTFilePath)
+	readData, err := strconv.ParseBool(params.Get(storageRESTReadData))
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+
+	rf, err := s.storage.ReadXL(context.Background(), volume, filePath, readData)
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+
+	return &rf, nil
 }
 
 // ReadFileHandler - read section of a file.
@@ -1405,7 +1396,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodNSScanner).HandlerFunc(h(server.NSScannerHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(h(server.MakeVolHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(h(server.MakeVolBulkHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVol).HandlerFunc(h(server.DeleteVolHandler))
@@ -1434,7 +1424,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
-
+			logger.FatalIf(storageReadXLHandler.Register(gr, server.ReadXLHandlerWS, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageNSScannerHandler.RegisterNoInput(gr, server.NSScannerHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageDiskInfoHandler.Register(gr, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageStatVolHandler.Register(gr, server.StatVolHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(gr.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{

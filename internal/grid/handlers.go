@@ -30,6 +30,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+//go:generate stringer -type=HandlerID -output=handlers_string.go -trimprefix=Handler msg.go $GOFILE
+
 // HandlerID is a handler identifier.
 // It is used to determine request routing on the server.
 // Handlers can be registered with a static subroute.
@@ -45,6 +47,8 @@ const (
 	HandlerWalkDir
 	HandlerStatVol
 	HandlerDiskInfo
+	HandlerNSScanner
+	HandlerReadXL
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -223,7 +227,8 @@ type RoundTripper interface {
 
 // SingleHandler is a type safe handler for single roundtrip requests.
 type SingleHandler[Req, Resp RoundTripper] struct {
-	id HandlerID
+	id             HandlerID
+	sharedResponse bool
 
 	reqPool  sync.Pool
 	respPool sync.Pool
@@ -252,6 +257,13 @@ func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
 	if r != h.nilResp {
 		h.respPool.Put(r)
 	}
+}
+
+// WithSharedResponse indicates it is unsafe to reuse the response.
+// Typically this is used when the response sharing part of its data structure.
+func (h *SingleHandler[Req, Resp]) WithSharedResponse() *SingleHandler[Req, Resp] {
+	h.sharedResponse = true
+	return h
 }
 
 // NewResponse creates a new response.
@@ -293,7 +305,9 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			return nil, rerr
 		}
 		payload, err = resp.MarshalMsg(payload[:0])
-		h.PutResponse(resp)
+		if !h.sharedResponse {
+			h.PutResponse(resp)
+		}
 		if err != nil {
 			PutByteBuffer(payload)
 			r := RemoteErr(err.Error())
@@ -372,12 +386,13 @@ type StreamTypeHandler[Payload, Req, Resp RoundTripper] struct {
 	// Will be 0 if newReq is nil.
 	InCapacity int
 
-	reqPool    sync.Pool
-	respPool   sync.Pool
-	id         HandlerID
-	newPayload func() Payload
-	nilReq     Req
-	nilResp    Resp
+	reqPool        sync.Pool
+	respPool       sync.Pool
+	id             HandlerID
+	newPayload     func() Payload
+	nilReq         Req
+	nilResp        Resp
+	sharedResponse bool
 }
 
 // NewStream creates a typed handler that can provide Marshal/Unmarshal.
@@ -404,6 +419,13 @@ func NewStream[Payload, Req, Resp RoundTripper](h HandlerID, newPayload func() P
 	s.newPayload = newPayload
 	s.WithPayload = newPayload != nil
 	return s
+}
+
+// WithSharedResponse indicates it is unsafe to reuse the response.
+// Typically this is used when the response sharing part of its data structure.
+func (h *StreamTypeHandler[Payload, Req, Resp]) WithSharedResponse() *StreamTypeHandler[Payload, Req, Resp] {
+	h.sharedResponse = true
+	return h
 }
 
 // NewPayload creates a new payload.
@@ -526,7 +548,9 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					if err != nil {
 						logger.LogOnceIf(ctx, err, err.Error())
 					}
-					h.PutResponse(v)
+					if !h.sharedResponse {
+						h.PutResponse(v)
+					}
 					select {
 					case <-ctx.Done():
 						dropOutput = true
@@ -617,6 +641,11 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 // NoPayload is a type that can be used for handlers that do not use a payload.
 type NoPayload struct{}
 
+// Msgsize returns 0.
+func (p NoPayload) Msgsize() int {
+	return 0
+}
+
 // UnmarshalMsg satisfies the interface, but is a no-op.
 func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
 	return bytes, nil
@@ -625,4 +654,8 @@ func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
 // MarshalMsg satisfies the interface, but is a no-op.
 func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
 	return bytes, nil
+}
+
+func NewNoPayload() NoPayload {
+	return NoPayload{}
 }

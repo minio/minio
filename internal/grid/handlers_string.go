@@ -18,14 +18,16 @@ func _() {
 	_ = x[HandlerWalkDir-7]
 	_ = x[HandlerStatVol-8]
 	_ = x[HandlerDiskInfo-9]
-	_ = x[handlerTest-10]
-	_ = x[handlerTest2-11]
-	_ = x[handlerLast-12]
+	_ = x[HandlerNSScanner-10]
+	_ = x[HandlerReadXL-11]
+	_ = x[handlerTest-12]
+	_ = x[handlerTest2-13]
+	_ = x[handlerLast-14]
 }
 
-const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfohandlerTesthandlerTest2handlerLast"
+const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfoNSScannerReadXLhandlerTesthandlerTest2handlerLast"
 
-var _HandlerID_index = [...]uint8{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 111, 123, 134}
+var _HandlerID_index = [...]uint8{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 109, 115, 126, 138, 149}
 
 func (i HandlerID) String() string {
 	if i >= HandlerID(len(_HandlerID_index)-1) {

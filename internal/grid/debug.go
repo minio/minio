@@ -17,6 +17,13 @@
 
 package grid
 
+import (
+	"context"
+	"fmt"
+
+	"github.com/google/uuid"
+)
+
 //go:generate stringer -type=debugMsg $GOFILE
 
 // debugMsg is a debug message for testing purposes.
@@ -34,3 +41,63 @@ const (
 	debugSetClientPingDuration
 	debugAddToDeadline
 )
+
+// NewTestingManager creates a new grid manager for testing purposes.
+func NewTestingManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
+	found := false
+	if o.AuthRequest == nil {
+		return nil, fmt.Errorf("grid: AuthRequest must be set")
+	}
+	m := &Manager{
+		ID:          uuid.New(),
+		targets:     make(map[string]*Connection, len(o.Hosts)),
+		local:       o.Local,
+		authRequest: o.AuthRequest,
+	}
+	m.handlers.init()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if len(o.Hosts) == 1 {
+		host := o.Hosts[0]
+		o.Local = host
+		m.targets[host] = newConnection(connectionParams{
+			ctx:          ctx,
+			id:           m.ID,
+			local:        o.Local,
+			remote:       host,
+			dial:         o.Dialer,
+			handlers:     &m.handlers,
+			auth:         o.AddAuth,
+			blockConnect: o.BlockConnect,
+			tlsConfig:    o.TLSConfig,
+		})
+		return m, nil
+	}
+	for _, host := range o.Hosts {
+		if host == o.Local {
+			if found {
+				return nil, fmt.Errorf("grid: local host found multiple times")
+			}
+			found = true
+			// No connection to local.
+			continue
+		}
+		m.targets[host] = newConnection(connectionParams{
+			ctx:          ctx,
+			id:           m.ID,
+			local:        o.Local,
+			remote:       host,
+			dial:         o.Dialer,
+			handlers:     &m.handlers,
+			auth:         o.AddAuth,
+			blockConnect: o.BlockConnect,
+			tlsConfig:    o.TLSConfig,
+		})
+	}
+	if !found {
+		return nil, fmt.Errorf("grid: local host not found")
+	}
+
+	return m, nil
+}

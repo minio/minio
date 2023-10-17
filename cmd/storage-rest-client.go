@@ -214,57 +214,37 @@ func (client *storageRESTClient) Healing() *healingTracker {
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
 	atomic.AddInt32(&client.scanning, 1)
 	defer atomic.AddInt32(&client.scanning, -1)
-
 	defer close(updates)
-	pr, pw := io.Pipe()
-	go func() {
-		pw.CloseWithError(cache.serializeTo(pw))
-	}()
-	vals := make(url.Values)
-	vals.Set(storageRESTScanMode, strconv.Itoa(int(scanMode)))
-	respBody, err := client.call(ctx, storageRESTMethodNSScanner, vals, pr, -1)
-	defer xhttp.DrainBody(respBody)
-	pr.CloseWithError(err)
+
+	st, err := storageNSScannerHandler.Call(ctx, client.gridConn, &nsScannerOptions{
+		DiskID:   client.diskID,
+		ScanMode: int(scanMode),
+		Cache:    &cache,
+	})
 	if err != nil {
 		return cache, err
 	}
-
-	rr, rw := io.Pipe()
-	go func() {
-		rw.CloseWithError(waitForHTTPStream(respBody, rw))
-	}()
-
-	ms := msgpNewReader(rr)
-	defer readMsgpReaderPoolPut(ms)
-	for {
-		// Read whether it is an update.
-		upd, err := ms.ReadBool()
-		if err != nil {
-			rr.CloseWithError(err)
-			return cache, err
+	var final *dataUsageCache
+	err = st.Results(func(resp *nsScannerResp) error {
+		if resp.Update != nil {
+			select {
+			case <-ctx.Done():
+			case updates <- *resp.Update:
+			}
 		}
-		if !upd {
-			// No more updates... New cache follows.
-			break
+		if resp.Final != nil {
+			final = resp.Final
 		}
-		var update dataUsageEntry
-		err = update.DecodeMsg(ms)
-		if err != nil || err == io.EOF {
-			rr.CloseWithError(err)
-			return cache, err
-		}
-		select {
-		case <-ctx.Done():
-		case updates <- update:
-		}
+		// We can't reuse the response since it is sent upstream.
+		return nil
+	})
+	if err != nil {
+		return cache, err
 	}
-	var newCache dataUsageCache
-	err = newCache.DecodeMsg(ms)
-	rr.CloseWithError(err)
-	if err == io.EOF {
-		err = nil
+	if final == nil {
+		return cache, errors.New("no final cache")
 	}
-	return newCache, err
+	return *final, nil
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
@@ -548,6 +528,20 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 
 // ReadXL - reads all contents of xl.meta of a file.
 func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	// Use websocket when not reading data.
+	if !readData {
+		resp, err := storageReadXLHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
+			storageRESTDiskID:   client.diskID,
+			storageRESTVolume:   volume,
+			storageRESTFilePath: path,
+			storageRESTReadData: strconv.FormatBool(readData),
+		}))
+		if err != nil {
+			return rf, err
+		}
+		return *resp, nil
+	}
+
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -835,7 +829,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint, healthCheck bool) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthCheck bool, g *grid.Manager) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -858,6 +852,6 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool) *storageRESTClien
 	}
 	return &storageRESTClient{
 		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
-		gridConn: globalGrid.Load().Connection(endpoint.GridHost()).Subroute(endpoint.Path),
+		gridConn: g.Connection(endpoint.GridHost()).Subroute(endpoint.Path),
 	}
 }

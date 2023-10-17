@@ -17,6 +17,8 @@
 
 package cmd
 
+//go:generate msgp -file $GOFILE -unexported
+
 const (
 	storageRESTVersion       = "v50" // Added DiskInfo metrics query
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
@@ -86,3 +88,14 @@ const (
 	storageRESTMetrics        = "metrics"
 	storageRESTNoPersistence  = "no-persistence"
 )
+
+type nsScannerOptions struct {
+	DiskID   string
+	ScanMode int
+	Cache    *dataUsageCache
+}
+
+type nsScannerResp struct {
+	Update *dataUsageEntry
+	Final  *dataUsageCache
+}

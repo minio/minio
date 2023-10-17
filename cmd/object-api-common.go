@@ -67,5 +67,5 @@ func newStorageAPI(endpoint Endpoint, opts storageOpts) (storage StorageAPI, err
 		return newXLStorageDiskIDCheck(storage, opts.healthCheck), nil
 	}
 
-	return newStorageRESTClient(endpoint, opts.healthCheck), nil
+	return newStorageRESTClient(endpoint, opts.healthCheck, globalGrid.Load()), nil
 }

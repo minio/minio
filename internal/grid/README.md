@@ -121,6 +121,10 @@ In the examples we use a `MSS` type, which is a `map[string]string` that is `msg
 The wrapper will handle all serialization and de-seralization of the request and response,
 and furthermore provides re-use of the structs used for the request and response.
 
+Note that Responses sent for serialization are automatically reused for similar requests.
+If the response contains shared data it will cause issues, since each unique response is reused.
+To disable this behavior, use `(SingleHandler).WithSharedResponse()` to disable it.
+
 ## Streaming Requests
 
 Streams consists of an initial request with payload and allows for full two-way communication between the client and server.
@@ -242,3 +246,6 @@ There are handlers for requests with:
  * No input stream: `RegisterNoInput`.
  * No initial payload: `RegisterNoPayload`.
 
+Note that Responses sent for serialization are automatically reused for similar requests.
+If the response contains shared data it will cause issues, since each unique response is reused.
+To disable this behavior, use `(StreamTypeHandler).WithSharedResponse()` to disable it.
