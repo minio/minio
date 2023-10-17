@@ -1859,57 +1859,60 @@ func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration t
 	}
 }
 
+func (ri *batchJobInfo) metric() madmin.JobMetric {
+	m := madmin.JobMetric{
+		JobID:         ri.JobID,
+		JobType:       ri.JobType,
+		StartTime:     ri.StartTime,
+		LastUpdate:    ri.LastUpdate,
+		RetryAttempts: ri.RetryAttempts,
+		Complete:      ri.Complete,
+		Failed:        ri.Failed,
+	}
+
+	switch ri.JobType {
+	case string(madmin.BatchJobReplicate):
+		m.Replicate = &madmin.ReplicateInfo{
+			Bucket:           ri.Bucket,
+			Object:           ri.Object,
+			Objects:          ri.Objects,
+			ObjectsFailed:    ri.ObjectsFailed,
+			BytesTransferred: ri.BytesTransferred,
+			BytesFailed:      ri.BytesFailed,
+		}
+	case string(madmin.BatchJobKeyRotate):
+		m.KeyRotate = &madmin.KeyRotationInfo{
+			Bucket:        ri.Bucket,
+			Object:        ri.Object,
+			Objects:       ri.Objects,
+			ObjectsFailed: ri.ObjectsFailed,
+		}
+	case string(madmin.BatchJobExpire):
+		m.Expired = &madmin.ExpirationInfo{
+			Bucket:        ri.Bucket,
+			Object:        ri.Object,
+			Objects:       ri.Objects,
+			ObjectsFailed: ri.ObjectsFailed,
+		}
+	}
+
+	return m
+}
+
 func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics) {
 	metrics = &madmin.BatchJobMetrics{CollectedAt: time.Now(), Jobs: make(map[string]madmin.JobMetric)}
 	m.RLock()
 	defer m.RUnlock()
 
-	match := true
+	if jobID != "" {
+		if job, ok := m.metrics[jobID]; ok {
+			metrics.Jobs[jobID] = job.metric()
+		}
+		return metrics
+	}
+
 	for id, job := range m.metrics {
-		if jobID != "" {
-			match = id == jobID
-		}
-		if !match {
-			continue
-		}
-
-		m := madmin.JobMetric{
-			JobID:         job.JobID,
-			JobType:       job.JobType,
-			StartTime:     job.StartTime,
-			LastUpdate:    job.LastUpdate,
-			RetryAttempts: job.RetryAttempts,
-			Complete:      job.Complete,
-			Failed:        job.Failed,
-		}
-
-		switch job.JobType {
-		case string(madmin.BatchJobReplicate):
-			m.Replicate = &madmin.ReplicateInfo{
-				Bucket:           job.Bucket,
-				Object:           job.Object,
-				Objects:          job.Objects,
-				ObjectsFailed:    job.ObjectsFailed,
-				BytesTransferred: job.BytesTransferred,
-				BytesFailed:      job.BytesFailed,
-			}
-		case string(madmin.BatchJobKeyRotate):
-			m.KeyRotate = &madmin.KeyRotationInfo{
-				Bucket:        job.Bucket,
-				Object:        job.Object,
-				Objects:       job.Objects,
-				ObjectsFailed: job.ObjectsFailed,
-			}
-		case string(madmin.BatchJobExpire):
-			m.Expired = &madmin.ExpirationInfo{
-				Bucket:        job.Bucket,
-				Object:        job.Object,
-				Objects:       job.Objects,
-				ObjectsFailed: job.ObjectsFailed,
-			}
-		}
-
-		metrics.Jobs[id] = m
+		metrics.Jobs[id] = job.metric()
 	}
 	return metrics
 }
