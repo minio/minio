@@ -295,8 +295,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			info, err := storageDiskInfoHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
-				storageRESTDiskID:  client.diskID,
-				storageRESTMetrics: strconv.FormatBool(metrics),
+				storageRESTDiskID: client.diskID,
+				// Always request metrics, since we are caching the result.
+				storageRESTMetrics: "true",
 			}))
 			if err != nil {
 				return info, err

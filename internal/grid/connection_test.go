@@ -61,12 +61,12 @@ func TestDisconnect(t *testing.T) {
 	defer local.debugMsg(debugShutdown)
 
 	// 1: Echo
-	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(local.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
@@ -115,9 +115,9 @@ func TestDisconnect(t *testing.T) {
 		OutCapacity: 1,
 		InCapacity:  1,
 	}
-	errFatal(remote.RegisterSingle(handlerTest, h1))
+	errFatal(remote.RegisterSingleHandler(handlerTest, h1))
 	errFatal(remote.RegisterStreamingHandler(handlerTest2, h2))
-	errFatal(local.RegisterSingle(handlerTest, h1))
+	errFatal(local.RegisterSingleHandler(handlerTest, h1))
 	errFatal(local.RegisterStreamingHandler(handlerTest2, h2))
 
 	// local to remote

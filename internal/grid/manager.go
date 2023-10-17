@@ -221,16 +221,16 @@ func (m *Manager) Connection(host string) *Connection {
 	return m.targets[host]
 }
 
-// RegisterSingle will register a stateless handler that serves
+// RegisterSingleHandler will register a stateless handler that serves
 // []byte -> ([]byte, error) requests.
 // subroutes are joined with "/" to a single subroute.
-func (m *Manager) RegisterSingle(id HandlerID, h SingleHandlerFn, subroute ...string) error {
+func (m *Manager) RegisterSingleHandler(id HandlerID, h SingleHandlerFn, subroute ...string) error {
 	if !id.valid() {
 		return ErrUnknownHandler
 	}
 	s := strings.Join(subroute, "/")
 	if debugPrint {
-		fmt.Println("RegisterSingle: ", id.String(), "subroute:", s)
+		fmt.Println("RegisterSingleHandler: ", id.String(), "subroute:", s)
 	}
 
 	if len(subroute) == 0 {

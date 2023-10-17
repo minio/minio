@@ -102,12 +102,12 @@ func TestSingleRoundtrip(t *testing.T) {
 	errFatal(err)
 
 	// 1: Echo
-	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(local.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
@@ -129,12 +129,12 @@ func TestSingleRoundtrip(t *testing.T) {
 	defer remoteServer.Close()
 
 	// 1: Echo
-	errFatal(remote.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(remote.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(remote.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(remote.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
@@ -685,7 +685,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 			OutCapacity: 1,
 			InCapacity:  0,
 		}))
-		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+		errFatal(manager.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 			// Simple roundtrip
 			return append([]byte{}, payload...), nil
 		}))
@@ -763,7 +763,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 			OutCapacity: 5,
 			InCapacity:  5,
 		}))
-		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+		errFatal(manager.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 			// Simple roundtrip
 			return append([]byte{}, payload...), nil
 		}))

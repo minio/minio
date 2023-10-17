@@ -278,7 +278,7 @@ func (h *SingleHandler[Req, Resp]) NewRequest() Req {
 
 // Register a handler for a Req -> Resp roundtrip.
 func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr), subroute ...string) error {
-	return m.RegisterSingle(h.id, func(payload []byte) ([]byte, *RemoteErr) {
+	return m.RegisterSingleHandler(h.id, func(payload []byte) ([]byte, *RemoteErr) {
 		req := h.NewRequest()
 		_, err := req.UnmarshalMsg(payload)
 		if err != nil {

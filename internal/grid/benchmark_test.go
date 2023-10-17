@@ -62,7 +62,7 @@ func benchmarkGridServers(b *testing.B, n int) {
 			AuthRequest: dummyRequestValidate,
 		})
 		// Register a single handler which echos the payload.
-		errFatal(remote.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+		errFatal(remote.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 			return append(GetByteBuffer()[:0], payload...), nil
 		}))
 		errFatal(err)
