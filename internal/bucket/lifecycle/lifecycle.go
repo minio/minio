@@ -156,7 +156,8 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		}
 
 		if len(prefix) > 0 && len(rule.GetPrefix()) > 0 {
-			// If recursive, we can skip this rule if it doesn't match the tested prefix.
+			// we can skip this rule if it doesn't match the tested
+			// prefix.
 			if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
 				continue
 			}
@@ -171,13 +172,13 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		if !rule.NoncurrentVersionTransition.IsNull() {
 			return true
 		}
-		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
-			continue
-		}
 		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Expiration.IsDaysNull() {
+			return true
+		}
+		if rule.Expiration.DeleteMarker.val {
 			return true
 		}
 		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now().UTC()) {
