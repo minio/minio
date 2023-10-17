@@ -305,10 +305,14 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 
 	var i int
 	for toExpire := range expireCh {
+		if i > 0 {
+			if wait := globalBatchConfig.Clone().ExpirationWorkersWait; wait > 0 {
+				time.Sleep(wait)
+			}
+		}
 		i++
-		i := i
 		wk.Take()
-		go func(toExpire []ObjectInfo, i int) {
+		go func(toExpire []ObjectInfo) {
 			defer wk.Give()
 			toDel := make([]ObjectToDelete, 0, len(toExpire))
 			for _, exp := range toExpire {
@@ -355,7 +359,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				// Add a delay between retry attempts
 				time.Sleep(delay)
 			}
-		}(toExpire, i)
+		}(toExpire)
 	}
 }
 
@@ -375,7 +379,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 
 	now := time.Now().UTC()
 
-	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_EXPIRE_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
+	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_EXPIRATION_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
 		return err
 	}
@@ -425,6 +429,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 
 	expireCh := make(chan []ObjectInfo, workerSize)
 	wk.Take() // For batchObjsForDelete goroutine
+
 	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
 
 	var (

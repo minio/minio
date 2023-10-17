@@ -400,6 +400,10 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
 				}
 			}
+
+			if wait := globalBatchConfig.Clone().KeyRotationWorkersWait; wait > 0 {
+				time.Sleep(wait)
+			}
 		}()
 	}
 	wk.Wait()

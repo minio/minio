@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/config/batch"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -53,6 +54,8 @@ import (
 	"github.com/minio/pkg/v2/workers"
 	"gopkg.in/yaml.v2"
 )
+
+var globalBatchConfig batch.Config
 
 // BatchJobRequest this is an internal data structure not for external consumption.
 type BatchJobRequest struct {
@@ -449,6 +452,10 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+
+				if wait := globalBatchConfig.Clone().ReplicationWorkersWait; wait > 0 {
+					time.Sleep(wait)
+				}
 			}()
 		}
 		wk.Wait()
@@ -1153,6 +1160,10 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+
+				if wait := globalBatchConfig.Clone().ReplicationWorkersWait; wait > 0 {
+					time.Sleep(wait)
+				}
 			}()
 		}
 		wk.Wait()
