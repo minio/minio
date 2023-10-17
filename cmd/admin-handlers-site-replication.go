@@ -412,6 +412,7 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 func getSREditOptions(r *http.Request) (opts madmin.SREditOptions) {
 	q := r.Form
 	opts.DisableILMExpiryReplication = q.Get("disableILMExpiryReplication") == "true"
+	opts.EnableILMExpiryReplication = q.Get("enableILMExpiryReplication") == "true"
 	return
 }
 

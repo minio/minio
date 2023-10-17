@@ -3708,7 +3708,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	for _, v := range sites.Sites {
 		if peer.DeploymentID == v.DeploymentID {
 			found = true
-			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet || opts.DisableILMExpiryReplication) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated or disabling ILM expiry
+			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet || opts.DisableILMExpiryReplication || opts.EnableILMExpiryReplication) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated or enabling/disabling ILM expiry
 				break
 			}
 			if peer.Endpoint == v.Endpoint && peer.SyncState.Empty() && !peer.DefaultBandwidth.IsSet {
@@ -3732,6 +3732,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	if !found {
 		return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("%s not found in existing replicated sites", peer.DeploymentID))
 	}
+	successMsg := "Cluster replication configuration updated successfully with:"
 	var state srState
 	c.RLock()
 	pi := c.state.Peers[peer.DeploymentID]
@@ -3743,6 +3744,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	}
 	if peer.Endpoint != "" { // `admin replicate update` requested an endpoint change
 		pi.Endpoint = peer.Endpoint
+		successMsg = fmt.Sprintf("%s\n- endpoint %s for peer %s", successMsg, peer.Endpoint, peer.Name)
 	}
 
 	if peer.DefaultBandwidth.IsSet {
@@ -3783,9 +3785,33 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		}
 	}
 
-	// If ILM expiry replications disabled, set accordingly
+	// If ILM expiry replications enabled/disabled, set accordingly
+        info, err := c.GetClusterInfo(ctx)
+        if err != nil {
+		return madmin.ReplicateEditStatus{
+			Status:    madmin.ReplicateAddStatusPartial,
+			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
+		}, nil
+	}
 	if opts.DisableILMExpiryReplication {
+		if !info.ReplicateILMExpiry {
+			return madmin.ReplicateEditStatus{
+				Status:    madmin.ReplicateAddStatusPartial,
+				ErrDetail: "ILM expiry already set to false",
+			}, nil
+		}
 		state.ReplicateILMExpiry = false
+		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: false", successMsg)
+	}
+	if opts.EnableILMExpiryReplication {
+		if info.ReplicateILMExpiry {
+			return madmin.ReplicateEditStatus{
+				Status:    madmin.ReplicateAddStatusPartial,
+				ErrDetail: "ILM expiry already set to true",
+			}, nil
+		}
+		state.ReplicateILMExpiry = true
+		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: true", successMsg)
 	}
 
 	// we can now save the cluster replication configuration state.
@@ -3805,7 +3831,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 
 	result := madmin.ReplicateEditStatus{
 		Success: true,
-		Status:  fmt.Sprintf("Cluster replication configuration updated with endpoint %s for peer %s successfully", peer.Endpoint, peer.Name),
+		Status:  successMsg,
 	}
 	return result, nil
 }
