@@ -814,7 +814,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	bucket := vars["bucket"]
 	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
 	reqInfo := &logger.ReqInfo{
-		DeploymentID: globalDeploymentID,
+		DeploymentID: globalDeploymentID(),
 		RequestID:    reqID,
 		RemoteHost:   handlers.GetSourceIP(r),
 		Host:         getHostName(r),
@@ -1048,7 +1048,7 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
-	entry := audit.NewEntry(globalDeploymentID)
+	entry := audit.NewEntry(globalDeploymentID())
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
 	entry.Error = opts.Error

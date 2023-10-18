@@ -713,7 +713,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	})
 
-	xhttp.SetDeploymentID(globalDeploymentID)
+	xhttp.SetDeploymentID(globalDeploymentID())
 	xhttp.SetMinIOVersion(Version)
 
 	for _, n := range globalNodes {
@@ -721,7 +721,7 @@ func serverMain(ctx *cli.Context) {
 		if n.IsLocal {
 			nodeName = globalLocalNodeName
 		}
-		nodeNameSum := sha256.Sum256([]byte(nodeName + globalDeploymentID))
+		nodeNameSum := sha256.Sum256([]byte(nodeName + globalDeploymentID()))
 		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
 

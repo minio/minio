@@ -245,7 +245,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Key:        object,
 				Resource:   r.URL.Path,
 				RequestID:  w.Header().Get(xhttp.AmzRequestID),
-				HostID:     globalDeploymentID,
+				HostID:     globalDeploymentID(),
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -264,7 +264,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Key:        object,
 				Resource:   r.URL.Path,
 				RequestID:  w.Header().Get(xhttp.AmzRequestID),
-				HostID:     globalDeploymentID,
+				HostID:     globalDeploymentID(),
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -3141,7 +3141,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 						Key:        object,
 						Resource:   r.URL.Path,
 						RequestID:  w.Header().Get(xhttp.AmzRequestID),
-						HostID:     globalDeploymentID,
+						HostID:     globalDeploymentID(),
 					})
 					writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 				} else {
