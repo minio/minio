@@ -387,21 +387,11 @@ func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceColl
 func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []Metric {
 	help := resourceMetricsHelpMap[rm.Name]
 	name := rm.Name
-	copyMSS := func(in map[string]string) map[string]string {
-		if in == nil {
-			return nil
-		}
-		r := make(map[string]string, len(in))
-		for k, v := range in {
-			r[k] = v
-		}
-		return r
-	}
-	metrics := []Metric{}
+	metrics := make([]Metric, 0, 3)
 	metrics = append(metrics, Metric{
 		Description:    getResourceMetricDescription(subSys, name, help),
 		Value:          rm.Current,
-		VariableLabels: copyMSS(rm.Labels),
+		VariableLabels: cloneMSS(rm.Labels),
 	})
 
 	if requireAvgMax {
@@ -410,7 +400,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 		metrics = append(metrics, Metric{
 			Description:    getResourceMetricDescription(subSys, avgName, avgHelp),
 			Value:          math.Round(rm.Avg*100) / 100,
-			VariableLabels: copyMSS(rm.Labels),
+			VariableLabels: cloneMSS(rm.Labels),
 		})
 
 		maxName := MetricName(fmt.Sprintf("%s_max", name))
@@ -418,7 +408,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 		metrics = append(metrics, Metric{
 			Description:    getResourceMetricDescription(subSys, maxName, maxHelp),
 			Value:          rm.Max,
-			VariableLabels: copyMSS(rm.Labels),
+			VariableLabels: cloneMSS(rm.Labels),
 		})
 	}
 
