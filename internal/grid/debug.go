@@ -91,7 +91,7 @@ func SetupTestGrid(n int) (*TestGrid, error) {
 		m := mux.NewRouter()
 		m.Handle(RoutePath, manager.Handler())
 		res.Managers = append(res.Managers, manager)
-		res.Servers = append(res.Servers, startHttpServer(listeners[i], m))
+		res.Servers = append(res.Servers, startHTTPServer(listeners[i], m))
 		res.Listeners = append(res.Listeners, listeners[i])
 		res.Mux = append(res.Mux, m)
 	}
@@ -137,7 +137,7 @@ func getHosts(n int) (hosts []string, listeners []net.Listener, err error) {
 	return
 }
 
-func startHttpServer(listener net.Listener, handler http.Handler) (server *httptest.Server) {
+func startHTTPServer(listener net.Listener, handler http.Handler) (server *httptest.Server) {
 	server = httptest.NewUnstartedServer(handler)
 	server.Config.Addr = listener.Addr().String()
 	server.Listener = listener
