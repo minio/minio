@@ -146,7 +146,8 @@ type storageRESTClient struct {
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
 
-	diskInfoCache timedValue
+	diskInfoCache        timedValue
+	diskInfoCacheMetrics timedValue
 }
 
 // Retrieve location indexes.
@@ -268,16 +269,15 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 		// transport is already down.
 		return info, errDiskNotFound
 	}
-	// Do not cache results from atomic variables
-	client.diskInfoCache.Once.Do(func() {
-		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.Update = func() (interface{}, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	var fetchDI = func(di *timedValue, metrics bool) {
+		di.TTL = time.Second
+		di.Update = func() (interface{}, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			info, err := storageDiskInfoHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
 				storageRESTDiskID: client.diskID,
 				// Always request metrics, since we are caching the result.
-				storageRESTMetrics: "true",
+				storageRESTMetrics: strconv.FormatBool(metrics),
 			}))
 			if err != nil {
 				return info, err
@@ -287,8 +287,14 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 			}
 			return info, nil
 		}
-	})
-	val, err := client.diskInfoCache.Get()
+	}
+	// Fetch disk info from appropriate cache.
+	dic := &client.diskInfoCache
+	if metrics {
+		dic = &client.diskInfoCacheMetrics
+	}
+	dic.Once.Do(func() { fetchDI(dic, metrics) })
+	val, err := dic.Get()
 	if di, ok := val.(*DiskInfo); di != nil && ok {
 		info = *di
 	}
