@@ -29,7 +29,7 @@ import (
 
 func TestDisconnect(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
-	hosts, listeners := getHosts(2)
+	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
 	}

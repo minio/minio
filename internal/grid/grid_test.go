@@ -35,28 +35,13 @@ import (
 	"github.com/minio/minio/internal/logger/target/testlogger"
 )
 
-func getHosts(n int) (hosts []string, listeners []net.Listener) {
-	for i := 0; i < n; i++ {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			if l, err = net.Listen("tcp6", "[::1]:0"); err != nil {
-				panic(fmt.Sprintf("httptest: failed to listen on a port: %v", err))
-			}
-		}
-		addr := l.Addr()
-		hosts = append(hosts, "http://"+addr.String())
-		listeners = append(listeners, l)
-		// Do not close until we have all hosts
-	}
-	return
-}
-
 func startServer(t testing.TB, listener net.Listener, handler http.Handler) (server *httptest.Server) {
 	t.Helper()
 	server = httptest.NewUnstartedServer(handler)
 	server.Config.Addr = listener.Addr().String()
 	server.Listener = listener
 	server.Start()
+	t.Cleanup(server.Close)
 	t.Log("Started server on", server.Config.Addr, "URL:", server.URL)
 	return server
 }
@@ -73,7 +58,7 @@ func shutdownManagers(t testing.TB, servers ...*Manager) {
 
 func TestSingleRoundtrip(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
-	hosts, listeners := getHosts(2)
+	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 5 * time.Second,
 	}
@@ -200,7 +185,7 @@ func TestSingleRoundtrip(t *testing.T) {
 
 func TestSingleRoundtripGenerics(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
-	hosts, listeners := getHosts(2)
+	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 5 * time.Second,
 	}
@@ -304,7 +289,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 
 func TestStreamSuite(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
-	hosts, listeners := getHosts(2)
+	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
 	}

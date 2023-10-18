@@ -298,6 +298,15 @@ func (m *Manager) HostName() string {
 	return m.local
 }
 
+// Targets returns the names of all remote targets.
+func (m *Manager) Targets() []string {
+	var res []string
+	for k := range m.targets {
+		res = append(res, k)
+	}
+	return res
+}
+
 // TestingShutDown will shut down all connections.
 // This should *only* be used by tests.
 //

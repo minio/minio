@@ -20,14 +20,11 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/minio/minio/internal/grid"
-	"github.com/minio/mux"
 	xnet "github.com/minio/pkg/v2/net"
 )
 
@@ -439,17 +436,21 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func newStorageRESTHTTPServerClient(t *testing.T) *storageRESTClient {
+func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
+	// Grid with 2 hosts
+	tg, err := grid.SetupTestGrid(2)
+	if err != nil {
+		t.Fatalf("SetupTestGrid: %v", err)
+	}
+	t.Cleanup(tg.Cleanup)
 	prevHost, prevPort := globalMinioHost, globalMinioPort
 	defer func() {
 		globalMinioHost, globalMinioPort = prevHost, prevPort
 	}()
+	// tg[0] = local, tg[1] = remote
 
-	router := mux.NewRouter()
-	httpServer := httptest.NewServer(router)
-	t.Cleanup(httpServer.Close)
-
-	url, err := xnet.ParseHTTPURL(httpServer.URL)
+	// Remote URL
+	url, err := xnet.ParseHTTPURL(tg.Servers[1].URL)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -466,43 +467,18 @@ func newStorageRESTHTTPServerClient(t *testing.T) *storageRESTClient {
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
-	registerStorageRESTHandlers(router, []PoolEndpoints{{
+	// Register handlers on newly created servers
+	registerStorageRESTHandlers(tg.Mux[0], []PoolEndpoints{{
 		Endpoints: Endpoints{endpoint},
-	}})
+	}}, tg.Managers[0])
+	registerStorageRESTHandlers(tg.Mux[1], []PoolEndpoints{{
+		Endpoints: Endpoints{endpoint},
+	}}, tg.Managers[1])
 
-	// local
-	localRouter := mux.NewRouter()
-	localHttpServer := httptest.NewServer(localRouter)
-	t.Cleanup(localHttpServer.Close)
-	lURL, err := xnet.ParseHTTPURL(localHttpServer.URL)
+	restClient, err := newStorageRESTClient(endpoint, false, tg.Managers[0])
 	if err != nil {
-		t.Fatalf("unexpected error %v", err)
+		t.Fatal(err)
 	}
-	lURL.Path = t.TempDir()
-
-	localEP, err := NewEndpoint(lURL.String())
-	if err != nil {
-		t.Fatalf("NewEndpoint failed %v", endpoint)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	g, err := grid.NewManager(ctx, grid.ManagerOptions{
-		Dialer: nil,
-		Local:  localEP.GridHost(),
-		Hosts:  []string{localEP.GridHost(), endpoint.GridHost()},
-		AddAuth: func(aud string) string {
-			return aud
-		},
-		AuthRequest: func(r *http.Request) error {
-			return nil
-		},
-		TLSConfig: nil,
-	})
-	if err != nil {
-		t.Fatalf("grid.NewManager failed %v", err)
-	}
-	t.Cleanup(cancel)
-
-	restClient := newStorageRESTClient(endpoint, false, g)
 
 	return restClient
 }

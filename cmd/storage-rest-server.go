@@ -297,6 +297,7 @@ func (s *storageRESTServer) StatVolHandler(params *grid.MSS) (*VolInfo, *grid.Re
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
+	fmt.Println("RETURNING", info, "params", params)
 	return &info, nil
 }
 
@@ -1351,7 +1352,7 @@ func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request)
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
+func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools, gm *grid.Manager) {
 	storageDisks := make([][]*xlStorage, len(endpointServerPools))
 	for poolIdx, ep := range endpointServerPools {
 		storageDisks[poolIdx] = make([]*xlStorage, len(ep.Endpoints))
@@ -1380,7 +1381,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 	h := func(f http.HandlerFunc) http.HandlerFunc {
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
-	gr := globalGrid.Load()
 
 	for _, setDisks := range storageDisks {
 		for _, storage := range setDisks {
@@ -1424,11 +1424,11 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
-			logger.FatalIf(storageReadXLHandler.Register(gr, server.ReadXLHandlerWS, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageNSScannerHandler.RegisterNoInput(gr, server.NSScannerHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageDiskInfoHandler.Register(gr, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageStatVolHandler.Register(gr, server.StatVolHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(gr.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
+			logger.FatalIf(storageReadXLHandler.Register(gm, server.ReadXLHandlerWS, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageNSScannerHandler.RegisterNoInput(gm, server.NSScannerHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageDiskInfoHandler.Register(gm, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageStatVolHandler.Register(gm, server.StatVolHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
 				Subroute:    endpoint.Path,
 				Handle:      server.WalkDirHandler,
 				OutCapacity: 1,

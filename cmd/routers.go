@@ -27,7 +27,7 @@ import (
 // Composed function registering routers for only distributed Erasure setup.
 func registerDistErasureRouters(router *mux.Router, endpointServerPools EndpointServerPools) {
 	// Register storage REST router only if its a distributed setup.
-	registerStorageRESTHandlers(router, endpointServerPools)
+	registerStorageRESTHandlers(router, endpointServerPools, globalGrid.Load())
 
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)

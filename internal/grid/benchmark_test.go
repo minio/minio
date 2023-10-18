@@ -40,7 +40,7 @@ func BenchmarkGrid(b *testing.B) {
 
 func benchmarkGridServers(b *testing.B, n int) {
 	defer testlogger.T.SetErrorTB(b)()
-	hosts, listeners := getHosts(n)
+	hosts, listeners, _ := getHosts(n)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
 	}

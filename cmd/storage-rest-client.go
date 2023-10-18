@@ -23,6 +23,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -269,7 +270,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 		// transport is already down.
 		return info, errDiskNotFound
 	}
-	var fetchDI = func(di *timedValue, metrics bool) {
+	fetchDI := func(di *timedValue, metrics bool) {
 		di.TTL = time.Second
 		di.Update = func() (interface{}, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -543,7 +544,7 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 			storageRESTReadData: strconv.FormatBool(readData),
 		}))
 		if err != nil {
-			return rf, err
+			return rf, toStorageErr(err)
 		}
 		return *resp, nil
 	}
@@ -554,7 +555,7 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 	values.Set(storageRESTReadData, strconv.FormatBool(readData))
 	respBody, err := client.call(ctx, storageRESTMethodReadXL, values, nil, -1)
 	if err != nil {
-		return rf, err
+		return rf, toStorageErr(err)
 	}
 	defer xhttp.DrainBody(respBody)
 
@@ -835,7 +836,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint, healthCheck bool, g *grid.Manager) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager) (*storageRESTClient, error) {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -856,8 +857,12 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, g *grid.Manager) 
 			return toStorageErr(err) != errDiskNotFound
 		}
 	}
+	conn := gm.Connection(endpoint.GridHost()).Subroute(endpoint.Path)
+	if conn == nil {
+		return nil, fmt.Errorf("unable to find connection for %s in targets: %v", endpoint.GridHost(), gm.Targets())
+	}
 	return &storageRESTClient{
 		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
-		gridConn: g.Connection(endpoint.GridHost()).Subroute(endpoint.Path),
-	}
+		gridConn: conn,
+	}, nil
 }

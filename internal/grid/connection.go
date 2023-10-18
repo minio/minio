@@ -233,6 +233,9 @@ func newConnection(o connectionParams) *Connection {
 
 // Subroute returns a static subroute for the connection.
 func (c *Connection) Subroute(s string) *Subroute {
+	if c == nil {
+		return nil
+	}
 	return &Subroute{
 		Connection: c,
 		route:      s,
