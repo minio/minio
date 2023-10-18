@@ -297,7 +297,6 @@ func (s *storageRESTServer) StatVolHandler(params *grid.MSS) (*VolInfo, *grid.Re
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
-	fmt.Println("RETURNING", info, "params", params)
 	return &info, nil
 }
 
