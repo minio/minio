@@ -90,12 +90,12 @@ const (
 )
 
 type nsScannerOptions struct {
-	DiskID   string
-	ScanMode int
-	Cache    *dataUsageCache
+	DiskID   string          `msg:"id"`
+	ScanMode int             `msg:"m"`
+	Cache    *dataUsageCache `msg:"c"`
 }
 
 type nsScannerResp struct {
-	Update *dataUsageEntry
-	Final  *dataUsageCache
+	Update *dataUsageEntry `msg:"u"`
+	Final  *dataUsageCache `msg:"f"`
 }

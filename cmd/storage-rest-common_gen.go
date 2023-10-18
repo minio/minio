@@ -24,19 +24,19 @@ func (z *nsScannerOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "DiskID":
+		case "id":
 			z.DiskID, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "DiskID")
 				return
 			}
-		case "ScanMode":
+		case "m":
 			z.ScanMode, err = dc.ReadInt()
 			if err != nil {
 				err = msgp.WrapError(err, "ScanMode")
 				return
 			}
-		case "Cache":
+		case "c":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
@@ -68,8 +68,8 @@ func (z *nsScannerOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *nsScannerOptions) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 3
-	// write "DiskID"
-	err = en.Append(0x83, 0xa6, 0x44, 0x69, 0x73, 0x6b, 0x49, 0x44)
+	// write "id"
+	err = en.Append(0x83, 0xa2, 0x69, 0x64)
 	if err != nil {
 		return
 	}
@@ -78,8 +78,8 @@ func (z *nsScannerOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DiskID")
 		return
 	}
-	// write "ScanMode"
-	err = en.Append(0xa8, 0x53, 0x63, 0x61, 0x6e, 0x4d, 0x6f, 0x64, 0x65)
+	// write "m"
+	err = en.Append(0xa1, 0x6d)
 	if err != nil {
 		return
 	}
@@ -88,8 +88,8 @@ func (z *nsScannerOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ScanMode")
 		return
 	}
-	// write "Cache"
-	err = en.Append(0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	// write "c"
+	err = en.Append(0xa1, 0x63)
 	if err != nil {
 		return
 	}
@@ -112,14 +112,14 @@ func (z *nsScannerOptions) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *nsScannerOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 3
-	// string "DiskID"
-	o = append(o, 0x83, 0xa6, 0x44, 0x69, 0x73, 0x6b, 0x49, 0x44)
+	// string "id"
+	o = append(o, 0x83, 0xa2, 0x69, 0x64)
 	o = msgp.AppendString(o, z.DiskID)
-	// string "ScanMode"
-	o = append(o, 0xa8, 0x53, 0x63, 0x61, 0x6e, 0x4d, 0x6f, 0x64, 0x65)
+	// string "m"
+	o = append(o, 0xa1, 0x6d)
 	o = msgp.AppendInt(o, z.ScanMode)
-	// string "Cache"
-	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	// string "c"
+	o = append(o, 0xa1, 0x63)
 	if z.Cache == nil {
 		o = msgp.AppendNil(o)
 	} else {
@@ -150,19 +150,19 @@ func (z *nsScannerOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "DiskID":
+		case "id":
 			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DiskID")
 				return
 			}
-		case "ScanMode":
+		case "m":
 			z.ScanMode, bts, err = msgp.ReadIntBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ScanMode")
 				return
 			}
-		case "Cache":
+		case "c":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -193,7 +193,7 @@ func (z *nsScannerOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *nsScannerOptions) Msgsize() (s int) {
-	s = 1 + 7 + msgp.StringPrefixSize + len(z.DiskID) + 9 + msgp.IntSize + 6
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.IntSize + 2
 	if z.Cache == nil {
 		s += msgp.NilSize
 	} else {
@@ -220,11 +220,11 @@ func (z *nsScannerResp) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Partial":
+		case "u":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
-					err = msgp.WrapError(err, "Partial")
+					err = msgp.WrapError(err, "Update")
 					return
 				}
 				z.Update = nil
@@ -234,15 +234,15 @@ func (z *nsScannerResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				err = z.Update.DecodeMsg(dc)
 				if err != nil {
-					err = msgp.WrapError(err, "Partial")
+					err = msgp.WrapError(err, "Update")
 					return
 				}
 			}
-		case "Cache":
+		case "f":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
-					err = msgp.WrapError(err, "Cache")
+					err = msgp.WrapError(err, "Final")
 					return
 				}
 				z.Final = nil
@@ -252,7 +252,7 @@ func (z *nsScannerResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				err = z.Final.DecodeMsg(dc)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache")
+					err = msgp.WrapError(err, "Final")
 					return
 				}
 			}
@@ -270,8 +270,8 @@ func (z *nsScannerResp) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *nsScannerResp) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "Partial"
-	err = en.Append(0x82, 0xa7, 0x50, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c)
+	// write "u"
+	err = en.Append(0x82, 0xa1, 0x75)
 	if err != nil {
 		return
 	}
@@ -283,12 +283,12 @@ func (z *nsScannerResp) EncodeMsg(en *msgp.Writer) (err error) {
 	} else {
 		err = z.Update.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, "Partial")
+			err = msgp.WrapError(err, "Update")
 			return
 		}
 	}
-	// write "Cache"
-	err = en.Append(0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	// write "f"
+	err = en.Append(0xa1, 0x66)
 	if err != nil {
 		return
 	}
@@ -300,7 +300,7 @@ func (z *nsScannerResp) EncodeMsg(en *msgp.Writer) (err error) {
 	} else {
 		err = z.Final.EncodeMsg(en)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache")
+			err = msgp.WrapError(err, "Final")
 			return
 		}
 	}
@@ -311,25 +311,25 @@ func (z *nsScannerResp) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *nsScannerResp) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "Partial"
-	o = append(o, 0x82, 0xa7, 0x50, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c)
+	// string "u"
+	o = append(o, 0x82, 0xa1, 0x75)
 	if z.Update == nil {
 		o = msgp.AppendNil(o)
 	} else {
 		o, err = z.Update.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Partial")
+			err = msgp.WrapError(err, "Update")
 			return
 		}
 	}
-	// string "Cache"
-	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
+	// string "f"
+	o = append(o, 0xa1, 0x66)
 	if z.Final == nil {
 		o = msgp.AppendNil(o)
 	} else {
 		o, err = z.Final.MarshalMsg(o)
 		if err != nil {
-			err = msgp.WrapError(err, "Cache")
+			err = msgp.WrapError(err, "Final")
 			return
 		}
 	}
@@ -354,7 +354,7 @@ func (z *nsScannerResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Partial":
+		case "u":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -367,11 +367,11 @@ func (z *nsScannerResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				bts, err = z.Update.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Partial")
+					err = msgp.WrapError(err, "Update")
 					return
 				}
 			}
-		case "Cache":
+		case "f":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -384,7 +384,7 @@ func (z *nsScannerResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				bts, err = z.Final.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Cache")
+					err = msgp.WrapError(err, "Final")
 					return
 				}
 			}
@@ -402,13 +402,13 @@ func (z *nsScannerResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *nsScannerResp) Msgsize() (s int) {
-	s = 1 + 8
+	s = 1 + 2
 	if z.Update == nil {
 		s += msgp.NilSize
 	} else {
 		s += z.Update.Msgsize()
 	}
-	s += 6
+	s += 2
 	if z.Final == nil {
 		s += msgp.NilSize
 	} else {
