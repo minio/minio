@@ -21,6 +21,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 
 func TestDisconnect(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
+	defer timeout(10 * time.Second)()
 	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
@@ -188,4 +190,15 @@ func TestShouldConnect(t *testing.T) {
 		}
 		t.Logf("host %q should connect to %d hosts", hosts[x], should)
 	}
+}
+
+func startServer(t testing.TB, listener net.Listener, handler http.Handler) (server *httptest.Server) {
+	t.Helper()
+	server = httptest.NewUnstartedServer(handler)
+	server.Config.Addr = listener.Addr().String()
+	server.Listener = listener
+	server.Start()
+	// t.Cleanup(server.Close)
+	t.Log("Started server on", server.Config.Addr, "URL:", server.URL)
+	return server
 }

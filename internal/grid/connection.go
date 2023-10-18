@@ -626,7 +626,7 @@ func (c *Connection) connect() {
 			}
 			if gotState != StateConnecting {
 				// Don't print error on first attempt.
-				logger.LogIf(c.ctx, fmt.Errorf("grid: connecting to %s: %w (%T) Sleeping %v (%v)", toDial, err, err, sleep, gotState))
+				logger.LogIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState))
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)

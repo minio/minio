@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"net"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -40,55 +39,29 @@ func BenchmarkGrid(b *testing.B) {
 
 func benchmarkGridServers(b *testing.B, n int) {
 	defer testlogger.T.SetErrorTB(b)()
-	hosts, listeners, _ := getHosts(n)
-	dialer := &net.Dialer{
-		Timeout: 1 * time.Second,
-	}
 	errFatal := func(err error) {
 		b.Helper()
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
-
+	grid, err := SetupTestGrid(n)
+	errFatal(err)
+	b.Cleanup(grid.Cleanup)
 	// Create n managers.
-	var managers []*Manager
-	for _, remoteHost := range hosts {
-		remote, err := NewManager(context.Background(), ManagerOptions{
-			Dialer:      dialer.DialContext,
-			Local:       remoteHost,
-			Hosts:       hosts,
-			AddAuth:     func(aud string) string { return aud },
-			AuthRequest: dummyRequestValidate,
-		})
+	for _, remote := range grid.Managers {
 		// Register a single handler which echos the payload.
 		errFatal(remote.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 			return append(GetByteBuffer()[:0], payload...), nil
 		}))
 		errFatal(err)
-		managers = append(managers, remote)
-	}
-	defer shutdownManagers(b, managers...)
-	for i, manager := range managers {
-		s := startServer(b, listeners[i], manager.Handler())
-		defer s.Close()
 	}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	payload := make([]byte, 512)
-	_, err := rng.Read(payload)
+	_, err = rng.Read(payload)
 	errFatal(err)
 
 	// Wait for all to connect
-	for i, manager := range managers {
-		for j, host := range hosts {
-			if i == j {
-				continue
-			}
-			// Connect to all other managers.
-			conn := manager.Connection(host)
-			conn.WaitForConnect(context.Background())
-		}
-	}
 	// Parallel writes per server.
 	for par := 1; par <= 32; par *= 2 {
 		b.Run("par="+strconv.Itoa(par), func(b *testing.B) {
@@ -103,6 +76,8 @@ func benchmarkGridServers(b *testing.B, n int) {
 			b.RunParallel(func(pb *testing.PB) {
 				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 				n := 0
+				managers := grid.Managers
+				hosts := grid.Hosts
 				for pb.Next() {
 					// Pick a random manager.
 					src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
