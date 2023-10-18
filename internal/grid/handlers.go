@@ -656,6 +656,7 @@ func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
 	return bytes, nil
 }
 
+// NewNoPayload returns an empty NoPayload struct.
 func NewNoPayload() NoPayload {
 	return NoPayload{}
 }
