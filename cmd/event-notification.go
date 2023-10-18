@@ -223,7 +223,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	}
 
 	// Add deployment as part of response elements.
-	respElements["x-minio-deployment-id"] = globalDeploymentID
+	respElements["x-minio-deployment-id"] = globalDeploymentID()
 	if args.RespElements["content-length"] != "" {
 		respElements["content-length"] = args.RespElements["content-length"]
 	}

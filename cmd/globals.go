@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/minio/console/restapi"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
+	"go.uber.org/atomic"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
@@ -313,7 +313,14 @@ var (
 	globalAuthZPlugin *polplugin.AuthZPlugin
 
 	// Deployment ID - unique per deployment
-	globalDeploymentID string
+	globalDeploymentIDPtr atomic.Pointer[string]
+	globalDeploymentID    = func() string {
+		ptr := globalDeploymentIDPtr.Load()
+		if ptr == nil {
+			return ""
+		}
+		return *ptr
+	}
 
 	globalAllHealState *allHealState
 

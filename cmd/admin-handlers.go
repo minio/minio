@@ -1001,7 +1001,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 							Message:   hr.errBody,
 							Resource:  r.URL.Path,
 							RequestID: w.Header().Get(xhttp.AmzRequestID),
-							HostID:    globalDeploymentID,
+							HostID:    globalDeploymentID(),
 						})
 					}
 					if !started {
@@ -1982,7 +1982,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 		Domain:        domain,
 		Region:        globalSite.Region,
 		SQSARN:        globalEventNotifier.GetARNList(false),
-		DeploymentID:  globalDeploymentID,
+		DeploymentID:  globalDeploymentID(),
 		Buckets:       buckets,
 		Objects:       objects,
 		Versions:      versions,
@@ -2392,7 +2392,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 		Version:   madmin.HealthInfoVersion,
 		Minio: madmin.MinioHealthInfo{
 			Info: madmin.MinioInfo{
-				DeploymentID: globalDeploymentID,
+				DeploymentID: globalDeploymentID(),
 			},
 		},
 	}
@@ -2690,7 +2690,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 		ci.Info.NoOfBuckets = dataUsageInfo.BucketsCount
 		ci.Info.NoOfObjects = dataUsageInfo.ObjectsTotalCount
 
-		ci.DeploymentID = globalDeploymentID
+		ci.DeploymentID = globalDeploymentID()
 		ci.ClusterName = fmt.Sprintf("%d-servers-%d-disks-%s", ci.Info.NoOfServers, ci.Info.NoOfDrives, ci.Info.MinioVersion)
 
 		select {
