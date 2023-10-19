@@ -20,12 +20,16 @@ package grid
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/gobwas/ws/wsutil"
 )
+
+// ErrDisconnected is returned when the connection to the remote has been lost during the call.
+var ErrDisconnected = errors.New("remote disconnected")
 
 const (
 	// minBufferSize is the minimum buffer size.
@@ -125,4 +129,12 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 // WriterToChannel will return an io.Writer that writes to the given channel.
 func WriterToChannel(ch chan<- []byte) io.Writer {
 	return &writerWrapper{ch: ch}
+}
+
+// bytesOrLength returns small (<=100b) byte slices as string, otherwise length.
+func bytesOrLength(b []byte) string {
+	if len(b) > 100 {
+		return fmt.Sprintf("%d bytes", len(b))
+	}
+	return fmt.Sprint(b)
 }

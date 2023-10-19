@@ -60,7 +60,6 @@ func TestDisconnect(t *testing.T) {
 		BlockConnect: connReady,
 	})
 	errFatal(err)
-	defer local.debugMsg(debugShutdown)
 
 	// 1: Echo
 	errFatal(local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
@@ -83,15 +82,19 @@ func TestDisconnect(t *testing.T) {
 		BlockConnect: connReady,
 	})
 	errFatal(err)
-	defer remote.debugMsg(debugShutdown)
-	defer local.debugMsg(debugWaitForExit)
-	defer remote.debugMsg(debugWaitForExit)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	defer localServer.Close()
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
-	defer remoteServer.Close()
 	close(connReady)
+
+	defer func() {
+		local.debugMsg(debugShutdown)
+		remote.debugMsg(debugShutdown)
+		remoteServer.Close()
+		localServer.Close()
+		remote.debugMsg(debugWaitForExit)
+		local.debugMsg(debugWaitForExit)
+	}()
 
 	cleanReqs := make(chan struct{})
 	gotCall := make(chan struct{})
@@ -155,6 +158,8 @@ func TestDisconnect(t *testing.T) {
 	<-gotCall
 	remote.debugMsg(debugKillOutbound)
 	local.debugMsg(debugKillOutbound)
+	errFatal(remoteConn.WaitForConnect(context.Background()))
+
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall

@@ -87,7 +87,7 @@ type Connection struct {
 	dialer ContextDialer
 	header http.Header
 
-	connWg sync.WaitGroup
+	handleMsgWg sync.WaitGroup
 
 	// connChange will be signaled whenever State has been updated, or at regular intervals.
 	// Holding the lock allows safe reads of State, and guarantees that changes will be detected.
@@ -414,10 +414,10 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		defer close(changed)
 		for {
 			c.connChange.Wait()
-			newState := c.state
+			newState := c.State()
 			select {
 			case changed <- newState:
-				if newState == StateConnected {
+				if newState == StateConnected || newState == StateShutdown {
 					c.connChange.L.Unlock()
 					return
 				}
@@ -439,16 +439,6 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		}
 	}
 }
-
-func bytesOrLength(b []byte) string {
-	if len(b) > 100 {
-		return fmt.Sprintf("%d bytes", len(b))
-	}
-	return fmt.Sprint(b)
-}
-
-// ErrDisconnected is returned when the connection to the remote has been lost during the call.
-var ErrDisconnected = errors.New("remote disconnected")
 
 /*
 var ErrDone = errors.New("done for now")
@@ -575,7 +565,7 @@ func (c *Connection) connect() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Runs until the server is shut down.
 	for {
-		if atomic.LoadUint32((*uint32)(&c.state)) == StateShutdown {
+		if c.State() == StateShutdown {
 			return
 		}
 		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
@@ -620,7 +610,7 @@ func (c *Connection) connect() {
 			if sleep < 0 {
 				sleep = 0
 			}
-			gotState := atomic.LoadUint32((*uint32)(&c.state))
+			gotState := c.State()
 			if gotState == StateShutdown {
 				return
 			}
@@ -675,10 +665,10 @@ func (c *Connection) connect() {
 		}
 		c.updateState(StateConnected)
 		go c.handleMessages(c.ctx, conn)
+		// Monitor state changes and reconnect if needed.
 		c.connChange.L.Lock()
 		for {
-			c.connChange.Wait()
-			newState := atomic.LoadUint32((*uint32)(&c.state))
+			newState := c.State()
 			if newState != StateConnected {
 				c.connChange.L.Unlock()
 				if newState == StateShutdown {
@@ -691,6 +681,8 @@ func (c *Connection) connect() {
 				// Reconnect
 				break
 			}
+			// Unlock and wait for state change.
+			c.connChange.Wait()
 		}
 	}
 }
@@ -785,7 +777,7 @@ func (c *Connection) reconnected() {
 	c.outgoing.Clear()
 
 	// Wait for existing to exit
-	c.connWg.Wait()
+	c.handleMsgWg.Wait()
 }
 
 func (c *Connection) updateState(s State) {
@@ -809,7 +801,7 @@ func (c *Connection) updateState(s State) {
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
-	c.connWg.Add(2)
+	c.handleMsgWg.Add(2)
 	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		defer func() {
@@ -823,7 +815,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			c.connChange.L.Unlock()
 			conn.Close()
-			c.connWg.Done()
+			c.handleMsgWg.Done()
 		}()
 
 		controlHandler := wsutil.ControlFrameHandler(conn, c.side)
@@ -921,7 +913,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		}
 	}()
 
-	// Write goroutine.
+	// Write function.
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: panic recovered: %v", rec))
@@ -939,7 +931,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		c.disconnected()
 
 		conn.Close()
-		c.connWg.Done()
+		c.handleMsgWg.Done()
 	}()
 
 	c.connMu.Lock()
@@ -961,7 +953,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		case <-ctx.Done():
 			return
 		case <-ping.C:
-			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
+			if c.State() != StateConnected {
 				continue
 			}
 			lastPong := atomic.LoadInt64(&c.LastPong)
@@ -995,14 +987,14 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		}
 		c.connChange.L.Lock()
 		for {
-			state := atomic.LoadUint32((*uint32)(&c.state))
+			state := c.State()
 			if state == StateConnected {
 				break
 			}
 			if debugPrint {
-				fmt.Println(c.Local, "Waiting for connection ->", c.Remote)
+				fmt.Println(c.Local, "Waiting for connection ->", c.Remote, "state: ", state)
 			}
-			if state == StateShutdown {
+			if state == StateShutdown || state == StateConnectionError {
 				c.connChange.L.Unlock()
 				return
 			}
@@ -1430,7 +1422,7 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 			c.debugInConn.Close()
 		}
 	case debugWaitForExit:
-		c.connWg.Wait()
+		c.handleMsgWg.Wait()
 	case debugSetConnPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
