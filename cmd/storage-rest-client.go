@@ -541,7 +541,7 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 			storageRESTDiskID:   client.diskID,
 			storageRESTVolume:   volume,
 			storageRESTFilePath: path,
-			storageRESTReadData: strconv.FormatBool(readData),
+			storageRESTReadData: "false",
 		}))
 		if err != nil {
 			return rf, toStorageErr(err)
