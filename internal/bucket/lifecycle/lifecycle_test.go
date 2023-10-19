@@ -1016,3 +1016,63 @@ func TestFilterAndSetPredictionHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterRules(t *testing.T) {
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "rule-1",
+				Status: "Enabled",
+				Filter: Filter{
+					Tag: Tag{
+						Key:   "key1",
+						Value: "val1",
+					},
+				},
+				Expiration: Expiration{
+					Days: 1,
+				},
+			},
+		},
+	}
+	tests := []struct {
+		opts     ObjectOpts
+		wantRule string
+	}{
+		{ // Delete marker should match filter without tags
+			opts: ObjectOpts{
+				DeleteMarker: true,
+				IsLatest:     true,
+				Name:         "obj-1",
+			},
+			wantRule: "rule-1",
+		},
+		{ // PUT version with no matching tags
+			opts: ObjectOpts{
+				IsLatest: true,
+				Name:     "obj-1",
+			},
+			wantRule: "",
+		},
+		{ // PUT version with matching tags
+			opts: ObjectOpts{
+				IsLatest: true,
+				UserTags: "key1=val1",
+				Name:     "obj-1",
+			},
+			wantRule: "rule-1",
+		},
+	}
+
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
+			rules := lc.FilterRules(tc.opts)
+			if tc.wantRule != "" && len(rules) == 0 {
+				t.Fatalf("%d: Expected rule match %s but none matched", i+1, tc.wantRule)
+			}
+			if tc.wantRule == "" && len(rules) > 0 {
+				t.Fatalf("%d: Expected no rules to match but got matches %v", i+1, rules)
+			}
+		})
+	}
+}
