@@ -210,6 +210,9 @@ type eventArgs struct {
 func (args eventArgs) ToEvent(escape bool) event.Event {
 	eventTime := UTCNow()
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
+	if !args.Object.ModTime.IsZero() {
+		uniqueID = fmt.Sprintf("%X", args.Object.ModTime.UnixNano())
+	}
 
 	respElements := map[string]string{
 		"x-amz-request-id": args.RespElements["requestId"],
