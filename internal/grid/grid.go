@@ -19,6 +19,7 @@
 package grid
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -111,7 +112,8 @@ func getDeadline(d time.Duration) time.Duration {
 }
 
 type writerWrapper struct {
-	ch chan<- []byte
+	ch  chan<- []byte
+	ctx context.Context
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
@@ -122,13 +124,19 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 	}
 	buf = buf[:len(p)]
 	copy(buf, p)
-	w.ch <- buf
-	return len(p), nil
+	select {
+	case w.ch <- buf:
+		return len(p), nil
+	case <-w.ctx.Done():
+		return 0, w.ctx.Err()
+	}
 }
 
 // WriterToChannel will return an io.Writer that writes to the given channel.
-func WriterToChannel(ch chan<- []byte) io.Writer {
-	return &writerWrapper{ch: ch}
+// The context both allows returning errors on writes and to ensure that
+// this isn't abandoned if the channel is no longer being read from.
+func WriterToChannel(ctx context.Context, ch chan<- []byte) io.Writer {
+	return &writerWrapper{ch: ch, ctx: ctx}
 }
 
 // bytesOrLength returns small (<=100b) byte slices as string, otherwise length.

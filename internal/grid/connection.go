@@ -163,7 +163,7 @@ const (
 	defaultOutQueue    = 10000
 	readBufferSize     = 16 << 10
 	writeBufferSize    = 16 << 10
-	defaultDialTimeout = time.Second
+	defaultDialTimeout = 2 * time.Second
 	connPingInterval   = 5 * time.Second
 )
 
@@ -370,7 +370,9 @@ func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (
 	}
 	handler := c.handlers.subStreams[makeZeroSubHandlerID(h)]
 	if handler == nil {
-		fmt.Println("want", makeZeroSubHandlerID(h), c.route, "got", c.handlers.subStreams)
+		if debugPrint {
+			fmt.Println("want", makeZeroSubHandlerID(h), c.route, "got", c.handlers.subStreams)
+		}
 		return nil, ErrUnknownHandler
 	}
 

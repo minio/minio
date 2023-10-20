@@ -49,6 +49,13 @@ const (
 	HandlerDiskInfo
 	HandlerNSScanner
 	HandlerReadXL
+	HandlerReadVersion
+	HandlerDeleteFile
+	HandlerDeleteVersion
+	HandlerUpdateMetadata
+	HandlerWriteMetadata
+	HandlerCheckParts
+	HandlerRenamedata
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -86,6 +93,16 @@ func NewRemoteErr(err error) *RemoteErr {
 	}
 	r := RemoteErr(err.Error())
 	return &r
+}
+
+// NewNPErr is a helper to no payload and optional remote error.
+// The error type is not preserved.
+func NewNPErr(err error) (NoPayload, *RemoteErr) {
+	if err == nil {
+		return NoPayload{}, nil
+	}
+	r := RemoteErr(err.Error())
+	return NoPayload{}, &r
 }
 
 // NewRemoteErrString creates a new remote error from a string.
