@@ -343,6 +343,7 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 		opts.Users = true
 		opts.Policies = true
 		opts.Groups = true
+		opts.ILMExpiryRules = true
 	}
 	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI, opts)
 	if err != nil {
@@ -446,6 +447,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	opts.Policies = q.Get("policies") == "true"
 	opts.Groups = q.Get("groups") == "true"
 	opts.Users = q.Get("users") == "true"
+	opts.ILMExpiryRules = q.Get("ilm-expiry-rules") == "true"
 	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
 	opts.EntityValue = q.Get("entityvalue")
 	opts.ShowDeleted = q.Get("showDeleted") == "true"

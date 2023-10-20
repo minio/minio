@@ -1872,7 +1872,6 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 		}
 
 		// Replicate ILM expiry rules if needed
-		fmt.Println("Sync to all peers: Flag: ", addOpts.ReplicateILMExpiry, ", meta.lifecycleConfig: ", meta.lifecycleConfig)
 		if addOpts.ReplicateILMExpiry && (meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry()) {
 			var expLclCfg lifecycle.Lifecycle
 			expLclCfg.XMLName = meta.lifecycleConfig.XMLName
@@ -2581,6 +2580,11 @@ type srGroupDesc struct {
 	DeploymentID string
 }
 
+type srILMExpiryRule struct {
+	madmin.ILMExpiryRule
+	DeploymentID string
+}
+
 // SiteReplicationStatus returns the site replication status across clusters participating in site replication.
 func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI ObjectLayer, opts madmin.SRStatusOptions) (info madmin.SRStatusInfo, err error) {
 	sinfo, err := c.siteReplicationStatus(ctx, objAPI, opts)
@@ -2588,19 +2592,21 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 		return info, err
 	}
 	info = madmin.SRStatusInfo{
-		Enabled:      sinfo.Enabled,
-		MaxBuckets:   sinfo.MaxBuckets,
-		MaxUsers:     sinfo.MaxUsers,
-		MaxGroups:    sinfo.MaxGroups,
-		MaxPolicies:  sinfo.MaxPolicies,
-		Sites:        sinfo.Sites,
-		StatsSummary: sinfo.StatsSummary,
-		Metrics:      sinfo.Metrics,
+		Enabled:           sinfo.Enabled,
+		MaxBuckets:        sinfo.MaxBuckets,
+		MaxUsers:          sinfo.MaxUsers,
+		MaxGroups:         sinfo.MaxGroups,
+		MaxPolicies:       sinfo.MaxPolicies,
+		MaxILMExpiryRules: sinfo.MaxILMExpiryRules,
+		Sites:             sinfo.Sites,
+		StatsSummary:      sinfo.StatsSummary,
+		Metrics:           sinfo.Metrics,
 	}
 	info.BucketStats = make(map[string]map[string]madmin.SRBucketStatsSummary, len(sinfo.Sites))
 	info.PolicyStats = make(map[string]map[string]madmin.SRPolicyStatsSummary)
 	info.UserStats = make(map[string]map[string]madmin.SRUserStatsSummary)
 	info.GroupStats = make(map[string]map[string]madmin.SRGroupStatsSummary)
+	info.ILMExpiryStats = make(map[string]map[string]madmin.SRILMExpiryStatsSummary)
 	numSites := len(info.Sites)
 	for b, stat := range sinfo.BucketStats {
 		for dID, st := range stat {
@@ -2646,6 +2652,16 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 					info.PolicyStats[p] = make(map[string]madmin.SRPolicyStatsSummary, numSites)
 				}
 				info.PolicyStats[p][dID] = st.SRPolicyStatsSummary
+			}
+		}
+	}
+	for p, stat := range sinfo.ILMExpiryRulesStats {
+		for dID, st := range stat {
+			if st.ILMExpiryRuleMismatch || opts.Entity == madmin.SRILMExpiryRuleEntity {
+				if _, ok := info.ILMExpiryStats[p]; !ok {
+					info.ILMExpiryStats[p] = make(map[string]madmin.SRILMExpiryStatsSummary, numSites)
+				}
+				info.ILMExpiryStats[p][dID] = st.SRILMExpiryStatsSummary
 			}
 		}
 	}
@@ -2725,6 +2741,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	groupPolicyStats := make(map[string][]srPolicyMapping)
 	userInfoStats := make(map[string][]srUserInfo)
 	groupDescStats := make(map[string][]srGroupDesc)
+	ilmExpiryRuleStats := make(map[string][]srILMExpiryRule)
 
 	numSites := len(sris)
 	allBuckets := set.NewStringSet() // across sites
@@ -2732,6 +2749,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	allUserWPolicies := set.NewStringSet()
 	allGroups := set.NewStringSet()
 	allGroupWPolicies := set.NewStringSet()
+	allILMExpiryRules := set.NewStringSet()
 
 	allPolicies := set.NewStringSet()
 	for _, sri := range sris {
@@ -2752,6 +2770,9 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 		}
 		for g := range sri.GroupPolicies {
 			allGroupWPolicies.Add(g)
+		}
+		for r := range sri.ILMExpiryRules {
+			allILMExpiryRules.Add(r)
 		}
 	}
 
@@ -2805,6 +2826,13 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			gd := sri.GroupDescMap[g]
 			groupDescStats[g][i] = srGroupDesc{GroupDesc: gd, DeploymentID: sri.DeploymentID}
 		}
+		for r := range allILMExpiryRules {
+			if _, ok := ilmExpiryRuleStats[r]; !ok {
+				ilmExpiryRuleStats[r] = make([]srILMExpiryRule, numSites)
+			}
+			rl := sri.ILMExpiryRules[r]
+			ilmExpiryRuleStats[r][i] = srILMExpiryRule{ILMExpiryRule: rl, DeploymentID: sri.DeploymentID}
+		}
 	}
 
 	info.StatsSummary = make(map[string]madmin.SRSiteSummary, len(c.state.Peers))
@@ -2812,6 +2840,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	info.PolicyStats = make(map[string]map[string]srPolicyStatsSummary)
 	info.UserStats = make(map[string]map[string]srUserStatsSummary)
 	info.GroupStats = make(map[string]map[string]srGroupStatsSummary)
+	info.ILMExpiryRulesStats = make(map[string]map[string]srILMExpiryRuleStatsSummary)
 	// collect user policy mapping replication status across sites
 	if opts.Users || opts.Entity == madmin.SRUserEntity {
 		for u, pslc := range userPolicyStats {
@@ -3176,6 +3205,48 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 		}
 	}
+	if opts.ILMExpiryRules || opts.Entity == madmin.SRILMExpiryRuleEntity {
+		// collect ILM expiry rules replication status across sites
+		for id, ilmExpRules := range ilmExpiryRuleStats {
+			var rules []*lifecycle.Rule
+			uRuleCount := 0
+			for _, rl := range ilmExpRules {
+				var rule lifecycle.Rule
+				if err := xml.Unmarshal([]byte(rl.ILMExpiryRule.ILMRule), &rule); err != nil {
+					continue
+				}
+				rules = append(rules, &rule)
+				uRuleCount++
+				sum := info.StatsSummary[rl.DeploymentID]
+				sum.TotalILMExpiryRulesCount++
+				info.StatsSummary[rl.DeploymentID] = sum
+			}
+			if len(info.ILMExpiryRulesStats[id]) == 0 {
+				info.ILMExpiryRulesStats[id] = make(map[string]srILMExpiryRuleStatsSummary)
+			}
+			ilmExpRuleMismatch := !isILMExpRuleReplicated(uRuleCount, numSites, rules)
+			for _, rl := range ilmExpRules {
+				dID := depIdx[rl.DeploymentID]
+				_, hasILMExpRule := sris[dID].ILMExpiryRules[id]
+				info.ILMExpiryRulesStats[id][rl.DeploymentID] = srILMExpiryRuleStatsSummary{
+					SRILMExpiryStatsSummary: madmin.SRILMExpiryStatsSummary{
+						ILMExpiryRuleMismatch: ilmExpRuleMismatch,
+						HasILMExpiryRules:     hasILMExpRule,
+					},
+					ilmExpiryRule: rl,
+				}
+				switch {
+				case ilmExpRuleMismatch, opts.Entity == madmin.SRILMExpiryRuleEntity:
+				default:
+					sum := info.StatsSummary[rl.DeploymentID]
+					if !ilmExpRuleMismatch {
+						sum.ReplicatedILMExpiryRules++
+					}
+					info.StatsSummary[rl.DeploymentID] = sum
+				}
+			}
+		}
+	}
 
 	if opts.Metrics {
 		m, err := globalSiteReplicationSys.getSiteMetrics(ctx)
@@ -3190,6 +3261,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	info.MaxUsers = len(userInfoStats)
 	info.MaxGroups = len(groupDescStats)
 	info.MaxPolicies = len(policyStats)
+	info.MaxILMExpiryRules = len(ilmExpiryRuleStats)
 	return
 }
 
@@ -3389,6 +3461,35 @@ func isBktReplCfgReplicated(total int, cfgs []*sreplication.Config) bool {
 	return true
 }
 
+// isILMExpRuleReplicated returns true if count of replicated ILM Expiry rules matches total
+// number of sites and ILM expiry rules are identical.
+func isILMExpRuleReplicated(cntReplicated, total int, rules []*lifecycle.Rule) bool {
+	if cntReplicated > 0 && cntReplicated != total {
+		return false
+	}
+	// check if policies match between sites
+	var prev *lifecycle.Rule
+	for i, r := range rules {
+		if i == 0 {
+			prev = r
+			continue
+		}
+		// Check equality of rules
+		prevRData, err := xml.Marshal(prev)
+		if err != nil {
+			return false
+		}
+		rData, err := xml.Marshal(*r)
+		if err != nil {
+			return false
+		}
+		if !(string(prevRData) == string(rData)) {
+			return false
+		}
+	}
+	return true
+}
+
 // cache of IAM info fetched in last SiteReplicationMetaInfo call
 type srIAMCache struct {
 	sync.RWMutex
@@ -3554,6 +3655,46 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				return info, wrapSRErr(err)
 			}
 			info.Policies[pname] = madmin.SRIAMPolicy{Policy: json.RawMessage(policyJSON), UpdatedAt: policyDoc.UpdateDate}
+		}
+	}
+	if opts.ILMExpiryRules || opts.Entity == madmin.SRILMExpiryRuleEntity {
+		info.ILMExpiryRules = make(map[string]madmin.ILMExpiryRule)
+		buckets, err := objAPI.ListBuckets(ctx, BucketOptions{Deleted: opts.ShowDeleted})
+		if err != nil {
+			return info, errSRBackendIssue(err)
+		}
+
+		allRules := make(map[string]madmin.ILMExpiryRule)
+		for _, bucketInfo := range buckets {
+			bucket := bucketInfo.Name
+			bucketExists := bucketInfo.Deleted.IsZero() || (!bucketInfo.Created.IsZero() && bucketInfo.Created.After(bucketInfo.Deleted))
+			if !bucketExists {
+				continue
+			}
+
+			meta, err := globalBucketMetadataSys.GetConfigFromDisk(ctx, bucket)
+			if err != nil && !errors.Is(err, errConfigNotFound) {
+				return info, errSRBackendIssue(err)
+			}
+
+			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
+				for _, rule := range meta.lifecycleConfig.Rules {
+					ruleData, err := xml.Marshal(rule)
+					if err != nil {
+						return info, errSRBackendIssue(err)
+					}
+					allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: *(meta.lifecycleConfig.ExpiryUpdatedAt)}
+				}
+			}
+		}
+		if opts.Entity == madmin.SRILMExpiryRuleEntity {
+			if rule, ok := allRules[opts.EntityValue]; ok {
+				info.ILMExpiryRules[opts.EntityValue] = rule
+			}
+		} else {
+			for id, rule := range allRules {
+				info.ILMExpiryRules[id] = rule
+			}
 		}
 	}
 
@@ -3786,8 +3927,8 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	}
 
 	// If ILM expiry replications enabled/disabled, set accordingly
-        info, err := c.GetClusterInfo(ctx)
-        if err != nil {
+	info, err := c.GetClusterInfo(ctx)
+	if err != nil {
 		return madmin.ReplicateEditStatus{
 			Status:    madmin.ReplicateAddStatusPartial,
 			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
@@ -3976,15 +4117,21 @@ type srGroupStatsSummary struct {
 	groupPolicy srPolicyMapping
 }
 
+type srILMExpiryRuleStatsSummary struct {
+	madmin.SRILMExpiryStatsSummary
+	ilmExpiryRule srILMExpiryRule
+}
+
 type srStatusInfo struct {
 	// SRStatusInfo returns detailed status on site replication status
-	Enabled      bool
-	MaxBuckets   int                             // maximum buckets seen across sites
-	MaxUsers     int                             // maximum users seen across sites
-	MaxGroups    int                             // maximum groups seen across sites
-	MaxPolicies  int                             // maximum policies across sites
-	Sites        map[string]madmin.PeerInfo      // deployment->sitename
-	StatsSummary map[string]madmin.SRSiteSummary // map of deployment id -> site stat
+	Enabled           bool
+	MaxBuckets        int                             // maximum buckets seen across sites
+	MaxUsers          int                             // maximum users seen across sites
+	MaxGroups         int                             // maximum groups seen across sites
+	MaxPolicies       int                             // maximum policies across sites
+	MaxILMExpiryRules int                             // maximum ILM expiry rules across sites
+	Sites             map[string]madmin.PeerInfo      // deployment->sitename
+	StatsSummary      map[string]madmin.SRSiteSummary // map of deployment id -> site stat
 	// BucketStats map of bucket to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific bucket's stats are requested
 	BucketStats map[string]map[string]srBucketStatsSummary
@@ -3997,7 +4144,10 @@ type srStatusInfo struct {
 	// GroupStats map of group to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific bucket's stats are requested
 	GroupStats map[string]map[string]srGroupStatsSummary
-	Metrics    madmin.SRMetricsSummary
+	// ILMExpiryRulesStats map of ILM expiry rules to slice of deployment IDs with stats. This is populated only if there are
+	// mismatches or if a specific ILM expiry rule's stats are requested
+	ILMExpiryRulesStats map[string]map[string]srILMExpiryRuleStatsSummary
+	Metrics             madmin.SRMetricsSummary
 }
 
 // SRBucketDeleteOp - type of delete op
