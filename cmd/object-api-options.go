@@ -194,8 +194,6 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
 			}
 		}
-	} else {
-		opts.MTime = UTCNow()
 	}
 	return opts, nil
 }
@@ -225,7 +223,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	}
 
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
-	mtime := UTCNow()
+	var mtime time.Time
 	if mtimeStr != "" {
 		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
@@ -237,7 +235,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 	}
 	retaintimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceObjectRetentionTimestamp))
-	retaintimestmp := mtime
+	var retaintimestmp time.Time
 	if retaintimeStr != "" {
 		retaintimestmp, err = time.Parse(time.RFC3339, retaintimeStr)
 		if err != nil {
@@ -250,7 +248,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	}
 
 	lholdtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceObjectLegalHoldTimestamp))
-	lholdtimestmp := mtime
+	var lholdtimestmp time.Time
 	if lholdtimeStr != "" {
 		lholdtimestmp, err = time.Parse(time.RFC3339, lholdtimeStr)
 		if err != nil {
@@ -262,7 +260,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 	}
 	tagtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceTaggingTimestamp))
-	taggingtimestmp := mtime
+	var taggingtimestmp time.Time
 	if tagtimeStr != "" {
 		taggingtimestmp, err = time.Parse(time.RFC3339, tagtimeStr)
 		if err != nil {
@@ -353,7 +351,7 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 // get ObjectOptions for CompleteMultipart calls
 func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
-	mtime := UTCNow()
+	var mtime time.Time
 	if mtimeStr != "" {
 		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
