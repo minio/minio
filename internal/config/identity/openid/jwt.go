@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/pkg/v2/env"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -193,9 +193,9 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	timeout, exists := os.LookupEnv(config.EnvBrowserSessionDuration)
+	timeout := env.Get(config.EnvBrowserSessionDuration, "")
 
-	if exists {
+	if timeout != "" {
 		if err = replaceClaimsExpiry(timeout, claims); err != nil {
 			return err
 		}
