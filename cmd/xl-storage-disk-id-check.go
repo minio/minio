@@ -177,13 +177,35 @@ func (e *lockedLastMinuteLatency) total() AccElem {
 	return e.lastMinuteLatency.getTotal()
 }
 
+var maxConcurrentOnce sync.Once
+
 func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDiskIDCheck {
+	// diskMaxConcurrent represents maximum number of running concurrent
+	// operations for local and (incoming) remote disk operations.
+	//
+	// this value is a placeholder it is overridden via ENV for custom settings
+	// or this default value is used to pick the correct value HDDs v/s NVMe's
+	diskMaxConcurrent := -1
+	maxConcurrentOnce.Do(func() {
+		s := env.Get("_MINIO_DRIVE_MAX_CONCURRENT", "")
+		if s == "" {
+			s = env.Get("_MINIO_DISK_MAX_CONCURRENT", "")
+		}
+		if s != "" {
+			diskMaxConcurrent, _ = strconv.Atoi(s)
+		}
+	})
+
 	if diskMaxConcurrent <= 0 {
 		diskMaxConcurrent = 512
 		if storage.rotational {
-			diskMaxConcurrent = 32
+			diskMaxConcurrent = int(storage.nrRequests) / 2
+			if diskMaxConcurrent == 0 {
+				diskMaxConcurrent = 32
+			}
 		}
 	}
+
 	diskStartChecking := 16 + diskMaxConcurrent/8
 	if diskStartChecking > diskMaxConcurrent {
 		diskStartChecking = diskMaxConcurrent
@@ -738,22 +760,7 @@ var diskMaxTimeout = 2 * time.Minute
 // diskActiveMonitoring indicates if we have enabled "active" disk monitoring
 var diskActiveMonitoring = true
 
-// diskMaxConcurrent represents maximum number of running concurrent
-// operations for local and (incoming) remote disk operations.
-//
-// this value is a placeholder it is overridden via ENV for custom settings
-// or this default value is used to pick the correct value HDDs v/s NVMe's
-var diskMaxConcurrent = -1
-
 func init() {
-	s := env.Get("_MINIO_DRIVE_MAX_CONCURRENT", "")
-	if s == "" {
-		s = env.Get("_MINIO_DISK_MAX_CONCURRENT", "")
-	}
-	if s != "" {
-		diskMaxConcurrent, _ = strconv.Atoi(s)
-	}
-
 	d := env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
 	if d == "" {
 		d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
