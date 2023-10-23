@@ -1,4 +1,4 @@
-apiVersion: v1
+apiVersion: v2
 description: Multi-Cloud Object Storage
 name: minio
 version: 5.0.15
@@ -13,6 +13,7 @@ home: https://min.io
 icon: https://min.io/resources/img/logo/MINIO_wordmark.png
 sources:
 - https://github.com/minio/minio
+type: application
 maintainers:
 - name: MinIO, Inc
   email: dev@minio.io
