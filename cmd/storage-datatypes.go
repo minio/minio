@@ -383,6 +383,7 @@ type DeleteFileHandlerParams struct {
 	Opts     DeleteOptions `msg:"do"`
 }
 
+// RenameDataHandlerParams are parameters for RenameDataHandler.
 type RenameDataHandlerParams struct {
 	DiskID    string   `msg:"id"`
 	SrcVolume string   `msg:"sv"`
