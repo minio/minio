@@ -22,8 +22,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/minio/minio/internal/config"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -140,6 +142,16 @@ const (
 	azpClaim = "azp"
 )
 
+func replaceClaimsExpiry(timeout string, claims map[string]interface{}) error {
+	expirySecs, err := time.ParseDuration(timeout)
+	if err != nil || expirySecs <= 0 {
+		expirySecs = 12 * time.Hour
+	}
+
+	claims["exp"] = time.Now().UTC().Add(expirySecs).Unix()
+	return nil
+}
+
 // Validate - validates the id_token.
 func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
 	jp := new(jwtgo.Parser)
@@ -181,8 +193,16 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	if err = updateClaimsExpiry(dsecs, claims); err != nil {
-		return err
+	timeout, exists := os.LookupEnv(config.EnvBrowserSessionDuration)
+
+	if exists {
+		if err = replaceClaimsExpiry(timeout, claims); err != nil {
+			return err
+		}
+	} else {
+		if err = updateClaimsExpiry(dsecs, claims); err != nil {
+			return err
+		}
 	}
 
 	if err = r.updateUserinfoClaims(ctx, arn, accessToken, claims); err != nil {
