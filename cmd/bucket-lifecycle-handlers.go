@@ -87,7 +87,9 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if bucketLifecycle.HasExpiry() {
+	var expiryRuleRemoved bool
+	expiryRuleRemoved = r.Form.Get("expiryRuleRemoved") == "true"
+	if bucketLifecycle.HasExpiry() || expiryRuleRemoved {
 		currtime := time.Now()
 		bucketLifecycle.ExpiryUpdatedAt = &currtime
 	}

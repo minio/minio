@@ -1697,7 +1697,7 @@ func (c *SiteReplicationSys) PeerBucketLCConfigHandler(ctx context.Context, buck
 	}
 
 	if expLCConfig != nil {
-		configData, err := base64.StdEncoding.DecodeString(*expLCConfig)
+		configData, err := mergeWithCurrentLCConfig(ctx, bucket, expLCConfig, updatedAt)
 		if err != nil {
 			return wrapSRErr(err)
 		}
@@ -3605,7 +3605,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				bms.ReplicationConfigUpdatedAt = meta.ReplicationConfigUpdatedAt
 			}
 
-			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
+			if meta.lifecycleConfig != nil {
 				var expLclCfg lifecycle.Lifecycle
 				expLclCfg.XMLName = meta.lifecycleConfig.XMLName
 				for _, rule := range meta.lifecycleConfig.Rules {
@@ -3679,11 +3679,13 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
 				for _, rule := range meta.lifecycleConfig.Rules {
-					ruleData, err := xml.Marshal(rule)
-					if err != nil {
-						return info, errSRBackendIssue(err)
+					if !rule.Expiration.IsNull() {
+						ruleData, err := xml.Marshal(rule)
+						if err != nil {
+							return info, errSRBackendIssue(err)
+						}
+						allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: *(meta.lifecycleConfig.ExpiryUpdatedAt)}
 					}
-					allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: *(meta.lifecycleConfig.ExpiryUpdatedAt)}
 				}
 			}
 		}
@@ -4178,10 +4180,11 @@ func getSRBucketDeleteOp(isSiteReplicated bool) SRBucketDeleteOp {
 
 func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer) error {
 	info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
-		Users:    true,
-		Policies: true,
-		Groups:   true,
-		Buckets:  true,
+		Users:          true,
+		Policies:       true,
+		Groups:         true,
+		Buckets:        true,
+		ILMExpiryRules: true,
 	})
 	if err != nil {
 		return err
@@ -4192,15 +4195,6 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 	}
 	for _, bi := range buckets {
 		bucket := bi.Name
-		// info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
-		// 	Entity:      madmin.SRBucketEntity,
-		// 	EntityValue: bucket,
-		// 	ShowDeleted: true,
-		// })
-		// if err != nil {
-		// 	logger.LogIf(ctx, err)
-		// 	continue
-		// }
 
 		c.healBucket(ctx, objAPI, bucket, info)
 
@@ -4254,20 +4248,26 @@ func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI Obj
 		}
 	}
 	latestPeerName = info.Sites[latestID].Name
-	var latestExpLCConfigBytes []byte
 	var err error
 	if latestExpLCConfig != nil {
-		latestExpLCConfigBytes, err = base64.StdEncoding.DecodeString(*latestExpLCConfig)
+		_, err = base64.StdEncoding.DecodeString(*latestExpLCConfig)
 		if err != nil {
 			return err
 		}
 	}
+
 	for dID, bStatus := range bs {
 		if bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(*latestExpLCConfig, *bStatus.meta.ExpiryLCConfig) {
 			continue
 		}
-		if dID == globalDeploymentID {
-			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, latestExpLCConfigBytes); err != nil {
+
+		finalConfigData, err := mergeWithCurrentLCConfig(ctx, bucket, latestExpLCConfig, lastUpdate)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+
+		if dID == globalDeploymentID() {
+			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, finalConfigData); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to heal bucket ILM expiry data from peer site %s : %w", latestPeerName, err))
 			}
 			continue
@@ -5853,4 +5853,80 @@ func (c *SiteReplicationSys) getSiteMetrics(ctx context.Context) (madmin.SRMetri
 	}
 	sm.Uptime = UTCNow().Unix() - globalBootTime.Unix()
 	return sm, nil
+}
+
+// mergeWithCurrentLCConfig - merges the given ilm expiry configuration with existing for the current site and returns
+func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *string, updatedAt time.Time) ([]byte, error) {
+	// Get bucket config from current site
+	meta, e := globalBucketMetadataSys.GetConfigFromDisk(ctx, bucket)
+	if e != nil && !errors.Is(e, errConfigNotFound) {
+		return []byte{}, e
+	}
+	rMap := make(map[string]lifecycle.Rule)
+	var xmlName xml.Name
+	if len(meta.LifecycleConfigXML) > 0 {
+		var lcCfg lifecycle.Lifecycle
+		if err := xml.Unmarshal(meta.LifecycleConfigXML, &lcCfg); err != nil {
+			return []byte{}, err
+		}
+		for _, rl := range lcCfg.Rules {
+			rMap[rl.ID] = rl
+		}
+		xmlName = meta.lifecycleConfig.XMLName
+	}
+
+	// get latest expiry rules
+	newRMap := make(map[string]lifecycle.Rule)
+	if expLCCfg != nil {
+		var cfg lifecycle.Lifecycle
+		expLcCfgData, err := base64.StdEncoding.DecodeString(*expLCCfg)
+		if err != nil {
+			return []byte{}, err
+		}
+		if err := xml.Unmarshal(expLcCfgData, &cfg); err != nil {
+			return []byte{}, err
+		}
+		for _, rl := range cfg.Rules {
+			newRMap[rl.ID] = rl
+		}
+		xmlName = cfg.XMLName
+	}
+
+	// check if current expiry rules are there in new one. if not remove as they may
+	// have been removed from latest updated one
+	for id, rl := range rMap {
+		if !rl.Expiration.IsNull() {
+			if _, ok := newRMap[id]; !ok {
+				delete(rMap, id)
+			}
+		}
+	}
+
+	// append now
+	for id, rl := range newRMap {
+		rMap[id] = rl
+	}
+
+	var rules []lifecycle.Rule
+	for _, rule := range rMap {
+		rules = append(rules, rule)
+	}
+
+	// no rules, return
+	if len(rules) == 0 {
+		return []byte{}, nil
+	}
+
+	// get final list for write
+	finalLcCfg := lifecycle.Lifecycle{
+		XMLName:         xmlName,
+		Rules:           rules,
+		ExpiryUpdatedAt: &updatedAt,
+	}
+	finalConfigData, err := xml.Marshal(finalLcCfg)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return finalConfigData, nil
 }
