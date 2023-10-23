@@ -151,7 +151,7 @@ spec:
             {{- end }}
           {{- if .Values.securityContext.enabled }}
           securityContext:
-            {{- omit .Values.securityContext "enabled" | toYaml | nindent 12 }}
+          {{- omit .Values.securityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
         {{- with .Values.extraContainers }}
