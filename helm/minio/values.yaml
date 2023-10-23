@@ -243,12 +243,25 @@ topologySpreadConstraints: []
 
 ## Add stateful containers to have security context, if enabled MinIO will run as this
 ## user and group NOTE: securityContext is only enabled if persistence.enabled=true
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
 securityContext:
   enabled: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  privileged: false
   runAsUser: 1000
   runAsGroup: 1000
+
+## Add security context for Pod
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
+podSecurityContext:
+  enabled: true
   fsGroup: 1000
-  fsGroupChangePolicy: "OnRootMismatch"
+  supplementalGroups:
+  - 1000
 
 # Additational pod annotations
 podAnnotations: {}
