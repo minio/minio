@@ -387,6 +387,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
 
+	opts.FastGetObjInfo = globalAPIConfig.ignoreSlowDisksEnabled()
+
 	var proxy proxyResult
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, opts)
 	if err != nil {
@@ -642,6 +644,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	// Get request range.
 	var rs *HTTPRangeSpec
 	rangeHeader := r.Header.Get(xhttp.Range)
+
+	opts.FastGetObjInfo = globalAPIConfig.ignoreSlowDisksEnabled()
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	var proxy proxyResult

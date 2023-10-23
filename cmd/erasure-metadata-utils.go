@@ -148,11 +148,30 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
+var readFileInfoIgnoredErrs = append(objectOpIgnoredErrs,
+	errFileNotFound,
+	errVolumeNotFound,
+	errFileVersionNotFound,
+	io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
+	io.EOF,              // some times we would read without locks, ignore these errors
+)
+
+func readFileInfo(ctx context.Context, disk StorageAPI, bucket, object, versionID string, readData bool) (FileInfo, error) {
+	fi, err := disk.ReadVersion(ctx, bucket, object, versionID, readData)
+
+	if err != nil && !IsErr(err, readFileInfoIgnoredErrs...) {
+		logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+			disk.String(), bucket, object, err),
+			disk.String())
+	}
+
+	return fi, err
+}
+
 // Reads all `xl.meta` metadata as a FileInfo slice.
 // Returns error slice indicating the failed metadata reads.
 func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string, readData bool) ([]FileInfo, []error) {
 	metadataArray := make([]FileInfo, len(disks))
-
 	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.meta` in parallel across disks.
 	for index := range disks {
@@ -161,33 +180,12 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, readData)
+			metadataArray[index], err = readFileInfo(ctx, disks[index], bucket, object, versionID, readData)
 			return err
 		}, index)
 	}
 
-	ignoredErrs := []error{
-		errFileNotFound,
-		errVolumeNotFound,
-		errFileVersionNotFound,
-		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
-		io.EOF,              // some times we would read without locks, ignore these errors
-	}
-	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
-	errs := g.Wait()
-	for index, err := range errs {
-		if err == nil {
-			continue
-		}
-		if !IsErr(err, ignoredErrs...) {
-			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
-				disks[index], bucket, object, err),
-				disks[index].String())
-		}
-	}
-
-	// Return all the metadata.
-	return metadataArray, errs
+	return metadataArray, g.Wait()
 }
 
 // shuffleDisksAndPartsMetadataByIndex this function should be always used by GetObjectNInfo()

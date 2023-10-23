@@ -44,6 +44,7 @@ const (
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
 	apiDisableODirect              = "disable_odirect"
 	apiODirect                     = "odirect"
+	apiIgnoreSlowDisks             = "ignore_slow_disks"
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
@@ -67,6 +68,7 @@ const (
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
 	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
+	EnvAPIIgnoreSlowDisks             = "MINIO_API_IGNORE_SLOW_DISKS"
 )
 
 // Deprecated key and ENVs
@@ -144,10 +146,15 @@ var (
 			Key:   apiSyncEvents,
 			Value: config.EnableOff,
 		},
+		config.KV{
+			Key:        apiIgnoreSlowDisks,
+			Value:      "",
+			Deprecated: true,
+		},
 	}
 )
 
-// Config storage class configuration
+// Config configuration for API subsystem
 type Config struct {
 	RequestsMax                 int           `json:"requests_max"`
 	RequestsDeadline            time.Duration `json:"requests_deadline"`
@@ -164,6 +171,7 @@ type Config struct {
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
+	IgnoreSlowDisks             bool          `json:"ignore_slow_disks"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -290,6 +298,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
 	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
+
+	switch env.Get(EnvAPIIgnoreSlowDisks, kvs.Get(apiIgnoreSlowDisks)) {
+	case "":
+	case config.EnableOn:
+		cfg.IgnoreSlowDisks = true
+	default:
+		return cfg, errors.New("invalid value")
+	}
 
 	return cfg, nil
 }

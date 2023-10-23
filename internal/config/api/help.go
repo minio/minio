@@ -110,5 +110,11 @@ var (
 			Optional:    true,
 			Type:        "boolean",
 		},
+		config.HelpKV{
+			Key:         apiIgnoreSlowDisks,
+			Description: "set to ignore slow disks during object metadata fetching" + defaultHelpPostfix(apiIgnoreSlowDisks),
+			Optional:    true,
+			Type:        "boolean",
+		},
 	}
 )

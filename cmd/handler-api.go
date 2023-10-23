@@ -53,6 +53,7 @@ type apiConfig struct {
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
+	ignoreSlowDisks             bool
 }
 
 const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
@@ -168,6 +169,14 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
+	t.ignoreSlowDisks = cfg.IgnoreSlowDisks
+}
+
+func (t *apiConfig) ignoreSlowDisksEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.ignoreSlowDisks
 }
 
 func (t *apiConfig) odirectEnabled() bool {
