@@ -154,6 +154,13 @@ func errSRConfigMissingError(err error) SRError {
 	}
 }
 
+func errSRIAMConfigMismatch(peer1, peer2 string, s1, s2 madmin.IDPSettings) SRError {
+	return SRError{
+		Cause: fmt.Errorf("IAM/IDP settings mismatch between %s and %s: %#v vs %#v", peer1, peer2, s1, s2),
+		Code:  ErrSiteReplicationIAMConfigMismatch,
+	}
+}
+
 var errSRObjectLayerNotReady = SRError{
 	Cause: fmt.Errorf("object layer not ready"),
 	Code:  ErrServerNotInitialized,
@@ -424,12 +431,9 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	}
 
 	// validate that all clusters are using the same IDP settings.
-	pass, err := c.validateIDPSettings(ctx, sites)
+	err = c.validateIDPSettings(ctx, sites)
 	if err != nil {
 		return madmin.ReplicateAddStatus{}, err
-	}
-	if !pass {
-		return madmin.ReplicateAddStatus{}, errSRInvalidRequest(errors.New("all cluster sites must have the same IAM/IDP settings"))
 	}
 
 	// For this `add` API, either all clusters must be empty or the local
@@ -619,7 +623,7 @@ func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSetti
 	return s
 }
 
-func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []PeerSiteInfo) (bool, error) {
+func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []PeerSiteInfo) error {
 	s := make([]madmin.IDPSettings, 0, len(peers))
 	for _, v := range peers {
 		if v.self {
@@ -629,22 +633,23 @@ func (c *SiteReplicationSys) validateIDPSettings(ctx context.Context, peers []Pe
 
 		admClient, err := getAdminClient(v.Endpoint, v.AccessKey, v.SecretKey)
 		if err != nil {
-			return false, errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
+			return errSRPeerResp(fmt.Errorf("unable to create admin client for %s: %w", v.Name, err))
 		}
 
 		is, err := admClient.SRPeerGetIDPSettings(ctx)
 		if err != nil {
-			return false, errSRPeerResp(fmt.Errorf("unable to fetch IDP settings from %s: %v", v.Name, err))
+			return errSRPeerResp(fmt.Errorf("unable to fetch IDP settings from %s: %v", v.Name, err))
 		}
 		s = append(s, is)
 	}
 
 	for i := 1; i < len(s); i++ {
 		if !reflect.DeepEqual(s[i], s[0]) {
-			return false, nil
+			return errSRIAMConfigMismatch(peers[0].Name, peers[i].Name, s[0], s[i])
 		}
 	}
-	return true, nil
+
+	return nil
 }
 
 // Netperf for site-replication net perf

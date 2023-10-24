@@ -795,6 +795,16 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return nil, err
 	}
 
+	// This is a special call attempted first to check for SOS-API calls.
+	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
+	if err == nil {
+		return gr, nil
+	}
+
+	// reset any error to 'nil' and any reader to be 'nil'
+	gr = nil
+	err = nil
+
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
@@ -923,6 +933,16 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
+
+	// This is a special call attempted first to check for SOS-API calls.
+	objInfo, err = veeamSOSAPIHeadObject(ctx, bucket, object, opts)
+	if err == nil {
+		return objInfo, nil
+	}
+
+	// reset any error to 'nil', and object info to be empty.
+	err = nil
+	objInfo = ObjectInfo{}
 
 	object = encodeDirObject(object)
 
