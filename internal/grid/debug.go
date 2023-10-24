@@ -122,6 +122,20 @@ func (t *TestGrid) Cleanup() {
 	})
 }
 
+// WaitAllConnect will wait for all connections to be established.
+func (t *TestGrid) WaitAllConnect(ctx context.Context) {
+	for _, manager := range t.Managers {
+		for _, remote := range manager.Targets() {
+			if manager.HostName() == remote {
+				continue
+			}
+			if err := manager.Connection(remote).WaitForConnect(ctx); err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 func getHosts(n int) (hosts []string, listeners []net.Listener, err error) {
 	for i := 0; i < n; i++ {
 		l, err := net.Listen("tcp", "127.0.0.1:0")

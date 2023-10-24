@@ -141,7 +141,7 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 // Make sure to bump the internode version at storage-rest-common.go
 type RawFileInfo struct {
 	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
-	Buf []byte `msg:"b"`
+	Buf []byte `msg:"b,allownil"`
 
 	// DiskMTime indicates the mtime of the xl.meta on disk
 	// This is mainly used for detecting a particular issue
