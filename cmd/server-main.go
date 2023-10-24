@@ -376,7 +376,8 @@ func configRetriableErrors(err error) bool {
 		return false
 	}
 
-	notInitialized := err.Error() == "Server not initialized, please try again"
+	notInitialized := strings.Contains(err.Error(), "Server not initialized, please try again") ||
+		errors.Is(err, errServerNotInitialized)
 
 	// Initializing sub-systems needs a retry mechanism for
 	// the following reasons:
