@@ -142,14 +142,13 @@ const (
 	azpClaim = "azp"
 )
 
-func replaceClaimsExpiry(timeout string, claims map[string]interface{}) error {
+func replaceClaimsExpiry(timeout string, claims map[string]interface{}) {
 	expirySecs, err := time.ParseDuration(timeout)
 	if err != nil || expirySecs <= 0 {
 		expirySecs = 12 * time.Hour
 	}
 
 	claims["exp"] = time.Now().UTC().Add(expirySecs).Unix()
-	return nil
 }
 
 // Validate - validates the id_token.
@@ -196,9 +195,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	timeout := env.Get(config.EnvBrowserSessionDuration, "")
 
 	if timeout != "" {
-		if err = replaceClaimsExpiry(timeout, claims); err != nil {
-			return err
-		}
+		replaceClaimsExpiry(timeout, claims)
 	} else {
 		if err = updateClaimsExpiry(dsecs, claims); err != nil {
 			return err
