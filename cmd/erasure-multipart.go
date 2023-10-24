@@ -310,35 +310,20 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 			continue
 		}
 		// If present, use time stored in ID.
+		startTime := time.Now()
 		if split := strings.Split(uploadID, "."); len(split) == 2 {
-			startTime, err := strconv.ParseInt(split[1], 10, 64)
-			if err != nil {
-				continue
+			t, err := strconv.ParseInt(split[1], 10, 64)
+			if err == nil {
+				startTime = time.Unix(0, t)
 			}
-			uploads = append(uploads, MultipartInfo{
-				Bucket:    bucket,
-				Object:    object,
-				UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
-				Initiated: time.Unix(0, startTime),
-			})
-		} else {
-			// No new parts should be created without time.
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
-			if err != nil {
-				if !IsErrIgnored(err, errFileNotFound, errDiskNotFound) {
-					logger.LogIf(ctx, err)
-				}
-				// Ignore this invalid upload-id since we are listing here
-				continue
-			}
-			populatedUploadIds.Add(uploadID)
-			uploads = append(uploads, MultipartInfo{
-				Bucket:    bucket,
-				Object:    object,
-				UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
-				Initiated: fi.ModTime,
-			})
 		}
+		uploads = append(uploads, MultipartInfo{
+			Bucket:    bucket,
+			Object:    object,
+			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
+			Initiated: startTime,
+		})
+
 	}
 
 	sort.Slice(uploads, func(i int, j int) bool {
