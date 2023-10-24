@@ -310,6 +310,7 @@ const (
 	ErrSiteReplicationBucketMetaError
 	ErrSiteReplicationIAMError
 	ErrSiteReplicationConfigMissing
+	ErrSiteReplicationIAMConfigMismatch
 
 	// Pool rebalance errors
 	ErrAdminRebalanceAlreadyStarted
@@ -1510,6 +1511,11 @@ var errorCodes = errorCodeMap{
 	ErrSiteReplicationConfigMissing: {
 		Code:           "XMinioSiteReplicationConfigMissingError",
 		Description:    "Site not found in site replication configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSiteReplicationIAMConfigMismatch: {
+		Code:           "XMinioSiteReplicationIAMConfigMismatch",
+		Description:    "IAM configuration mismatch between sites",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminRebalanceAlreadyStarted: {

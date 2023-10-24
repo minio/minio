@@ -372,6 +372,12 @@ func initAllSubsystems(ctx context.Context) {
 }
 
 func configRetriableErrors(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	notInitialized := err.Error() == "Server not initialized, please try again"
+
 	// Initializing sub-systems needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
@@ -392,7 +398,8 @@ func configRetriableErrors(err error) bool {
 		errors.As(err, &wquorum) ||
 		isErrObjectNotFound(err) ||
 		isErrBucketNotFound(err) ||
-		errors.Is(err, os.ErrDeadlineExceeded)
+		errors.Is(err, os.ErrDeadlineExceeded) ||
+		notInitialized
 }
 
 func bootstrapTraceMsg(msg string) {
@@ -813,10 +820,12 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	go func() {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 		if !globalDisableFreezeOnBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
-				logger.Info(color.Yellow("WARNING: Taking more time to initialize the config subsystem. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+				logger.Info(color.Yellow("WARNING: Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
 			})
 			defer t.Stop()
 		}
@@ -864,9 +873,18 @@ func serverMain(ctx *cli.Context) {
 		var buckets []BucketInfo
 		// List buckets to initialize bucket metadata sub-sys.
 		bootstrapTrace("listBuckets", func() {
-			buckets, err = newObject.ListBuckets(GlobalContext, BucketOptions{})
-			if err != nil {
-				logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
+			for {
+				buckets, err = newObject.ListBuckets(GlobalContext, BucketOptions{})
+				if err != nil {
+					if configRetriableErrors(err) {
+						logger.Info("Waiting for list buckets to succeed to initialize buckets.. possible cause (%v)", err)
+						time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
+						continue
+					}
+					logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
+				}
+
+				break
 			}
 		})
 
