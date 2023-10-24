@@ -80,7 +80,7 @@ require (
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.23.8
 	github.com/tidwall/gjson v1.16.0
-	github.com/tinylib/msgp v1.1.8
+	github.com/tinylib/msgp v1.1.9-0.20230705140925-6ac204f0b4d4
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
 	github.com/zeebo/xxh3 v1.0.2
