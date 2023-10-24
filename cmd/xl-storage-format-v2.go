@@ -328,6 +328,18 @@ func (x xlMetaV2VersionHeader) sortsBefore(o xlMetaV2VersionHeader) bool {
 	return false
 }
 
+func (j xlMetaV2Version) getDataDir() string {
+	if j.Valid() {
+		switch j.Type {
+		case LegacyType:
+			return j.ObjectV1.DataDir
+		case ObjectType:
+			return uuid.UUID(j.ObjectV2.DataDir).String()
+		}
+	}
+	return ""
+}
+
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
 	if !j.Type.valid() {
@@ -1168,6 +1180,20 @@ func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	binary.BigEndian.PutUint32(tmp[1:], uint32(xxhash.Sum64(dst[dataOffset:])))
 	dst = append(dst, tmp[:5]...)
 	return append(dst, x.data...), nil
+}
+
+func (x *xlMetaV2) findVersionStr(key string) (idx int, ver *xlMetaV2Version, err error) {
+	if key == nullVersionID {
+		key = ""
+	}
+	var u uuid.UUID
+	if key != "" {
+		u, err = uuid.Parse(key)
+		if err != nil {
+			return -1, nil, errFileVersionNotFound
+		}
+	}
+	return x.findVersion(u)
 }
 
 func (x *xlMetaV2) findVersion(key [16]byte) (idx int, ver *xlMetaV2Version, err error) {

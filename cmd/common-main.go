@@ -122,8 +122,8 @@ func init() {
 const consolePrefix = "CONSOLE_"
 
 func minioConfigToConsoleFeatures() {
-	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID)
-	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID)
+	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID())
+	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID())
 	if globalMinioEndpoint != "" {
 		os.Setenv("CONSOLE_MINIO_SERVER", globalMinioEndpoint)
 	} else {
@@ -191,7 +191,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 			DisplayName:             cfg.DisplayName,
 			ClientID:                cfg.ClientID,
 			ClientSecret:            cfg.ClientSecret,
-			HMACSalt:                globalDeploymentID,
+			HMACSalt:                globalDeploymentID(),
 			HMACPassphrase:          cfg.ClientID,
 			Scopes:                  strings.Join(cfg.DiscoveryDoc.ScopesSupported, ","),
 			Userinfo:                cfg.ClaimUserinfo,
@@ -619,8 +619,6 @@ func loadEnvVarsFromFiles() {
 }
 
 func handleCommonEnvVars() {
-	loadEnvVarsFromFiles()
-
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {

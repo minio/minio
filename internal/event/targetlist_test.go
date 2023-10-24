@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/internal/store"
 )
 
 type ExampleTarget struct {
@@ -61,7 +63,7 @@ func (target ExampleTarget) send(eventData Event) error {
 }
 
 // SendFromStore - interface compatible method does no-op.
-func (target *ExampleTarget) SendFromStore(eventKey string) error {
+func (target *ExampleTarget) SendFromStore(_ store.Key) error {
 	return nil
 }
 

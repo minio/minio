@@ -133,11 +133,6 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
 
-	if globalCacheConfig.Enabled {
-		w.Header().Set(xhttp.XCache, objInfo.CacheStatus.String())
-		w.Header().Set(xhttp.XCacheLookup, objInfo.CacheLookupStatus.String())
-	}
-
 	// Set tag count if object has tags
 	if len(objInfo.UserTags) > 0 {
 		tags, _ := tags.ParseObjectTags(objInfo.UserTags)

@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
-	uatomic "go.uber.org/atomic"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -273,9 +272,15 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 	if len(disks) == 0 {
 		// using er.getLoadBalancedLocalDisks() has one side-affect where
 		// on a pooled setup all disks are remote, add a fallback
-		disks = er.getOnlineDisks()
+		disks = er.getDisks()
 	}
 	for _, disk = range disks {
+		if disk == nil {
+			continue
+		}
+		if !disk.IsOnline() {
+			continue
+		}
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if errors.Is(err, errDiskNotFound) {
@@ -315,7 +320,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		populatedUploadIds.Add(uploadID)
 		uploads = append(uploads, MultipartInfo{
 			Object:    object,
-			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadID))),
+			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
 			Initiated: fi.ModTime,
 		})
 	}
@@ -399,47 +404,31 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// If we have offline disks upgrade the number of erasure codes for this object.
 	parityOrig := parityDrives
 
-	atomicParityDrives := uatomic.NewInt64(0)
-	atomicOfflineDrives := uatomic.NewInt64(0)
-
-	// Start with current parityDrives
-	atomicParityDrives.Store(int64(parityDrives))
-
-	var wg sync.WaitGroup
+	var offlineDrives int
 	for _, disk := range onlineDisks {
 		if disk == nil {
-			atomicParityDrives.Inc()
-			atomicOfflineDrives.Inc()
+			parityDrives++
+			offlineDrives++
 			continue
 		}
 		if !disk.IsOnline() {
-			atomicParityDrives.Inc()
-			atomicOfflineDrives.Inc()
+			parityDrives++
+			offlineDrives++
 			continue
 		}
-		wg.Add(1)
-		go func(disk StorageAPI) {
-			defer wg.Done()
-			di, err := disk.DiskInfo(ctx, false)
-			if err != nil || di.ID == "" {
-				atomicOfflineDrives.Inc()
-				atomicParityDrives.Inc()
-			}
-		}(disk)
 	}
-	wg.Wait()
 
-	if int(atomicOfflineDrives.Load()) >= (len(onlineDisks)+1)/2 {
+	if offlineDrives >= (len(onlineDisks)+1)/2 {
 		// if offline drives are more than 50% of the drives
 		// we have no quorum, we shouldn't proceed just
 		// fail at that point.
 		return nil, toObjectErr(errErasureWriteQuorum, bucket, object)
 	}
 
-	parityDrives = int(atomicParityDrives.Load())
 	if parityDrives >= len(onlineDisks)/2 {
 		parityDrives = len(onlineDisks) / 2
 	}
+
 	if parityOrig != parityDrives {
 		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 	}
@@ -492,7 +481,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].Metadata = userDefined
 	}
 	uploadUUID := mustGetUUID()
-	uploadID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID, uploadUUID)))
+	uploadID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadUUID)))
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
@@ -1180,6 +1169,16 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return oi, err
 		}
 	}
+
+	// Hold namespace to complete the transaction
+	lk := er.NewNSLock(bucket, object)
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return oi, err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx)
+
 	if checksumType.IsSet() {
 		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
 		cs := hash.NewChecksumFromData(checksumType, checksumCombined)
@@ -1222,15 +1221,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			partsMetadata[index].Versioned = opts.Versioned || opts.VersionSuspended
 		}
 	}
-
-	// Hold namespace to complete the transaction
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return oi, err
-	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	// Remove parts that weren't present in CompleteMultipartUpload request.
 	for _, curpart := range currentFI.Parts {

@@ -47,7 +47,6 @@ import (
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
 	"github.com/tinylib/msgp/msgp"
-	uatomic "go.uber.org/atomic"
 )
 
 // list all errors which can be ignored in object operations.
@@ -188,14 +187,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	auditObjectErasureSet(ctx, object, &er)
-
-	// This is a special call attempted first to check for SOS-API calls.
-	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
-	if err == nil {
-		return gr, nil
-	}
-	// reset any error to 'nil'
-	err = nil
 
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
@@ -452,14 +443,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
 
-	// This is a special call attempted first to check for SOS-API calls.
-	info, err = veeamSOSAPIHeadObject(ctx, bucket, object, opts)
-	if err == nil {
-		return info, nil
-	}
-	// reset any error to 'nil'
-	err = nil
-
 	if !opts.NoLock {
 		// Lock the object before reading.
 		lk := er.NewNSLock(bucket, object)
@@ -490,6 +473,24 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 	auditLogInternal(ctx, opts)
 }
 
+func joinErrors(errs ...error) error {
+	s := make([]string, 0, len(errs))
+	nonNilErrs := make([]any, 0, len(errs))
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		s = append(s, "[%w]")
+		nonNilErrs = append(nonNilErrs, err)
+	}
+	// If all the errors were nil, return nil.
+	if len(nonNilErrs) == 0 {
+		return nil
+	}
+	allErrs := strings.Join(s, "\n")
+	return fmt.Errorf(allErrs, nonNilErrs...)
+}
+
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
 	_, file, line, cok := runtime.Caller(1)
 	var err error
@@ -498,8 +499,8 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["merrs"] = errors.Join(errs...)
-		tags["derrs"] = errors.Join(dataErrs...)
+		tags["merrs"] = joinErrors(errs...)     // errors.Join(errs...)
+		tags["derrs"] = joinErrors(dataErrs...) // errors.Join(dataErrs...)
 		if m.IsValid() {
 			tags["size"] = m.Size
 			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
@@ -1097,47 +1098,31 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		// If we have offline disks upgrade the number of erasure codes for this object.
 		parityOrig := parityDrives
 
-		atomicParityDrives := uatomic.NewInt64(0)
-		atomicOfflineDrives := uatomic.NewInt64(0)
-
-		// Start with current parityDrives
-		atomicParityDrives.Store(int64(parityDrives))
-
-		var wg sync.WaitGroup
+		var offlineDrives int
 		for _, disk := range storageDisks {
 			if disk == nil {
-				atomicParityDrives.Inc()
-				atomicOfflineDrives.Inc()
+				parityDrives++
+				offlineDrives++
 				continue
 			}
 			if !disk.IsOnline() {
-				atomicParityDrives.Inc()
-				atomicOfflineDrives.Inc()
+				parityDrives++
+				offlineDrives++
 				continue
 			}
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-				di, err := disk.DiskInfo(ctx, false)
-				if err != nil || di.ID == "" {
-					atomicOfflineDrives.Inc()
-					atomicParityDrives.Inc()
-				}
-			}(disk)
 		}
-		wg.Wait()
 
-		if int(atomicOfflineDrives.Load()) >= (len(storageDisks)+1)/2 {
+		if offlineDrives >= (len(storageDisks)+1)/2 {
 			// if offline drives are more than 50% of the drives
 			// we have no quorum, we shouldn't proceed just
 			// fail at that point.
 			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
 
-		parityDrives = int(atomicParityDrives.Load())
 		if parityDrives >= len(storageDisks)/2 {
 			parityDrives = len(storageDisks) / 2
 		}
+
 		if parityOrig != parityDrives {
 			userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
 		}

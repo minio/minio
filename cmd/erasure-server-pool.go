@@ -143,6 +143,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
 
+	// Initialize the pool meta, but set it to not save.
+	// When z.Init below has loaded the poolmeta will be initialized,
+	// and allowed to save.
+	z.poolMeta = newPoolMeta(z, poolMeta{})
+	z.poolMeta.dontSave = true
+
 	// initialize the object layer.
 	setObjectLayer(z)
 
@@ -789,6 +795,16 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return nil, err
 	}
 
+	// This is a special call attempted first to check for SOS-API calls.
+	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
+	if err == nil {
+		return gr, nil
+	}
+
+	// reset any error to 'nil' and any reader to be 'nil'
+	gr = nil
+	err = nil
+
 	object = encodeDirObject(object)
 
 	if z.SinglePool() {
@@ -917,6 +933,16 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
+
+	// This is a special call attempted first to check for SOS-API calls.
+	objInfo, err = veeamSOSAPIHeadObject(ctx, bucket, object, opts)
+	if err == nil {
+		return objInfo, nil
+	}
+
+	// reset any error to 'nil', and object info to be empty.
+	err = nil
+	objInfo = ObjectInfo{}
 
 	object = encodeDirObject(object)
 
@@ -2451,12 +2477,12 @@ func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object s
 		return z.serverPools[0].GetObjectTags(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
+	oi, _, err := z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return z.serverPools[idx].GetObjectTags(ctx, bucket, object, opts)
+	return tags.ParseObjectTags(oi.UserTags)
 }
 
 // TransitionObject - transition object content to target tier.

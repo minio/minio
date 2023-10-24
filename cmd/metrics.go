@@ -108,7 +108,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	bucketUsageMetricsPrometheus(ch)
 	networkMetricsPrometheus(ch)
 	httpMetricsPrometheus(ch)
-	cacheMetricsPrometheus(ch)
 	healingMetricsPrometheus(ch)
 }
 
@@ -184,82 +183,6 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 				[]string{"mount_path", "volume_status"}, nil),
 			prometheus.GaugeValue,
 			float64(v), s[0], s[1],
-		)
-	}
-}
-
-// collects cache metrics for MinIO server in Prometheus specific format
-// and sends to given channel
-func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
-	cacheObjLayer := newCachedObjectLayerFn()
-	// Service not initialized yet
-	if cacheObjLayer == nil {
-		return
-	}
-
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName(cacheNamespace, "hits", "total"),
-			"Total number of drive cache hits in current MinIO instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(cacheObjLayer.CacheStats().getHits()),
-	)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName(cacheNamespace, "misses", "total"),
-			"Total number of drive cache misses in current MinIO instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(cacheObjLayer.CacheStats().getMisses()),
-	)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName(cacheNamespace, "data", "served"),
-			"Total number of bytes served from cache of current MinIO instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(cacheObjLayer.CacheStats().getBytesServed()),
-	)
-	for _, cdStats := range cacheObjLayer.CacheStats().GetDiskStats() {
-		// Cache disk usage percentage
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName(cacheNamespace, "usage", "percent"),
-				"Total percentage cache usage",
-				[]string{"disk"}, nil),
-			prometheus.GaugeValue,
-			float64(cdStats.UsagePercent),
-			cdStats.Dir,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName(cacheNamespace, "usage", "high"),
-				"Indicates cache usage is high or low, relative to current cache 'quota' settings",
-				[]string{"disk"}, nil),
-			prometheus.GaugeValue,
-			float64(cdStats.UsageState),
-			cdStats.Dir,
-		)
-
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "usage", "size"),
-				"Indicates current cache usage in bytes",
-				[]string{"disk"}, nil),
-			prometheus.GaugeValue,
-			float64(cdStats.UsageSize),
-			cdStats.Dir,
-		)
-
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "total", "size"),
-				"Indicates total size of cache drive",
-				[]string{"disk"}, nil),
-			prometheus.GaugeValue,
-			float64(cdStats.TotalCapacity),
-			cdStats.Dir,
 		)
 	}
 }

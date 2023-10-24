@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
+
+	"github.com/minio/madmin-go/v3"
 )
 
 // From Veeam-SOSAPI_1.0_Document_v1.02d.pdf
@@ -143,17 +145,32 @@ func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRa
 		if objAPI == nil {
 			return nil, errServerNotInitialized
 		}
-		info := objAPI.StorageInfo(ctx)
-		info.Backend = objAPI.BackendInfo()
 
-		usableTotal := int64(GetTotalUsableCapacity(info.Disks, info))
-		usableFree := int64(GetTotalUsableCapacityFree(info.Disks, info))
+		q, _ := globalBucketQuotaSys.Get(ctx, bucket)
+		binfo, _ := globalBucketQuotaSys.GetBucketUsageInfo(bucket)
 
 		ci := capacityInfo{
-			Capacity:  usableTotal,
-			Available: usableFree,
-			Used:      usableTotal - usableFree,
+			Used: int64(binfo.Size),
 		}
+
+		var quotaSize int64
+		if q != nil && q.Type == madmin.HardQuota {
+			if q.Size > 0 {
+				quotaSize = int64(q.Size)
+			} else if q.Quota > 0 {
+				quotaSize = int64(q.Quota)
+			}
+		}
+
+		if quotaSize == 0 {
+			info := objAPI.StorageInfo(ctx)
+			info.Backend = objAPI.BackendInfo()
+
+			ci.Capacity = int64(GetTotalUsableCapacity(info.Disks, info))
+		} else {
+			ci.Capacity = quotaSize
+		}
+		ci.Available = ci.Capacity - ci.Used
 
 		buf = encodeResponse(&ci)
 	default:

@@ -290,17 +290,14 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	}
 
-	// Return an error if ODirect is not supported unless it is a single erasure
-	// disk mode
-	if err := s.checkODirectDiskSupport(); err == nil {
+	// Return an error if ODirect is not supported. Single disk will have
+	// oDirect off.
+	if globalIsErasureSD || !disk.ODirectPlatform {
+		s.oDirect = false
+	} else if err := s.checkODirectDiskSupport(); err == nil {
 		s.oDirect = true
 	} else {
-		// Allow if unsupported platform or single disk.
-		if errors.Is(err, errUnsupportedDisk) && globalIsErasureSD || !disk.ODirectPlatform {
-			s.oDirect = false
-		} else {
-			return s, err
-		}
+		return s, err
 	}
 
 	// Success.
@@ -1064,12 +1061,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
-	// Move xl.meta to trash
-	err = s.moveToTrash(pathJoin(volumeDir, path, xlStorageFormatFile), false, false)
-	if err == nil || err == errFileNotFound {
-		s.deleteFile(volumeDir, pathJoin(volumeDir, path), false, false)
-	}
-	return err
+	return s.deleteFile(volumeDir, pathJoin(volumeDir, path), true, false)
 }
 
 // DeleteVersions deletes slice of versions, it can be same object
@@ -2445,19 +2437,20 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	}
 
 	// Replace the data of null version or any other existing version-id
-	ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, reqVID, false, false)
-	if err == nil && !ofi.Deleted {
-		if xlMeta.SharedDataDirCountStr(reqVID, ofi.DataDir) == 0 {
+	_, ver, err := xlMeta.findVersionStr(reqVID)
+	if err == nil {
+		dataDir := ver.getDataDir()
+		if dataDir != "" && (xlMeta.SharedDataDirCountStr(reqVID, dataDir) == 0) {
 			// Purge the destination path as we are not preserving anything
 			// versioned object was not requested.
-			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
+			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, dataDir)
 			// if old destination path is same as new destination path
 			// there is nothing to purge, this is true in case of healing
 			// avoid setting oldDstDataPath at that point.
 			if oldDstDataPath == dstDataPath {
 				oldDstDataPath = ""
 			} else {
-				xlMeta.data.remove(reqVID, ofi.DataDir)
+				xlMeta.data.remove(reqVID, dataDir)
 			}
 		}
 	}
