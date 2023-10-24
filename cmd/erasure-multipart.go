@@ -309,20 +309,36 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		if populatedUploadIds.Contains(uploadID) {
 			continue
 		}
-		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
-		if err != nil {
-			if !IsErrIgnored(err, errFileNotFound, errDiskNotFound) {
-				logger.LogIf(ctx, err)
+		// If present, use time stored in ID.
+		if split := strings.Split(uploadID, "."); len(split) == 2 {
+			startTime, err := strconv.ParseInt(split[1], 10, 64)
+			if err != nil {
+				continue
 			}
-			// Ignore this invalid upload-id since we are listing here
-			continue
+			uploads = append(uploads, MultipartInfo{
+				Bucket:    bucket,
+				Object:    object,
+				UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
+				Initiated: time.Unix(0, startTime),
+			})
+		} else {
+			// No new parts should be created without time.
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
+			if err != nil {
+				if !IsErrIgnored(err, errFileNotFound, errDiskNotFound) {
+					logger.LogIf(ctx, err)
+				}
+				// Ignore this invalid upload-id since we are listing here
+				continue
+			}
+			populatedUploadIds.Add(uploadID)
+			uploads = append(uploads, MultipartInfo{
+				Bucket:    bucket,
+				Object:    object,
+				UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
+				Initiated: fi.ModTime,
+			})
 		}
-		populatedUploadIds.Add(uploadID)
-		uploads = append(uploads, MultipartInfo{
-			Object:    object,
-			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
-			Initiated: fi.ModTime,
-		})
 	}
 
 	sort.Slice(uploads, func(i int, j int) bool {
@@ -635,7 +651,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// accommodate concurrent PutObjectPart requests
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
-	tmpPart := mustGetUUID()
+	// Random UUID and timestamp for temporary part file.
+	tmpPart := fmt.Sprintf("%s.%d", mustGetUUID(), time.Now().UnixNano())
 	tmpPartPath := pathJoin(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
