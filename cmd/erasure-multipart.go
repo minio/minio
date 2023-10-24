@@ -311,7 +311,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		}
 		// If present, use time stored in ID.
 		startTime := time.Now()
-		if split := strings.Split(uploadID, "."); len(split) == 2 {
+		if split := strings.Split(uploadID, "x"); len(split) == 2 {
 			t, err := strconv.ParseInt(split[1], 10, 64)
 			if err == nil {
 				startTime = time.Unix(0, t)
@@ -637,7 +637,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
 	// Random UUID and timestamp for temporary part file.
-	tmpPart := fmt.Sprintf("%s.%d", mustGetUUID(), time.Now().UnixNano())
+	tmpPart := fmt.Sprintf("%sx%d", mustGetUUID(), time.Now().UnixNano())
 	tmpPartPath := pathJoin(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
