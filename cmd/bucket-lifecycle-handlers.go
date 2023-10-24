@@ -150,6 +150,9 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	// explicitly set ExpiryUpdatedAt nil as its meant for internal consumption only
+	config.ExpiryUpdatedAt = nil
+
 	configData, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
