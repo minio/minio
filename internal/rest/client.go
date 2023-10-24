@@ -448,6 +448,7 @@ func (c *Client) MarkOffline(err error) bool {
 	c.Lock()
 	c.lastErr = err
 	c.lastErrTime = time.Now()
+	atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
 	c.Unlock()
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.

@@ -696,6 +696,12 @@ func (c *Connection) disconnected() {
 		}
 		return true
 	})
+	c.outgoing.Clear()
+	c.inStream.Range(func(key uint64, client *muxServer) bool {
+		client.cancel()
+		return true
+	})
+	c.inStream.Clear()
 }
 
 func (c *Connection) receive(conn net.Conn, r receiver) error {
@@ -929,8 +935,8 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		if atomic.CompareAndSwapUint32((*uint32)(&c.state), StateConnected, StateConnectionError) {
 			c.connChange.Broadcast()
 		}
-		c.connChange.L.Unlock()
 		c.disconnected()
+		c.connChange.L.Unlock()
 
 		conn.Close()
 		c.handleMsgWg.Done()
