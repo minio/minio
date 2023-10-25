@@ -162,7 +162,7 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
 	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
-	for _, disk := range er.getLoadBalancedLocalDisks() {
+	for _, disk := range er.getLocalDisks() {
 		if disk != nil {
 			wg.Add(1)
 			go func(disk StorageAPI) {
@@ -268,11 +268,11 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 
 	var uploadIDs []string
 	var disk StorageAPI
-	disks := er.getLoadBalancedLocalDisks()
+	disks := er.getOnlineLocalDisks()
 	if len(disks) == 0 {
-		// using er.getLoadBalancedLocalDisks() has one side-affect where
+		// using er.getOnlineLocalDisks() has one side-affect where
 		// on a pooled setup all disks are remote, add a fallback
-		disks = er.getDisks()
+		disks = er.getOnlineDisks()
 	}
 	for _, disk = range disks {
 		if disk == nil {
@@ -867,53 +867,64 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	}
 
 	var disk StorageAPI
-	disks := er.getLoadBalancedLocalDisks()
+	disks := er.getOnlineLocalDisks()
 	if len(disks) == 0 {
-		// using er.getLoadBalancedLocalDisks() has one side-affect where
+		// using er.getOnlineLocalDisks() has one side-affect where
 		// on a pooled setup all disks are remote, add a fallback
-		disks = er.getDisks()
+		disks = er.getOnlineDisks()
 	}
-
-	ch := make(chan ReadMultipleResp) // channel is closed by ReadMultiple()
 
 	for _, disk = range disks {
 		if disk == nil {
 			continue
 		}
+
 		if !disk.IsOnline() {
 			continue
 		}
-		go func(disk StorageAPI) {
-			disk.ReadMultiple(ctx, req, ch) // ignore error since this function only ever returns an error i
-		}(disk)
+
 		break
 	}
 
-	var i int
-	for part := range ch {
-		partN := i + partNumberMarker + 1
-		i++
+	g := errgroup.WithNErrs(len(req.Files)).WithConcurrency(32)
 
-		if part.Error != "" || !part.Exists {
-			continue
+	partsInfo := make([]ObjectPartInfo, len(req.Files))
+	for i, file := range req.Files {
+		file := file
+		partN := i + start
+		i := i
+
+		g.Go(func() error {
+			buf, err := disk.ReadAll(ctx, minioMetaMultipartBucket, pathJoin(partPath, file))
+			if err != nil {
+				return err
+			}
+
+			var pfi FileInfo
+			_, err = pfi.UnmarshalMsg(buf)
+			if err != nil {
+				return err
+			}
+
+			if len(pfi.Parts) != 1 {
+				return errors.New("invalid number of parts expected 1, got 0")
+			}
+
+			if partN != pfi.Parts[0].Number {
+				return fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", partN, partN, pfi.Parts[0].Number)
+			}
+
+			partsInfo[i] = pfi.Parts[0]
+			return nil
+		}, i)
+	}
+
+	g.Wait()
+
+	for _, part := range partsInfo {
+		if part.Number != 0 && !part.ModTime.IsZero() {
+			fi.AddObjectPart(part.Number, part.ETag, part.Size, part.ActualSize, part.ModTime, part.Index, part.Checksums)
 		}
-
-		var pfi FileInfo
-		_, err := pfi.UnmarshalMsg(part.Data)
-		if err != nil {
-			// Maybe crash or similar.
-			logger.LogIf(ctx, err)
-			continue
-		}
-
-		partI := pfi.Parts[0]
-		if partN != partI.Number {
-			logger.LogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", i+1, i+1, partI.Number))
-			continue
-		}
-
-		// Add the current part.
-		fi.AddObjectPart(partI.Number, partI.ETag, partI.Size, partI.ActualSize, partI.ModTime, partI.Index, partI.Checksums)
 	}
 
 	// Only parts with higher part numbers will be listed.

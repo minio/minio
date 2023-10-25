@@ -1509,16 +1509,6 @@ func removeRoots(roots []string) {
 	}
 }
 
-// removeDiskN - removes N disks from supplied disk slice.
-func removeDiskN(disks []string, n int) {
-	if n > len(disks) {
-		n = len(disks)
-	}
-	for _, disk := range disks[:n] {
-		os.RemoveAll(disk)
-	}
-}
-
 // creates a bucket for the tests and returns the bucket name.
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.
