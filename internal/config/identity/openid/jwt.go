@@ -192,7 +192,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	timeout := env.Get(config.EnvBrowserSessionDuration, "")
+	timeout := env.Get(config.EnvMinioStsDuration, "")
 
 	if timeout != "" {
 		replaceClaimsExpiry(timeout, claims)
