@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"runtime"
 	"strings"
@@ -1223,8 +1224,18 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	// Remove some random disk.
-	removeDiskN(disks, 1)
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
+
+	erasureDisks := er.getDisks()
+	ridx := rand.Intn(len(erasureDisks))
+
+	z.serverPools[0].erasureDisksMu.Lock()
+	er.getDisks = func() []StorageAPI {
+		erasureDisks[ridx] = newNaughtyDisk(erasureDisks[ridx], nil, errFaultyDisk)
+		return erasureDisks
+	}
+	z.serverPools[0].erasureDisksMu.Unlock()
 
 	uploadIDs = append(uploadIDs, res.UploadID)
 
@@ -1256,9 +1267,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
-
-	// Remove one disk.
-	removeDiskN(disks, 1)
 
 	partInfos := []ListPartsInfo{
 		// partinfos - 0.
