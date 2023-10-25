@@ -335,7 +335,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
-	for _, disk := range er.getLoadBalancedLocalDisks() {
+	for _, disk := range er.getLocalDisks() {
 		if disk != nil {
 			wg.Add(1)
 			go func(disk StorageAPI) {
