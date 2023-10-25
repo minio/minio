@@ -488,9 +488,10 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	}
 
 	joinReq := madmin.SRPeerJoinReq{
-		SvcAcctAccessKey: svcCred.AccessKey,
-		SvcAcctSecretKey: secretKey,
-		Peers:            make(map[string]madmin.PeerInfo),
+		SvcAcctAccessKey:   svcCred.AccessKey,
+		SvcAcctSecretKey:   secretKey,
+		Peers:              make(map[string]madmin.PeerInfo),
+		ReplicateILMExpiry: opts.ReplicateILMExpiry,
 	}
 
 	for _, v := range sites {
@@ -603,6 +604,7 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		Name:                    ourName,
 		Peers:                   arg.Peers,
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
+		ReplicateILMExpiry:      arg.ReplicateILMExpiry,
 	}
 	if err = c.saveToDisk(ctx, state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
@@ -1691,7 +1693,7 @@ func (c *SiteReplicationSys) PeerBucketQuotaConfigHandler(ctx context.Context, b
 func (c *SiteReplicationSys) PeerBucketLCConfigHandler(ctx context.Context, bucket string, expLCConfig *string, updatedAt time.Time) error {
 	// skip overwrite if local update is newer than peer update.
 	if !updatedAt.IsZero() {
-		if cfg, _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil && cfg.ExpiryUpdatedAt.After(updatedAt) {
+		if cfg, _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil && (cfg.ExpiryUpdatedAt != nil && cfg.ExpiryUpdatedAt.After(updatedAt)) {
 			return nil
 		}
 	}
@@ -1876,7 +1878,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 			var expLclCfg lifecycle.Lifecycle
 			expLclCfg.XMLName = meta.lifecycleConfig.XMLName
 			for _, rule := range meta.lifecycleConfig.Rules {
-				if !rule.Expiration.IsNull() {
+				if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 					expLclCfg.Rules = append(expLclCfg.Rules, rule)
 				}
 			}
@@ -3609,7 +3611,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				var expLclCfg lifecycle.Lifecycle
 				expLclCfg.XMLName = meta.lifecycleConfig.XMLName
 				for _, rule := range meta.lifecycleConfig.Rules {
-					if !rule.Expiration.IsNull() {
+					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 						expLclCfg.Rules = append(expLclCfg.Rules, rule)
 					}
 				}
@@ -3621,7 +3623,10 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 				expLclCfgStr := base64.StdEncoding.EncodeToString(ilmConfigData)
 				bms.ExpiryLCConfig = &expLclCfgStr
-				bms.ExpiryLCConfigUpdatedAt = *(meta.lifecycleConfig.ExpiryUpdatedAt)
+				// if all non expiry rules only, ExpiryUpdatedAt would be nil
+				if meta.lifecycleConfig.ExpiryUpdatedAt != nil {
+					bms.ExpiryLCConfigUpdatedAt = *(meta.lifecycleConfig.ExpiryUpdatedAt)
+				}
 			}
 
 			info.Buckets[bucket] = bms
@@ -3679,7 +3684,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
 				for _, rule := range meta.lifecycleConfig.Rules {
-					if !rule.Expiration.IsNull() {
+					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 						ruleData, err := xml.Marshal(rule)
 						if err != nil {
 							return info, errSRBackendIssue(err)
@@ -3896,6 +3901,36 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	}
 	state.Peers[peer.DeploymentID] = pi
 
+	// If ILM expiry replications enabled/disabled, set accordingly
+	info, err := c.GetClusterInfo(ctx)
+	if err != nil {
+		return madmin.ReplicateEditStatus{
+			Status:    madmin.ReplicateAddStatusPartial,
+			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
+		}, nil
+	}
+	if opts.DisableILMExpiryReplication {
+		if !info.ReplicateILMExpiry {
+			return madmin.ReplicateEditStatus{
+				Status:    madmin.ReplicateAddStatusPartial,
+				ErrDetail: "ILM expiry already set to false",
+			}, nil
+		}
+		state.ReplicateILMExpiry = false
+		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: false", successMsg)
+	}
+	if opts.EnableILMExpiryReplication {
+		if info.ReplicateILMExpiry {
+			return madmin.ReplicateEditStatus{
+				Status:    madmin.ReplicateAddStatusPartial,
+				ErrDetail: "ILM expiry already set to true",
+			}, nil
+		}
+		state.ReplicateILMExpiry = true
+		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: true", successMsg)
+	}
+	pi.ReplicateILMExpiry = state.ReplicateILMExpiry
+
 	errs := make(map[string]error, len(state.Peers))
 	var wg sync.WaitGroup
 
@@ -3926,35 +3961,6 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		if err != nil {
 			return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err))
 		}
-	}
-
-	// If ILM expiry replications enabled/disabled, set accordingly
-	info, err := c.GetClusterInfo(ctx)
-	if err != nil {
-		return madmin.ReplicateEditStatus{
-			Status:    madmin.ReplicateAddStatusPartial,
-			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, nil
-	}
-	if opts.DisableILMExpiryReplication {
-		if !info.ReplicateILMExpiry {
-			return madmin.ReplicateEditStatus{
-				Status:    madmin.ReplicateAddStatusPartial,
-				ErrDetail: "ILM expiry already set to false",
-			}, nil
-		}
-		state.ReplicateILMExpiry = false
-		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: false", successMsg)
-	}
-	if opts.EnableILMExpiryReplication {
-		if info.ReplicateILMExpiry {
-			return madmin.ReplicateEditStatus{
-				Status:    madmin.ReplicateAddStatusPartial,
-				ErrDetail: "ILM expiry already set to true",
-			}, nil
-		}
-		state.ReplicateILMExpiry = true
-		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: true", successMsg)
 	}
 
 	// we can now save the cluster replication configuration state.
@@ -4052,6 +4058,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 			ourName = p.Name
 		}
 	}
+	c.state.ReplicateILMExpiry = arg.ReplicateILMExpiry
 	if err := c.saveToDisk(ctx, c.state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
@@ -5895,7 +5902,7 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 	// check if current expiry rules are there in new one. if not remove as they may
 	// have been removed from latest updated one
 	for id, rl := range rMap {
-		if !rl.Expiration.IsNull() {
+		if !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
 			if _, ok := newRMap[id]; !ok {
 				delete(rMap, id)
 			}

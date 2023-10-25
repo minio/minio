@@ -115,7 +115,7 @@ func (lc Lifecycle) HasTransition() bool {
 // HasExpiry returns 'true' if lifecycle document has Expiry enabled.
 func (lc Lifecycle) HasExpiry() bool {
 	for _, rule := range lc.Rules {
-		if !rule.Expiration.IsNull() {
+		if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 			return true
 		}
 	}

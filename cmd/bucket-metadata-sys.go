@@ -192,7 +192,7 @@ func (sys *BucketMetadataSys) Delete(ctx context.Context, bucket string, configF
 			}
 			// find a single expiry rule set the flag
 			for _, rl := range lcCfg.Rules {
-				if !rl.Expiration.IsNull() {
+				if !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
 					expiryRuleRemoved = true
 					break
 				}
