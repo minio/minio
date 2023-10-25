@@ -97,9 +97,11 @@ func (n NoncurrentVersionExpiration) Validate() error {
 
 // NoncurrentVersionTransition - an action for lifecycle configuration rule.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays TransitionDays `xml:"NoncurrentDays"`
-	StorageClass   string         `xml:"StorageClass"`
-	set            bool
+	NoncurrentDays          TransitionDays `xml:"NoncurrentDays"`
+	StorageClass            string         `xml:"StorageClass"`
+	NewerNoncurrentVersions int            `xml:"NewerNoncurrentVersions,omitempty" json:"NewerNoncurrentVersions,omitempty"`
+
+	set bool
 }
 
 // MarshalXML is extended to leave out

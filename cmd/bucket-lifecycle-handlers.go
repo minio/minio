@@ -39,7 +39,6 @@ const (
 // https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html
 func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketLifecycle")
-
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objAPI := api.ObjectAPI()
@@ -170,7 +169,6 @@ func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter,
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketLifecycleAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
