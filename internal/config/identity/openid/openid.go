@@ -602,7 +602,6 @@ func (r Config) GetRoleInfo() map[arn.ARN]string {
 func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	timeout := env.Get(config.EnvMinioStsDuration, "")
 	defaultExpiryDuration, err := time.ParseDuration(timeout)
-	//defaultExpiryDuration := time.Duration(60) * time.Minute // Defaults to 1hr.
 	if err != nil {
 		defaultExpiryDuration = time.Duration(60) * time.Minute
 	}

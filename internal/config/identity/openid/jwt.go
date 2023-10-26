@@ -30,8 +30,6 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 )
@@ -142,15 +140,6 @@ const (
 	azpClaim = "azp"
 )
 
-func replaceClaimsExpiry(timeout string, claims map[string]interface{}) {
-	expirySecs, err := time.ParseDuration(timeout)
-	if err != nil || expirySecs <= 0 {
-		expirySecs = 12 * time.Hour
-	}
-
-	claims["exp"] = time.Now().UTC().Add(expirySecs).Unix()
-}
-
 // Validate - validates the id_token.
 func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
 	jp := new(jwtgo.Parser)
@@ -192,14 +181,8 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	timeout := env.Get(config.EnvMinioStsDuration, "")
-
-	if timeout != "" {
-		replaceClaimsExpiry(timeout, claims)
-	} else {
-		if err = updateClaimsExpiry(dsecs, claims); err != nil {
-			return err
-		}
+	if err = updateClaimsExpiry(dsecs, claims); err != nil {
+		return err
 	}
 
 	if err = r.updateUserinfoClaims(ctx, arn, accessToken, claims); err != nil {
