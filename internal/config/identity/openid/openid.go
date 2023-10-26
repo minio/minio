@@ -21,7 +21,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
-	"github.com/minio/pkg/v2/env"
 	"io"
 	"net/http"
 	"sort"
@@ -37,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/minio/internal/hash/sha256"
+	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 )
