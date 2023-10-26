@@ -1056,7 +1056,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respCh := make(chan healResp)
+	respCh := make(chan healResp, 1)
 	switch {
 	case hip.forceStop:
 		go func() {
