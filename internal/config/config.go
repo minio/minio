@@ -1091,6 +1091,8 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 		seen.Add(k)
 	}
 
+	// env:prefix
+	filterMap := map[string]string{}
 	// Add targets that are configured via environment variables.
 	for _, param := range defKVS {
 		envVarPrefix := getEnvVarName(subSys, Default, param.Key) + Default
@@ -1098,9 +1100,19 @@ func (c Config) GetAvailableTargets(subSys string) ([]string, error) {
 		for _, k := range envsWithPrefix {
 			tgtName := strings.TrimPrefix(k, envVarPrefix)
 			if tgtName != "" {
-				seen.Add(tgtName)
+				if v, ok := filterMap[k]; ok {
+					if strings.HasPrefix(envVarPrefix, v) {
+						filterMap[k] = envVarPrefix
+					}
+				} else {
+					filterMap[k] = envVarPrefix
+				}
 			}
 		}
+	}
+
+	for k, v := range filterMap {
+		seen.Add(strings.TrimPrefix(k, v))
 	}
 
 	seen.Remove(Default)
