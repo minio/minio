@@ -293,7 +293,7 @@ const (
 	batchExpireJobDefaultRetryDelay = 250 * time.Millisecond
 )
 
-func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []ObjectInfo) {
+func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
 	defer wk.Give()
 
 	vc, _ := globalBucketVersioningSys.Get(r.Bucket)
@@ -312,10 +312,15 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 		}
 		i++
 		wk.Take()
-		go func(toExpire []ObjectInfo) {
+		go func(toExpire []expireObjInfo) {
 			defer wk.Give()
+			toExpireAll := make([]ObjectInfo, 0, len(toExpire))
 			toDel := make([]ObjectToDelete, 0, len(toExpire))
 			for _, exp := range toExpire {
+				if exp.ExpireAll {
+					toExpireAll = append(toExpireAll, exp.ObjectInfo)
+					continue
+				}
 				toDel = append(toDel, ObjectToDelete{
 					ObjectV: ObjectV{
 						ObjectName: exp.Name,
@@ -324,6 +329,25 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				})
 			}
 
+			// DeleteObject(deletePrefix: true) to expire all versions of an object
+			for _, exp := range toExpireAll {
+				for attempts := 1; attempts <= retryAttempts; attempts++ {
+					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
+					var failed int
+					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
+						DeletePrefix: true,
+					})
+					if err != nil {
+						stopFn(exp, err)
+						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
+						failed++
+					} else {
+						stopFn(exp, err)
+					}
+				}
+			}
+
+			// DeleteMultiple objects
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
 				var failed int
@@ -336,7 +360,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 					} else {
 						stopFn(toDel[i], nil)
 					}
-					ri.trackCurrentBucketObject(r.Bucket, toExpire[i], err == nil)
+					ri.trackCurrentBucketObject(r.Bucket, toExpire[i].ObjectInfo, err == nil)
 				}
 
 				ri.RetryAttempts = attempts
@@ -361,6 +385,11 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 			}
 		}(toExpire)
 	}
+}
+
+type expireObjInfo struct {
+	ObjectInfo
+	ExpireAll bool
 }
 
 // Start the batch expiration job, resumes if there was a pending job via "job.ID"
@@ -427,7 +456,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		}
 	}()
 
-	expireCh := make(chan []ObjectInfo, workerSize)
+	expireCh := make(chan []expireObjInfo, workerSize)
 	wk.Take() // For batchObjsForDelete goroutine
 
 	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
@@ -436,7 +465,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		prevObj       ObjectInfo
 		matchedFilter BatchJobExpireFilter
 		versionsCount int
-		toDel         []ObjectInfo
+		toDel         []expireObjInfo
 	)
 	for result := range results {
 		result := result
@@ -446,8 +475,8 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		if result.IsLatest {
 			// send down filtered entries to be deleted using
 			// DeleteObjects method
-			if len(toDel) > 0 {
-				xfer := make([]ObjectInfo, len(toDel))
+			if len(toDel) > 10 { // batch up to 10 objects/versions to be expired simulatenously.
+				xfer := make([]expireObjInfo, len(toDel))
 				copy(xfer, toDel)
 				expireCh <- xfer
 				toDel = toDel[:0] // resetting toDel
@@ -468,17 +497,29 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 			prevObj = result
 			matchedFilter = match
 			versionsCount = 1
+			// Include the latest version
+			if matchedFilter.Purge.RetainVersions == 0 {
+				toDel = append(toDel, expireObjInfo{
+					ObjectInfo: result,
+					ExpireAll:  true,
+				})
+				continue
+			}
 		} else if prevObj.Name == result.Name {
+			if matchedFilter.Purge.RetainVersions == 0 {
+				continue // including latest version in toDel suffices, skipping other versions
+			}
 			versionsCount++
 		} else {
 			continue
 		}
 
 		if versionsCount <= matchedFilter.Purge.RetainVersions {
-			// TODO: we could add versions that were skipped in batch job trace in verbose mode?
 			continue // retain versions
 		}
-		toDel = append(toDel, result)
+		toDel = append(toDel, expireObjInfo{
+			ObjectInfo: result,
+		})
 	}
 	// Send any remaining objects downstream
 	if len(toDel) > 0 {
