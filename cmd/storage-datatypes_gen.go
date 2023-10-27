@@ -2819,10 +2819,19 @@ func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "b":
-			z.Buf, err = dc.ReadBytes(z.Buf)
-			if err != nil {
-				err = msgp.WrapError(err, "Buf")
-				return
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
+				z.Buf = nil
+			} else {
+				z.Buf, err = dc.ReadBytes(z.Buf)
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
 			}
 		case "dmt":
 			z.DiskMTime, err = dc.ReadTime()
@@ -2849,10 +2858,17 @@ func (z *RawFileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.Buf)
-	if err != nil {
-		err = msgp.WrapError(err, "Buf")
-		return
+	if z.Buf == nil { // allownil: if nil
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = en.WriteBytes(z.Buf)
+		if err != nil {
+			err = msgp.WrapError(err, "Buf")
+			return
+		}
 	}
 	// write "dmt"
 	err = en.Append(0xa3, 0x64, 0x6d, 0x74)
@@ -2873,7 +2889,11 @@ func (z *RawFileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "b"
 	o = append(o, 0x82, 0xa1, 0x62)
-	o = msgp.AppendBytes(o, z.Buf)
+	if z.Buf == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendBytes(o, z.Buf)
+	}
 	// string "dmt"
 	o = append(o, 0xa3, 0x64, 0x6d, 0x74)
 	o = msgp.AppendTime(o, z.DiskMTime)
@@ -2899,10 +2919,15 @@ func (z *RawFileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "b":
-			z.Buf, bts, err = msgp.ReadBytesBytes(bts, z.Buf)
-			if err != nil {
-				err = msgp.WrapError(err, "Buf")
-				return
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.Buf = nil
+			} else {
+				z.Buf, bts, err = msgp.ReadBytesBytes(bts, z.Buf)
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
 			}
 		case "dmt":
 			z.DiskMTime, bts, err = msgp.ReadTimeBytes(bts)
