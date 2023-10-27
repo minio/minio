@@ -185,6 +185,14 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 				}
 			}
 		}
+		// loop through buckets and see if some with lost quorum
+		// these could be stale buckets lying around, remove them
+		for bktName, count := range bucketsMap {
+			if count < quorum {
+				// Its safe to remove as its stale bucket lying around
+				sys.DeleteBucket(ctx, bktName, DeleteBucketOptions{Force: true})
+			}
+		}
 	}
 
 	result := make([]BucketInfo, 0, len(resultMap))
