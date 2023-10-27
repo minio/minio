@@ -30,7 +30,6 @@ import (
 //
 //go:generate msgp -unexported -file=$GOFILE
 //go:generate stringer -type=Op -output=msg_string.go -trimprefix=Op $GOFILE
-//go:generate stringer -type=HandlerID -output=handlers_string.go -trimprefix=Handler $GOFILE handlers.go
 
 // Op is operation type messages.
 type Op uint8

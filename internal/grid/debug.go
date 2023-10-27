@@ -17,13 +17,28 @@
 
 package grid
 
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"time"
+
+	"github.com/minio/mux"
+)
+
 //go:generate stringer -type=debugMsg $GOFILE
 
 // debugMsg is a debug message for testing purposes.
 // may only be used for tests.
 type debugMsg int
 
-const debugPrint = false
+const (
+	debugPrint = false
+	debugReqs  = false
+)
 
 const (
 	debugShutdown debugMsg = iota
@@ -34,3 +49,115 @@ const (
 	debugSetClientPingDuration
 	debugAddToDeadline
 )
+
+// TestGrid contains a grid of servers for testing purposes.
+type TestGrid struct {
+	Servers     []*httptest.Server
+	Listeners   []net.Listener
+	Managers    []*Manager
+	Mux         []*mux.Router
+	Hosts       []string
+	cleanupOnce sync.Once
+	cancel      context.CancelFunc
+}
+
+// SetupTestGrid creates a new grid for testing purposes.
+// Select the number of hosts to create.
+// Call (TestGrid).Cleanup() when done.
+func SetupTestGrid(n int) (*TestGrid, error) {
+	hosts, listeners, err := getHosts(n)
+	if err != nil {
+		return nil, err
+	}
+	dialer := &net.Dialer{
+		Timeout: 5 * time.Second,
+	}
+	var res TestGrid
+	res.Hosts = hosts
+	ready := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	res.cancel = cancel
+	for i, host := range hosts {
+		manager, err := NewManager(ctx, ManagerOptions{
+			Dialer: dialer.DialContext,
+			Local:  host,
+			Hosts:  hosts,
+			AuthRequest: func(r *http.Request) error {
+				return nil
+			},
+			AddAuth:      func(aud string) string { return aud },
+			BlockConnect: ready,
+		})
+		if err != nil {
+			return nil, err
+		}
+		m := mux.NewRouter()
+		m.Handle(RoutePath, manager.Handler())
+		res.Managers = append(res.Managers, manager)
+		res.Servers = append(res.Servers, startHTTPServer(listeners[i], m))
+		res.Listeners = append(res.Listeners, listeners[i])
+		res.Mux = append(res.Mux, m)
+	}
+	close(ready)
+	for _, m := range res.Managers {
+		for _, remote := range m.Targets() {
+			if err := m.Connection(remote).WaitForConnect(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &res, nil
+}
+
+// Cleanup will clean up the test grid.
+func (t *TestGrid) Cleanup() {
+	t.cancel()
+	t.cleanupOnce.Do(func() {
+		for _, manager := range t.Managers {
+			manager.debugMsg(debugShutdown)
+		}
+		for _, server := range t.Servers {
+			server.Close()
+		}
+		for _, listener := range t.Listeners {
+			listener.Close()
+		}
+	})
+}
+
+// WaitAllConnect will wait for all connections to be established.
+func (t *TestGrid) WaitAllConnect(ctx context.Context) {
+	for _, manager := range t.Managers {
+		for _, remote := range manager.Targets() {
+			if manager.HostName() == remote {
+				continue
+			}
+			if err := manager.Connection(remote).WaitForConnect(ctx); err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+func getHosts(n int) (hosts []string, listeners []net.Listener, err error) {
+	for i := 0; i < n; i++ {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			if l, err = net.Listen("tcp6", "[::1]:0"); err != nil {
+				return nil, nil, fmt.Errorf("httptest: failed to listen on a port: %v", err)
+			}
+		}
+		addr := l.Addr()
+		hosts = append(hosts, "http://"+addr.String())
+		listeners = append(listeners, l)
+	}
+	return
+}
+
+func startHTTPServer(listener net.Listener, handler http.Handler) (server *httptest.Server) {
+	server = httptest.NewUnstartedServer(handler)
+	server.Config.Addr = listener.Addr().String()
+	server.Listener = listener
+	server.Start()
+	return server
+}

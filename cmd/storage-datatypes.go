@@ -22,11 +22,9 @@ import (
 )
 
 // DeleteOptions represents the disk level delete options available for the APIs
-//
-//msgp:ignore DeleteOptions
 type DeleteOptions struct {
-	Recursive bool
-	Force     bool
+	Recursive bool `msg:"r"`
+	Force     bool `msg:"f"`
 }
 
 //go:generate msgp -file=$GOFILE
@@ -143,7 +141,7 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 // Make sure to bump the internode version at storage-rest-common.go
 type RawFileInfo struct {
 	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
-	Buf []byte `msg:"b"`
+	Buf []byte `msg:"b,allownil"`
 
 	// DiskMTime indicates the mtime of the xl.meta on disk
 	// This is mainly used for detecting a particular issue
@@ -344,4 +342,58 @@ type ReadMultipleResp struct {
 	Error   string    // Returns any error when reading.
 	Data    []byte    // Contains all data of file.
 	Modtime time.Time // Modtime of file on disk.
+}
+
+// DeleteVersionHandlerParams are parameters for DeleteVersionHandler
+type DeleteVersionHandlerParams struct {
+	DiskID         string   `msg:"id"`
+	Volume         string   `msg:"v"`
+	FilePath       string   `msg:"fp"`
+	ForceDelMarker bool     `msg:"fdm"`
+	FI             FileInfo `msg:"fi"`
+}
+
+// MetadataHandlerParams is request info for UpdateMetadataHandle and WriteMetadataHandler.
+type MetadataHandlerParams struct {
+	DiskID     string             `msg:"id"`
+	Volume     string             `msg:"v"`
+	FilePath   string             `msg:"fp"`
+	UpdateOpts UpdateMetadataOpts `msg:"uo"`
+	FI         FileInfo           `msg:"fi"`
+}
+
+// UpdateMetadataOpts provides an optional input to indicate if xl.meta updates need to be fully synced to disk.
+type UpdateMetadataOpts struct {
+	NoPersistence bool `msg:"np"`
+}
+
+// CheckPartsHandlerParams are parameters for CheckPartsHandler
+type CheckPartsHandlerParams struct {
+	DiskID   string   `msg:"id"`
+	Volume   string   `msg:"v"`
+	FilePath string   `msg:"fp"`
+	FI       FileInfo `msg:"fi"`
+}
+
+// DeleteFileHandlerParams are parameters for DeleteFileHandler
+type DeleteFileHandlerParams struct {
+	DiskID   string        `msg:"id"`
+	Volume   string        `msg:"v"`
+	FilePath string        `msg:"fp"`
+	Opts     DeleteOptions `msg:"do"`
+}
+
+// RenameDataHandlerParams are parameters for RenameDataHandler.
+type RenameDataHandlerParams struct {
+	DiskID    string   `msg:"id"`
+	SrcVolume string   `msg:"sv"`
+	SrcPath   string   `msg:"sp"`
+	DstVolume string   `msg:"dv"`
+	DstPath   string   `msg:"dp"`
+	FI        FileInfo `msg:"fi"`
+}
+
+// RenameDataResp - RenameData()'s response.
+type RenameDataResp struct {
+	Signature uint64 `msg:"sig"`
 }

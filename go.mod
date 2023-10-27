@@ -73,14 +73,13 @@ require (
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0
 	github.com/prometheus/procfs v0.11.1
-	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rs/cors v1.10.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.23.8
 	github.com/tidwall/gjson v1.16.0
-	github.com/tinylib/msgp v1.1.8
+	github.com/tinylib/msgp v1.1.9-0.20230705140925-6ac204f0b4d4
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
 	github.com/zeebo/xxh3 v1.0.2

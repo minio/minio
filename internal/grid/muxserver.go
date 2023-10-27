@@ -243,7 +243,7 @@ func (m *muxServer) ping(seq uint32) pongMsg {
 	}
 	select {
 	case <-m.ctx.Done():
-		err := m.ctx.Err().Error()
+		err := context.Cause(m.ctx).Error()
 		return pongMsg{Err: &err}
 	default:
 		atomic.StoreInt64(&m.LastPing, time.Now().Unix())

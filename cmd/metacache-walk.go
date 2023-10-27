@@ -19,9 +19,7 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -411,31 +409,26 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	st, err := client.gridConn.NewStream(ctx, grid.HandlerWalkDir, b)
 	if err != nil {
 		return err
 	}
-	return st.Results(func(in []byte) error {
+	return toStorageErr(st.Results(func(in []byte) error {
 		_, err := wr.Write(in)
 		return err
-	})
+	}))
 }
 
 // WalkDirHandler - remote caller to list files and folders in a requested directory path.
-func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) *grid.RemoteErr {
+func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) (gerr *grid.RemoteErr) {
 	var opts WalkDirOptions
 	_, err := opts.UnmarshalMsg(payload)
 	if err != nil {
 		return grid.NewRemoteErr(err)
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			debug.PrintStack()
-			err = fmt.Errorf("panic: %v", r)
-		}
-	}()
-	return grid.NewRemoteErr(s.storage.WalkDir(ctx, opts, grid.WriterToChannel(out)))
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	return grid.NewRemoteErr(s.storage.WalkDir(ctx, opts, grid.WriterToChannel(ctx, out)))
 }

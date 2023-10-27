@@ -19,13 +19,18 @@
 package grid
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/gobwas/ws/wsutil"
 )
+
+// ErrDisconnected is returned when the connection to the remote has been lost during the call.
+var ErrDisconnected = errors.New("remote disconnected")
 
 const (
 	// minBufferSize is the minimum buffer size.
@@ -107,7 +112,8 @@ func getDeadline(d time.Duration) time.Duration {
 }
 
 type writerWrapper struct {
-	ch chan<- []byte
+	ch  chan<- []byte
+	ctx context.Context
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
@@ -118,11 +124,164 @@ func (w *writerWrapper) Write(p []byte) (n int, err error) {
 	}
 	buf = buf[:len(p)]
 	copy(buf, p)
-	w.ch <- buf
-	return len(p), nil
+	select {
+	case w.ch <- buf:
+		return len(p), nil
+	case <-w.ctx.Done():
+		return 0, context.Cause(w.ctx)
+	}
 }
 
 // WriterToChannel will return an io.Writer that writes to the given channel.
-func WriterToChannel(ch chan<- []byte) io.Writer {
-	return &writerWrapper{ch: ch}
+// The context both allows returning errors on writes and to ensure that
+// this isn't abandoned if the channel is no longer being read from.
+func WriterToChannel(ctx context.Context, ch chan<- []byte) io.Writer {
+	return &writerWrapper{ch: ch, ctx: ctx}
+}
+
+// bytesOrLength returns small (<=100b) byte slices as string, otherwise length.
+func bytesOrLength(b []byte) string {
+	if len(b) > 100 {
+		return fmt.Sprintf("%d bytes", len(b))
+	}
+	return fmt.Sprint(b)
+}
+
+type lockedClientMap struct {
+	m  map[uint64]*muxClient
+	mu sync.Mutex
+}
+
+func (m *lockedClientMap) Load(id uint64) (*muxClient, bool) {
+	m.mu.Lock()
+	v, ok := m.m[id]
+	m.mu.Unlock()
+	return v, ok
+}
+
+func (m *lockedClientMap) LoadAndDelete(id uint64) (*muxClient, bool) {
+	m.mu.Lock()
+	v, ok := m.m[id]
+	if ok {
+		delete(m.m, id)
+	}
+	m.mu.Unlock()
+	return v, ok
+}
+
+func (m *lockedClientMap) Size() int {
+	m.mu.Lock()
+	v := len(m.m)
+	m.mu.Unlock()
+	return v
+}
+
+func (m *lockedClientMap) Delete(id uint64) {
+	m.mu.Lock()
+	delete(m.m, id)
+	m.mu.Unlock()
+}
+
+func (m *lockedClientMap) Range(fn func(key uint64, value *muxClient) bool) {
+	m.mu.Lock()
+	for k, v := range m.m {
+		if !fn(k, v) {
+			break
+		}
+	}
+	m.mu.Unlock()
+}
+
+func (m *lockedClientMap) Clear() {
+	m.mu.Lock()
+	m.m = map[uint64]*muxClient{}
+	m.mu.Unlock()
+}
+
+func (m *lockedClientMap) LoadOrStore(id uint64, v *muxClient) (*muxClient, bool) {
+	m.mu.Lock()
+	v2, ok := m.m[id]
+	if ok {
+		m.mu.Unlock()
+		return v2, true
+	}
+	m.m[id] = v
+	m.mu.Unlock()
+	return v, false
+}
+
+type lockedServerMap struct {
+	m  map[uint64]*muxServer
+	mu sync.Mutex
+}
+
+func (m *lockedServerMap) Load(id uint64) (*muxServer, bool) {
+	m.mu.Lock()
+	v, ok := m.m[id]
+	m.mu.Unlock()
+	return v, ok
+}
+
+func (m *lockedServerMap) LoadAndDelete(id uint64) (*muxServer, bool) {
+	m.mu.Lock()
+	v, ok := m.m[id]
+	if ok {
+		delete(m.m, id)
+	}
+	m.mu.Unlock()
+	return v, ok
+}
+
+func (m *lockedServerMap) Size() int {
+	m.mu.Lock()
+	v := len(m.m)
+	m.mu.Unlock()
+	return v
+}
+
+func (m *lockedServerMap) Delete(id uint64) {
+	m.mu.Lock()
+	delete(m.m, id)
+	m.mu.Unlock()
+}
+
+func (m *lockedServerMap) Range(fn func(key uint64, value *muxServer) bool) {
+	m.mu.Lock()
+	for k, v := range m.m {
+		if !fn(k, v) {
+			break
+		}
+	}
+	m.mu.Unlock()
+}
+
+func (m *lockedServerMap) Clear() {
+	m.mu.Lock()
+	m.m = map[uint64]*muxServer{}
+	m.mu.Unlock()
+}
+
+func (m *lockedServerMap) LoadOrStore(id uint64, v *muxServer) (*muxServer, bool) {
+	m.mu.Lock()
+	v2, ok := m.m[id]
+	if ok {
+		m.mu.Unlock()
+		return v2, true
+	}
+	m.m[id] = v
+	m.mu.Unlock()
+	return v, false
+}
+
+func (m *lockedServerMap) LoadOrCompute(id uint64, fn func() *muxServer) (*muxServer, bool) {
+	m.mu.Lock()
+	v2, ok := m.m[id]
+	if ok {
+		m.mu.Unlock()
+		return v2, true
+	}
+	v := fn()
+	m.m[id] = v
+	m.mu.Unlock()
+	return v, false
 }
