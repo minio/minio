@@ -40,7 +40,6 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/logger"
-	"github.com/puzpuzpuz/xsync/v2"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
@@ -73,10 +72,10 @@ type Connection struct {
 	ctx context.Context
 
 	// Active mux connections.
-	outgoing *xsync.MapOf[uint64, *muxClient]
+	outgoing *lockedClientMap
 
 	// Incoming streams
-	inStream *xsync.MapOf[uint64, *muxServer]
+	inStream *lockedServerMap
 
 	// outQueue is the output queue
 	outQueue chan []byte
@@ -119,6 +118,16 @@ type Subroute struct {
 	*Connection
 	route string
 	subID subHandlerID
+}
+
+// String returns a string representation of the connection.
+func (c *Connection) String() string {
+	return fmt.Sprintf("%s->%s", c.Local, c.Remote)
+}
+
+// StringReverse returns a string representation of the reverse connection.
+func (c *Connection) StringReverse() string {
+	return fmt.Sprintf("%s->%s", c.Remote, c.Local)
 }
 
 // State is a connection state.
@@ -165,7 +174,7 @@ const (
 	readBufferSize     = 16 << 10
 	writeBufferSize    = 16 << 10
 	defaultDialTimeout = 2 * time.Second
-	connPingInterval   = 5 * time.Second
+	connPingInterval   = 10 * time.Second
 )
 
 type connectionParams struct {
@@ -190,8 +199,8 @@ func newConnection(o connectionParams) *Connection {
 		Local:              o.local,
 		id:                 o.id,
 		ctx:                o.ctx,
-		outgoing:           xsync.NewIntegerMapOfPresized[uint64, *muxClient](1000),
-		inStream:           xsync.NewIntegerMapOfPresized[uint64, *muxServer](1000),
+		outgoing:           &lockedClientMap{m: make(map[uint64]*muxClient, 1000)},
+		inStream:           &lockedServerMap{m: make(map[uint64]*muxServer, 1000)},
 		outQueue:           make(chan []byte, defaultOutQueue),
 		dialer:             o.dial,
 		side:               ws.StateServerSide,
@@ -228,6 +237,9 @@ func newConnection(o connectionParams) *Connection {
 	}
 	if debugPrint {
 		fmt.Println(c.Local, "->", c.Remote, "Should local connect:", c.shouldConnect(), "side:", c.side)
+	}
+	if debugReqs {
+		fmt.Println("Created connection", c.String())
 	}
 	return c
 }
@@ -266,12 +278,15 @@ func (c *Connection) newMuxClient(ctx context.Context) (*muxClient, error) {
 	}
 	for {
 		// Handle the extremely unlikely scenario that we wrapped.
-		if _, ok := c.outgoing.LoadOrStore(client.MuxID, client); client.MuxID == 0 || !ok {
-			break
+		if _, loaded := c.outgoing.LoadOrStore(client.MuxID, client); client.MuxID != 0 && !loaded {
+			if debugReqs {
+				_, found := c.outgoing.Load(client.MuxID)
+				fmt.Println(client.MuxID, c.String(), "Connection.newMuxClient: RELOADED MUX. loaded:", loaded, "found:", found)
+			}
+			return client, nil
 		}
 		client.MuxID = atomic.AddUint64(&c.NextID, 1)
 	}
-	return client, nil
 }
 
 // newMuxClient returns a mux client for manual use.
@@ -302,7 +317,13 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 	if err != nil {
 		return nil, err
 	}
-	defer c.outgoing.Delete(client.MuxID)
+	defer func() {
+		if debugReqs {
+			_, ok := c.outgoing.Load(client.MuxID)
+			fmt.Println(client.MuxID, c.String(), "Connection.Request: DELETING MUX. Exists:", ok)
+		}
+		c.outgoing.Delete(client.MuxID)
+	}()
 	return client.roundtrip(h, req)
 }
 
@@ -325,7 +346,12 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		return nil, err
 	}
 	client.subroute = &c.subID
-	defer c.outgoing.Delete(client.MuxID)
+	defer func() {
+		if debugReqs {
+			fmt.Println(client.MuxID, c.String(), "Subroute.Request: DELETING MUX")
+		}
+		c.outgoing.Delete(client.MuxID)
+	}()
 	return client.roundtrip(h, req)
 }
 
@@ -434,7 +460,7 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return context.Cause(ctx)
 		case newState := <-changed:
 			if newState == StateConnected {
 				return nil
@@ -495,7 +521,7 @@ func (c *Connection) shouldConnect() bool {
 func (c *Connection) send(msg []byte) error {
 	select {
 	case <-c.ctx.Done():
-		return c.ctx.Err()
+		return context.Cause(c.ctx)
 	case c.outQueue <- msg:
 		return nil
 	}
@@ -699,6 +725,9 @@ func (c *Connection) disconnected() {
 		}
 		return true
 	})
+	if debugReqs {
+		fmt.Println(c.String(), "Disconnected. Clearing outgoing.")
+	}
 	c.outgoing.Clear()
 	c.inStream.Range(func(key uint64, client *muxServer) bool {
 		client.cancel()
@@ -775,6 +804,9 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 func (c *Connection) reconnected() {
 	c.updateState(StateConnectionError)
 	// Close all active requests.
+	if debugReqs {
+		fmt.Println(c.String(), "Reconnected. Clearing outgoing.")
+	}
 	c.outgoing.Range(func(key uint64, client *muxClient) bool {
 		client.close()
 		return true
@@ -951,7 +983,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	ping := time.NewTicker(connPingInterval)
 	pingFrame := message{
 		Op:         OpPing,
-		DeadlineMS: 1000,
+		DeadlineMS: 5000,
 	}
 
 	defer ping.Stop()
@@ -970,10 +1002,8 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			lastPong := atomic.LoadInt64(&c.LastPong)
 			if lastPong > 0 {
 				lastPongTime := time.Unix(lastPong, 0)
-				if time.Since(lastPongTime) > connPingInterval*2 {
-					if debugPrint {
-						fmt.Println(c.Local, "Last pong too old. Disconnecting")
-					}
+				if d := time.Since(lastPongTime); d > connPingInterval*2 {
+					logger.LogIf(ctx, fmt.Errorf("host %s last pong too old (%v); disconnecting", c.Remote, d.Round(time.Millisecond)))
 					cancel(ErrDisconnected)
 					return
 				}
@@ -1051,7 +1081,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		}
 		_, err = buf.WriteTo(conn)
 		if err != nil {
-			// TODO: Probably too noisy for long term use.
 			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
 			cancel(ErrDisconnected)
 			return
@@ -1164,6 +1193,9 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 		logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
 		return
 	}
+	if debugReqs {
+		fmt.Println(m.MuxID, c.StringReverse(), "INCOMING")
+	}
 	// Singleshot message
 	var handler SingleHandlerFn
 	if subID == nil {
@@ -1198,9 +1230,15 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 
 		// TODO: Maybe recycle m.Payload - should be free here.
 		if m.DeadlineMS > 0 && time.Since(start).Milliseconds()+c.addDeadline.Milliseconds() > int64(m.DeadlineMS) {
+			if debugReqs {
+				fmt.Println(m.MuxID, c.StringReverse(), "DEADLINE EXCEEDED")
+			}
 			// No need to return result
 			PutByteBuffer(b)
 			return
+		}
+		if debugReqs {
+			fmt.Println(m.MuxID, c.StringReverse(), "RESPONDING")
 		}
 		m = message{
 			MuxID: m.MuxID,
@@ -1322,6 +1360,9 @@ func (c *Connection) handleResponse(m message) {
 	}
 	v, ok := c.outgoing.Load(m.MuxID)
 	if !ok {
+		if debugReqs {
+			fmt.Println(m.MuxID, c.String(), "Got response for unknown mux")
+		}
 		PutByteBuffer(m.Payload)
 		return
 	}
@@ -1338,7 +1379,9 @@ func (c *Connection) handleResponse(m message) {
 		})
 	}
 	v.close()
-	c.outgoing.Delete(m.MuxID)
+	if debugReqs {
+		fmt.Println(m.MuxID, c.String(), "handleResponse: closing mux")
+	}
 }
 
 func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
@@ -1367,6 +1410,9 @@ func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
 	}
 	if m.Flags&FlagEOF != 0 {
 		v.close()
+		if debugReqs {
+			fmt.Println(m.MuxID, c.String(), "handleMuxServerMsg: DELETING MUX")
+		}
 		c.outgoing.Delete(m.MuxID)
 	}
 }
@@ -1387,6 +1433,9 @@ func (c *Connection) deleteMux(incoming bool, muxID uint64) {
 		}
 		v, loaded := c.outgoing.LoadAndDelete(muxID)
 		if loaded && v != nil {
+			if debugReqs {
+				fmt.Println(muxID, c.String(), "deleteMux: DELETING MUX")
+			}
 			v.close()
 			logger.LogIf(c.ctx, c.queueMsg(message{Op: OpDisconnectServerMux, MuxID: muxID}, nil))
 		}

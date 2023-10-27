@@ -35,7 +35,10 @@ import (
 // may only be used for tests.
 type debugMsg int
 
-const debugPrint = false
+const (
+	debugPrint = false
+	debugReqs  = false
+)
 
 const (
 	debugShutdown debugMsg = iota

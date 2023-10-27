@@ -73,7 +73,6 @@ require (
 	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.44.0
 	github.com/prometheus/procfs v0.11.1
-	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rs/cors v1.10.0

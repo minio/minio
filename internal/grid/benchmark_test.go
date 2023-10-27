@@ -19,7 +19,7 @@ package grid
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"sync/atomic"
@@ -89,14 +89,15 @@ func benchmarkGridServers(b *testing.B, n int) {
 					if conn == nil {
 						b.Fatal("No connection")
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					// Send the payload.
 					resp, err := conn.Request(ctx, handlerTest, payload)
 					cancel()
 					if err != nil {
-						if !errors.Is(err, context.DeadlineExceeded) {
-							b.Fatal(err)
+						if debugReqs {
+							fmt.Println(err.Error())
 						}
+						b.Fatal(err.Error())
 					}
 					PutByteBuffer(resp)
 					n++
