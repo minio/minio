@@ -105,16 +105,24 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 	if err := m.sendLocked(msg); err != nil {
 		return nil, err
 	}
-	defer m.parent.outgoing.Delete(m.MuxID)
+	if debugReqs {
+		fmt.Println(m.MuxID, m.parent.String(), "SEND")
+	}
 	// Wait for response or context.
 	select {
 	case v, ok := <-ch:
 		if !ok {
 			return nil, ErrDisconnected
 		}
+		if debugReqs && v.Err != nil {
+			v.Err = fmt.Errorf("%d %s RESP ERR: %w", m.MuxID, m.parent.String(), v.Err)
+		}
 		return v.Msg, v.Err
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		if debugReqs {
+			return nil, fmt.Errorf("%d %s ERR: %w", m.MuxID, m.parent.String(), context.Cause(ctx))
+		}
+		return nil, context.Cause(ctx)
 	}
 }
 
@@ -279,7 +287,7 @@ func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Respo
 			m.respMu.Lock()
 			defer m.respMu.Unlock() // We always return in this path.
 			if !m.closed {
-				respHandler <- Response{Err: m.ctx.Err()}
+				respHandler <- Response{Err: context.Cause(m.ctx)}
 				logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 				m.closeLocked()
 			}
@@ -345,7 +353,7 @@ func (m *muxClient) handleTwowayRequests(responses chan<- Response, requests cha
 			defer m.respMu.Unlock()
 			logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 			if !m.closed {
-				responses <- Response{Err: m.ctx.Err()}
+				responses <- Response{Err: context.Cause(m.ctx)}
 				m.closeLocked()
 			}
 			return
@@ -418,11 +426,19 @@ func (m *muxClient) checkSeq(seq uint32) (ok bool) {
 // may never block.
 // Should return whether the next call would block.
 func (m *muxClient) response(seq uint32, r Response) {
+	if debugReqs {
+		fmt.Println(m.MuxID, m.parent.String(), "RESP")
+	}
 	if debugPrint {
 		fmt.Printf("mux %d: got msg seqid %d, payload length: %d, err:%v\n", m.MuxID, seq, len(r.Msg), r.Err)
 	}
 	if !m.checkSeq(seq) {
+		if debugReqs {
+			fmt.Println(m.MuxID, m.parent.String(), "CHECKSEQ FAIL", m.RecvSeq, seq)
+		}
 		PutByteBuffer(r.Msg)
+		r.Err = ErrIncorrectSequence
+		m.addResponse(r)
 		return
 	}
 	atomic.StoreInt64(&m.LastPong, time.Now().Unix())

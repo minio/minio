@@ -117,6 +117,18 @@ func NewMSSWith(m map[string]string) *MSS {
 	return &m2
 }
 
+// NewBytes returns a new Bytes.
+func NewBytes() *Bytes {
+	b := Bytes(GetByteBuffer()[:0])
+	return &b
+}
+
+// NewBytesWith returns a new Bytes with the provided content.
+func NewBytesWith(b []byte) *Bytes {
+	bb := Bytes(b)
+	return &bb
+}
+
 // Bytes provides a byte slice that can be serialized.
 type Bytes []byte
 

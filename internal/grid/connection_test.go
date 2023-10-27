@@ -21,6 +21,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -29,7 +30,8 @@ import (
 
 func TestDisconnect(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
-	hosts, listeners := getHosts(2)
+	defer timeout(10 * time.Second)()
+	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
 	}
@@ -58,15 +60,14 @@ func TestDisconnect(t *testing.T) {
 		BlockConnect: connReady,
 	})
 	errFatal(err)
-	defer local.debugMsg(debugShutdown)
 
 	// 1: Echo
-	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(local.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
@@ -81,15 +82,19 @@ func TestDisconnect(t *testing.T) {
 		BlockConnect: connReady,
 	})
 	errFatal(err)
-	defer remote.debugMsg(debugShutdown)
-	defer local.debugMsg(debugWaitForExit)
-	defer remote.debugMsg(debugWaitForExit)
 
 	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	defer localServer.Close()
 	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
-	defer remoteServer.Close()
 	close(connReady)
+
+	defer func() {
+		local.debugMsg(debugShutdown)
+		remote.debugMsg(debugShutdown)
+		remoteServer.Close()
+		localServer.Close()
+		remote.debugMsg(debugWaitForExit)
+		local.debugMsg(debugWaitForExit)
+	}()
 
 	cleanReqs := make(chan struct{})
 	gotCall := make(chan struct{})
@@ -115,9 +120,9 @@ func TestDisconnect(t *testing.T) {
 		OutCapacity: 1,
 		InCapacity:  1,
 	}
-	errFatal(remote.RegisterSingle(handlerTest, h1))
+	errFatal(remote.RegisterSingleHandler(handlerTest, h1))
 	errFatal(remote.RegisterStreamingHandler(handlerTest2, h2))
-	errFatal(local.RegisterSingle(handlerTest, h1))
+	errFatal(local.RegisterSingleHandler(handlerTest, h1))
 	errFatal(local.RegisterStreamingHandler(handlerTest2, h2))
 
 	// local to remote
@@ -153,6 +158,8 @@ func TestDisconnect(t *testing.T) {
 	<-gotCall
 	remote.debugMsg(debugKillOutbound)
 	local.debugMsg(debugKillOutbound)
+	errFatal(remoteConn.WaitForConnect(context.Background()))
+
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall
@@ -188,4 +195,15 @@ func TestShouldConnect(t *testing.T) {
 		}
 		t.Logf("host %q should connect to %d hosts", hosts[x], should)
 	}
+}
+
+func startServer(t testing.TB, listener net.Listener, handler http.Handler) (server *httptest.Server) {
+	t.Helper()
+	server = httptest.NewUnstartedServer(handler)
+	server.Config.Addr = listener.Addr().String()
+	server.Listener = listener
+	server.Start()
+	// t.Cleanup(server.Close)
+	t.Log("Started server on", server.Config.Addr, "URL:", server.URL)
+	return server
 }

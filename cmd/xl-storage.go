@@ -1226,11 +1226,6 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	return s.deleteFile(volumeDir, filePath, true, false)
 }
 
-// UpdateMetadataOpts provides an optional input to indicate if xl.meta updates need to be fully synced to disk.
-type UpdateMetadataOpts struct {
-	NoPersistence bool
-}
-
 // Updates only metadata for a given version.
 func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error {
 	if len(fi.Metadata) == 0 {

@@ -52,7 +52,7 @@ func (s *Stream) Send(b []byte) error {
 	case s.Requests <- b:
 		return nil
 	case <-s.ctx.Done():
-		return s.ctx.Err()
+		return context.Cause(s.ctx)
 	}
 }
 
@@ -75,7 +75,7 @@ func (s *Stream) Results(next func(b []byte) error) (err error) {
 	for {
 		select {
 		case <-s.ctx.Done():
-			return s.ctx.Err()
+			return context.Cause(s.ctx)
 		case resp, ok := <-s.responses:
 			if !ok {
 				done = true

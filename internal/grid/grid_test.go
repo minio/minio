@@ -22,9 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"runtime"
 	"strconv"
@@ -35,106 +32,40 @@ import (
 	"github.com/minio/minio/internal/logger/target/testlogger"
 )
 
-func getHosts(n int) (hosts []string, listeners []net.Listener) {
-	for i := 0; i < n; i++ {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			if l, err = net.Listen("tcp6", "[::1]:0"); err != nil {
-				panic(fmt.Sprintf("httptest: failed to listen on a port: %v", err))
-			}
-		}
-		addr := l.Addr()
-		hosts = append(hosts, "http://"+addr.String())
-		listeners = append(listeners, l)
-		// Do not close until we have all hosts
-	}
-	return
-}
-
-func startServer(t testing.TB, listener net.Listener, handler http.Handler) (server *httptest.Server) {
-	t.Helper()
-	server = httptest.NewUnstartedServer(handler)
-	server.Config.Addr = listener.Addr().String()
-	server.Listener = listener
-	server.Start()
-	t.Log("Started server on", server.Config.Addr, "URL:", server.URL)
-	return server
-}
-
-func shutdownManagers(t testing.TB, servers ...*Manager) {
-	t.Helper()
-	for _, s := range servers {
-		s.debugMsg(debugShutdown)
-	}
-	for _, s := range servers {
-		s.debugMsg(debugWaitForExit)
-	}
-}
-
 func TestSingleRoundtrip(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
-	hosts, listeners := getHosts(2)
-	dialer := &net.Dialer{
-		Timeout: 5 * time.Second,
-	}
 	errFatal := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	wrapServer := func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Logf("Got a %s request for: %v", r.Method, r.URL)
-			handler.ServeHTTP(w, r)
-		})
-	}
-	// We fake a local and remote server.
-	localHost := hosts[0]
-	remoteHost := hosts[1]
-	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       localHost,
-		Hosts:       hosts,
-		AuthRequest: dummyRequestValidate,
-		AddAuth:     func(aud string) string { return aud },
-	})
+	grid, err := SetupTestGrid(2)
 	errFatal(err)
+	remoteHost := grid.Hosts[1]
+	local := grid.Managers[0]
 
 	// 1: Echo
-	errFatal(local.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(local.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(local.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
 	}))
 
-	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       remoteHost,
-		Hosts:       hosts,
-		AuthRequest: dummyRequestValidate,
-		AddAuth:     func(aud string) string { return aud },
-	})
-	errFatal(err)
-	defer shutdownManagers(t, local, remote)
-
-	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	defer localServer.Close()
-	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
-	defer remoteServer.Close()
+	remote := grid.Managers[1]
 
 	// 1: Echo
-	errFatal(remote.RegisterSingle(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(remote.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("1: server payload: ", len(payload), "bytes.")
 		return append([]byte{}, payload...), nil
 	}))
 	// 2: Return as error
-	errFatal(remote.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+	errFatal(remote.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 		t.Log("2: server payload: ", len(payload), "bytes.")
 		err := RemoteErr(payload)
 		return nil, &err
@@ -199,34 +130,18 @@ func TestSingleRoundtrip(t *testing.T) {
 }
 
 func TestSingleRoundtripGenerics(t *testing.T) {
-	defer testlogger.T.SetErrorTB(t)()
-	hosts, listeners := getHosts(2)
-	dialer := &net.Dialer{
-		Timeout: 5 * time.Second,
-	}
+	defer testlogger.T.SetLogTB(t)()
 	errFatal := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	wrapServer := func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Logf("Got a %s request for: %v", r.Method, r.URL)
-			handler.ServeHTTP(w, r)
-		})
-	}
-	// We fake a local and remote server.
-	localHost := hosts[0]
-	remoteHost := hosts[1]
-	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       localHost,
-		Hosts:       hosts,
-		AddAuth:     func(aud string) string { return aud },
-		AuthRequest: dummyRequestValidate,
-	})
+	grid, err := SetupTestGrid(2)
 	errFatal(err)
+	remoteHost := grid.Hosts[1]
+	local := grid.Managers[0]
+	remote := grid.Managers[1]
 
 	// 1: Echo
 	h1 := NewSingleHandler[*testRequest, *testResponse](handlerTest, func() *testRequest {
@@ -257,29 +172,12 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	errFatal(h1.Register(local, handler1))
 	errFatal(h2.Register(local, handler2))
 
-	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       remoteHost,
-		Hosts:       hosts,
-		AddAuth:     func(aud string) string { return aud },
-		AuthRequest: dummyRequestValidate,
-	})
-
-	errFatal(err)
-	defer shutdownManagers(t, local, remote)
-
 	errFatal(h1.Register(remote, handler1))
 	errFatal(h2.Register(remote, handler2))
-
-	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	defer localServer.Close()
-	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
-	defer remoteServer.Close()
 
 	// local to remote connection
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
-	remoteConn.WaitForConnect(context.Background())
 
 	start := time.Now()
 	req := testRequest{Num: 1, String: testPayload}
@@ -304,60 +202,23 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 
 func TestStreamSuite(t *testing.T) {
 	defer testlogger.T.SetErrorTB(t)()
-	hosts, listeners := getHosts(2)
-	dialer := &net.Dialer{
-		Timeout: 1 * time.Second,
-	}
 	errFatal := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	wrapServer := func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Logf("Got a %s request for: %v", r.Method, r.URL)
-			handler.ServeHTTP(w, r)
-		})
-	}
-	// We fake a local and remote server.
-	localHost := hosts[0]
-	remoteHost := hosts[1]
-
-	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       localHost,
-		Hosts:       hosts,
-		AddAuth:     func(aud string) string { return aud },
-		AuthRequest: dummyRequestValidate,
-	})
-
+	grid, err := SetupTestGrid(2)
 	errFatal(err)
+	t.Cleanup(grid.Cleanup)
 
-	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:      dialer.DialContext,
-		Local:       remoteHost,
-		Hosts:       hosts,
-		AddAuth:     func(aud string) string { return aud },
-		AuthRequest: dummyRequestValidate,
-	})
-	errFatal(err)
-	defer shutdownManagers(t, local, remote)
-
-	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
+	local := grid.Managers[0]
+	localHost := grid.Hosts[0]
+	remote := grid.Managers[1]
+	remoteHost := grid.Hosts[1]
 
 	connLocalToRemote := local.Connection(remoteHost)
-	err = connLocalToRemote.WaitForConnect(context.Background())
-	errFatal(err)
-
 	connRemoteLocal := remote.Connection(localHost)
-	err = connRemoteLocal.WaitForConnect(context.Background())
-	errFatal(err)
-	defer func() {
-		localServer.Close()
-		remoteServer.Close()
-	}()
 
 	t.Run("testStreamRoundtrip", func(t *testing.T) {
 		defer timeout(5 * time.Second)()
@@ -685,7 +546,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 			OutCapacity: 1,
 			InCapacity:  0,
 		}))
-		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+		errFatal(manager.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 			// Simple roundtrip
 			return append([]byte{}, payload...), nil
 		}))
@@ -763,7 +624,7 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 			OutCapacity: 5,
 			InCapacity:  5,
 		}))
-		errFatal(manager.RegisterSingle(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+		errFatal(manager.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
 			// Simple roundtrip
 			return append([]byte{}, payload...), nil
 		}))
