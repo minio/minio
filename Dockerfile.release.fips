@@ -12,8 +12,8 @@ RUN apk add -U --no-cache ca-certificates && \
     go install aead.dev/minisign/cmd/minisign@v0.2.0
 
 # Download minio binary and signature file
-RUN curl -s -q https://dl.min.io/server/minio/release/${TARGETARCH}/archive/minio.${RELEASE}.fips -o /go/bin/minio && \
-    curl -s -q https://dl.min.io/server/minio/release/${TARGETARCH}/archive/minio.${RELEASE}.fips.minisig -o /go/bin/minio.minisig && \
+RUN curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.fips -o /go/bin/minio && \
+    curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.fips.minisig -o /go/bin/minio.minisig && \
     chmod +x /go/bin/minio
 
 # Verify binary signature using public key "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGavRUN"
