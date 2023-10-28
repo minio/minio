@@ -104,7 +104,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		for res := range evnot.targetResCh {
 			if res.Err != nil {
 				reqInfo := &logger.ReqInfo{}
-				reqInfo.AppendTags("targetID", res.ID.Name)
+				reqInfo.AppendTags("targetID", res.ID.String())
 				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID.String())
 			}
 		}
