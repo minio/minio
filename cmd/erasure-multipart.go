@@ -323,7 +323,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
 			Initiated: startTime,
 		})
-
+		populatedUploadIds.Add(uploadID)
 	}
 
 	sort.Slice(uploads, func(i int, j int) bool {
