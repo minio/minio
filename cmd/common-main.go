@@ -169,10 +169,10 @@ func minioConfigToConsoleFeatures() {
 	}
 
 	// Pass on the session duration environment variable, else we will default to 12 hours
-	if value_sts := env.Get(config.EnvMinioStsDuration, ""); value_sts != "" {
-		os.Setenv("CONSOLE_STS_DURATION", value_sts)
-	} else if value_session := env.Get(config.EnvBrowserSessionDuration, ""); value_session != "" {
-		os.Setenv("CONSOLE_STS_DURATION", value_session)
+	if valueSts := env.Get(config.EnvMinioStsDuration, ""); valueSts != "" {
+		os.Setenv("CONSOLE_STS_DURATION", valueSts)
+	} else if valueSession := env.Get(config.EnvBrowserSessionDuration, ""); valueSession != "" {
+		os.Setenv("CONSOLE_STS_DURATION", valueSession)
 	}
 
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
