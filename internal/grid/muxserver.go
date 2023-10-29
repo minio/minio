@@ -97,6 +97,16 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		LastPing:  time.Now().Unix(),
 		BaseFlags: c.baseFlags,
 	}
+	// Acknowledge Mux created.
+	var ack message
+	ack.Op = OpAckMux
+	ack.Flags = m.BaseFlags
+	ack.MuxID = m.ID
+	m.send(ack)
+	if debugPrint {
+		fmt.Println("connected stream mux:", ack.MuxID)
+	}
+
 	var handlerIn chan []byte
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)
@@ -113,6 +123,8 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
 	}
+
+	// Handler goroutine.
 	var handlerErr *RemoteErr
 	go func() {
 		start := time.Now()
@@ -133,6 +145,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		// handlerErr is guarded by 'send' channel.
 		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
 	}()
+	// Response sender gorutine...
 	go func(outBlock <-chan struct{}) {
 		defer m.parent.deleteMux(true, m.ID)
 		for {
@@ -266,9 +279,9 @@ func (m *muxServer) disconnect(msg string) {
 func (m *muxServer) send(msg message) {
 	m.sendMu.Lock()
 	defer m.sendMu.Unlock()
-	m.SendSeq++
 	msg.MuxID = m.ID
 	msg.Seq = m.SendSeq
+	m.SendSeq++
 	if debugPrint {
 		fmt.Printf("Mux %d, Sending %+v\n", m.ID, msg)
 	}

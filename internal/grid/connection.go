@@ -215,7 +215,10 @@ func newConnection(o connectionParams) *Connection {
 		incomingBytes:      o.incomingBytes,
 		outgoingBytes:      o.outgoingBytes,
 	}
-
+	if debugPrint {
+		// Random Mux ID
+		c.NextID = rand.Uint64()
+	}
 	if !strings.HasPrefix(o.remote, "https://") && !strings.HasPrefix(o.remote, "wss://") {
 		c.baseFlags |= FlagCRCxxh3
 	}
@@ -1162,15 +1165,7 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 		_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
 			return newMuxStream(ctx, m, c, *handler)
 		})
-		if debugPrint {
-			fmt.Println("connected stream mux:", m.MuxID)
-		}
 	}
-	// Acknowledge Mux created.
-	m.Op = OpAckMux
-	m.Flags = 0
-	m.Payload = nil
-	logger.LogIf(ctx, c.queueMsg(m, nil))
 }
 
 func (c *Connection) handleAckMux(ctx context.Context, m message) {
@@ -1329,7 +1324,9 @@ func (c *Connection) handleUnblockClMux(m message) {
 }
 
 func (c *Connection) handleUnblockSrvMux(m message) {
-	PutByteBuffer(m.Payload)
+	if m.Payload != nil {
+		PutByteBuffer(m.Payload)
+	}
 	m.Payload = nil
 	if v, ok := c.inStream.Load(m.MuxID); ok {
 		v.unblockSend(m.Seq)
