@@ -42,6 +42,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -550,6 +551,10 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			sizeS.tiers[tier.Name] = tierStats{}
 		}
+		if sizeS.tiers != nil {
+			sizeS.tiers[storageclass.STANDARD] = tierStats{}
+			sizeS.tiers[storageclass.RRS] = tierStats{}
+		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
 		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions)
@@ -588,7 +593,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			tier := oi.StorageClass
 			if tier == "" {
-				tier = minioHotTier
+				tier = storageclass.STANDARD // no SC means "STANDARD"
 			}
 			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
 				tier = oi.TransitionedObject.Tier
@@ -618,11 +623,9 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 				res["versions"] = strconv.FormatUint(sizeS.versions, 10)
 			}
 			res["size"] = strconv.FormatInt(sizeS.totalSize, 10)
-			if len(sizeS.tiers) > 0 {
-				for name, tier := range sizeS.tiers {
-					res["tier-size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
-					res["tier-versions-"+name] = strconv.Itoa(tier.NumVersions)
-				}
+			for name, tier := range sizeS.tiers {
+				res["tier-size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
+				res["tier-versions-"+name] = strconv.Itoa(tier.NumVersions)
 			}
 			if sizeS.failedCount > 0 {
 				res["repl-failed"] = fmt.Sprintf("%d versions, %d bytes", sizeS.failedCount, sizeS.failedSize)
