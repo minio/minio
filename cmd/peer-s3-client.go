@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/minio/madmin-go/v3"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/v2/sync/errgroup"
@@ -189,8 +190,15 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 		// these could be stale buckets lying around, remove them
 		for bktName, count := range bucketsMap {
 			if count < quorum {
-				// Its safe to remove as its stale bucket lying around
-				sys.DeleteBucket(ctx, bktName, DeleteBucketOptions{Force: true})
+				// Queue a bucket heal task
+				globalHealStateLK.Lock()
+				bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+				globalHealStateLK.Unlock()
+				if ok {
+					if err := bgSeq.queueHealTask(healSource{bucket: bktName}, madmin.HealItemBucket); err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
 	}

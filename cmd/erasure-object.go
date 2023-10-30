@@ -476,6 +476,20 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 	auditLogInternal(ctx, opts)
 }
 
+func auditDanglingBucketDeletion(ctx context.Context, bucket string, tags map[string]interface{}) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
+
+	opts := AuditLogOptions{
+		Event:  "DeleteDanglingBucket",
+		Bucket: bucket,
+		Tags:   tags,
+	}
+
+	auditLogInternal(ctx, opts)
+}
+
 func joinErrors(errs ...error) error {
 	s := make([]string, 0, len(errs))
 	nonNilErrs := make([]any, 0, len(errs))
@@ -543,6 +557,46 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		g.Wait()
 	}
 	return m, err
+}
+
+func (er erasureObjects) deleteBucketIfDangling(ctx context.Context, bucket string, metaArr []VolInfo, errs []error) error {
+	_, file, line, cok := runtime.Caller(1)
+	var err error
+	ok := isBucketDangling(metaArr, errs)
+	if ok {
+		tags := make(map[string]interface{}, 4)
+		tags["set"] = er.setIndex
+		tags["pool"] = er.poolIndex
+		tags["merrs"] = joinErrors(errs...) // errors.Join(errs...)
+
+		if cok {
+			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
+		}
+
+		defer auditDanglingBucketDeletion(ctx, bucket, tags)
+
+		err = errVolumeNotFound
+
+		disks := er.getDisks()
+		g := errgroup.WithNErrs(len(disks))
+		for index := range disks {
+			index := index
+			g.Go(func() error {
+				if disks[index] == nil {
+					return errDiskNotFound
+				}
+				err := disks[index].DeleteVol(ctx, bucket, false)
+				if errors.Is(err, errVolumeNotEmpty) {
+					// If volume non empty, force delete as its dangling anyway
+					return disks[index].DeleteVol(ctx, bucket, true)
+				}
+				return err
+			}, index)
+		}
+
+		g.Wait()
+	}
+	return err
 }
 
 func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, readData, inclFreeVers, allParts bool) ([]FileInfo, []error) {

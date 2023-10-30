@@ -224,6 +224,19 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 		})
 	}
 
+	// check dangling and delete bucket only if its not a meta bucket
+	if !isMinioMetaBucketName(bucket) {
+		// read all bucket metadata
+		bktMetadata, errs := readAllBucketInfo(ctx, storageDisks, bucket)
+		if isAllBucketsNotFound(errs) {
+			// nothing to be done, bucket already gone
+			return res, errVolumeNotFound
+		}
+		if err := er.deleteBucketIfDangling(ctx, bucket, bktMetadata, errs); err != nil {
+			return res, err
+		}
+	}
+
 	reducedErr := reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, res.DataBlocks)
 	if errors.Is(reducedErr, errVolumeNotFound) && !opts.Recreate {
 		for i := range beforeState {
@@ -1019,6 +1032,22 @@ func isAllNotFound(errs []error) bool {
 	return len(errs) > 0
 }
 
+// isAllBucketsNotFound will return true if all the errors are either errFileNotFound
+// or errFileCorrupt
+// A 0 length slice will always return false.
+func isAllBucketsNotFound(errs []error) bool {
+	if len(errs) == 0 {
+		return false
+	}
+	notFoundCount := 0
+	for _, err := range errs {
+		if err != nil && (err.Error() == errFileNotFound.Error() || err.Error() == errFileCorrupt.Error()) {
+			notFoundCount++
+		}
+	}
+	return len(errs) == notFoundCount
+}
+
 // ObjectDir is considered dangling/corrupted if any only
 // if total disks - a combination of corrupted and missing
 // files is lesser than N/2+1 number of disks.
@@ -1044,7 +1073,7 @@ func isObjectDirDangling(errs []error) (ok bool) {
 	return found < notFound && found > 0
 }
 
-// Object is considered dangling/corrupted if any only
+// Object is considered dangling/corrupted if and only
 // if total disks - a combination of corrupted and missing
 // files is lesser than number of data blocks.
 func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (validMeta FileInfo, ok bool) {
@@ -1131,6 +1160,35 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 
 	// We have valid meta, now verify if we have enough files with parity blocks.
 	return validMeta, totalErrs > validMeta.Erasure.ParityBlocks
+}
+
+// Bucket is considered dangling/corrupted if and only
+// if bucket meta data is missing on more than N/2 disks
+func isBucketDangling(metaArr []VolInfo, errs []error) bool {
+	// We can consider a bucket not reliable
+	// when xl.meta is not found in read quorum disks.
+	// or when xl.meta is not readable in read quorum disks.
+	danglingErrsCount := func(cerrs []error) (int, int, int) {
+		var (
+			notFoundCount     int
+			corruptedCount    int
+			diskNotFoundCount int
+		)
+		for _, readErr := range cerrs {
+			switch {
+			case errors.Is(readErr, errVolumeNotFound):
+				notFoundCount++
+			case errors.Is(readErr, errFileCorrupt):
+				corruptedCount++
+			case errors.Is(readErr, errDiskNotFound):
+				diskNotFoundCount++
+			}
+		}
+		return notFoundCount, corruptedCount, diskNotFoundCount
+	}
+
+	notFoundMetaErrs, corruptedMetaErrs, _ := danglingErrsCount(errs)
+	return corruptedMetaErrs+notFoundMetaErrs > len(errs)/2
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.

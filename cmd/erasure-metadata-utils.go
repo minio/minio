@@ -190,6 +190,47 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 	return metadataArray, errs
 }
 
+// Reads all `xl.meta` metadata as a VolInfo slice.
+// Returns error slice indicating the failed metadata reads.
+func readAllBucketInfo(ctx context.Context, disks []StorageAPI, bucket string) ([]VolInfo, []error) {
+	metadataArray := make([]VolInfo, len(disks))
+
+	g := errgroup.WithNErrs(len(disks))
+	// Read `xl.meta` in parallel across disks.
+	for index := range disks {
+		index := index
+		g.Go(func() (err error) {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			metadataArray[index], err = disks[index].StatVol(ctx, bucket)
+			return err
+		}, index)
+	}
+
+	ignoredErrs := []error{
+		errDiskAccessDenied,
+		errFaultyDisk,
+		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
+		io.EOF,              // some times we would read without locks, ignore these errors
+	}
+	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
+	errs := g.Wait()
+	for index, err := range errs {
+		if err == nil {
+			continue
+		}
+		if !IsErr(err, ignoredErrs...) {
+			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s) returned an error (%w)",
+				disks[index], bucket, err),
+				disks[index].String())
+		}
+	}
+
+	// Return all the metadata.
+	return metadataArray, errs
+}
+
 // shuffleDisksAndPartsMetadataByIndex this function should be always used by GetObjectNInfo()
 // and CompleteMultipartUpload code path, it is not meant to be used with PutObject,
 // NewMultipartUpload metadata shuffling.
