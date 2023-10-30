@@ -40,14 +40,29 @@ const (
 	defaultHealthCheckReloadDuration = 30 * time.Minute
 )
 
+type arnTarget struct {
+	Client      *TargetClient
+	lastRefresh time.Time
+}
+
+// arnErrs represents number of errors seen for a ARN and if update is in progress
+// to refresh remote targets from bucket metadata.
+type arnErrs struct {
+	count            int64
+	updateInProgress bool
+	bucket           string
+}
+
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
 	sync.RWMutex
-	arnRemotesMap map[string]*TargetClient
+	arnRemotesMap map[string]arnTarget
 	targetsMap    map[string][]madmin.BucketTarget
 	hMutex        sync.RWMutex
 	hc            map[string]epHealth
 	hcClient      *madmin.AnonymousClient
+	aMutex        sync.RWMutex
+	arnErrsMap    map[string]arnErrs // map of ARN to error count of failures to get target
 }
 
 type latencyStat struct {
@@ -364,7 +379,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 
 	sys.targetsMap[bucket] = newtgts
-	sys.arnRemotesMap[tgt.Arn] = clnt
+	sys.arnRemotesMap[tgt.Arn] = arnTarget{Client: clnt}
 	sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 	return nil
 }
@@ -432,11 +447,71 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	return nil
 }
 
+func (sys *BucketTargetSys) markRefreshInProgress(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; !ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: true,
+			count:            v.count + 1,
+			bucket:           bucket,
+		}
+	}
+}
+
+func (sys *BucketTargetSys) markRefreshDone(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: false,
+			count:            v.count,
+			bucket:           bucket,
+		}
+	}
+}
+
+func (sys *BucketTargetSys) isReloadingTarget(bucket, arn string) bool {
+	sys.aMutex.RLock()
+	defer sys.aMutex.RUnlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		return v.updateInProgress
+	}
+	return false
+}
+
+func (sys *BucketTargetSys) incTargetErr(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: v.updateInProgress,
+			count:            v.count + 1,
+		}
+	}
+}
+
 // GetRemoteTargetClient returns minio-go client for replication target instance
-func (sys *BucketTargetSys) GetRemoteTargetClient(arn string) *TargetClient {
+func (sys *BucketTargetSys) GetRemoteTargetClient(bucket, arn string) *TargetClient {
 	sys.RLock()
-	defer sys.RUnlock()
-	return sys.arnRemotesMap[arn]
+	tgt := sys.arnRemotesMap[arn]
+	sys.RUnlock()
+
+	if tgt.Client != nil {
+		return tgt.Client
+	}
+	defer func() { // lazy refresh remote targets
+		if tgt.Client == nil && !sys.isReloadingTarget(bucket, arn) && (tgt.lastRefresh.Equal(timeSentinel) || tgt.lastRefresh.Before(UTCNow().Add(-5*time.Minute))) {
+			tgts, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket)
+			if err == nil {
+				sys.markRefreshInProgress(bucket, arn)
+				sys.UpdateAllTargets(bucket, tgts)
+				sys.markRefreshDone(bucket, arn)
+			}
+		}
+		sys.incTargetErr(bucket, arn)
+	}()
+	return nil
 }
 
 // GetRemoteBucketTargetByArn returns BucketTarget for a ARN
@@ -457,8 +532,9 @@ func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, buck
 // NewBucketTargetSys - creates new replication system.
 func NewBucketTargetSys(ctx context.Context) *BucketTargetSys {
 	sys := &BucketTargetSys{
-		arnRemotesMap: make(map[string]*TargetClient),
+		arnRemotesMap: make(map[string]arnTarget),
 		targetsMap:    make(map[string][]madmin.BucketTarget),
+		arnErrsMap:    make(map[string]arnErrs),
 		hc:            make(map[string]epHealth),
 		hcClient:      newHCClient(),
 	}
@@ -502,7 +578,10 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 			if err != nil {
 				continue
 			}
-			sys.arnRemotesMap[tgt.Arn] = tgtClient
+			sys.arnRemotesMap[tgt.Arn] = arnTarget{
+				Client:      tgtClient,
+				lastRefresh: UTCNow(),
+			}
 			sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 		}
 
@@ -526,7 +605,7 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 			logger.LogIf(GlobalContext, err)
 			continue
 		}
-		sys.arnRemotesMap[tgt.Arn] = tgtClient
+		sys.arnRemotesMap[tgt.Arn] = arnTarget{Client: tgtClient}
 		sys.updateBandwidthLimit(bucket.Name, tgt.Arn, tgt.BandwidthLimit)
 	}
 	sys.targetsMap[bucket.Name] = cfg.Targets
