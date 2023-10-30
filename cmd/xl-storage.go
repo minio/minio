@@ -544,9 +544,11 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		sizeS := sizeSummary{}
-		var noTiers bool
-		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
-			sizeS.tiers = make(map[string]tierStats)
+		for _, tier := range globalTierConfigMgr.ListTiers() {
+			if sizeS.tiers == nil {
+				sizeS.tiers = make(map[string]tierStats)
+			}
+			sizeS.tiers[tier.Name] = tierStats{}
 		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
@@ -578,25 +580,27 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			sizeS.totalSize += sz
 
-			// Skip tier accounting if,
-			// 1. no tiers configured
-			// 2. object version is a delete-marker or a free-version
-			//    tracking deleted transitioned objects
+			// Skip tier accounting if object version is a delete-marker or a free-version
+			// tracking deleted transitioned objects
 			switch {
-			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
+			case oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
 				continue
 			}
-			tier := minioHotTier
+			tier := oi.StorageClass
+			if tier == "" {
+				tier = minioHotTier
+			}
 			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
 				tier = oi.TransitionedObject.Tier
 			}
-			sizeS.tiers[tier] = sizeS.tiers[tier].add(oi.tierStats())
+			if sizeS.tiers != nil {
+				if st, ok := sizeS.tiers[tier]; ok {
+					sizeS.tiers[tier] = st.add(oi.tierStats())
+				}
+			}
 		}
 
 		// apply tier sweep action on free versions
-		if len(fivs.FreeVersions) > 0 {
-			res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
-		}
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
@@ -606,14 +610,18 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		// These are rather expensive. Skip if nobody listens.
 		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
+			if len(fivs.FreeVersions) > 0 {
+				res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
+			}
+
 			if sizeS.versions > 0 {
 				res["versions"] = strconv.FormatUint(sizeS.versions, 10)
 			}
 			res["size"] = strconv.FormatInt(sizeS.totalSize, 10)
 			if len(sizeS.tiers) > 0 {
 				for name, tier := range sizeS.tiers {
-					res["size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
-					res["versions-"+name] = strconv.Itoa(tier.NumVersions)
+					res["tier-size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
+					res["tier-versions-"+name] = strconv.Itoa(tier.NumVersions)
 				}
 			}
 			if sizeS.failedCount > 0 {
