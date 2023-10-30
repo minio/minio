@@ -107,6 +107,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		fmt.Println("connected stream mux:", ack.MuxID)
 	}
 
+	// Data inbound to the handler
 	var handlerIn chan []byte
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)

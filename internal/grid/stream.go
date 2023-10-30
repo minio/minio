@@ -38,6 +38,7 @@ type Stream struct {
 	// If the handler is defined with 0 incoming capacity this will be nil.
 	// Channel *must* be closed to signal the end of the stream.
 	// If the request context is canceled, the stream will no longer process requests.
+	// Requests sent cannot be used any further by the called.
 	Requests chan<- []byte
 
 	ctx context.Context

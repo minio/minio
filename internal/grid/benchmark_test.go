@@ -57,7 +57,7 @@ func benchmarkGridRequests(b *testing.B, n int) {
 		}))
 		errFatal(err)
 	}
-	const payloadSize = 1
+	const payloadSize = 512
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	payload := make([]byte, payloadSize)
 	_, err = rng.Read(payload)
@@ -127,8 +127,8 @@ func BenchmarkStream(b *testing.B) {
 		name string
 		fn   func(b *testing.B, n int)
 	}{
-		{name: "responses", fn: benchmarkGridStreamRespOnly},
 		{name: "request", fn: benchmarkGridStreamReqOnly},
+		{name: "responses", fn: benchmarkGridStreamRespOnly},
 	}
 	for _, test := range tests {
 		b.Run(test.name, func(b *testing.B) {
@@ -177,7 +177,7 @@ func benchmarkGridStreamRespOnly(b *testing.B, n int) {
 		}))
 		errFatal(err)
 	}
-	const payloadSize = 1
+	const payloadSize = 512
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	payload := make([]byte, payloadSize)
 	_, err = rng.Read(payload)
@@ -272,7 +272,8 @@ func benchmarkGridStreamReqOnly(b *testing.B, n int) {
 			// Send 10x requests.
 			Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
 				got := 0
-				for range in {
+				for b := range in {
+					PutByteBuffer(b)
 					got++
 				}
 				if got != requests {
@@ -287,7 +288,7 @@ func benchmarkGridStreamReqOnly(b *testing.B, n int) {
 		}))
 		errFatal(err)
 	}
-	const payloadSize = 1
+	const payloadSize = 512
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	payload := make([]byte, payloadSize)
 	_, err = rng.Read(payload)

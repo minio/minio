@@ -635,6 +635,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 		}
 	}
 	stream, err := c.NewStream(ctx, h.id, payloadB)
+	PutByteBuffer(payloadB)
 	if err != nil {
 		return nil, err
 	}

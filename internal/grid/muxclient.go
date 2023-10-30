@@ -196,7 +196,6 @@ func (m *muxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 	// Send...
 	err := m.send(msg)
 	if err != nil {
-		PutByteBuffer(req)
 		out <- Response{Err: err}
 		return
 	}
@@ -398,8 +397,8 @@ func (m *muxClient) handleTwowayRequests(responses chan<- Response, requests cha
 			}
 			msg.setZeroPayloadFlag()
 			err := m.send(msg)
+			PutByteBuffer(req)
 			if err != nil {
-				PutByteBuffer(req)
 				responses <- Response{Err: err}
 				m.close()
 				errState = true
