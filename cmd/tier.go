@@ -177,8 +177,24 @@ func (config *TierConfigMgr) Empty() bool {
 	return len(config.ListTiers()) == 0
 }
 
+// TierType returns the type of tier
+func (config *TierConfigMgr) TierType(name string) string {
+	config.RLock()
+	defer config.RUnlock()
+
+	cfg, ok := config.Tiers[name]
+	if !ok {
+		return "internal"
+	}
+	return cfg.Type.String()
+}
+
 // ListTiers lists remote tiers configured in this deployment.
 func (config *TierConfigMgr) ListTiers() []madmin.TierConfig {
+	if config == nil {
+		return nil
+	}
+
 	config.RLock()
 	defer config.RUnlock()
 
