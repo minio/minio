@@ -248,10 +248,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/minio/madmin-go/v3 v3.0.21 => github.com/shtripat/madmin-go/v3 v3.0.0-20231025075849-6db3129f614e
+replace github.com/minio/mc v0.0.0-20231020090326-eb6f304e2e82 => github.com/shtripat/mc v0.0.0-20231030113923-bc4efeae2c29
 
-replace github.com/minio/mc v0.0.0-20230922050746-ae05d451739b => github.com/shtripat/mc v0.0.0-20231025080247-509667a6222d
+replace github.com/minio/console v0.40.0 => github.com/shtripat/minio-console v0.0.0-20231030114436-3a1e0a288a2f
 
-replace github.com/minio/console v0.40.0 => github.com/shtripat/minio-console v0.0.0-20231025080539-9def1c45ec5d
-
-replace github.com/minio/minio-go/v7 v7.0.64-0.20230920204636-e783c9ba11b3 => github.com/shtripat/minio-go/v7 v7.0.0-20231023110439-74a68457cc04
+replace github.com/minio/minio-go/v7 v7.0.64-0.20230920204636-e783c9ba11b3 => github.com/shtripat/minio-go/v7 v7.0.0-20231030110736-a9dfa761680d

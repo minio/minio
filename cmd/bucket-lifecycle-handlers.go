@@ -69,10 +69,14 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	bucketLifecycle, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
+	lcCfg, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
+	}
+	bucketLifecycle := &lifecycle.Lifecycle{
+		XMLName: lcCfg.XMLName,
+		Rules:   lcCfg.Rules,
 	}
 
 	// Validate the received bucket policy document
@@ -87,9 +91,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	var expiryRuleRemoved bool
-	expiryRuleRemoved = r.Form.Get("expiryRuleRemoved") == "true"
-	if bucketLifecycle.HasExpiry() || expiryRuleRemoved {
+	if bucketLifecycle.HasExpiry() || *lcCfg.ExpiryRuleRemoved {
 		currtime := time.Now()
 		bucketLifecycle.ExpiryUpdatedAt = &currtime
 	}
