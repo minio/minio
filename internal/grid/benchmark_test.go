@@ -160,7 +160,8 @@ func benchmarkGridStreamRespOnly(b *testing.B, n int) {
 			// Send 10x response.
 			Handle: func(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) *RemoteErr {
 				for i := 0; i < responses; i++ {
-					toSend := append(GetByteBuffer()[:0], byte(i))
+					toSend := GetByteBuffer()[:0]
+					toSend = append(toSend, byte(i))
 					toSend = append(toSend, payload...)
 					select {
 					case <-ctx.Done():
