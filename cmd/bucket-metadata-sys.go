@@ -302,7 +302,10 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 		}
 		return nil, time.Time{}, err
 	}
-	if meta.lifecycleConfig == nil {
+	// there could be just `ExpiryUpdatedAt` field populated as part
+	// of last delete all. Treat this situation as not lifecycle configuration
+	// available
+	if meta.lifecycleConfig == nil || len(meta.lifecycleConfig.Rules) == 0 {
 		return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 	}
 	return meta.lifecycleConfig, meta.LifecycleConfigUpdatedAt, nil
