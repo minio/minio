@@ -48,7 +48,7 @@ require (
 	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
-	github.com/minio/madmin-go/v3 v3.0.22
+	github.com/minio/madmin-go/v3 v3.0.29
 	github.com/minio/minio-go/v7 v7.0.64-0.20230920204636-e783c9ba11b3
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.2
@@ -105,6 +105,8 @@ require (
 	cloud.google.com/go/iam v1.1.3 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
+	github.com/VividCortex/ewma v1.2.0 // indirect
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/apache/thrift v0.19.0 // indirect
 	github.com/armon/go-metrics v0.4.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -180,7 +182,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/minio/colorjson v1.0.6 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20231020090326-eb6f304e2e82 // indirect
+	github.com/minio/mc v0.0.0-20231030184332-9f2fb2b6a9f8 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/pkg v1.7.5 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
@@ -209,6 +211,7 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/rs/xid v1.5.0 // indirect
+	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -216,6 +219,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/unrolled/secure v1.13.0 // indirect
+	github.com/vbauerster/mpb/v8 v8.6.2 // indirect
 	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
@@ -240,3 +244,9 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/madmin-go/v3 => github.com/jiuker/madmin-go/v3 v3.0.0-20231031103307-d17929c5d046
+
+replace github.com/minio/mc => github.com/jiuker/mc v0.0.0-20231031103741-dc9a564c2610
+
+replace github.com/minio/console => github.com/jiuker/console v0.19.3-0.20231031071954-1116ca37e2f8

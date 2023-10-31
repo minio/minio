@@ -349,6 +349,8 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	errStr := ""
 	var wg sync.WaitGroup
 
+	var totalSpentDuration time.Duration
+	var totalReqCount = int64(0)
 	for _, info := range clusterInfos.Sites {
 		// skip self
 		if globalDeploymentID() == info.DeploymentID {
@@ -358,15 +360,17 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		wg.Add(connectionsPerPeer)
 		for i := 0; i < connectionsPerPeer; i++ {
 			go func() {
+				atomic.AddInt64(&totalReqCount, 1)
 				defer wg.Done()
 				ctx, cancel := context.WithTimeout(ctx, duration+10*time.Second)
 				defer cancel()
-				perfNetRequest(
+				result := perfNetRequest(
 					ctx,
 					info.DeploymentID,
 					adminPathPrefix+adminAPIVersionPrefix+adminAPISiteReplicationDevNull,
 					r,
 				)
+				atomic.AddInt64((*int64)(&totalSpentDuration), int64(result.TXTotalSpentDuration))
 			}()
 		}
 	}
@@ -390,13 +394,14 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 
 	globalSiteNetPerfRX.Reset()
 	return madmin.SiteNetPerfNodeResult{
-		Endpoint:        "",
-		TX:              r.n,
-		TXTotalDuration: duration,
-		RX:              uint64(rx),
-		RXTotalDuration: delta,
-		Error:           errStr,
-		TotalConn:       uint64(connectionsPerPeer),
+		Endpoint:             "",
+		TX:                   r.n,
+		TXTotalDuration:      duration,
+		TXTotalSpentDuration: time.Duration(int64(totalSpentDuration) / totalReqCount),
+		RX:                   uint64(rx),
+		RXTotalDuration:      delta,
+		Error:                errStr,
+		TotalConn:            uint64(connectionsPerPeer),
 	}
 }
 
@@ -423,11 +428,13 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	client := &http.Client{
 		Transport: globalRemoteTargetTransport,
 	}
+	perfStartTime := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		result.Error = err.Error()
 		return
 	}
+	perfSpent := time.Since(perfStartTime)
 	defer xhttp.DrainBody(resp.Body)
 	err = gob.NewDecoder(resp.Body).Decode(&result)
 	// endpoint have been overwritten
@@ -435,5 +442,6 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	if err != nil {
 		result.Error = err.Error()
 	}
+	result.TXTotalSpentDuration = perfSpent
 	return
 }
