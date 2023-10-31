@@ -98,15 +98,69 @@ spec:
     staticConfig:
       static:
       - {{ template "minio.fullname" . }}.{{ .Release.Namespace }}
-      {{- if not .Values.metrics.serviceMonitor.public }}
-      {{- if .Values.metrics.serviceMonitor.interval }}
-      interval: {{ .Values.metrics.serviceMonitor.interval }}
-      {{- end }}
-      {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
-      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
-      {{- end }}
-      bearerTokenSecret:
-        name: {{ template "minio.fullname" . }}-prometheus
-        key: token
-      {{- end }}
+  {{- if .Values.metrics.serviceMonitor.interval }}
+  interval: {{ .Values.metrics.serviceMonitor.interval }}
+  {{- end }}
+  {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
+  scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+  {{- end }}
+  {{- if not .Values.metrics.serviceMonitor.public }}
+  bearerTokenSecret:
+    name: {{ template "minio.fullname" . }}-prometheus
+    key: token
+  {{- end }}
+{{- if .Values.metrics.serviceMonitor.includeBucket }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: {{ template "minio.fullname" . }}-bucket
+  {{- if .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{- end }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    {{- if .Values.metrics.serviceMonitor.additionalLabels }}
+      {{- toYaml .Values.metrics.serviceMonitor.additionalLabels | nindent 4 }}
+    {{- end }}
+spec:
+  jobName: {{ template "minio.fullname" . }}
+  {{- if .Values.tls.enabled }}
+  tlsConfig:
+    ca:
+      secret:
+        name: {{ .Values.tls.certSecret }}
+        key: {{ .Values.tls.publicCrt }}
+    serverName: {{ template "minio.fullname" . }}
+  {{- end }}
+  prober:
+    url: {{ template "minio.fullname" . }}.{{ .Release.Namespace }}:{{ .Values.service.port }}
+    path: /minio/v2/metrics/bucket
+    {{- if .Values.tls.enabled }}
+    scheme: https
+    {{- else }}
+    scheme: http
+    {{- end }}
+  {{- if .Values.metrics.serviceMonitor.relabelConfigsBucket }}
+    {{- toYaml .Values.metrics.serviceMonitor.relabelConfigsBucket | nindent 2 }}
+  {{- end }}
+  targets:
+    staticConfig:
+      static:
+      - {{ template "minio.fullname" . }}.{{ .Release.Namespace }}
+  {{- if .Values.metrics.serviceMonitor.interval }}
+  interval: {{ .Values.metrics.serviceMonitor.interval }}
+  {{- end }}
+  {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
+  scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+  {{- end }}
+  {{- if not .Values.metrics.serviceMonitor.public }}
+  bearerTokenSecret:
+    name: {{ template "minio.fullname" . }}-prometheus
+    key: token
+  {{- end }}
+{{- end }}
 {{- end }}

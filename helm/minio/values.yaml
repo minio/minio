@@ -520,6 +520,8 @@ metrics:
     enabled: false
     # scrape each node/pod individually for additional metrics
     includeNode: false
+    # Scrape buckets metrics (see https://min.io/docs/minio/windows/operations/monitoring/collect-minio-metrics-using-prometheus.html)
+    includeBucket: false
     public: true
     additionalLabels: {}
     annotations: {}
@@ -530,6 +532,8 @@ metrics:
       # metricRelabelings:
       #   - regex: (server|pod)
       #     action: labeldrop
+    # for bucket metrics
+    relabelConfigsBucket: {}
     namespace: ~
     # Scrape interval, for example `interval: 30s`
     interval: ~
