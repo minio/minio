@@ -247,7 +247,7 @@ if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
 	exit_1
 fi
-./mc tag set --version-id "${vID}" minio2/newbucket/README.md "k=v"
+./mc tag set --version-id "${vID}" minio2/newbucket/README.md "key=val"
 if [ $? -ne 0 ]; then
 	echo "expecting tag set to be successful. exiting.."
 	exit_1
@@ -351,6 +351,23 @@ diff -q <(./mc ls minio1) <(./mc ls minio2) 1>/dev/null
 if [ $? -ne 0 ]; then
 	echo "expected 'bucket2' delete and 'newbucket2' creation to have replicated, exiting..."
 	exit_1
+fi
+
+# force a resync after removing all site replication
+./mc admin replicate rm --all --force minio1
+./mc rb minio2 --force --dangerous
+./mc admin replicate add minio1 minio2
+./mc admin replicate resync start minio1 minio2
+sleep 30
+
+./mc ls -r --versions minio1/newbucket >/tmp/minio1.txt
+./mc ls -r --versions minio2/newbucket >/tmp/minio2.txt
+
+out=$(diff -qpruN /tmp/minio1.txt /tmp/minio2.txt)
+ret=$?
+if [ $ret -ne 0 ]; then
+	echo "BUG: expected no missing entries after replication resync: $out"
+	exit 1
 fi
 
 cleanup

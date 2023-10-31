@@ -62,7 +62,22 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 	return newDisks
 }
 
-func (er erasureObjects) getLoadBalancedLocalDisks() (newDisks []StorageAPI) {
+func (er erasureObjects) getOnlineLocalDisks() (newDisks []StorageAPI) {
+	disks := er.getOnlineDisks()
+
+	// Based on the random shuffling return back randomized disks.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for _, i := range r.Perm(len(disks)) {
+		if disks[i] != nil && disks[i].IsLocal() {
+			newDisks = append(newDisks, disks[i])
+		}
+	}
+
+	return newDisks
+}
+
+func (er erasureObjects) getLocalDisks() (newDisks []StorageAPI) {
 	disks := er.getDisks()
 	// Based on the random shuffling return back randomized disks.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))

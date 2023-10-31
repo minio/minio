@@ -87,8 +87,8 @@ function verify_rewrite() {
 		exit 1
 	fi
 
-	go build ./docs/debugging/s3-check-md5/
-	if ! ./s3-check-md5 \
+	go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+	if ! s3-check-md5 \
 		-debug \
 		-versions \
 		-access-key minio \
@@ -113,7 +113,7 @@ function verify_rewrite() {
 	go run ./buildscripts/heal-manual.go "127.0.0.1:${start_port}" "minio" "minio123"
 	sleep 1
 
-	if ! ./s3-check-md5 \
+	if ! s3-check-md5 \
 		-debug \
 		-versions \
 		-access-key minio \

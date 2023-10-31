@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -60,7 +60,7 @@ type ARN struct {
 
 // Allows english letters, numbers, '.', '-', '_' and '/'. Starts with a
 // letter or digit. At least 1 character long.
-var validResourceIDRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_/\.-]*$`)
+var validResourceIDRegex = regexp.MustCompile(`[A-Za-z0-9_/\.-]+$`)
 
 // NewIAMRoleARN - returns an ARN for a role in MinIO.
 func NewIAMRoleARN(resourceID, serverRegion string) (ARN, error) {

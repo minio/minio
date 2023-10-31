@@ -110,7 +110,7 @@ func (sm *siteResyncMetrics) load(ctx context.Context, objAPI ObjectLayer) error
 		return nil
 	}
 	for _, peer := range info.Sites {
-		if peer.DeploymentID == globalDeploymentID {
+		if peer.DeploymentID == globalDeploymentID() {
 			continue
 		}
 		rs, err := loadSiteResyncMetadata(ctx, objAPI, peer.DeploymentID)
@@ -118,11 +118,11 @@ func (sm *siteResyncMetrics) load(ctx context.Context, objAPI ObjectLayer) error
 			return err
 		}
 		sm.Lock()
-		defer sm.Unlock()
 		if _, ok := sm.peerResyncMap[peer.DeploymentID]; !ok {
 			sm.peerResyncMap[peer.DeploymentID] = resyncState{resyncID: rs.ResyncID, LastSaved: time.Time{}}
 			sm.resyncStatus[rs.ResyncID] = rs
 		}
+		sm.Unlock()
 	}
 	return nil
 }
@@ -198,9 +198,9 @@ func (sm *siteResyncMetrics) save(ctx context.Context) {
 }
 
 // update overall site resync state
-func (sm *siteResyncMetrics) updateState(s SiteResyncStatus) {
+func (sm *siteResyncMetrics) updateState(s SiteResyncStatus) error {
 	if !globalSiteReplicationSys.isEnabled() {
-		return
+		return nil
 	}
 	sm.Lock()
 	defer sm.Unlock()
@@ -213,9 +213,12 @@ func (sm *siteResyncMetrics) updateState(s SiteResyncStatus) {
 		if ok {
 			st.LastUpdate = s.LastUpdate
 			st.Status = s.Status
+			return nil
 		}
 		sm.resyncStatus[s.ResyncID] = st
+		return saveSiteResyncMetadata(GlobalContext, st, newObjectLayerFn())
 	}
+	return nil
 }
 
 // increment SyncedBuckets count

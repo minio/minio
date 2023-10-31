@@ -144,7 +144,8 @@ type storageRESTClient struct {
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
 
-	diskInfoCache timedValue
+	diskInfoCache        timedValue
+	diskInfoCacheMetrics timedValue
 }
 
 // Retrieve location indexes.
@@ -289,30 +290,61 @@ func (client *storageRESTClient) DiskInfo(_ context.Context, metrics bool) (info
 	}
 	// Do not cache results from atomic variables
 	scanning := atomic.LoadInt32(&client.scanning) == 1
-	client.diskInfoCache.Once.Do(func() {
-		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.Update = func() (interface{}, error) {
-			var info DiskInfo
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+	if metrics {
+		client.diskInfoCacheMetrics.Once.Do(func() {
+			client.diskInfoCacheMetrics.TTL = time.Second
+			client.diskInfoCacheMetrics.Update = func() (interface{}, error) {
+				var info DiskInfo
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
 
-			vals := make(url.Values)
-			vals.Set(storageRESTMetrics, strconv.FormatBool(metrics))
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, vals, nil, -1)
-			if err != nil {
-				return info, err
+				vals := make(url.Values)
+				vals.Set(storageRESTMetrics, "true")
+				respBody, err := client.call(ctx, storageRESTMethodDiskInfo, vals, nil, -1)
+				if err != nil {
+					return info, err
+				}
+				defer xhttp.DrainBody(respBody)
+				if err = msgp.Decode(respBody, &info); err != nil {
+					return info, err
+				}
+				if info.Error != "" {
+					return info, toStorageErr(errors.New(info.Error))
+				}
+				return info, nil
 			}
-			defer xhttp.DrainBody(respBody)
-			if err = msgp.Decode(respBody, &info); err != nil {
-				return info, err
+		})
+	} else {
+		client.diskInfoCache.Once.Do(func() {
+			client.diskInfoCache.TTL = time.Second
+			client.diskInfoCache.Update = func() (interface{}, error) {
+				var info DiskInfo
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				vals := make(url.Values)
+				respBody, err := client.call(ctx, storageRESTMethodDiskInfo, vals, nil, -1)
+				if err != nil {
+					return info, err
+				}
+				defer xhttp.DrainBody(respBody)
+				if err = msgp.Decode(respBody, &info); err != nil {
+					return info, err
+				}
+				if info.Error != "" {
+					return info, toStorageErr(errors.New(info.Error))
+				}
+				return info, nil
 			}
-			if info.Error != "" {
-				return info, toStorageErr(errors.New(info.Error))
-			}
-			return info, nil
-		}
-	})
-	val, err := client.diskInfoCache.Get()
+		})
+	}
+
+	var val interface{}
+	if metrics {
+		val, err = client.diskInfoCacheMetrics.Get()
+	} else {
+		val, err = client.diskInfoCache.Get()
+	}
 	if val != nil {
 		info = val.(DiskInfo)
 	}

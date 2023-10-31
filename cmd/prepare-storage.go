@@ -225,9 +225,9 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 			return nil, nil, err
 		}
 
-		// Assign globalDeploymentID on first run for the
+		// Assign globalDeploymentID() on first run for the
 		// minio server managing the first disk
-		globalDeploymentID = format.ID
+		globalDeploymentIDPtr.Store(&format.ID)
 		return storageDisks, format, nil
 	}
 
@@ -266,7 +266,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		}
 	}
 
-	globalDeploymentID = format.ID
+	globalDeploymentIDPtr.Store(&format.ID)
 
 	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		logger.LogIf(GlobalContext, err)

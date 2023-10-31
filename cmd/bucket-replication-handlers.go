@@ -575,7 +575,7 @@ func (api objectAPIHandlers) ValidateBucketReplicationCredsHandler(w http.Respon
 		if rule.Status == replication.Disabled {
 			continue
 		}
-		clnt := globalBucketTargetSys.GetRemoteTargetClient(rule.Destination.Bucket)
+		clnt := globalBucketTargetSys.GetRemoteTargetClient(bucket, rule.Destination.Bucket)
 		if clnt == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrRemoteTargetNotFoundError, fmt.Errorf("replication config with rule ID %s has a stale target", rule.ID)), r.URL)
 			return

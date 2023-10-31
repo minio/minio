@@ -41,7 +41,8 @@ unset MINIO_KMS_KES_KEY_FILE
 unset MINIO_KMS_KES_ENDPOINT
 unset MINIO_KMS_KES_KEY_NAME
 
-go build ./docs/debugging/s3-check-md5/
+go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+
 wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
 	chmod +x mc
 wget -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&
@@ -194,18 +195,18 @@ head -c 221227088 </dev/urandom >200M
 sleep 10
 
 echo "Verifying ETag for all objects"
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket bucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket bucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket bucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket bucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket bucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket bucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket bucket
 
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket olockbucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket olockbucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket olockbucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket olockbucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket olockbucket
-./s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9001/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9002/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9003/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket olockbucket
+s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket olockbucket
 
 catch
