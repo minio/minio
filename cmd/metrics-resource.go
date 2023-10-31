@@ -74,7 +74,8 @@ const (
 var (
 	resourceCollector *minioResourceCollector
 	// resourceMetricsMap is a map of subsystem to its metrics
-	resourceMetricsMap map[MetricSubsystem]ResourceMetrics
+	resourceMetricsMap   map[MetricSubsystem]ResourceMetrics
+	resourceMetricsMapMu sync.RWMutex
 	// resourceMetricsHelpMap maps metric name to its help string
 	resourceMetricsHelpMap map[MetricName]string
 	resourceMetricsGroups  []*MetricsGroup
@@ -159,6 +160,8 @@ func init() {
 }
 
 func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64, labels map[string]string, isCumulative bool) {
+	resourceMetricsMapMu.Lock()
+	defer resourceMetricsMapMu.Unlock()
 	subsysMetrics, found := resourceMetricsMap[subSys]
 	if !found {
 		subsysMetrics = ResourceMetrics{}
@@ -320,7 +323,9 @@ func collectLocalResourceMetrics() {
 
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
+	resourceMetricsMapMu.Lock()
 	resourceMetricsMap = map[MetricSubsystem]ResourceMetrics{}
+	resourceMetricsMapMu.Unlock()
 	metricsTimer := time.NewTimer(resourceMetricsCollectionInterval)
 	defer metricsTimer.Stop()
 
@@ -382,12 +387,11 @@ func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceColl
 func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []Metric {
 	help := resourceMetricsHelpMap[rm.Name]
 	name := rm.Name
-
-	metrics := []Metric{}
+	metrics := make([]Metric, 0, 3)
 	metrics = append(metrics, Metric{
 		Description:    getResourceMetricDescription(subSys, name, help),
 		Value:          rm.Current,
-		VariableLabels: rm.Labels,
+		VariableLabels: cloneMSS(rm.Labels),
 	})
 
 	if requireAvgMax {
@@ -396,7 +400,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 		metrics = append(metrics, Metric{
 			Description:    getResourceMetricDescription(subSys, avgName, avgHelp),
 			Value:          math.Round(rm.Avg*100) / 100,
-			VariableLabels: rm.Labels,
+			VariableLabels: cloneMSS(rm.Labels),
 		})
 
 		maxName := MetricName(fmt.Sprintf("%s_max", name))
@@ -404,7 +408,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 		metrics = append(metrics, Metric{
 			Description:    getResourceMetricDescription(subSys, maxName, maxHelp),
 			Value:          rm.Max,
-			VariableLabels: rm.Labels,
+			VariableLabels: cloneMSS(rm.Labels),
 		})
 	}
 
@@ -429,6 +433,8 @@ func getResourceMetrics() *MetricsGroup {
 		metrics := []Metric{}
 
 		subSystems := []MetricSubsystem{interfaceSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
+		resourceMetricsMapMu.RLock()
+		defer resourceMetricsMapMu.RUnlock()
 		for _, subSys := range subSystems {
 			stats, found := resourceMetricsMap[subSys]
 			if found {

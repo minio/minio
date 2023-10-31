@@ -351,7 +351,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 
 	for _, info := range clusterInfos.Sites {
 		// skip self
-		if globalDeploymentID == info.DeploymentID {
+		if globalDeploymentID() == info.DeploymentID {
 			continue
 		}
 		info := info

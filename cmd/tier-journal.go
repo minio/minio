@@ -195,6 +195,10 @@ func (jd *tierDiskJournal) addEntry(je jentry) error {
 	defer jd.Unlock()
 	_, err = jd.file.Write(b)
 	if err != nil {
+		// Do not leak fd here, close the file properly.
+		Fdatasync(jd.file)
+		_ = jd.file.Close()
+
 		jd.file = nil // reset to allow subsequent reopen when file/disk is available.
 	}
 	return err

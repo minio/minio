@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/minio/minio/internal/store"
 )
 
 const (
@@ -34,7 +36,7 @@ type Target interface {
 	ID() TargetID
 	IsActive() (bool, error)
 	Save(Event) error
-	SendFromStore(string) error
+	SendFromStore(store.Key) error
 	Close() error
 	Store() TargetStore
 }
@@ -48,6 +50,8 @@ type TargetStore interface {
 type TargetStats struct {
 	// CurrentSendCalls is the number of concurrent async Send calls to all targets
 	CurrentSendCalls int64
+	TotalEvents      int64
+	EventsSkipped    int64
 
 	TargetStats map[string]TargetStat
 }
@@ -62,6 +66,8 @@ type TargetStat struct {
 type TargetList struct {
 	// The number of concurrent async Send calls to all targets
 	currentSendCalls int64
+	totalEvents      int64
+	eventsSkipped    int64
 
 	sync.RWMutex
 	targets map[TargetID]Target
@@ -159,6 +165,7 @@ func (list *TargetList) TargetMap() map[TargetID]Target {
 // Send - sends events to targets identified by target IDs.
 func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult, synchronous bool) {
 	if atomic.LoadInt64(&list.currentSendCalls) > maxConcurrentTargetSendCalls {
+		atomic.AddInt64(&list.eventsSkipped, 1)
 		err := fmt.Errorf("concurrent target notifications exceeded %d", maxConcurrentTargetSendCalls)
 		for id := range targetIDset {
 			resCh <- TargetIDResult{ID: id, Err: err}
@@ -169,9 +176,7 @@ func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- 
 		list.send(event, targetIDset, resCh)
 		return
 	}
-	go func() {
-		list.send(event, targetIDset, resCh)
-	}()
+	go list.send(event, targetIDset, resCh)
 }
 
 func (list *TargetList) send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult) {
@@ -197,6 +202,7 @@ func (list *TargetList) send(event Event, targetIDset TargetIDSet, resCh chan<- 
 		}
 	}
 	wg.Wait()
+	atomic.AddInt64(&list.totalEvents, 1)
 }
 
 // Stats returns stats for targets.
@@ -206,6 +212,9 @@ func (list *TargetList) Stats() TargetStats {
 		return t
 	}
 	t.CurrentSendCalls = atomic.LoadInt64(&list.currentSendCalls)
+	t.EventsSkipped = atomic.LoadInt64(&list.eventsSkipped)
+	t.TotalEvents = atomic.LoadInt64(&list.totalEvents)
+
 	list.RLock()
 	defer list.RUnlock()
 	t.TargetStats = make(map[string]TargetStat, len(list.targets))

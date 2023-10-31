@@ -59,7 +59,6 @@ func init() {
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
-		getCacheMetrics(),
 		getGoMetrics(),
 		getHTTPMetrics(false),
 		getNotificationMetrics(),
@@ -85,7 +84,6 @@ func init() {
 
 	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(),
-		getCacheMetrics(),
 		getHTTPMetrics(false),
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
@@ -237,8 +235,6 @@ const (
 
 	latencyMicroSec MetricName = "latency_us"
 	latencyNanoSec  MetricName = "latency_ns"
-
-	usagePercent MetricName = "update_percent"
 
 	commitInfo  MetricName = "commit_info"
 	usageInfo   MetricName = "usage_info"
@@ -1226,76 +1222,6 @@ func getS3RejectedInvalidRequestsTotalMD() MetricDescription {
 		Subsystem: requestsRejectedSubsystem,
 		Name:      invalidTotal,
 		Help:      "Total number of invalid S3 requests",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheHitsTotalMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      hitsTotal,
-		Help:      "Total number of drive cache hits",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheHitsMissedTotalMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      missedTotal,
-		Help:      "Total number of drive cache misses",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheUsagePercentMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: minioNamespace,
-		Name:      usagePercent,
-		Help:      "Total percentage cache usage",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheUsageInfoMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      usageInfo,
-		Help:      "Total percentage cache usage, value of 1 indicates high and 0 low, label level is set as well",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheUsedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      usedBytes,
-		Help:      "Current cache usage in bytes",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheTotalBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      totalBytes,
-		Help:      "Total size of cache drive in bytes",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheSentBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      sentBytes,
-		Help:      "Total number of bytes served from cache",
 		Type:      counterMetric,
 	}
 }
@@ -2454,56 +2380,6 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 	return
 }
 
-func getCacheMetrics() *MetricsGroup {
-	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
-	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		cacheObjLayer := newCachedObjectLayerFn()
-		// Service not initialized yet
-		if cacheObjLayer == nil {
-			return
-		}
-		metrics = make([]Metric, 0, 20)
-		metrics = append(metrics, Metric{
-			Description: getCacheHitsTotalMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getHits()),
-		})
-		metrics = append(metrics, Metric{
-			Description: getCacheHitsMissedTotalMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getMisses()),
-		})
-		metrics = append(metrics, Metric{
-			Description: getCacheSentBytesMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getBytesServed()),
-		})
-		for _, cdStats := range cacheObjLayer.CacheStats().GetDiskStats() {
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsagePercentMD(),
-				Value:          float64(cdStats.UsagePercent),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsageInfoMD(),
-				Value:          float64(cdStats.UsageState),
-				VariableLabels: map[string]string{"drive": cdStats.Dir, "level": cdStats.GetUsageLevelString()},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsedBytesMD(),
-				Value:          float64(cdStats.UsageSize),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheTotalBytesMD(),
-				Value:          float64(cdStats.TotalCapacity),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-		}
-		return
-	})
-	return mg
-}
-
 func getDistLockMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 1 * time.Second,
@@ -2556,30 +2432,53 @@ func getNotificationMetrics() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		nstats := globalNotifyTargetList.Stats()
-		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
-		metrics = append(metrics, Metric{
-			Description: MetricDescription{
-				Namespace: minioNamespace,
-				Subsystem: notifySubsystem,
-				Name:      "current_send_in_progress",
-				Help:      "Number of concurrent async Send calls active to all targets",
-				Type:      gaugeMetric,
-			},
-			Value: float64(nstats.CurrentSendCalls),
-		})
-		for _, st := range nstats.TargetStats {
+		metrics := make([]Metric, 0, 3)
+
+		if globalEventNotifier != nil {
+			nstats := globalEventNotifier.targetList.Stats()
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
-					Name:      "target_queue_length",
-					Help:      "Number of unsent notifications in queue for target",
+					Name:      "current_send_in_progress",
+					Help:      "Number of concurrent async Send calls active to all targets",
 					Type:      gaugeMetric,
 				},
-				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
-				Value:          float64(st.CurrentQueue),
+				Value: float64(nstats.CurrentSendCalls),
 			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_skipped_total",
+					Help:      "Events that were skipped due to full queue",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsSkipped),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_sent_total",
+					Help:      "Total number of events sent since start",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.TotalEvents),
+			})
+			for _, st := range nstats.TargetStats {
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_queue_length",
+						Help:      "Number of unsent notifications in queue for target",
+						Type:      gaugeMetric,
+					},
+					VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+					Value:          float64(st.CurrentQueue),
+				})
+			}
 		}
 
 		lstats := globalLambdaTargetList.Stats()

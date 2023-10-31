@@ -251,10 +251,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoinBuf(sb, current, meta.name)
 				meta.name = decodeDirObject(meta.name)
-				if err := send(meta); err != nil {
-					return err
-				}
-				return nil
+
+				return send(meta)
 			}
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) && legacy {
@@ -270,10 +268,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoinBuf(sb, current, meta.name)
-				if err := send(meta); err != nil {
-					return err
-				}
-				return nil
+
+				return send(meta)
 			}
 			// Skip all other files.
 		}
