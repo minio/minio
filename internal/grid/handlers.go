@@ -133,6 +133,15 @@ func (r *RemoteErr) Is(other error) bool {
 	return false
 }
 
+// IsRemoteErr returns the value if the error is a RemoteErr.
+func IsRemoteErr(err error) *RemoteErr {
+	var r RemoteErr
+	if errors.As(err, &r) {
+		return &r
+	}
+	return nil
+}
+
 type (
 	// SingleHandlerFn is handlers for one to one requests.
 	// A non-nil error value will be returned as RemoteErr(msg) to client.

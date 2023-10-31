@@ -73,6 +73,7 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 		// Record incoming and outgoing bytes.
 		Incoming: globalConnStats.incInternodeInputBytes,
 		Outgoing: globalConnStats.incInternodeOutputBytes,
+		TraceTo:  globalTrace,
 	})
 	if err != nil {
 		return err

@@ -39,7 +39,9 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
@@ -103,8 +105,8 @@ type Connection struct {
 
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
-
-	baseFlags Flags
+	trace         *tracer       // tracer for this connection.
+	baseFlags     Flags
 
 	// For testing only
 	debugInConn  net.Conn
@@ -116,6 +118,7 @@ type Connection struct {
 // Subroute is a connection subroute that can be used to route to a specific handler with the same handler ID.
 type Subroute struct {
 	*Connection
+	trace *tracer
 	route string
 	subID subHandlerID
 }
@@ -187,6 +190,7 @@ type connectionParams struct {
 	tlsConfig     *tls.Config
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
+	publisher     *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]
 
 	blockConnect chan struct{}
 }
@@ -225,6 +229,9 @@ func newConnection(o connectionParams) *Connection {
 	if !strings.HasPrefix(o.local, "https://") && !strings.HasPrefix(o.local, "wss://") {
 		c.baseFlags |= FlagCRCxxh3
 	}
+	if o.publisher != nil {
+		c.traceRequests(o.publisher)
+	}
 	if o.local == o.remote {
 		panic("equal hosts")
 	}
@@ -256,6 +263,7 @@ func (c *Connection) Subroute(s string) *Subroute {
 		Connection: c,
 		route:      s,
 		subID:      makeSubHandlerID(0, s),
+		trace:      c.trace.subroute(s),
 	}
 }
 
@@ -267,6 +275,7 @@ func (c *Subroute) Subroute(s string) *Subroute {
 		Connection: c.Connection,
 		route:      route,
 		subID:      makeSubHandlerID(0, route),
+		trace:      c.trace.subroute(route),
 	}
 }
 
@@ -327,7 +336,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.roundtrip(h, req)
+	return client.traceRoundtrip(c.trace, h, req)
 }
 
 // Request allows to do a single remote request.
@@ -355,7 +364,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.roundtrip(h, req)
+	return client.traceRoundtrip(c.trace, h, req)
 }
 
 // NewStream creates a new stream.
