@@ -776,10 +776,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 	var sp *policy.Policy
 	if len(createReq.Policy) > 0 {
-		sp, err = policy.ParseConfig(bytes.NewReader(createReq.Policy))
+		preSp, err := policy.ParseConfig(bytes.NewReader(createReq.Policy))
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
+		}
+		if preSp.Version != "" || len(preSp.Statements) > 0 {
+			sp = preSp
 		}
 	}
 
