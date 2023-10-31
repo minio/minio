@@ -474,9 +474,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	deleteObjectsFn := objectAPI.DeleteObjects
-	if api.CacheAPI() != nil {
-		deleteObjectsFn = api.CacheAPI().DeleteObjects
-	}
 
 	// Return Malformed XML as S3 spec if the number of objects is empty
 	if len(deleteObjectsReq.Objects) == 0 || len(deleteObjectsReq.Objects) > maxDeleteList {
@@ -486,9 +483,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	objectsToDelete := map[ObjectToDelete]int{}
 	getObjectInfoFn := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfoFn = api.CacheAPI().GetObjectInfo
-	}
 
 	var (
 		hasLockEnabled bool
@@ -716,7 +710,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
 			continue
 		}
-		logger.LogIf(ctx, os.Sweep())
+		os.Sweep()
 	}
 }
 
@@ -794,7 +788,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		logger.LogIf(ctx, fmt.Errorf("An attempt to create %d buckets beyond recommended %d", currBuckets+1, maxBuckets))
+		logger.LogIf(ctx, fmt.Errorf("Please avoid creating more buckets %d beyond recommended %d", currBuckets+1, maxBuckets))
 	}
 
 	opts := MakeBucketOptions{
@@ -1045,11 +1039,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		break
 	}
 
-	if _, ok := formValues["Key"]; !ok {
+	if keyName, ok := formValues["Key"]; !ok {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The name of the uploaded key is missing"))
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
+	} else if fileName == "" && len(keyName) >= 1 {
+		// if we can't get fileName. We use keyName[0] to fileName
+		fileName = keyName[0]
 	}
 
 	if fileName == "" {
@@ -1141,7 +1138,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	hashReader, err := hash.NewReader(ctx, reader, fileSize, "", "", fileSize)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

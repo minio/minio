@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -31,8 +30,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 	"github.com/minio/zipindex"
 )
@@ -82,9 +79,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
 
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
@@ -223,9 +217,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
-		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
-		}
 		return
 	}
 
@@ -233,9 +224,6 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		if !httpWriter.HasWritten() { // write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
-		}
-		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client: %w", err))
 		}
 		return
 	}
@@ -384,9 +372,6 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
-	if api.CacheAPI() != nil {
-		getObjectInfo = api.CacheAPI().GetObjectInfo
-	}
 
 	opts, err := getOpts(ctx, r, bucket, zipPath)
 	if err != nil {

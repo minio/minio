@@ -104,7 +104,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 		for res := range evnot.targetResCh {
 			if res.Err != nil {
 				reqInfo := &logger.ReqInfo{}
-				reqInfo.AppendTags("targetID", res.ID.Name)
+				reqInfo.AppendTags("targetID", res.ID.String())
 				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID.String())
 			}
 		}
@@ -210,6 +210,9 @@ type eventArgs struct {
 func (args eventArgs) ToEvent(escape bool) event.Event {
 	eventTime := UTCNow()
 	uniqueID := fmt.Sprintf("%X", eventTime.UnixNano())
+	if !args.Object.ModTime.IsZero() {
+		uniqueID = fmt.Sprintf("%X", args.Object.ModTime.UnixNano())
+	}
 
 	respElements := map[string]string{
 		"x-amz-request-id": args.RespElements["requestId"],
@@ -223,7 +226,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	}
 
 	// Add deployment as part of response elements.
-	respElements["x-minio-deployment-id"] = globalDeploymentID
+	respElements["x-minio-deployment-id"] = globalDeploymentID()
 	if args.RespElements["content-length"] != "" {
 		respElements["content-length"] = args.RespElements["content-length"]
 	}

@@ -273,15 +273,5 @@ func checkMetaHeaders(signedHeadersMap http.Header, r *http.Request) APIErrorCod
 		}
 	}
 
-	// check values from url, if no http header
-	for k, val := range r.Form {
-		if stringsHasPrefixFold(k, "x-amz-meta-") {
-			if signedHeadersMap.Get(http.CanonicalHeaderKey(k)) == val[0] {
-				continue
-			}
-			return ErrUnsignedHeaders
-		}
-	}
-
 	return ErrNone
 }

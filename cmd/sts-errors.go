@@ -27,23 +27,23 @@ import (
 )
 
 // writeSTSErrorRespone writes error headers
-func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, errCtxt error) {
-	err := stsErrCodes.ToSTSErr(errCode)
+func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, err error) {
+	stsErr := stsErrCodes.ToSTSErr(errCode)
 
 	// Generate error response.
 	stsErrorResponse := STSErrorResponse{}
-	stsErrorResponse.Error.Code = err.Code
+	stsErrorResponse.Error.Code = stsErr.Code
 	stsErrorResponse.RequestID = w.Header().Get(xhttp.AmzRequestID)
-	stsErrorResponse.Error.Message = err.Description
-	if errCtxt != nil {
-		stsErrorResponse.Error.Message = errCtxt.Error()
+	stsErrorResponse.Error.Message = stsErr.Description
+	if err != nil {
+		stsErrorResponse.Error.Message = err.Error()
 	}
 	switch errCode {
-	case ErrSTSInternalError, ErrSTSNotInitialized, ErrSTSUpstreamError, ErrSTSIAMNotInitialized:
-		logger.LogIf(ctx, errCtxt, logger.Minio)
+	case ErrSTSInternalError, ErrSTSUpstreamError:
+		logger.LogIf(ctx, err, logger.Minio)
 	}
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
-	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
+	writeResponse(w, stsErr.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
 
 // STSError structure

@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,7 +30,6 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
 )
 
 var etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
@@ -356,17 +356,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 			PrefixEnabledFn:  vc.PrefixEnabled,
 			VersionSuspended: vc.Suspended(),
 		})
-		var logged bool
-		for i, err := range errs {
-			if err != nil {
-				if !logged {
-					// log the first error
-					logger.LogIf(ctx, err)
-					logged = true
-				}
-				continue
-			}
-			dobj := deletedObjs[i]
+
+		for i, dobj := range deletedObjs {
 			oi := ObjectInfo{
 				Bucket:    bucket,
 				Name:      dobj.ObjectName,
@@ -382,7 +373,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				oi,
 				ILMExpiry, tags, traceFn)
 
-			sendEvent(eventArgs{
+			evArgs := eventArgs{
 				EventName:  event.ObjectRemovedDelete,
 				BucketName: bucket,
 				Object: ObjectInfo{
@@ -391,7 +382,13 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				},
 				UserAgent: "Internal: [ILM-Expiry]",
 				Host:      globalLocalNodeName,
-			})
+			}
+			if errs[i] != nil {
+				evArgs.RespElements = map[string]string{
+					"error": fmt.Sprintf("failed to delete %s(%s), with error %v", dobj.ObjectName, dobj.VersionID, errs[i]),
+				}
+			}
+			sendEvent(evArgs)
 		}
 	}
 }
