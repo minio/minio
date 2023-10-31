@@ -996,9 +996,12 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// if session policy is nil or empty, then it is implied policy
+	impliedPolicy := sessionPolicy == nil || (sessionPolicy.Version == "" && len(sessionPolicy.Statements) == 0)
+
 	var svcAccountPolicy policy.Policy
 
-	if sessionPolicy != nil {
+	if !impliedPolicy {
 		svcAccountPolicy = *sessionPolicy
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
@@ -1025,7 +1028,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		Name:          svcAccount.Name,
 		Description:   svcAccount.Description,
 		AccountStatus: svcAccount.Status,
-		ImpliedPolicy: sessionPolicy == nil,
+		ImpliedPolicy: impliedPolicy,
 		Policy:        string(policyJSON),
 		Expiration:    expiration,
 	}
