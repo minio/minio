@@ -900,7 +900,7 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 	return nil
 }
 
-func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, failed bool) {
+func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool) {
 	if ri == nil {
 		return
 	}
@@ -910,7 +910,7 @@ func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo,
 
 	ri.Bucket = bucket
 	ri.Object = info.Name
-	ri.countItem(info.Size, info.DeleteMarker, failed)
+	ri.countItem(info.Size, info.DeleteMarker, success)
 }
 
 // Start start the batch replication job, resumes if there was a pending job via "job.ID"

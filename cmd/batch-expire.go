@@ -316,11 +316,16 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 			defer wk.Give()
 			toExpireAll := make([]ObjectInfo, 0, len(toExpire))
 			toDel := make([]ObjectToDelete, 0, len(toExpire))
+			objInfoCache := make(map[string]*ObjectInfo)
 			for _, exp := range toExpire {
 				if exp.ExpireAll {
 					toExpireAll = append(toExpireAll, exp.ObjectInfo)
 					continue
 				}
+				// Cache ObjectInfo value via pointers for
+				// subsequent use to track objects which
+				// couldn't be deleted.
+				objInfoCache[fmt.Sprintf("%s-%s", exp.Name, exp.VersionID)] = &exp.ObjectInfo
 				toDel = append(toDel, ObjectToDelete{
 					ObjectV: ObjectV{
 						ObjectName: exp.Name,
@@ -331,27 +336,42 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 
 			// DeleteObject(deletePrefix: true) to expire all versions of an object
 			for _, exp := range toExpireAll {
+				var success bool
 				for attempts := 1; attempts <= retryAttempts; attempts++ {
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
-					var failed int
 					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
 						DeletePrefix: true,
+						NoLock:       true,
 					})
 					if err != nil {
 						stopFn(exp, err)
 						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
-						failed++
 					} else {
 						stopFn(exp, err)
+						success = true
+						break
 					}
 				}
+				ri.trackCurrentBucketObject(r.Bucket, exp, success)
 			}
 
 			// DeleteMultiple objects
+			toDelCopy := make([]ObjectToDelete, len(toDel))
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
+				// Copying toDel to select from objects whose
+				// deletion failed
+				copy(toDelCopy, toDel)
 				var failed int
 				errs := r.Expire(ctx, api, vc, toDel)
+				// TODO: remove fault injection code
+				if attempts == 1 {
+					for i := range errs {
+						if i%2 == 0 {
+							errs[i] = fmt.Errorf("failed to delete %s %s", toDel[i].ObjectName, toDel[i].VersionID)
+						}
+					}
+				}
 				for i, err := range errs {
 					if err != nil {
 						stopFn(toDel[i], err)
@@ -359,8 +379,8 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 						failed++
 					} else {
 						stopFn(toDel[i], nil)
+						ri.trackCurrentBucketObject(r.Bucket, toExpire[i].ObjectInfo, true)
 					}
-					ri.trackCurrentBucketObject(r.Bucket, toExpire[i].ObjectInfo, err == nil)
 				}
 
 				ri.RetryAttempts = attempts
@@ -370,11 +390,11 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				}
 
 				toDel = toDel[:0]
-				for i, exp := range toExpire {
+				for i, exp := range toDelCopy {
 					if errs[i] != nil {
 						toDel = append(toDel, ObjectToDelete{
 							ObjectV: ObjectV{
-								ObjectName: exp.Name,
+								ObjectName: exp.ObjectName,
 								VersionID:  exp.VersionID,
 							},
 						})
@@ -382,6 +402,12 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				}
 				// Add a delay between retry attempts
 				time.Sleep(delay)
+			}
+			// Objects failed to delete remain in toDel
+			for _, exp := range toDel {
+				if oi := objInfoCache[fmt.Sprintf("%s/%s", exp.ObjectName, exp.VersionID)]; oi != nil {
+					ri.trackCurrentBucketObject(r.Bucket, *oi, false)
+				}
 			}
 		}(toExpire)
 	}
