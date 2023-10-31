@@ -350,7 +350,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	var wg sync.WaitGroup
 
 	var totalSpentDuration time.Duration
-	var totalReqCount = int64(0)
+	totalReqCount := int64(0)
 	for _, info := range clusterInfos.Sites {
 		// skip self
 		if globalDeploymentID() == info.DeploymentID {
