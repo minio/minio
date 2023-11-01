@@ -196,7 +196,6 @@ func (m *muxClient) RequestStateless(h HandlerID, req []byte, out chan<- Respons
 	// Send...
 	err := m.send(msg)
 	if err != nil {
-		PutByteBuffer(req)
 		out <- Response{Err: err}
 		return
 	}
@@ -220,6 +219,7 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 
 	// Try to grab an initial block.
 	m.singleResp = false
+	m.RecvSeq = m.SendSeq // Sync
 	if cap(requests) > 0 {
 		m.outBlock = make(chan struct{}, cap(requests))
 	}
@@ -397,8 +397,8 @@ func (m *muxClient) handleTwowayRequests(responses chan<- Response, requests cha
 			}
 			msg.setZeroPayloadFlag()
 			err := m.send(msg)
+			PutByteBuffer(req)
 			if err != nil {
-				PutByteBuffer(req)
 				responses <- Response{Err: err}
 				m.close()
 				errState = true
@@ -413,7 +413,7 @@ func (m *muxClient) handleTwowayRequests(responses chan<- Response, requests cha
 func (m *muxClient) checkSeq(seq uint32) (ok bool) {
 	if seq != m.RecvSeq {
 		if debugPrint {
-			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
+			fmt.Printf("MuxID: %d client, expected sequence %d, got %d\n", m.MuxID, m.RecvSeq, seq)
 		}
 		m.addResponse(Response{Err: ErrIncorrectSequence})
 		return false

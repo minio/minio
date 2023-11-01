@@ -39,7 +39,9 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
@@ -103,8 +105,8 @@ type Connection struct {
 
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
-
-	baseFlags Flags
+	trace         *tracer       // tracer for this connection.
+	baseFlags     Flags
 
 	// For testing only
 	debugInConn  net.Conn
@@ -116,6 +118,7 @@ type Connection struct {
 // Subroute is a connection subroute that can be used to route to a specific handler with the same handler ID.
 type Subroute struct {
 	*Connection
+	trace *tracer
 	route string
 	subID subHandlerID
 }
@@ -187,6 +190,7 @@ type connectionParams struct {
 	tlsConfig     *tls.Config
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
+	publisher     *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]
 
 	blockConnect chan struct{}
 }
@@ -215,12 +219,18 @@ func newConnection(o connectionParams) *Connection {
 		incomingBytes:      o.incomingBytes,
 		outgoingBytes:      o.outgoingBytes,
 	}
-
+	if debugPrint {
+		// Random Mux ID
+		c.NextID = rand.Uint64()
+	}
 	if !strings.HasPrefix(o.remote, "https://") && !strings.HasPrefix(o.remote, "wss://") {
 		c.baseFlags |= FlagCRCxxh3
 	}
 	if !strings.HasPrefix(o.local, "https://") && !strings.HasPrefix(o.local, "wss://") {
 		c.baseFlags |= FlagCRCxxh3
+	}
+	if o.publisher != nil {
+		c.traceRequests(o.publisher)
 	}
 	if o.local == o.remote {
 		panic("equal hosts")
@@ -253,6 +263,7 @@ func (c *Connection) Subroute(s string) *Subroute {
 		Connection: c,
 		route:      s,
 		subID:      makeSubHandlerID(0, s),
+		trace:      c.trace.subroute(s),
 	}
 }
 
@@ -264,6 +275,7 @@ func (c *Subroute) Subroute(s string) *Subroute {
 		Connection: c.Connection,
 		route:      route,
 		subID:      makeSubHandlerID(0, route),
+		trace:      c.trace.subroute(route),
 	}
 }
 
@@ -324,7 +336,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.roundtrip(h, req)
+	return client.traceRoundtrip(c.trace, h, req)
 }
 
 // Request allows to do a single remote request.
@@ -352,10 +364,11 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.roundtrip(h, req)
+	return client.traceRoundtrip(c.trace, h, req)
 }
 
 // NewStream creates a new stream.
+// Initial payload can be reused by the caller.
 func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -388,6 +401,7 @@ func (c *Connection) NewStream(ctx context.Context, h HandlerID, payload []byte)
 }
 
 // NewStream creates a new stream.
+// Initial payload can be reused by the caller.
 func (c *Subroute) NewStream(ctx context.Context, h HandlerID, payload []byte) (st *Stream, err error) {
 	if !h.valid() {
 		return nil, ErrUnknownHandler
@@ -862,28 +876,28 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		}()
 
 		controlHandler := wsutil.ControlFrameHandler(conn, c.side)
+		wsReader := wsutil.Reader{
+			Source:          conn,
+			State:           c.side,
+			CheckUTF8:       true,
+			SkipHeaderCheck: false,
+			OnIntermediate:  controlHandler,
+		}
 		readDataInto := func(dst []byte, rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, error) {
 			dst = dst[:0]
-			rd := wsutil.Reader{
-				Source:          conn,
-				State:           c.side,
-				CheckUTF8:       true,
-				SkipHeaderCheck: false,
-				OnIntermediate:  controlHandler,
-			}
 			for {
-				hdr, err := rd.NextFrame()
+				hdr, err := wsReader.NextFrame()
 				if err != nil {
 					return nil, err
 				}
 				if hdr.OpCode.IsControl() {
-					if err := controlHandler(hdr, &rd); err != nil {
+					if err := controlHandler(hdr, &wsReader); err != nil {
 						return nil, err
 					}
 					continue
 				}
 				if hdr.OpCode&want == 0 {
-					if err := rd.Discard(); err != nil {
+					if err := wsReader.Discard(); err != nil {
 						return nil, err
 					}
 					continue
@@ -892,7 +906,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				if int64(cap(dst)) < hdr.Length+1 {
 					dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
 				}
-				return readAllInto(dst[:0], &rd)
+				return readAllInto(dst[:0], &wsReader)
 			}
 		}
 
@@ -988,8 +1002,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 	defer ping.Stop()
 	queue := make([][]byte, 0, maxMergeMessages)
+	merged := make([]byte, 0, writeBufferSize)
 	var queueSize int
 	var buf bytes.Buffer
+	var wsw wsWriter
 	for {
 		var toSend []byte
 		select {
@@ -1048,43 +1064,65 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 		}
 		c.connChange.L.Unlock()
-		if len(queue) > 0 {
-			// Merge entries and send
-			queue = append(queue, toSend)
-			if debugPrint {
-				fmt.Println("Merging", len(queue)+1, "messages")
-			}
-
-			toSend = GetByteBuffer()[:0]
-			m := message{Op: OpMerged, Seq: uint32(len(queue))}
-			var err error
-			toSend, err = m.MarshalMsg(toSend)
+		if len(queue) == 0 {
+			// Combine writes.
+			buf.Reset()
+			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("msg.MarshalMsg: %w", err))
+				logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
 				cancel(ErrDisconnected)
 				return
 			}
-			// Append as byte slices.
-			for _, q := range queue {
-				toSend = msgp.AppendBytes(toSend, q)
+			PutByteBuffer(toSend)
+			_, err = buf.WriteTo(conn)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
+				cancel(ErrDisconnected)
+				return
 			}
-			queue = queue[:0]
-			queueSize = 0
+			continue
 		}
+
+		// Merge entries and send
+		queue = append(queue, toSend)
+		if debugPrint {
+			fmt.Println("Merging", len(queue), "messages")
+		}
+
+		toSend = merged[:0]
+		m := message{Op: OpMerged, Seq: uint32(len(queue))}
+		var err error
+		toSend, err = m.MarshalMsg(toSend)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("msg.MarshalMsg: %w", err))
+			cancel(ErrDisconnected)
+			return
+		}
+		// Append as byte slices.
+		for _, q := range queue {
+			toSend = msgp.AppendBytes(toSend, q)
+			PutByteBuffer(q)
+		}
+		queue = queue[:0]
+		queueSize = 0
+
 		// Combine writes.
+		// Consider avoiding buffer copy.
 		buf.Reset()
-		err := wsutil.WriteMessage(&buf, c.side, ws.OpBinary, toSend)
+		err = wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
 			cancel(ErrDisconnected)
 			return
 		}
+		// Tosend is our local buffer, so we can reuse it.
 		_, err = buf.WriteTo(conn)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
 			cancel(ErrDisconnected)
 			return
 		}
+
 		if buf.Cap() > writeBufferSize*4 {
 			// Reset buffer if it gets too big, so we don't keep it around.
 			buf = bytes.Buffer{}
@@ -1162,15 +1200,7 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 		_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
 			return newMuxStream(ctx, m, c, *handler)
 		})
-		if debugPrint {
-			fmt.Println("connected stream mux:", m.MuxID)
-		}
 	}
-	// Acknowledge Mux created.
-	m.Op = OpAckMux
-	m.Flags = 0
-	m.Payload = nil
-	logger.LogIf(ctx, c.queueMsg(m, nil))
 }
 
 func (c *Connection) handleAckMux(ctx context.Context, m message) {
@@ -1329,7 +1359,9 @@ func (c *Connection) handleUnblockClMux(m message) {
 }
 
 func (c *Connection) handleUnblockSrvMux(m message) {
-	PutByteBuffer(m.Payload)
+	if m.Payload != nil {
+		PutByteBuffer(m.Payload)
+	}
 	m.Payload = nil
 	if v, ok := c.inStream.Load(m.MuxID); ok {
 		v.unblockSend(m.Seq)
@@ -1492,4 +1524,75 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
 	}
+}
+
+// wsWriter writes websocket messages.
+type wsWriter struct {
+	tmp [ws.MaxHeaderSize]byte
+}
+
+// writeMessage writes a message to w without allocations.
+func (ww *wsWriter) writeMessage(w io.Writer, s ws.State, op ws.OpCode, p []byte) error {
+	const fin = true
+	var frame ws.Frame
+	if s.ClientSide() {
+		// We do not need to copy the payload, since we own it.
+		payload := p
+
+		frame = ws.NewFrame(op, fin, payload)
+		frame = ws.MaskFrameInPlace(frame)
+	} else {
+		frame = ws.NewFrame(op, fin, p)
+	}
+
+	return ww.writeFrame(w, frame)
+}
+
+// writeFrame writes frame binary representation into w.
+func (ww *wsWriter) writeFrame(w io.Writer, f ws.Frame) error {
+	const (
+		bit0  = 0x80
+		len7  = int64(125)
+		len16 = int64(^(uint16(0)))
+		len64 = int64(^(uint64(0)) >> 1)
+	)
+
+	bts := ww.tmp[:]
+	if f.Header.Fin {
+		bts[0] |= bit0
+	}
+	bts[0] |= f.Header.Rsv << 4
+	bts[0] |= byte(f.Header.OpCode)
+
+	var n int
+	switch {
+	case f.Header.Length <= len7:
+		bts[1] = byte(f.Header.Length)
+		n = 2
+
+	case f.Header.Length <= len16:
+		bts[1] = 126
+		binary.BigEndian.PutUint16(bts[2:4], uint16(f.Header.Length))
+		n = 4
+
+	case f.Header.Length <= len64:
+		bts[1] = 127
+		binary.BigEndian.PutUint64(bts[2:10], uint64(f.Header.Length))
+		n = 10
+
+	default:
+		return ws.ErrHeaderLengthUnexpected
+	}
+
+	if f.Header.Masked {
+		bts[1] |= bit0
+		n += copy(bts[n:], f.Header.Mask[:])
+	}
+
+	if _, err := w.Write(bts[:n]); err != nil {
+		return err
+	}
+
+	_, err := w.Write(f.Payload)
+	return err
 }
