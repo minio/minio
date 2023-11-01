@@ -18,11 +18,14 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/policy"
@@ -174,4 +177,233 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 	}
 
 	writeSuccessResponseJSON(w, encryptedData)
+}
+
+// AddServiceAccountLDAP adds a new service account for provided LDAP username or DN
+//
+// PUT /minio/admin/v3/ldap/add-service-account
+func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	password := cred.SecretKey
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	var createReq madmin.AddServiceAccountReq
+	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	// service account access key cannot have space characters beginning and end of the string.
+	if hasSpaceBE(createReq.AccessKey) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
+	if err := createReq.Validate(); err != nil {
+		// Since this validation would happen client side as well, we only send
+		// a generic error message here.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
+	var (
+		targetUser   string
+		targetGroups []string
+	)
+
+	// If the request did not set a TargetUser, the service account is
+	// created for the request sender.
+	targetUser = createReq.TargetUser
+	if targetUser == "" {
+		targetUser = cred.AccessKey
+	}
+
+	description := createReq.Description
+	if description == "" {
+		description = createReq.Comment
+	}
+	opts := newServiceAccountOpts{
+		accessKey:   createReq.AccessKey,
+		secretKey:   createReq.SecretKey,
+		name:        createReq.Name,
+		description: description,
+		expiration:  createReq.Expiration,
+		claims:      make(map[string]interface{}),
+	}
+
+	// Find the user for the request sender (as it may be sent via a service
+	// account or STS account):
+	requestorUser := cred.AccessKey
+	requestorParentUser := cred.AccessKey
+	requestorGroups := cred.Groups
+	requestorIsDerivedCredential := false
+	if cred.IsServiceAccount() || cred.IsTemp() {
+		requestorParentUser = cred.ParentUser
+		requestorIsDerivedCredential = true
+	}
+
+	// Check if we are creating svc account for request sender.
+	isSvcAccForRequestor := false
+	if targetUser == requestorUser || targetUser == requestorParentUser {
+		isSvcAccForRequestor = true
+	}
+
+	// If we are creating svc account for request sender, ensure
+	// that targetUser is a real user (i.e. not derived
+	// credentials).
+	if isSvcAccForRequestor {
+		// Check if adding service account is explicitly denied.
+		//
+		// This allows turning off service accounts for request sender,
+		// if there is no deny statement this call is implicitly enabled.
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     requestorUser,
+			Groups:          requestorGroups,
+			Action:          policy.CreateServiceAccountAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+			DenyOnly:        true,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+
+		if requestorIsDerivedCredential {
+			if requestorParentUser == "" {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
+					errors.New("service accounts cannot be generated for temporary credentials without parent")), r.URL)
+				return
+			}
+			targetUser = requestorParentUser
+		}
+		targetGroups = requestorGroups
+
+		// In case of LDAP/OIDC we need to set `opts.claims` to ensure
+		// it is associated with the LDAP/OIDC user properly.
+		for k, v := range cred.Claims {
+			if k == expClaim {
+				continue
+			}
+			opts.claims[k] = v
+		}
+	} else {
+		// Need permission if we are creating a service account for a
+		// user <> to the request sender
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     requestorUser,
+			Groups:          requestorGroups,
+			Action:          policy.CreateServiceAccountAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+
+		// fail if ldap is not enabled
+		if !globalIAMSys.LDAPConfig.Enabled() {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
+		}
+
+		// check if targetUser is username or DN
+		if globalIAMSys.LDAPConfig.IsLDAPUserDN(targetUser) {
+			opts.claims[ldapUser] = targetUser // DN
+			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupDN(targetUser)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			opts.claims[ldapUserN] = targetUser // simple username
+		} else {
+			opts.claims[ldapUserN] = targetUser // simple username
+			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			opts.claims[ldapUser] = targetUser // DN
+		}
+
+	}
+
+	var sp *policy.Policy
+	if len(createReq.Policy) > 0 {
+		sp, err = policy.ParseConfig(bytes.NewReader(createReq.Policy))
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	opts.sessionPolicy = sp
+	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	createResp := madmin.AddServiceAccountResp{
+		Credentials: madmin.Credentials{
+			AccessKey:  newCred.AccessKey,
+			SecretKey:  newCred.SecretKey,
+			Expiration: newCred.Expiration,
+		},
+	}
+
+	data, err := json.Marshal(createResp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+
+	// Call hook for cluster-replication if the service account is not for a
+	// root user.
+	if newCred.ParentUser != globalActiveCred.AccessKey {
+		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+			Type: madmin.SRIAMItemSvcAcc,
+			SvcAccChange: &madmin.SRSvcAccChange{
+				Create: &madmin.SRSvcAccCreate{
+					Parent:        newCred.ParentUser,
+					AccessKey:     newCred.AccessKey,
+					SecretKey:     newCred.SecretKey,
+					Groups:        newCred.Groups,
+					Name:          newCred.Name,
+					Description:   newCred.Description,
+					Claims:        opts.claims,
+					SessionPolicy: createReq.Policy,
+					Status:        auth.AccountOn,
+					Expiration:    createReq.Expiration,
+				},
+			},
+			UpdatedAt: updatedAt,
+		}))
+	}
 }

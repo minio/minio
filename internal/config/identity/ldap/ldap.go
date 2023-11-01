@@ -20,6 +20,7 @@ package ldap
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -328,4 +329,52 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	}
 
 	return res, nil
+}
+
+// LookupDN searches for the username and groups of a given DN, like opposite of LookupUserDN
+func (l *Config) LookupDN(DN string) (string, []string, error) {
+	conn, err := l.LDAP.Connect()
+	if err != nil {
+		return "", nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.LDAP.LookupBind(conn); err != nil {
+		return "", nil, err
+	}
+
+	// Parse DN for username
+	findUserAttribute, err := regexp.Compile(`(?:\()([^\)]*)=%s`) // find attribute directly proceding the %s
+	if err != nil {
+		return "", nil, err
+	}
+	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
+	findUsername, err := regexp.Compile(userFilter + `=([^,]*)`) // find username in DN
+	if err != nil {
+		return "", nil, err
+	}
+	usernameSl := findUsername.FindStringSubmatch(DN)
+	if len(usernameSl) != 2 {
+		return "", nil, fmt.Errorf("Unable to parse username from DN %s", DN)
+	}
+	username := usernameSl[1]
+
+	// Lookup user DN and make sure it matches the DN provided
+	bindDN, err := l.LDAP.LookupUserDN(conn, username)
+	if err != nil {
+		err = fmt.Errorf("Unable to find user DN: %w", err)
+		return "", nil, err
+	}
+	if bindDN != DN {
+		err = fmt.Errorf("User DN %s does not match provided DN %s", bindDN, DN)
+		return "", nil, err
+	}
+
+	groups, err := l.LDAP.SearchForUserGroups(conn, username, bindDN)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return bindDN, groups, nil
 }
