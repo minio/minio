@@ -76,7 +76,7 @@ import (
 //     attempts: 10 # number of retries for the job before giving up
 //     delay: 500ms # least amount of delay between each retry
 
-//go:generate msgp -file $GOFILE -unexported
+//go:generate msgp -file $GOFILE
 
 // BatchJobExpirePurge type accepts non-negative versions to be retained
 type BatchJobExpirePurge struct {
@@ -293,6 +293,21 @@ const (
 	batchExpireJobDefaultRetryDelay = 250 * time.Millisecond
 )
 
+type objInfoCache map[string]*ObjectInfo
+
+func newObjInfoCache() objInfoCache {
+	return objInfoCache(make(map[string]*ObjectInfo))
+}
+
+func (oiCache objInfoCache) Add(toDel ObjectToDelete, oi *ObjectInfo) {
+	oiCache[fmt.Sprintf("%s-%s", toDel.ObjectName, toDel.VersionID)] = oi
+}
+
+func (oiCache objInfoCache) Get(toDel ObjectToDelete) (*ObjectInfo, bool) {
+	oi, ok := oiCache[fmt.Sprintf("%s-%s", toDel.ObjectName, toDel.VersionID)]
+	return oi, ok
+}
+
 func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
 	defer wk.Give()
 
@@ -314,9 +329,10 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 		wk.Take()
 		go func(toExpire []expireObjInfo) {
 			defer wk.Give()
+
 			toExpireAll := make([]ObjectInfo, 0, len(toExpire))
 			toDel := make([]ObjectToDelete, 0, len(toExpire))
-			objInfoCache := make(map[string]*ObjectInfo)
+			oiCache := newObjInfoCache()
 			for _, exp := range toExpire {
 				if exp.ExpireAll {
 					toExpireAll = append(toExpireAll, exp.ObjectInfo)
@@ -325,13 +341,14 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				// Cache ObjectInfo value via pointers for
 				// subsequent use to track objects which
 				// couldn't be deleted.
-				objInfoCache[fmt.Sprintf("%s-%s", exp.Name, exp.VersionID)] = &exp.ObjectInfo
-				toDel = append(toDel, ObjectToDelete{
+				od := ObjectToDelete{
 					ObjectV: ObjectV{
 						ObjectName: exp.Name,
 						VersionID:  exp.VersionID,
 					},
-				})
+				}
+				toDel = append(toDel, od)
+				oiCache.Add(od, &exp.ObjectInfo)
 			}
 
 			// DeleteObject(deletePrefix: true) to expire all versions of an object
@@ -352,7 +369,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 						break
 					}
 				}
-				ri.trackCurrentBucketObject(r.Bucket, exp, success)
+				ri.trackMultipleObjectVersions(r.Bucket, exp, success)
 			}
 
 			// DeleteMultiple objects
@@ -364,49 +381,38 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				copy(toDelCopy, toDel)
 				var failed int
 				errs := r.Expire(ctx, api, vc, toDel)
-				// TODO: remove fault injection code
-				if attempts == 1 {
-					for i := range errs {
-						if i%2 == 0 {
-							errs[i] = fmt.Errorf("failed to delete %s %s", toDel[i].ObjectName, toDel[i].VersionID)
+				// reslice toDel in preparation for next retry
+				// attempt
+				toDel = toDel[:0]
+				for i, err := range errs {
+					if err != nil {
+						stopFn(toDelCopy[i], err)
+						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
+						failed++
+						if attempts == retryAttempts { // all retry attempts failed, record failure
+							if oi, ok := oiCache.Get(toDelCopy[i]); ok {
+								ri.trackCurrentBucketObject(r.Bucket, *oi, false)
+							}
+						} else {
+							toDel = append(toDel, toDelCopy[i])
+						}
+					} else {
+						stopFn(toDelCopy[i], nil)
+						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
+							ri.trackCurrentBucketObject(r.Bucket, *oi, true)
 						}
 					}
 				}
-				for i, err := range errs {
-					if err != nil {
-						stopFn(toDel[i], err)
-						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
-						failed++
-					} else {
-						stopFn(toDel[i], nil)
-						ri.trackCurrentBucketObject(r.Bucket, toExpire[i].ObjectInfo, true)
-					}
-				}
 
-				ri.RetryAttempts = attempts
 				globalBatchJobsMetrics.save(ri.JobID, ri)
+
 				if failed == 0 {
 					break
 				}
 
-				toDel = toDel[:0]
-				for i, exp := range toDelCopy {
-					if errs[i] != nil {
-						toDel = append(toDel, ObjectToDelete{
-							ObjectV: ObjectV{
-								ObjectName: exp.ObjectName,
-								VersionID:  exp.VersionID,
-							},
-						})
-					}
-				}
 				// Add a delay between retry attempts
-				time.Sleep(delay)
-			}
-			// Objects failed to delete remain in toDel
-			for _, exp := range toDel {
-				if oi := objInfoCache[fmt.Sprintf("%s/%s", exp.ObjectName, exp.VersionID)]; oi != nil {
-					ri.trackCurrentBucketObject(r.Bucket, *oi, false)
+				if attempts < retryAttempts {
+					time.Sleep(delay)
 				}
 			}
 		}(toExpire)
@@ -501,7 +507,7 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 		if result.IsLatest {
 			// send down filtered entries to be deleted using
 			// DeleteObjects method
-			if len(toDel) > 10 { // batch up to 10 objects/versions to be expired simulatenously.
+			if len(toDel) > 10 { // batch up to 10 objects/versions to be expired simultaneously.
 				xfer := make([]expireObjInfo, len(toDel))
 				copy(xfer, toDel)
 				expireCh <- xfer
