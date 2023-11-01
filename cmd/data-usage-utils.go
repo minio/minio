@@ -107,33 +107,20 @@ func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
 		return nil
 	}
 
-	cfgs := globalTierConfigMgr.ListTiers()
-	if len(cfgs) == 0 {
+	if globalTierConfigMgr.Empty() {
 		return nil
 	}
 
-	ts := make(map[string]madmin.TierStats, len(cfgs)+1)
+	ts := make(map[string]madmin.TierStats)
+	dui.TierStats.populateStats(ts)
+
 	infos := make([]madmin.TierInfo, 0, len(ts))
-
-	// Add STANDARD (hot-tier)
-	ts[minioHotTier] = madmin.TierStats{}
-	infos = append(infos, madmin.TierInfo{
-		Name: minioHotTier,
-		Type: "internal",
-	})
-	// Add configured remote tiers
-	for _, cfg := range cfgs {
-		ts[cfg.Name] = madmin.TierStats{}
+	for tier, stats := range ts {
 		infos = append(infos, madmin.TierInfo{
-			Name: cfg.Name,
-			Type: cfg.Type.String(),
+			Name:  tier,
+			Type:  globalTierConfigMgr.TierType(tier),
+			Stats: stats,
 		})
-	}
-
-	ts = dui.TierStats.adminStats(ts)
-	for i := range infos {
-		info := infos[i]
-		infos[i].Stats = ts[info.Name]
 	}
 
 	sort.Slice(infos, func(i, j int) bool {

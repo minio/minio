@@ -392,7 +392,8 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 	// of bucket metadata
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
-	rawDataFn := func(r io.Reader, filename string, sz int) error {
+
+	rawDataFn := func(r io.Reader, filename string, sz int) {
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
 			name:    filename,
 			size:    int64(sz),
@@ -401,20 +402,13 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 			isDir:   false,
 			sys:     nil,
 		})
-		if zerr != nil {
-			logger.LogIf(ctx, zerr)
-			return nil
+		if zerr == nil {
+			header.Method = zip.Deflate
+			zwriter, zerr := zipWriter.CreateHeader(header)
+			if zerr == nil {
+				io.Copy(zwriter, r)
+			}
 		}
-		header.Method = zip.Deflate
-		zwriter, zerr := zipWriter.CreateHeader(header)
-		if zerr != nil {
-			logger.LogIf(ctx, zerr)
-			return nil
-		}
-		if _, err := io.Copy(zwriter, r); err != nil {
-			logger.LogIf(ctx, err)
-		}
-		return nil
 	}
 
 	cfgFiles := []string{
@@ -446,10 +440,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketLifecycleConfig:
 				config, _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
 				if err != nil {
@@ -465,10 +456,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketQuotaConfigFile:
 				config, _, err := globalBucketMetadataSys.GetQuotaConfig(ctx, bucket)
 				if err != nil {
@@ -483,10 +471,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketSSEConfig:
 				config, _, err := globalBucketMetadataSys.GetSSEConfig(bucket)
 				if err != nil {
@@ -501,10 +486,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketTaggingConfig:
 				config, _, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
 				if err != nil {
@@ -519,10 +501,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case objectLockConfig:
 				config, _, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
 				if err != nil {
@@ -538,10 +517,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketVersioningConfig:
 				config, _, err := globalBucketMetadataSys.GetVersioningConfig(bucket)
 				if err != nil {
@@ -557,10 +533,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketReplicationConfig:
 				config, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
 				if err != nil {
@@ -575,11 +548,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			case bucketTargetsFile:
 				config, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket)
 				if err != nil {
@@ -595,10 +564,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
-				if err = rawDataFn(bytes.NewReader(configData), cfgPath, len(configData)); err != nil {
-					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
-					return
-				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			}
 		}
 	}

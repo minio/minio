@@ -82,8 +82,8 @@ function start_minio_16drive() {
 	rm -rf "${WORK_DIR}/xl3/healing-shard-bucket/unaligned"
 	sleep 10
 
-	go build ./docs/debugging/s3-check-md5/
-	if ! ./s3-check-md5 \
+	go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+	if ! s3-check-md5 \
 		-debug \
 		-access-key minio \
 		-secret-key minio123 \
@@ -111,7 +111,7 @@ function start_minio_16drive() {
 		exit 1
 	fi
 
-	if ! ./s3-check-md5 \
+	if ! s3-check-md5 \
 		-debug \
 		-access-key minio \
 		-secret-key minio123 \
@@ -134,7 +134,7 @@ function start_minio_16drive() {
 
 	"${WORK_DIR}/mc" admin heal --quiet --recursive minio/healing-shard-bucket
 
-	if ! ./s3-check-md5 \
+	if ! s3-check-md5 \
 		-debug \
 		-access-key minio \
 		-secret-key minio123 \
