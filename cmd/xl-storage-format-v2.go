@@ -1788,7 +1788,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers, allPa
 			}
 		}
 		if found {
-			continue
+			break
 		}
 
 		// We need a specific version, skip...
