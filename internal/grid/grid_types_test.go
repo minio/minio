@@ -29,3 +29,11 @@ type testResponse struct {
 	OrgString string
 	Embedded  testRequest
 }
+
+func newTestRequest() *testRequest {
+	return &testRequest{}
+}
+
+func newTestResponse() *testResponse {
+	return &testResponse{}
+}
