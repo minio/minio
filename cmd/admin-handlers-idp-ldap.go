@@ -297,6 +297,17 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		}
 		targetGroups = requestorGroups
 
+		// Deny if the target user is not LDAP
+		isLDAP, err := globalIAMSys.LDAPConfig.DoesUsernameExist(targetUser)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if isLDAP == "" {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchUser), r.URL)
+			return
+		}
+
 		// In case of LDAP/OIDC we need to set `opts.claims` to ensure
 		// it is associated with the LDAP/OIDC user properly.
 		for k, v := range cred.Claims {
@@ -335,6 +346,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			}
 			opts.claims[ldapUserN] = targetUser // simple username
 		} else {
+			// targetUser is simple username
 			opts.claims[ldapUserN] = targetUser // simple username
 			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 			if err != nil {
@@ -407,3 +419,108 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		}))
 	}
 }
+
+// // ListAccessKeysLDAP - GET /minio/admin/v3/ldap/list-access-keys
+// func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Request) {
+// 	ctx := r.Context()
+
+// 	// Get current object layer instance.
+// 	objectAPI := newObjectLayerFn()
+// 	if objectAPI == nil || globalNotificationSys == nil {
+// 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+// 		return
+// 	}
+
+// 	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+// 	if s3Err != ErrNone {
+// 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+// 		return
+// 	}
+
+// 	var targetAccount string
+
+// 	// If listing is requested for a specific user (who is not the request
+// 	// sender), check that the user has permissions.
+// 	user := r.Form.Get("user")
+// 	if user != "" && user != cred.AccessKey {
+// 		if !globalIAMSys.IsAllowed(policy.Args{
+// 			AccountName:     cred.AccessKey,
+// 			Groups:          cred.Groups,
+// 			Action:          policy.ListServiceAccountsAdminAction,
+// 			ConditionValues: getConditionValues(r, "", cred),
+// 			IsOwner:         owner,
+// 			Claims:          cred.Claims,
+// 		}) {
+// 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+// 			return
+// 		}
+// 		targetAccount = user
+// 	} else {
+// 		targetAccount = cred.AccessKey
+// 		if cred.ParentUser != "" {
+// 			targetAccount = cred.ParentUser
+// 		}
+// 	}
+
+// 	listType := r.Form.Get("list-type")
+// 	if listType != "sts-only" && listType != "svcacct-only" && listType != "" {
+// 		// default to both
+// 		listType = ""
+// 	}
+
+// 	var serviceAccounts []auth.Credentials
+// 	var stsKeys []UserIdentity
+// 	var err error
+
+// 	if listType == "" || listType == "sts-only" {
+// 		stsKeys, err = globalIAMSys.ListTempAccounts(ctx, targetAccount)
+// 		if err != nil {
+// 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+// 			return
+// 		}
+// 	}
+// 	if listType == "" || listType == "svcacct-only" {
+// 		serviceAccounts, err = globalIAMSys.ListServiceAccounts(ctx, targetAccount)
+// 		if err != nil {
+// 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+// 			return
+// 		}
+// 	}
+
+// 	var serviceAccountList []madmin.ServiceAccountInfo
+// 	var stsKeyList []madmin.ServiceAccountInfo
+
+// 	for _, svc := range serviceAccounts {
+// 		expiryTime := svc.Expiration
+// 		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
+// 			AccessKey:  svc.AccessKey,
+// 			Expiration: &expiryTime,
+// 		})
+// 	}
+// 	for _, sts := range stsKeys {
+// 		expiryTime := sts.Credentials.Expiration
+// 		stsKeyList = append(stsKeyList, madmin.ServiceAccountInfo{
+// 			AccessKey:  sts.Credentials.AccessKey,
+// 			Expiration: &expiryTime,
+// 		})
+// 	}
+
+// 	listResp := madmin.ListAccessKeysLDAPResp{
+// 		ServiceAccounts: serviceAccountList,
+// 		STSKeys:         stsKeyList,
+// 	}
+
+// 	data, err := json.Marshal(listResp)
+// 	if err != nil {
+// 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+// 		return
+// 	}
+
+// 	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+// 	if err != nil {
+// 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+// 		return
+// 	}
+
+// 	writeSuccessResponseJSON(w, encryptedData)
+// }
