@@ -28,7 +28,9 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
 )
 
@@ -63,15 +65,16 @@ type Manager struct {
 
 // ManagerOptions are options for creating a new grid manager.
 type ManagerOptions struct {
-	Dialer       ContextDialer
-	Local        string
-	Hosts        []string
-	AddAuth      AuthFn
-	AuthRequest  func(r *http.Request) error
-	TLSConfig    *tls.Config
-	Incoming     func(n int64) // Record incoming bytes.
-	Outgoing     func(n int64) // Record outgoing bytes.
-	BlockConnect chan struct{} // If set, incoming and outgoing connections will be blocked until closed.
+	Dialer       ContextDialer               // Outgoing dialer.
+	Local        string                      // Local host name.
+	Hosts        []string                    // All hosts, including local in the grid.
+	AddAuth      AuthFn                      // Add authentication to the given audience.
+	AuthRequest  func(r *http.Request) error // Validate incoming requests.
+	TLSConfig    *tls.Config                 // TLS to apply to the connnections.
+	Incoming     func(n int64)               // Record incoming bytes.
+	Outgoing     func(n int64)               // Record outgoing bytes.
+	BlockConnect chan struct{}               // If set, incoming and outgoing connections will be blocked until closed.
+	TraceTo      *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]
 }
 
 // NewManager creates a new grid manager
@@ -109,6 +112,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			auth:         o.AddAuth,
 			blockConnect: o.BlockConnect,
 			tlsConfig:    o.TLSConfig,
+			publisher:    o.TraceTo,
 		})
 	}
 	if !found {

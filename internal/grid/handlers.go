@@ -95,6 +95,12 @@ func NewRemoteErr(err error) *RemoteErr {
 	return &r
 }
 
+// NewRemoteErrf creates a new remote error from a format string.
+func NewRemoteErrf(format string, a ...any) *RemoteErr {
+	r := RemoteErr(fmt.Sprintf(format, a...))
+	return &r
+}
+
 // NewNPErr is a helper to no payload and optional remote error.
 // The error type is not preserved.
 func NewNPErr(err error) (NoPayload, *RemoteErr) {
@@ -127,6 +133,15 @@ func (r *RemoteErr) Is(other error) bool {
 	return false
 }
 
+// IsRemoteErr returns the value if the error is a RemoteErr.
+func IsRemoteErr(err error) *RemoteErr {
+	var r RemoteErr
+	if errors.As(err, &r) {
+		return &r
+	}
+	return nil
+}
+
 type (
 	// SingleHandlerFn is handlers for one to one requests.
 	// A non-nil error value will be returned as RemoteErr(msg) to client.
@@ -154,6 +169,7 @@ type (
 	// 'in' and 'out' are independent.
 	// The handler should never close out.
 	// Buffers received from 'in'  can be recycled with PutByteBuffer.
+	// Buffers sent on out can not be referenced once sent.
 	StreamHandlerFn func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr
 
 	// StreamHandler handles fully bidirectional streams,
@@ -628,6 +644,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 		}
 	}
 	stream, err := c.NewStream(ctx, h.id, payloadB)
+	PutByteBuffer(payloadB)
 	if err != nil {
 		return nil, err
 	}
