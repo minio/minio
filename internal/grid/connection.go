@@ -1187,6 +1187,10 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 		// Stream:
 		var handler *StreamHandler
 		if subID == nil {
+			if !m.Handler.valid() {
+				logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler"}))
+				return
+			}
 			handler = c.handlers.streams[m.Handler]
 		} else {
 			handler = c.handlers.subStreams[*subID]
@@ -1237,6 +1241,9 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 		logger.LogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
 		return
 	}
+
+	// TODO: This causes allocations, but escape analysis doesn't really show the cause.
+	// If another faithful engineer wants to take a stab, feel free.
 	go func(m message) {
 		var start time.Time
 		if m.DeadlineMS > 0 {
@@ -1258,7 +1265,6 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 			}
 		}()
 
-		// TODO: Maybe recycle m.Payload - should be free here.
 		if m.DeadlineMS > 0 && time.Since(start).Milliseconds()+c.addDeadline.Milliseconds() > int64(m.DeadlineMS) {
 			if debugReqs {
 				fmt.Println(m.MuxID, c.StringReverse(), "DEADLINE EXCEEDED")
