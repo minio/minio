@@ -147,6 +147,7 @@ type (
 	// A non-nil error value will be returned as RemoteErr(msg) to client.
 	// No client information or cancellation (deadline) is available.
 	// Include this in payload if needed.
+	// Payload should be recycled with PutByteBuffer if not needed after the call.
 	SingleHandlerFn func(payload []byte) ([]byte, *RemoteErr)
 
 	// StatelessHandlerFn must handle incoming stateless request.

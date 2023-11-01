@@ -46,6 +46,7 @@ func benchmarkGridRequests(b *testing.B, n int) {
 			b.Fatal(err)
 		}
 	}
+	rpc := NewSingleHandler[*testRequest, *testResponse](handlerTest2, newTestRequest, newTestResponse)
 	grid, err := SetupTestGrid(n)
 	errFatal(err)
 	b.Cleanup(grid.Cleanup)
@@ -53,7 +54,15 @@ func benchmarkGridRequests(b *testing.B, n int) {
 	for _, remote := range grid.Managers {
 		// Register a single handler which echos the payload.
 		errFatal(remote.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+			defer PutByteBuffer(payload)
 			return append(GetByteBuffer()[:0], payload...), nil
+		}))
+		errFatal(rpc.Register(remote, func(req *testRequest) (resp *testResponse, err *RemoteErr) {
+			return &testResponse{
+				OrgNum:    req.Num,
+				OrgString: req.String,
+				Embedded:  *req,
+			}, nil
 		}))
 		errFatal(err)
 	}
@@ -65,61 +74,123 @@ func benchmarkGridRequests(b *testing.B, n int) {
 
 	// Wait for all to connect
 	// Parallel writes per server.
-	for par := 1; par <= 32; par *= 2 {
-		b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
-			defer timeout(30 * time.Second)()
-			b.ReportAllocs()
-			b.SetBytes(int64(len(payload) * 2))
-			b.ResetTimer()
-			t := time.Now()
-			var ops int64
-			var lat int64
-			b.SetParallelism(par)
-			b.RunParallel(func(pb *testing.PB) {
-				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-				n := 0
-				var latency int64
-				managers := grid.Managers
-				hosts := grid.Hosts
-				for pb.Next() {
-					// Pick a random manager.
-					src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
-					if src == dst {
-						dst = (dst + 1) % len(managers)
-					}
-					local := managers[src]
-					conn := local.Connection(hosts[dst])
-					if conn == nil {
-						b.Fatal("No connection")
-					}
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-					// Send the payload.
-					t := time.Now()
-					resp, err := conn.Request(ctx, handlerTest, payload)
-					latency += time.Since(t).Nanoseconds()
-					cancel()
-					if err != nil {
-						if debugReqs {
-							fmt.Println(err.Error())
+	b.Run("bytes", func(b *testing.B) {
+		for par := 1; par <= 32; par *= 2 {
+			b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
+				defer timeout(60 * time.Second)()
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				b.ReportAllocs()
+				b.SetBytes(int64(len(payload) * 2))
+				b.ResetTimer()
+				t := time.Now()
+				var ops int64
+				var lat int64
+				b.SetParallelism(par)
+				b.RunParallel(func(pb *testing.PB) {
+					rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+					n := 0
+					var latency int64
+					managers := grid.Managers
+					hosts := grid.Hosts
+					for pb.Next() {
+						// Pick a random manager.
+						src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
+						if src == dst {
+							dst = (dst + 1) % len(managers)
 						}
-						b.Fatal(err.Error())
+						local := managers[src]
+						conn := local.Connection(hosts[dst])
+						if conn == nil {
+							b.Fatal("No connection")
+						}
+						// Send the payload.
+						t := time.Now()
+						resp, err := conn.Request(ctx, handlerTest, payload)
+						latency += time.Since(t).Nanoseconds()
+						if err != nil {
+							if debugReqs {
+								fmt.Println(err.Error())
+							}
+							b.Fatal(err.Error())
+						}
+						PutByteBuffer(resp)
+						n++
 					}
-					PutByteBuffer(resp)
-					n++
+					atomic.AddInt64(&ops, int64(n))
+					atomic.AddInt64(&lat, latency)
+				})
+				spent := time.Since(t)
+				if spent > 0 && n > 0 {
+					// Since we are benchmarking n parallel servers we need to multiply by n.
+					// This will give an estimate of the total ops/s.
+					latency := float64(atomic.LoadInt64(&lat)) / float64(time.Millisecond)
+					b.ReportMetric(float64(n)*float64(ops)/spent.Seconds(), "vops/s")
+					b.ReportMetric(latency/float64(ops), "ms/op")
 				}
-				atomic.AddInt64(&ops, int64(n))
-				atomic.AddInt64(&lat, latency)
 			})
-			spent := time.Since(t)
-			if spent > 0 && n > 0 {
-				// Since we are benchmarking n parallel servers we need to multiply by n.
-				// This will give an estimate of the total ops/s.
-				latency := float64(atomic.LoadInt64(&lat)) / float64(time.Millisecond)
-				b.ReportMetric(float64(n)*float64(ops)/spent.Seconds(), "vops/s")
-				b.ReportMetric(latency/float64(ops), "ms/op")
-			}
-		})
-	}
+		}
+	})
+	b.Run("rpc", func(b *testing.B) {
+		for par := 1; par <= 32; par *= 2 {
+			b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
+				defer timeout(60 * time.Second)()
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				b.ReportAllocs()
+				b.ResetTimer()
+				t := time.Now()
+				var ops int64
+				var lat int64
+				b.SetParallelism(par)
+				b.RunParallel(func(pb *testing.PB) {
+					rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+					n := 0
+					var latency int64
+					managers := grid.Managers
+					hosts := grid.Hosts
+					req := testRequest{
+						Num:    rng.Int(),
+						String: "hello",
+					}
+					for pb.Next() {
+						// Pick a random manager.
+						src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
+						if src == dst {
+							dst = (dst + 1) % len(managers)
+						}
+						local := managers[src]
+						conn := local.Connection(hosts[dst])
+						if conn == nil {
+							b.Fatal("No connection")
+						}
+						// Send the payload.
+						t := time.Now()
+						resp, err := rpc.Call(ctx, conn, &req)
+						latency += time.Since(t).Nanoseconds()
+						if err != nil {
+							if debugReqs {
+								fmt.Println(err.Error())
+							}
+							b.Fatal(err.Error())
+						}
+						rpc.PutResponse(resp)
+						n++
+					}
+					atomic.AddInt64(&ops, int64(n))
+					atomic.AddInt64(&lat, latency)
+				})
+				spent := time.Since(t)
+				if spent > 0 && n > 0 {
+					// Since we are benchmarking n parallel servers we need to multiply by n.
+					// This will give an estimate of the total ops/s.
+					latency := float64(atomic.LoadInt64(&lat)) / float64(time.Millisecond)
+					b.ReportMetric(float64(n)*float64(ops)/spent.Seconds(), "vops/s")
+					b.ReportMetric(latency/float64(ops), "ms/op")
+				}
+			})
+		}
+	})
 }
 
 func BenchmarkStream(b *testing.B) {

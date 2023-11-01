@@ -26,7 +26,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-openapi/loads v0.21.2
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/gobwas/ws v1.2.1
+	github.com/gobwas/ws v1.3.1-0.20231030152437-516805a9f3b3
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/uuid v1.3.1

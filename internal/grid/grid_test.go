@@ -160,11 +160,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		return resp, nil
 	}
 	// Return error
-	h2 := NewSingleHandler[*testRequest, *testResponse](handlerTest2, func() *testRequest {
-		return &testRequest{}
-	}, func() *testResponse {
-		return &testResponse{}
-	})
+	h2 := NewSingleHandler[*testRequest, *testResponse](handlerTest2, newTestRequest, newTestResponse)
 	handler2 := func(req *testRequest) (resp *testResponse, err *RemoteErr) {
 		r := RemoteErr(req.String)
 		return nil, &r
@@ -682,13 +678,7 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 
 	// We fake a local and remote server.
 	remoteHost := remote.HostName()
-	handler := NewStream[*testRequest, *testRequest, *testResponse](handlerTest, func() *testRequest {
-		return &testRequest{}
-	}, func() *testRequest {
-		return &testRequest{}
-	}, func() *testResponse {
-		return &testResponse{}
-	})
+	handler := NewStream[*testRequest, *testRequest, *testResponse](handlerTest, newTestRequest, newTestRequest, newTestResponse)
 	handler.InCapacity = 1
 	handler.OutCapacity = 1
 	const payloads = 10
@@ -759,13 +749,7 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 
 	// We fake a local and remote server.
 	remoteHost := remote.HostName()
-	handler := NewStream[*testRequest, *testRequest, *testResponse](handlerTest, func() *testRequest {
-		return &testRequest{}
-	}, func() *testRequest {
-		return &testRequest{}
-	}, func() *testResponse {
-		return &testResponse{}
-	})
+	handler := NewStream[*testRequest, *testRequest, *testResponse](handlerTest, newTestRequest, newTestRequest, newTestResponse)
 	handler.InCapacity = 1
 	handler.OutCapacity = 1
 	const payloads = 10
