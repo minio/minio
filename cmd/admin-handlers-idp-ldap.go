@@ -439,10 +439,20 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 
 	var targetAccount string
 
+	userDN := r.Form.Get("userDN")
+	// if not DN, check if it is username
+	if !globalIAMSys.LDAPConfig.IsLDAPUserDN(userDN) {
+		user, _, err := globalIAMSys.LDAPConfig.LookupUserDN(userDN)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		userDN = user
+	}
+
 	// If listing is requested for a specific user (who is not the request
 	// sender), check that the user has permissions.
-	user := r.Form.Get("userDN")
-	if user != "" && user != cred.AccessKey {
+	if userDN != "" && userDN != cred.ParentUser {
 		if !globalIAMSys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
 			Groups:          cred.Groups,
@@ -454,7 +464,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-		targetAccount = user
+		targetAccount = userDN
 	} else {
 		targetAccount = cred.AccessKey
 		if cred.ParentUser != "" {
