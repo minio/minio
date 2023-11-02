@@ -1040,7 +1040,7 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 	return updatedAt, nil
 }
 
-// ListServiceAccounts - lists all services accounts associated to a specific user
+// ListServiceAccounts - lists all service accounts associated to a specific user
 func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
@@ -1054,7 +1054,7 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	}
 }
 
-// ListTempAccounts - lists all services accounts associated to a specific user
+// ListTempAccounts - lists all temporary service accounts associated to a specific user
 func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]UserIdentity, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
@@ -1063,6 +1063,20 @@ func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]Us
 	select {
 	case <-sys.configLoaded:
 		return sys.store.ListTempAccounts(ctx, accessKey)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// ListSTSAccounts - lists all STS accounts associated to a specific user
+func (sys *IAMSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListSTSAccounts(ctx, accessKey)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

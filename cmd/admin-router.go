@@ -245,6 +245,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// LDAP specific service accounts ops
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/ldap/list-access-keys").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
+			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
 
 		// STS accounts ops
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/temporary-account-info").HandlerFunc(adminMiddleware(adminAPI.TemporaryAccountInfo)).Queries("accessKey", "{accessKey:.*}")
