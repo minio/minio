@@ -80,11 +80,11 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 			continue
 		}
 
-		var typ os.FileMode = 0 // regular file
+		var typ os.FileMode // regular file
 		switch {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
 			// Reparse point is a symlink
-			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			fi, err := os.Stat(pathJoin(dirPath, name))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -153,7 +153,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		switch {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
 			// Reparse point is a symlink
-			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			fi, err := os.Stat(pathJoin(dirPath, name))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -170,7 +170,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 				continue
 			}
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
-			name = name + SlashSeparator
+			name += SlashSeparator
 		}
 
 		count--

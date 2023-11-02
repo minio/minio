@@ -110,7 +110,7 @@ func (sm *siteResyncMetrics) load(ctx context.Context, objAPI ObjectLayer) error
 		return nil
 	}
 	for _, peer := range info.Sites {
-		if peer.DeploymentID == globalDeploymentID {
+		if peer.DeploymentID == globalDeploymentID() {
 			continue
 		}
 		rs, err := loadSiteResyncMetadata(ctx, objAPI, peer.DeploymentID)

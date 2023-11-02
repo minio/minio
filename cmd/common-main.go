@@ -122,8 +122,8 @@ func init() {
 const consolePrefix = "CONSOLE_"
 
 func minioConfigToConsoleFeatures() {
-	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID)
-	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID)
+	os.Setenv("CONSOLE_PBKDF_SALT", globalDeploymentID())
+	os.Setenv("CONSOLE_PBKDF_PASSPHRASE", globalDeploymentID())
 	if globalMinioEndpoint != "" {
 		os.Setenv("CONSOLE_MINIO_SERVER", globalMinioEndpoint)
 	} else {
@@ -167,9 +167,12 @@ func minioConfigToConsoleFeatures() {
 	if value := env.Get(config.EnvBrowserLoginAnimation, "on"); value != "" {
 		os.Setenv("CONSOLE_ANIMATED_LOGIN", value)
 	}
+
 	// Pass on the session duration environment variable, else we will default to 12 hours
-	if value := env.Get(config.EnvBrowserSessionDuration, ""); value != "" {
-		os.Setenv("CONSOLE_STS_DURATION", value)
+	if valueSts := env.Get(config.EnvMinioStsDuration, ""); valueSts != "" {
+		os.Setenv("CONSOLE_STS_DURATION", valueSts)
+	} else if valueSession := env.Get(config.EnvBrowserSessionDuration, ""); valueSession != "" {
+		os.Setenv("CONSOLE_STS_DURATION", valueSession)
 	}
 
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
@@ -191,7 +194,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 			DisplayName:             cfg.DisplayName,
 			ClientID:                cfg.ClientID,
 			ClientSecret:            cfg.ClientSecret,
-			HMACSalt:                globalDeploymentID,
+			HMACSalt:                globalDeploymentID(),
 			HMACPassphrase:          cfg.ClientID,
 			Scopes:                  strings.Join(cfg.DiscoveryDoc.ScopesSupported, ","),
 			Userinfo:                cfg.ClaimUserinfo,

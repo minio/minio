@@ -132,8 +132,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 			versionID = mustGetUUID()
 			fi.IsLatest = true // we are creating a new version so this is latest.
 		}
-		modTime = UTCNow()
 	}
+
+	modTime = UTCNow() // We only preserve modTime if dstOpts.MTime is true.
+	// in all other cases mtime is latest.
 
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
@@ -141,6 +143,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = dstOpts.MTime
 		fi.ModTime = dstOpts.MTime
 	}
+
 	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
@@ -187,14 +190,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	auditObjectErasureSet(ctx, object, &er)
-
-	// This is a special call attempted first to check for SOS-API calls.
-	gr, err = veeamSOSAPIGetObject(ctx, bucket, object, rs, opts)
-	if err == nil {
-		return gr, nil
-	}
-	// reset any error to 'nil'
-	err = nil
 
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
@@ -450,14 +445,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
 	auditObjectErasureSet(ctx, object, &er)
-
-	// This is a special call attempted first to check for SOS-API calls.
-	info, err = veeamSOSAPIHeadObject(ctx, bucket, object, opts)
-	if err == nil {
-		return info, nil
-	}
-	// reset any error to 'nil'
-	err = nil
 
 	if !opts.NoLock {
 		// Lock the object before reading.

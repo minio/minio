@@ -1142,7 +1142,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	if reqInfo != nil {
 		newReqInfo = logger.NewReqInfo(reqInfo.RemoteHost, reqInfo.UserAgent, reqInfo.DeploymentID, reqInfo.RequestID, reqInfo.API, bucket, object)
 	} else {
-		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
+		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID(), "", "Heal", bucket, object)
 	}
 	healCtx := logger.SetReqInfo(GlobalContext, newReqInfo)
 

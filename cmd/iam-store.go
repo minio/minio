@@ -112,14 +112,9 @@ func saveIAMFormat(ctx context.Context, store IAMStorageAPI) error {
 	bootstrapTraceMsg("Load IAM format file")
 	var iamFmt iamFormat
 	path := getIAMFormatFilePath()
-	if err := store.loadIAMConfig(ctx, &iamFmt, path); err != nil {
-		switch err {
-		case errConfigNotFound:
-			// Need to migrate to V1.
-		default:
-			// if IAM format
-			return err
-		}
+	if err := store.loadIAMConfig(ctx, &iamFmt, path); err != nil && !errors.Is(err, errConfigNotFound) {
+		// if IAM format
+		return err
 	}
 
 	if iamFmt.Version >= iamFormatVersion1 {
@@ -129,12 +124,7 @@ func saveIAMFormat(ctx context.Context, store IAMStorageAPI) error {
 
 	bootstrapTraceMsg("Write IAM format file")
 	// Save iam format to version 1.
-	if err := store.saveIAMConfig(ctx, newIAMFormatVersion1(), path); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	return nil
+	return store.saveIAMConfig(ctx, newIAMFormatVersion1(), path)
 }
 
 func getGroupInfoPath(group string) string {
@@ -430,10 +420,10 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}
-	if !u.Credentials.IsTemp() {
-		c.iamUsersMap[key] = u
-	} else {
+	if u.Credentials.IsTemp() && !u.Credentials.IsServiceAccount() {
 		c.iamSTSAccountsMap[key] = u
+	} else {
+		c.iamUsersMap[key] = u
 	}
 	c.updatedAt = time.Now()
 	return nil

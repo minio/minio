@@ -131,7 +131,6 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
 	nodeBuckets := make([][]BucketInfo, len(sys.peerClients))
-	errs := []error{nil}
 
 	for idx, client := range sys.peerClients {
 		idx := idx
@@ -149,7 +148,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 		}, idx)
 	}
 
-	errs = append(errs, g.Wait()...)
+	errs := g.Wait()
 
 	// The list of buckets in a map to avoid duplication
 	resultMap := make(map[string]BucketInfo)
@@ -161,7 +160,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 				perPoolErrs = append(perPoolErrs, errs[i])
 			}
 		}
-		quorum := len(perPoolErrs)/2 + 1
+		quorum := len(perPoolErrs) / 2
 		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
 			return nil, poolErr
 		}
@@ -181,7 +180,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 					continue
 				}
 				bucketsMap[bi.Name]++
-				if bucketsMap[bi.Name] == quorum {
+				if bucketsMap[bi.Name] >= quorum {
 					resultMap[bi.Name] = bi
 				}
 			}
@@ -223,9 +222,17 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 
 	errs := g.Wait()
 
-	quorum := len(sys.peerClients)/2 + 1
-	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
+		}
+		quorum := len(perPoolErrs) / 2
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
+			return BucketInfo{}, poolErr
+		}
 	}
 
 	for i, err := range errs {

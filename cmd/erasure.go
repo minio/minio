@@ -335,7 +335,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
-	for _, disk := range er.getLoadBalancedLocalDisks() {
+	for _, disk := range er.getLocalDisks() {
 		if disk != nil {
 			wg.Add(1)
 			go func(disk StorageAPI) {
@@ -433,6 +433,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				}
 				logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-cache-update")
 				updates <- cache.clone()
+
 				lastSave = cache.Info.LastUpdate
 			case v, ok := <-bucketResults:
 				if !ok {
@@ -440,7 +441,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
 					logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
-					updates <- cache
+					updates <- cache.clone()
 					return
 				}
 				cache.replace(v.Name, v.Parent, v.Entry)

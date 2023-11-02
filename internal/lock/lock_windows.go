@@ -81,11 +81,10 @@ func lockedOpenFile(path string, flag int, perm os.FileMode, lockType uint32) (*
 // acquire a write lock.
 func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
 	var lockType uint32 = lockFileFailImmediately | lockFileExclusiveLock
-	switch flag {
-	case syscall.O_RDONLY:
+	if flag == syscall.O_RDONLY {
 		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-lockfileex
 		//lint:ignore SA4016 Reasons
-		lockType = lockFileFailImmediately | 0 // Set this to enable shared lock and fail immediately.
+		lockType = lockFileFailImmediately // Set this to enable shared lock and fail immediately.
 	}
 	return lockedOpenFile(path, flag, perm, lockType)
 }
@@ -94,8 +93,7 @@ func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, er
 // the file from concurrent access.
 func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
 	var lockType uint32 = lockFileExclusiveLock
-	switch flag {
-	case syscall.O_RDONLY:
+	if flag == syscall.O_RDONLY {
 		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-lockfileex
 		lockType = 0 // Set this to enable shared lock.
 	}
@@ -239,15 +237,13 @@ func lockFile(fd syscall.Handle, flags uint32) error {
 	}
 
 	err := lockFileEx(fd, flags, 1, 0, &syscall.Overlapped{})
-	if err == nil {
+	if err == nil || err == errLockViolation {
 		return nil
-	} else if err.Error() == "The process cannot access the file because another process has locked a portion of the file." {
-		return ErrAlreadyLocked
-	} else if err != errLockViolation {
-		return err
 	}
-
-	return nil
+	if err.Error() == "The process cannot access the file because another process has locked a portion of the file." {
+		return ErrAlreadyLocked
+	}
+	return err
 }
 
 func lockFileEx(h syscall.Handle, flags, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {

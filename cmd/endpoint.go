@@ -920,33 +920,35 @@ func CreatePoolEndpoints(serverAddr string, poolArgs ...[][]string) ([]Endpoints
 		}
 
 		orchestrated := IsKubernetes() || IsDocker()
-		if !orchestrated {
+		reverseProxy := (env.Get("_MINIO_REVERSE_PROXY", "") != "") && ((env.Get("MINIO_CI_CD", "") != "") || (env.Get("CI", "") != ""))
+		// If not orchestrated
+		if !orchestrated &&
+			// and not setup in reverse proxy
+			!reverseProxy {
 			// Check whether same path is not used in endpoints of a host on different port.
 			// Only verify this on baremetal setups, DNS is not available in orchestrated
 			// environments so we can't do much here.
-			{
-				pathIPMap := make(map[string]set.StringSet)
-				hostIPCache := make(map[string]set.StringSet)
-				for _, endpoint := range endpoints {
-					host := endpoint.Hostname()
-					hostIPSet, ok := hostIPCache[host]
-					if !ok {
-						var err error
-						hostIPSet, err = getHostIP(host)
-						if err != nil {
-							return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
-						}
-						hostIPCache[host] = hostIPSet
+			pathIPMap := make(map[string]set.StringSet)
+			hostIPCache := make(map[string]set.StringSet)
+			for _, endpoint := range endpoints {
+				host := endpoint.Hostname()
+				hostIPSet, ok := hostIPCache[host]
+				if !ok {
+					var err error
+					hostIPSet, err = getHostIP(host)
+					if err != nil {
+						return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
 					}
-					if IPSet, ok := pathIPMap[endpoint.Path]; ok {
-						if !IPSet.Intersection(hostIPSet).IsEmpty() {
-							return nil, setupType,
-								config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("same path '%s' can not be served by different port on same address", endpoint.Path))
-						}
-						pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
-					} else {
-						pathIPMap[endpoint.Path] = hostIPSet
+					hostIPCache[host] = hostIPSet
+				}
+				if IPSet, ok := pathIPMap[endpoint.Path]; ok {
+					if !IPSet.Intersection(hostIPSet).IsEmpty() {
+						return nil, setupType,
+							config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("same path '%s' can not be served by different port on same address", endpoint.Path))
 					}
+					pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
+				} else {
+					pathIPMap[endpoint.Path] = hostIPSet
 				}
 			}
 		}
@@ -1118,32 +1120,34 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 	}
 
 	orchestrated := IsKubernetes() || IsDocker()
-	if !orchestrated {
+	reverseProxy := (env.Get("_MINIO_REVERSE_PROXY", "") != "") && ((env.Get("MINIO_CI_CD", "") != "") || (env.Get("CI", "") != ""))
+	// If not orchestrated
+	if !orchestrated &&
+		// and not setup in reverse proxy
+		!reverseProxy {
 		// Check whether same path is not used in endpoints of a host on different port.
 		// Only verify this on baremetal setups, DNS is not available in orchestrated
 		// environments so we can't do much here.
-		{
-			pathIPMap := make(map[string]set.StringSet)
-			hostIPCache := make(map[string]set.StringSet)
-			for _, endpoint := range endpoints {
-				host := endpoint.Hostname()
-				hostIPSet, ok := hostIPCache[host]
-				if !ok {
-					hostIPSet, err = getHostIP(host)
-					if err != nil {
-						return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
-					}
-					hostIPCache[host] = hostIPSet
+		pathIPMap := make(map[string]set.StringSet)
+		hostIPCache := make(map[string]set.StringSet)
+		for _, endpoint := range endpoints {
+			host := endpoint.Hostname()
+			hostIPSet, ok := hostIPCache[host]
+			if !ok {
+				hostIPSet, err = getHostIP(host)
+				if err != nil {
+					return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
 				}
-				if IPSet, ok := pathIPMap[endpoint.Path]; ok {
-					if !IPSet.Intersection(hostIPSet).IsEmpty() {
-						return endpoints, setupType,
-							config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("same path '%s' can not be served by different port on same address", endpoint.Path))
-					}
-					pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
-				} else {
-					pathIPMap[endpoint.Path] = hostIPSet
+				hostIPCache[host] = hostIPSet
+			}
+			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
+				if !IPSet.Intersection(hostIPSet).IsEmpty() {
+					return endpoints, setupType,
+						config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("same path '%s' can not be served by different port on same address", endpoint.Path))
 				}
+				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
+			} else {
+				pathIPMap[endpoint.Path] = hostIPSet
 			}
 		}
 	}

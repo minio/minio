@@ -63,6 +63,6 @@ func DisableDirectIO(f *os.File) error {
 
 // AlignedBlock simply returns an unaligned buffer
 // for systems that do not support DirectIO.
-func AlignedBlock(BlockSize int) []byte {
-	return make([]byte, BlockSize)
+func AlignedBlock(blockSize int) []byte {
+	return make([]byte, blockSize)
 }
