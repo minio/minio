@@ -8,7 +8,7 @@ trap 'catch $LINENO' ERR
 catch() {
 	if [ $# -ne 0 ]; then
 		echo "error on line $1"
-		for site in sitea siteb; do
+		for site in sitea siteb sitec; do
 			echo "$site server logs ========="
 			cat "/tmp/${site}_1.log"
 			echo "==========================="
@@ -21,6 +21,7 @@ catch() {
 	pkill -9 minio
 	rm -rf /tmp/multisitea
 	rm -rf /tmp/multisiteb
+	rm -rf /tmp/multisitec
 	rm -rf /tmp/data
 }
 
@@ -54,79 +55,119 @@ minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data
 minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
 
-sleep 10s
+minio server --address 127.0.0.1:9005 "http://127.0.0.1:9005/tmp/multisitec/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9006/tmp/multisitec/data/disterasure/xl{5...8}" >/tmp/sitec_1.log 2>&1 &
+minio server --address 127.0.0.1:9006 "http://127.0.0.1:9005/tmp/multisitec/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9006/tmp/multisitec/data/disterasure/xl{5...8}" >/tmp/sitec_2.log 2>&1 &
+
+# Wait to make sure all MinIO instances are up
+sleep 20s
 
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
 export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
+export MC_HOST_sitec=http://minio:minio123@127.0.0.1:9006
 
 ./mc mb sitea/bucket
-
-## Add ILM rules
-./mc ilm rule add --expire-days "300" sitea/bucket
-./mc ilm rule add --expire-delete-marker sitea/bucket
+./mc mb sitec/bucket
 
 ## Setup site replication
 ./mc admin replicate add sitea siteb --replicate-ilm-expiry
 
+## Add warm tier
+./mc ilm tier add minio sitea WARM-TIER --endpoint http://localhost:9006 --access-key minio --secret-key minio123 --bucket bucket
+
+## Add ILM rules
+./mc ilm add sitea/bucket --transition-days 0 --transition-tier WARM-TIER --transition-days 0 --noncurrent-expire-days 2 --expire-days 3
+./mc ilm rule list sitea/bucket
+
 ## Check ilm expiry flag
 ./mc admin replicate info sitea --json
-flag=$(./mc admin replicate info sitea --json | jq '."replicate-ilm-expiry"')
-if [ "$flag" != "true" ]; then
-	echo "BUG: expected ILM expiry replication not set"
+flag1=$(./mc admin replicate info sitea --json | jq '.sites[0]."replicate-ilm-expiry"')
+flag2=$(./mc admin replicate info sitea --json | jq '.sites[1]."replicate-ilm-expiry"')
+if [ "$flag1" != "true" ]; then
+	echo "BUG: expected ILM expiry replication not set for site1"
+	exit 1
+fi
+if [ "$flag2" != "true" ]; then
+	echo "BUG: expected ILM expiry replication not set for site2"
 	exit 1
 fi
 
 ## Check if ILM expiry rules replicated
+sleep 20
+./mc ilm rule list siteb/bucket
 count=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules | length')
 if [ $count -ne 1 ]; then
-	echo "BUG: ILM expiry rules not replicated"
+	echo "BUG: ILM expiry rules not replicated to siteb"
 	exit 1
 fi
 
-./mc admin replicate status sitea
-./mc admin replicate status siteb
-
 ## Check edit if ILM expiry rule and its replication
-id=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==300) | .ID' | sed 's/"//g')
+id=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==3) | .ID' | sed 's/"//g')
 ./mc ilm edit --id "${id}" --expire-days "100" sitea/bucket
-sleep 20
-count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .Expiration.Days')
-count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .Expiration.Days')
+sleep 30
+count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration.Days')
+count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Expiration.Days')
 if [ $count1 -ne 100 ]; then
-	echo "BUG: expiration days not changed"
+	echo "BUG: expiration days not changed on sitea"
 	exit 1
 fi
 if [ $count2 -ne 100 ]; then
-	echo "BUG: modified ILM expiry rule not replicated"
+	echo "BUG: modified ILM expiry rule not replicated to siteb"
+	exit 1
+fi
+
+## Check disabling of ILM expiry rules replication
+depID=$(./mc admin replicate info sitea --json | jq '.sites[] | select(.name=="sitea") | .deploymentID' | sed 's/"//g')
+./mc admin replicate update sitea --deployment-id "${depID}" --disable-ilm-expiry-replication
+flag=$(./mc admin replicate info sitea --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
+if [ "$flag" != "false" ]; then
+	echo "BUG: ILM expiry replication not disabled for sitea"
+	exit 1
+fi
+flag=$(./mc admin replicate info siteb --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
+if [ "$flag" != "false" ]; then
+	echo "BUG: ILM expiry replication not disabled for sitea"
+	exit 1
+fi
+
+## Perform individual updates of rules to sites
+./mc ilm edit --id "${id}" --expire-days "999" sitea/bucket
+sleep 1
+./mc ilm edit --id "${id}" --expire-days "888" siteb/bucket # when ilm expiry re-enabled, this should win
+
+## Check re-enabling of ILM expiry rules replication
+./mc admin replicate update sitea --deployment-id "${depID}" --enable-ilm-expiry-replication
+flag=$(./mc admin replicate info sitea --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
+if [ "$flag" != "true" ]; then
+	echo "BUG: ILM expiry replication not enabled for sitea"
+	exit 1
+fi
+flag=$(./mc admin replicate info siteb --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
+if [ "$flag" != "true" ]; then
+	echo "BUG: ILM expiry replication not enabled for sitea"
+	exit 1
+fi
+
+## Check if latest updated rules get replicated to all sites post re-enable of ILM expiry rules replication
+sleep 30
+count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration.Days')
+count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Expiration.Days')
+if [ $count1 -ne 888 ]; then
+	echo "BUG: latest expiration days not updated on sitea"
+	exit 1
+fi
+if [ $count2 -ne 888 ]; then
+	echo "BUG: latest expiration days not updated on siteb"
 	exit 1
 fi
 
 ## Check replication of deleted ILM expiry rules
 ./mc ilm rule remove --id "${id}" sitea/bucket
-sleep 20
-count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .ID' | wc -l)
-count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .ID' | wc -l)
-if [ $count1 -ne 0 ]; then
-	echo "BUG: ILM rule not removed"
-	exit 1
-fi
-if [ $count2 -ne 0 ]; then
-	echo "BUG: removed ILM expiry rule not replicated"
-	exit 1
-fi
-
-## Check disabling and re enabling of ILM expiry rules replication
-depID=$(./mc admin replicate info sitea --json | jq '.sites[] | select(.name=="sitea") | .deploymentID' | sed 's/"//g')
-./mc admin replicate update sitea --deployment-id "${depID}" --disable-ilm-expiry-replication
-flag=$(./mc admin replicate info sitea --json | jq '."replicate-ilm-expiry"')
-if [ "$flag" != "false" ]; then
-	echo "BUG: ILM expiry replication not disabled"
-	exit 1
-fi
-./mc admin replicate update sitea --deployment-id "${depID}" --enable-ilm-expiry-replication
-flag=$(./mc admin replicate info sitea --json | jq '."replicate-ilm-expiry"')
-if [ "$flag" != "true" ]; then
-	echo "BUG: ILM expiry replication not enabled"
+sleep 30
+count=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .ID' | wc -l)
+if [ $count -ne 0 ]; then
+	echo "BUG: removed ILM expiry rule not replicated to siteb"
 	exit 1
 fi
 
