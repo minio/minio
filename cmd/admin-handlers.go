@@ -2089,6 +2089,20 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		}
 	}
 
+	getAndWriteNetInfo := func() {
+		if query.Get(string(madmin.HealthDataTypeSysNet)) == "true" {
+			localNetInfo := madmin.GetNetInfo(globalLocalNodeName, globalInternodeInterface)
+			healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, localNetInfo)
+
+			peerNetInfos := globalNotificationSys.GetNetInfo(healthCtx)
+			for _, n := range peerNetInfos {
+				anonymizeAddr(&n)
+				healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, n)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
 	getAndWriteOSInfo := func() {
 		if query.Get("sysosinfo") == "true" {
 			localOSInfo := madmin.GetOSInfo(healthCtx, globalLocalNodeName)
@@ -2310,6 +2324,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWritePlatformInfo()
 		getAndWriteCPUs()
 		getAndWritePartitions()
+		getAndWriteNetInfo()
 		getAndWriteOSInfo()
 		getAndWriteMemInfo()
 		getAndWriteProcInfo()
