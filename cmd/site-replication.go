@@ -5234,6 +5234,7 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 		Status:   ResyncStarted.String(),
 		OpType:   "start",
 		ResyncID: rs.ResyncID,
+		Buckets:  res.Buckets,
 	}
 	if len(res.Buckets) > 0 {
 		res.ErrDetail = "partial failure in starting site resync"
