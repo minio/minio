@@ -40,7 +40,7 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 | `minio_cluster_capacity_usable_free_bytes`    | Total free usable capacity online in the cluster.                                                               |
 | `minio_cluster_capacity_usable_total_bytes`   | Total usable capacity online in the cluster.                                                                    |
 | `minio_cluster_objects_size_distribution`     | Distribution of object sizes across a cluster                                                                   |
-| `minio_cluster_objects_version_distribution`  | Distribution of object sizes across a cluster                                                                   |
+| `minio_cluster_objects_version_distribution`  | Distribution of object versions across a cluster                                                                |
 | `minio_cluster_usage_object_total`            | Total number of objects in a cluster                                                                            |
 | `minio_cluster_usage_total_bytes`             | Total cluster usage in bytes                                                                                    |
 | `minio_cluster_usage_version_total`           | Total number of versions (includes delete marker) in a cluster                                                  |
