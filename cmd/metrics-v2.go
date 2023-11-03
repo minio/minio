@@ -693,7 +693,7 @@ func getClusterObjectVersionsMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      versionDistribution,
-		Help:      "Distribution of object sizes across a cluster",
+		Help:      "Distribution of object versions across a cluster",
 		Type:      histogramMetric,
 	}
 }
