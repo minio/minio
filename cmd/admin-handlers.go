@@ -64,6 +64,8 @@ import (
 const (
 	maxEConfigJSONSize        = 262272
 	kubernetesVersionEndpoint = "https://kubernetes.default.svc/version"
+	anonymizeParam            = "anonymize"
+	anonymizeStrict           = "strict"
 )
 
 // Only valid query params for mgmt admin APIs.
@@ -2027,8 +2029,14 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 
 func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *url.Values, healthInfoCh chan madmin.HealthInfo, healthInfo madmin.HealthInfo) {
 	hostAnonymizer := createHostAnonymizer()
-	// anonAddr - Anonymizes hosts in given input string.
+
+	anonParam := query.Get(anonymizeParam)
+	// anonAddr - Anonymizes hosts in given input string
+	// (only if the anonymize param is set to srict).
 	anonAddr := func(addr string) string {
+		if anonParam != anonymizeStrict {
+			return addr
+		}
 		newAddr, found := hostAnonymizer[addr]
 		if found {
 			return newAddr
@@ -2203,6 +2211,10 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	}
 
 	anonymizeCmdLine := func(cmdLine string) string {
+		if anonParam != anonymizeStrict {
+			return cmdLine
+		}
+
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
 			anonCmdLine := strings.ReplaceAll(cmdLine, globalLocalNodeName, "server1")
