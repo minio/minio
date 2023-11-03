@@ -214,6 +214,7 @@ type srStateV1 struct {
 	// Peers maps peers by their deploymentID
 	Peers                   map[string]madmin.PeerInfo `json:"peers"`
 	ServiceAccountAccessKey string                     `json:"serviceAccountAccessKey"`
+	UpdatedAt               time.Time                  `json:"updatedAt"`
 }
 
 // srStateData represents the format of the current `srStateFile`.
@@ -484,13 +485,13 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		return madmin.ReplicateAddStatus{}, errSRBackendIssue(err)
 	}
 
+	currTime := time.Now()
 	joinReq := madmin.SRPeerJoinReq{
-		SvcAcctAccessKey:   svcCred.AccessKey,
-		SvcAcctSecretKey:   secretKey,
-		Peers:              make(map[string]madmin.PeerInfo),
-		ReplicateILMExpiry: opts.ReplicateILMExpiry,
+		SvcAcctAccessKey: svcCred.AccessKey,
+		SvcAcctSecretKey: secretKey,
+		Peers:            make(map[string]madmin.PeerInfo),
+		UpdatedAt:        currTime,
 	}
-
 	for _, v := range sites {
 		joinReq.Peers[v.DeploymentID] = madmin.PeerInfo{
 			Endpoint:           v.Endpoint,
@@ -551,6 +552,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		Name:                    sites[selfIdx].Name,
 		Peers:                   joinReq.Peers,
 		ServiceAccountAccessKey: svcCred.AccessKey,
+		UpdatedAt:               currTime,
 	}
 
 	if err = c.saveToDisk(ctx, state); err != nil {
@@ -601,6 +603,7 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		Name:                    ourName,
 		Peers:                   arg.Peers,
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
+		UpdatedAt:               arg.UpdatedAt,
 	}
 	if err = c.saveToDisk(ctx, state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
@@ -734,6 +737,7 @@ const (
 	deleteBucket            = "DeleteBucket"
 	replicateIAMItem        = "SRPeerReplicateIAMItem"
 	replicateBucketMetadata = "SRPeerReplicateBucketMeta"
+	siteReplicationEdit     = "SiteReplicationEdit"
 )
 
 // MakeBucketHook - called during a regular make bucket call when cluster
@@ -2733,6 +2737,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	for d, peer := range c.state.Peers {
 		info.Sites[d] = peer
 	}
+	info.UpdatedAt = c.state.UpdatedAt
 
 	var maxBuckets int
 	for _, sri := range sris {
@@ -3923,12 +3928,6 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	}
 
 	// If ILM expiry replications enabled/disabled, set accordingly
-	if err != nil {
-		return madmin.ReplicateEditStatus{
-			Status:    madmin.ReplicateAddStatusPartial,
-			ErrDetail: fmt.Sprintf("unable to save cluster-replication state on local: %v", err),
-		}, nil
-	}
 	if opts.DisableILMExpiryReplication {
 		if !pi.ReplicateILMExpiry {
 			return madmin.ReplicateEditStatus{
@@ -3950,6 +3949,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: true", successMsg)
 	}
 	state.Peers[peer.DeploymentID] = pi
+	state.UpdatedAt = time.Now()
 
 	errs := make(map[string]error, len(state.Peers))
 	var wg sync.WaitGroup
@@ -3978,9 +3978,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 
 	wg.Wait()
 	for dID, err := range errs {
-		if err != nil {
-			return madmin.ReplicateEditStatus{}, errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err))
-		}
+		logger.LogOnceIf(ctx, fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err), "site-relication-edit")
 	}
 
 	// we can now save the cluster replication configuration state.
@@ -3998,6 +3996,10 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		}, nil
 	}
 
+	// set partial error message if remote site updates failed for few cases
+	if len(errs) > 0 {
+		successMsg = fmt.Sprintf("%s\n- partially failed for few remote sites as they could be down/unreachable at the moment", successMsg)
+	}
 	result := madmin.ReplicateEditStatus{
 		Success: true,
 		Status:  successMsg,
@@ -4074,6 +4076,7 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 			p.Endpoint = arg.Endpoint
 			p.ReplicateILMExpiry = arg.ReplicateILMExpiry
 			c.state.Peers[arg.DeploymentID] = p
+			c.state.UpdatedAt = time.Now()
 		}
 		if p.DeploymentID == globalDeploymentID() {
 			ourName = p.Name
@@ -4081,6 +4084,20 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 	}
 	if err := c.saveToDisk(ctx, c.state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
+	}
+	return nil
+}
+
+// PeerStateEditReq - internal API handler to respond to a peer cluster's request
+// to edit state.
+func (c *SiteReplicationSys) PeerStateEditReq(ctx context.Context, arg madmin.SRStateEditReq) error {
+	if arg.UpdatedAt.After(c.state.UpdatedAt) {
+		state := c.state
+		state.Peers = arg.Peers
+		state.UpdatedAt = arg.UpdatedAt
+		if err := c.saveToDisk(ctx, state); err != nil {
+			return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", state.Name, err))
+		}
 	}
 	return nil
 }
@@ -4177,6 +4194,7 @@ type srStatusInfo struct {
 	// mismatches or if a specific ILM expiry rule's stats are requested
 	ILMExpiryRulesStats map[string]map[string]srILMExpiryRuleStatsSummary
 	Metrics             madmin.SRMetricsSummary
+	UpdatedAt           time.Time
 }
 
 // SRBucketDeleteOp - type of delete op
@@ -4205,11 +4223,36 @@ func getSRBucketDeleteOp(isSiteReplicated bool) SRBucketDeleteOp {
 	return MarkDelete
 }
 
+func (c *SiteReplicationSys) healILMExpiryConfig(ctx context.Context, objAPI ObjectLayer, info srStatusInfo) error {
+	c.RLock()
+	defer c.RUnlock()
+	if !c.enabled {
+		return nil
+	}
+
+	for dID, pi := range info.Sites {
+		if dID == globalDeploymentID() {
+			continue
+		}
+		admClient, err := c.getAdminClient(ctx, dID)
+		if err != nil {
+			return wrapSRErr(err)
+		}
+		if err = admClient.SRStateEdit(ctx, madmin.SRStateEditReq{Peers: info.Sites, UpdatedAt: info.UpdatedAt}); err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(pi.Name, siteReplicationEdit,
+				fmt.Errorf("Unable to heal site replication state for peer %s from peer %s : %w",
+					pi.Name, c.state.Name, err)))
+		}
+	}
+	return nil
+}
+
 func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer) error {
 	buckets, err := c.listBuckets(ctx)
 	if err != nil {
 		return err
 	}
+	ilmExpiryCfgHealed := false
 	for _, bi := range buckets {
 		bucket := bi.Name
 		info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
@@ -4232,6 +4275,10 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 			c.healBucketPolicies(ctx, objAPI, bucket, info)
 			c.healTagMetadata(ctx, objAPI, bucket, info)
 			c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
+			if !ilmExpiryCfgHealed {
+				c.healILMExpiryConfig(ctx, objAPI, info)
+				ilmExpiryCfgHealed = true
+			}
 			if ilmExpiryReplicationEnabled(c.state.Peers) {
 				c.healBucketILMExpiry(ctx, objAPI, bucket, info)
 			}

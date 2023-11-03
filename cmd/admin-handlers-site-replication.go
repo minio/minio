@@ -441,6 +441,29 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SRStateEdit - PUT /minio/admin/v3/site-replication/state/edit
+//
+// used internally to tell current cluster to update site replication state
+func (a adminAPIHandlers) SRStateEdit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var state madmin.SRStateEditReq
+	if err := parseJSONBody(ctx, r.Body, &state, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if err := globalSiteReplicationSys.PeerStateEditReq(ctx, state); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
 func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	q := r.Form
 	opts.Buckets = q.Get("buckets") == "true"
