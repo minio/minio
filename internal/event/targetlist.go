@@ -25,7 +25,7 @@ import (
 
 const (
 	// The maximum allowed number of concurrent Send() calls to all configured notifications targets
-	maxConcurrentTargetSendCalls = 100000
+	maxConcurrentTargetSendCalls = 20000
 )
 
 // Target - event target interface

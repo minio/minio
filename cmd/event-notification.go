@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -219,7 +218,7 @@ func (evnot *EventNotifier) Send(args eventArgs) {
 	default:
 		// A new goroutine is created for each notification job, eventsQueue is
 		// drained quickly and is not expected to be filled with any scenario.
-		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
+		logger.LogIf(context.Background(), fmt.Errorf("internal events queue unexpectedly full, eventArgs: %+v", args))
 	}
 }
 
