@@ -45,7 +45,7 @@ require (
 	github.com/minio/console v0.41.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
-	github.com/minio/dperf v0.5.0
+	github.com/minio/dperf v0.5.1
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
 	github.com/minio/madmin-go/v3 v3.0.29
@@ -124,7 +124,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/frankban/quicktest v1.14.3 // indirect
+	github.com/frankban/quicktest v1.14.4 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.6.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
