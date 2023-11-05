@@ -19,6 +19,8 @@ package http
 
 import (
 	"io"
+
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 // DrainBody close non nil response with any response Body.
@@ -37,6 +39,6 @@ func DrainBody(respBody io.ReadCloser) {
 		// the same connection for future uses.
 		//  - http://stackoverflow.com/a/17961593/4465767
 		defer respBody.Close()
-		io.Copy(io.Discard, respBody)
+		xioutil.DiscardReader(respBody)
 	}
 }

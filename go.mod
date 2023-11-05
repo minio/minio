@@ -45,7 +45,7 @@ require (
 	github.com/minio/console v0.41.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
-	github.com/minio/dperf v0.5.1
+	github.com/minio/dperf v0.5.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
 	github.com/minio/madmin-go/v3 v3.0.29

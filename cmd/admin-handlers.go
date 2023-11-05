@@ -52,6 +52,7 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -756,11 +757,8 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	// read request body
-	io.CopyN(io.Discard, r.Body, 1)
 
 	globalProfilerMu.Lock()
-
 	if globalProfiler == nil {
 		globalProfiler = make(map[string]minioProfiler, 10)
 	}
@@ -1220,7 +1218,7 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 	totalRx := int64(0)
 	connectTime := time.Now()
 	for {
-		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		n, err := io.CopyN(xioutil.Discard, r.Body, 128*humanize.KiByte)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {

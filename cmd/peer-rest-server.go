@@ -33,6 +33,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
@@ -1423,7 +1424,7 @@ func (s *peerRESTServer) DevNull(w http.ResponseWriter, r *http.Request) {
 	connectTime := time.Now()
 	ctx := newContext(r, w, "DevNull")
 	for {
-		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		n, err := io.CopyN(xioutil.Discard, r.Body, 128*humanize.KiByte)
 		atomic.AddUint64(&globalNetPerfRX.RX, uint64(n))
 		if err != nil && err != io.EOF {
 			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)

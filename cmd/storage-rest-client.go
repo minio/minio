@@ -856,10 +856,7 @@ func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume 
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
-	respReader, err := waitForHTTPResponse(respBody)
-	if err == nil {
-		io.Copy(io.Discard, respReader)
-	}
+	_, err = waitForHTTPResponse(respBody)
 	return err
 }
 
