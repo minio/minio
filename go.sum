@@ -470,8 +470,8 @@ github.com/minio/csvparser v1.0.0 h1:xJEHcYK8ZAjeW4hNV9Zu30u+/2o4UyPnYgyjWp8b7ZU
 github.com/minio/csvparser v1.0.0/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/dnscache v0.1.1 h1:AMYLqomzskpORiUA1ciN9k7bZT1oB3YZN4cEIi88W5o=
 github.com/minio/dnscache v0.1.1/go.mod h1:WCumm6offO4rQ/82oTCSoHnlhTmc81+vXgKpBtSYRbg=
-github.com/minio/dperf v0.5.1 h1:oXX1og7sajPlcnr0c/cJ9qBeoPFNlbCqt0WAd5t3TPY=
-github.com/minio/dperf v0.5.1/go.mod h1:Y8HlbQ90LbtybYXEyMfsoVyOWndB1kGUo707uCwEuxo=
+github.com/minio/dperf v0.5.2 h1:ZTCyWE9jnngK55w6eU9u4VvQktJGYsUP6kaaUYORDyE=
+github.com/minio/dperf v0.5.2/go.mod h1:Y8HlbQ90LbtybYXEyMfsoVyOWndB1kGUo707uCwEuxo=
 github.com/minio/filepath v1.0.0 h1:fvkJu1+6X+ECRA6G3+JJETj4QeAYO9sV43I79H8ubDY=
 github.com/minio/filepath v1.0.0/go.mod h1:/nRZA2ldl5z6jT9/KQuvZcQlxZIMQoFFQPvEXx9T/Bw=
 github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA/g=
