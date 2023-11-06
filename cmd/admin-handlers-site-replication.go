@@ -471,6 +471,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	opts.Groups = q.Get("groups") == "true"
 	opts.Users = q.Get("users") == "true"
 	opts.ILMExpiryRules = q.Get("ilm-expiry-rules") == "true"
+	opts.PeerState = q.Get("peer-state") == "true"
 	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
 	opts.EntityValue = q.Get("entityvalue")
 	opts.ShowDeleted = q.Get("showDeleted") == "true"

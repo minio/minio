@@ -3258,6 +3258,12 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			}
 		}
 	}
+	if opts.PeerState {
+		info.PeerStates = make(map[string]madmin.SRStateInfo, numSites)
+		for _, sri := range sris {
+			info.PeerStates[sri.DeploymentID] = sri.State
+		}
+	}
 
 	if opts.Metrics {
 		m, err := globalSiteReplicationSys.getSiteMetrics(ctx)
@@ -3731,6 +3737,13 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		}
 	}
+	if opts.PeerState {
+		info.State = madmin.SRStateInfo{
+			Name:      c.state.Name,
+			Peers:     c.state.Peers,
+			UpdatedAt: c.state.UpdatedAt,
+		}
+	}
 
 	if opts.Users || opts.Entity == madmin.SRUserEntity {
 		// Replicate policy mappings on local to all peers.
@@ -4093,7 +4106,12 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 func (c *SiteReplicationSys) PeerStateEditReq(ctx context.Context, arg madmin.SRStateEditReq) error {
 	if arg.UpdatedAt.After(c.state.UpdatedAt) {
 		state := c.state
-		state.Peers = arg.Peers
+		// update only the ReplicateILMExpiry flag for the peers from incoming request
+		for _, peer := range arg.Peers {
+			currPeer := c.state.Peers[peer.DeploymentID]
+			currPeer.ReplicateILMExpiry = peer.ReplicateILMExpiry
+			state.Peers[peer.DeploymentID] = currPeer
+		}
 		state.UpdatedAt = arg.UpdatedAt
 		if err := c.saveToDisk(ctx, state); err != nil {
 			return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", state.Name, err))
@@ -4193,8 +4211,10 @@ type srStatusInfo struct {
 	// ILMExpiryRulesStats map of ILM expiry rules to slice of deployment IDs with stats. This is populated only if there are
 	// mismatches or if a specific ILM expiry rule's stats are requested
 	ILMExpiryRulesStats map[string]map[string]srILMExpiryRuleStatsSummary
-	Metrics             madmin.SRMetricsSummary
-	UpdatedAt           time.Time
+	// PeerStates map of site replication sites to their site replication states
+	PeerStates map[string]madmin.SRStateInfo
+	Metrics    madmin.SRMetricsSummary
+	UpdatedAt  time.Time
 }
 
 // SRBucketDeleteOp - type of delete op
@@ -4229,19 +4249,53 @@ func (c *SiteReplicationSys) healILMExpiryConfig(ctx context.Context, objAPI Obj
 	if !c.enabled {
 		return nil
 	}
+	var (
+		latestID, latestPeerName string
+		lastUpdate               time.Time
+		latestPeers              map[string]madmin.PeerInfo
+	)
 
-	for dID, pi := range info.Sites {
+	for dID, ps := range info.PeerStates {
+		if lastUpdate.IsZero() {
+			lastUpdate = ps.UpdatedAt
+			latestID = dID
+			latestPeers = ps.Peers
+		}
+		if ps.UpdatedAt.After(lastUpdate) {
+			lastUpdate = ps.UpdatedAt
+			latestID = dID
+			latestPeers = ps.Peers
+		}
+	}
+	latestPeerName = info.Sites[latestID].Name
+
+	for dID, ps := range info.PeerStates {
+		// If latest peers ILM expiry flags are equal to current peer, no need to heal
+		flagEual := true
+		for id, peer := range latestPeers {
+			if !(ps.Peers[id].ReplicateILMExpiry == peer.ReplicateILMExpiry) {
+				flagEual = false
+				break
+			}
+		}
+		if flagEual {
+			continue
+		}
+
+		// Dont apply the self state to self
 		if dID == globalDeploymentID() {
 			continue
 		}
+
+		// Send details to other sites for healing
 		admClient, err := c.getAdminClient(ctx, dID)
 		if err != nil {
 			return wrapSRErr(err)
 		}
-		if err = admClient.SRStateEdit(ctx, madmin.SRStateEditReq{Peers: info.Sites, UpdatedAt: info.UpdatedAt}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(pi.Name, siteReplicationEdit,
+		if err = admClient.SRStateEdit(ctx, madmin.SRStateEditReq{Peers: latestPeers, UpdatedAt: lastUpdate}); err != nil {
+			logger.LogIf(ctx, c.annotatePeerErr(ps.Name, siteReplicationEdit,
 				fmt.Errorf("Unable to heal site replication state for peer %s from peer %s : %w",
-					pi.Name, c.state.Name, err)))
+					ps.Name, latestPeerName, err)))
 		}
 	}
 	return nil
@@ -4260,6 +4314,7 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 			EntityValue:    bucket,
 			ShowDeleted:    true,
 			ILMExpiryRules: true,
+			PeerState:      true,
 		})
 		if err != nil {
 			return err

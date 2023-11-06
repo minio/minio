@@ -657,8 +657,8 @@ github.com/shoenig/go-m1cpu v0.1.6 h1:nxdKQNcEB6vzgA2E2bvzKIYRuNj7XNJ4S/aRSwKzFt
 github.com/shoenig/go-m1cpu v0.1.6/go.mod h1:1JJMcUBvfNwpq05QDQVAnx3gUHr9IYF7GNg9SUEw2VQ=
 github.com/shoenig/test v0.6.4 h1:kVTaSd7WLz5WZ2IaoM0RSzRsUD+m8wRR+5qvntpn4LU=
 github.com/shoenig/test v0.6.4/go.mod h1:byHiCGXqrVaflBLAMq/srcZIHynQPQgeyvkvXnjqq0k=
-github.com/shtripat/madmin-go/v3 v3.0.0-20231103110004-8fb3f683098c h1:slJSdaqM9tyWvyygXcu4PGdqTDS1iw9ZSVI73Hb1KWI=
-github.com/shtripat/madmin-go/v3 v3.0.0-20231103110004-8fb3f683098c/go.mod h1:4QN2NftLSV7MdlT50dkrenOMmNVHluxTvlqJou3hte8=
+github.com/shtripat/madmin-go/v3 v3.0.0-20231106151808-5082883cc33c h1:QvvwLkuqdj5muc3jgHvZzeSEYG+xZjWc5OuZgxLW53I=
+github.com/shtripat/madmin-go/v3 v3.0.0-20231106151808-5082883cc33c/go.mod h1:4QN2NftLSV7MdlT50dkrenOMmNVHluxTvlqJou3hte8=
 github.com/shtripat/minio-console v0.0.0-20231103112336-64026826b70d h1:pJYusmrxWTtg+fQEenhVeRckCFOISGVznVVdeugDZCg=
 github.com/shtripat/minio-console v0.0.0-20231103112336-64026826b70d/go.mod h1:a680EPQ9mdN+j8bQ4u1FrqWI5EgnEP6ZawlPjeLTUPQ=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
