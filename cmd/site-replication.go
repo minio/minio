@@ -5260,13 +5260,6 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 	if err != nil {
 		return res, err
 	}
-	switch rs.Status {
-	case ResyncCanceled:
-		return res, errSRResyncCanceled
-	case ResyncCompleted, NoResync:
-		return res, errSRNoResync
-	}
-
 	res = madmin.SRResyncOpStatus{
 		Status:   rs.Status.String(),
 		OpType:   "cancel",
