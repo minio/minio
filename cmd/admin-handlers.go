@@ -1402,13 +1402,21 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 }
 
 func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName string) (bucketExists bool, err error) {
-	if err = objectAPI.MakeBucket(ctx, bucketName, MakeBucketOptions{}); err != nil {
+	if err = objectAPI.MakeBucket(ctx, bucketName, MakeBucketOptions{VersioningEnabled: globalSiteReplicationSys.isEnabled()}); err != nil {
 		if _, ok := err.(BucketExists); !ok {
 			// Only BucketExists error can be ignored.
 			return false, err
 		}
 		bucketExists = true
 	}
+
+	if globalSiteReplicationSys.isEnabled() {
+		configData := []byte(`<VersioningConfiguration><Status>Enabled</Status><ExcludedPrefixes><Prefix>speedtest/*</Prefix></ExcludedPrefixes></VersioningConfiguration>`)
+		if _, err = globalBucketMetadataSys.Update(ctx, bucketName, bucketVersioningConfig, configData); err != nil {
+			return false, err
+		}
+	}
+
 	return bucketExists, nil
 }
 
