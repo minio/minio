@@ -243,12 +243,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(adminMiddleware(adminAPI.ListServiceAccounts))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(adminMiddleware(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
-		// LDAP specific service accounts ops
-		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/ldap/list-access-keys").
-			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
-			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
-
 		// STS accounts ops
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/temporary-account-info").HandlerFunc(adminMiddleware(adminAPI.TemporaryAccountInfo)).Queries("accessKey", "{accessKey:.*}")
 
@@ -305,6 +299,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}").HandlerFunc(adminMiddleware(adminAPI.ListIdentityProviderCfg))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.GetIdentityProviderCfg))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.DeleteIdentityProviderCfg))
+
+		// LDAP specific service accounts ops
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
+			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
 
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))

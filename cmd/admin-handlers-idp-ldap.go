@@ -181,7 +181,7 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 
 // AddServiceAccountLDAP adds a new service account for provided LDAP username or DN
 //
-// PUT /minio/admin/v3/ldap/add-service-account
+// PUT /minio/admin/v3/idp/ldap/add-service-account
 func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -420,7 +420,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 	}
 }
 
-// ListAccessKeysLDAP - GET /minio/admin/v3/ldap/list-access-keys
+// ListAccessKeysLDAP - GET /minio/admin/v3/idp/ldap/list-access-keys
 func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
