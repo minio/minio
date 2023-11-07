@@ -8,22 +8,19 @@ if [ "${1}" != "minio" ]; then
 	fi
 fi
 
-# su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
 	if [ -n "${MINIO_USERNAME}" ] && [ -n "${MINIO_GROUPNAME}" ]; then
 		if [ -n "${MINIO_UID}" ] && [ -n "${MINIO_GID}" ]; then
-			groupadd -f -g "$MINIO_GID" "$MINIO_GROUPNAME" &&
-				useradd -u "$MINIO_UID" -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
+			chroot --userspec=${MINIO_UID}:${MINIO_GID} / "$@"
 		else
-			groupadd -f "$MINIO_GROUPNAME" &&
-				useradd -g "$MINIO_GROUPNAME" "$MINIO_USERNAME"
+			echo "${MINIO_USERNAME}:x:1000:1000:${MINIO_USERNAME}:/:/sbin/nologin" >>/etc/passwd
+			echo "${MINIO_GROUPNAME}:x:1000" >>/etc/group
+			chroot --userspec=${MINIO_USERNAME}:${MINIO_GROUPNAME} / "$@"
 		fi
-		exec setpriv --reuid="${MINIO_USERNAME}" \
-			--regid="${MINIO_GROUPNAME}" --keep-groups "$@"
 	else
 		exec "$@"
 	fi
 }
 
-## Switch to user if applicable.
+## DEPRECATED and unsupported - switch to user if applicable.
 docker_switch_user "$@"

@@ -33,6 +33,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
@@ -371,6 +372,21 @@ func (s *peerRESTServer) GetCPUsHandler(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	info := madmin.GetCPUs(ctx, r.Host)
+
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// GetNetInfoHandler - returns network information.
+func (s *peerRESTServer) GetNetInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	info := madmin.GetNetInfo(r.Host, globalInternodeInterface)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -1408,7 +1424,7 @@ func (s *peerRESTServer) DevNull(w http.ResponseWriter, r *http.Request) {
 	connectTime := time.Now()
 	ctx := newContext(r, w, "DevNull")
 	for {
-		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		n, err := io.CopyN(xioutil.Discard, r.Body, 128*humanize.KiByte)
 		atomic.AddUint64(&globalNetPerfRX.RX, uint64(n))
 		if err != nil && err != io.EOF {
 			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
@@ -1460,6 +1476,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(h(server.GetSysConfigHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodOsInfo).HandlerFunc(h(server.GetOSInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDiskHwInfo).HandlerFunc(h(server.GetPartitionsHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetHwInfo).HandlerFunc(h(server.GetNetInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCPUInfo).HandlerFunc(h(server.GetCPUsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetAllBucketStats).HandlerFunc(h(server.GetAllBucketStatsHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(h(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)

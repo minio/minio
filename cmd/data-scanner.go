@@ -343,7 +343,6 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
-
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
