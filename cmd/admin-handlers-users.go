@@ -781,6 +781,9 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		if sp.Version == "" && len(sp.Statements) == 0 {
+			sp = nil
+		}
 	}
 
 	opts.sessionPolicy = sp
@@ -911,6 +914,9 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		if sp.Version == "" && len(sp.Statements) == 0 {
+			sp = nil
+		}
 	}
 	opts := updateServiceAccountOpts{
 		secretKey:     updateReq.NewSecretKey,
@@ -996,9 +1002,12 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// if session policy is nil or empty, then it is implied policy
+	impliedPolicy := sessionPolicy == nil || (sessionPolicy.Version == "" && len(sessionPolicy.Statements) == 0)
+
 	var svcAccountPolicy policy.Policy
 
-	if sessionPolicy != nil {
+	if !impliedPolicy {
 		svcAccountPolicy = *sessionPolicy
 	} else {
 		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
@@ -1025,7 +1034,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		Name:          svcAccount.Name,
 		Description:   svcAccount.Description,
 		AccountStatus: svcAccount.Status,
-		ImpliedPolicy: sessionPolicy == nil,
+		ImpliedPolicy: impliedPolicy,
 		Policy:        string(policyJSON),
 		Expiration:    expiration,
 	}

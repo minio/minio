@@ -67,7 +67,8 @@ const (
 	EnvRootDriveThresholdSize     = "MINIO_ROOTDRIVE_THRESHOLD_SIZE"
 	EnvRootDiskThresholdSize      = "MINIO_ROOTDISK_THRESHOLD_SIZE" // Deprecated Sep 2023
 	EnvBrowserLoginAnimation      = "MINIO_BROWSER_LOGIN_ANIMATION"
-	EnvBrowserSessionDuration     = "MINIO_BROWSER_SESSION_DURATION"
+	EnvBrowserSessionDuration     = "MINIO_BROWSER_SESSION_DURATION" // Deprecated after November 2023
+	EnvMinioStsDuration           = "MINIO_STS_DURATION"
 	EnvMinIOLogQueryURL           = "MINIO_LOG_QUERY_URL"
 	EnvMinIOLogQueryAuthToken     = "MINIO_LOG_QUERY_AUTH_TOKEN"
 	EnvMinIOPrometheusURL         = "MINIO_PROMETHEUS_URL"

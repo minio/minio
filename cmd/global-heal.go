@@ -309,7 +309,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						Remove:   healDeleteDangling,
 					})
 				if err != nil {
-					if isErrObjectNotFound(err) {
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// queueing happens across namespace, ignore
 						// objects that are not found.
 						return
@@ -335,7 +335,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
 					}); err != nil {
-					if isErrObjectNotFound(err) {
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// queueing happens across namespace, ignore
 						// objects that are not found.
 						versionNotFound++
@@ -344,9 +344,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// If not deleted, assume they failed.
 					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
-						if !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
-						}
+						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
 					} else {
 						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
@@ -358,7 +356,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					return
 				}
 			}
-			// All versions resulted in 'ObjectNotFound'
+			// All versions resulted in 'ObjectNotFound/VersionNotFound'
 			if versionNotFound == len(fivs.Versions) {
 				return
 			}

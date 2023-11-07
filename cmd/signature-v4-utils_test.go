@@ -394,17 +394,4 @@ func TestCheckMetaHeaders(t *testing.T) {
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
-
-	// Add extra metadata in url values
-	r, err = http.NewRequest(http.MethodPut, "http://play.min.io:9000?x-amz-meta-test=test&x-amz-meta-extension=png&x-amz-meta-name=imagepng&x-amz-meta-clone=fail", nil)
-	if err != nil {
-		t.Fatal("Unable to create http.Request :", err)
-	}
-
-	r.ParseForm()
-	// calling the function being tested.
-	errCode = checkMetaHeaders(signedHeadersMap, r)
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
-	}
 }

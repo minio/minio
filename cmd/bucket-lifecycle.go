@@ -444,7 +444,7 @@ func genTransitionObjName(bucket string) (string, error) {
 		return "", err
 	}
 	us := u.String()
-	obj := fmt.Sprintf("%s/%s/%s/%s/%s", globalDeploymentID, bucket, us[0:2], us[2:4], us)
+	obj := fmt.Sprintf("%s/%s/%s/%s/%s", globalDeploymentID(), bucket, us[0:2], us[2:4], us)
 	return obj, nil
 }
 

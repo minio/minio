@@ -1,7 +1,4 @@
-//go:build !windows
-// +build !windows
-
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,40 +15,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package ioutil
 
 import (
-	"errors"
 	"io"
-	"os"
-	"time"
-
-	"github.com/djherbis/atime"
 )
 
-// Return error if Atime is disabled on the O/S
-func checkAtimeSupport(dir string) (err error) {
-	file, err := os.CreateTemp(dir, "prefix")
-	if err != nil {
-		return
-	}
-	defer os.Remove(file.Name())
-	defer file.Close()
-	finfo1, err := os.Stat(file.Name())
-	if err != nil {
-		return
-	}
-	// add a sleep to ensure atime change is detected
-	time.Sleep(10 * time.Millisecond)
+// Discard is just like io.Discard without the io.ReaderFrom compatible
+// implementation which is buggy on NUMA systems, we have to use a simpler
+// io.Writer implementation alone avoids also unnecessary buffer copies,
+// and as such incurred latencies.
+var Discard io.Writer = discard{}
 
-	if _, err = io.Copy(io.Discard, file); err != nil {
-		return
-	}
+// discard is /dev/null for Golang.
+type discard struct{}
 
-	finfo2, err := os.Stat(file.Name())
+func (discard) Write(p []byte) (int, error) {
+	return len(p), nil
+}
 
-	if atime.Get(finfo2).Equal(atime.Get(finfo1)) {
-		return errors.New("Atime not supported")
-	}
-	return
+// DiscardReader discarded reader
+func DiscardReader(r io.Reader) {
+	Copy(Discard, r)
 }

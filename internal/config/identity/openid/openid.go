@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/minio/internal/hash/sha256"
+	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 )
@@ -599,7 +600,11 @@ func (r Config) GetRoleInfo() map[arn.ARN]string {
 
 // GetDefaultExpiration - returns the expiration seconds expected.
 func GetDefaultExpiration(dsecs string) (time.Duration, error) {
-	defaultExpiryDuration := time.Duration(60) * time.Minute // Defaults to 1hr.
+	timeout := env.Get(config.EnvMinioStsDuration, "")
+	defaultExpiryDuration, err := time.ParseDuration(timeout)
+	if err != nil {
+		defaultExpiryDuration = time.Duration(60) * time.Minute
+	}
 	if dsecs != "" {
 		expirySecs, err := strconv.ParseInt(dsecs, 10, 64)
 		if err != nil {
