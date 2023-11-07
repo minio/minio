@@ -5239,6 +5239,9 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 	if len(res.Buckets) > 0 {
 		res.ErrDetail = "partial failure in starting site resync"
 	}
+	if len(buckets) != 0 && len(res.Buckets) == len(buckets) {
+		return res, fmt.Errorf("all buckets resync failed")
+	}
 	return res, nil
 }
 
