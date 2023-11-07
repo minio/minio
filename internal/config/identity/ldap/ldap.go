@@ -331,8 +331,8 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	return res, nil
 }
 
-// LookupDN searches for the username and groups of a given DN, like opposite of LookupUserDN
-func (l *Config) LookupDN(DN string) (string, []string, error) {
+// LookupUsername searches for the username and groups of a given DN, like opposite of LookupUserDN
+func (l *Config) LookupUsername(DN string) (string, []string, error) {
 	conn, err := l.LDAP.Connect()
 	if err != nil {
 		return "", nil, err

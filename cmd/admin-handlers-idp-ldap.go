@@ -339,7 +339,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		// check if targetUser is username or DN
 		if globalIAMSys.LDAPConfig.IsLDAPUserDN(targetUser) {
 			opts.claims[ldapUser] = targetUser // DN
-			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupDN(targetUser)
+			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUsername(targetUser)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
