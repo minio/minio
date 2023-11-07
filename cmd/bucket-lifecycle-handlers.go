@@ -91,7 +91,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if bucketLifecycle.HasExpiry() || *lcCfg.ExpiryRuleRemoved {
+	if bucketLifecycle.HasExpiry() || (lcCfg != nil && *lcCfg.ExpiryRuleRemoved) {
 		currtime := time.Now()
 		bucketLifecycle.ExpiryUpdatedAt = &currtime
 	}

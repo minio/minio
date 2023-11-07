@@ -118,8 +118,7 @@ if [ $count2 -ne 100 ]; then
 fi
 
 ## Check disabling of ILM expiry rules replication
-depID=$(./mc admin replicate info sitea --json | jq '.sites[] | select(.name=="sitea") | .deploymentID' | sed 's/"//g')
-./mc admin replicate update sitea --deployment-id "${depID}" --disable-ilm-expiry-replication
+./mc admin replicate update sitea --disable-ilm-expiry-replication
 flag=$(./mc admin replicate info sitea --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
 if [ "$flag" != "false" ]; then
 	echo "BUG: ILM expiry replication not disabled for sitea"
@@ -137,7 +136,7 @@ sleep 1
 ./mc ilm edit --id "${id}" --expire-days "888" siteb/bucket # when ilm expiry re-enabled, this should win
 
 ## Check re-enabling of ILM expiry rules replication
-./mc admin replicate update sitea --deployment-id "${depID}" --enable-ilm-expiry-replication
+./mc admin replicate update sitea --enable-ilm-expiry-replication
 flag=$(./mc admin replicate info sitea --json | jq '.sites[] | select (.name=="sitea") | ."replicate-ilm-expiry"')
 if [ "$flag" != "true" ]; then
 	echo "BUG: ILM expiry replication not enabled for sitea"
@@ -165,8 +164,9 @@ fi
 ## Check replication of deleted ILM expiry rules
 ./mc ilm rule remove --id "${id}" sitea/bucket
 sleep 30
-count=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.ID=="${id}") | .ID' | wc -l)
-if [ $count -ne 0 ]; then
+# should error as rule doesnt exist
+error=$(./mc ilm rule list siteb/bucket --json | jq '.error.cause.message' | sed 's/"//g')
+if [ "$error" != "The lifecycle configuration does not exist" ]; then
 	echo "BUG: removed ILM expiry rule not replicated to siteb"
 	exit 1
 fi

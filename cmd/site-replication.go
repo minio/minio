@@ -492,12 +492,32 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		Peers:            make(map[string]madmin.PeerInfo),
 		UpdatedAt:        currTime,
 	}
+	// check if few peers exist already and ILM expiry replcation is set to true
+	replicateILMExpirySet := false
+	if c.state.Peers != nil {
+		for _, pi := range c.state.Peers {
+			if pi.ReplicateILMExpiry {
+				replicateILMExpirySet = true
+				break
+			}
+		}
+	}
 	for _, v := range sites {
+		var peerReplicateILMExpiry bool
+		// if peers already exist and for one of them ReplicateILMExpiry
+		// set true, that means earlier replication of ILM expiry was set
+		// for the site replication. All new sites added to the setup should
+		// get this enabled as well
+		if replicateILMExpirySet {
+			peerReplicateILMExpiry = replicateILMExpirySet
+		} else {
+			peerReplicateILMExpiry = opts.ReplicateILMExpiry
+		}
 		joinReq.Peers[v.DeploymentID] = madmin.PeerInfo{
 			Endpoint:           v.Endpoint,
 			Name:               v.Name,
 			DeploymentID:       v.DeploymentID,
-			ReplicateILMExpiry: opts.ReplicateILMExpiry,
+			ReplicateILMExpiry: peerReplicateILMExpiry,
 		}
 	}
 
@@ -599,9 +619,22 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		return errSRServiceAccount(fmt.Errorf("unable to create service account on %s: %v", ourName, err))
 	}
 
+	peers := make(map[string]madmin.PeerInfo, len(arg.Peers))
+	for dID, pi := range arg.Peers {
+		if c.state.Peers != nil {
+			if existingPeer, ok := c.state.Peers[dID]; ok {
+				// retain existing ReplicateILMExpiry of peer if its already set
+				// and incoming arg has it false. it could be default false
+				if !pi.ReplicateILMExpiry && existingPeer.ReplicateILMExpiry {
+					pi.ReplicateILMExpiry = existingPeer.ReplicateILMExpiry
+				}
+			}
+		}
+		peers[dID] = pi
+	}
 	state := srState{
 		Name:                    ourName,
-		Peers:                   arg.Peers,
+		Peers:                   peers,
 		ServiceAccountAccessKey: arg.SvcAcctAccessKey,
 		UpdatedAt:               arg.UpdatedAt,
 	}
@@ -3896,7 +3929,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	for _, v := range sites.Sites {
 		if peer.DeploymentID == v.DeploymentID {
 			found = true
-			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet || opts.DisableILMExpiryReplication || opts.EnableILMExpiryReplication) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated or enabling/disabling ILM expiry
+			if (!peer.SyncState.Empty() || peer.DefaultBandwidth.IsSet) && peer.Endpoint == "" { // peer.Endpoint may be "" if only sync state/bandwidth is being updated
 				break
 			}
 			if peer.Endpoint == v.Endpoint && peer.SyncState.Empty() && !peer.DefaultBandwidth.IsSet {
@@ -3917,51 +3950,69 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		}
 	}
 
-	if !found {
+	// if disable/enable ILM expiry replication, deployment id not needed.
+	// check for below error only if other options being updated (e.g. endpoint, sync, bandwidth)
+	if !opts.DisableILMExpiryReplication && !opts.EnableILMExpiryReplication && !found {
 		return madmin.ReplicateEditStatus{}, errSRInvalidRequest(fmt.Errorf("%s not found in existing replicated sites", peer.DeploymentID))
 	}
 	successMsg := "Cluster replication configuration updated successfully with:"
 	var state srState
 	c.RLock()
-	pi := c.state.Peers[peer.DeploymentID]
 	state = c.state
 	c.RUnlock()
-	prevPeerInfo := pi
-	if !peer.SyncState.Empty() { // update replication to peer to be sync/async
-		pi.SyncState = peer.SyncState
-	}
-	if peer.Endpoint != "" { // `admin replicate update` requested an endpoint change
-		pi.Endpoint = peer.Endpoint
-		successMsg = fmt.Sprintf("%s\n- endpoint %s for peer %s", successMsg, peer.Endpoint, peer.Name)
-	}
 
-	if peer.DefaultBandwidth.IsSet {
-		pi.DefaultBandwidth = peer.DefaultBandwidth
-		pi.DefaultBandwidth.UpdatedAt = UTCNow()
+	// in case of --disable-ilm-expiry-replication and --enable-ilm-expiry-replication
+	// --deployment-id is not passed
+	var (
+		prevPeerInfo, pi madmin.PeerInfo
+	)
+	if peer.DeploymentID != "" {
+		pi = c.state.Peers[peer.DeploymentID]
+		prevPeerInfo = pi
+		if !peer.SyncState.Empty() { // update replication to peer to be sync/async
+			pi.SyncState = peer.SyncState
+			successMsg = fmt.Sprintf("%s\n- sync state %s for peer %s", successMsg, peer.SyncState, peer.Name)
+		}
+		if peer.Endpoint != "" { // `admin replicate update` requested an endpoint change
+			pi.Endpoint = peer.Endpoint
+			successMsg = fmt.Sprintf("%s\n- endpoint %s for peer %s", successMsg, peer.Endpoint, peer.Name)
+		}
+
+		if peer.DefaultBandwidth.IsSet {
+			pi.DefaultBandwidth = peer.DefaultBandwidth
+			pi.DefaultBandwidth.UpdatedAt = UTCNow()
+			successMsg = fmt.Sprintf("%s\n- default bandwidth %v for peer %s", successMsg, peer.DefaultBandwidth.Limit, peer.Name)
+		}
+		state.Peers[peer.DeploymentID] = pi
 	}
 
 	// If ILM expiry replications enabled/disabled, set accordingly
 	if opts.DisableILMExpiryReplication {
-		if !pi.ReplicateILMExpiry {
-			return madmin.ReplicateEditStatus{
-				Status:    madmin.ReplicateAddStatusPartial,
-				ErrDetail: "ILM expiry already set to false",
-			}, nil
+		for dID, pi := range state.Peers {
+			if !pi.ReplicateILMExpiry {
+				return madmin.ReplicateEditStatus{
+					Status:    madmin.ReplicateAddStatusPartial,
+					ErrDetail: "ILM expiry already set to false",
+				}, nil
+			}
+			pi.ReplicateILMExpiry = false
+			state.Peers[dID] = pi
 		}
-		pi.ReplicateILMExpiry = false
 		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: false", successMsg)
 	}
 	if opts.EnableILMExpiryReplication {
-		if pi.ReplicateILMExpiry {
-			return madmin.ReplicateEditStatus{
-				Status:    madmin.ReplicateAddStatusPartial,
-				ErrDetail: "ILM expiry already set to true",
-			}, nil
+		for dID, pi := range state.Peers {
+			if pi.ReplicateILMExpiry {
+				return madmin.ReplicateEditStatus{
+					Status:    madmin.ReplicateAddStatusPartial,
+					ErrDetail: "ILM expiry already set to true",
+				}, nil
+			}
+			pi.ReplicateILMExpiry = true
+			state.Peers[dID] = pi
 		}
-		pi.ReplicateILMExpiry = true
 		successMsg = fmt.Sprintf("%s\n- replicate-ilm-expiry: true", successMsg)
 	}
-	state.Peers[peer.DeploymentID] = pi
 	state.UpdatedAt = time.Now()
 
 	errs := make(map[string]error, len(state.Peers))
@@ -3970,6 +4021,15 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 	for dID, v := range state.Peers {
 		if v.DeploymentID == globalDeploymentID() {
 			continue
+		}
+		// if individual deployment change like mode, endpoint, default bandwidth
+		// send it to all sites. Else send the current node details to all sites
+		// for ILM expiry flag update
+		var p madmin.PeerInfo
+		if peer.DeploymentID != "" {
+			p = pi
+		} else {
+			p = v
 		}
 		wg.Add(1)
 		go func(pi madmin.PeerInfo, dID string) {
@@ -3986,7 +4046,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 				errs[dID] = errSRPeerResp(fmt.Errorf("unable to update peer %s: %w", pi.Name, err))
 				return
 			}
-		}(pi, dID)
+		}(p, dID)
 	}
 
 	wg.Wait()
@@ -4002,11 +4062,13 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 		}, nil
 	}
 
-	if err = c.updateTargetEndpoints(ctx, prevPeerInfo, pi); err != nil {
-		return madmin.ReplicateEditStatus{
-			Status:    madmin.ReplicateAddStatusPartial,
-			ErrDetail: fmt.Sprintf("unable to update peer targets on local: %v", err),
-		}, nil
+	if peer.DeploymentID != "" {
+		if err = c.updateTargetEndpoints(ctx, prevPeerInfo, pi); err != nil {
+			return madmin.ReplicateEditStatus{
+				Status:    madmin.ReplicateAddStatusPartial,
+				ErrDetail: fmt.Sprintf("unable to update peer targets on local: %v", err),
+			}, nil
+		}
 	}
 
 	// set partial error message if remote site updates failed for few cases
@@ -4083,13 +4145,25 @@ func (c *SiteReplicationSys) updateTargetEndpoints(ctx context.Context, prevInfo
 // to edit endpoint.
 func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInfo) error {
 	ourName := ""
+
+	// Set ReplicateILMExpiry for all peers
+	currTime := time.Now()
+	for i := range c.state.Peers {
+		p := c.state.Peers[i]
+		if p.ReplicateILMExpiry == arg.ReplicateILMExpiry {
+			// its already set due to previous edit req
+			break
+		}
+		p.ReplicateILMExpiry = arg.ReplicateILMExpiry
+		c.state.UpdatedAt = currTime
+		c.state.Peers[i] = p
+	}
+
 	for i := range c.state.Peers {
 		p := c.state.Peers[i]
 		if p.DeploymentID == arg.DeploymentID {
 			p.Endpoint = arg.Endpoint
-			p.ReplicateILMExpiry = arg.ReplicateILMExpiry
 			c.state.Peers[arg.DeploymentID] = p
-			c.state.UpdatedAt = time.Now()
 		}
 		if p.DeploymentID == globalDeploymentID() {
 			ourName = p.Name
@@ -4271,14 +4345,14 @@ func (c *SiteReplicationSys) healILMExpiryConfig(ctx context.Context, objAPI Obj
 
 	for dID, ps := range info.PeerStates {
 		// If latest peers ILM expiry flags are equal to current peer, no need to heal
-		flagEual := true
+		flagEqual := true
 		for id, peer := range latestPeers {
 			if !(ps.Peers[id].ReplicateILMExpiry == peer.ReplicateILMExpiry) {
-				flagEual = false
+				flagEqual = false
 				break
 			}
 		}
-		if flagEual {
+		if flagEqual {
 			continue
 		}
 
