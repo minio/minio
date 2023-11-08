@@ -6094,12 +6094,14 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 		xmlName = cfg.XMLName
 	}
 
-	// check if current expiry rules are there in new one. if not remove as they may
-	// have been removed from latest updated one
+	// check if current expiry rules are there in new one. if not remove the expiration
+	// part of rule as they may have been removed from latest updated one
 	for id, rl := range rMap {
 		if !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
 			if _, ok := newRMap[id]; !ok {
-				delete(rMap, id)
+				rl.Expiration = lifecycle.Expiration{}
+				rl.NoncurrentVersionExpiration = lifecycle.NoncurrentVersionExpiration{}
+				rMap[id] = rl
 			}
 		}
 	}
