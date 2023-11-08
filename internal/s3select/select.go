@@ -33,6 +33,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
 	"github.com/minio/minio/internal/config"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/s3select/csv"
 	"github.com/minio/minio/internal/s3select/json"
 	"github.com/minio/minio/internal/s3select/parquet"
@@ -91,7 +92,7 @@ var bufioWriterPool = sync.Pool{
 	New: func() interface{} {
 		// io.Discard is just used to create the writer. Actual destination
 		// writer is set later by Reset() before using it.
-		return bufio.NewWriter(io.Discard)
+		return bufio.NewWriter(xioutil.Discard)
 	},
 }
 
@@ -467,7 +468,7 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		// Use bufio Writer to prevent csv.Writer from allocating a new buffer.
 		bufioWriter := bufioWriterPool.Get().(*bufio.Writer)
 		defer func() {
-			bufioWriter.Reset(io.Discard)
+			bufioWriter.Reset(xioutil.Discard)
 			bufioWriterPool.Put(bufioWriter)
 		}()
 
