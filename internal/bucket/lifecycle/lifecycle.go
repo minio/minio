@@ -104,9 +104,9 @@ type Lifecycle struct {
 
 // ConfigReq - received from client
 type ConfigReq struct {
-	XMLName           xml.Name `xml:"LifecycleConfiguration"`
-	Rules             []Rule   `xml:"Rule"`
-	ExpiryRuleRemoved *bool    `xml:"ExpiryRuleRemoved,omitempty"`
+	XMLName              xml.Name `xml:"LifecycleConfiguration"`
+	Rules                []Rule   `xml:"Rule"`
+	ExpiryRuleRemovedPtr *bool    `xml:"ExpiryRuleRemoved,omitempty"`
 }
 
 // HasTransition returns 'true' if lifecycle document has Transition enabled.

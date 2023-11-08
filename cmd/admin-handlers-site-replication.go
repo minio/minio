@@ -447,7 +447,7 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) SRStateEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationAddAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationOperationAction)
 	if objectAPI == nil {
 		return
 	}
