@@ -3787,14 +3787,6 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 		p := c.state.Peers[i]
 		if p.DeploymentID == arg.DeploymentID {
 			p.Endpoint = arg.Endpoint
-			if arg.DefaultBandwidth.IsSet {
-				if arg.DefaultBandwidth.UpdatedAt.After(p.DefaultBandwidth.UpdatedAt) {
-					p.DefaultBandwidth = arg.DefaultBandwidth
-				}
-			}
-			if !arg.SyncState.Empty() {
-				p.SyncState = arg.SyncState
-			}
 			c.state.Peers[arg.DeploymentID] = p
 		}
 		if p.DeploymentID == globalDeploymentID() {
