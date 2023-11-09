@@ -250,8 +250,6 @@ require (
 
 replace github.com/minio/madmin-go/v3 v3.0.29 => github.com/shtripat/madmin-go/v3 v3.0.0-20231106151808-5082883cc33c
 
-replace github.com/minio/mc v0.0.0-20231030184332-9f2fb2b6a9f8 => github.com/shtripat/mc v0.0.0-20231107125827-eafbf3611499
+replace github.com/minio/mc v0.0.0-20231030184332-9f2fb2b6a9f8 => github.com/shtripat/mc v0.0.0-20231109083216-6c94adcab7f8
 
 replace github.com/minio/console v0.41.0 => github.com/shtripat/minio-console v0.0.0-20231107130354-bf0c7604ae99
-
-replace github.com/minio/minio-go/v7 v7.0.64-0.20230920204636-e783c9ba11b3 => github.com/shtripat/minio-go/v7 v7.0.0-20231030110736-a9dfa761680d

@@ -77,7 +77,7 @@ export MC_HOST_sitec=http://minio:minio123@127.0.0.1:9006
 ./mc ilm tier add minio sitea WARM-TIER --endpoint http://localhost:9006 --access-key minio --secret-key minio123 --bucket bucket
 
 ## Add ILM rules
-./mc ilm add sitea/bucket --transition-days 0 --transition-tier WARM-TIER --transition-days 0 --noncurrent-expire-days 2 --expire-days 3
+./mc ilm add sitea/bucket --transition-days 0 --transition-tier WARM-TIER --transition-days 0 --noncurrent-expire-days 2 --expire-days 3 --prefix "myprefix" --tags "tag1=val1&tag2=val2"
 ./mc ilm rule list sitea/bucket
 
 ## Check ilm expiry flag
@@ -102,7 +102,22 @@ if [ $count -ne 1 ]; then
 	exit 1
 fi
 
-## Check edit if ILM expiry rule and its replication
+## Check replication of rules prefix and tags
+prefix=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Prefix' | sed 's/"//g')
+tagName1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Key' | sed 's/"//g')
+tagVal1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Value' | sed 's/"//g')
+tagName2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[1].Key' | sed 's/"//g')
+tagVal2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[1].Value' | sed 's/"//g')
+if [ "${prefix}" != "myprefix" ]; then
+	echo "BUG: ILM expiry rules prefix not replicated to siteb"
+	exit 1
+fi
+if [ "${tagName1}" != "tag1" ] || [ "${tagVal1}" != "val1" ] || [ "${tagName2}" != "tag2" ] || [ "${tagVal2}" != "val2" ]; then
+	echo "BUG: ILM expiry rules tags not replicated to siteb"
+	exit 1
+fi
+
+## Check edit of ILM expiry rule and its replication
 id=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==3) | .ID' | sed 's/"//g')
 ./mc ilm edit --id "${id}" --expire-days "100" sitea/bucket
 sleep 30
@@ -168,6 +183,27 @@ sleep 30
 error=$(./mc ilm rule list siteb/bucket --json | jq '.error.cause.message' | sed 's/"//g')
 if [ "$error" != "The lifecycle configuration does not exist" ]; then
 	echo "BUG: removed ILM expiry rule not replicated to siteb"
+	exit 1
+fi
+
+## Check replication of deleted ILM expiry rules when target has transition part as well
+## Only the expiry part of rules should get removed as part if replication of removal from
+## other site
+./mc ilm add sitea/bucket --transition-days 0 --transition-tier WARM-TIER --transition-days 0 --noncurrent-expire-days 2 --expire-days 3 --prefix "myprefix" --tags "tag1=val1&tag2=val2"
+sleep 30 # allow the rules to replicate to siteb
+id=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==3) | .ID' | sed 's/"//g')
+# Remove rule from siteb
+./mc ilm rule remove --id "${id}" siteb/bucket
+sleep 30 # allow to replicate
+# sitea should still contain the transition portion of rule
+transitionRuleDays=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Transition.Days')
+expirationRuleDet=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration')
+if [ ${transitionRuleDays} -ne 0 ]; then
+	echo "BUG: Transition rules not retained as part of replication of deleted ILM expiry rules on sitea"
+	exit 1
+fi
+if [ ${expirationRuleDet} != null ]; then
+	echo "BUG: removed ILM expiry rule not replicated to sitea"
 	exit 1
 fi
 

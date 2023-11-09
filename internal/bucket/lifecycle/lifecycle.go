@@ -102,13 +102,6 @@ type Lifecycle struct {
 	ExpiryUpdatedAt *time.Time `xml:"ExpiryUpdatedAt,omitempty"`
 }
 
-// ConfigReq - received from client
-type ConfigReq struct {
-	XMLName              xml.Name `xml:"LifecycleConfiguration"`
-	Rules                []Rule   `xml:"Rule"`
-	ExpiryRuleRemovedPtr *bool    `xml:"ExpiryRuleRemoved,omitempty"`
-}
-
 // HasTransition returns 'true' if lifecycle document has Transition enabled.
 func (lc Lifecycle) HasTransition() bool {
 	for _, rule := range lc.Rules {
@@ -218,8 +211,8 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 
 // ParseLifecycleConfigWithID - parses for a Lifecycle config and assigns
 // unique id to rules with empty ID.
-func ParseLifecycleConfigWithID(r io.Reader) (*ConfigReq, error) {
-	var lc ConfigReq
+func ParseLifecycleConfigWithID(r io.Reader) (*Lifecycle, error) {
+	var lc Lifecycle
 	if err := xml.NewDecoder(r).Decode(&lc); err != nil {
 		return nil, err
 	}

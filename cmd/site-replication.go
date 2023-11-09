@@ -1911,16 +1911,8 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 			expLclCfg.XMLName = meta.lifecycleConfig.XMLName
 			for _, rule := range meta.lifecycleConfig.Rules {
 				if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
-					// copy only the expiration details of the rule
-					expRl := lifecycle.Rule{
-						XMLName:                     rule.XMLName,
-						ID:                          rule.ID,
-						Status:                      rule.Status,
-						Prefix:                      rule.Prefix,
-						Expiration:                  rule.Expiration,
-						NoncurrentVersionExpiration: rule.NoncurrentVersionExpiration,
-					}
-					expLclCfg.Rules = append(expLclCfg.Rules, expRl)
+					// copy the non transition details of the rule
+					expLclCfg.Rules = append(expLclCfg.Rules, rule.CloneNonTransition())
 				}
 			}
 			currtime := time.Now()
@@ -3660,16 +3652,8 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				expLclCfg.XMLName = meta.lifecycleConfig.XMLName
 				for _, rule := range meta.lifecycleConfig.Rules {
 					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
-						// copy only the expiration details of the rule
-						expRl := lifecycle.Rule{
-							XMLName:                     rule.XMLName,
-							ID:                          rule.ID,
-							Status:                      rule.Status,
-							Prefix:                      rule.Prefix,
-							Expiration:                  rule.Expiration,
-							NoncurrentVersionExpiration: rule.NoncurrentVersionExpiration,
-						}
-						expLclCfg.Rules = append(expLclCfg.Rules, expRl)
+						// copy the non transition details of the rule
+						expLclCfg.Rules = append(expLclCfg.Rules, rule.CloneNonTransition())
 					}
 				}
 				expLclCfg.ExpiryUpdatedAt = meta.lifecycleConfig.ExpiryUpdatedAt
@@ -3742,16 +3726,8 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
 				for _, rule := range meta.lifecycleConfig.Rules {
 					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
-						// copy only the expiration details of the rule
-						expRl := lifecycle.Rule{
-							XMLName:                     rule.XMLName,
-							ID:                          rule.ID,
-							Status:                      rule.Status,
-							Prefix:                      rule.Prefix,
-							Expiration:                  rule.Expiration,
-							NoncurrentVersionExpiration: rule.NoncurrentVersionExpiration,
-						}
-						ruleData, err := xml.Marshal(expRl)
+						// copy the non transition details of the rule
+						ruleData, err := xml.Marshal(rule.CloneNonTransition())
 						if err != nil {
 							return info, errSRBackendIssue(err)
 						}
@@ -6099,9 +6075,16 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 	for id, rl := range rMap {
 		if !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
 			if _, ok := newRMap[id]; !ok {
-				rl.Expiration = lifecycle.Expiration{}
-				rl.NoncurrentVersionExpiration = lifecycle.NoncurrentVersionExpiration{}
-				rMap[id] = rl
+				// if rule getting removed was pure expiry rule (may be got to this site
+				// as part of replication of expiry rules), remove it. Otherwise remove
+				// only the expiry part of it
+				if rl.Transition.IsNull() && rl.NoncurrentVersionTransition.IsNull() {
+					delete(rMap, id)
+				} else {
+					rl.Expiration = lifecycle.Expiration{}
+					rl.NoncurrentVersionExpiration = lifecycle.NoncurrentVersionExpiration{}
+					rMap[id] = rl
+				}
 			}
 		}
 	}

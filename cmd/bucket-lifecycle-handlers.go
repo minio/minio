@@ -69,14 +69,10 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	lcCfg, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
+	bucketLifecycle, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
-	}
-	bucketLifecycle := &lifecycle.Lifecycle{
-		XMLName: lcCfg.XMLName,
-		Rules:   lcCfg.Rules,
 	}
 
 	// Validate the received bucket policy document
@@ -91,7 +87,35 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if bucketLifecycle.HasExpiry() || (lcCfg != nil && lcCfg.ExpiryRuleRemovedPtr != nil && *lcCfg.ExpiryRuleRemovedPtr) {
+	// Create a map of updated set of rules in request
+	updatedRules := make(map[string]lifecycle.Rule, len(bucketLifecycle.Rules))
+	for _, rule := range bucketLifecycle.Rules {
+		updatedRules[rule.ID] = rule
+	}
+
+	// Get list of rules for the bucket from disk
+	meta, err := globalBucketMetadataSys.GetConfigFromDisk(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	expiryRuleRemoved := false
+	if len(meta.LifecycleConfigXML) > 0 {
+		var lcCfg lifecycle.Lifecycle
+		if err := xml.Unmarshal(meta.LifecycleConfigXML, &lcCfg); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		for _, rl := range lcCfg.Rules {
+			// if rule not found the incoming rules from request and was an expiry rule
+			// set the flag that expiry rule removed as part of request
+			if _, ok := updatedRules[rl.ID]; ok && !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
+				expiryRuleRemoved = true
+			}
+		}
+	}
+
+	if bucketLifecycle.HasExpiry() || expiryRuleRemoved {
 		currtime := time.Now()
 		bucketLifecycle.ExpiryUpdatedAt = &currtime
 	}
