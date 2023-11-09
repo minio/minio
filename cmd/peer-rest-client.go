@@ -58,7 +58,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if client == nil || !client.IsOnline() {
-		return nil, errPeerNotReachable
+		return nil, fmt.Errorf("%w - %s", errPeerNotReachable, client)
 	}
 
 	if values == nil {
