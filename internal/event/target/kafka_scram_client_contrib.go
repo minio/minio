@@ -18,6 +18,7 @@ package target
 
 import (
 	"crypto/sha512"
+	"strings"
 
 	"github.com/IBM/sarama"
 	"github.com/xdg/scram"
@@ -26,7 +27,7 @@ import (
 )
 
 func initScramClient(args KafkaArgs, config *sarama.Config) {
-	switch args.SASL.Mechanism {
+	switch strings.ToLower(args.SASL.Mechanism) {
 	case "sha512":
 		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA512} }
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)

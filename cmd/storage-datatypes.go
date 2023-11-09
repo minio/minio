@@ -296,7 +296,11 @@ func (fi FileInfo) GetDataDir() string {
 // InlineData returns true if object contents are inlined alongside its metadata.
 func (fi FileInfo) InlineData() bool {
 	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]
-	return ok
+	// Earlier MinIO versions didn't reset "x-minio-internal-inline-data"
+	// from fi.Metadata when the object was tiered. So, tiered objects
+	// would return true for InlineData() in these versions even though the
+	// object isn't inlined in xl.meta
+	return ok && !fi.IsRemote()
 }
 
 // SetInlineData marks object (version) as inline.

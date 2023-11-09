@@ -3787,14 +3787,6 @@ func (c *SiteReplicationSys) PeerEditReq(ctx context.Context, arg madmin.PeerInf
 		p := c.state.Peers[i]
 		if p.DeploymentID == arg.DeploymentID {
 			p.Endpoint = arg.Endpoint
-			if arg.DefaultBandwidth.IsSet {
-				if arg.DefaultBandwidth.UpdatedAt.After(p.DefaultBandwidth.UpdatedAt) {
-					p.DefaultBandwidth = arg.DefaultBandwidth
-				}
-			}
-			if !arg.SyncState.Empty() {
-				p.SyncState = arg.SyncState
-			}
 			c.state.Peers[arg.DeploymentID] = p
 		}
 		if p.DeploymentID == globalDeploymentID() {
@@ -5234,9 +5226,13 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 		Status:   ResyncStarted.String(),
 		OpType:   "start",
 		ResyncID: rs.ResyncID,
+		Buckets:  res.Buckets,
 	}
 	if len(res.Buckets) > 0 {
 		res.ErrDetail = "partial failure in starting site resync"
+	}
+	if len(buckets) != 0 && len(res.Buckets) == len(buckets) {
+		return res, fmt.Errorf("all buckets resync failed")
 	}
 	return res, nil
 }
@@ -5259,13 +5255,6 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 	if err != nil {
 		return res, err
 	}
-	switch rs.Status {
-	case ResyncCanceled:
-		return res, errSRResyncCanceled
-	case ResyncCompleted, NoResync:
-		return res, errSRNoResync
-	}
-
 	res = madmin.SRResyncOpStatus{
 		Status:   rs.Status.String(),
 		OpType:   "cancel",
