@@ -217,6 +217,10 @@ func (s *erasureSets) connectDisks() {
 				continue
 			}
 		}
+		if cdisk != nil {
+			// Close previous offline disk.
+			cdisk.Close()
+		}
 
 		wg.Add(1)
 		go func(endpoint Endpoint) {
