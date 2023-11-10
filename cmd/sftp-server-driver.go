@@ -202,86 +202,56 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 }
 
 func (w *writerAt) Close() (err error) {
-	if w.remaining > 0 {
+	if len(w.buffer) > 0 {
 		err = w.w.CloseWithError(errors.New("some file segments were not flushed from the queue"))
+		for i := range w.buffer {
+			delete(w.buffer, i)
+		}
 	} else {
 		err = w.w.Close()
-	}
-	for i := range w.buffers {
-		w.buffers[i] = nil
 	}
 	w.wg.Wait()
 	return err
 }
 
-const bufferLength = 1000
-
 type writerAt struct {
-	w  *io.PipeWriter
-	wg *sync.WaitGroup
+	w      *io.PipeWriter
+	wg     *sync.WaitGroup
+	buffer map[int64][]byte
 
 	nextOffset int64
-	remaining  int
-	offsets    [bufferLength]int64
-	buffers    [bufferLength][]byte
 	m          sync.Mutex
-}
-
-func (w *writerAt) placeBytesInBuffer(b []byte, offset int64) (err error) {
-	for i := 0; i < bufferLength; i++ {
-		if len(w.buffers[i]) == 0 || w.offsets[i] == 0 {
-			w.offsets[i] = offset
-			w.buffers[i] = make([]byte, len(b))
-			copy(w.buffers[i], b)
-			w.remaining++
-			return nil
-		}
-	}
-	return errors.New("sftp segment queue is full")
-}
-
-func (w *writerAt) flushBuffers() (err error) {
-	for i := 0; i < bufferLength; i++ {
-		if w.offsets[i] == w.nextOffset {
-			n, err := w.w.Write(w.buffers[i])
-			if err != nil {
-				return err
-			}
-			if n != len(w.buffers[i]) {
-				return fmt.Errorf("expected write size %d but wrote %d bytes", len(w.buffers[i]), n)
-			}
-			w.nextOffset += int64(len(w.buffers[i]))
-			w.offsets[i] = 0
-			w.buffers[i] = nil
-			w.remaining--
-			continue
-		}
-	}
-
-	return nil
 }
 
 func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
 	w.m.Lock()
 	defer w.m.Unlock()
-	if w.nextOffset != offset {
-		err = w.placeBytesInBuffer(b, offset)
-		if err != nil {
-			return 0, err
-		}
-		n = len(b)
-	} else {
-		w.nextOffset += int64(len(b))
+
+	if w.nextOffset == offset {
 		n, err = w.w.Write(b)
+		w.nextOffset += int64(n)
+	} else {
+		w.buffer[offset] = make([]byte, len(b))
+		copy(w.buffer[offset], b)
+		n = len(b)
 	}
 
-	if w.remaining > 0 {
-		err = w.flushBuffers()
+again:
+	nextOut, ok := w.buffer[w.nextOffset]
+	if ok {
+		n, err = w.w.Write(nextOut)
+		delete(w.buffer, w.nextOffset)
+		w.nextOffset += int64(n)
+		if n != len(nextOut) {
+			return 0, fmt.Errorf("expected write size %d but wrote %d bytes", len(nextOut), n)
+		}
 		if err != nil {
 			return 0, err
 		}
+		goto again
 	}
-	return
+
+	return len(b), nil
 }
 
 func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
@@ -306,7 +276,11 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 
 	pr, pw := io.Pipe()
 
-	wa := &writerAt{w: pw, wg: &sync.WaitGroup{}}
+	wa := &writerAt{
+		buffer: make(map[int64][]byte),
+		w:      pw,
+		wg:     &sync.WaitGroup{},
+	}
 	wa.wg.Add(1)
 	go func() {
 		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{SendContentMd5: true})
