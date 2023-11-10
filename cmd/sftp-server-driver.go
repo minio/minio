@@ -201,11 +201,15 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 	return obj, nil
 }
 
-func (w *writerAt) Close() error {
+func (w *writerAt) Close() (err error) {
+	if w.remaining > 0 {
+		err = w.w.CloseWithError(errors.New("some file segments were not flushed from the queue"))
+	} else {
+		err = w.w.Close()
+	}
 	for i := range w.buffers {
 		w.buffers[i] = nil
 	}
-	err := w.w.Close()
 	w.wg.Wait()
 	return err
 }
