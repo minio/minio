@@ -19,14 +19,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/bucket/policy"
 )
@@ -218,7 +217,7 @@ func (evnot *EventNotifier) Send(args eventArgs) {
 	default:
 		// A new goroutine is created for each notification job, eventsQueue is
 		// drained quickly and is not expected to be filled with any scenario.
-		logger.LogIf(context.Background(), fmt.Errorf("internal events queue unexpectedly full, eventArgs: %+v", args))
+		logger.LogIf(context.Background(), errors.New("internal events queue unexpectedly full"))
 	}
 }
 
@@ -315,23 +314,5 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	args.Object.Size, _ = args.Object.GetActualSize()
-
-	// avoid generating a notification for REPLICA creation event.
-	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
-		return
-	}
-	// remove sensitive encryption entries in metadata.
-	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
-	crypto.RemoveInternalEntries(args.Object.UserDefined)
-
-	// globalNotificationSys is not initialized in gateway mode.
-	if globalNotificationSys == nil {
-		return
-	}
-	if globalHTTPListen.NumSubscribers(args.EventName) > 0 {
-		globalHTTPListen.Publish(args.ToEvent(false))
-	}
-
-	globalEventNotifier.Send(args)
+	// Do nothing as we are in gateway mode and those events are not used
 }
