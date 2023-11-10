@@ -201,19 +201,83 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 	return obj, nil
 }
 
-type writerAt struct {
-	w  *io.PipeWriter
-	wg *sync.WaitGroup
-}
-
 func (w *writerAt) Close() error {
+	for i := range w.buffers {
+		w.buffers[i] = nil
+	}
 	err := w.w.Close()
 	w.wg.Wait()
 	return err
 }
 
+const bufferLength = 1000
+
+type writerAt struct {
+	w  *io.PipeWriter
+	wg *sync.WaitGroup
+
+	nextOffset int64
+	remaining  int
+	offsets    [bufferLength]int64
+	buffers    [bufferLength][]byte
+	m          sync.Mutex
+}
+
+func (w *writerAt) placeBytesInBuffer(b []byte, offset int64) (err error) {
+	for i := 0; i < bufferLength; i++ {
+		if len(w.buffers[i]) == 0 || w.offsets[i] == 0 {
+			w.offsets[i] = offset
+			w.buffers[i] = make([]byte, len(b))
+			copy(w.buffers[i], b)
+			w.remaining++
+			return nil
+		}
+	}
+	return errors.New("sftp segment queue is full")
+}
+
+func (w *writerAt) flushBuffers() (err error) {
+	for i := 0; i < bufferLength; i++ {
+		if w.offsets[i] == w.nextOffset {
+			n, err := w.w.Write(w.buffers[i])
+			if err != nil {
+				return err
+			}
+			if n != len(w.buffers[i]) {
+				return fmt.Errorf("expected write size %d but wrote %d bytes", len(w.buffers[i]), n)
+			}
+			w.nextOffset += int64(len(w.buffers[i]))
+			w.offsets[i] = 0
+			w.buffers[i] = nil
+			w.remaining--
+			continue
+		}
+	}
+
+	return nil
+}
+
 func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
-	return w.w.Write(b)
+	w.m.Lock()
+	defer w.m.Unlock()
+	if w.nextOffset != offset {
+		err = w.placeBytesInBuffer(b, offset)
+		if err != nil {
+			return 0, err
+		}
+		n = len(b)
+	} else {
+		w.nextOffset += int64(len(b))
+		n, err = w.w.Write(b)
+	}
+
+	if w.remaining > 0 {
+		err = w.flushBuffers()
+		if err != nil {
+			return 0, err
+		}
+	}
+	return
 }
 
 func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
