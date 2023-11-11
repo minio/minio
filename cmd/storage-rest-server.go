@@ -611,6 +611,8 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
+
 	rc, err := s.storage.ReadFileStream(r.Context(), volume, filePath, int64(offset), int64(length))
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -618,12 +620,28 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	}
 	defer rc.Close()
 
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-	if _, err = xioutil.Copy(w, rc); err != nil {
-		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-			logger.LogIf(r.Context(), err)
+	rf, ok := w.(io.ReaderFrom)
+	if ok {
+		// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
+		// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
+		dr, ok := rc.(*xioutil.DeadlineReader)
+		if ok {
+			sr, ok := dr.ReadCloser.(*sendFileReader)
+			if ok {
+				_, err = rf.ReadFrom(sr.Reader)
+				if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+					logger.LogIf(r.Context(), err)
+				}
+				if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
+					return
+				}
+			}
 		}
-		return
+	} // Fallback to regular copy
+
+	_, err = xioutil.Copy(w, rc)
+	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+		logger.LogIf(r.Context(), err)
 	}
 }
 

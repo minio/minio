@@ -19,6 +19,7 @@ package http
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 // status code and to record the response body
 type ResponseRecorder struct {
 	http.ResponseWriter
+	io.ReaderFrom
 	StatusCode int
 	// Log body of 4xx or 5xx responses
 	LogErrBody bool
@@ -51,11 +53,25 @@ type ResponseRecorder struct {
 // NewResponseRecorder - returns a wrapped response writer to trap
 // http status codes for auditing purposes.
 func NewResponseRecorder(w http.ResponseWriter) *ResponseRecorder {
+	rf, _ := w.(io.ReaderFrom)
 	return &ResponseRecorder{
 		ResponseWriter: w,
+		ReaderFrom:     rf,
 		StatusCode:     http.StatusOK,
 		StartTime:      time.Now().UTC(),
 	}
+}
+
+// ErrNotImplemented when a functionality is not implemented
+var ErrNotImplemented = errors.New("not implemented")
+
+// ReadFrom implements support for calling internal io.ReaderFrom implementations
+// returns an error if the underlying ResponseWriter does not implement io.ReaderFrom
+func (lrw *ResponseRecorder) ReadFrom(r io.Reader) (int64, error) {
+	if lrw.ReaderFrom != nil {
+		return lrw.ReaderFrom.ReadFrom(r)
+	}
+	return 0, ErrNotImplemented
 }
 
 func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
