@@ -209,7 +209,7 @@ func (w *writerAt) Close() (err error) {
 		}
 	}
 	if err != nil {
-		w.w.Close()
+		w.w.CloseWithError(err)
 	} else {
 		err = w.w.Close()
 	}
