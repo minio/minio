@@ -207,6 +207,9 @@ func (w *writerAt) Close() (err error) {
 		for i := range w.buffer {
 			delete(w.buffer, i)
 		}
+	}
+	if err != nil {
+		w.w.Close()
 	} else {
 		err = w.w.Close()
 	}
