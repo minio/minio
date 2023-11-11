@@ -3187,12 +3187,16 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 	}
 }
 
-func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries, data []byte) {
+func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries) {
 	newReader := func() io.ReadCloser {
 		r, w := io.Pipe()
 		go func() {
+			// Initialize MRF meta header.
+			var data [4]byte
+			binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
+			binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
 			mw := msgp.NewWriter(w)
-			n, err := mw.Write(data)
+			n, err := mw.Write(data[:])
 			if err != nil {
 				w.CloseWithError(err)
 				return
@@ -3230,15 +3234,10 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 	v := MRFReplicateEntries{
 		Entries: entries,
-		Version: mrfMetaVersionV1,
+		Version: mrfMetaVersion,
 	}
-	data := make([]byte, 4, v.Msgsize()+4)
 
-	// Initialize the resync meta header.
-	binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
-	binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
-
-	p.persistToDrive(ctx, v, data)
+	p.persistToDrive(ctx, v)
 }
 
 // load mrf entries from disk
