@@ -107,9 +107,11 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 			return
 		}
 		for _, rl := range lcCfg.Rules {
-			// if rule not found the incoming rules from request and was an expiry rule
-			// set the flag that expiry rule removed as part of request
-			if _, ok := updatedRules[rl.ID]; ok && !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
+			updRule, ok := updatedRules[rl.ID]
+			// original rule had expiry that is no longer in the new config,
+			// or rule is present but missing expiration flags
+			if (!rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull()) &&
+				(!ok || (updRule.Expiration.IsNull() && updRule.NoncurrentVersionExpiration.IsNull())) {
 				expiryRuleRemoved = true
 			}
 		}
