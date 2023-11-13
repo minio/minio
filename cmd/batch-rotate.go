@@ -261,6 +261,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if err := ri.load(ctx, api, job); err != nil {
 		return err
 	}
+	if ri.Complete {
+		return nil
+	}
 
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object

@@ -2253,11 +2253,12 @@ type HealthOptions struct {
 // additionally with any specific heuristic information which
 // was queried
 type HealthResult struct {
-	Healthy        bool
-	HealingDrives  int
-	UnhealthyPools []struct {
+	Healthy       bool
+	HealingDrives int
+	ESHealth      []struct {
 		Maintenance   bool
 		PoolID, SetID int
+		HealthyDrives int
 		WriteQuorum   int
 	}
 	WriteQuorum   int
@@ -2372,50 +2373,40 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 
 	result := HealthResult{
-		HealingDrives: len(aggHealStateResult.HealDisks),
+		Healthy:       true,
 		WriteQuorum:   maximumWriteQuorum,
 		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
 	}
 
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
+			result.ESHealth = append(result.ESHealth, struct {
+				Maintenance                bool
+				PoolID, SetID              int
+				HealthyDrives, WriteQuorum int
+			}{
+				Maintenance:   opts.Maintenance,
+				SetID:         setIdx,
+				PoolID:        poolIdx,
+				HealthyDrives: erasureSetUpCount[poolIdx][setIdx],
+				WriteQuorum:   poolWriteQuorums[poolIdx],
+			})
+
 			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
-				result.UnhealthyPools = append(result.UnhealthyPools, struct {
-					Maintenance                bool
-					PoolID, SetID, WriteQuorum int
-				}{
-					Maintenance: opts.Maintenance,
-					SetID:       setIdx,
-					PoolID:      poolIdx,
-					WriteQuorum: poolWriteQuorums[poolIdx],
-				})
+				result.Healthy = false
 			}
 		}
-		if len(result.UnhealthyPools) > 0 {
-			// We have unhealthy pools return error.
-			return result
-		}
 	}
 
-	// when maintenance is not specified we don't have
-	// to look at the healing side of the code.
-	if !opts.Maintenance {
-		return HealthResult{
-			Healthy:       true,
-			WriteQuorum:   maximumWriteQuorum,
-			UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
-		}
+	if opts.Maintenance {
+		result.Healthy = result.Healthy && len(aggHealStateResult.HealDisks) == 0
+		result.HealingDrives = len(aggHealStateResult.HealDisks)
 	}
 
-	return HealthResult{
-		Healthy:       len(aggHealStateResult.HealDisks) == 0,
-		HealingDrives: len(aggHealStateResult.HealDisks),
-		WriteQuorum:   maximumWriteQuorum,
-		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
-	}
+	return result
 }
 
 // PutObjectMetadata - replace or add tags to an existing object

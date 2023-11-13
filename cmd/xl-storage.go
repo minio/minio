@@ -1779,6 +1779,11 @@ func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) 
 	return w, nil
 }
 
+type sendFileReader struct {
+	io.Reader
+	io.Closer
+}
+
 // ReadFileStream - Returns the read stream of the file.
 func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if offset < 0 {
@@ -1796,14 +1801,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && length >= 0
-
-	var file *os.File
-	if odirectEnabled {
-		file, err = OpenFileDirectIO(filePath, readMode, 0o666)
-	} else {
-		file, err = OpenFile(filePath, readMode, 0o666)
-	}
+	file, err := OpenFile(filePath, readMode, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1852,14 +1850,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errFileCorrupt
 	}
 
-	alignment := offset%xioutil.DirectioAlignSize == 0
-	if !alignment && odirectEnabled {
-		if err = disk.DisableDirectIO(file); err != nil {
-			file.Close()
-			return nil, err
-		}
-	}
-
 	if offset > 0 {
 		if _, err = file.Seek(offset, io.SeekStart); err != nil {
 			file.Close()
@@ -1867,26 +1857,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		}
 	}
 
-	or := &xioutil.ODirectReader{
-		File: file,
-		// Select bigger blocks when reading at least 50% of a big block.
-		SmallFile: length <= xioutil.BlockSizeLarge/2,
-	}
-
-	r := struct {
-		io.Reader
-		io.Closer
-	}{Reader: io.LimitReader(diskHealthReader(ctx, or), length), Closer: closeWrapper(func() error {
-		if (!alignment || offset+length%xioutil.DirectioAlignSize != 0) && odirectEnabled {
-			// invalidate page-cache for unaligned reads.
-			// skip removing from page-cache only
-			// if O_DIRECT was disabled.
-			disk.FadviseDontNeed(file)
-		}
-		return or.Close()
-	})}
-
-	return r, nil
+	return &sendFileReader{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 
 // closeWrapper converts a function to an io.Closer

@@ -94,7 +94,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiODirect,
-			Description: "set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
+			Description: "set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
 			Optional:    true,
 			Type:        "boolean",
 		},
