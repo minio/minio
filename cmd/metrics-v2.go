@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -3187,6 +3188,16 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
+func getClusterErasureSetToleranceMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_tolerance",
+		Help:      "Get erasure set tolerance status",
+		Type:      gaugeMetric,
+	}
+}
+
 func getClusterHealthMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
@@ -3217,6 +3228,18 @@ func getClusterHealthMetrics() *MetricsGroup {
 			Description: getClusterHealthStatusMD(),
 			Value:       float64(health),
 		})
+
+		for _, h := range result.ESHealth {
+			labels := map[string]string{
+				"pool": strconv.Itoa(h.PoolID),
+				"set":  strconv.Itoa(h.SetID),
+			}
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetToleranceMD(),
+				VariableLabels: labels,
+				Value:          float64(h.HealthyDrives - h.WriteQuorum),
+			})
+		}
 
 		return
 	})
