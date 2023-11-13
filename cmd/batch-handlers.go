@@ -163,7 +163,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	}
 	rd, objInfo, _, err := core.GetObject(ctx, srcBucket, srcObject, gopts)
 	if err != nil {
-		return err
+		return ErrorRespToObjectError(err, srcBucket, srcObject, srcObjInfo.VersionID)
 	}
 	defer rd.Close()
 
@@ -226,7 +226,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 		}
 		rd, objInfo, _, err := c.GetObject(ctx, srcBucket, srcObject, gopts)
 		if err != nil {
-			return err
+			return ErrorRespToObjectError(err, srcBucket, srcObject, srcObjInfo.VersionID)
 		}
 		defer rd.Close()
 

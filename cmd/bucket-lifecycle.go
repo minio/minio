@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/workers"
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -444,7 +445,8 @@ func genTransitionObjName(bucket string) (string, error) {
 		return "", err
 	}
 	us := u.String()
-	obj := fmt.Sprintf("%s/%s/%s/%s/%s", globalDeploymentID(), bucket, us[0:2], us[2:4], us)
+	hash := xxh3.HashString(pathJoin(globalDeploymentID(), bucket))
+	obj := fmt.Sprintf("%s/%s/%s/%s", strconv.FormatUint(hash, 16), us[0:2], us[2:4], us)
 	return obj, nil
 }
 

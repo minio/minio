@@ -99,11 +99,15 @@ func ErrorRespToObjectError(err error, params ...string) error {
 
 	bucket := ""
 	object := ""
+	versionID := ""
 	if len(params) >= 1 {
 		bucket = params[0]
 	}
 	if len(params) == 2 {
 		object = params[1]
+	}
+	if len(params) == 3 {
+		versionID = params[2]
 	}
 
 	if xnet.IsNetworkOrHostDown(err, false) {
@@ -139,6 +143,12 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	case "NoSuchKey":
 		if object != "" {
 			err = ObjectNotFound{Bucket: bucket, Object: object}
+		} else {
+			err = BucketNotFound{Bucket: bucket}
+		}
+	case "NoSuchVersion":
+		if object != "" {
+			err = ObjectNotFound{Bucket: bucket, Object: object, VersionID: versionID}
 		} else {
 			err = BucketNotFound{Bucket: bucket}
 		}
