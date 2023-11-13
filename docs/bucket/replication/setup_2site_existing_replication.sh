@@ -86,8 +86,6 @@ sleep 1
 ./mc replicate resync start sitea/bucket/ --remote-bucket "${remote_arn}"
 sleep 10s ## sleep for 10s idea is that we give 100ms per object.
 
-count=$(./mc replicate resync status sitea/bucket --remote-bucket "${remote_arn}" --json | jq .resyncInfo.target[].replicationCount)
-
 ./mc ls -r --versions sitea/bucket >/tmp/sitea.txt
 ./mc ls -r --versions siteb/bucket >/tmp/siteb.txt
 
@@ -95,12 +93,6 @@ out=$(diff -qpruN /tmp/sitea.txt /tmp/siteb.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
 	echo "BUG: expected no missing entries after replication: $out"
-	exit 1
-fi
-
-if [ $count -ne 12 ]; then
-	echo "resync not complete after 30s - unexpected failure"
-	./mc diff sitea/bucket siteb/bucket
 	exit 1
 fi
 

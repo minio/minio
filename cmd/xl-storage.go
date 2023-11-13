@@ -42,6 +42,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -544,9 +545,15 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		sizeS := sizeSummary{}
-		var noTiers bool
-		if noTiers = globalTierConfigMgr.Empty(); !noTiers {
-			sizeS.tiers = make(map[string]tierStats)
+		for _, tier := range globalTierConfigMgr.ListTiers() {
+			if sizeS.tiers == nil {
+				sizeS.tiers = make(map[string]tierStats)
+			}
+			sizeS.tiers[tier.Name] = tierStats{}
+		}
+		if sizeS.tiers != nil {
+			sizeS.tiers[storageclass.STANDARD] = tierStats{}
+			sizeS.tiers[storageclass.RRS] = tierStats{}
 		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
@@ -578,25 +585,27 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 			sizeS.totalSize += sz
 
-			// Skip tier accounting if,
-			// 1. no tiers configured
-			// 2. object version is a delete-marker or a free-version
-			//    tracking deleted transitioned objects
+			// Skip tier accounting if object version is a delete-marker or a free-version
+			// tracking deleted transitioned objects
 			switch {
-			case noTiers, oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
+			case oi.DeleteMarker, oi.TransitionedObject.FreeVersion:
 				continue
 			}
-			tier := minioHotTier
+			tier := oi.StorageClass
+			if tier == "" {
+				tier = storageclass.STANDARD // no SC means "STANDARD"
+			}
 			if oi.TransitionedObject.Status == lifecycle.TransitionComplete {
 				tier = oi.TransitionedObject.Tier
 			}
-			sizeS.tiers[tier] = sizeS.tiers[tier].add(oi.tierStats())
+			if sizeS.tiers != nil {
+				if st, ok := sizeS.tiers[tier]; ok {
+					sizeS.tiers[tier] = st.add(oi.tierStats())
+				}
+			}
 		}
 
 		// apply tier sweep action on free versions
-		if len(fivs.FreeVersions) > 0 {
-			res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
-		}
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
@@ -606,15 +615,17 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		// These are rather expensive. Skip if nobody listens.
 		if globalTrace.NumSubscribers(madmin.TraceScanner) > 0 {
+			if len(fivs.FreeVersions) > 0 {
+				res["free-versions"] = strconv.Itoa(len(fivs.FreeVersions))
+			}
+
 			if sizeS.versions > 0 {
 				res["versions"] = strconv.FormatUint(sizeS.versions, 10)
 			}
 			res["size"] = strconv.FormatInt(sizeS.totalSize, 10)
-			if len(sizeS.tiers) > 0 {
-				for name, tier := range sizeS.tiers {
-					res["size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
-					res["versions-"+name] = strconv.Itoa(tier.NumVersions)
-				}
+			for name, tier := range sizeS.tiers {
+				res["tier-size-"+name] = strconv.FormatUint(tier.TotalSize, 10)
+				res["tier-versions-"+name] = strconv.Itoa(tier.NumVersions)
 			}
 			if sizeS.failedCount > 0 {
 				res["repl-failed"] = fmt.Sprintf("%d versions, %d bytes", sizeS.failedCount, sizeS.failedSize)
@@ -1768,6 +1779,11 @@ func (s *xlStorage) openFile(filePath string, mode int) (f *os.File, err error) 
 	return w, nil
 }
 
+type sendFileReader struct {
+	io.Reader
+	io.Closer
+}
+
 // ReadFileStream - Returns the read stream of the file.
 func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if offset < 0 {
@@ -1785,14 +1801,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect && length >= 0
-
-	var file *os.File
-	if odirectEnabled {
-		file, err = OpenFileDirectIO(filePath, readMode, 0o666)
-	} else {
-		file, err = OpenFile(filePath, readMode, 0o666)
-	}
+	file, err := OpenFile(filePath, readMode, 0o666)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1841,14 +1850,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errFileCorrupt
 	}
 
-	alignment := offset%xioutil.DirectioAlignSize == 0
-	if !alignment && odirectEnabled {
-		if err = disk.DisableDirectIO(file); err != nil {
-			file.Close()
-			return nil, err
-		}
-	}
-
 	if offset > 0 {
 		if _, err = file.Seek(offset, io.SeekStart); err != nil {
 			file.Close()
@@ -1856,26 +1857,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		}
 	}
 
-	or := &xioutil.ODirectReader{
-		File: file,
-		// Select bigger blocks when reading at least 50% of a big block.
-		SmallFile: length <= xioutil.BlockSizeLarge/2,
-	}
-
-	r := struct {
-		io.Reader
-		io.Closer
-	}{Reader: io.LimitReader(diskHealthReader(ctx, or), length), Closer: closeWrapper(func() error {
-		if (!alignment || offset+length%xioutil.DirectioAlignSize != 0) && odirectEnabled {
-			// invalidate page-cache for unaligned reads.
-			// skip removing from page-cache only
-			// if O_DIRECT was disabled.
-			disk.FadviseDontNeed(file)
-		}
-		return or.Close()
-	})}
-
-	return r, nil
+	return &sendFileReader{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 
 // closeWrapper converts a function to an io.Closer

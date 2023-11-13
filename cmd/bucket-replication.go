@@ -113,7 +113,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		if arn.Type != madmin.ReplicationService {
 			return sameTarget, toAPIError(ctx, BucketRemoteArnTypeInvalid{Bucket: bucket})
 		}
-		clnt := globalBucketTargetSys.GetRemoteTargetClient(arnStr)
+		clnt := globalBucketTargetSys.GetRemoteTargetClient(bucket, arnStr)
 		if clnt == nil {
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
@@ -138,7 +138,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 			}
 		}
 		// validate replication ARN against target endpoint
-		c := globalBucketTargetSys.GetRemoteTargetClient(arnStr)
+		c := globalBucketTargetSys.GetRemoteTargetClient(bucket, arnStr)
 		if c != nil {
 			if err := checkRemoteEndpoint(ctx, c.EndpointURL()); err != nil {
 				switch err.(type) {
@@ -280,7 +280,7 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 	}
 	tgtArns := cfg.FilterTargetArns(opts)
 	for _, tgtArn := range tgtArns {
-		tgt := globalBucketTargetSys.GetRemoteTargetClient(tgtArn)
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		// the target online status should not be used here while deciding
 		// whether to replicate as the target could be temporarily down
 		opts.TargetArn = tgtArn
@@ -383,7 +383,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 				continue
 			}
 		}
-		tgt := globalBucketTargetSys.GetRemoteTargetClient(tgtArn)
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		// the target online status should not be used here while deciding
 		// whether to replicate deletes as the target could be temporarily down
 		tgtDsc := newReplicateTargetDecision(tgtArn, false, false)
@@ -495,7 +495,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		if dobj.TargetArn != "" && dobj.TargetArn != tgtEntry.Arn {
 			continue
 		}
-		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(tgtEntry.Arn)
+		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtEntry.Arn)
 		if tgtClnt == nil {
 			// Skip stale targets if any and log them to be missing atleast once.
 			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtEntry.Arn), tgtEntry.Arn)
@@ -1023,7 +1023,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, tgtArn := range tgtArns {
-		tgt := globalBucketTargetSys.GetRemoteTargetClient(tgtArn)
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		if tgt == nil {
 			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn), tgtArn)
 			sendEvent(eventArgs{
@@ -2188,7 +2188,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 		return nil, oi, proxy
 	}
 	for _, t := range proxyTargets.Targets {
-		tgt = globalBucketTargetSys.GetRemoteTargetClient(t.Arn)
+		tgt = globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
 		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			continue
 		}
@@ -2560,7 +2560,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 		logger.LogIf(ctx, fmt.Errorf("replication resync failed for %s - arn specified %s is missing in the replication config", opts.bucket, opts.arn))
 		return
 	}
-	tgt := globalBucketTargetSys.GetRemoteTargetClient(opts.arn)
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(opts.bucket, opts.arn)
 	if tgt == nil {
 		logger.LogIf(ctx, fmt.Errorf("replication resync failed for %s - target could not be created for arn %s", opts.bucket, opts.arn))
 		return
@@ -3187,12 +3187,16 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 	}
 }
 
-func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries, data []byte) {
+func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries) {
 	newReader := func() io.ReadCloser {
 		r, w := io.Pipe()
 		go func() {
+			// Initialize MRF meta header.
+			var data [4]byte
+			binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
+			binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
 			mw := msgp.NewWriter(w)
-			n, err := mw.Write(data)
+			n, err := mw.Write(data[:])
 			if err != nil {
 				w.CloseWithError(err)
 				return
@@ -3230,15 +3234,10 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 	v := MRFReplicateEntries{
 		Entries: entries,
-		Version: mrfMetaVersionV1,
+		Version: mrfMetaVersion,
 	}
-	data := make([]byte, 4, v.Msgsize()+4)
 
-	// Initialize the resync meta header.
-	binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
-	binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
-
-	p.persistToDrive(ctx, v, data)
+	p.persistToDrive(ctx, v)
 }
 
 // load mrf entries from disk

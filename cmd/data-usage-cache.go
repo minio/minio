@@ -78,8 +78,8 @@ func newAllTierStats() *allTierStats {
 	}
 }
 
-func (ats *allTierStats) addSizes(sz sizeSummary) {
-	for tier, st := range sz.tiers {
+func (ats *allTierStats) addSizes(tiers map[string]tierStats) {
+	for tier, st := range tiers {
 		ats.Tiers[tier] = ats.Tiers[tier].add(st)
 	}
 }
@@ -95,18 +95,16 @@ func (ats *allTierStats) clone() *allTierStats {
 		return nil
 	}
 	dst := *ats
-	if dst.Tiers != nil {
-		dst.Tiers = make(map[string]tierStats, len(dst.Tiers))
-		for tier, st := range dst.Tiers {
-			dst.Tiers[tier] = st
-		}
+	dst.Tiers = make(map[string]tierStats, len(ats.Tiers))
+	for tier, st := range ats.Tiers {
+		dst.Tiers[tier] = st
 	}
 	return &dst
 }
 
-func (ats *allTierStats) adminStats(stats map[string]madmin.TierStats) map[string]madmin.TierStats {
+func (ats *allTierStats) populateStats(stats map[string]madmin.TierStats) {
 	if ats == nil {
-		return stats
+		return
 	}
 
 	// Update stats for tiers as they become available.
@@ -117,7 +115,7 @@ func (ats *allTierStats) adminStats(stats map[string]madmin.TierStats) map[strin
 			NumObjects:  st.NumObjects,
 		}
 	}
-	return stats
+	return
 }
 
 // tierStats holds per-tier stats of a remote tier.
@@ -128,10 +126,11 @@ type tierStats struct {
 }
 
 func (ts tierStats) add(u tierStats) tierStats {
-	ts.TotalSize += u.TotalSize
-	ts.NumVersions += u.NumVersions
-	ts.NumObjects += u.NumObjects
-	return ts
+	return tierStats{
+		TotalSize:   ts.TotalSize + u.TotalSize,
+		NumVersions: ts.NumVersions + u.NumVersions,
+		NumObjects:  ts.NumObjects + u.NumObjects,
+	}
 }
 
 //msgp:tuple replicationStatsV1
@@ -197,12 +196,11 @@ func (r *replicationAllStats) clone() *replicationAllStats {
 	dst := *r
 
 	// Copy individual targets.
-	if dst.Targets != nil {
-		dst.Targets = make(map[string]replicationStats, len(dst.Targets))
-		for k, v := range r.Targets {
-			dst.Targets[k] = v
-		}
+	dst.Targets = make(map[string]replicationStats, len(r.Targets))
+	for k, v := range r.Targets {
+		dst.Targets[k] = v
 	}
+
 	return &dst
 }
 
@@ -360,11 +358,11 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 		tgtStat.PendingCount += st.pendingCount
 		e.ReplicationStats.Targets[arn] = tgtStat
 	}
-	if summary.tiers != nil {
+	if len(summary.tiers) != 0 {
 		if e.AllTierStats == nil {
 			e.AllTierStats = newAllTierStats()
 		}
-		e.AllTierStats.addSizes(summary)
+		e.AllTierStats.addSizes(summary.tiers)
 	}
 }
 
@@ -403,7 +401,7 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 		e.ObjVersions[i] += v
 	}
 
-	if other.AllTierStats != nil {
+	if other.AllTierStats != nil && len(other.AllTierStats.Tiers) != 0 {
 		if e.AllTierStats == nil {
 			e.AllTierStats = newAllTierStats()
 		}
@@ -987,15 +985,10 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return ctx.Err()
 	case maxConcurrentScannerSaves <- struct{}{}:
 	}
-	defer func() {
-		select {
-		case <-ctx.Done():
-		case <-maxConcurrentScannerSaves:
-		}
-	}()
 
 	buf := bytebufferpool.Get()
 	defer func() {
+		<-maxConcurrentScannerSaves
 		buf.Reset()
 		bytebufferpool.Put(buf)
 	}()
@@ -1004,12 +997,12 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return err
 	}
 
-	hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
-	if err != nil {
-		return err
-	}
-
 	save := func(name string, timeout time.Duration) error {
+		hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
+		if err != nil {
+			return err
+		}
+
 		// Abandon if more than a minute, so we don't hold up scanner.
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -1024,7 +1017,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		}
 		return err
 	}
-	defer save(name+".bkp", 30*time.Second) // Keep a backup as well
+	defer save(name+".bkp", 5*time.Second) // Keep a backup as well
 
 	// drive timeout by default is 2 minutes, we do not need to wait longer.
 	return save(name, time.Minute)

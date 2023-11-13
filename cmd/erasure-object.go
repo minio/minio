@@ -132,8 +132,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 			versionID = mustGetUUID()
 			fi.IsLatest = true // we are creating a new version so this is latest.
 		}
-		modTime = UTCNow()
 	}
+
+	modTime = UTCNow() // We only preserve modTime if dstOpts.MTime is true.
+	// in all other cases mtime is latest.
 
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
@@ -141,6 +143,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = dstOpts.MTime
 		fi.ModTime = dstOpts.MTime
 	}
+
 	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 

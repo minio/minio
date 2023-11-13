@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/config/lambda/event"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/certs"
 	xnet "github.com/minio/pkg/v2/net"
@@ -133,8 +133,7 @@ func (target *WebhookTarget) isActive() (bool, error) {
 		}
 		return false, err
 	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	xioutil.DiscardReader(resp.Body)
 	// No network failure i.e response from the target means its up
 	return true, nil
 }

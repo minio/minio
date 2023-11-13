@@ -200,7 +200,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		diskMaxConcurrent = 512
 		if storage.rotational {
 			diskMaxConcurrent = int(storage.nrRequests) / 2
-			if diskMaxConcurrent == 0 {
+			if diskMaxConcurrent < 32 {
 				diskMaxConcurrent = 32
 			}
 		}
@@ -421,7 +421,13 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 	}
 	defer done(&err)
 
-	return p.storage.ReadFile(ctx, volume, path, offset, buf, verifier)
+	w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+	err = w.Run(func() error {
+		n, err = p.storage.ReadFile(ctx, volume, path, offset, buf, verifier)
+		return err
+	})
+
+	return n, err
 }
 
 // Legacy API - does not have any deadlines
@@ -432,7 +438,10 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 	}
 	defer done(&err)
 
-	return p.storage.AppendFile(ctx, volume, path, buf)
+	w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+	return w.Run(func() error {
+		return p.storage.AppendFile(ctx, volume, path, buf)
+	})
 }
 
 func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) (err error) {
@@ -442,7 +451,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 	}
 	defer done(&err)
 
-	return p.storage.CreateFile(ctx, volume, path, size, reader)
+	return p.storage.CreateFile(ctx, volume, path, size, xioutil.NewDeadlineReader(io.NopCloser(reader), diskMaxTimeout))
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
@@ -452,9 +461,16 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 	}
 	defer done(&err)
 
-	rc, err := p.storage.ReadFileStream(ctx, volume, path, offset, length)
+	w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+
+	var rc io.ReadCloser
+	err = w.Run(func() error {
+		var ierr error
+		rc, ierr = p.storage.ReadFileStream(ctx, volume, path, offset, length)
+		return ierr
+	})
 	if err != nil {
-		return rc, err
+		return nil, err
 	}
 
 	return xioutil.NewDeadlineReader(rc, diskMaxTimeout), nil

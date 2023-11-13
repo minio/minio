@@ -983,7 +983,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 
 		var b bytes.Buffer
-		if fileName == "" {
+		if name != "file" {
 			if http.CanonicalHeaderKey(name) == http.CanonicalHeaderKey("x-minio-fanout-list") {
 				dec := json.NewDecoder(part)
 

@@ -420,10 +420,10 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}
-	if !u.Credentials.IsTemp() {
-		c.iamUsersMap[key] = u
-	} else {
+	if u.Credentials.IsTemp() && !u.Credentials.IsServiceAccount() {
 		c.iamSTSAccountsMap[key] = u
+	} else {
+		c.iamUsersMap[key] = u
 	}
 	c.updatedAt = time.Now()
 	return nil
