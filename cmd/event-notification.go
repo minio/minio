@@ -128,40 +128,6 @@ func (evnot *EventNotifier) AddRulesMap(bucketName string, rulesMap event.RulesM
 	}
 }
 
-// RemoveRulesMap - removes rules map for bucket name.
-func (evnot *EventNotifier) RemoveRulesMap(bucketName string, rulesMap event.RulesMap) {
-	evnot.Lock()
-	defer evnot.Unlock()
-
-	evnot.bucketRulesMap[bucketName].Remove(rulesMap)
-	if len(evnot.bucketRulesMap[bucketName]) == 0 {
-		delete(evnot.bucketRulesMap, bucketName)
-	}
-}
-
-// ConfiguredTargetIDs - returns list of configured target id's
-func (evnot *EventNotifier) ConfiguredTargetIDs() []event.TargetID {
-	if evnot == nil {
-		return nil
-	}
-
-	evnot.RLock()
-	defer evnot.RUnlock()
-
-	var targetIDs []event.TargetID
-	for _, rmap := range evnot.bucketRulesMap {
-		for _, rules := range rmap {
-			for _, targetSet := range rules {
-				for id := range targetSet {
-					targetIDs = append(targetIDs, id)
-				}
-			}
-		}
-	}
-
-	return targetIDs
-}
-
 // RemoveNotification - removes all notification configuration for bucket name.
 func (evnot *EventNotifier) RemoveNotification(bucketName string) {
 	evnot.Lock()
