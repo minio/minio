@@ -346,7 +346,7 @@ func (l *Config) LookupUsername(userDN string) (string, []string, error) {
 
 	// Parse DN for username
 	// Regex searches for string between '=%s' and the previous '(', which is the attribute name
-	findUserAttribute := regexp.MustCompile(`(?:\()([^\)]*)=%s`) // find attribute directly proceding the %s
+	findUserAttribute := regexp.MustCompile(`(?:\()([^\)]*)=%s`) // find attribute directly proceeding the %s
 	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
 
 	// Regex searches for string between the attribute name and the next ',' or end of string
