@@ -332,7 +332,7 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 }
 
 // LookupUsername searches for the username and groups of a given DN, like opposite of LookupUserDN
-func (l *Config) LookupUsername(DN string) (string, []string, error) {
+func (l *Config) LookupUsername(userDN string) (string, []string, error) {
 	conn, err := l.LDAP.Connect()
 	if err != nil {
 		return "", nil, err
@@ -345,18 +345,18 @@ func (l *Config) LookupUsername(DN string) (string, []string, error) {
 	}
 
 	// Parse DN for username
-	findUserAttribute, err := regexp.Compile(`(?:\()([^\)]*)=%s`) // find attribute directly proceding the %s
-	if err != nil {
-		return "", nil, err
-	}
+	// Regex searches for string between '=%s' and the previous '(', which is the attribute name
+	findUserAttribute := regexp.MustCompile(`(?:\()([^\)]*)=%s`) // find attribute directly proceding the %s
 	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
+
+	// Regex searches for string between the attribute name and the next ',' or end of string
 	findUsername, err := regexp.Compile(userFilter + `=([^,]*)`) // find username in DN
 	if err != nil {
 		return "", nil, err
 	}
-	usernameSl := findUsername.FindStringSubmatch(DN)
+	usernameSl := findUsername.FindStringSubmatch(userDN)
 	if len(usernameSl) != 2 {
-		return "", nil, fmt.Errorf("Unable to parse username from DN %s", DN)
+		return "", nil, fmt.Errorf("Unable to parse username from DN %s", userDN)
 	}
 	username := usernameSl[1]
 
@@ -366,8 +366,8 @@ func (l *Config) LookupUsername(DN string) (string, []string, error) {
 		err = fmt.Errorf("Unable to find user DN: %w", err)
 		return "", nil, err
 	}
-	if bindDN != DN {
-		err = fmt.Errorf("User DN %s does not match provided DN %s", bindDN, DN)
+	if bindDN != userDN {
+		err = fmt.Errorf("User DN %s does not match provided DN %s", bindDN, userDN)
 		return "", nil, err
 	}
 
