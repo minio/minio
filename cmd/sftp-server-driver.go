@@ -201,6 +201,16 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 	return obj, nil
 }
 
+// TransferError will catch network errors during transfer.
+// When TransferError() is called Close() will also
+// be called, so we do not need to Wait() here.
+func (w *writerAt) TransferError(err error) {
+	_ = w.w.CloseWithError(err)
+	for i := range w.buffer {
+		delete(w.buffer, i)
+	}
+}
+
 func (w *writerAt) Close() (err error) {
 	if len(w.buffer) > 0 {
 		err = w.w.CloseWithError(errors.New("some file segments were not flushed from the queue"))
