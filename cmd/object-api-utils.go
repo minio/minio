@@ -1198,7 +1198,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 		if disk == nil || disk.Total == 0 {
 			continue
 		}
-		if disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
+		if !globalIsErasureSD && disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
 			// We have an inode count, but not enough inodes.
 			return false, nil
 		}
