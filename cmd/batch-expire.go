@@ -106,7 +106,7 @@ type BatchJobExpireFilter struct {
 	Purge BatchJobExpirePurge `yaml:"purge" json:"purge"`
 }
 
-// Matches returns true if fi matches the filter conditions specified in ef.
+// Matches returns true if obj matches the filter conditions specified in ef.
 func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	switch ef.Type {
 	case BatchJobExpireObject:
@@ -202,7 +202,7 @@ const (
 	BatchJobExpireDeleted string = "deleted"
 )
 
-// Validate returns nil if f has valid fields, validation error otherwise.
+// Validate returns nil if ef has valid fields, validation error otherwise.
 func (ef BatchJobExpireFilter) Validate() error {
 	switch ef.Type {
 	case BatchJobExpireObject:
