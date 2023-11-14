@@ -340,6 +340,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 				return err.Err
 			}
 		}
+		return err
 
 	case "Remove":
 		bucket, object := path2BucketObject(r.Filepath)
