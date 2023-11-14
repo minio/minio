@@ -1368,10 +1368,10 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
+					if d.isScanner {
+						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
+					}
 					<-timer.C
-				}
-				if d.isScanner {
-					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
 				return
 			case <-timer.C:
@@ -1382,10 +1382,10 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 			case <-cycle:
 				if !timer.Stop() {
 					// We expired.
-					<-timer.C
 					if d.isScanner {
 						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 					}
+					<-timer.C
 					return
 				}
 			}
@@ -1415,10 +1415,10 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 		select {
 		case <-ctx.Done():
 			if !timer.Stop() {
-				<-timer.C
 				if d.isScanner {
 					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
+				<-timer.C
 			}
 			return
 		case <-timer.C:
@@ -1429,10 +1429,10 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 		case <-cycle:
 			if !timer.Stop() {
 				// We expired.
-				<-timer.C
 				if d.isScanner {
 					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
 				}
+				<-timer.C
 				return
 			}
 		}
