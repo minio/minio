@@ -206,19 +206,24 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 // be called, so we do not need to Wait() here.
 func (w *writerAt) TransferError(err error) {
 	_ = w.w.CloseWithError(err)
-	for i := range w.buffer {
-		delete(w.buffer, i)
-	}
+	_ = w.r.CloseWithError(err)
+	w.err = err
 }
 
 func (w *writerAt) Close() (err error) {
-	if len(w.buffer) > 0 {
-		err = w.w.CloseWithError(errors.New("some file segments were not flushed from the queue"))
-		for i := range w.buffer {
-			delete(w.buffer, i)
-		}
-	} else {
+	switch {
+	case len(w.buffer) > 0:
+		err = errors.New("some file segments were not flushed from the queue")
+		_ = w.w.CloseWithError(err)
+	case w.err != nil:
+		// No need to close here since both pipes were
+		// closing inside TransferError()
+		err = w.err
+	default:
 		err = w.w.Close()
+	}
+	for i := range w.buffer {
+		delete(w.buffer, i)
 	}
 	w.wg.Wait()
 	return err
@@ -226,8 +231,10 @@ func (w *writerAt) Close() (err error) {
 
 type writerAt struct {
 	w      *io.PipeWriter
+	r      *io.PipeReader
 	wg     *sync.WaitGroup
 	buffer map[int64][]byte
+	err    error
 
 	nextOffset int64
 	m          sync.Mutex
@@ -289,6 +296,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	wa := &writerAt{
 		buffer: make(map[int64][]byte),
 		w:      pw,
+		r:      pr,
 		wg:     &sync.WaitGroup{},
 	}
 	wa.wg.Add(1)
