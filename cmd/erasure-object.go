@@ -587,10 +587,11 @@ func (er erasureObjects) deleteBucketIfDangling(ctx context.Context, bucket stri
 				}
 				err := disks[index].DeleteVol(ctx, bucket, false)
 				if errors.Is(err, errVolumeNotEmpty) {
-					// If volume non empty, force delete as its dangling anyway
-					return disks[index].DeleteVol(ctx, bucket, true)
+					logger.LogOnceIf(ctx, fmt.Errorf("While deleting dangling Bucket (%s), Drive %s returned an error (%w)",
+						bucket, disks[index], err), "delete-dangling-bucket-"+bucket)
+					return err
 				}
-				return err
+				return nil
 			}, index)
 		}
 
