@@ -93,17 +93,14 @@ func (p BatchJobExpirePurge) Validate() error {
 
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
-	OlderThan     time.Duration `yaml:"olderThan,omitempty" json:"olderThan"`
-	CreatedBefore time.Time     `yaml:"createdBefore,omitempty" json:"createdBefore"`
-	Tags          []BatchJobKV  `yaml:"tags,omitempty" json:"tags"`
-	Metadata      []BatchJobKV  `yaml:"metadata,omitempty" json:"metadata"`
-	Size          struct {
-		LesserThan  BatchJobSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
-		GreaterThan BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
-	} `yaml:"size" json:"size"`
-	Type  string              `yaml:"type" json:"type"`
-	Name  string              `yaml:"name" json:"name"`
-	Purge BatchJobExpirePurge `yaml:"purge" json:"purge"`
+	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
+	CreatedBefore time.Time           `yaml:"createdBefore,omitempty" json:"createdBefore"`
+	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
+	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
+	Size          BatchJobSizeFilter  `yaml:"size" json:"size"`
+	Type          string              `yaml:"type" json:"type"`
+	Name          string              `yaml:"name" json:"name"`
+	Purge         BatchJobExpirePurge `yaml:"purge" json:"purge"`
 }
 
 // Matches returns true if obj matches the filter conditions specified in ef.
@@ -180,19 +177,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 		}
 	}
 
-	if ef.Size.LesserThan > 0 {
-		if !ef.Size.LesserThan.LesserThan(obj.Size) {
-			return false
-		}
-	}
-
-	if ef.Size.GreaterThan > 0 {
-		if !ef.Size.GreaterThan.GreaterThan(obj.Size) {
-			return false
-		}
-	}
-
-	return true
+	return ef.Size.InRange(obj.Size)
 }
 
 const (
@@ -226,6 +211,9 @@ func (ef BatchJobExpireFilter) Validate() error {
 		}
 	}
 	if err := ef.Purge.Validate(); err != nil {
+		return err
+	}
+	if err := ef.Size.Validate(); err != nil {
 		return err
 	}
 	return nil

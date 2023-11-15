@@ -75,39 +75,10 @@ func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "Size":
-			var zb0004 uint32
-			zb0004, err = dc.ReadMapHeader()
+			err = z.Size.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Size")
 				return
-			}
-			for zb0004 > 0 {
-				zb0004--
-				field, err = dc.ReadMapKeyPtr()
-				if err != nil {
-					err = msgp.WrapError(err, "Size")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "LesserThan":
-					err = z.Size.LesserThan.DecodeMsg(dc)
-					if err != nil {
-						err = msgp.WrapError(err, "Size", "LesserThan")
-						return
-					}
-				case "GreaterThan":
-					err = z.Size.GreaterThan.DecodeMsg(dc)
-					if err != nil {
-						err = msgp.WrapError(err, "Size", "GreaterThan")
-						return
-					}
-				default:
-					err = dc.Skip()
-					if err != nil {
-						err = msgp.WrapError(err, "Size")
-						return
-					}
-				}
 			}
 		case "Type":
 			z.Type, err = dc.ReadString()
@@ -122,14 +93,14 @@ func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Purge":
-			var zb0005 uint32
-			zb0005, err = dc.ReadMapHeader()
+			var zb0004 uint32
+			zb0004, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Purge")
 				return
 			}
-			for zb0005 > 0 {
-				zb0005--
+			for zb0004 > 0 {
+				zb0004--
 				field, err = dc.ReadMapKeyPtr()
 				if err != nil {
 					err = msgp.WrapError(err, "Purge")
@@ -223,25 +194,9 @@ func (z *BatchJobExpireFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 2
-	// write "LesserThan"
-	err = en.Append(0x82, 0xaa, 0x4c, 0x65, 0x73, 0x73, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
+	err = z.Size.EncodeMsg(en)
 	if err != nil {
-		return
-	}
-	err = z.Size.LesserThan.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Size", "LesserThan")
-		return
-	}
-	// write "GreaterThan"
-	err = en.Append(0xab, 0x47, 0x72, 0x65, 0x61, 0x74, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	if err != nil {
-		return
-	}
-	err = z.Size.GreaterThan.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Size", "GreaterThan")
+		err = msgp.WrapError(err, "Size")
 		return
 	}
 	// write "Type"
@@ -315,19 +270,9 @@ func (z *BatchJobExpireFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "Size"
 	o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
-	// map header, size 2
-	// string "LesserThan"
-	o = append(o, 0x82, 0xaa, 0x4c, 0x65, 0x73, 0x73, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o, err = z.Size.LesserThan.MarshalMsg(o)
+	o, err = z.Size.MarshalMsg(o)
 	if err != nil {
-		err = msgp.WrapError(err, "Size", "LesserThan")
-		return
-	}
-	// string "GreaterThan"
-	o = append(o, 0xab, 0x47, 0x72, 0x65, 0x61, 0x74, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o, err = z.Size.GreaterThan.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Size", "GreaterThan")
+		err = msgp.WrapError(err, "Size")
 		return
 	}
 	// string "Type"
@@ -414,39 +359,10 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "Size":
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			bts, err = z.Size.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Size")
 				return
-			}
-			for zb0004 > 0 {
-				zb0004--
-				field, bts, err = msgp.ReadMapKeyZC(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Size")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "LesserThan":
-					bts, err = z.Size.LesserThan.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Size", "LesserThan")
-						return
-					}
-				case "GreaterThan":
-					bts, err = z.Size.GreaterThan.UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Size", "GreaterThan")
-						return
-					}
-				default:
-					bts, err = msgp.Skip(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Size")
-						return
-					}
-				}
 			}
 		case "Type":
 			z.Type, bts, err = msgp.ReadStringBytes(bts)
@@ -461,14 +377,14 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Purge":
-			var zb0005 uint32
-			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0004 uint32
+			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Purge")
 				return
 			}
-			for zb0005 > 0 {
-				zb0005--
+			for zb0004 > 0 {
+				zb0004--
 				field, bts, err = msgp.ReadMapKeyZC(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Purge")
@@ -511,7 +427,7 @@ func (z *BatchJobExpireFilter) Msgsize() (s int) {
 	for za0002 := range z.Metadata {
 		s += z.Metadata[za0002].Msgsize()
 	}
-	s += 5 + 1 + 11 + z.Size.LesserThan.Msgsize() + 12 + z.Size.GreaterThan.Msgsize() + 5 + msgp.StringPrefixSize + len(z.Type) + 5 + msgp.StringPrefixSize + len(z.Name) + 6 + 1 + 15 + msgp.IntSize
+	s += 5 + z.Size.Msgsize() + 5 + msgp.StringPrefixSize + len(z.Type) + 5 + msgp.StringPrefixSize + len(z.Name) + 6 + 1 + 15 + msgp.IntSize
 	return
 }
 

@@ -115,22 +115,37 @@ func (b BatchJobSnowball) Validate() error {
 
 // BatchJobSizeFilter supports size based filters - LesserThan and GreaterThan
 type BatchJobSizeFilter struct {
-	LesserThan  BatchJobSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
-	GreaterThan BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
+	UpperBound BatchJobSize `yaml:"lesserThan,omitempty" json:"lesserThan"`
+	LowerBound BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
+}
+
+// InRange returns true in the following cases and false otherwise,
+// - sf.LowerBound < sz, when sf.LowerBound alone is specified
+// - sz < sf.UpperBound, when sf.UpperBound alone is specified
+// - sf.LowerBound < sz < sf.UpperBound when both are specified,
+func (sf BatchJobSizeFilter) InRange(sz int64) bool {
+	if sf.UpperBound > 0 && sz > int64(sf.UpperBound) {
+		return false
+	}
+
+	if sf.LowerBound > 0 && sz < int64(sf.LowerBound) {
+		return false
+	}
+	return true
+}
+
+var errInvalidBatchJobSizeFilter = errors.New("invalid batch-job size filter")
+
+// Validate checks if sf is a valid batch-job size filter
+func (sf BatchJobSizeFilter) Validate() error {
+	if sf.LowerBound > 0 && sf.UpperBound > 0 && sf.LowerBound >= sf.UpperBound {
+		return errInvalidBatchJobSizeFilter
+	}
+	return nil
 }
 
 // BatchJobSize supports humanized byte values in yaml files type BatchJobSize uint64
 type BatchJobSize int64
-
-// LesserThan returns true if sz is less than s, false otherwise.
-func (s BatchJobSize) LesserThan(sz int64) bool {
-	return sz < int64(s)
-}
-
-// GreaterThan returns true if sz is greater than s, false otherwise.
-func (s BatchJobSize) GreaterThan(sz int64) bool {
-	return sz > int64(s)
-}
 
 // UnmarshalYAML to parse humanized byte values
 func (s *BatchJobSize) UnmarshalYAML(unmarshal func(interface{}) error) error {

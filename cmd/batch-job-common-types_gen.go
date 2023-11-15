@@ -460,25 +460,25 @@ func (z *BatchJobSizeFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "LesserThan":
+		case "UpperBound":
 			{
 				var zb0002 int64
 				zb0002, err = dc.ReadInt64()
 				if err != nil {
-					err = msgp.WrapError(err, "LesserThan")
+					err = msgp.WrapError(err, "UpperBound")
 					return
 				}
-				z.LesserThan = BatchJobSize(zb0002)
+				z.UpperBound = BatchJobSize(zb0002)
 			}
-		case "GreaterThan":
+		case "LowerBound":
 			{
 				var zb0003 int64
 				zb0003, err = dc.ReadInt64()
 				if err != nil {
-					err = msgp.WrapError(err, "GreaterThan")
+					err = msgp.WrapError(err, "LowerBound")
 					return
 				}
-				z.GreaterThan = BatchJobSize(zb0003)
+				z.LowerBound = BatchJobSize(zb0003)
 			}
 		default:
 			err = dc.Skip()
@@ -494,24 +494,24 @@ func (z *BatchJobSizeFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z BatchJobSizeFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "LesserThan"
-	err = en.Append(0x82, 0xaa, 0x4c, 0x65, 0x73, 0x73, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
+	// write "UpperBound"
+	err = en.Append(0x82, 0xaa, 0x55, 0x70, 0x70, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(int64(z.LesserThan))
+	err = en.WriteInt64(int64(z.UpperBound))
 	if err != nil {
-		err = msgp.WrapError(err, "LesserThan")
+		err = msgp.WrapError(err, "UpperBound")
 		return
 	}
-	// write "GreaterThan"
-	err = en.Append(0xab, 0x47, 0x72, 0x65, 0x61, 0x74, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
+	// write "LowerBound"
+	err = en.Append(0xaa, 0x4c, 0x6f, 0x77, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(int64(z.GreaterThan))
+	err = en.WriteInt64(int64(z.LowerBound))
 	if err != nil {
-		err = msgp.WrapError(err, "GreaterThan")
+		err = msgp.WrapError(err, "LowerBound")
 		return
 	}
 	return
@@ -521,12 +521,12 @@ func (z BatchJobSizeFilter) EncodeMsg(en *msgp.Writer) (err error) {
 func (z BatchJobSizeFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "LesserThan"
-	o = append(o, 0x82, 0xaa, 0x4c, 0x65, 0x73, 0x73, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendInt64(o, int64(z.LesserThan))
-	// string "GreaterThan"
-	o = append(o, 0xab, 0x47, 0x72, 0x65, 0x61, 0x74, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendInt64(o, int64(z.GreaterThan))
+	// string "UpperBound"
+	o = append(o, 0x82, 0xaa, 0x55, 0x70, 0x70, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	o = msgp.AppendInt64(o, int64(z.UpperBound))
+	// string "LowerBound"
+	o = append(o, 0xaa, 0x4c, 0x6f, 0x77, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	o = msgp.AppendInt64(o, int64(z.LowerBound))
 	return
 }
 
@@ -548,25 +548,25 @@ func (z *BatchJobSizeFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "LesserThan":
+		case "UpperBound":
 			{
 				var zb0002 int64
 				zb0002, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "LesserThan")
+					err = msgp.WrapError(err, "UpperBound")
 					return
 				}
-				z.LesserThan = BatchJobSize(zb0002)
+				z.UpperBound = BatchJobSize(zb0002)
 			}
-		case "GreaterThan":
+		case "LowerBound":
 			{
 				var zb0003 int64
 				zb0003, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "GreaterThan")
+					err = msgp.WrapError(err, "LowerBound")
 					return
 				}
-				z.GreaterThan = BatchJobSize(zb0003)
+				z.LowerBound = BatchJobSize(zb0003)
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -582,7 +582,7 @@ func (z *BatchJobSizeFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z BatchJobSizeFilter) Msgsize() (s int) {
-	s = 1 + 11 + msgp.Int64Size + 12 + msgp.Int64Size
+	s = 1 + 11 + msgp.Int64Size + 11 + msgp.Int64Size
 	return
 }
 

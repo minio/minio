@@ -52,6 +52,7 @@ require (
 	github.com/minio/madmin-go/v3 v3.0.35-0.20231130082526-199918d0ff20
 	github.com/minio/minio-go/v7 v7.0.65-0.20231122233251-1f7dd6b7e3e1
 	github.com/minio/mux v1.9.0
+	github.com/minio/pkg v1.7.5
 	github.com/minio/pkg/v2 v2.0.4
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
@@ -95,7 +96,6 @@ require (
 	golang.org/x/time v0.5.0
 	google.golang.org/api v0.152.0
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -188,7 +188,6 @@ require (
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20231127112613-5e6ae2172e25 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/pkg v1.7.5 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -246,4 +245,5 @@ require (
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
