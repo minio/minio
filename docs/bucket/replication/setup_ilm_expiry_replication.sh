@@ -183,6 +183,28 @@ if [ $count2 -ne 888 ]; then
 	exit 1
 fi
 
+## Check replication of edit of prefix, tags and status of ILM Expiry Rules
+./mc ilm rule edit --id "${id}" --prefix "newprefix" --tags "ntag1=nval1&ntag2=nval2" --disable sitea/bucket
+sleep 30
+nprefix=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Prefix' | sed 's/"//g')
+ntagName1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Key' | sed 's/"//g')
+ntagVal1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Value' | sed 's/"//g')
+ntagName2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[1].Key' | sed 's/"//g')
+ntagVal2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[1].Value' | sed 's/"//g')
+st=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Status' | sed 's/"//g')
+if [ "${nprefix}" != "newprefix" ]; then
+	echo "BUG: ILM expiry rules prefix not replicated to 'siteb'"
+	exit 1
+fi
+if [ "${ntagName1}" != "ntag1" ] || [ "${ntagVal1}" != "nval1" ] || [ "${ntagName2}" != "ntag2" ] || [ "${ntagVal2}" != "nval2" ]; then
+	echo "BUG: ILM expiry rules tags not replicated to 'siteb'"
+	exit 1
+fi
+if [ "${st}" != "Disabled" ]; then
+	echo "BUG: ILM expiry rules status not replicated to 'siteb'"
+	exit 1
+fi
+
 ## Check replication of deleted ILM expiry rules
 ./mc ilm rule remove --id "${id}" sitea/bucket
 sleep 30

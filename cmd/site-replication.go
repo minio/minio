@@ -6091,14 +6091,12 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 
 	// append now
 	for id, rl := range newRMap {
-		// if rule is already in original list update expiry rules with latest
+		// if rule is already in original list update non tranisition details with latest
 		// else simply add to the map. This may happen if ILM expiry replication
 		// was disabled for sometime and rules were updated independently in different
-		// sites. Latest changes would get applied but merge only the expiration details
-		if origRl, ok := rMap[id]; ok {
-			origRl.Expiration = rl.Expiration
-			origRl.NoncurrentVersionExpiration = rl.NoncurrentVersionExpiration
-			rMap[id] = origRl
+		// sites. Latest changes would get applied but merge only the non transition details
+		if _, ok := rMap[id]; ok {
+			rMap[id] = rl.CloneNonTransition()
 		} else {
 			rMap[id] = rl
 		}
