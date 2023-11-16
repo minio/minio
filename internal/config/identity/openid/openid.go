@@ -603,9 +603,9 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	timeout := env.Get(config.EnvMinioStsDuration, "")
 	defaultExpiryDuration, err := time.ParseDuration(timeout)
 	if err != nil {
-		defaultExpiryDuration = time.Duration(60) * time.Minute
+		defaultExpiryDuration = time.Hour
 	}
-	if dsecs != "" {
+	if timeout == "" && dsecs != "" {
 		expirySecs, err := strconv.ParseInt(dsecs, 10, 64)
 		if err != nil {
 			return 0, auth.ErrInvalidDuration
@@ -614,11 +614,18 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
 		// up to 365 days.
-		if expirySecs < 900 || expirySecs > 31536000 {
+		if expirySecs < config.MinExpiration || expirySecs > config.MaxExpiration {
 			return 0, auth.ErrInvalidDuration
 		}
 
 		defaultExpiryDuration = time.Duration(expirySecs) * time.Second
+	} else if timeout == "" && dsecs == "" {
+		return time.Hour, nil
 	}
+
+	if defaultExpiryDuration.Seconds() < config.MinExpiration || defaultExpiryDuration.Seconds() > config.MaxExpiration {
+		return 0, auth.ErrInvalidDuration
+	}
+
 	return defaultExpiryDuration, nil
 }
