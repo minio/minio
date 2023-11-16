@@ -228,12 +228,10 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 	if !isMinioMetaBucketName(bucket) {
 		// read all bucket metadata
 		bktMetadata, errs := readAllBucketInfo(ctx, storageDisks, bucket)
-		if isAllBucketsNotFound(errs) {
-			// nothing to be done, bucket already gone
-			return res, errVolumeNotFound
-		}
-		if err := er.deleteBucketIfDangling(ctx, bucket, bktMetadata, errs); err != nil {
-			return res, err
+		if !isAllBucketsNotFound(errs) {
+			if err := er.deleteBucketIfDangling(ctx, bucket, bktMetadata, errs); err != nil {
+				return res, err
+			}
 		}
 	}
 
@@ -290,6 +288,7 @@ func (er erasureObjects) healBucket(ctx context.Context, storageDisks []StorageA
 			State:    afterState[i],
 		})
 	}
+
 	return res, nil
 }
 
@@ -1041,7 +1040,7 @@ func isAllBucketsNotFound(errs []error) bool {
 	}
 	notFoundCount := 0
 	for _, err := range errs {
-		if err != nil && (err.Error() == errFileNotFound.Error() || err.Error() == errFileCorrupt.Error()) {
+		if err != nil && (err.Error() == errVolumeNotFound.Error() || err.Error() == errFileCorrupt.Error()) {
 			notFoundCount++
 		}
 	}

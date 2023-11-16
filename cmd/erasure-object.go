@@ -589,7 +589,6 @@ func (er erasureObjects) deleteBucketIfDangling(ctx context.Context, bucket stri
 				if errors.Is(err, errVolumeNotEmpty) {
 					logger.LogOnceIf(ctx, fmt.Errorf("While deleting dangling Bucket (%s), Drive %s returned an error (%w)",
 						bucket, disks[index], err), "delete-dangling-bucket-"+bucket)
-					return err
 				}
 				return nil
 			}, index)
