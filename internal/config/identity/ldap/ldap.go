@@ -364,7 +364,7 @@ func (l *Config) LookupUsername(userDN string) (string, []string, error) {
 		return "", nil, err
 	}
 	for _, attr := range parsedDN.RDNs {
-		if strings.ToLower(attr.Attributes[0].Type) == userFilter {
+		if attr.Attributes[0].Type == userFilter {
 			usernameSl = append(usernameSl, attr.Attributes[0].Value)
 		}
 	}
