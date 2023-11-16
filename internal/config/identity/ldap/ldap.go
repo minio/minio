@@ -344,21 +344,31 @@ func (l *Config) LookupUsername(userDN string) (string, []string, error) {
 		return "", nil, err
 	}
 
-	// Parse DN for username
-	// Regex searches for string between '=%s' and the previous '(', which is the attribute name
-	findUserAttribute := regexp.MustCompile(`(?:\()([^\)]*)=%s`) // find attribute directly proceeding the %s
-	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
-
-	// Regex searches for string between the attribute name and the next ',' or end of string
-	findUsername, err := regexp.Compile(userFilter + `=([^,]*)`) // find username in DN
+	filter, err := ldap.CompileFilter(l.LDAP.UserDNSearchFilter)
 	if err != nil {
 		return "", nil, err
 	}
-	usernameSl := findUsername.FindStringSubmatch(userDN)
-	if len(usernameSl) != 2 {
-		return "", nil, fmt.Errorf("Unable to parse username from DN %s", userDN)
+	if filter == nil {
+		return "", nil, fmt.Errorf("Unable to parse filter %s", l.LDAP.UserDNSearchFilter)
 	}
-	username := usernameSl[1]
+
+	// Parse DN for username
+	// Regex searches for string between '=%s' and the previous '(', which is the attribute name
+	findUserAttribute := regexp.MustCompile(`\(([^\)\(]*)=%s`) // find attribute directly proceeding the %s
+	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
+
+	var usernameSl []string
+
+	parsedDN, err := ldap.ParseDN(userDN)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, attr := range parsedDN.RDNs {
+		if strings.ToLower(attr.Attributes[0].Type) == userFilter {
+			usernameSl = append(usernameSl, attr.Attributes[0].Value)
+		}
+	}
+	username := usernameSl[0]
 
 	// Lookup user DN and make sure it matches the DN provided
 	bindDN, err := l.LDAP.LookupUserDN(conn, username)
