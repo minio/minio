@@ -1511,7 +1511,7 @@ func removeRoots(roots []string) {
 
 // creates a bucket for the tests and returns the bucket name.
 // initializes the specified API endpoints for the tests.
-// initialies the root and returns its path.
+// initializes the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	initAllSubsystems(ctx)

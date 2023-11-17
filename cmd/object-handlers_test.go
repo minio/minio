@@ -3021,7 +3021,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		},
 		// Test case - 7.
 		// Test case with proper parts.
-		// Should successed and the content in the response body is asserted.
+		// Should succeeded and the content in the response body is asserted.
 		{
 			bucket:    bucketName,
 			object:    objectName,
@@ -3037,7 +3037,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		},
 		// Test case - 8.
 		// Test case with proper parts.
-		// Should successed and the content in the response body is asserted.
+		// Should succeeded and the content in the response body is asserted.
 		{
 			bucket:    bucketName,
 			object:    objectName,

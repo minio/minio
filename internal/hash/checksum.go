@@ -166,7 +166,7 @@ func (c ChecksumType) Hasher() hash.Hash {
 	return nil
 }
 
-// Trailing return whether the checksum is traling.
+// Trailing return whether the checksum is trailing.
 func (c ChecksumType) Trailing() bool {
 	return c.Is(ChecksumTrailing)
 }
