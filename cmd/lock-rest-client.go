@@ -46,7 +46,7 @@ func (c *lockRESTClient) Close() error {
 	return nil
 }
 
-// Close - marks the client as closed.
+// String - returns the remote host of the connection.
 func (c *lockRESTClient) String() string {
 	return c.connection.Remote
 }

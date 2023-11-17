@@ -141,8 +141,8 @@ Sample handler:
             case <-ctx.Done():
                 return nil
             case req, ok := <-in:
-				if !ok {
-					break
+                if !ok {
+                    break
                 }           
                 // Do something with payload
                 out <- []byte("response")

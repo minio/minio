@@ -755,7 +755,7 @@ func (z *pongMsg) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "f":
+		case "nf":
 			z.NotFound, err = dc.ReadBool()
 			if err != nil {
 				err = msgp.WrapError(err, "NotFound")
@@ -793,8 +793,8 @@ func (z *pongMsg) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *pongMsg) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "f"
-	err = en.Append(0x82, 0xa1, 0x66)
+	// write "nf"
+	err = en.Append(0x82, 0xa2, 0x6e, 0x66)
 	if err != nil {
 		return
 	}
@@ -827,8 +827,8 @@ func (z *pongMsg) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *pongMsg) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "f"
-	o = append(o, 0x82, 0xa1, 0x66)
+	// string "nf"
+	o = append(o, 0x82, 0xa2, 0x6e, 0x66)
 	o = msgp.AppendBool(o, z.NotFound)
 	// string "e"
 	o = append(o, 0xa1, 0x65)
@@ -858,7 +858,7 @@ func (z *pongMsg) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "f":
+		case "nf":
 			z.NotFound, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NotFound")
@@ -895,7 +895,7 @@ func (z *pongMsg) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *pongMsg) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BoolSize + 2
+	s = 1 + 3 + msgp.BoolSize + 2
 	if z.Err == nil {
 		s += msgp.NilSize
 	} else {
