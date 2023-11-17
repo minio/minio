@@ -480,15 +480,16 @@ func readMsgpReaderPoolPut(r *msgp.Reader) {
 	}
 }
 
-func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	// Use websocket when not reading data.
-	if !readData {
+	if !opts.ReadData {
 		resp, err := storageReadVersionHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
 			storageRESTDiskID:    client.diskID,
 			storageRESTVolume:    volume,
 			storageRESTFilePath:  path,
 			storageRESTVersionID: versionID,
-			storageRESTReadData:  "false",
+			storageRESTReadData:  strconv.FormatBool(opts.ReadData),
+			storageRESTHealing:   strconv.FormatBool(opts.Healing),
 		}))
 		if err != nil {
 			return fi, toStorageErr(err)
@@ -500,7 +501,8 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
-	values.Set(storageRESTReadData, strconv.FormatBool(readData))
+	values.Set(storageRESTReadData, strconv.FormatBool(opts.ReadData))
+	values.Set(storageRESTHealing, strconv.FormatBool(opts.Healing))
 
 	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {

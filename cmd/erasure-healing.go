@@ -409,7 +409,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	}
 
 	// Re-read when we have lock...
-	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
+	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true, true)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {
@@ -1162,7 +1162,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 
 	// Perform quick read without lock.
 	// This allows to quickly check if all is ok or all are missing.
-	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
+	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false, false)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {

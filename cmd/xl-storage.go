@@ -1426,10 +1426,16 @@ func (s *xlStorage) ReadXL(ctx context.Context, volume, path string, readData bo
 	}, err
 }
 
+// ReadOptions optional inputs for ReadVersion
+type ReadOptions struct {
+	ReadData bool
+	Healing  bool
+}
+
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
 // for all objects less than `32KiB` this call returns data as well
 // along with metadata.
-func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return fi, err
@@ -1439,6 +1445,8 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if err = checkPathLength(filePath); err != nil {
 		return fi, err
 	}
+
+	readData := opts.ReadData
 
 	buf, dmTime, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
 	if err != nil {
@@ -1473,9 +1481,9 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 				return fi, nil
 			}
 
-			// For overwritten objects without header we might have a conflict with
-			// data written later.
-			// Check the data path if there is a part with data.
+			// For overwritten objects without header we might have a
+			// conflict with data written later. Check the data path
+			// if there is a part with data.
 			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
 			dataPath := pathJoin(path, fi.DataDir, partPath)
 			_, lerr := Lstat(pathJoin(volumeDir, dataPath))
@@ -1501,6 +1509,22 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 			if err != nil {
 				return FileInfo{}, err
 			}
+		}
+	}
+
+	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID {
+		// Verify if the dataDir is present or not when the data
+		// is not inlined to make sure we return correct errors
+		// during HeadObject().
+
+		// Healing must not come here and return error, since healing
+		// deals with dataDirs directly, let healing fix things automatically.
+		if lerr := Access(pathJoin(volumeDir, path, fi.DataDir)); lerr != nil {
+			if os.IsNotExist(lerr) {
+				// Data dir is missing we must return errFileCorrupted
+				return FileInfo{}, errFileCorrupt
+			}
+			return FileInfo{}, osErrToFileErr(lerr)
 		}
 	}
 

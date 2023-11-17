@@ -386,7 +386,12 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 		return nil, grid.NewRemoteErr(err)
 	}
 
-	fi, err := s.storage.ReadVersion(context.Background(), volume, filePath, versionID, readData)
+	healing, err := strconv.ParseBool(params.Get(storageRESTHealing))
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+
+	fi, err := s.storage.ReadVersion(context.Background(), volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
@@ -406,8 +411,12 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-
-	fi, err := s.storage.ReadVersion(r.Context(), volume, filePath, versionID, readData)
+	healing, err := strconv.ParseBool(r.Form.Get(storageRESTHealing))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	fi, err := s.storage.ReadVersion(r.Context(), volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
