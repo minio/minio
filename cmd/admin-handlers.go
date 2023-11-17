@@ -154,47 +154,40 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
+	updateErrorFun := func(err error, host string) {
+		err = AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+		logger.GetReqInfo(ctx).SetTags("peerAddress", host)
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	}
 	// Push binary to other servers
 	for _, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader) {
 		if nerr.Err != nil {
-			err := AdminError{
-				Code:       AdminUpdateApplyFailure,
-				Message:    nerr.Err.Error(),
-				StatusCode: http.StatusInternalServerError,
-			}
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			updateErrorFun(nerr.Err, nerr.Host.String())
 			return
 		}
 	}
 
 	err = verifyBinary(u, sha256Sum, releaseInfo, mode, reader)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		updateErrorFun(err, globalMinioHost)
 		return
 	}
 
 	for _, nerr := range globalNotificationSys.CommitBinary(ctx) {
 		if nerr.Err != nil {
-			err := AdminError{
-				Code:       AdminUpdateApplyFailure,
-				Message:    nerr.Err.Error(),
-				StatusCode: http.StatusInternalServerError,
-			}
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			updateErrorFun(nerr.Err, nerr.Host.String())
 			return
 		}
 	}
 
 	err = commitBinary()
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		updateErrorFun(err, globalMinioHost)
 		return
 	}
 
