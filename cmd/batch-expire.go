@@ -94,7 +94,7 @@ func (p BatchJobExpirePurge) Validate() error {
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
 	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
-	CreatedBefore time.Time           `yaml:"createdBefore,omitempty" json:"createdBefore"`
+	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
 	Size          BatchJobSizeFilter  `yaml:"size" json:"size"`
@@ -126,7 +126,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 		return false
 	}
 
-	if !ef.CreatedBefore.IsZero() && (obj.ModTime.Equal(ef.CreatedBefore) || obj.ModTime.After(ef.CreatedBefore)) {
+	if ef.CreatedBefore != nil && !obj.ModTime.Before(*ef.CreatedBefore) {
 		return false
 	}
 
@@ -216,11 +216,15 @@ func (ef BatchJobExpireFilter) Validate() error {
 	if err := ef.Size.Validate(); err != nil {
 		return err
 	}
+	if ef.CreatedBefore != nil && !ef.CreatedBefore.Before(time.Now()) {
+		return errors.New("CreatedBefore is in the future")
+	}
 	return nil
 }
 
-// BatchJobExpireV1 v1 of batch expiration job
-type BatchJobExpireV1 struct {
+// BatchJobExpire represents configuration parameters for a batch expiration
+// job typically supplied in yaml form
+type BatchJobExpire struct {
 	APIVersion      string                 `yaml:"apiVersion" json:"apiVersion"`
 	Bucket          string                 `yaml:"bucket" json:"bucket"`
 	Prefix          string                 `yaml:"prefix" json:"prefix"`
@@ -230,7 +234,7 @@ type BatchJobExpireV1 struct {
 }
 
 // Notify notifies notification endpoint if configured regarding job failure or success.
-func (r BatchJobExpireV1) Notify(ctx context.Context, body io.Reader) error {
+func (r BatchJobExpire) Notify(ctx context.Context, body io.Reader) error {
 	if r.NotificationCfg.Endpoint == "" {
 		return nil
 	}
@@ -262,7 +266,7 @@ func (r BatchJobExpireV1) Notify(ctx context.Context, body io.Reader) error {
 }
 
 // Expire expires object versions which have already matched supplied filter conditions
-func (r *BatchJobExpireV1) Expire(ctx context.Context, api ObjectLayer, vc *versioning.Versioning, objsToDel []ObjectToDelete) []error {
+func (r *BatchJobExpire) Expire(ctx context.Context, api ObjectLayer, vc *versioning.Versioning, objsToDel []ObjectToDelete) []error {
 	opts := ObjectOptions{
 		PrefixEnabledFn:  vc.PrefixEnabled,
 		VersionSuspended: vc.Suspended(),
@@ -296,7 +300,7 @@ func (oiCache objInfoCache) Get(toDel ObjectToDelete) (*ObjectInfo, bool) {
 	return oi, ok
 }
 
-func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
+func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
 	defer wk.Give()
 
 	vc, _ := globalBucketVersioningSys.Get(r.Bucket)
@@ -308,8 +312,13 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 
 	var i int
 	for toExpire := range expireCh {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		if i > 0 {
-			if wait := globalBatchConfig.Clone().ExpirationWorkersWait; wait > 0 {
+			if wait := globalBatchConfig.ExpirationWait(); wait > 0 {
 				time.Sleep(wait)
 			}
 		}
@@ -339,10 +348,16 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 				oiCache.Add(od, &exp.ObjectInfo)
 			}
 
+			var done bool
 			// DeleteObject(deletePrefix: true) to expire all versions of an object
 			for _, exp := range toExpireAll {
 				var success bool
 				for attempts := 1; attempts <= retryAttempts; attempts++ {
+					select {
+					case <-ctx.Done():
+						done = true
+					default:
+					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
 					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
 						DeletePrefix: true,
@@ -358,11 +373,24 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpireV1, ri *batchJobIn
 					}
 				}
 				ri.trackMultipleObjectVersions(r.Bucket, exp, success)
+				if done {
+					break
+				}
+			}
+
+			if done {
+				return
 			}
 
 			// DeleteMultiple objects
 			toDelCopy := make([]ObjectToDelete, len(toDel))
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
 				// Copying toDel to select from objects whose
 				// deletion failed
@@ -413,7 +441,7 @@ type expireObjInfo struct {
 }
 
 // Start the batch expiration job, resumes if there was a pending job via "job.ID"
-func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
+func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
 	ri := &batchJobInfo{
 		JobID:     job.ID,
 		JobType:   string(job.Type()),
@@ -562,8 +590,8 @@ func (r *BatchJobExpireV1) Start(ctx context.Context, api ObjectLayer, job Batch
 
 	// Notify expire jobs final status to the configured endpoint
 	buf, _ := json.Marshal(ri)
-	if err := r.Notify(ctx, bytes.NewReader(buf)); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
+	if err := r.Notify(context.Background(), bytes.NewReader(buf)); err != nil {
+		logger.LogIf(context.Background(), fmt.Errorf("unable to notify %v", err))
 	}
 
 	return nil
@@ -581,7 +609,7 @@ func (e batchExpireJobError) Error() string {
 }
 
 // Validate validates the job definition input
-func (r *BatchJobExpireV1) Validate(ctx context.Context, job BatchJobRequest, o ObjectLayer) error {
+func (r *BatchJobExpire) Validate(ctx context.Context, job BatchJobRequest, o ObjectLayer) error {
 	if r == nil {
 		return nil
 	}

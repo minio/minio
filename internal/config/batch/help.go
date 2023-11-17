@@ -19,7 +19,7 @@ package batch
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for caching feature.
+// Help template for batch feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)

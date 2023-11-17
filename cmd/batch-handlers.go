@@ -65,7 +65,7 @@ type BatchJobRequest struct {
 	Location  string               `yaml:"-" json:"location"`
 	Replicate *BatchJobReplicateV1 `yaml:"replicate" json:"replicate"`
 	KeyRotate *BatchJobKeyRotateV1 `yaml:"keyrotate" json:"keyrotate"`
-	Expire    *BatchJobExpireV1    `yaml:"expire" json:"expire"`
+	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
 
@@ -453,7 +453,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
-				if wait := globalBatchConfig.Clone().ReplicationWorkersWait; wait > 0 {
+				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
 					time.Sleep(wait)
 				}
 			}()
@@ -1172,7 +1172,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
-				if wait := globalBatchConfig.Clone().ReplicationWorkersWait; wait > 0 {
+				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
 					time.Sleep(wait)
 				}
 			}()

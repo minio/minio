@@ -25,7 +25,7 @@ import (
 	"github.com/minio/pkg/env"
 )
 
-// Compression environment variables
+// Batch job environment variables
 const (
 	ReplicationWorkersWait = "replication_workers_wait"
 	KeyRotationWorkersWait = "keyrotation_workers_wait"
@@ -36,19 +36,46 @@ const (
 	EnvKeyExpirationWorkersWait = "MINIO_BATCH_EXPIRATION_WORKERS_WAIT"
 )
 
-var configMutex sync.RWMutex
+var configMu sync.RWMutex
 
-// Config represents the heal settings.
+// Config represents the batch job settings.
 type Config struct {
 	ReplicationWorkersWait time.Duration `json:"replicationWorkersWait"`
 	KeyRotationWorkersWait time.Duration `json:"keyRotationWorkersWait"`
 	ExpirationWorkersWait  time.Duration `json:"expirationWorkersWait"`
 }
 
+// ExpirationWait returns the duration for which a batch expiration worker
+// would wait before working on next object.
+func (opts Config) ExpirationWait() time.Duration {
+	configMu.RLock()
+	defer configMu.RUnlock()
+
+	return opts.ExpirationWorkersWait
+}
+
+// ReplicationWait returns the duration for which a batch replication worker
+// would wait before working on next object.
+func (opts Config) ReplicationWait() time.Duration {
+	configMu.RLock()
+	defer configMu.RUnlock()
+
+	return opts.ReplicationWorkersWait
+}
+
+// KeyRotationWait returns the duration for which a batch key-rotation worker
+// would wait before working on next object.
+func (opts Config) KeyRotationWait() time.Duration {
+	configMu.RLock()
+	defer configMu.RUnlock()
+
+	return opts.KeyRotationWorkersWait
+}
+
 // Clone returns a copy of Config value
 func (opts Config) Clone() Config {
-	configMutex.RLock()
-	defer configMutex.RUnlock()
+	configMu.RLock()
+	defer configMu.RUnlock()
 
 	return Config{
 		ReplicationWorkersWait: opts.ReplicationWorkersWait,
@@ -59,15 +86,15 @@ func (opts Config) Clone() Config {
 
 // Update updates opts with nopts
 func (opts *Config) Update(nopts Config) {
-	configMutex.Lock()
-	defer configMutex.Unlock()
+	configMu.Lock()
+	defer configMu.Unlock()
 
 	opts.ReplicationWorkersWait = nopts.ReplicationWorkersWait
 	opts.KeyRotationWorkersWait = nopts.KeyRotationWorkersWait
 	opts.ExpirationWorkersWait = nopts.ExpirationWorkersWait
 }
 
-// DefaultKVS - default KV config for heal settings
+// DefaultKVS - default KV config for batch job settings
 var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   ReplicationWorkersWait,
@@ -85,7 +112,7 @@ var DefaultKVS = config.KVS{
 
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	if err = config.CheckValidKeys(config.HealSubSys, kvs, DefaultKVS); err != nil {
+	if err = config.CheckValidKeys(config.BatchSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
 

@@ -94,7 +94,7 @@ func (z *BatchJobRequest) DecodeMsg(dc *msgp.Reader) (err error) {
 				z.Expire = nil
 			} else {
 				if z.Expire == nil {
-					z.Expire = new(BatchJobExpireV1)
+					z.Expire = new(BatchJobExpire)
 				}
 				err = z.Expire.DecodeMsg(dc)
 				if err != nil {
@@ -347,7 +347,7 @@ func (z *BatchJobRequest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Expire = nil
 			} else {
 				if z.Expire == nil {
-					z.Expire = new(BatchJobExpireV1)
+					z.Expire = new(BatchJobExpire)
 				}
 				bts, err = z.Expire.UnmarshalMsg(bts)
 				if err != nil {
