@@ -18,6 +18,7 @@
 package grid
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -36,7 +37,7 @@ func (c *Connection) traceRequests(p *pubsub.PubSub[madmin.TraceInfo, madmin.Tra
 	}
 }
 
-// traceRequests adds request tracing to the connection.
+// subroute adds a specific subroute to the request.
 func (c *tracer) subroute(subroute string) *tracer {
 	if c == nil {
 		return nil
@@ -63,14 +64,14 @@ func (c *muxClient) traceRoundtrip(t *tracer, h HandlerID, req []byte) ([]byte, 
 	body := bytesOrLength(req)
 	resp, err := c.roundtrip(h, req)
 	end := time.Now()
-	status := 200
+	status := http.StatusOK
 	errString := ""
 	if err != nil {
 		errString = err.Error()
 		if IsRemoteErr(err) == nil {
-			status = 500
+			status = http.StatusInternalServerError
 		} else {
-			status = 400
+			status = http.StatusBadRequest
 		}
 	}
 	trace := madmin.TraceInfo{

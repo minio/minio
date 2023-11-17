@@ -45,7 +45,8 @@ const (
 	RoutePath = "/minio/grid/" + apiVersion
 )
 
-// Manager will
+// Manager will contain all the connections to the grid.
+// It also handles incoming requests and routes them to the appropriate connection.
 type Manager struct {
 	// ID is an instance ID, that will change whenever the server restarts.
 	// This allows remotes to keep track of whether state is preserved.
@@ -57,6 +58,7 @@ type Manager struct {
 	// serverside handlers.
 	handlers handlers
 
+	// local host name.
 	local string
 
 	// Validate incoming requests.
@@ -309,8 +311,7 @@ func (m *Manager) Targets() []string {
 	return res
 }
 
-// TestingShutDown will shut down all connections.
-// This should *only* be used by tests.
+// debugMsg should *only* be used by tests.
 //
 //lint:ignore U1000 This is used by tests.
 func (m *Manager) debugMsg(d debugMsg, args ...any) {

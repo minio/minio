@@ -26,7 +26,7 @@ import (
 
 // Tests lock rpc client.
 func TestLockRESTlient(t *testing.T) {
-	// These should not be conbectable.
+	// These should not be connectable.
 	endpoint, err := NewEndpoint("http://localhost:9876")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)

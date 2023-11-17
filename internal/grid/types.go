@@ -35,7 +35,7 @@ func (m *MSS) Get(key string) string {
 	return (*m)[key]
 }
 
-// UnmarshalMsg deserializes b from the provided byte slice and returns the
+// UnmarshalMsg deserializes m from the provided byte slice and returns the
 // remainder of bytes.
 func (m *MSS) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	if m == nil {

@@ -118,7 +118,7 @@ func storageServerRequestValidate(r *http.Request) error {
 	return nil
 }
 
-// IsValid - To authenticate and verify the time difference.
+// IsAuthValid - To authenticate and verify the time difference.
 func (s *storageRESTServer) IsAuthValid(w http.ResponseWriter, r *http.Request) bool {
 	if s.storage == nil {
 		s.writeErrorResponse(w, errDiskNotFound)
@@ -167,7 +167,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 	return true
 }
 
-// IsValid - To authenticate and check if the disk-id in the request corresponds to the underlying disk.
+// checkID - check if the disk-id in the request corresponds to the underlying disk.
 func (s *storageRESTServer) checkID(wantID string) bool {
 	if s.storage == nil {
 		return false
@@ -210,7 +210,7 @@ func (s *storageRESTServer) DiskInfoHandler(params *grid.MSS) (*DiskInfo, *grid.
 	return &info, nil
 }
 
-// diskinfo types.
+// scanner rpc handler.
 var storageNSScannerHandler = grid.NewStream[*nsScannerOptions, grid.NoPayload, *nsScannerResp](grid.HandlerNSScanner,
 	func() *nsScannerOptions { return &nsScannerOptions{} },
 	nil,
@@ -300,7 +300,7 @@ func (s *storageRESTServer) StatVolHandler(params *grid.MSS) (*VolInfo, *grid.Re
 	return &info, nil
 }
 
-// DeleteVolumeHandler - delete a volume.
+// DeleteVolHandler - delete a volume.
 func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -356,7 +356,7 @@ var storageDeleteVersionHandler = grid.NewSingleHandler[*DeleteVersionHandlerPar
 	return &DeleteVersionHandlerParams{}
 }, grid.NewNoPayload)
 
-// DeleteVersion delete updated metadata.
+// DeleteVersionHandler delete updated metadata.
 func (s *storageRESTServer) DeleteVersionHandler(p *DeleteVersionHandlerParams) (np grid.NoPayload, gerr *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
 		return np, grid.NewRemoteErr(errDiskNotFound)
@@ -393,7 +393,7 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 	return &fi, nil
 }
 
-// ReadVersion read metadata of versionID
+// ReadVersionHandler read metadata of versionID
 func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -420,7 +420,7 @@ var storageWriteMetadataHandler = grid.NewSingleHandler[*MetadataHandlerParams, 
 	return &MetadataHandlerParams{}
 }, grid.NewNoPayload)
 
-// WriteMetadata write new updated metadata.
+// WriteMetadataHandler rpc handler to write new updated metadata.
 func (s *storageRESTServer) WriteMetadataHandler(p *MetadataHandlerParams) (np grid.NoPayload, gerr *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
 		return grid.NewNPErr(errDiskNotFound)
@@ -436,7 +436,7 @@ var storageUpdateMetadataHandler = grid.NewSingleHandler[*MetadataHandlerParams,
 	return &MetadataHandlerParams{}
 }, grid.NewNoPayload)
 
-// UpdateMetadata update new updated metadata.
+// UpdateMetadataHandler update new updated metadata.
 func (s *storageRESTServer) UpdateMetadataHandler(p *MetadataHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
 		return grid.NewNPErr(errDiskNotFound)
@@ -593,7 +593,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 	w.Write(buf)
 }
 
-// ReadFileHandler - read section of a file.
+// ReadFileStreamHandler - read section of a file.
 func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -1310,7 +1310,7 @@ func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request)
 	rw.CloseWithError(err)
 }
 
-// registerStorageRPCRouter - register storage rpc router.
+// registerStorageRESTHandlers - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools, gm *grid.Manager) {
 	storageDisks := make([][]*xlStorage, len(endpointServerPools))
 	for poolIdx, ep := range endpointServerPools {

@@ -79,5 +79,5 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 		return err
 	}
 	globalGrid.Store(g)
-	return err
+	return nil
 }

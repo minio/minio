@@ -24,7 +24,7 @@ import (
 
 // A Stream is a two-way stream.
 // All responses *must* be read by the caller.
-// If the call is canceled though the context,
+// If the call is canceled through the context,
 // the appropriate error will be returned.
 type Stream struct {
 	// responses from the remote server.
@@ -68,7 +68,6 @@ func (s *Stream) Results(next func(b []byte) error) (err error) {
 				s.cancel(err)
 			}
 			// Drain channel.
-			// A goroutine shouldn't be needed.
 			for range s.responses {
 			}
 		}

@@ -46,7 +46,7 @@ const (
 
 	// OpPing is a ping request.
 	// If a mux id is specified that mux is pinged.
-	// Clients sends ping requests.
+	// Clients send ping requests.
 	OpPing
 
 	// OpPong is a OpPing response returned by the server.
@@ -186,7 +186,7 @@ func (f Flags) String() string {
 	return "[" + strings.Join(res, ",") + "]"
 }
 
-// parse an handleIncoming message.
+// parse an incoming message.
 func (m *message) parse(b []byte) (*subHandlerID, []byte, error) {
 	var sub *subHandlerID
 	if m.Payload == nil {
@@ -272,7 +272,7 @@ func (muxConnectError) Op() Op {
 }
 
 type pongMsg struct {
-	NotFound bool    `msg:"f"`
+	NotFound bool    `msg:"nf"`
 	Err      *string `msg:"e,allownil"`
 }
 

@@ -285,7 +285,7 @@ func NewSingleHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, ne
 	return &s
 }
 
-// PutResponse will accept a request for reuse.
+// PutResponse will accept a response for reuse.
 // These should be returned by the caller.
 func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
 	if r != h.nilResp {
@@ -315,8 +315,8 @@ func (h *SingleHandler[Req, Resp]) putRequest(r Req) {
 	}
 }
 
-// NewRequest creates a new response.
-// Handlers can use this to create a reusable response.
+// NewRequest creates a new request.
+// Handlers can use this to create a reusable request.
 // The request may be reused, so caller should clear any fields.
 func (h *SingleHandler[Req, Resp]) NewRequest() Req {
 	return h.reqPool.Get().(Req)
@@ -356,7 +356,7 @@ type Requester interface {
 	Request(ctx context.Context, h HandlerID, req []byte) ([]byte, error)
 }
 
-// Call the remove with the request and return the response.
+// Call the remote with the request and return the response.
 // The response should be returned with PutResponse when no error.
 // If no deadline is set, a 1-minute deadline is added.
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Req) (resp Resp, err error) {
@@ -481,7 +481,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
 	}
 }
 
-// PutResponse will accept a request for reuse.
+// PutResponse will accept a response for reuse.
 // These should be returned by the caller.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
 	if r != h.nilResp {
@@ -600,8 +600,8 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 	})
 }
 
-// TypedSteam is a stream with specific types.
-type TypedSteam[Req, Resp RoundTripper] struct {
+// TypedStream is a stream with specific types.
+type TypedStream[Req, Resp RoundTripper] struct {
 	// responses from the remote server.
 	// Channel will be closed after error or when remote closes.
 	// responses *must* be read to either an error is returned or the channel is closed.
@@ -618,7 +618,7 @@ type TypedSteam[Req, Resp RoundTripper] struct {
 // Results returns the results from the remote server one by one.
 // If any error is returned by the callback, the stream will be canceled.
 // If the context is canceled, the stream will be canceled.
-func (s *TypedSteam[Req, Resp]) Results(next func(resp Resp) error) (err error) {
+func (s *TypedStream[Req, Resp]) Results(next func(resp Resp) error) (err error) {
 	return s.responses.Results(func(b []byte) error {
 		resp := s.newResp()
 		_, err := resp.UnmarshalMsg(b)
@@ -635,7 +635,7 @@ type Streamer interface {
 }
 
 // Call the remove with the request and
-func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Streamer, payload Payload) (st *TypedSteam[Req, Resp], err error) {
+func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Streamer, payload Payload) (st *TypedStream[Req, Resp], err error) {
 	var payloadB []byte
 	if h.WithPayload {
 		var err error
@@ -670,7 +670,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 		close(stream.Requests)
 	}
 
-	return &TypedSteam[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil
+	return &TypedStream[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil
 }
 
 // NoPayload is a type that can be used for handlers that do not use a payload.
