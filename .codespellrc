@@ -1,5 +1,6 @@
 [codespell]
 skip = .git,*.pdf,*.svg,.codespellrc
 check-hidden = true
-# ignore-regex = 
-# ignore-words-list =
+ignore-regex = \bnewfolder/afile\b
+# some custom short variables used often etc
+ignore-words-list = inout,bui,to,bu,te,ot
