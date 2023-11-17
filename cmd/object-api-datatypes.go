@@ -399,7 +399,7 @@ func (lm ListMultipartsInfo) Lookup(uploadID string) bool {
 	return false
 }
 
-// ListMultipartsInfo - represnets bucket resources for incomplete multipart uploads.
+// ListMultipartsInfo - represents bucket resources for incomplete multipart uploads.
 type ListMultipartsInfo struct {
 	// Together with upload-id-marker, this parameter specifies the multipart upload
 	// after which listing should begin.

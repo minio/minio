@@ -532,7 +532,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
-	// There should be atleast half correct entries, if not return failure
+	// There should be at least half correct entries, if not return failure
 	expectedRQuorum := len(partsMetaData) / 2
 	if defaultParityCount == 0 {
 		// if parity count is '0', we expected all entries to be present.

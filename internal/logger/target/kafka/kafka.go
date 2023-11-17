@@ -77,7 +77,7 @@ type Config struct {
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
-// Check if atleast one broker in cluster is active
+// Check if at least one broker in cluster is active
 func (k Config) pingBrokers() (err error) {
 	d := net.Dialer{Timeout: 1 * time.Second}
 

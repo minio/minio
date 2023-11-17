@@ -26,7 +26,7 @@ MinIO follows strict **read-after-write** and **list-after-write** consistency m
 
 **In our tests we also found ext4 does not honor POSIX O_DIRECT/Fdatasync semantics, ext4 trades performance for consistency guarantees. Please avoid ext4 in your setup.**
 
-**If MinIO distributed setup is using NFS volumes underneath it is not guaranteed MinIO will provide these consistency guarantees since NFS is not strictly consistent (If you must use NFS we recommend that you atleast use NFSv4 instead of NFSv3 for relatively better outcomes).**
+**If MinIO distributed setup is using NFS volumes underneath it is not guaranteed MinIO will provide these consistency guarantees since NFS is not strictly consistent (If you must use NFS we recommend that you at least use NFSv4 instead of NFSv3 for relatively better outcomes).**
 
 ## Get started
 

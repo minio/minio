@@ -171,7 +171,7 @@ func calculateSeedSignature(r *http.Request, trailers bool) (cred auth.Credentia
 		return cred, "", "", time.Time{}, ErrSignatureDoesNotMatch
 	}
 
-	// Return caculated signature.
+	// Return calculated signature.
 	return cred, newSignature, region, date, ErrNone
 }
 

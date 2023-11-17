@@ -1204,7 +1204,7 @@ func TestXLStorageReadFile(t *testing.T) {
 			if err == nil && err != testCase.expectedErr {
 				t.Errorf("Case: %d %#v, expected: %s, got :%s", i+1, testCase, testCase.expectedErr, err)
 			}
-			// Expected error retured, proceed further to validate the returned results.
+			// Expected error returned, proceed further to validate the returned results.
 			if err != nil && testCase.expectedErr == nil {
 				t.Errorf("Case: %d %#v, expected: %s, got :%s", i+1, testCase, testCase.expectedErr, err)
 			}
@@ -1408,7 +1408,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 	}
 
 	// TestXLStorage case with invalid volume name.
-	// A valid volume name should be atleast of size 3.
+	// A valid volume name should be at least of size 3.
 	err = xlStorage.AppendFile(context.Background(), "bn", "yes", []byte("hello, world"))
 	if err != errVolumeNotFound {
 		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
@@ -1564,7 +1564,7 @@ func TestXLStorageRenameFile(t *testing.T) {
 			expectedErr: errVolumeNotFound,
 		},
 		// TestXLStorage case - 12.
-		// TestXLStorage case with invalid src volume name. Length should be atleast 3.
+		// TestXLStorage case with invalid src volume name. Length should be at least 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "ab",
@@ -1574,7 +1574,7 @@ func TestXLStorageRenameFile(t *testing.T) {
 			expectedErr: errVolumeNotFound,
 		},
 		// TestXLStorage case - 13.
-		// TestXLStorage case with invalid destination volume name. Length should be atleast 3.
+		// TestXLStorage case with invalid destination volume name. Length should be at least 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "abcd",
@@ -1584,7 +1584,7 @@ func TestXLStorageRenameFile(t *testing.T) {
 			expectedErr: errVolumeNotFound,
 		},
 		// TestXLStorage case - 14.
-		// TestXLStorage case with invalid destination volume name. Length should be atleast 3.
+		// TestXLStorage case with invalid destination volume name. Length should be at least 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "abcd",

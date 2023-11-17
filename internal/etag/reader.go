@@ -52,7 +52,7 @@ func (r wrapReader) ETag() ETag {
 // returns ETag of the content. Otherwise, it returns
 // nil as ETag.
 //
-// Wrap provides an adapter for io.Reader implemetations
+// Wrap provides an adapter for io.Reader implementations
 // that don't implement the Tagger interface.
 // It is mainly used to provide a high-level io.Reader
 // access to the ETag computed by a low-level io.Reader:

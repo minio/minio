@@ -64,7 +64,7 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 		if IsErrIgnored(err, ignoredErrs...) {
 			continue
 		}
-		// Errors due to context cancelation may be wrapped - group them by context.Canceled.
+		// Errors due to context cancellation may be wrapped - group them by context.Canceled.
 		if errors.Is(err, context.Canceled) {
 			errorCounts[context.Canceled]++
 			continue

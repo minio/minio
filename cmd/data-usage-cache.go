@@ -924,7 +924,7 @@ type objectIO interface {
 // The loader is optimistic and has no locking, but tries 5 times before giving up.
 // If the object is not found, a nil error with empty data usage cache is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
-	// By defaut, empty data usage cache
+	// By default, empty data usage cache
 	*d = dataUsageCache{}
 
 	load := func(name string, timeout time.Duration) (bool, error) {

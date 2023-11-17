@@ -88,7 +88,7 @@ func osMkdirAll(dirPath string, perm os.FileMode, baseDir string) error {
 // refer https://github.com/golang/go/issues/24015
 const blockSize = 8 << 10 // 8192
 
-// By default atleast 128 entries in single getdents call (1MiB buffer)
+// By default at least 128 entries in single getdents call (1MiB buffer)
 var (
 	direntPool = sync.Pool{
 		New: func() interface{} {

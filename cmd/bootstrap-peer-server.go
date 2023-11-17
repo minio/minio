@@ -242,7 +242,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 			retries++
 			// after 20 retries start logging that servers are not reachable yet
 			if retries >= 20 {
-				logger.Info(fmt.Sprintf("Waiting for atleast %d remote servers with valid configuration to be online", len(clnts)/2))
+				logger.Info(fmt.Sprintf("Waiting for at least %d remote servers with valid configuration to be online", len(clnts)/2))
 				if len(offlineEndpoints) > 0 {
 					logger.Info(fmt.Sprintf("Following servers are currently offline or unreachable %s", offlineEndpoints))
 				}

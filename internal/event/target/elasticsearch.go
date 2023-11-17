@@ -71,7 +71,7 @@ const (
 	ESSUnknown ESSupportStatus = "ESSUnknown"
 	// ESSDeprecated -> support will be removed in future
 	ESSDeprecated ESSupportStatus = "ESSDeprecated"
-	// ESSUnsupported -> we wont work with this ES server
+	// ESSUnsupported -> we won't work with this ES server
 	ESSUnsupported ESSupportStatus = "ESSUnsupported"
 	// ESSSupported -> all good!
 	ESSSupported ESSupportStatus = "ESSSupported"

@@ -207,7 +207,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	return cred
 }
 
-// Extract request params to be sent with event notifiation.
+// Extract request params to be sent with event notification.
 func extractReqParams(r *http.Request) map[string]string {
 	if r == nil {
 		return nil
@@ -238,7 +238,7 @@ func extractReqParams(r *http.Request) map[string]string {
 	return m
 }
 
-// Extract response elements to be sent with event notifiation.
+// Extract response elements to be sent with event notification.
 func extractRespElements(w http.ResponseWriter) map[string]string {
 	if w == nil {
 		return map[string]string{}

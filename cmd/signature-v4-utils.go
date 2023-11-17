@@ -206,7 +206,7 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 	extractedSignedHeaders := make(http.Header)
 	for _, header := range signedHeaders {
 		// `host` will not be found in the headers, can be found in r.Host.
-		// but its alway necessary that the list of signed headers containing host in it.
+		// but its always necessary that the list of signed headers containing host in it.
 		val, ok := reqHeaders[http.CanonicalHeaderKey(header)]
 		if !ok {
 			// try to set headers from Query String

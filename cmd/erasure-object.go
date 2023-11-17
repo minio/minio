@@ -758,7 +758,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 		// verify metadata is valid, it has similar erasure info
 		// as well as common modtime, if modtime is not possible
-		// verify if it has common "etag" atleast.
+		// verify if it has common "etag" at least.
 		if metaArr[i].IsValid() && metaArr[i].Erasure.Equal(fi.Erasure) {
 			ok := metaArr[i].ModTime.Equal(modTime)
 			if modTime.IsZero() || modTime.Equal(timeSentinel) {
@@ -949,7 +949,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	var buffer []byte
 	switch size := data.Size(); {
 	case size == 0:
-		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
 	case size >= fi.Erasure.BlockSize:
 		buffer = er.bp.Get()
 		defer er.bp.Put(buffer)
@@ -1200,7 +1200,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	var buffer []byte
 	switch size := data.Size(); {
 	case size == 0:
-		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
 	case size >= fi.Erasure.BlockSize || size == -1:
 		buffer = er.bp.Get()
 		defer er.bp.Put(buffer)

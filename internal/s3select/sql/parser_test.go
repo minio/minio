@@ -41,7 +41,7 @@ func TestJSONPathElement(t *testing.T) {
 		// Index
 		"[2]", "[0]", "[100]",
 
-		// Object wilcard
+		// Object wildcard
 		".*",
 
 		// array wildcard

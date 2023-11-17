@@ -109,7 +109,7 @@ func (srv *Server) Init(listenCtx context.Context, listenErrCallback func(listen
 	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// If server is in shutdown.
 		if atomic.LoadUint32(&srv.inShutdown) != 0 {
-			// To indicate disable keep-alives
+			// To indicate disable keep-alive
 			w.Header().Set("Connection", "close")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(http.ErrServerClosed.Error()))

@@ -857,7 +857,7 @@ When the _access_ format is used, MinIO appends events to a table. It creates ro
 
 The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
 
-### Step 1: Ensure PostgresSQL minimum requirements are met
+### Step 1: Ensure postgresql minimum requirements are met
 
 MinIO requires PostgreSQL version 9.5 or above. MinIO uses the [`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) feature, introduced in version 9.5 and the [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) data-type introduced in version 9.4.
 

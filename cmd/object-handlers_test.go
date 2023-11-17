@@ -1914,7 +1914,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		},
 
 		// Test case - 6.
-		// Test case with ivalid byte range for exceeding source size boundaries.
+		// Test case with invalid byte range for exceeding source size boundaries.
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
@@ -2030,7 +2030,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
-		// Test case - 16,  Test case with ivalid byte range empty value.
+		// Test case - 16,  Test case with invalid byte range empty value.
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
@@ -3088,7 +3088,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		if rec.Code == http.StatusOK {
 			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
-				t.Errorf("Test %d : MinIO %s: CompleteMultipart response content differs from expected value. got %s, expecte %s", i+1, instanceType,
+				t.Errorf("Test %d : MinIO %s: CompleteMultipart response content differs from expected value. got %s, expected %s", i+1, instanceType,
 					string(actualContent), string(testCase.expectedContent))
 			}
 			continue
@@ -3366,7 +3366,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	}{
 		// Test case - 1.
 		// Deleting an existing object.
-		// Expected to return HTTP resposne status code 204.
+		// Expected to return HTTP response status code 204.
 		{
 			bucketName: bucketName,
 			objectName: objectName,
@@ -3490,7 +3490,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 	}
 	apiRouter.ServeHTTP(rec, req)
 
-	// Get uploadID of the mulitpart upload initiated.
+	// Get uploadID of the multipart upload initiated.
 	var mpartResp InitiateMultipartUploadResponse
 	mpartRespBytes, err := io.ReadAll(rec.Result().Body)
 	if err != nil {
@@ -3897,7 +3897,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	}
 	apiRouter.ServeHTTP(rec, req)
 
-	// Get uploadID of the mulitpart upload initiated.
+	// Get uploadID of the multipart upload initiated.
 	var mpartResp InitiateMultipartUploadResponse
 	mpartRespBytes, err := io.ReadAll(rec.Result().Body)
 	if err != nil {

@@ -52,16 +52,16 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	}
 
 	errMsg := "Bucket not found: minio-bucket"
-	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
+	// operation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
 	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err == nil {
-		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
+		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is initialized on a non-existent bucket.", instanceType)
 	}
 	if errMsg != err.Error() {
 		t.Errorf("%s, Expected to fail with Error \"%s\", but instead found \"%s\".", instanceType, errMsg, err.Error())
 	}
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -94,7 +94,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -150,7 +150,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	bucket := "minio-bucket"
 	object := "minio-object"
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -182,7 +182,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -348,7 +348,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// bucketnames[1].
 	// objectNames[0].
 	// uploadIds [1-3].
-	// Bucket to test for mutiple upload Id's for a given object.
+	// Bucket to test for multiple upload Id's for a given object.
 	err = obj.MakeBucket(context.Background(), bucketNames[1], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -366,7 +366,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		uploadIDs = append(uploadIDs, res.UploadID)
 	}
 
-	// Bucket to test for mutiple objects, each with unique UUID.
+	// Bucket to test for multiple objects, each with unique UUID.
 	// bucketnames[2].
 	// objectNames[0-2].
 	// uploadIds [4-9].
@@ -1210,7 +1210,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1461,7 +1461,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1702,7 +1702,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.

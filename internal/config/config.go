@@ -594,7 +594,7 @@ func LookupSite(siteKV KVS, regionKV KVS) (s Site, err error) {
 }
 
 // CheckValidKeys - checks if inputs KVS has the necessary keys,
-// returns error if it find extra or superflous keys.
+// returns error if it find extra or superfluous keys.
 func CheckValidKeys(subSys string, kv KVS, validKVS KVS, deprecatedKeys ...string) error {
 	nkv := KVS{}
 	for _, kv := range kv {

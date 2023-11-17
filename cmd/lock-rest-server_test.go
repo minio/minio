@@ -81,7 +81,7 @@ func getLockArgsOld(r *http.Request) (args dsync.LockArgs, err error) {
 	}
 
 	args = dsync.LockArgs{
-		Owner:  values.Get("onwer"),
+		Owner:  values.Get("owner"),
 		UID:    values.Get("uid"),
 		Source: values.Get("source"),
 		Quorum: quorum,
