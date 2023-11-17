@@ -28,6 +28,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+const lastPingThreshold = 4 * clientPingInterval
+
 type muxServer struct {
 	ID               uint64
 	LastPing         int64
@@ -79,6 +81,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	} else {
 		ctx, cancel = context.WithCancel(ctx)
 	}
+
 	send := make(chan []byte)
 	inboundCap, outboundCap := handler.InCapacity, handler.OutCapacity
 	if outboundCap <= 0 {
@@ -113,12 +116,12 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
 		go func(inbound <-chan []byte) {
+			defer close(handlerIn)
 			// Send unblocks when we have delivered the message to the handler.
 			for in := range inbound {
 				handlerIn <- in
 				m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
 			}
-			close(handlerIn)
 		}(m.inbound)
 	}
 	for i := 0; i < outboundCap; i++ {
@@ -158,7 +161,11 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			case <-ctx.Done():
 				return
 			}
-			<-outBlock
+			select {
+			case <-ctx.Done():
+				return
+			case <-outBlock:
+			}
 			msg := message{
 				MuxID: m.ID,
 				Op:    OpMuxServerMsg,
@@ -183,6 +190,26 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		}
 	}(m.outBlock)
 
+	// Remote aliveness check.
+	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(lastPingThreshold/time.Millisecond) {
+		go func() {
+			t := time.NewTicker(lastPingThreshold / 4)
+			defer t.Stop()
+			for {
+				select {
+				case <-m.ctx.Done():
+					return
+				case <-t.C:
+					last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
+					if last > lastPingThreshold {
+						logger.LogIf(m.ctx, fmt.Errorf("canceling remote mux %d not seen for %v", m.ID, last))
+						m.close()
+						return
+					}
+				}
+			}
+		}()
+	}
 	return &m
 }
 

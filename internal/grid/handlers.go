@@ -207,8 +207,8 @@ func makeSubHandlerID(id HandlerID, subRoute string) subHandlerID {
 }
 
 func (s subHandlerID) withHandler(id HandlerID) subHandlerID {
-	s[1] = 0 // Reserved
 	s[0] = byte(id)
+	s[1] = 0 // Reserved
 	return s
 }
 

@@ -47,7 +47,7 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 			}
 			seenHosts.Add(u)
 
-			// Only proceed for remote endpoints.
+			// Set local endpoint
 			if endpoint.IsLocal {
 				local = u
 			}

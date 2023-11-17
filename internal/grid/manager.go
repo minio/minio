@@ -137,22 +137,20 @@ func (m *Manager) Handler() http.HandlerFunc {
 			}
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				fmt.Printf("grid: panic: %v\n", r)
+				err := fmt.Errorf("grid: panic: %v\n", r)
+				logger.LogIf(context.Background(), err, err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}()
 		if debugPrint {
 			fmt.Printf("grid: Got a %s request for: %v\n", req.Method, req.URL)
 		}
+		ctx := req.Context()
 		if err := m.authRequest(req); err != nil {
-			fmt.Printf("grid: auth error: %v\n", err)
-			if debugPrint {
-				fmt.Printf("grid: auth error: %v\n", err)
-			}
+			logger.LogOnceIf(ctx, fmt.Errorf("auth %s: %w", req.RemoteAddr, err), req.RemoteAddr+err.Error())
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
-		ctx := req.Context()
 		conn, _, _, err := ws.UpgradeHTTP(req, w)
 		if err != nil {
 			if debugPrint {

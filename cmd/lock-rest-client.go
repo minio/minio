@@ -97,7 +97,7 @@ func (c *lockRESTClient) Unlock(ctx context.Context, args dsync.LockArgs) (reply
 
 // ForceUnlock calls force unlock handler to forcibly unlock an active lock.
 func (c *lockRESTClient) ForceUnlock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	return c.call(ctx, lockRPCRLock, &args)
+	return c.call(ctx, lockRPCForceUnlock, &args)
 }
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {

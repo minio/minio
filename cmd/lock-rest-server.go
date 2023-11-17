@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"github.com/minio/minio/internal/dsync"
@@ -30,16 +29,6 @@ import (
 // To abstract a node over network.
 type lockRESTServer struct {
 	ll *localLocker
-}
-
-// IsValid - To authenticate and verify the time difference.
-func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
-	return true
-}
-
-// HealthHandler returns success if request is authenticated.
-func (l *lockRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	l.IsValid(w, r)
 }
 
 // RefreshHandler - refresh the current lock

@@ -170,7 +170,7 @@ func (m *muxClient) sendLocked(msg message) error {
 
 // RequestStateless will send a single payload request and stream back results.
 // req may not be read/written to after calling.
-// TODO: Probably unexport this.
+// TODO: Not implemented
 func (m *muxClient) RequestStateless(h HandlerID, req []byte, out chan<- Response) {
 	if m.init {
 		out <- Response{Err: errors.New("mux client already used")}
