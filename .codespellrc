@@ -1,6 +1,8 @@
 [codespell]
-skip = .git,*.pdf,*.svg,.codespellrc
+# certs_test.go - has lots of ceritificates and I did not
+# bother coming up with a regex for such lines
+skip = .git,*.pdf,*.svg,.codespellrc,CREDITS,certs_test.go
 check-hidden = true
 ignore-regex = \bnewfolder/afile\b
 # some custom short variables used often etc
-ignore-words-list = inout,bui,to,bu,te,ot
+ignore-words-list = inout,bui,to,bu,te,ot,toi,ist,helpes,parms,flate
