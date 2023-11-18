@@ -18,9 +18,11 @@
 package cmd
 
 import (
+	"errors"
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/pkg/v2/wildcard"
 )
 
@@ -81,3 +83,34 @@ func (r BatchJobRetry) Validate() error {
 
 	return nil
 }
+
+//   # snowball based archive transfer is by default enabled when source
+//   # is local and target is remote which is also minio.
+//   snowball:
+//     disable: false # optionally turn-off snowball archive transfer
+//     batch: 100 # upto this many objects per archive
+//     inmemory: true # indicates if the archive must be staged locally or in-memory
+//     compress: true # S2/Snappy compressed archive
+//     smallerThan: 5MiB # create archive for all objects smaller than 5MiB
+//     skipErrs: false # skips any source side read() errors
+
+// BatchJobSnowball describes the snowball feature when replicating objects from a local source to a remote target
+type BatchJobSnowball struct {
+	Disable     *bool   `yaml:"disable" json:"disable"`
+	Batch       *int    `yaml:"batch" json:"batch"`
+	InMemory    *bool   `yaml:"inmemory" json:"inmemory"`
+	Compress    *bool   `yaml:"compress" json:"compress"`
+	SmallerThan *string `yaml:"smallerThan" json:"smallerThan"`
+	SkipErrs    *bool   `yaml:"skipErrs" json:"skipErrs"`
+}
+
+// Validate the snowball parameters in the job description
+func (b BatchJobSnowball) Validate() error {
+	if *b.Batch <= 0 {
+		return errors.New("batch number should be non positive zero")
+	}
+	_, err := humanize.ParseBytes(*b.SmallerThan)
+	return err
+}
+
+// TODO: add validation

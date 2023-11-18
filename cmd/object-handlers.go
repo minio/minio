@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/hex"
 	"encoding/xml"
@@ -26,6 +27,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"os"
 	"sort"
@@ -873,7 +875,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isDirectiveReplace(r.Header.Get(xhttp.AmzMetadataDirective)) {
-		emetadata, err := extractMetadata(ctx, r)
+		emetadata, err := extractMetadataFromReq(ctx, r)
 		if err != nil {
 			return nil, err
 		}
@@ -1613,7 +1615,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	metadata, err := extractMetadata(ctx, r)
+	metadata, err := extractMetadataFromReq(ctx, r)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1754,7 +1756,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	pReader := NewPutObjReader(rawReader)
 
 	var opts ObjectOptions
-	opts, err = putOpts(ctx, r, bucket, object, metadata)
+	opts, err = putOptsFromReq(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -2126,11 +2128,40 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			metadata[ReservedMetadataPrefixLower+ReplicaTimestamp] = UTCNow().Format(time.RFC3339Nano)
 		}
 
-		// get encryption options
-		opts, err := putOpts(ctx, r, bucket, object, metadata)
+		var (
+			versionID string
+			hdrs      http.Header
+		)
+
+		if tarHdrs, ok := info.Sys().(*tar.Header); ok && len(tarHdrs.PAXRecords) > 0 {
+			versionID = tarHdrs.PAXRecords["minio.versionId"]
+			hdrs = make(http.Header)
+			for k, v := range tarHdrs.PAXRecords {
+				if k == "minio.versionId" {
+					continue
+				}
+				if strings.HasPrefix(k, "minio.metadata.") {
+					k = strings.TrimPrefix(k, "minio.metadata.")
+					hdrs.Set(k, v)
+				}
+			}
+			m, err := extractMetadata(ctx, textproto.MIMEHeader(hdrs))
+			if err != nil {
+				return err
+			}
+			for k, v := range m {
+				metadata[k] = v
+			}
+		} else {
+			versionID = r.Form.Get(xhttp.VersionID)
+			hdrs = r.Header
+		}
+
+		opts, err := putOpts(ctx, bucket, object, versionID, hdrs, metadata)
 		if err != nil {
 			return err
 		}
+
 		opts.MTime = info.ModTime()
 		if opts.MTime.Unix() <= 0 {
 			opts.MTime = UTCNow()
