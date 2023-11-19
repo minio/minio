@@ -561,6 +561,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 				}
 				content.UserMetadata.Set(k, v)
 			}
+			content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
 			content.Internal = &ObjectInternalInfo{
 				K: object.DataBlocks,
 				M: object.ParityBlocks,
@@ -704,6 +705,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 					}
 					content.UserMetadata.Set(k, v)
 				}
+				content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
 				content.Internal = &ObjectInternalInfo{
 					K: object.DataBlocks,
 					M: object.ParityBlocks,
