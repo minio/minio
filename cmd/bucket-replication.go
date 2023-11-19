@@ -777,6 +777,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		UserMetadata:    meta,
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
+		Expires:         objInfo.Expires,
 		StorageClass:    sc,
 		Internal: minio.AdvancedPutOptions{
 			SourceVersionID:    objInfo.VersionID,
