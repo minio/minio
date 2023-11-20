@@ -54,7 +54,7 @@ import (
 //         - key: content-type
 //           value: image/* # match objects with 'content-type', all values starting with 'image/'
 //       size:
-//         lesserThan: "10MiB" # match objects with size lesser than this value (e.g. 10MiB)
+//         lessThan: "10MiB" # match objects with size less than this value (e.g. 10MiB)
 //         greaterThan: 1MiB # match objects with size greater than this value (e.g. 1MiB)
 //       purge:
 //           # retainVersions: 0 # (default) delete all versions of the object. This option is the fastest.
