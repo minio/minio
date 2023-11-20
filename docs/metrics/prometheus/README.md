@@ -154,4 +154,4 @@ curl https://play.min.io/minio/v2/metrics/cluster
 
 ### Configure Alerts for Prometheus
 
-[The Prometheus AlertManager and alerts can be configured following this](http://github.com/minio/minio/blob/master/metrics/prometheus/alerts.md)
+[The Prometheus AlertManager and alerts can be configured following this](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/alerts.md)
