@@ -4435,7 +4435,7 @@ func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI Obj
 	}
 
 	for dID, bStatus := range bs {
-		if bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(*latestExpLCConfig, *bStatus.meta.ExpiryLCConfig) {
+		if latestExpLCConfig != nil && bStatus.meta.ExpiryLCConfig != nil && strings.EqualFold(*latestExpLCConfig, *bStatus.meta.ExpiryLCConfig) {
 			continue
 		}
 
