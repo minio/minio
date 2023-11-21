@@ -290,6 +290,13 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	if err != nil {
 		return nil, err
 	}
+	ok, err := clnt.BucketExists(r.Context(), bucket)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, os.ErrNotExist
+	}
 
 	pr, pw := io.Pipe()
 
