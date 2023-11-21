@@ -20,12 +20,11 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
 	"testing"
 
-	"github.com/minio/mux"
+	"github.com/minio/minio/internal/grid"
 	xnet "github.com/minio/pkg/v2/net"
 )
 
@@ -437,17 +436,21 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func newStorageRESTHTTPServerClient(t *testing.T) *storageRESTClient {
+func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
+	// Grid with 2 hosts
+	tg, err := grid.SetupTestGrid(2)
+	if err != nil {
+		t.Fatalf("SetupTestGrid: %v", err)
+	}
+	t.Cleanup(tg.Cleanup)
 	prevHost, prevPort := globalMinioHost, globalMinioPort
 	defer func() {
 		globalMinioHost, globalMinioPort = prevHost, prevPort
 	}()
+	// tg[0] = local, tg[1] = remote
 
-	router := mux.NewRouter()
-	httpServer := httptest.NewServer(router)
-	t.Cleanup(httpServer.Close)
-
-	url, err := xnet.ParseHTTPURL(httpServer.URL)
+	// Remote URL
+	url, err := xnet.ParseHTTPURL(tg.Servers[1].URL)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -464,11 +467,18 @@ func newStorageRESTHTTPServerClient(t *testing.T) *storageRESTClient {
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
-	registerStorageRESTHandlers(router, []PoolEndpoints{{
+	// Register handlers on newly created servers
+	registerStorageRESTHandlers(tg.Mux[0], []PoolEndpoints{{
 		Endpoints: Endpoints{endpoint},
-	}})
+	}}, tg.Managers[0])
+	registerStorageRESTHandlers(tg.Mux[1], []PoolEndpoints{{
+		Endpoints: Endpoints{endpoint},
+	}}, tg.Managers[1])
 
-	restClient := newStorageRESTClient(endpoint, false)
+	restClient, err := newStorageRESTClient(endpoint, false, tg.Managers[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return restClient
 }
