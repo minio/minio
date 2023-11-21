@@ -83,7 +83,7 @@ type StorageAPI interface {
 	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error
-	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
+	ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (FileInfo, error)
 	ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error)
 	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error)
 
@@ -260,7 +260,7 @@ func (p *unrecognizedDisk) WriteMetadata(ctx context.Context, volume, path strin
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	return fi, errDiskNotFound
 }
 

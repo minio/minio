@@ -21,22 +21,6 @@ import (
 	"errors"
 )
 
-const (
-	lockRESTVersion       = "v7" // Add msgp for lockArgs
-	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
-	lockRESTPrefix        = minioReservedBucketPath + "/lock"
-)
-
-const (
-	lockRESTMethodHealth      = "/health"
-	lockRESTMethodRefresh     = "/refresh"
-	lockRESTMethodLock        = "/lock"
-	lockRESTMethodRLock       = "/rlock"
-	lockRESTMethodUnlock      = "/unlock"
-	lockRESTMethodRUnlock     = "/runlock"
-	lockRESTMethodForceUnlock = "/force-unlock"
-)
-
 var (
 	errLockConflict       = errors.New("lock conflict")
 	errLockNotInitialized = errors.New("lock not initialized")

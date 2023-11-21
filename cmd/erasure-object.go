@@ -91,7 +91,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	// Read metadata associated with the object from all disks.
 	if srcOpts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, true)
+		metaArr, errs = readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, true, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, storageDisks, srcBucket, srcObject, true, false, true)
 	}
@@ -699,7 +699,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	// Read metadata associated with the object from all disks.
 	if opts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, readData)
+		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, readData, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, disks, bucket, object, readData, opts.InclFreeVersions, true)
 	}
@@ -1859,7 +1859,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	// Read metadata associated with the object from all disks.
 	if opts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
+		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
 	}
@@ -1932,7 +1932,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	// Read metadata associated with the object from all disks.
 	if opts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
+		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
 	}

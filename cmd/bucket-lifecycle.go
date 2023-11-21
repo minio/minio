@@ -224,11 +224,19 @@ type transitionState struct {
 	lastDayStats map[string]*lastDayTierStats
 }
 
-func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
-	select {
-	case <-t.ctx.Done():
-	case t.transitionCh <- transitionTask{objInfo: oi, event: event, src: src}:
-	default:
+func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event, src lcEventSrc, blocking bool) {
+	task := transitionTask{objInfo: oi, event: event, src: src}
+	if blocking {
+		select {
+		case <-t.ctx.Done():
+		case t.transitionCh <- task:
+		}
+	} else {
+		select {
+		case <-t.ctx.Done():
+		case t.transitionCh <- task:
+		default:
+		}
 	}
 }
 
@@ -238,7 +246,7 @@ var globalTransitionState *transitionState
 // via its Init method.
 func newTransitionState(ctx context.Context) *transitionState {
 	return &transitionState{
-		transitionCh: make(chan transitionTask, 10000),
+		transitionCh: make(chan transitionTask, 100000),
 		ctx:          ctx,
 		killCh:       make(chan struct{}),
 		lastDayStats: make(map[string]*lastDayTierStats),
@@ -368,7 +376,7 @@ func enqueueTransitionImmediate(obj ObjectInfo, src lcEventSrc) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
 		switch event := lc.Eval(obj.ToLifecycleOpts()); event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-			globalTransitionState.queueTransitionTask(obj, event, src)
+			globalTransitionState.queueTransitionTask(obj, event, src, true)
 		}
 	}
 }

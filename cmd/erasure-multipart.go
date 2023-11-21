@@ -72,7 +72,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket,
-		uploadIDPath, "", false)
+		uploadIDPath, "", false, false)
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
@@ -200,7 +200,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 	readDirFn(pathJoin(diskPath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
 		readDirFn(pathJoin(diskPath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", ReadOptions{})
 			if err != nil {
 				return nil
 			}

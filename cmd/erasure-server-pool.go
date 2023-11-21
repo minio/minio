@@ -970,7 +970,7 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 // PutObject - writes an object to least used erasure pool.
 func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
 	// Validate put object input args.
-	if err := checkPutObjectArgs(ctx, bucket, object, z); err != nil {
+	if err := checkPutObjectArgs(ctx, bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
 
