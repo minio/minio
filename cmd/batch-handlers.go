@@ -1004,7 +1004,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		slowCh = make(chan ObjectInfo, 100)
 	)
 
-	if !*r.Source.Snowball.Disable {
+	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
 		go func() {
 			// Snowball currently needs the high level minio-go Client, not the Core one
 			cl, err := miniogo.New(u.Host, &miniogo.Options{
