@@ -247,3 +247,9 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/minio/madmin-go/v3 v3.0.29 => github.com/shtripat/madmin-go/v3 v3.0.0-20231106151808-5082883cc33c
+
+replace github.com/minio/mc v0.0.0-20231030184332-9f2fb2b6a9f8 => github.com/shtripat/mc v0.0.0-20231109083216-6c94adcab7f8
+
+replace github.com/minio/console v0.41.0 => github.com/shtripat/minio-console v0.0.0-20231107130354-bf0c7604ae99
