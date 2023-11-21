@@ -1270,14 +1270,6 @@ func stringsHasPrefixFold(s, prefix string) bool {
 	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
 }
 
-func boolPtr(v bool) *bool {
-	return &v
-}
-
-func stringPtr(v string) *string {
-	return &v
-}
-
-func intPtr(v int) *int {
-	return &v
+func ptr[T any](a T) *T {
+	return &a
 }

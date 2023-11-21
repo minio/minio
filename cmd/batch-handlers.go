@@ -1006,6 +1006,8 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
 		go func() {
+			defer close(slowCh)
+
 			// Snowball currently needs the high level minio-go Client, not the Core one
 			cl, err := miniogo.New(u.Host, &miniogo.Options{
 				Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
@@ -1532,22 +1534,22 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 	// Fill with default values
 	if job.Replicate != nil {
 		if job.Replicate.Source.Snowball.Disable == nil {
-			job.Replicate.Source.Snowball.Disable = boolPtr(false)
+			job.Replicate.Source.Snowball.Disable = ptr(false)
 		}
 		if job.Replicate.Source.Snowball.Batch == nil {
-			job.Replicate.Source.Snowball.Batch = intPtr(100)
+			job.Replicate.Source.Snowball.Batch = ptr(100)
 		}
 		if job.Replicate.Source.Snowball.InMemory == nil {
-			job.Replicate.Source.Snowball.InMemory = boolPtr(true)
+			job.Replicate.Source.Snowball.InMemory = ptr(true)
 		}
 		if job.Replicate.Source.Snowball.Compress == nil {
-			job.Replicate.Source.Snowball.Compress = boolPtr(false)
+			job.Replicate.Source.Snowball.Compress = ptr(false)
 		}
 		if job.Replicate.Source.Snowball.SmallerThan == nil {
-			job.Replicate.Source.Snowball.SmallerThan = stringPtr("5MiB")
+			job.Replicate.Source.Snowball.SmallerThan = ptr("5MiB")
 		}
 		if job.Replicate.Source.Snowball.SkipErrs == nil {
-			job.Replicate.Source.Snowball.SkipErrs = boolPtr(true)
+			job.Replicate.Source.Snowball.SkipErrs = ptr(true)
 		}
 	}
 

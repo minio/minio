@@ -112,5 +112,3 @@ func (b BatchJobSnowball) Validate() error {
 	_, err := humanize.ParseBytes(*b.SmallerThan)
 	return err
 }
-
-// TODO: add validation
