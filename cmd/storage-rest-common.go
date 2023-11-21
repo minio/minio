@@ -20,7 +20,7 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v50" // Added DiskInfo metrics query
+	storageRESTVersion       = "v51" // Added ReadVersions readOptions
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -56,6 +56,7 @@ const (
 	storageRESTFilePath      = "file-path"
 	storageRESTVersionID     = "version-id"
 	storageRESTReadData      = "read-data"
+	storageRESTHealing       = "healing"
 	storageRESTTotalVersions = "total-versions"
 	storageRESTSrcVolume     = "source-volume"
 	storageRESTSrcPath       = "source-path"

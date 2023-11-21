@@ -608,7 +608,7 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	return w.Run(func() error { return p.storage.WriteMetadata(ctx, volume, path, fi) })
 }
 
-func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadVersion, volume, path)
 	if err != nil {
 		return fi, err
@@ -617,7 +617,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 
 	w := xioutil.NewDeadlineWorker(diskMaxTimeout)
 	rerr := w.Run(func() error {
-		fi, err = p.storage.ReadVersion(ctx, volume, path, versionID, readData)
+		fi, err = p.storage.ReadVersion(ctx, volume, path, versionID, opts)
 		return err
 	})
 	if rerr != nil {
