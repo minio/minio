@@ -362,7 +362,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+	_, err = obj.HealBucket(ctx, bucket, madmin.HealOpts{
 		DryRun: false,
 		Remove: false,
 	})
@@ -543,7 +543,7 @@ func TestHealingVersioned(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+	_, err = obj.HealBucket(ctx, bucket, madmin.HealOpts{
 		DryRun: false,
 		Remove: false,
 	})
