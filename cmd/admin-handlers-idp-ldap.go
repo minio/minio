@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -183,70 +182,10 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 //
 // PUT /minio/admin/v3/idp/ldap/add-service-account
 func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r)
+	if APIError.Code != "" {
+		writeErrorResponseJSON(ctx, w, APIError, r.URL)
 		return
-	}
-
-	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
-	if s3Err != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
-		return
-	}
-
-	password := cred.SecretKey
-	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
-		return
-	}
-
-	var createReq madmin.AddServiceAccountReq
-	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
-		return
-	}
-
-	// service account access key cannot have space characters beginning and end of the string.
-	if hasSpaceBE(createReq.AccessKey) {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
-		return
-	}
-
-	if err := createReq.Validate(); err != nil {
-		// Since this validation would happen client side as well, we only send
-		// a generic error message here.
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
-		return
-	}
-
-	var (
-		targetUser   string
-		targetGroups []string
-	)
-
-	// If the request did not set a TargetUser, the service account is
-	// created for the request sender.
-	targetUser = createReq.TargetUser
-	if targetUser == "" {
-		targetUser = cred.AccessKey
-	}
-
-	description := createReq.Description
-	if description == "" {
-		description = createReq.Comment
-	}
-	opts := newServiceAccountOpts{
-		accessKey:   createReq.AccessKey,
-		secretKey:   createReq.SecretKey,
-		name:        createReq.Name,
-		description: description,
-		expiration:  createReq.Expiration,
-		claims:      make(map[string]interface{}),
 	}
 
 	// Find the user for the request sender (as it may be sent via a service
@@ -266,27 +205,15 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		isSvcAccForRequestor = true
 	}
 
+	var (
+		targetGroups []string
+		err          error
+	)
+
 	// If we are creating svc account for request sender, ensure
 	// that targetUser is a real user (i.e. not derived
 	// credentials).
 	if isSvcAccForRequestor {
-		// Check if adding service account is explicitly denied.
-		//
-		// This allows turning off service accounts for request sender,
-		// if there is no deny statement this call is implicitly enabled.
-		if !globalIAMSys.IsAllowed(policy.Args{
-			AccountName:     requestorUser,
-			Groups:          requestorGroups,
-			Action:          policy.CreateServiceAccountAdminAction,
-			ConditionValues: getConditionValues(r, "", cred),
-			IsOwner:         owner,
-			Claims:          cred.Claims,
-			DenyOnly:        true,
-		}) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
-
 		if requestorIsDerivedCredential {
 			if requestorParentUser == "" {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx,
@@ -317,20 +244,6 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			opts.claims[k] = v
 		}
 	} else {
-		// Need permission if we are creating a service account for a
-		// user <> to the request sender
-		if !globalIAMSys.IsAllowed(policy.Args{
-			AccountName:     requestorUser,
-			Groups:          requestorGroups,
-			Action:          policy.CreateServiceAccountAdminAction,
-			ConditionValues: getConditionValues(r, "", cred),
-			IsOwner:         owner,
-			Claims:          cred.Claims,
-		}) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
-
 		// fail if ldap is not enabled
 		if !globalIAMSys.LDAPConfig.Enabled() {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
@@ -358,16 +271,6 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 
 	}
 
-	var sp *policy.Policy
-	if len(createReq.Policy) > 0 {
-		sp, err = policy.ParseConfig(bytes.NewReader(createReq.Policy))
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-	}
-
-	opts.sessionPolicy = sp
 	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -388,7 +291,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	encryptedData, err := madmin.EncryptData(password, data)
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
