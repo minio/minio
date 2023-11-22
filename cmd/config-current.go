@@ -631,7 +631,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {
-			globalSubnetConfig.Update(subnetConfig)
+			globalSubnetConfig.Update(subnetConfig, globalIsCICD)
 			globalSubnetConfig.ApplyEnv() // update environment settings for Console UI
 		}
 	case config.CallhomeSubSys:
