@@ -447,7 +447,7 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 
 func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, error) {
 	var buf []byte
-	err := xioutil.NewDeadlineWorker(diskMaxTimeout).Run(func() error {
+	err := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout()).Run(func() error {
 		var rerr error
 		buf, _, rerr = s.readMetadataWithDMTime(ctx, itemPath)
 		return rerr
@@ -1085,7 +1085,7 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 			errs[i] = ctx.Err()
 			continue
 		}
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		if err := w.Run(func() error { return s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...) }); err != nil {
 			errs[i] = err
 		}
@@ -2738,7 +2738,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		var data []byte
 		var mt time.Time
 		fullPath := pathJoin(volumeDir, req.Prefix, f)
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		if err := w.Run(func() (err error) {
 			if req.MetadataOnly {
 				data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)

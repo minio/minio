@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/drive"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -154,7 +155,7 @@ var (
 	// Disable redirect, default is enabled.
 	globalBrowserRedirect bool
 
-	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
+	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. DefaultKVS is false.
 	globalInplaceUpdateDisabled = false
 
 	globalSite = config.Site{
@@ -241,6 +242,9 @@ var (
 
 	// The global callhome config
 	globalCallhomeConfig callhome.Config
+
+	// The global drive config
+	globalDriveConfig drive.Config
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
