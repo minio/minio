@@ -2505,12 +2505,22 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		// Ensure that metadata does not contain sensitive information
 		crypto.RemoveSensitiveEntries(metadata)
 
+		os := newObjSweeper(bucket, object).WithVersioning(opts.Versioned, opts.VersionSuspended)
+		if !globalTierConfigMgr.Empty() {
+			// Get appropriate object info to identify the remote object to delete
+			goiOpts := os.GetOpts()
+			if goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts); gerr == nil {
+				os.SetTransitionState(goi.TransitionedObject)
+			}
+		}
+
 		// Create the object..
 		objInfo, err := putObject(ctx, bucket, object, pReader, opts)
 		if err != nil {
 			return err
 		}
 
+		origETag := objInfo.ETag
 		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 
 		if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(metadata, "", "", replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
@@ -2544,6 +2554,14 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			Host:         handlers.GetSourceIP(r),
 		}
 		sendEvent(evt)
+
+		// Remove the transitioned object whose object version is being overwritten.
+		if !globalTierConfigMgr.Empty() {
+			objInfo.ETag = origETag
+			// Schedule object for immediate transition if eligible.
+			enqueueTransitionImmediate(objInfo, lcEventSrc_s3PutObject)
+			os.Sweep()
+		}
 
 		return nil
 	}
