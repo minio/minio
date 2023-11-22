@@ -111,21 +111,20 @@ var userMetadataKeyPrefixes = []string{
 	"x-minio-meta-",
 }
 
-// extractMetadata extracts metadata from HTTP header and HTTP queryString.
-func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
-	query := r.Form
-	header := r.Header
-	metadata = make(map[string]string)
-	// Extract all query values.
-	err = extractMetadataFromMime(ctx, textproto.MIMEHeader(query), metadata)
-	if err != nil {
-		return nil, err
-	}
+// extractMetadataFromReq extracts metadata from HTTP header and HTTP queryString.
+func extractMetadataFromReq(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
+	return extractMetadata(ctx, textproto.MIMEHeader(r.Form), textproto.MIMEHeader(r.Header))
+}
 
-	// Extract all header values.
-	err = extractMetadataFromMime(ctx, textproto.MIMEHeader(header), metadata)
-	if err != nil {
-		return nil, err
+func extractMetadata(ctx context.Context, mimesHeader ...textproto.MIMEHeader) (metadata map[string]string, err error) {
+	metadata = make(map[string]string)
+
+	for _, hdr := range mimesHeader {
+		// Extract all query values.
+		err = extractMetadataFromMime(ctx, hdr, metadata)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Set content-type to default value if it is not set.

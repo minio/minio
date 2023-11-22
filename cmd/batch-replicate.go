@@ -155,6 +155,7 @@ type BatchJobReplicateSource struct {
 	Endpoint string                        `yaml:"endpoint" json:"endpoint"`
 	Path     string                        `yaml:"path" json:"path"`
 	Creds    BatchJobReplicateCredentials  `yaml:"credentials" json:"credentials"`
+	Snowball BatchJobSnowball              `yaml:"snowball" json:"snowball"`
 }
 
 // ValidPath returns true if path is valid
