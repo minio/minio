@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1200,6 +1201,10 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 			"remove":   fmt.Sprint(opts.Remove),
 			"recreate": fmt.Sprint(opts.Recreate),
 			"mode":     fmt.Sprint(opts.ScanMode),
+		}
+		if result != nil {
+			tr.Custom["version-id"] = result.VersionID
+			tr.Custom["disks"] = strconv.Itoa(result.DiskCount)
 		}
 	}
 	if err != nil {
