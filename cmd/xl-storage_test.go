@@ -893,8 +893,8 @@ func TestXLStorageListDir(t *testing.T) {
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
 			Force:     false,
-		}); err != errVolumeAccessDenied {
-			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
+		}); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -983,14 +983,6 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			expectedErr: errFileNameTooLong,
 		},
-		// TestXLStorage case - 6.
-		// TestXLStorage case with undeletable parent directory.
-		// File can delete, dir cannot delete because no-permissions doesn't have write perms.
-		{
-			srcVol:      "no-permissions",
-			srcPath:     "dir/file",
-			expectedErr: errVolumeAccessDenied,
-		},
 	}
 
 	for i, testCase := range testCases {
@@ -1024,8 +1016,8 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
 			Force:     false,
-		}); err != errVolumeAccessDenied {
-			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
+		}); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -1406,8 +1398,8 @@ func TestXLStorageAppendFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errVolumeAccessDenied {
-			t.Fatalf("expected: errVolumeAccessDenied error, got: %s", err)
+		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
+			t.Fatalf("expected: errFileAccessDenied error, got: %s", err)
 		}
 	}
 

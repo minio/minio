@@ -33,7 +33,7 @@ import (
 )
 
 func access(name string) error {
-	if err := unix.Access(name, unix.R_OK|unix.W_OK); err != nil {
+	if err := unix.Access(name, unix.F_OK); err != nil {
 		return &os.PathError{Op: "lstat", Path: name, Err: err}
 	}
 	return nil
