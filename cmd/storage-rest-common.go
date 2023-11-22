@@ -47,6 +47,7 @@ const (
 	storageRESTMethodStatInfoFile   = "/statfile"
 	storageRESTMethodReadMultiple   = "/readmultiple"
 	storageRESTMethodCleanAbandoned = "/cleanabandoned"
+	storageRESTMethodLinkXL         = "/linkxl"
 )
 
 const (

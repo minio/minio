@@ -183,6 +183,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
 	StorageClassSubSys,
+	CacheSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.
@@ -203,6 +204,7 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	ScannerSubSys,
 	SubnetSubSys,
 	CallhomeSubSys,
+	CacheSubSys,
 )
 
 // Constant separators
