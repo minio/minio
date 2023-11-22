@@ -282,6 +282,9 @@ func (lc Lifecycle) FilterRules(obj ObjectOpts) []Rule {
 		if !obj.DeleteMarker && !rule.Filter.TestTags(obj.UserTags) {
 			continue
 		}
+		if !obj.DeleteMarker && !rule.Filter.BySize(obj.Size) {
+			continue
+		}
 		rules = append(rules, rule)
 	}
 	return rules
@@ -293,6 +296,7 @@ type ObjectOpts struct {
 	Name             string
 	UserTags         string
 	ModTime          time.Time
+	Size             int64
 	VersionID        string
 	IsLatest         bool
 	DeleteMarker     bool

@@ -872,6 +872,7 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 		UserTags:         oi.UserTags,
 		VersionID:        oi.VersionID,
 		ModTime:          oi.ModTime,
+		Size:             oi.Size,
 		IsLatest:         oi.IsLatest,
 		NumVersions:      oi.NumVersions,
 		DeleteMarker:     oi.DeleteMarker,

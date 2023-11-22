@@ -61,6 +61,50 @@ func TestInvalidRules(t *testing.T) {
 	                    </Rule>`,
 			expectedErr: errInvalidRuleStatus,
 		},
+		{ // Rule with negative values for ObjectSizeLessThan
+			inputXML: `<Rule>
+				<ID>negative-obj-size-less-than</ID>
+				<Filter><ObjectSizeLessThan>-1</ObjectSizeLessThan></Filter>
+				<Expiration>
+					<Days>365</Days>
+				</Expiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errXMLNotWellFormed,
+		},
+		{ // Rule with negative values for And>ObjectSizeLessThan
+			inputXML: `<Rule>
+				<ID>negative-and-obj-size-less-than</ID>
+				<Filter><And><ObjectSizeLessThan>-1</ObjectSizeLessThan></And></Filter>
+				<Expiration>
+					<Days>365</Days>
+				</Expiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errXMLNotWellFormed,
+		},
+		{ // Rule with negative values for ObjectSizeGreaterThan
+			inputXML: `<Rule>
+				<ID>negative-obj-size-greater-than</ID>
+				<Filter><ObjectSizeGreaterThan>-1</ObjectSizeGreaterThan></Filter>
+				<Expiration>
+					<Days>365</Days>
+				</Expiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errXMLNotWellFormed,
+		},
+		{ // Rule with negative values for And>ObjectSizeGreaterThan
+			inputXML: `<Rule>
+				<ID>negative-and-obj-size-greater-than</ID>
+				<Filter><And><ObjectSizeGreaterThan>-1</ObjectSizeGreaterThan></And></Filter>
+				<Expiration>
+					<Days>365</Days>
+				</Expiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errXMLNotWellFormed,
+		},
 	}
 
 	for i, tc := range invalidTestCases {
