@@ -1186,28 +1186,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	return res, nil
 }
 
-// HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
-	// Initialize heal result info
-	result = madmin.HealResultItem{
-		Type:      madmin.HealItemBucket,
-		Bucket:    bucket,
-		DiskCount: s.setCount * s.setDriveCount,
-		SetCount:  s.setCount,
-	}
-
-	for _, set := range s.sets {
-		healResult, err := set.HealBucket(ctx, bucket, opts)
-		if err != nil {
-			return result, toObjectErr(err, bucket)
-		}
-		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
-		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
-	}
-
-	return result, nil
-}
-
 // HealObject - heals inconsistent object on a hashedSet based on object name.
 func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return s.getHashedSet(object).HealObject(ctx, bucket, object, versionID, opts)
