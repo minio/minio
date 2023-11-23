@@ -96,6 +96,11 @@ func (endpoint Endpoint) HTTPS() bool {
 	return endpoint.Scheme == "https"
 }
 
+// GridHost returns the host to be used for grid connections.
+func (endpoint Endpoint) GridHost() string {
+	return fmt.Sprintf("%s://%s", endpoint.Scheme, endpoint.Host)
+}
+
 // UpdateIsLocal - resolves the host and updates if it is local or not.
 func (endpoint *Endpoint) UpdateIsLocal() (err error) {
 	if !endpoint.IsLocal {

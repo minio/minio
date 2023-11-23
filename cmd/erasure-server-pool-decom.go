@@ -701,10 +701,12 @@ func (set *erasureObjects) listObjectsToDecommission(ctx context.Context, bi dec
 		return fmt.Errorf("no online drives found for set with endpoints %s", set.getEndpoints())
 	}
 
+	listQuorum := (len(disks) + 1) / 2
+
 	// How to resolve partial results.
 	resolver := metadataResolutionParams{
-		dirQuorum: len(disks) / 2, // make sure to capture all quorum ratios
-		objQuorum: len(disks) / 2, // make sure to capture all quorum ratios
+		dirQuorum: listQuorum, // make sure to capture all quorum ratios
+		objQuorum: listQuorum, // make sure to capture all quorum ratios
 		bucket:    bi.Name,
 	}
 
@@ -714,7 +716,7 @@ func (set *erasureObjects) listObjectsToDecommission(ctx context.Context, bi dec
 		path:           bi.Prefix,
 		recursive:      true,
 		forwardTo:      "",
-		minDisks:       len(disks) / 2, // to capture all quorum ratios
+		minDisks:       len(disks) / 2,
 		reportNotFound: false,
 		agreed:         fn,
 		partial: func(entries metaCacheEntries, _ []error) {

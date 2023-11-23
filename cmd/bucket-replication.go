@@ -639,19 +639,23 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				IsReplicationReadyForDeleteMarker: true,
 			},
 		})
+		serr := ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName, dobj.VersionID)
 		switch {
-		case isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+		case isErrMethodNotAllowed(serr):
 			// delete marker already replicated
 			if dobj.VersionID == "" && rinfo.VersionPurgeStatus.Empty() {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
-		case isErrObjectNotFound(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+		case isErrObjectNotFound(serr), isErrVersionNotFound(serr):
 			// version being purged is already not found on target.
 			if !rinfo.VersionPurgeStatus.Empty() {
 				rinfo.VersionPurgeStatus = Complete
 				return
 			}
+		case isErrReadQuorum(serr), isErrWriteQuorum(serr):
+			// destination has some quorum issues, perform removeObject() anyways
+			// to complete the operation.
 		default:
 			if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 				globalBucketTargetSys.markOffline(tgt.EndpointURL())
@@ -777,6 +781,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		UserMetadata:    meta,
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
+		Expires:         objInfo.Expires,
 		StorageClass:    sc,
 		Internal: minio.AdvancedPutOptions{
 			SourceVersionID:    objInfo.VersionID,
@@ -1382,7 +1387,6 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		rinfo.Duration = time.Since(startTime)
 	}()
 
-	rAction = replicateAll
 	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, minio.StatObjectOptions{
 		VersionID: objInfo.VersionID,
 		Internal: minio.AdvancedGetOptions{
@@ -1419,16 +1423,19 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			}
 			return
 		}
-	}
-	// if target returns error other than NoSuchKey, defer replication attempt
-	if cerr != nil {
+	} else {
+		// if target returns error other than NoSuchKey, defer replication attempt
 		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 
-		errResp := minio.ToErrorResponse(cerr)
-		switch errResp.Code {
-		case "NoSuchKey", "NoSuchVersion", "SlowDownRead":
+		serr := ErrorRespToObjectError(cerr, bucket, object, objInfo.VersionID)
+		switch {
+		case isErrMethodNotAllowed(serr):
+			rAction = replicateAll
+		case isErrObjectNotFound(serr), isErrVersionNotFound(serr):
+			rAction = replicateAll
+		case isErrReadQuorum(serr), isErrWriteQuorum(serr):
 			rAction = replicateAll
 		default:
 			rinfo.Err = cerr

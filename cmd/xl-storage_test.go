@@ -235,7 +235,7 @@ func TestXLStorageReadVersionLegacy(t *testing.T) {
 		t.Fatalf("Unable to create a file \"as-file\", %s", err)
 	}
 
-	fi, err := xlStorage.ReadVersion(context.Background(), "exists-legacy", "as-file", "", false)
+	fi, err := xlStorage.ReadVersion(context.Background(), "exists-legacy", "as-file", "", ReadOptions{})
 	if err != nil {
 		t.Fatalf("Unable to read older 'xl.json' content: %s", err)
 	}
@@ -254,6 +254,7 @@ func TestXLStorageReadVersion(t *testing.T) {
 	}
 
 	xlMeta, _ := os.ReadFile("testdata/xl.meta")
+	fi, _ := getFileInfo(xlMeta, "exists", "as-file", "", false, true)
 
 	// Create files for the test cases.
 	if err = xlStorage.MakeVol(context.Background(), "exists"); err != nil {
@@ -267,6 +268,9 @@ func TestXLStorageReadVersion(t *testing.T) {
 	}
 	if err = xlStorage.AppendFile(context.Background(), "exists", "as-file-parent/xl.meta", xlMeta); err != nil {
 		t.Fatalf("Unable to create a file \"as-file-parent\", %s", err)
+	}
+	if err = xlStorage.MakeVol(context.Background(), "exists/as-file/"+fi.DataDir); err != nil {
+		t.Fatalf("Unable to create a dataDir %s,  %s", fi.DataDir, err)
 	}
 
 	// TestXLStoragecases to validate different conditions for ReadVersion API.
@@ -321,7 +325,7 @@ func TestXLStorageReadVersion(t *testing.T) {
 
 	// Run through all the test cases and validate for ReadVersion.
 	for i, testCase := range testCases {
-		_, err = xlStorage.ReadVersion(context.Background(), testCase.volume, testCase.path, "", false)
+		_, err = xlStorage.ReadVersion(context.Background(), testCase.volume, testCase.path, "", ReadOptions{})
 		if err != testCase.err {
 			t.Fatalf("TestXLStorage %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
 		}
@@ -889,8 +893,8 @@ func TestXLStorageListDir(t *testing.T) {
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
 			Force:     false,
-		}); err != errVolumeAccessDenied {
-			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
+		}); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -979,14 +983,6 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			expectedErr: errFileNameTooLong,
 		},
-		// TestXLStorage case - 6.
-		// TestXLStorage case with undeletable parent directory.
-		// File can delete, dir cannot delete because no-permissions doesn't have write perms.
-		{
-			srcVol:      "no-permissions",
-			srcPath:     "dir/file",
-			expectedErr: errVolumeAccessDenied,
-		},
 	}
 
 	for i, testCase := range testCases {
@@ -1020,8 +1016,8 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
 			Force:     false,
-		}); err != errVolumeAccessDenied {
-			t.Errorf("expected: %s, got: %s", errVolumeAccessDenied, err)
+		}); err != errFileAccessDenied {
+			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -1402,8 +1398,8 @@ func TestXLStorageAppendFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errVolumeAccessDenied {
-			t.Fatalf("expected: errVolumeAccessDenied error, got: %s", err)
+		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
+			t.Fatalf("expected: errFileAccessDenied error, got: %s", err)
 		}
 	}
 
@@ -1650,7 +1646,7 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 	for i := range versions {
 		versions[i] = uuid.New().String()
 		fi := FileInfo{
-			Name: object, Volume: volume, VersionID: versions[i], ModTime: UTCNow(), DataDir: uuid.NewString(), Size: 10000,
+			Name: object, Volume: volume, VersionID: versions[i], ModTime: UTCNow(), DataDir: "", Size: 10000,
 			Erasure: ErasureInfo{
 				Algorithm:    erasureAlgorithm,
 				DataBlocks:   4,
@@ -1670,7 +1666,7 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 		t.Helper()
 		for i := range versions {
 			shouldExist := !deleted[i]
-			fi, err := xl.ReadVersion(ctx, volume, object, versions[i], false)
+			fi, err := xl.ReadVersion(ctx, volume, object, versions[i], ReadOptions{})
 			if shouldExist {
 				if err != nil {
 					t.Fatalf("Version %s should exist, but got err %v", versions[i], err)
@@ -1717,7 +1713,7 @@ func TestXLStorageDeleteVersion(t *testing.T) {
 	checkVerExist(t)
 
 	// Meta should be deleted now...
-	fi, err := xl.ReadVersion(ctx, volume, object, "", false)
+	fi, err := xl.ReadVersion(ctx, volume, object, "", ReadOptions{})
 	if err != errFileNotFound {
 		t.Fatalf("Object %s should not exist, but returned: %#v", object, fi)
 	}

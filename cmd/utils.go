@@ -103,10 +103,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	if len(params) >= 1 {
 		bucket = params[0]
 	}
-	if len(params) == 2 {
+	if len(params) >= 2 {
 		object = params[1]
 	}
-	if len(params) == 3 {
+	if len(params) >= 3 {
 		versionID = params[2]
 	}
 
@@ -122,6 +122,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	switch minioErr.Code {
+	case "SlowDownWrite":
+		err = InsufficientWriteQuorum{Bucket: bucket, Object: object}
+	case "SlowDownRead":
+		err = InsufficientReadQuorum{Bucket: bucket, Object: object}
 	case "PreconditionFailed":
 		err = PreConditionFailed{}
 	case "InvalidRange":
@@ -1264,4 +1268,8 @@ func unwrapAll(err error) error {
 func stringsHasPrefixFold(s, prefix string) bool {
 	// Test match with case first.
 	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
+}
+
+func ptr[T any](a T) *T {
+	return &a
 }

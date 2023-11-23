@@ -199,11 +199,15 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 }
 
 // get ObjectOptions for PUT calls from encryption headers and metadata
-func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+func putOptsFromReq(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+	return putOpts(ctx, bucket, object, r.Form.Get(xhttp.VersionID), r.Header, metadata)
+}
+
+func putOpts(ctx context.Context, bucket, object, vid string, hdrs http.Header, metadata map[string]string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
-	vid := strings.TrimSpace(r.Form.Get(xhttp.VersionID))
+	vid = strings.TrimSpace(vid)
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
@@ -221,54 +225,59 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			}
 		}
 	}
+	opts, err = putOptsFromHeaders(ctx, hdrs, metadata)
+	if err != nil {
+		return opts, InvalidArgument{
+			Bucket: bucket,
+			Object: object,
+			Err:    err,
+		}
+	}
 
-	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	opts.VersionID = vid
+	opts.Versioned = versioned
+	opts.VersionSuspended = versionSuspended
+
+	// For directory objects skip creating new versions.
+	if isDirObject(object) && vid == "" {
+		opts.VersionID = nullVersionID
+	}
+
+	return opts, nil
+}
+
+func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[string]string) (opts ObjectOptions, err error) {
+	mtimeStr := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceMTime))
 	var mtime time.Time
 	if mtimeStr != "" {
 		mtime, err = time.Parse(time.RFC3339Nano, mtimeStr)
 		if err != nil {
-			return opts, InvalidArgument{
-				Bucket: bucket,
-				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
-			}
+			return opts, fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err)
 		}
 	}
-	retaintimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceObjectRetentionTimestamp))
+	retaintimeStr := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceObjectRetentionTimestamp))
 	var retaintimestmp time.Time
 	if retaintimeStr != "" {
 		retaintimestmp, err = time.Parse(time.RFC3339, retaintimeStr)
 		if err != nil {
-			return opts, InvalidArgument{
-				Bucket: bucket,
-				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceObjectRetentionTimestamp, err),
-			}
+			return opts, fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceObjectRetentionTimestamp, err)
 		}
 	}
 
-	lholdtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceObjectLegalHoldTimestamp))
+	lholdtimeStr := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceObjectLegalHoldTimestamp))
 	var lholdtimestmp time.Time
 	if lholdtimeStr != "" {
 		lholdtimestmp, err = time.Parse(time.RFC3339, lholdtimeStr)
 		if err != nil {
-			return opts, InvalidArgument{
-				Bucket: bucket,
-				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceObjectLegalHoldTimestamp, err),
-			}
+			return opts, fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceObjectLegalHoldTimestamp, err)
 		}
 	}
-	tagtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceTaggingTimestamp))
+	tagtimeStr := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceTaggingTimestamp))
 	var taggingtimestmp time.Time
 	if tagtimeStr != "" {
 		taggingtimestmp, err = time.Parse(time.RFC3339, tagtimeStr)
 		if err != nil {
-			return opts, InvalidArgument{
-				Bucket: bucket,
-				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceTaggingTimestamp, err),
-			}
+			return opts, fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceTaggingTimestamp, err)
 		}
 	}
 
@@ -276,18 +285,14 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		metadata = make(map[string]string)
 	}
 
-	wantCRC, err := hash.GetContentChecksum(r.Header)
+	wantCRC, err := hash.GetContentChecksum(hdr)
 	if err != nil {
-		return opts, InvalidArgument{
-			Bucket: bucket,
-			Object: object,
-			Err:    fmt.Errorf("invalid/unknown checksum sent: %v", err),
-		}
+		return opts, fmt.Errorf("invalid/unknown checksum sent: %v", err)
 	}
-	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
+	etag := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceETag))
 
-	if crypto.S3KMS.IsRequested(r.Header) {
-		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
+	if crypto.S3KMS.IsRequested(hdr) {
+		keyID, context, err := crypto.S3KMS.ParseHTTP(hdr)
 		if err != nil {
 			return ObjectOptions{}, err
 		}
@@ -298,27 +303,15 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		return ObjectOptions{
 			ServerSideEncryption: sseKms,
 			UserDefined:          metadata,
-			VersionID:            vid,
-			Versioned:            versioned,
-			VersionSuspended:     versionSuspended,
 			MTime:                mtime,
 			WantChecksum:         wantCRC,
 			PreserveETag:         etag,
 		}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
-	opts, err = getDefaultOpts(r.Header, false, metadata)
+	opts, err = getDefaultOpts(hdr, false, metadata)
 	if err != nil {
 		return opts, err
-	}
-
-	opts.VersionID = vid
-	opts.Versioned = versioned
-	opts.VersionSuspended = versionSuspended
-
-	// For directory objects skip creating new versions.
-	if isDirObject(object) && vid == "" {
-		opts.VersionID = nullVersionID
 	}
 
 	opts.MTime = mtime
@@ -333,7 +326,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 
 // get ObjectOptions for Copy calls with encryption headers provided on the target side and source side metadata
 func copyDstOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	return putOpts(ctx, r, bucket, object, metadata)
+	return putOptsFromReq(ctx, r, bucket, object, metadata)
 }
 
 // get ObjectOptions for Copy calls with encryption headers provided on the source side

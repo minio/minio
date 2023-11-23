@@ -248,3 +248,191 @@ func (z *LockArgs) Msgsize() (s int) {
 	s += 7 + msgp.StringPrefixSize + len(z.Source) + 6 + msgp.StringPrefixSize + len(z.Owner) + 7 + msgp.IntSize
 	return
 }
+
+// DecodeMsg implements msgp.Decodable
+func (z *LockResp) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Code":
+			{
+				var zb0002 uint8
+				zb0002, err = dc.ReadUint8()
+				if err != nil {
+					err = msgp.WrapError(err, "Code")
+					return
+				}
+				z.Code = ResponseCode(zb0002)
+			}
+		case "Err":
+			z.Err, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Err")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z LockResp) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "Code"
+	err = en.Append(0x82, 0xa4, 0x43, 0x6f, 0x64, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(uint8(z.Code))
+	if err != nil {
+		err = msgp.WrapError(err, "Code")
+		return
+	}
+	// write "Err"
+	err = en.Append(0xa3, 0x45, 0x72, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Err)
+	if err != nil {
+		err = msgp.WrapError(err, "Err")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z LockResp) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "Code"
+	o = append(o, 0x82, 0xa4, 0x43, 0x6f, 0x64, 0x65)
+	o = msgp.AppendUint8(o, uint8(z.Code))
+	// string "Err"
+	o = append(o, 0xa3, 0x45, 0x72, 0x72)
+	o = msgp.AppendString(o, z.Err)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LockResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Code":
+			{
+				var zb0002 uint8
+				zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Code")
+					return
+				}
+				z.Code = ResponseCode(zb0002)
+			}
+		case "Err":
+			z.Err, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Err")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z LockResp) Msgsize() (s int) {
+	s = 1 + 5 + msgp.Uint8Size + 4 + msgp.StringPrefixSize + len(z.Err)
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *ResponseCode) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 uint8
+		zb0001, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ResponseCode(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z ResponseCode) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteUint8(uint8(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z ResponseCode) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ResponseCode) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ResponseCode(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z ResponseCode) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
