@@ -75,8 +75,6 @@ const (
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
 	EnvKafkaBatchSize     = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
-
-	maxBatchLimit = 100
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -130,9 +128,6 @@ func (k KafkaArgs) Validate() error {
 	if k.BatchSize > 1 {
 		if k.QueueDir == "" {
 			return errors.New("batch should be enabled only if queue dir is enabled")
-		}
-		if k.BatchSize > maxBatchLimit {
-			return fmt.Errorf("batch limit should not exceed %d", maxBatchLimit)
 		}
 	}
 	return nil
