@@ -18,13 +18,14 @@
 package drive
 
 import (
-	"github.com/minio/pkg/v2/env"
 	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/pkg/v2/env"
 )
 
+// DefaultKVS - default KVS for drive
 var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   MaxTimeout,
@@ -40,6 +41,7 @@ type Config struct {
 
 var mutex sync.RWMutex
 
+// Update - updates the config with latest values
 func (c *Config) Update(new Config) error {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -47,6 +49,7 @@ func (c *Config) Update(new Config) error {
 	return nil
 }
 
+// GetMaxTimeout - returns the max timeout value.
 func (c *Config) GetMaxTimeout() time.Duration {
 	mutex.RLock()
 	defer mutex.RUnlock()
