@@ -20,7 +20,6 @@ package ldap
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -329,62 +328,4 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	}
 
 	return res, nil
-}
-
-// LookupUsername searches for the username and groups of a given DN, like opposite of LookupUserDN
-func (l *Config) LookupUsername(userDN string) (string, []string, error) {
-	conn, err := l.LDAP.Connect()
-	if err != nil {
-		return "", nil, err
-	}
-	defer conn.Close()
-
-	// Bind to the lookup user account
-	if err = l.LDAP.LookupBind(conn); err != nil {
-		return "", nil, err
-	}
-
-	filter, err := ldap.CompileFilter(l.LDAP.UserDNSearchFilter)
-	if err != nil {
-		return "", nil, err
-	}
-	if filter == nil {
-		return "", nil, fmt.Errorf("Unable to parse filter %s", l.LDAP.UserDNSearchFilter)
-	}
-
-	// Parse DN for username
-	// Regex searches for string between '=%s' and the previous '(', which is the attribute name
-	findUserAttribute := regexp.MustCompile(`\(([^\)\(]*)=%s`) // find attribute directly proceeding the %s
-	userFilter := findUserAttribute.FindStringSubmatch(strings.ToLower(l.LDAP.UserDNSearchFilter))[1]
-
-	var usernameSl []string
-
-	parsedDN, err := ldap.ParseDN(userDN)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, attr := range parsedDN.RDNs {
-		if attr.Attributes[0].Type == userFilter {
-			usernameSl = append(usernameSl, attr.Attributes[0].Value)
-		}
-	}
-	username := usernameSl[0]
-
-	// Lookup user DN and make sure it matches the DN provided
-	bindDN, err := l.LDAP.LookupUserDN(conn, username)
-	if err != nil {
-		err = fmt.Errorf("Unable to find user DN: %w", err)
-		return "", nil, err
-	}
-	if bindDN != userDN {
-		err = fmt.Errorf("User DN %s does not match provided DN %s", bindDN, userDN)
-		return "", nil, err
-	}
-
-	groups, err := l.LDAP.SearchForUserGroups(conn, username, bindDN)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return bindDN, groups, nil
 }

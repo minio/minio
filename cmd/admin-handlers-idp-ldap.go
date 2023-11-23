@@ -20,8 +20,10 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
@@ -188,6 +190,11 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// fail if ldap is not enabled
+	if !globalIAMSys.LDAPConfig.Enabled() {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
+	}
+
 	// Find the user for the request sender (as it may be sent via a service
 	// account or STS account):
 	requestorUser := cred.AccessKey
@@ -231,7 +238,9 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			return
 		}
 		if isLDAP == "" {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchUser), r.URL)
+			err := errors.New("Specified user does not exist on LDAP server")
+			APIErr := errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err)
+			writeErrorResponseJSON(ctx, w, APIErr, r.URL)
 			return
 		}
 
@@ -244,31 +253,18 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			opts.claims[k] = v
 		}
 	} else {
-		// fail if ldap is not enabled
-		if !globalIAMSys.LDAPConfig.Enabled() {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
-		}
-
-		// check if targetUser is username or DN
-		if globalIAMSys.LDAPConfig.IsLDAPUserDN(targetUser) {
-			opts.claims[ldapUser] = targetUser // DN
-			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUsername(targetUser)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-				return
+		opts.claims[ldapUserN] = targetUser // simple username
+		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
+		if err != nil {
+			// if not found, check if DN
+			if strings.Contains(err.Error(), "not found") && globalIAMSys.LDAPConfig.IsLDAPUserDN(targetUser) {
+				// warn user that DNs are not allowed
+				err = fmt.Errorf("Must use short username to add service account. %w", err)
 			}
-			opts.claims[ldapUserN] = targetUser // simple username
-		} else {
-			// targetUser is simple username
-			opts.claims[ldapUserN] = targetUser // simple username
-			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-				return
-			}
-			opts.claims[ldapUser] = targetUser // DN
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
-
+		opts.claims[ldapUser] = targetUser // DN
 	}
 
 	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
