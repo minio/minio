@@ -669,18 +669,16 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			}
 			opts.claims[k] = v
 		}
-	} else {
+	} else if globalIAMSys.LDAPConfig.Enabled() {
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
-		if globalIAMSys.LDAPConfig.Enabled() {
-			opts.claims[ldapUserN] = targetUser // simple username
-			targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-				return
-			}
-			opts.claims[ldapUser] = targetUser // username DN
+		opts.claims[ldapUserN] = targetUser // simple username
+		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
+		opts.claims[ldapUser] = targetUser // username DN
 
 		// NOTE: if not using LDAP, then internal IDP or open ID is
 		// being used - in the former, group info is enforced when
@@ -2437,7 +2435,6 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 	// service account access key cannot have space characters beginning and end of the string.
 	if hasSpaceBE(createReq.AccessKey) {
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument)
-
 	}
 
 	if err := createReq.Validate(); err != nil {
