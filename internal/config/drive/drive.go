@@ -58,6 +58,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.DriveSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
+	// if not set. Get default value from environment
 	d := kvs.GetWithDefault(MaxTimeout, DefaultKVS)
 	if d == "" {
 		d = env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
@@ -65,17 +66,27 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 			d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
 		}
 	}
-	if d == "" {
-		d = "2m"
-	}
 	dur, _ := time.ParseDuration(d)
-	cfg.MaxTimeout = getMaxTimeout(dur)
+	if dur < time.Second {
+		cfg.MaxTimeout = time.Minute * 2
+	} else {
+		cfg.MaxTimeout = getMaxTimeout(dur)
+	}
 	return cfg, err
 }
 
 func getMaxTimeout(t time.Duration) time.Duration {
 	if t < time.Second {
-		return time.Minute * 2
+		// get default value
+		d := env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
+		if d == "" {
+			d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
+		}
+		dur, _ := time.ParseDuration(d)
+		if dur < time.Second {
+			return time.Minute * 2
+		}
+		return dur
 	}
 	return t
 }
