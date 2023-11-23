@@ -159,7 +159,7 @@ func (l *localLocker) removeEntry(name string, args dsync.LockArgs, lri *[]lockR
 }
 
 func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	if len(args.Resources) > 1 {
+	if len(args.Resources) != 1 {
 		return false, fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
 	}
 

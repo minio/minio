@@ -427,7 +427,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					continue
 				}
 				_, err := disk.ReadVersion(ctx, minioMetaBucket,
-					o.objectPath(0), "", false)
+					o.objectPath(0), "", ReadOptions{})
 				if err != nil {
 					time.Sleep(retryDelay250)
 					retries++
@@ -504,7 +504,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 							continue
 						}
 						_, err := disk.ReadVersion(ctx, minioMetaBucket,
-							o.objectPath(partN), "", false)
+							o.objectPath(partN), "", ReadOptions{})
 						if err != nil {
 							time.Sleep(retryDelay250)
 							retries++

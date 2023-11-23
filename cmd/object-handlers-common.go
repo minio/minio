@@ -202,6 +202,31 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 	return false
 }
 
+// Headers to be set of object content is not going to be written to the client.
+func writeHeadersPrecondition(w http.ResponseWriter, objInfo ObjectInfo) {
+	// set common headers
+	setCommonHeaders(w)
+
+	// set object-related metadata headers
+	w.Header().Set(xhttp.LastModified, objInfo.ModTime.UTC().Format(http.TimeFormat))
+
+	if objInfo.ETag != "" {
+		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+	}
+
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+	}
+
+	if !objInfo.Expires.IsZero() {
+		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
+	}
+
+	if objInfo.CacheControl != "" {
+		w.Header().Set(xhttp.CacheControl, objInfo.CacheControl)
+	}
+}
+
 // Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
 // Preconditions supported are:
 //
@@ -221,24 +246,23 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return false
 	}
 
-	// Headers to be set of object content is not going to be written to the client.
-	writeHeaders := func() {
-		// set common headers
-		setCommonHeaders(w)
-
-		// set object-related metadata headers
-		w.Header().Set(xhttp.LastModified, objInfo.ModTime.UTC().Format(http.TimeFormat))
-
-		if objInfo.ETag != "" {
-			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
-		}
-	}
-
 	// Check if the part number is correct.
 	if opts.PartNumber > 1 && opts.PartNumber > len(objInfo.Parts) {
 		// According to S3 we don't need to set any object information here.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL)
 		return true
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
+	if ifNoneMatchETagHeader != "" {
+		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+			// If the object ETag matches with the specified ETag.
+			writeHeadersPrecondition(w, objInfo)
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
 	}
 
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
@@ -248,22 +272,8 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if givenTime, err := amztime.ParseHeader(ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is not modified since the specified time.
-				writeHeaders()
+				writeHeadersPrecondition(w, objInfo)
 				w.WriteHeader(http.StatusNotModified)
-				return true
-			}
-		}
-	}
-
-	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
-	// time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
-	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
-			if ifModifiedSince(objInfo.ModTime, givenTime) {
-				// If the object is modified since the specified time.
-				writeHeaders()
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 				return true
 			}
 		}
@@ -275,23 +285,26 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if ifMatchETagHeader != "" {
 		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
+			writeHeadersPrecondition(w, objInfo)
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
 		}
 	}
 
-	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
-	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
-	if ifNoneMatchETagHeader != "" {
-		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
-			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
+	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
+	// time, otherwise return a 412 (precondition failed).
+	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
+	if ifUnmodifiedSinceHeader != "" {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
+			if ifModifiedSince(objInfo.ModTime, givenTime) {
+				// If the object is modified since the specified time.
+				writeHeadersPrecondition(w, objInfo)
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
+				return true
+			}
 		}
 	}
+
 	// Object content should be written to http.ResponseWriter
 	return false
 }
