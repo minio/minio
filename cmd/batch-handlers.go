@@ -1521,16 +1521,6 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	//  Validate the incoming job request
-	if err := job.Validate(ctx, objectAPI); err != nil {
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
-	job.User = user
-	job.Started = time.Now()
-
 	// Fill with default values
 	if job.Replicate != nil {
 		if job.Replicate.Source.Snowball.Disable == nil {
@@ -1552,6 +1542,16 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 			job.Replicate.Source.Snowball.SkipErrs = ptr(true)
 		}
 	}
+
+	//  Validate the incoming job request
+	if err := job.Validate(ctx, objectAPI); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	job.User = user
+	job.Started = time.Now()
 
 	if err := job.save(ctx, objectAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
