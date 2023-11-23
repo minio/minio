@@ -248,4 +248,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/minio/madmin-go/v3 => ../madmin-go
+replace github.com/minio/madmin-go/v3 => github.com/jiuker/madmin-go/v3 v3.0.0-20231122072459-e88ab8ab6645

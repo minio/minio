@@ -360,6 +360,8 @@ github.com/jedib0t/go-pretty/v6 v6.4.8 h1:HiNzyMSEpsBaduKhmK+CwcpulEeBrTmxutz4oX
 github.com/jedib0t/go-pretty/v6 v6.4.8/go.mod h1:Ndk3ase2CkQbXLLNf5QDHoYb6J9WtVfmHZu9n8rk2xs=
 github.com/jessevdk/go-flags v1.5.0 h1:1jKYvbxEjfUl0fmqTCOfonvskHHXMjBySTLW4y9LFvc=
 github.com/jessevdk/go-flags v1.5.0/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
+github.com/jiuker/madmin-go/v3 v3.0.0-20231122072459-e88ab8ab6645 h1:xQ3Krj7cePwooW85rFYOWXece9Ssr15Y+2rh4r7lqZs=
+github.com/jiuker/madmin-go/v3 v3.0.0-20231122072459-e88ab8ab6645/go.mod h1:4QN2NftLSV7MdlT50dkrenOMmNVHluxTvlqJou3hte8=
 github.com/jlaffaye/ftp v0.0.0-20190624084859-c1312a7102bf/go.mod h1:lli8NYPQOFy3O++YmYbqVgOcQ1JPCwdOy+5zSjKJ9qY=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
