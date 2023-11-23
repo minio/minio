@@ -1269,3 +1269,7 @@ func stringsHasPrefixFold(s, prefix string) bool {
 	// Test match with case first.
 	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
 }
+
+func ptr[T any](a T) *T {
+	return &a
+}

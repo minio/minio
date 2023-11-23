@@ -38,6 +38,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
@@ -155,7 +156,7 @@ var (
 	// Disable redirect, default is enabled.
 	globalBrowserRedirect bool
 
-	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. DefaultKVS is false.
+	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
 	globalSite = config.Site{
@@ -245,6 +246,9 @@ var (
 
 	// The global drive config
 	globalDriveConfig drive.Config
+
+	// The global cache config
+	globalCacheConfig cache.Config
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()

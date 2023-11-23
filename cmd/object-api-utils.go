@@ -64,6 +64,7 @@ const (
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// MinIO tmp meta prefix for deleted objects.
 	minioMetaTmpDeletedBucket = minioMetaTmpBucket + "/.trash"
+
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 	// On compressed files bigger than this;
@@ -697,7 +698,6 @@ type GetObjectReader struct {
 	io.Reader
 	ObjInfo    ObjectInfo
 	cleanUpFns []func()
-	opts       ObjectOptions
 	once       sync.Once
 }
 
@@ -722,7 +722,6 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 		ObjInfo:    oi,
 		Reader:     r,
 		cleanUpFns: cleanupFns,
-		opts:       opts,
 	}, nil
 }
 
@@ -859,7 +858,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     decReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}
@@ -913,7 +911,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     decReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}
@@ -928,7 +925,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     inputReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}

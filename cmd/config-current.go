@@ -27,6 +27,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
@@ -70,6 +71,7 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
+		config.CacheSubSys:          cache.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -212,6 +214,12 @@ func initHelp() {
 			Key:         config.EtcdSubSys,
 			Description: "persist IAM assets externally to etcd",
 		},
+		config.HelpKV{
+			Key:         config.CacheSubSys,
+			Type:        "string",
+			Description: "enable various cache optimizations on MinIO for reads",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -257,6 +265,7 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.HelpSubnet,
 		config.CallhomeSubSys:       callhome.HelpCallhome,
 		config.DriveSubSys:          drive.HelpDrive,
+		config.CacheSubSys:          cache.Help,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -366,6 +375,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.DriveSubSys:
 		if _, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.CacheSubSys:
+		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport); err != nil {
 			return err
 		}
 	case config.PolicyOPASubSys:
@@ -651,6 +664,13 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
 			}
+		}
+	case config.CacheSubSys:
+		cacheCfg, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
+		} else {
+			globalCacheConfig.Update(cacheCfg)
 		}
 	}
 	globalServerConfigMu.Lock()

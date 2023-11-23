@@ -35,6 +35,7 @@ import (
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
@@ -129,7 +130,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// Extract metadata that needs to be saved.
-	metadata, err := extractMetadata(ctx, r)
+	metadata, err := extractMetadataFromReq(ctx, r)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -183,7 +184,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
 
-	opts, err := putOpts(ctx, r, bucket, object, metadata)
+	opts, err := putOptsFromReq(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -748,7 +749,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 
-		opts, err = putOpts(ctx, r, bucket, object, mi.UserDefined)
+		opts, err = putOptsFromReq(ctx, r, bucket, object, mi.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -1010,6 +1011,22 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		Host:         handlers.GetSourceIP(r),
 	}
 	sendEvent(evt)
+
+	asize, err := objInfo.GetActualSize()
+	if err != nil {
+		asize = objInfo.Size
+	}
+
+	defer globalCacheConfig.Set(&cache.ObjectInfo{
+		Key:          objInfo.Name,
+		Bucket:       objInfo.Bucket,
+		ETag:         objInfo.ETag,
+		ModTime:      objInfo.ModTime,
+		Expires:      objInfo.ExpiresStr(),
+		CacheControl: objInfo.CacheControl,
+		Size:         asize,
+		Metadata:     cleanReservedKeys(objInfo.UserDefined),
+	})
 
 	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
 		evt.EventName = event.ObjectManyVersions
