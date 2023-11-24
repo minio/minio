@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/grid"
-	"github.com/minio/minio/internal/logger"
 )
 
 // lockRESTClient is authenticable lock REST client
@@ -54,7 +53,6 @@ func (c *lockRESTClient) String() string {
 func (c *lockRESTClient) call(ctx context.Context, h *grid.SingleHandler[*dsync.LockArgs, *dsync.LockResp], args *dsync.LockArgs) (ok bool, err error) {
 	r, err := h.Call(ctx, c.connection, args)
 	if err != nil {
-		logger.LogIfNot(ctx, err, grid.ErrDisconnected)
 		return false, err
 	}
 	defer h.PutResponse(r)
