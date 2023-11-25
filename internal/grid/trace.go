@@ -121,16 +121,15 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 	// If the context contains a TraceParamsKey, add it to the trace path.
 	v := ctx.Value(TraceParamsKey{})
 	if p, ok := v.(*MSS); ok && p != nil {
-		trace.Path = trace.Path + p.ToQuery()
+		trace.Path += p.ToQuery()
 		trace.HTTP.ReqInfo.Path = trace.Path
 	} else if p, ok := v.(map[string]string); ok {
 		m := MSS(p)
-		trace.Path = trace.Path + m.ToQuery()
+		trace.Path += m.ToQuery()
 		trace.HTTP.ReqInfo.Path = trace.Path
 	} else if v != nil {
 		// Print exported fields as single request to path.
-		p := fmt.Sprintf("%+v", v)
-		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(p))
+		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(fmt.Sprintf("%+v", v)))
 		trace.HTTP.ReqInfo.Path = trace.Path
 	}
 	t.Publisher.Publish(trace)
