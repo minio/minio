@@ -55,7 +55,7 @@ const (
 	HandlerUpdateMetadata
 	HandlerWriteMetadata
 	HandlerCheckParts
-	HandlerRenamedata
+	HandlerRenameData
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -63,6 +63,34 @@ const (
 	handlerTest
 	handlerTest2
 	handlerLast
+)
+
+// handlerPrefixes are prefixes for handler IDs used for tracing.
+// If a handler is not listed here, it will be traced with "grid" prefix.
+var handlerPrefixes = [handlerLast]string{
+	HandlerLockLock:        lockPrefix,
+	HandlerLockRLock:       lockPrefix,
+	HandlerLockUnlock:      lockPrefix,
+	HandlerLockRUnlock:     lockPrefix,
+	HandlerLockRefresh:     lockPrefix,
+	HandlerLockForceUnlock: lockPrefix,
+	HandlerWalkDir:         storagePrefix,
+	HandlerStatVol:         storagePrefix,
+	HandlerDiskInfo:        storagePrefix,
+	HandlerNSScanner:       storagePrefix,
+	HandlerReadXL:          storagePrefix,
+	HandlerReadVersion:     storagePrefix,
+	HandlerDeleteFile:      storagePrefix,
+	HandlerDeleteVersion:   storagePrefix,
+	HandlerUpdateMetadata:  storagePrefix,
+	HandlerWriteMetadata:   storagePrefix,
+	HandlerCheckParts:      storagePrefix,
+	HandlerRenameData:      storagePrefix,
+}
+
+const (
+	lockPrefix    = "lock"
+	storagePrefix = "storageR"
 )
 
 func init() {
@@ -364,6 +392,7 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Re
 	if err != nil {
 		return resp, err
 	}
+	ctx = context.WithValue(ctx, TraceParamsKey{}, req)
 	res, err := c.Request(ctx, h.id, payload)
 	PutByteBuffer(payload)
 	if err != nil {

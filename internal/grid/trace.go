@@ -18,19 +18,27 @@
 package grid
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/pubsub"
 )
 
+// TraceParamsKey allows to pass trace parameters to the request via context.
+// This is only needed when un-typed requests are used.
+// MSS, map[string]string types are preferred, but any struct with exported fields will work.
+type TraceParamsKey struct{}
+
 // traceRequests adds request tracing to the connection.
 func (c *Connection) traceRequests(p *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]) {
 	c.trace = &tracer{
 		Publisher: p,
 		TraceType: madmin.TraceInternal,
-		Prefix:    "grid.",
+		Prefix:    "grid",
 		Local:     c.Local,
 		Remote:    c.Remote,
 		Subroute:  "",
@@ -56,7 +64,7 @@ type tracer struct {
 	Subroute  string
 }
 
-func (c *muxClient) traceRoundtrip(t *tracer, h HandlerID, req []byte) ([]byte, error) {
+func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, req []byte) ([]byte, error) {
 	if t == nil || t.Publisher.NumSubscribers(t.TraceType) == 0 {
 		return c.roundtrip(h, req)
 	}
@@ -74,9 +82,14 @@ func (c *muxClient) traceRoundtrip(t *tracer, h HandlerID, req []byte) ([]byte, 
 			status = http.StatusBadRequest
 		}
 	}
+
+	prefix := t.Prefix
+	if p := handlerPrefixes[h]; p != "" {
+		prefix = p
+	}
 	trace := madmin.TraceInfo{
 		TraceType: t.TraceType,
-		FuncName:  t.Prefix + h.String(),
+		FuncName:  prefix + "." + h.String(),
 		NodeName:  t.Local,
 		Time:      start,
 		Duration:  end.Sub(start),
@@ -104,6 +117,20 @@ func (c *muxClient) traceRoundtrip(t *tracer, h HandlerID, req []byte) ([]byte, 
 				TimeToFirstByte: end.Sub(start),
 			},
 		},
+	}
+	// If the context contains a TraceParamsKey, add it to the trace path.
+	v := ctx.Value(TraceParamsKey{})
+	if p, ok := v.(*MSS); ok && p != nil {
+		trace.Path += p.ToQuery()
+		trace.HTTP.ReqInfo.Path = trace.Path
+	} else if p, ok := v.(map[string]string); ok {
+		m := MSS(p)
+		trace.Path += m.ToQuery()
+		trace.HTTP.ReqInfo.Path = trace.Path
+	} else if v != nil {
+		// Print exported fields as single request to path.
+		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(fmt.Sprintf("%+v", v)))
+		trace.HTTP.ReqInfo.Path = trace.Path
 	}
 	t.Publisher.Publish(trace)
 	return resp, err

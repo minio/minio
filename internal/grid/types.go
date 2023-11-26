@@ -19,6 +19,9 @@ package grid
 
 import (
 	"errors"
+	"net/url"
+	"sort"
+	"strings"
 
 	"github.com/tinylib/msgp/msgp"
 )
@@ -115,6 +118,31 @@ func NewMSS() *MSS {
 func NewMSSWith(m map[string]string) *MSS {
 	m2 := MSS(m)
 	return &m2
+}
+
+// ToQuery constructs a URL query string from the MSS, including "?" if there are any keys.
+func (m MSS) ToQuery() string {
+	if len(m) == 0 {
+		return ""
+	}
+	var buf strings.Builder
+	buf.WriteByte('?')
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m[k]
+		keyEscaped := url.QueryEscape(k)
+		if buf.Len() > 1 {
+			buf.WriteByte('&')
+		}
+		buf.WriteString(keyEscaped)
+		buf.WriteByte('=')
+		buf.WriteString(url.QueryEscape(v))
+	}
+	return buf.String()
 }
 
 // NewBytes returns a new Bytes.

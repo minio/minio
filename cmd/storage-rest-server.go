@@ -732,7 +732,7 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	encoder.Encode(dErrsResp)
 }
 
-var storageRenameDataHandler = grid.NewSingleHandler[*RenameDataHandlerParams, *RenameDataResp](grid.HandlerRenamedata, func() *RenameDataHandlerParams {
+var storageRenameDataHandler = grid.NewSingleHandler[*RenameDataHandlerParams, *RenameDataResp](grid.HandlerRenameData, func() *RenameDataHandlerParams {
 	return &RenameDataHandlerParams{}
 }, func() *RenameDataResp {
 	return &RenameDataResp{}
