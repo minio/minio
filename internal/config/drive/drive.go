@@ -35,29 +35,28 @@ var DefaultKVS = config.KVS{
 
 // Config represents the subnet related configuration
 type Config struct {
-	// Flag indicating whether callhome is enabled.
+	// MaxTimeout - maximum timeout for a drive operation
 	MaxTimeout time.Duration `json:"maxTimeout"`
+	mutex      sync.RWMutex
 }
 
-var mutex sync.RWMutex
-
 // Update - updates the config with latest values
-func (c *Config) Update(new Config) error {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (c *Config) Update(new *Config) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	c.MaxTimeout = getMaxTimeout(new.MaxTimeout)
 	return nil
 }
 
 // GetMaxTimeout - returns the max timeout value.
 func (c *Config) GetMaxTimeout() time.Duration {
-	mutex.RLock()
-	defer mutex.RUnlock()
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 	return getMaxTimeout(c.MaxTimeout)
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.
-func LookupConfig(kvs config.KVS) (cfg Config, err error) {
+func LookupConfig(kvs config.KVS) (cfg *Config, err error) {
 	if err = config.CheckValidKeys(config.DriveSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -75,6 +74,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	} else {
 		cfg.MaxTimeout = getMaxTimeout(dur)
 	}
+	cfg.mutex = sync.RWMutex{}
 	return cfg, err
 }
 
