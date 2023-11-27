@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/workers"
 	"github.com/zeebo/xxh3"
 )
@@ -289,9 +290,11 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 			}
 			atomic.AddInt32(&t.activeTasks, 1)
 			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
-				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
-					logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
-						task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !xnet.IsNetworkOrHostDown(err, false) {
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
+							task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+					}
 				}
 			} else {
 				ts := tierStats{

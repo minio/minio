@@ -342,7 +342,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+					w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 					return w.Run(func() error {
 						wait := deletedCleanupSleeper.Timer(ctx)
 						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))

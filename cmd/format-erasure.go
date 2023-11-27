@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/storageclass"
-	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
@@ -391,7 +390,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
 	// Ensure that the grid is online.
 	if _, err := disk.DiskInfo(context.Background(), false); err != nil {
-		if errors.Is(err, grid.ErrDisconnected) {
+		if errors.Is(err, errDiskNotFound) {
 			return nil, err
 		}
 	}

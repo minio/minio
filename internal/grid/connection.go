@@ -336,7 +336,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.traceRoundtrip(c.trace, h, req)
+	return client.traceRoundtrip(ctx, c.trace, h, req)
 }
 
 // Request allows to do a single remote request.
@@ -364,7 +364,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		}
 		c.outgoing.Delete(client.MuxID)
 	}()
-	return client.traceRoundtrip(c.trace, h, req)
+	return client.traceRoundtrip(ctx, c.trace, h, req)
 }
 
 // NewStream creates a new stream.

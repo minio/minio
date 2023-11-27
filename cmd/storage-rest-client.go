@@ -270,7 +270,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 		// were attempted. This can lead to false success under certain conditions
 		// - this change attempts to avoid stale information if the underlying
 		// transport is already down.
-		return info, grid.ErrDisconnected
+		return info, errDiskNotFound
 	}
 	fetchDI := func(di *timedValue, metrics bool) {
 		di.TTL = time.Second

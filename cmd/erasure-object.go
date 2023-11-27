@@ -317,7 +317,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > fi.Size || startOffset+length > fi.Size {
-		logger.LogIf(ctx, InvalidRange{startOffset, length, fi.Size}, logger.Application)
 		return InvalidRange{startOffset, length, fi.Size}
 	}
 
@@ -2249,7 +2248,6 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
 	pr.CloseWithError(err)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
 		return err
 	}
 	fi.TransitionStatus = lifecycle.TransitionComplete
