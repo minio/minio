@@ -232,6 +232,10 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 		return psv, ErrMaximumExpires
 	}
 
+	if preSignV4Values.Date.IsZero() || preSignV4Values.Date.Equal(timeSentinel) {
+		return psv, ErrMalformedPresignedDate
+	}
+
 	// Save signed headers.
 	preSignV4Values.SignedHeaders, aec = parseSignedHeader("SignedHeaders=" + query.Get(xhttp.AmzSignedHeaders))
 	if aec != ErrNone {
