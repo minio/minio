@@ -117,7 +117,7 @@ const (
 	CrawlerSubSys        = madmin.CrawlerSubSys
 	SubnetSubSys         = madmin.SubnetSubSys
 	CallhomeSubSys       = madmin.CallhomeSubSys
-
+	DriveSubSys          = madmin.DriveSubSys
 	// Add new constants here (similar to above) if you add new fields to config.
 )
 
@@ -179,6 +179,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	HealSubSys,
 	SubnetSubSys,
 	CallhomeSubSys,
+	DriveSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
@@ -204,6 +205,7 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	ScannerSubSys,
 	SubnetSubSys,
 	CallhomeSubSys,
+	DriveSubSys,
 	CacheSubSys,
 )
 

@@ -204,7 +204,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			if err != nil {
 				return nil
 			}
-			w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+			w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 			return w.Run(func() error {
 				wait := deletedCleanupSleeper.Timer(ctx)
 				if now.Sub(fi.ModTime) > expiry {
@@ -218,7 +218,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		return w.Run(func() error {
 			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(vi.Created) > expiry {
@@ -239,7 +239,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		return w.Run(func() error {
 			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(vi.Created) > expiry {
