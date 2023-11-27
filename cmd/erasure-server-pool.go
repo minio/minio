@@ -1945,7 +1945,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
+func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
 		close(results)
@@ -1982,21 +1982,27 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						}
 					}
 
-					askDisks := getListQuorum(opts.WalkAskDisks, set.setDriveCount)
-					var fallbackDisks []StorageAPI
+					askDisks := getListQuorum(opts.AskDisks, set.setDriveCount)
+					if askDisks == -1 {
+						askDisks = getListQuorum("strict", set.setDriveCount)
+					}
 
 					// Special case: ask all disks if the drive count is 4
 					if set.setDriveCount == 4 || askDisks > len(disks) {
 						askDisks = len(disks) // use all available drives
 					}
 
+					var fallbackDisks []StorageAPI
 					if askDisks > 0 && len(disks) > askDisks {
+						rand.Shuffle(len(disks), func(i, j int) {
+							disks[i], disks[j] = disks[j], disks[i]
+						})
 						fallbackDisks = disks[askDisks:]
 						disks = disks[:askDisks]
 					}
 
 					requestedVersions := 0
-					if opts.WalkLatestOnly {
+					if opts.LatestOnly {
 						requestedVersions = 1
 					}
 					loadEntry := func(entry metaCacheEntry) {
@@ -2004,14 +2010,14 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							return
 						}
 
-						if opts.WalkLatestOnly {
+						if opts.LatestOnly {
 							fi, err := entry.fileInfo(bucket)
 							if err != nil {
 								cancel()
 								return
 							}
-							if opts.WalkFilter != nil {
-								if opts.WalkFilter(fi) {
+							if opts.Filter != nil {
+								if opts.Filter(fi) {
 									if !send(fi.ToObjectInfo(bucket, fi.Name, vcfg != nil && vcfg.Versioned(fi.Name))) {
 										return
 									}
@@ -2032,8 +2038,8 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							versionsSorter(fivs.Versions).reverse()
 
 							for _, version := range fivs.Versions {
-								if opts.WalkFilter != nil {
-									if opts.WalkFilter(version) {
+								if opts.Filter != nil {
+									if opts.Filter(version) {
 										if !send(version.ToObjectInfo(bucket, version.Name, vcfg != nil && vcfg.Versioned(version.Name))) {
 											return
 										}
@@ -2047,10 +2053,13 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						}
 					}
 
+					// However many we ask, versions must exist on ~50%
+					listingQuorum := (askDisks + 1) / 2
+
 					// How to resolve partial results.
 					resolver := metadataResolutionParams{
-						dirQuorum:         1,
-						objQuorum:         1,
+						dirQuorum:         listingQuorum,
+						objQuorum:         listingQuorum,
 						bucket:            bucket,
 						requestedVersions: requestedVersions,
 					}
@@ -2068,19 +2077,15 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 						path:           path,
 						filterPrefix:   filterPrefix,
 						recursive:      true,
-						forwardTo:      opts.WalkMarker,
+						forwardTo:      opts.Marker,
 						minDisks:       1,
 						reportNotFound: false,
 						agreed:         loadEntry,
 						partial: func(entries metaCacheEntries, _ []error) {
 							entry, ok := entries.resolve(&resolver)
-							if !ok {
-								// check if we can get one entry atleast
-								// proceed to heal nonetheless.
-								entry, _ = entries.firstFound()
+							if ok {
+								loadEntry(*entry)
 							}
-
-							loadEntry(*entry)
 						},
 						finished: nil,
 					}

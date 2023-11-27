@@ -2579,7 +2579,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 
 	// Walk through all object versions - Walk() is always in ascending order needed to ensure
 	// delete marker replicated to target after object version is first created.
-	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, ObjectOptions{}); err != nil {
+	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, WalkOptions{}); err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
@@ -2952,7 +2952,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	}
 
 	objInfoCh := make(chan ObjectInfo, 10)
-	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, ObjectOptions{}); err != nil {
+	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, WalkOptions{}); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
