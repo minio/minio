@@ -567,11 +567,19 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
 
+		var objDeleted bool
 		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
-			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
+			var sz int64
+			objDeleted, sz = item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
 
+			// DeleteAllVersionsAction: The object and all its
+			// versions are expired and
+			// doesn't contribute toward data usage.
+			if objDeleted {
+				break
+			}
 			actualSz, err := oi.GetActualSize()
 			if err != nil {
 				continue
@@ -643,6 +651,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 					res["repl-pending-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.pendingCount, st.pendingSize)
 				}
 			}
+		}
+		if objDeleted {
+			// we return errSkipFile to signal this function's
+			// callers to skip this object's contribution towards
+			// usage.
+			return sizeSummary{}, errSkipFile
 		}
 		return sizeS, nil
 	}, scanMode)

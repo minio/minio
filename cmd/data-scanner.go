@@ -917,16 +917,17 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 	return 0
 }
 
-func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (applied bool, size int64) {
+func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (action lifecycle.Action, size int64) {
 	size, err := oi.GetActualSize()
 	if i.debug {
 		logger.LogIf(ctx, err)
 	}
 	if i.lifeCycle == nil {
-		return false, size
+		return action, size
 	}
 
 	versionID := oi.VersionID
+	vcfg, _ := globalBucketVersioningSys.Get(i.bucket)
 	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
 	replcfg, _ := getReplicationConfig(ctx, i.bucket)
 	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, replcfg, oi)
@@ -938,7 +939,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		}
 	}
 	defer func() {
-		if applied {
+		if lcEvt.Action != lifecycle.NoneAction {
 			numVersions := uint64(1)
 			if lcEvt.Action == lifecycle.DeleteAllVersionsAction {
 				numVersions = uint64(oi.NumVersions)
@@ -948,14 +949,21 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	}()
 
 	switch lcEvt.Action {
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction, lifecycle.DeleteAllVersionsAction:
-		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), 0
-	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), size
-	default:
-		// No action.
-		return false, size
+	// This version doesn't contribute towards sizeS only when it is permanently deleted.
+	// This can happen when,
+	// - ExpireObjectAllVersions flag is enabled
+	// - NoncurrentVersionExpiration is applicable
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteAllVersionsAction:
+		size = 0
+	case lifecycle.DeleteAction:
+		// On a non-versioned bucket, DeleteObject removes the only version permanently.
+		if !vcfg.PrefixEnabled(oi.Name) {
+			size = 0
+		}
 	}
+
+	applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi)
+	return lcEvt.Action, size
 }
 
 // applyTierObjSweep removes remote object pending deletion and the free-version
@@ -1097,15 +1105,22 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 // The resulting size on disk will always be returned.
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
-func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) int64 {
+func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) (objDeleted bool, size int64) {
 	done := globalScannerMetrics.time(scannerMetricILM)
-	applied, size := i.applyLifecycle(ctx, o, oi)
+	var action lifecycle.Action
+	action, size = i.applyLifecycle(ctx, o, oi)
 	done()
+
+	// Note: objDeleted is true if and only if action ==
+	// lifecycle.DeleteAllVersionsAction
+	if action == lifecycle.DeleteAllVersionsAction {
+		return true, 0
+	}
 
 	// For instance, an applied lifecycle means we remove/transitioned an object
 	// from the current deployment, which means we don't have to call healing
 	// routine even if we are asked to do via heal flag.
-	if !applied {
+	if action == lifecycle.NoneAction {
 		if i.heal.enabled {
 			done := globalScannerMetrics.time(scannerMetricHealCheck)
 			size = i.applyHealing(ctx, o, oi)
@@ -1126,7 +1141,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 		i.healReplication(ctx, o, oi.Clone(), sizeS)
 		done()
 	}
-	return size
+	return false, size
 }
 
 func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, rcfg *replication.Config, obj ObjectInfo) lifecycle.Event {
