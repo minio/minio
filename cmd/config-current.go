@@ -101,7 +101,7 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.DriveSubSys,
-			Description: "enable drive config",
+			Description: "enable drive specific settings",
 		},
 		config.HelpKV{
 			Key:         config.SiteSubSys,

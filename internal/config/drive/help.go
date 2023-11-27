@@ -27,7 +27,7 @@ var (
 		config.HelpKV{
 			Key:         MaxTimeout,
 			Type:        "string",
-			Description: "set max_timeout for drive, default 2min",
+			Description: "set per call max_timeout for the drive, defaults to 2 minutes",
 			Optional:    true,
 		},
 	}
