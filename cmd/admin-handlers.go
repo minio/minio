@@ -2572,7 +2572,7 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
-	for _, tgt := range globalNotifyTargetList.Targets() {
+	for _, tgt := range globalEventNotifier.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()
