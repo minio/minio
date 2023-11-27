@@ -68,13 +68,15 @@ func LookupConfig(kvs config.KVS) (cfg *Config, err error) {
 			d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
 		}
 	}
+	cfg = &Config{
+		mutex: sync.RWMutex{},
+	}
 	dur, _ := time.ParseDuration(d)
 	if dur < time.Second {
 		cfg.MaxTimeout = time.Minute * 2
 	} else {
 		cfg.MaxTimeout = getMaxTimeout(dur)
 	}
-	cfg.mutex = sync.RWMutex{}
 	return cfg, err
 }
 
