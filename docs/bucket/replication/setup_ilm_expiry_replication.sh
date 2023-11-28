@@ -204,7 +204,7 @@ fi
 
 ## Check to make sure sitea transition rule is not overwritten
 transDays=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Transition.Days')
-if [ $transDays -ne 0 ] || [ "${transDays}" == "null" ] ; then
+if [ $transDays -ne 0 ] || [ "${transDays}" == "null" ]; then
 	echo "BUG: Transition rule on sitea seems to be overwritten"
 	exit 1
 fi
