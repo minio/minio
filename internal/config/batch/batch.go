@@ -124,15 +124,24 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+	if rduration < 0 {
+		return cfg, config.ErrInvalidBatchReplicationWorkersWait(nil)
+	}
 
 	kduration, err := time.ParseDuration(env.Get(EnvKeyRotationWorkersWait, kvs.GetWithDefault(KeyRotationWorkersWait, DefaultKVS)))
 	if err != nil {
 		return cfg, err
 	}
+	if kduration < 0 {
+		return cfg, config.ErrInvalidBatchKeyRotationWorkersWait(nil)
+	}
 
 	eduration, err := time.ParseDuration(env.Get(EnvKeyExpirationWorkersWait, kvs.GetWithDefault(ExpirationWorkersWait, DefaultKVS)))
 	if err != nil {
 		return cfg, err
+	}
+	if eduration < 0 {
+		return cfg, config.ErrInvalidBatchExpirationWorkersWait(nil)
 	}
 
 	if rduration > 0 {

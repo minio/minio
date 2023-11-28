@@ -224,4 +224,19 @@ Examples:
 		"",
 		"MINIO_API_TRANSITION_WORKERS: should be >= GOMAXPROCS/2",
 	)
+	ErrInvalidBatchKeyRotationWorkersWait = newErrFn(
+		"Invalid value for batch key rotation workers wait",
+		"Please input a non-negative duration",
+		"keyrotation_workers_wait should be > 0ms",
+	)
+	ErrInvalidBatchReplicationWorkersWait = newErrFn(
+		"Invalid value for batch replication workers wait",
+		"Please input a non-negative duration",
+		"replication_workers_wait should be > 0ms",
+	)
+	ErrInvalidBatchExpirationWorkersWait = newErrFn(
+		"Invalid value for batch expiration workers wait",
+		"Please input a non-negative duration",
+		"expiration_workers_wait should be > 0ms",
+	)
 )

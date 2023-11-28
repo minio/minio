@@ -115,8 +115,8 @@ func (b BatchJobSnowball) Validate() error {
 
 // BatchJobSizeFilter supports size based filters - LesserThan and GreaterThan
 type BatchJobSizeFilter struct {
-	UpperBound BatchJobSize `yaml:"lessThan,omitempty" json:"lessThan"`
-	LowerBound BatchJobSize `yaml:"greaterThan,omitempty" json:"greaterThan"`
+	UpperBound BatchJobSize `yaml:"lessThan" json:"lessThan"`
+	LowerBound BatchJobSize `yaml:"greaterThan" json:"greaterThan"`
 }
 
 // InRange returns true in the following cases and false otherwise,

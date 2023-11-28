@@ -2036,7 +2036,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 							}
 
 							// Note: entry.fileInfoVersions returns versions sorted in reverse chronological order based on ModTime
-							if opts.WalkVersionsSort == WalkVersionsSortAsc {
+							if opts.VersionsSort == WalkVersionsSortAsc {
 								versionsSorter(fivs.Versions).reverse()
 							}
 

@@ -471,10 +471,10 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	defer cancel()
 
 	results := make(chan ObjectInfo, workerSize)
-	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, ObjectOptions{
-		WalkMarker:       lastObject,
-		WalkLatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
-		WalkVersionsSort: WalkVersionsSortDesc,
+	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
+		Marker:       lastObject,
+		LatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
+		VersionsSort: WalkVersionsSortDesc,
 	}); err != nil {
 		// Do not need to retry if we can't list objects on source.
 		return err
@@ -516,7 +516,6 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		toDel         []expireObjInfo
 	)
 	for result := range results {
-		result := result
 		// Apply filter to find the matching rule to apply expiry
 		// actions accordingly.
 		// nolint:gocritic
@@ -526,8 +525,17 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 			if len(toDel) > 10 { // batch up to 10 objects/versions to be expired simultaneously.
 				xfer := make([]expireObjInfo, len(toDel))
 				copy(xfer, toDel)
-				expireCh <- xfer
-				toDel = toDel[:0] // resetting toDel
+
+				var done bool
+				select {
+				case <-ctx.Done():
+					done = true
+				case expireCh <- xfer:
+					toDel = toDel[:0] // resetting toDel
+				}
+				if done {
+					break
+				}
 			}
 			var match BatchJobExpireFilter
 			var found bool

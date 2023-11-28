@@ -122,10 +122,11 @@ type ObjectOptions struct {
 
 // WalkOptions provides filtering, marker and other Walk() specific options.
 type WalkOptions struct {
-	Filter     func(info FileInfo) bool // return WalkFilter returns 'true/false'
-	Marker     string                   // set to skip until this object
-	LatestOnly bool                     // returns only latest versions for all matching objects
-	AskDisks   string                   // dictates how many disks are being listed
+	Filter       func(info FileInfo) bool // return WalkFilter returns 'true/false'
+	Marker       string                   // set to skip until this object
+	LatestOnly   bool                     // returns only latest versions for all matching objects
+	AskDisks     string                   // dictates how many disks are being listed
+	VersionsSort WalkVersionsSortOrder    // sort order for versions of the same object; default: Ascending order in ModTime
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
