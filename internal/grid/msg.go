@@ -186,6 +186,16 @@ func (f Flags) String() string {
 	return "[" + strings.Join(res, ",") + "]"
 }
 
+// Set one or more flags on f.
+func (f *Flags) Set(flags Flags) {
+	*f |= flags
+}
+
+// Clear one or more flags on f.
+func (f *Flags) Clear(flags Flags) {
+	*f &^= flags
+}
+
 // parse an incoming message.
 func (m *message) parse(b []byte) (*subHandlerID, []byte, error) {
 	var sub *subHandlerID
