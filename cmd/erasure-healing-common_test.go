@@ -273,7 +273,7 @@ func TestListOnlineDisks(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", filepath.Join(object, "part.1"), dErr)
@@ -455,7 +455,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", pathJoin(object, xlStorageFormatFile), dErr)

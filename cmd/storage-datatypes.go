@@ -24,7 +24,7 @@ import (
 // DeleteOptions represents the disk level delete options available for the APIs
 type DeleteOptions struct {
 	Recursive bool `msg:"r"`
-	Force     bool `msg:"f"`
+	Immediate bool `msg:"i"`
 }
 
 //go:generate msgp -file=$GOFILE
