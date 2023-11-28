@@ -1414,8 +1414,8 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
 			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 				err = x.addVersion(ventry)
+				return "", err
 			}
-			return "", err
 		case ObjectType:
 			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
