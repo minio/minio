@@ -6095,8 +6095,11 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 		// else simply add to the map. This may happen if ILM expiry replication
 		// was disabled for sometime and rules were updated independently in different
 		// sites. Latest changes would get applied but merge only the non transition details
-		if _, ok := rMap[id]; ok {
-			rMap[id] = rl.CloneNonTransition()
+		if existingRl, ok := rMap[id]; ok {
+			clonedRl := rl.CloneNonTransition()
+			clonedRl.Transition = existingRl.Transition
+			clonedRl.NoncurrentVersionTransition = existingRl.NoncurrentVersionTransition
+			rMap[id] = clonedRl
 		} else {
 			rMap[id] = rl
 		}
