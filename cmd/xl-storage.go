@@ -653,7 +653,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			}
 		}
 		if objDeleted {
-			// we return errSkipFile to signal this function's
+			// we return errIgnoreFileContrib to signal this function's
 			// callers to skip this object's contribution towards
 			// usage.
 			return sizeSummary{}, errIgnoreFileContrib
