@@ -95,10 +95,6 @@ type ObjectOptions struct {
 	// participating in a rebalance operation. Typically set for 'write' operations.
 	SkipRebalancing bool
 
-	WalkFilter      func(info FileInfo) bool // return WalkFilter returns 'true/false'
-	WalkMarker      string                   // set to skip until this object
-	WalkLatestOnly  bool                     // returns only latest versions for all matching objects
-	WalkAskDisks    string                   // dictates how many disks are being listed
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
 	// IndexCB will return any index created but the compression.
@@ -111,6 +107,14 @@ type ObjectOptions struct {
 	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.
 
 	FastGetObjInfo bool // Only for S3 Head/Get Object calls for now
+}
+
+// WalkOptions provides filtering, marker and other Walk() specific options.
+type WalkOptions struct {
+	Filter     func(info FileInfo) bool // return WalkFilter returns 'true/false'
+	Marker     string                   // set to skip until this object
+	LatestOnly bool                     // returns only latest versions for all matching objects
+	AskDisks   string                   // dictates how many disks are being listed
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
@@ -224,7 +228,7 @@ type ObjectLayer interface {
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (result ListObjectVersionsInfo, err error)
 	// Walk lists all objects including versions, delete markers.
-	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error
+	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts WalkOptions) error
 
 	// Object operations.
 

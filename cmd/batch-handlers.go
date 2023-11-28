@@ -1074,6 +1074,11 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		return err
 	}
 
+	walkQuorum := env.Get("_MINIO_BATCH_REPLICATION_WALK_QUORUM", "strict")
+	if walkQuorum == "" {
+		walkQuorum = "strict"
+	}
+
 	retryAttempts := ri.RetryAttempts
 	retry := false
 	for attempts := 1; attempts <= retryAttempts; attempts++ {
@@ -1083,9 +1088,11 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// one of source/target is s3, skip delete marker and all versions under the same object name.
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 
-		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, walkCh, ObjectOptions{
-			WalkMarker: lastObject,
-			WalkFilter: selectObj,
+		results := make(chan ObjectInfo, 100)
+		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, results, WalkOptions{
+			Marker:   lastObject,
+			Filter:   selectObj,
+			AskDisks: walkQuorum,
 		}); err != nil {
 			cancel()
 			// Do not need to retry if we can't list objects on source.
@@ -1429,7 +1436,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobPrefix, resultCh, ObjectOptions{}); err != nil {
+	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobPrefix, resultCh, WalkOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1646,7 +1653,7 @@ func (j *BatchJobPool) resume() {
 	results := make(chan ObjectInfo, 100)
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
-	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, ObjectOptions{}); err != nil {
+	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, WalkOptions{}); err != nil {
 		logger.LogIf(j.ctx, err)
 		return
 	}
