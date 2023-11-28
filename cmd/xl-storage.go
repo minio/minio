@@ -1095,18 +1095,27 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) error {
+func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
 	if recursive {
-		if err := renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket)); err != nil {
-			return err
-		}
+		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket))
 	} else {
-		if err := Rename(filePath, targetPath); err != nil {
-			return err
+		err = Rename(filePath, targetPath)
+	}
+
+	// ENOSPC is a valid error from rename(); remove instead of rename in that case
+	if err == errDiskFull {
+		if recursive {
+			err = removeAll(filePath)
+		} else {
+			err = Remove(filePath)
 		}
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// immediately purge the target
