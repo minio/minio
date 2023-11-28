@@ -786,7 +786,8 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 					mu.Unlock()
 				} else {
 					// Read the latest version
-					ri, err := readRawFileInfo(ctx, disk, bucket, object, readData)
+					var ri RawFileInfo
+					ri, err = readRawFileInfo(ctx, disk, bucket, object, readData)
 					mu.Lock()
 					rawArr[i], errs[i] = ri, err
 					mu.Unlock()
