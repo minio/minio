@@ -656,7 +656,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			// we return errSkipFile to signal this function's
 			// callers to skip this object's contribution towards
 			// usage.
-			return sizeSummary{}, errSkipFile
+			return sizeSummary{}, errIgnoreFileContrib
 		}
 		return sizeS, nil
 	}, scanMode)

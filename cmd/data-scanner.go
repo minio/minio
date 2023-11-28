@@ -477,7 +477,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			item.heal.enabled = item.heal.enabled && f.healObjectSelect > 0
 
 			sz, err := f.getSize(item)
-			if err != nil {
+			if err != nil && err != errIgnoreFileContrib {
 				wait() // wait to proceed to next entry.
 				if err != errSkipFile && f.dataUsageScannerDebug {
 					console.Debugf(scannerLogPrefix+" getSize \"%v/%v\" returned err: %v\n", bucket, item.objectPath(), err)
@@ -495,8 +495,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// object.
 			delete(abandonedChildren, pathJoin(item.bucket, item.objectPath()))
 
-			into.addSizes(sz)
-			into.Objects++
+			if err != errIgnoreFileContrib {
+				into.addSizes(sz)
+				into.Objects++
+			}
 
 			wait() // wait to proceed to next entry.
 

@@ -118,6 +118,8 @@ var errDoneForNow = errors.New("done for now")
 // to proceed to next entry.
 var errSkipFile = errors.New("skip this file")
 
+var errIgnoreFileContrib = errors.New("ignore this file's contribution toward data-usage")
+
 // errXLBackend XL drive mode requires fresh deployment.
 var errXLBackend = errors.New("XL backend requires fresh drive")
 
