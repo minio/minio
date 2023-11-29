@@ -267,7 +267,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	// Validate that user.AccessKey's policies can be retrieved - it may not
 	// be in case the user is disabled.
-	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, false); err != nil {
+	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, user.Groups...); err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
@@ -630,7 +630,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
+	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
