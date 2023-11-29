@@ -544,7 +544,10 @@ func (c *Connection) send(msg []byte) error {
 // queueMsg queues a message, with an optional payload.
 // sender should not reference msg.Payload
 func (c *Connection) queueMsg(msg message, payload sender) error {
-	msg.Flags |= c.baseFlags
+	// Add baseflags.
+	msg.Flags.Set(c.baseFlags)
+	// This cannot encode subroute.
+	msg.Flags.Clear(FlagSubroute)
 	if payload != nil {
 		if cap(msg.Payload) < payload.Msgsize() {
 			old := msg.Payload

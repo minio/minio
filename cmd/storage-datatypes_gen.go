@@ -245,10 +245,10 @@ func (z *DeleteFileHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
 						err = msgp.WrapError(err, "Opts", "Recursive")
 						return
 					}
-				case "f":
-					z.Opts.Force, err = dc.ReadBool()
+				case "i":
+					z.Opts.Immediate, err = dc.ReadBool()
 					if err != nil {
-						err = msgp.WrapError(err, "Opts", "Force")
+						err = msgp.WrapError(err, "Opts", "Immediate")
 						return
 					}
 				default:
@@ -319,14 +319,14 @@ func (z *DeleteFileHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Opts", "Recursive")
 		return
 	}
-	// write "f"
-	err = en.Append(0xa1, 0x66)
+	// write "i"
+	err = en.Append(0xa1, 0x69)
 	if err != nil {
 		return
 	}
-	err = en.WriteBool(z.Opts.Force)
+	err = en.WriteBool(z.Opts.Immediate)
 	if err != nil {
-		err = msgp.WrapError(err, "Opts", "Force")
+		err = msgp.WrapError(err, "Opts", "Immediate")
 		return
 	}
 	return
@@ -351,9 +351,9 @@ func (z *DeleteFileHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "r"
 	o = append(o, 0x82, 0xa1, 0x72)
 	o = msgp.AppendBool(o, z.Opts.Recursive)
-	// string "f"
-	o = append(o, 0xa1, 0x66)
-	o = msgp.AppendBool(o, z.Opts.Force)
+	// string "i"
+	o = append(o, 0xa1, 0x69)
+	o = msgp.AppendBool(o, z.Opts.Immediate)
 	return
 }
 
@@ -414,10 +414,10 @@ func (z *DeleteFileHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error)
 						err = msgp.WrapError(err, "Opts", "Recursive")
 						return
 					}
-				case "f":
-					z.Opts.Force, bts, err = msgp.ReadBoolBytes(bts)
+				case "i":
+					z.Opts.Immediate, bts, err = msgp.ReadBoolBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Opts", "Force")
+						err = msgp.WrapError(err, "Opts", "Immediate")
 						return
 					}
 				default:
@@ -470,10 +470,10 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Recursive")
 				return
 			}
-		case "f":
-			z.Force, err = dc.ReadBool()
+		case "i":
+			z.Immediate, err = dc.ReadBool()
 			if err != nil {
-				err = msgp.WrapError(err, "Force")
+				err = msgp.WrapError(err, "Immediate")
 				return
 			}
 		default:
@@ -500,14 +500,14 @@ func (z DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Recursive")
 		return
 	}
-	// write "f"
-	err = en.Append(0xa1, 0x66)
+	// write "i"
+	err = en.Append(0xa1, 0x69)
 	if err != nil {
 		return
 	}
-	err = en.WriteBool(z.Force)
+	err = en.WriteBool(z.Immediate)
 	if err != nil {
-		err = msgp.WrapError(err, "Force")
+		err = msgp.WrapError(err, "Immediate")
 		return
 	}
 	return
@@ -520,9 +520,9 @@ func (z DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "r"
 	o = append(o, 0x82, 0xa1, 0x72)
 	o = msgp.AppendBool(o, z.Recursive)
-	// string "f"
-	o = append(o, 0xa1, 0x66)
-	o = msgp.AppendBool(o, z.Force)
+	// string "i"
+	o = append(o, 0xa1, 0x69)
+	o = msgp.AppendBool(o, z.Immediate)
 	return
 }
 
@@ -550,10 +550,10 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Recursive")
 				return
 			}
-		case "f":
-			z.Force, bts, err = msgp.ReadBoolBytes(bts)
+		case "i":
+			z.Immediate, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Force")
+				err = msgp.WrapError(err, "Immediate")
 				return
 			}
 		default:

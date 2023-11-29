@@ -118,7 +118,7 @@ func (er erasureObjects) removePartMeta(bucket, object, uploadID, dataDir string
 		g.Go(func() error {
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 
 			return nil
@@ -145,11 +145,11 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 
 			return nil
@@ -185,7 +185,7 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 			defer wg.Done()
 			disk.Delete(ctx, bucket, prefix, DeleteOptions{
 				Recursive: true,
-				Force:     false,
+				Immediate: false,
 			})
 		}(disk)
 	}
@@ -564,7 +564,7 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 			}
 			index := index
 			g.Go(func() error {
-				return disks[index].Delete(ctx, dstBucket, dstEntry, DeleteOptions{Force: true})
+				return disks[index].Delete(ctx, dstBucket, dstEntry, DeleteOptions{Immediate: true})
 			}, index)
 		}
 		// Ignore these errors.

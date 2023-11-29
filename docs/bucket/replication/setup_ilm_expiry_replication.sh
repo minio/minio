@@ -109,6 +109,25 @@ if [ $count -ne 1 ]; then
 	exit 1
 fi
 
+## Check replication of rules content
+expDays=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Expiration.Days')
+noncurrentDays=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].NoncurrentVersionExpiration.NoncurrentDays')
+if [ $expDays -ne 3 ]; then
+	echo "BUG: Incorrect expiry days '${expDays}' set for 'siteb'"
+	exit 1
+fi
+if [ $noncurrentDays -ne 2 ]; then
+	echo "BUG: Incorrect non current expiry days '${noncurrentDays}' set for siteb"
+	exit 1
+fi
+
+## Make sure transition rule not replicated to siteb
+tranDays=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Transition.Days')
+if [ "${tranDays}" != "null" ]; then
+	echo "BUG: Transition rules as well copied to siteb"
+	exit 1
+fi
+
 ## Check replication of rules prefix and tags
 prefix=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Prefix' | sed 's/"//g')
 tagName1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Key' | sed 's/"//g')
@@ -180,6 +199,13 @@ if [ $count1 -ne 888 ]; then
 fi
 if [ $count2 -ne 888 ]; then
 	echo "BUG: Latest expiration days not updated on 'siteb'"
+	exit 1
+fi
+
+## Check to make sure sitea transition rule is not overwritten
+transDays=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Transition.Days')
+if [ $transDays -ne 0 ] || [ "${transDays}" == "null" ]; then
+	echo "BUG: Transition rule on sitea seems to be overwritten"
 	exit 1
 fi
 

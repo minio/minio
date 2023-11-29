@@ -567,11 +567,19 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 		versioned := vcfg != nil && vcfg.Versioned(item.objectPath())
 
+		var objDeleted bool
 		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
-			sz := item.applyActions(ctx, objAPI, oi, &sizeS)
+			var sz int64
+			objDeleted, sz = item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
 
+			// DeleteAllVersionsAction: The object and all its
+			// versions are expired and
+			// doesn't contribute toward data usage.
+			if objDeleted {
+				break
+			}
 			actualSz, err := oi.GetActualSize()
 			if err != nil {
 				continue
@@ -643,6 +651,12 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 					res["repl-pending-"+tgt] = fmt.Sprintf("%d versions, %d bytes", st.pendingCount, st.pendingSize)
 				}
 			}
+		}
+		if objDeleted {
+			// we return errIgnoreFileContrib to signal this function's
+			// callers to skip this object's contribution towards
+			// usage.
+			return sizeSummary{}, errIgnoreFileContrib
 		}
 		return sizeS, nil
 	}, scanMode)
@@ -1095,22 +1109,32 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) error {
+func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
 	if recursive {
-		if err := renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket)); err != nil {
-			return err
-		}
+		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket))
 	} else {
-		if err := Rename(filePath, targetPath); err != nil {
-			return err
+		err = Rename(filePath, targetPath)
+	}
+
+	// ENOSPC is a valid error from rename(); remove instead of rename in that case
+	if err == errDiskFull {
+		if recursive {
+			err = removeAll(filePath)
+		} else {
+			err = Remove(filePath)
 		}
+		return err // Avoid the immediate purge since not needed
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// immediately purge the target
-	if force {
+	if immediatePurge {
 		removeAll(targetPath)
 	}
 
@@ -1123,7 +1147,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if HasSuffix(path, SlashSeparator) {
 		return s.Delete(ctx, volume, path, DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		})
 	}
 
@@ -2148,7 +2172,7 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 // move up the tree, deleting empty parent directories until it finds one
 // with files in it. Returns nil for a non-empty directory even when
 // recursive is set to false.
-func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force bool) error {
+func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate bool) error {
 	if basePath == "" || deletePath == "" {
 		return nil
 	}
@@ -2161,7 +2185,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force boo
 
 	var err error
 	if recursive {
-		err = s.moveToTrash(deletePath, true, force)
+		err = s.moveToTrash(deletePath, true, immediate)
 	} else {
 		err = Remove(deletePath)
 	}
@@ -2233,7 +2257,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 	}
 
 	// Delete file and delete parent directory as well if it's empty.
-	return s.deleteFile(volumeDir, filePath, deleteOpts.Recursive, deleteOpts.Force)
+	return s.deleteFile(volumeDir, filePath, deleteOpts.Recursive, deleteOpts.Immediate)
 }
 
 func skipAccessChecks(volume string) (ok bool) {

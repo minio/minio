@@ -786,7 +786,8 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 					mu.Unlock()
 				} else {
 					// Read the latest version
-					ri, err := readRawFileInfo(ctx, disk, bucket, object, readData)
+					var ri RawFileInfo
+					ri, err = readRawFileInfo(ctx, disk, bucket, object, readData)
 					mu.Lock()
 					rawArr[i], errs[i] = ri, err
 					mu.Unlock()
@@ -1771,11 +1772,11 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 			// - The prefix__XLDIR__
 			defer disks[index].Delete(ctx, bucket, dirPrefix, DeleteOptions{
 				Recursive: true,
-				Force:     true,
+				Immediate: true,
 			})
 			return disks[index].Delete(ctx, bucket, prefix, DeleteOptions{
 				Recursive: true,
-				Force:     true,
+				Immediate: true,
 			})
 		}, index)
 	}
