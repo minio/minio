@@ -143,8 +143,13 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	healBuckets := make([]string, len(buckets))
 	copy(healBuckets, buckets)
 
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
 	for _, bucket := range healBuckets {
-		_, err := globalBucketMetadataSys.objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
+		_, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
 		if err != nil {
 			// Log bucket healing error if any, we shall retry again.
 			logger.LogIf(ctx, err)
@@ -195,16 +200,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		tracker.setBucket(bucket)
 		// Heal current bucket again in case if it is failed
 		// in the beginning of erasure set healing
-		if _, err := globalBucketMetadataSys.objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
-			ScanMode: scanMode,
-		}); err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-
-		// Heal current bucket again in case if it is failed
-		// in the beginning of erasure set healing
-		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
+		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
 			logger.LogIf(ctx, err)
