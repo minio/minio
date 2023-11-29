@@ -116,6 +116,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 		}
 	default:
 		// we should never come here, Validate should have caught this.
+		logger.LogOnceIf(context.Background(), fmt.Errorf("invalid filter type: %s", ef.Type), ef.Type)
 		return false
 	}
 
@@ -301,8 +302,6 @@ func (oiCache objInfoCache) Get(toDel ObjectToDelete) (*ObjectInfo, bool) {
 }
 
 func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
-	defer wk.Give()
-
 	vc, _ := globalBucketVersioningSys.Get(r.Bucket)
 	retryAttempts := r.Retry.Attempts
 	delay := job.Expire.Retry.Delay
@@ -361,7 +360,6 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
 					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
 						DeletePrefix: true,
-						NoLock:       true,
 					})
 					if err != nil {
 						stopFn(exp, err)
@@ -505,8 +503,6 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	}()
 
 	expireCh := make(chan []expireObjInfo, workerSize)
-	wk.Take() // For batchObjsForDelete goroutine
-
 	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
 
 	var (
@@ -616,6 +612,9 @@ func (e batchExpireJobError) Error() string {
 	return e.Description
 }
 
+// maxBatchRules maximum number of rules a batch-expiry job supports
+const maxBatchRules = 50
+
 // Validate validates the job definition input
 func (r *BatchJobExpire) Validate(ctx context.Context, job BatchJobRequest, o ObjectLayer) error {
 	if r == nil {
@@ -623,11 +622,19 @@ func (r *BatchJobExpire) Validate(ctx context.Context, job BatchJobRequest, o Ob
 	}
 
 	if r.APIVersion != batchExpireAPIVersion {
-		return errInvalidArgument
+		return batchExpireJobError{
+			Code:           "InvalidArgument",
+			Description:    "Unsupported batch expire API version",
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	}
 
 	if r.Bucket == "" {
-		return errInvalidArgument
+		return batchExpireJobError{
+			Code:           "InvalidArgument",
+			Description:    "Bucket argument missing",
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	}
 
 	if _, err := o.GetBucketInfo(ctx, r.Bucket, BucketOptions{}); err != nil {
@@ -641,18 +648,30 @@ func (r *BatchJobExpire) Validate(ctx context.Context, job BatchJobRequest, o Ob
 		return err
 	}
 
-	if len(r.Rules) > 10 {
-		return errors.New("Too many rules. Batch expire job can't have more than 10 rules")
+	if len(r.Rules) > maxBatchRules {
+		return batchExpireJobError{
+			Code:           "InvalidArgument",
+			Description:    "Too many rules. Batch expire job can't have more than 100 rules",
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	}
 
 	for _, rule := range r.Rules {
 		if err := rule.Validate(); err != nil {
-			return err
+			return batchExpireJobError{
+				Code:           "InvalidArgument",
+				Description:    fmt.Sprintf("Invalid batch expire rule: %s", err),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		}
 	}
 
 	if err := r.Retry.Validate(); err != nil {
-		return err
+		return batchExpireJobError{
+			Code:           "InvalidArgument",
+			Description:    fmt.Sprintf("Invalid batch expire retry configuration: %s", err),
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	}
 	return nil
 }
