@@ -2460,7 +2460,7 @@ func getNotificationMetrics() *MetricsGroup {
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
 					Name:      "current_send_in_progress",
-					Help:      "Number of concurrent async Send calls active to all targets",
+					Help:      "Number of concurrent async Send calls active to all targets (deprecated, please use 'minio_notify_target_current_send_in_progress' instead)",
 					Type:      gaugeMetric,
 				},
 				Value: float64(nstats.CurrentSendCalls),
@@ -2470,7 +2470,7 @@ func getNotificationMetrics() *MetricsGroup {
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
 					Name:      "events_skipped_total",
-					Help:      "Events that were skipped due to full queue",
+					Help:      "Events that were skipped to be sent to the targets due to the in-memory queue being full",
 					Type:      counterMetric,
 				},
 				Value: float64(nstats.EventsSkipped),
@@ -2480,7 +2480,7 @@ func getNotificationMetrics() *MetricsGroup {
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
 					Name:      "events_errors_total",
-					Help:      "Events that were failed while sending to target",
+					Help:      "Events that were failed to be sent to the targets (deprecated, please use 'minio_notify_target_failed_events' instead)",
 					Type:      counterMetric,
 				},
 				Value: float64(nstats.EventsErrorsTotal),
@@ -2490,21 +2490,54 @@ func getNotificationMetrics() *MetricsGroup {
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
 					Name:      "events_sent_total",
-					Help:      "Total number of events sent since start",
+					Help:      "Total number of events sent to the targets (deprecated, please use 'minio_notify_target_total_events' instead)",
 					Type:      counterMetric,
 				},
 				Value: float64(nstats.TotalEvents),
 			})
-			for _, st := range nstats.TargetStats {
+			for id, st := range nstats.TargetStats {
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_total_events",
+						Help:      "Total number of events sent (or) queued to the target",
+						Type:      counterMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.TotalEvents),
+				})
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_failed_events",
+						Help:      "Number of events failed to be sent (or) queued to the target",
+						Type:      counterMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.FailedEvents),
+				})
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_current_send_in_progress",
+						Help:      "Number of concurrent async Send calls active to the target",
+						Type:      gaugeMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.CurrentSendCalls),
+				})
 				metrics = append(metrics, Metric{
 					Description: MetricDescription{
 						Namespace: minioNamespace,
 						Subsystem: notifySubsystem,
 						Name:      "target_queue_length",
-						Help:      "Number of unsent notifications in queue for target",
+						Help:      "Number of events currently staged in the queue_dir configured for the target",
 						Type:      gaugeMetric,
 					},
-					VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
 					Value:          float64(st.CurrentQueue),
 				})
 			}
