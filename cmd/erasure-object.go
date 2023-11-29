@@ -1772,11 +1772,11 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 			// - The prefix__XLDIR__
 			defer disks[index].Delete(ctx, bucket, dirPrefix, DeleteOptions{
 				Recursive: true,
-				Force:     true,
+				Immediate: true,
 			})
 			return disks[index].Delete(ctx, bucket, prefix, DeleteOptions{
 				Recursive: true,
-				Force:     true,
+				Immediate: true,
 			})
 		}, index)
 	}

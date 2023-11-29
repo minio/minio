@@ -526,7 +526,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			if file != "xl.meta" {
 				disk.Delete(ctx, bucket, pathJoin(object, file), DeleteOptions{
 					Recursive: true,
-					Force:     false,
+					Immediate: false,
 				})
 			}
 		}
@@ -630,7 +630,7 @@ func TestHeadObjectNoQuorum(t *testing.T) {
 			if file != "xl.meta" {
 				disk.Delete(ctx, bucket, pathJoin(object, file), DeleteOptions{
 					Recursive: true,
-					Force:     false,
+					Immediate: false,
 				})
 			}
 		}

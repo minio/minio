@@ -364,7 +364,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	// Purge any existing temporary file, okay to ignore errors here.
 	defer disk.Delete(context.TODO(), minioMetaBucket, tmpFormat, DeleteOptions{
 		Recursive: false,
-		Force:     false,
+		Immediate: false,
 	})
 
 	// write to unique file.

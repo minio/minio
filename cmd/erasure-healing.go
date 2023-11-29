@@ -866,7 +866,7 @@ func (er *erasureObjects) healObjectDir(ctx context.Context, bucket, object stri
 					defer wg.Done()
 					_ = disk.Delete(ctx, bucket, object, DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 				}(index, disk)
 			}
