@@ -2158,7 +2158,7 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 // move up the tree, deleting empty parent directories until it finds one
 // with files in it. Returns nil for a non-empty directory even when
 // recursive is set to false.
-func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediatePurge bool) error {
+func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate bool) error {
 	if basePath == "" || deletePath == "" {
 		return nil
 	}
@@ -2171,7 +2171,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate
 
 	var err error
 	if recursive {
-		err = s.moveToTrash(deletePath, true, immediatePurge)
+		err = s.moveToTrash(deletePath, true, immediate)
 	} else {
 		err = Remove(deletePath)
 	}
