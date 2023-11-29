@@ -239,7 +239,7 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 		}
 		// loop through buckets and see if some with lost quorum
 		// these could be stale buckets lying around, queue a heal
-		// of such a bucket. This is neeed here as we identify such
+		// of such a bucket. This is needed here as we identify such
 		// buckets here while listing buckets. As part of regular
 		// globalBucketMetadataSys.Init() call would get a valid
 		// buckets only and not the quourum lost ones like this, so
