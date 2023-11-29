@@ -143,6 +143,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	healBuckets := make([]string, len(buckets))
 	copy(healBuckets, buckets)
 
+	for _, bucket := range healBuckets {
+		_, err := globalBucketMetadataSys.objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
+		if err != nil {
+			// Log bucket healing error if any, we shall retry again.
+			logger.LogIf(ctx, err)
+		}
+	}
+
 	info, err := tracker.disk.DiskInfo(ctx, false)
 	if err != nil {
 		return fmt.Errorf("unable to get disk information before healing it: %w", err)
@@ -185,6 +193,14 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 		tracker.setObject("")
 		tracker.setBucket(bucket)
+		// Heal current bucket again in case if it is failed
+		// in the beginning of erasure set healing
+		if _, err := globalBucketMetadataSys.objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
+			ScanMode: scanMode,
+		}); err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
 
 		if serverDebugLog {
 			console.Debugf(color.Green("healDrive:")+" healing bucket %s content on %s erasure set\n",

@@ -876,7 +876,7 @@ func isAllBucketsNotFound(errs []error) bool {
 	}
 	notFoundCount := 0
 	for _, err := range errs {
-		if err != nil && (err.Error() == errVolumeNotFound.Error() || err.Error() == errFileCorrupt.Error()) {
+		if err != nil && errors.Is(err, errVolumeNotFound) {
 			notFoundCount++
 		}
 	}
