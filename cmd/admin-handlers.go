@@ -60,6 +60,7 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 	"github.com/secure-io/sio-go"
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -2500,11 +2501,27 @@ func getTLSInfo() madmin.TLSInfo {
 
 	if globalIsTLS {
 		for _, c := range globalPublicCerts {
+			check := xxh3.Hash(c.RawIssuer)
+			check ^= xxh3.Hash(c.RawSubjectPublicKeyInfo)
+			// We XOR, so order doesn't matter.
+			for _, v := range c.DNSNames {
+				check ^= xxh3.HashString(v)
+			}
+			for _, v := range c.EmailAddresses {
+				check ^= xxh3.HashString(v)
+			}
+			for _, v := range c.IPAddresses {
+				check ^= xxh3.HashString(v.String())
+			}
+			for _, v := range c.URIs {
+				check ^= xxh3.HashString(v.String())
+			}
 			tlsInfo.Certs = append(tlsInfo.Certs, madmin.TLSCert{
 				PubKeyAlgo:    c.PublicKeyAlgorithm.String(),
 				SignatureAlgo: c.SignatureAlgorithm.String(),
 				NotBefore:     c.NotBefore,
 				NotAfter:      c.NotAfter,
+				Checksum:      strconv.FormatUint(check, 16),
 			})
 		}
 	}
