@@ -1109,7 +1109,7 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) (err error) {
+func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
@@ -1126,6 +1126,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) (err err
 		} else {
 			err = Remove(filePath)
 		}
+		return err // Avoid the immediate purge since not needed
 	}
 
 	if err != nil {
@@ -1133,7 +1134,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, force bool) (err err
 	}
 
 	// immediately purge the target
-	if force {
+	if immediatePurge {
 		removeAll(targetPath)
 	}
 
@@ -1146,7 +1147,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if HasSuffix(path, SlashSeparator) {
 		return s.Delete(ctx, volume, path, DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		})
 	}
 
@@ -2171,7 +2172,7 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 // move up the tree, deleting empty parent directories until it finds one
 // with files in it. Returns nil for a non-empty directory even when
 // recursive is set to false.
-func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force bool) error {
+func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate bool) error {
 	if basePath == "" || deletePath == "" {
 		return nil
 	}
@@ -2184,7 +2185,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, force boo
 
 	var err error
 	if recursive {
-		err = s.moveToTrash(deletePath, true, force)
+		err = s.moveToTrash(deletePath, true, immediate)
 	} else {
 		err = Remove(deletePath)
 	}
@@ -2256,7 +2257,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 	}
 
 	// Delete file and delete parent directory as well if it's empty.
-	return s.deleteFile(volumeDir, filePath, deleteOpts.Recursive, deleteOpts.Force)
+	return s.deleteFile(volumeDir, filePath, deleteOpts.Recursive, deleteOpts.Immediate)
 }
 
 func skipAccessChecks(volume string) (ok bool) {

@@ -892,7 +892,7 @@ func TestXLStorageListDir(t *testing.T) {
 
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		}); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
@@ -902,7 +902,7 @@ func TestXLStorageListDir(t *testing.T) {
 	// should fail with disk not found.
 	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", DeleteOptions{
 		Recursive: false,
-		Force:     false,
+		Immediate: false,
 	})
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
@@ -988,7 +988,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	for i, testCase := range testCases {
 		if err = xlStorage.Delete(context.Background(), testCase.srcVol, testCase.srcPath, DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		}); err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
@@ -1015,7 +1015,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 
 		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		}); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
@@ -1036,7 +1036,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	// should fail with disk not found.
 	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", DeleteOptions{
 		Recursive: false,
-		Force:     false,
+		Immediate: false,
 	})
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Drive not found\", got \"%s\"", err)
@@ -1862,7 +1862,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 
 	if err := storage.Delete(context.Background(), volName, fileName, DeleteOptions{
 		Recursive: false,
-		Force:     false,
+		Immediate: false,
 	}); err != nil {
 		t.Fatal(err)
 	}
