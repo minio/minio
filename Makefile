@@ -141,14 +141,23 @@ hotfix-vars:
 	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
 	$(eval TAG := "minio/minio:$(VERSION)")
 
-hotfix: hotfix-vars install ## builds minio binary with hotfix tags
-	@mv -f ./minio ./minio.$(VERSION)
-	@minisign -qQSm ./minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
-	@sha256sum < ./minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio.$(VERSION).sha256sum
+hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
+	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.0/pkger_2.2.0_linux_amd64.deb
+	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.0/linux-systemd/distributed/minio.service
+	@sudo apt install ./pkger_2.2.0_linux_amd64.deb --yes
+	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
+	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
+	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)
+	@minisign -qQSm minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
+	@sha256sum < minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION).sha256sum
+	@cp -af minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)* minio-release/$(GOOS)-$(GOARCH)/archive/
+	@pkger -r $(VERSION) --ignore
 
 hotfix-push: hotfix
-	@scp -q -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
-	@scp -q -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
 	@echo "Published new hotfix binaries at https://dl.min.io/server/minio/hotfixes/linux-amd64/archive/minio.$(VERSION)"
 
 docker-hotfix-push: docker-hotfix
@@ -183,3 +192,6 @@ clean: ## cleanup all generated assets
 	@rm -rvf build
 	@rm -rvf release
 	@rm -rvf .verify*
+	@rm -rvf minio-release
+	@rm -rvf minio.RELEASE*.hotfix.*
+	@rm -rvf pkger_*.deb
