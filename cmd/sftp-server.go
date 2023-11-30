@@ -114,7 +114,7 @@ func startSFTPServer(c *cli.Context) {
 				if err != nil {
 					return nil, err
 				}
-				ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, false, targetGroups...)
+				ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
 				if len(ldapPolicies) == 0 {
 					return nil, errAuthentication
 				}
