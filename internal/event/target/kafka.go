@@ -82,15 +82,13 @@ const (
 	EnvKafkaProducerCompressionLevel = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_LEVEL"
 )
 
-var (
-	codecs = map[string]sarama.CompressionCodec{
-		"none":   sarama.CompressionNone,
-		"gzip":   sarama.CompressionGZIP,
-		"snappy": sarama.CompressionSnappy,
-		"lz4":    sarama.CompressionLZ4,
-		"zstd":   sarama.CompressionZSTD,
-	}
-)
+var codecs = map[string]sarama.CompressionCodec{
+	"none":   sarama.CompressionNone,
+	"gzip":   sarama.CompressionGZIP,
+	"snappy": sarama.CompressionSnappy,
+	"lz4":    sarama.CompressionLZ4,
+	"zstd":   sarama.CompressionZSTD,
+}
 
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
