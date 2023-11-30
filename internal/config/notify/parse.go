@@ -366,6 +366,14 @@ var (
 			Key:   target.KafkaBatchSize,
 			Value: "0",
 		},
+		config.KV{
+			Key:   target.KafkaCompressionCodec,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaCompressionLevel,
+			Value: "",
+		},
 	}
 )
 
@@ -482,6 +490,19 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 
 		kafkaArgs.TLS.ClientTLSCert = env.Get(tlsClientTLSCertEnv, kv.Get(target.KafkaClientTLSCert))
 		kafkaArgs.TLS.ClientTLSKey = env.Get(tlsClientTLSKeyEnv, kv.Get(target.KafkaClientTLSKey))
+
+		compressionCodecEnv := target.EnvKafkaProducerCompressionCodec
+		if k != config.Default {
+			compressionCodecEnv = compressionCodecEnv + config.Default + k
+		}
+		kafkaArgs.Producer.Compression = env.Get(compressionCodecEnv, kv.Get(target.KafkaCompressionCodec))
+
+		compressionLevelEnv := target.EnvKafkaProducerCompressionLevel
+		if k != config.Default {
+			compressionLevelEnv = compressionLevelEnv + config.Default + k
+		}
+		compressionLevel, _ := strconv.Atoi(env.Get(compressionLevelEnv, kv.Get(target.KafkaCompressionLevel)))
+		kafkaArgs.Producer.CompressionLevel = compressionLevel
 
 		saslEnableEnv := target.EnvKafkaSASLEnable
 		if k != config.Default {

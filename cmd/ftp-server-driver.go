@@ -252,7 +252,7 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 		if err != nil {
 			return false, err
 		}
-		ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
+		ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
 		return len(ldapPolicies) > 0, nil
 	}
 
@@ -273,7 +273,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		if err != nil {
 			return nil, err
 		}
-		ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, false, targetGroups...)
+		ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
 		if len(ldapPolicies) == 0 {
 			return nil, errAuthentication
 		}
