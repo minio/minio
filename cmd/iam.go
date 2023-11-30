@@ -189,7 +189,7 @@ func (sys *IAMSys) Initialized() bool {
 // Load - loads all credentials, policies and policy mappings.
 func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	loadStartTime := time.Now()
-	err := sys.store.LoadIAMCache(ctx)
+	err := sys.store.LoadIAMCache(ctx, firstTime)
 	if err != nil {
 		atomic.AddUint64(&sys.TotalRefreshFailures, 1)
 		return err
