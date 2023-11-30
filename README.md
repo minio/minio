@@ -22,8 +22,8 @@ for more complete documentation.
 Run the following command to run the latest stable image of MinIO as a container using an ephemeral data volume:
 
 ```sh
-podman run -p 9000:9000 -p 9001:9001 \
-  quay.io/minio/minio server /data --console-address ":9001"
+podman run -p 9000:9000 -p 9090:9090 \
+  quay.io/minio/minio server /data --console-address ":9090"
 ```
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Console, an embedded
@@ -151,10 +151,10 @@ For hosts with ufw enabled (Debian based distros), you can use `ufw` command to 
 ufw allow 9000
 ```
 
-Below command enables all incoming traffic to ports ranging from 9000 to 9010.
+Below command enables all incoming traffic to ports ranging from 9000 to 9090.
 
 ```sh
-ufw allow 9000:9010/tcp
+ufw allow 9000:9090/tcp
 ```
 
 ### firewall-cmd
@@ -187,10 +187,10 @@ iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
 service iptables restart
 ```
 
-Below command enables all incoming traffic to ports ranging from 9000 to 9010.
+Below command enables all incoming traffic to ports ranging from 9000 to 9090.
 
 ```sh
-iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
+iptables -A INPUT -p tcp --dport 9000:9090 -j ACCEPT
 service iptables restart
 ```
 
@@ -208,7 +208,7 @@ MinIO redirects browser access requests to the configured server port (i.e. `127
 
 For deployments behind a load balancer, proxy, or ingress rule where the MinIO host IP address or port is not public, use the `MINIO_BROWSER_REDIRECT_URL` environment variable to specify the external hostname for the redirect. The LB/Proxy must have rules for directing traffic to the Console port specifically.
 
-For example, consider a MinIO deployment behind a proxy `https://minio.example.net`, `https://console.minio.example.net` with rules for forwarding traffic on port :9000 and :9001 to MinIO and the MinIO Console respectively on the internal network. Set `MINIO_BROWSER_REDIRECT_URL` to `https://console.minio.example.net` to ensure the browser receives a valid reachable URL.
+For example, consider a MinIO deployment behind a proxy `https://minio.example.net`, `https://console.minio.example.net` with rules for forwarding traffic on port :9000 and :9090 to MinIO and the MinIO Console respectively on the internal network. Set `MINIO_BROWSER_REDIRECT_URL` to `https://console.minio.example.net` to ensure the browser receives a valid reachable URL.
 
 Similarly, if your TLS certificates do not have the IP SAN for the MinIO server host, the MinIO Console may fail to validate the connection to the server. Use the `MINIO_SERVER_URL` environment variable  and specify the proxy-accessible hostname of the MinIO server to allow the Console to use the MinIO server API using the TLS certificate.
 
