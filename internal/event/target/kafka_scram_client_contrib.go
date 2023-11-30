@@ -38,6 +38,20 @@ func initScramClient(args KafkaArgs, config *sarama.Config) {
 		// default to PLAIN
 		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypePlaintext)
 	}
+	// set producer
+	codecs := map[string]sarama.CompressionCodec{
+		"none":   sarama.CompressionNone,
+		"gzip":   sarama.CompressionGZIP,
+		"snappy": sarama.CompressionSnappy,
+		"lz4":    sarama.CompressionLZ4,
+		"zstd":   sarama.CompressionZSTD,
+	}
+	cc, ok := codecs[strings.ToLower(args.Producer.Compression)]
+	if !ok {
+		return
+	}
+	config.Producer.Compression = cc
+	config.Producer.CompressionLevel = args.Producer.CompressionLevel
 }
 
 // KafkaSHA256 is a function that returns a crypto/sha256 hasher and should be used
