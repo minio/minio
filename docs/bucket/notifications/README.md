@@ -1150,7 +1150,7 @@ MINIO_NOTIFY_KAFKA_QUEUE_DIR                   (path)                      stagi
 MINIO_NOTIFY_KAFKA_QUEUE_LIMIT                 (number)                    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_KAFKA_COMMENT                     (sentence)                  optionally add a comment to this setting
 MINIO_NOTIFY_KAFKA_VERSION                     (string)                    specify the version of the Kafka cluster e.g. '2.2.0'
-MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_CODEC  (none|snappy|gzip|lz4|zstd) compression codec for producer messages, defaults to 'none'
+MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_CODEC  (none|snappy|gzip|lz4|zstd) compression codec for producer messages
 MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_LEVEL  (number)                    compression level for producer messages, defaults to '0'
 ```
 

@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,6 +80,16 @@ const (
 	EnvKafkaBatchSize                = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
 	EnvKafkaProducerCompressionCodec = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_CODEC"
 	EnvKafkaProducerCompressionLevel = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_LEVEL"
+)
+
+var (
+	codecs = map[string]sarama.CompressionCodec{
+		"none":   sarama.CompressionNone,
+		"gzip":   sarama.CompressionGZIP,
+		"snappy": sarama.CompressionSnappy,
+		"lz4":    sarama.CompressionLZ4,
+		"zstd":   sarama.CompressionZSTD,
+	}
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -399,6 +410,13 @@ func (target *KafkaTarget) initKafka() error {
 	config.Producer.Return.Errors = true
 	config.Producer.RequiredAcks = 1
 	config.Producer.Timeout = (5 * time.Second)
+	// Set Producer Compression
+	cc, ok := codecs[strings.ToLower(args.Producer.Compression)]
+	if ok {
+		config.Producer.Compression = cc
+		config.Producer.CompressionLevel = args.Producer.CompressionLevel
+	}
+
 	config.Net.ReadTimeout = (5 * time.Second)
 	config.Net.DialTimeout = (5 * time.Second)
 	config.Net.WriteTimeout = (5 * time.Second)
