@@ -198,6 +198,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 		tracker.setObject("")
 		tracker.setBucket(bucket)
+
 		// Heal current bucket again in case if it is failed
 		// in the beginning of erasure set healing
 		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
@@ -207,12 +208,21 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			continue
 		}
 
+		vc, _ := globalBucketVersioningSys.Get(bucket)
+
+		// Check if the current bucket has a configured lifecycle policy
+		lc, _ := globalLifecycleSys.Get(bucket)
+
+		// Check if bucket is object locked.
+		lr, _ := globalBucketObjectLockSys.Get(bucket)
+		rcfg, _ := getReplicationConfig(ctx, bucket)
+
 		if serverDebugLog {
 			console.Debugf(color.Green("healDrive:")+" healing bucket %s content on %s erasure set\n",
 				bucket, humanize.Ordinal(er.setIndex+1))
 		}
 
-		disks, _ := er.getOnlineDisksWithHealing()
+		disks, _ := er.getOnlineDisksWithHealing(false)
 		if len(disks) == 0 {
 			logger.LogIf(ctx, fmt.Errorf("no online disks found to heal the bucket `%s`", bucket))
 			continue
@@ -244,6 +254,26 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		healEntryFailure := func(sz uint64) healEntryResult {
 			return healEntryResult{
 				bytes: sz,
+			}
+		}
+
+		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
+			if lc == nil {
+				return false
+			}
+			versioned := vc != nil && vc.Versioned(object)
+			objInfo := fi.ToObjectInfo(bucket, object, versioned)
+
+			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
+			switch {
+			case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
+				applyExpiryOnTransitionedObject(ctx, newObjectLayerFn(), objInfo, evt, lcEventSrc_Heal)
+				return false
+			case evt.Action.Delete():
+				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Heal)
+				return true
+			default:
+				return false
 			}
 		}
 
@@ -329,10 +359,17 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 			var versionNotFound int
 			for _, version := range fivs.Versions {
-				// Ignore a version with a modtime newer than healing start
+				// Ignore a version with a modtime newer than healing start time.
 				if version.ModTime.After(tracker.Started) {
 					continue
 				}
+
+				// Apply lifecycle rules on the objects that are expired.
+				if filterLifecycle(bucket, version.Name, version) {
+					versionNotFound++
+					continue
+				}
+
 				if _, err := er.HealObject(ctx, bucket, encodedEntryName,
 					version.VersionID, madmin.HealOpts{
 						ScanMode: scanMode,

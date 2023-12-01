@@ -72,7 +72,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	disks, _ := er.getOnlineDisksWithHealing()
+	disks, _ := er.getOnlineDisksWithHealing(false)
 	if len(disks) == 0 {
 		return errors.New("listAndHeal: No non-healing drives found")
 	}

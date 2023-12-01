@@ -2014,7 +2014,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				go func() {
 					defer wg.Done()
 
-					disks, _ := set.getOnlineDisksWithHealing()
+					disks, _ := set.getOnlineDisksWithHealing(true)
 					if len(disks) == 0 {
 						cancel()
 						return

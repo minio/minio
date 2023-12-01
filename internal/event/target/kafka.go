@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,39 +44,51 @@ import (
 
 // Kafka input constants
 const (
-	KafkaBrokers       = "brokers"
-	KafkaTopic         = "topic"
-	KafkaQueueDir      = "queue_dir"
-	KafkaQueueLimit    = "queue_limit"
-	KafkaTLS           = "tls"
-	KafkaTLSSkipVerify = "tls_skip_verify"
-	KafkaTLSClientAuth = "tls_client_auth"
-	KafkaSASL          = "sasl"
-	KafkaSASLUsername  = "sasl_username"
-	KafkaSASLPassword  = "sasl_password"
-	KafkaSASLMechanism = "sasl_mechanism"
-	KafkaClientTLSCert = "client_tls_cert"
-	KafkaClientTLSKey  = "client_tls_key"
-	KafkaVersion       = "version"
-	KafkaBatchSize     = "batch_size"
+	KafkaBrokers          = "brokers"
+	KafkaTopic            = "topic"
+	KafkaQueueDir         = "queue_dir"
+	KafkaQueueLimit       = "queue_limit"
+	KafkaTLS              = "tls"
+	KafkaTLSSkipVerify    = "tls_skip_verify"
+	KafkaTLSClientAuth    = "tls_client_auth"
+	KafkaSASL             = "sasl"
+	KafkaSASLUsername     = "sasl_username"
+	KafkaSASLPassword     = "sasl_password"
+	KafkaSASLMechanism    = "sasl_mechanism"
+	KafkaClientTLSCert    = "client_tls_cert"
+	KafkaClientTLSKey     = "client_tls_key"
+	KafkaVersion          = "version"
+	KafkaBatchSize        = "batch_size"
+	KafkaCompressionCodec = "compression_codec"
+	KafkaCompressionLevel = "compression_level"
 
-	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
-	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
-	EnvKafkaTopic         = "MINIO_NOTIFY_KAFKA_TOPIC"
-	EnvKafkaQueueDir      = "MINIO_NOTIFY_KAFKA_QUEUE_DIR"
-	EnvKafkaQueueLimit    = "MINIO_NOTIFY_KAFKA_QUEUE_LIMIT"
-	EnvKafkaTLS           = "MINIO_NOTIFY_KAFKA_TLS"
-	EnvKafkaTLSSkipVerify = "MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY"
-	EnvKafkaTLSClientAuth = "MINIO_NOTIFY_KAFKA_TLS_CLIENT_AUTH"
-	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL"
-	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
-	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
-	EnvKafkaSASLMechanism = "MINIO_NOTIFY_KAFKA_SASL_MECHANISM"
-	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
-	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
-	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
-	EnvKafkaBatchSize     = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
+	EnvKafkaEnable                   = "MINIO_NOTIFY_KAFKA_ENABLE"
+	EnvKafkaBrokers                  = "MINIO_NOTIFY_KAFKA_BROKERS"
+	EnvKafkaTopic                    = "MINIO_NOTIFY_KAFKA_TOPIC"
+	EnvKafkaQueueDir                 = "MINIO_NOTIFY_KAFKA_QUEUE_DIR"
+	EnvKafkaQueueLimit               = "MINIO_NOTIFY_KAFKA_QUEUE_LIMIT"
+	EnvKafkaTLS                      = "MINIO_NOTIFY_KAFKA_TLS"
+	EnvKafkaTLSSkipVerify            = "MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY"
+	EnvKafkaTLSClientAuth            = "MINIO_NOTIFY_KAFKA_TLS_CLIENT_AUTH"
+	EnvKafkaSASLEnable               = "MINIO_NOTIFY_KAFKA_SASL"
+	EnvKafkaSASLUsername             = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
+	EnvKafkaSASLPassword             = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+	EnvKafkaSASLMechanism            = "MINIO_NOTIFY_KAFKA_SASL_MECHANISM"
+	EnvKafkaClientTLSCert            = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
+	EnvKafkaClientTLSKey             = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
+	EnvKafkaVersion                  = "MINIO_NOTIFY_KAFKA_VERSION"
+	EnvKafkaBatchSize                = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
+	EnvKafkaProducerCompressionCodec = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_CODEC"
+	EnvKafkaProducerCompressionLevel = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_LEVEL"
 )
+
+var codecs = map[string]sarama.CompressionCodec{
+	"none":   sarama.CompressionNone,
+	"gzip":   sarama.CompressionGZIP,
+	"snappy": sarama.CompressionSnappy,
+	"lz4":    sarama.CompressionLZ4,
+	"zstd":   sarama.CompressionZSTD,
+}
 
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
@@ -100,6 +113,10 @@ type KafkaArgs struct {
 		Password  string `json:"password"`
 		Mechanism string `json:"mechanism"`
 	} `json:"sasl"`
+	Producer struct {
+		Compression      string `json:"compression"`
+		CompressionLevel int    `json:"compressionLevel"`
+	} `json:"producer"`
 }
 
 // Validate KafkaArgs fields
@@ -391,6 +408,13 @@ func (target *KafkaTarget) initKafka() error {
 	config.Producer.Return.Errors = true
 	config.Producer.RequiredAcks = 1
 	config.Producer.Timeout = (5 * time.Second)
+	// Set Producer Compression
+	cc, ok := codecs[strings.ToLower(args.Producer.Compression)]
+	if ok {
+		config.Producer.Compression = cc
+		config.Producer.CompressionLevel = args.Producer.CompressionLevel
+	}
+
 	config.Net.ReadTimeout = (5 * time.Second)
 	config.Net.DialTimeout = (5 * time.Second)
 	config.Net.WriteTimeout = (5 * time.Second)

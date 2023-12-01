@@ -545,14 +545,16 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !globalIAMSys.IsAllowed(policy.Args{
+	args := policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          policy.ListTemporaryAccountsAdminAction,
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
-	}) {
+	}
+
+	if !globalIAMSys.IsAllowed(args) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
 	}
@@ -568,11 +570,16 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 	if sessionPolicy != nil {
 		stsAccountPolicy = *sessionPolicy
 	} else {
-		policiesNames, err := globalIAMSys.PolicyDBGet(stsAccount.ParentUser, false)
+		policiesNames, err := globalIAMSys.PolicyDBGet(stsAccount.ParentUser, stsAccount.Groups...)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		if len(policiesNames) == 0 {
+			policySet, _ := args.GetPolicies(iamPolicyClaimNameOpenID())
+			policiesNames = policySet.ToSlice()
+		}
+
 		stsAccountPolicy = globalIAMSys.GetCombinedPolicy(policiesNames...)
 	}
 
@@ -1010,7 +1017,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 	if !impliedPolicy {
 		svcAccountPolicy = *sessionPolicy
 	} else {
-		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, false)
+		policiesNames, err := globalIAMSys.PolicyDBGet(svcAccount.ParentUser, svcAccount.Groups...)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -1357,7 +1364,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policySetFromClaims.ToSlice()...)
 
 	default:
-		policies, err := globalIAMSys.PolicyDBGet(accountName, false, cred.Groups...)
+		policies, err := globalIAMSys.PolicyDBGet(accountName, cred.Groups...)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

@@ -1350,12 +1350,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
 
+	registered := 0
 	for _, setDisks := range storageDisks {
 		for _, storage := range setDisks {
 			if storage == nil {
 				continue
 			}
-
 			endpoint := storage.Endpoint()
 
 			server := &storageRESTServer{storage: newXLStorageDiskIDCheck(storage, true)}
@@ -1402,6 +1402,17 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Handle:      server.WalkDirHandler,
 				OutCapacity: 1,
 			}), "unable to register handler")
+			registered++
 		}
+	}
+	if registered == 0 {
+		// Register a dummy handler so remote calls can go out.
+		logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
+			Subroute: fmt.Sprintf("__dummy__%d", time.Now().UnixNano()),
+			Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *grid.RemoteErr {
+				return grid.NewRemoteErr(errDiskNotFound)
+			},
+			OutCapacity: 1,
+		}), "unable to register handler")
 	}
 }
