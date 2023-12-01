@@ -129,6 +129,54 @@ func TestSingleRoundtrip(t *testing.T) {
 	})
 }
 
+func TestSingleRoundtripNotReady(t *testing.T) {
+	defer testlogger.T.SetLogTB(t)()
+	errFatal := func(t testing.TB, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	grid, err := SetupTestGrid(2)
+	errFatal(t, err)
+	remoteHost := grid.Hosts[1]
+	local := grid.Managers[0]
+
+	// 1: Echo
+	errFatal(t, local.RegisterSingleHandler(handlerTest, func(payload []byte) ([]byte, *RemoteErr) {
+		t.Log("1: server payload: ", len(payload), "bytes.")
+		return append([]byte{}, payload...), nil
+	}))
+	// 2: Return as error
+	errFatal(t, local.RegisterSingleHandler(handlerTest2, func(payload []byte) ([]byte, *RemoteErr) {
+		t.Log("2: server payload: ", len(payload), "bytes.")
+		err := RemoteErr(payload)
+		return nil, &err
+	}))
+
+	// Do not register remote handlers
+
+	// local to remote
+	remoteConn := local.Connection(remoteHost)
+	remoteConn.WaitForConnect(context.Background())
+	defer testlogger.T.SetErrorTB(t)()
+
+	t.Run("localToRemote", func(t *testing.T) {
+		const testPayload = "Hello Grid World!"
+		// Single requests should have remote errors.
+		_, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
+		if v, ok := err.(*RemoteErr); !ok || v.Error() != "Invalid Handler for type" {
+			t.Fatalf("Unexpected error: %v, %T", err, err)
+		}
+		// Streams should not be able to set up until registered.
+		// Thus, the error is a local error.
+		_, err = remoteConn.NewStream(context.Background(), handlerTest, []byte(testPayload))
+		if !errors.Is(err, ErrUnknownHandler) {
+			t.Fatalf("Unexpected error: %v, %T", err, err)
+		}
+	})
+}
+
 func TestSingleRoundtripGenerics(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
 	errFatal := func(err error) {

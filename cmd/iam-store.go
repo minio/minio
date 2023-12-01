@@ -488,7 +488,12 @@ func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
 
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
-func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
+func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) error {
+	bootstrapTraceMsg := func(s string) {
+		if firstTime {
+			bootstrapTraceMsg(s)
+		}
+	}
 	bootstrapTraceMsg("loading IAM data")
 
 	newCache := newIamCache()
