@@ -606,8 +606,8 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
-	// get non-healing disks for listing
-	disks, _ := er.getOnlineDisksWithHealing()
+	// get prioritized non-healing disks for listing
+	disks, _ := er.getOnlineDisksWithHealing(true)
 	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
 	var fallbackDisks []StorageAPI
 
