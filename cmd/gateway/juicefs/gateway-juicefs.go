@@ -429,6 +429,20 @@ func (n *JfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 				IsDir:   fi.IsDir(),
 				AccTime: fi.ModTime(),
 			}
+
+			// replace links to external file systems with empty files
+			if eno == syscall.ENOTSUP {
+				now := time.Now()
+				obj = minio.ObjectInfo{
+					Bucket:  bucket,
+					Name:    object,
+					ModTime: now,
+					Size:    0,
+					IsDir:   false,
+					AccTime: now,
+				}
+				eno = 0
+			}
 		}
 		return obj, jfsToObjectErr(ctx, eno, bucket, object)
 	}
@@ -559,6 +573,7 @@ func (n *JfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		logger.Errorf("copy %s to %s: %s", src, tmp, err)
 		return
 	}
+	_ = n.mkdirAll(ctx, path.Dir(dst), os.FileMode(n.gConf.DirMode))
 	eno = n.fs.Rename(mctx, tmp, dst, 0)
 	if eno != 0 {
 		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
