@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os/user"
 	"path"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -630,9 +631,10 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	defer rc.Close()
 
 	rf, ok := w.(io.ReaderFrom)
-	if ok {
+	if ok && runtime.GOOS != "windows" {
 		// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
 		// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
+		// Windows can lock up with this optimization, so we fall back to regular copy.
 		dr, ok := rc.(*xioutil.DeadlineReader)
 		if ok {
 			sr, ok := dr.ReadCloser.(*sendFileReader)

@@ -80,7 +80,9 @@ var ErrNotImplemented = errors.New("not implemented")
 // returns an error if the underlying ResponseWriter does not implement io.ReaderFrom
 func (lrw *ResponseRecorder) ReadFrom(r io.Reader) (int64, error) {
 	if lrw.ReaderFrom != nil {
-		return lrw.ReaderFrom.ReadFrom(r)
+		n, err := lrw.ReaderFrom.ReadFrom(r)
+		lrw.bytesWritten += int(n)
+		return n, err
 	}
 	return 0, ErrNotImplemented
 }
