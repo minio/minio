@@ -1343,6 +1343,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 	for pool, serverPool := range endpointServerPools {
 		for set, endpoint := range serverPool.Endpoints {
+			if !endpoint.IsLocal {
+				continue
+			}
 			driveHandlers[pool][set] = &storageRESTServer{}
 			server := driveHandlers[pool][set]
 
@@ -1390,30 +1393,36 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 		}
 	}
 
-	go func() {
-		for pool, serverPool := range endpointServerPools {
-			for set, endpoint := range serverPool.Endpoints {
-				if !endpoint.IsLocal {
-					continue
-				}
-				go func(pool, set int, endpoint Endpoint) {
-					for {
-						xl, err := newXLStorage(endpoint, false)
-						if err != nil {
-							// if supported errors don't fail, we proceed to
-							// printing message and moving forward.
-							logFatalErrs(err, endpoint, false)
-						} else {
-							storage := newXLStorageDiskIDCheck(xl, true)
-							storage.SetDiskID(xl.diskID)
-							driveHandlers[pool][set].setStorage(storage)
-							return
-						}
-
-						time.Sleep(30 * time.Second)
-					}
-				}(pool, set, endpoint)
+	for pool, serverPool := range endpointServerPools {
+		for set, endpoint := range serverPool.Endpoints {
+			if !endpoint.IsLocal {
+				continue
 			}
+			createStorage := func(pool, set int, endpoint Endpoint) bool {
+				xl, err := newXLStorage(endpoint, false)
+				if err != nil {
+					// if supported errors don't fail, we proceed to
+					// printing message and moving forward.
+					logFatalErrs(err, endpoint, false)
+					return false
+				}
+				storage := newXLStorageDiskIDCheck(xl, true)
+				storage.SetDiskID(xl.diskID)
+				driveHandlers[pool][set].setStorage(storage)
+				return true
+			}
+			if createStorage(pool, set, endpoint) {
+				continue
+			}
+			// Start async goroutine to create storage.
+			go func(pool, set int, endpoint Endpoint) {
+				for {
+					time.Sleep(time.Minute)
+					if createStorage(pool, set, endpoint) {
+						return
+					}
+				}
+			}(pool, set, endpoint)
 		}
-	}()
+	}
 }
