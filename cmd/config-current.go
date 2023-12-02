@@ -27,6 +27,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/config/batch"
 	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
@@ -72,6 +73,7 @@ func initHelp() {
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
+		config.BatchSubSys:          batch.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -114,6 +116,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.ScannerSubSys,
 			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
+		},
+		config.HelpKV{
+			Key:         config.BatchSubSys,
+			Description: "manage batch job workers and wait times",
 		},
 		config.HelpKV{
 			Key:         config.CompressionSubSys,
@@ -241,6 +247,7 @@ func initHelp() {
 		config.EtcdSubSys:           etcd.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
+		config.BatchSubSys:          batch.Help,
 		config.ScannerSubSys:        scanner.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
@@ -299,6 +306,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.APISubSys:
 		if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.BatchSubSys:
+		if _, err := batch.LookupConfig(s[config.BatchSubSys][config.Default]); err != nil {
 			return err
 		}
 	case config.StorageClassSubSys:
@@ -564,6 +575,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply heal config: %w", err)
 		}
 		globalHealConfig.Update(healCfg)
+	case config.BatchSubSys:
+		batchCfg, err := batch.LookupConfig(s[config.BatchSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply batch config: %w", err)
+		}
+		globalBatchConfig.Update(batchCfg)
 	case config.ScannerSubSys:
 		scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
 		if err != nil {

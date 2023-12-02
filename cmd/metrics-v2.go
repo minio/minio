@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/kes-go"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -98,6 +99,7 @@ func init() {
 		getBucketUsageMetrics(),
 		getHTTPMetrics(true),
 		getBucketTTFBMetric(),
+		getBatchJobsMetrics(),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
@@ -3244,6 +3246,77 @@ func getClusterHealthMetrics() *MetricsGroup {
 		return
 	})
 
+	return mg
+}
+
+func getBatchJobsMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil {
+			return
+		}
+
+		var m madmin.RealtimeMetrics
+		mLocal := collectLocalMetrics(madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mLocal)
+
+		mRemote := collectRemoteMetrics(ctx, madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mRemote)
+
+		if m.Aggregated.BatchJobs == nil {
+			return
+		}
+
+		for _, mj := range m.Aggregated.BatchJobs.Jobs {
+			jtype := toSnake(mj.JobType)
+			var objects, objectsFailed float64
+			var bucket string
+			switch madmin.BatchJobType(mj.JobType) {
+			case madmin.BatchJobReplicate:
+				objects = float64(mj.Replicate.Objects)
+				objectsFailed = float64(mj.Replicate.ObjectsFailed)
+				bucket = mj.Replicate.Bucket
+			case madmin.BatchJobKeyRotate:
+				objects = float64(mj.KeyRotate.Objects)
+				objectsFailed = float64(mj.KeyRotate.ObjectsFailed)
+				bucket = mj.KeyRotate.Bucket
+			case madmin.BatchJobExpire:
+				objects = float64(mj.Expired.Objects)
+				objectsFailed = float64(mj.Expired.ObjectsFailed)
+				bucket = mj.Expired.Bucket
+			}
+			metrics = append(metrics,
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects"),
+						Help:      "Get successfully completed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objects,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects_failed"),
+						Help:      "Get failed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objectsFailed,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+			)
+		}
+		return
+	})
 	return mg
 }
 
