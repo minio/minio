@@ -256,6 +256,7 @@ const (
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
 	transitionPendingTasks MetricName = "transition_pending_tasks"
 	transitionActiveTasks  MetricName = "transition_active_tasks"
+	transitionMissedTasks  MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
@@ -1707,6 +1708,16 @@ func getTransitionActiveTasksMD() MetricDescription {
 	}
 }
 
+func getTransitionMissedTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionMissedTasks,
+		Help:      "Number of missed immediate ILM transition tasks",
+		Type:      gaugeMetric,
+	}
+}
+
 func getExpiryPendingTasksMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1781,17 +1792,22 @@ func getILMNodeMetrics() *MetricsGroup {
 		trActiveTasks := Metric{
 			Description: getTransitionActiveTasksMD(),
 		}
+		trMissedTasks := Metric{
+			Description: getTransitionMissedTasksMD(),
+		}
 		if globalExpiryState != nil {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
 		}
 		if globalTransitionState != nil {
 			trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
 			trActiveTasks.Value = float64(globalTransitionState.ActiveTasks())
+			trMissedTasks.Value = float64(globalTransitionState.MissedImmediateTasks())
 		}
 		return []Metric{
 			expPendingTasks,
 			trPendingTasks,
 			trActiveTasks,
+			trMissedTasks,
 		}
 	})
 	return mg
