@@ -1,0 +1,34 @@
+[Unit]
+Description=MinIO Web Identity Provider
+Wants=network-online.target
+After=network-online.target
+AssertFileIsExecutable=/opt/web_identity/web_identity.py
+
+[Service]
+Type=simple
+
+WorkingDirectory=/usr/local
+
+User=minio-web-identity
+Group=minio-web-identity
+#ProtectProc=invisible # not available in ubuntu 18 systemd
+
+EnvironmentFile=/etc/default/web_identity.conf
+ExecStart=/opt/web_identity/env/bin/python /opt/web_identity/web_identity.py
+#ExecReload=/bin/kill -HUP $MAINPID
+
+# Let systemd restart this service always
+Restart=always
+
+# Specifies the maximum file descriptor number that can be opened by this process
+LimitNOFILE=1048576
+
+# Specifies the maximum number of threads this process can create
+TasksMax=infinity
+
+# Disable timeout logic and wait until process is stopped
+TimeoutStopSec=infinity
+SendSIGKILL=no
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+cachetools>=4.2.4; python_version < "3.7"
+cachetools==5.3.2; python_version >= "3.7"
+python-dotenv>=0.20.0; python_version < "3.7"
+python-dotenv==1.0.0; python_version >= "3.7"
+tornado>=6.1; python_version < "3.7"
+tornado==6.4; python_version >= "3.7"
+xmltodict==0.13.0
