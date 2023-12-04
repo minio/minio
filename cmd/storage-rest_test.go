@@ -20,9 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
+	"math/rand"
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/minio/minio/internal/grid"
 	xnet "github.com/minio/pkg/v2/net"
@@ -478,6 +481,14 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 	restClient, err := newStorageRESTClient(endpoint, false, tg.Managers[0])
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	for {
+		_, err := restClient.DiskInfo(context.Background(), false)
+		if err == nil || errors.Is(err, errUnformattedDisk) {
+			break
+		}
+		time.Sleep(time.Duration(rand.Float64() * float64(100*time.Millisecond)))
 	}
 
 	return restClient

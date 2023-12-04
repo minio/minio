@@ -1190,7 +1190,7 @@ func applyTransitionRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) 
 	if obj.DeleteMarker {
 		return false
 	}
-	globalTransitionState.queueTransitionTask(obj, event, src, false)
+	globalTransitionState.queueTransitionTask(obj, event, src)
 	return true
 }
 
