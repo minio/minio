@@ -1531,18 +1531,21 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// For speedtest objects do not attempt to heal them.
 	if !opts.Speedtest {
-		// Whether a disk was initially or becomes offline
-		// during this upload, send it to the MRF list.
-		for i := 0; i < len(onlineDisks); i++ {
-			if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
-				continue
+		// When there is versions disparity we are healing
+		// the content implicitly for all versions, we can
+		// avoid triggering another MRF heal for offline drives.
+		if !versionsDisparity {
+			// Whether a disk was initially or becomes offline
+			// during this upload, send it to the MRF list.
+			for i := 0; i < len(onlineDisks); i++ {
+				if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+					continue
+				}
+
+				er.addPartial(bucket, object, fi.VersionID)
+				break
 			}
-
-			er.addPartial(bucket, object, fi.VersionID)
-			break
-		}
-
-		if versionsDisparity {
+		} else {
 			globalMRFState.addPartialOp(partialOperation{
 				bucket:      bucket,
 				object:      object,

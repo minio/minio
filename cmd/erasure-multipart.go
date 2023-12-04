@@ -1290,13 +1290,15 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		})
 	}
 
-	// Check if there is any offline disk and add it to the MRF list
-	for _, disk := range onlineDisks {
-		if disk != nil && disk.IsOnline() {
-			continue
+	if !opts.Speedtest && !versionsDisparity {
+		// Check if there is any offline disk and add it to the MRF list
+		for _, disk := range onlineDisks {
+			if disk != nil && disk.IsOnline() {
+				continue
+			}
+			er.addPartial(bucket, object, fi.VersionID)
+			break
 		}
-		er.addPartial(bucket, object, fi.VersionID)
-		break
 	}
 
 	for i := 0; i < len(onlineDisks); i++ {
