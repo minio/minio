@@ -391,6 +391,202 @@ func (z BatchJobRetry) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *BatchJobSize) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 int64
+		zb0001, err = dc.ReadInt64()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = BatchJobSize(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z BatchJobSize) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteInt64(int64(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z BatchJobSize) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendInt64(o, int64(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BatchJobSize) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 int64
+		zb0001, bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = BatchJobSize(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z BatchJobSize) Msgsize() (s int) {
+	s = msgp.Int64Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *BatchJobSizeFilter) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "UpperBound":
+			{
+				var zb0002 int64
+				zb0002, err = dc.ReadInt64()
+				if err != nil {
+					err = msgp.WrapError(err, "UpperBound")
+					return
+				}
+				z.UpperBound = BatchJobSize(zb0002)
+			}
+		case "LowerBound":
+			{
+				var zb0003 int64
+				zb0003, err = dc.ReadInt64()
+				if err != nil {
+					err = msgp.WrapError(err, "LowerBound")
+					return
+				}
+				z.LowerBound = BatchJobSize(zb0003)
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z BatchJobSizeFilter) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "UpperBound"
+	err = en.Append(0x82, 0xaa, 0x55, 0x70, 0x70, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(int64(z.UpperBound))
+	if err != nil {
+		err = msgp.WrapError(err, "UpperBound")
+		return
+	}
+	// write "LowerBound"
+	err = en.Append(0xaa, 0x4c, 0x6f, 0x77, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(int64(z.LowerBound))
+	if err != nil {
+		err = msgp.WrapError(err, "LowerBound")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z BatchJobSizeFilter) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "UpperBound"
+	o = append(o, 0x82, 0xaa, 0x55, 0x70, 0x70, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	o = msgp.AppendInt64(o, int64(z.UpperBound))
+	// string "LowerBound"
+	o = append(o, 0xaa, 0x4c, 0x6f, 0x77, 0x65, 0x72, 0x42, 0x6f, 0x75, 0x6e, 0x64)
+	o = msgp.AppendInt64(o, int64(z.LowerBound))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BatchJobSizeFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "UpperBound":
+			{
+				var zb0002 int64
+				zb0002, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpperBound")
+					return
+				}
+				z.UpperBound = BatchJobSize(zb0002)
+			}
+		case "LowerBound":
+			{
+				var zb0003 int64
+				zb0003, bts, err = msgp.ReadInt64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LowerBound")
+					return
+				}
+				z.LowerBound = BatchJobSize(zb0003)
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z BatchJobSizeFilter) Msgsize() (s int) {
+	s = 1 + 11 + msgp.Int64Size + 11 + msgp.Int64Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *BatchJobSnowball) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
