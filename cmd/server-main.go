@@ -51,10 +51,17 @@ import (
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/env"
 	"golang.org/x/exp/slices"
+	"gopkg.in/yaml.v2"
 )
 
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{
+	cli.StringFlag{
+		Name:   "config-file",
+		Value:  "",
+		Usage:  "use an alternate configuration file",
+		EnvVar: "MINIO_CONFIG_FILE",
+	},
 	cli.StringFlag{
 		Name:   "address",
 		Value:  ":" + GlobalMinioDefaultPort,
@@ -226,9 +233,59 @@ func serverCmdArgs(ctx *cli.Context) []string {
 	return strings.Fields(v)
 }
 
-func serverHandleCmdArgs(ctx *cli.Context) {
-	// Handle common command args.
-	handleCommonCmdArgs(ctx)
+type configFileOpts struct {
+	FTP  map[string]string `yaml:"ftp"`
+	SFTP map[string]string `yaml:"sftp"`
+}
+
+type configFileMain struct {
+	Version     string         `yaml:"version"`
+	Addr        *string        `yaml:"address"`
+	ConsoleAddr *string        `yaml:"console-address"`
+	CertsDir    *string        `yaml:"certs-dir"`
+	Pools       [][]string     `yaml:"pools"`
+	Options     configFileOpts `yaml:"options"`
+}
+
+func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
+	buf, err := os.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+	cf := &configFileMain{}
+	err = yaml.UnmarshalStrict(buf, cf)
+	if err != nil {
+		return err
+	}
+	if cf.Version != "v1" {
+		return fmt.Errorf("unexpected version: %s", cf.Version)
+	}
+	if cf.Addr != nil {
+		ctxt.Addr = *cf.Addr
+	}
+	if cf.ConsoleAddr != nil {
+		ctxt.ConsoleAddr = *cf.ConsoleAddr
+	}
+	if cf.CertsDir != nil {
+		ctxt.CertsDir = *cf.CertsDir
+	}
+	for k, v := range cf.Options.FTP {
+		ctxt.FTP = append(ctxt.FTP, fmt.Sprintf("%s=%s", k, v))
+	}
+	for k, v := range cf.Options.SFTP {
+		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	pools, err := buildDisksLayoutFromConfFile(cf.Pools)
+	if err == nil {
+		ctxt.Layout = pools
+	}
+
+	return err
+}
+
+func serverHandleCmdArgs(ctxt serverCtxt) {
+	handleCommonArgs(ctxt)
 
 	logger.FatalIf(CheckLocalServerAddr(globalMinioAddr), "Unable to validate passed arguments")
 
@@ -251,7 +308,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, serverCmdArgs(ctx)...)
+	globalEndpoints, setupType, err = createServerEndpoints(globalMinioAddr, ctxt.Layout.pools, ctxt.Layout.legacy)
 	logger.FatalIf(err, "Invalid command line arguments")
 	globalNodes = globalEndpoints.GetNodes()
 
@@ -262,7 +319,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	globalIsErasureSD = (setupType == ErasureSDSetupType)
 	if globalDynamicAPIPort && globalIsDistErasure {
-		logger.FatalIf(errInvalidArgument, "Invalid --address=\"%s\", port '0' is not allowed in a distributed erasure coded setup", ctx.String("address"))
+		logger.FatalIf(errInvalidArgument, "Invalid --address=\"%s\", port '0' is not allowed in a distributed erasure coded setup", ctxt.Addr)
 	}
 
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
@@ -270,7 +327,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
 
 	// Initialize, see which NIC the service is running on, and save it as global value
-	setGlobalInternodeInterface(ctx.String("interface"))
+	setGlobalInternodeInterface(ctxt.Interface)
 
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
@@ -289,8 +346,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	})
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout: int(ctx.Duration("conn-user-timeout").Milliseconds()),
-		Interface:   ctx.String("interface"),
+		UserTimeout: int(ctxt.UserTimeout.Milliseconds()),
+		Interface:   ctxt.Interface,
 	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -299,8 +356,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
 
-	globalConnReadDeadline = ctx.Duration("conn-read-deadline")
-	globalConnWriteDeadline = ctx.Duration("conn-write-deadline")
+	globalConnReadDeadline = ctxt.ConnReadDeadline
+	globalConnWriteDeadline = ctxt.ConnWriteDeadline
 }
 
 func serverHandleEnvVars() {
@@ -590,10 +647,16 @@ func serverMain(ctx *cli.Context) {
 	// Always load ENV variables from files first.
 	loadEnvVarsFromFiles()
 
-	// Handle all server command args.
+	// Handle all server command args and build the disks layout
 	bootstrapTrace("serverHandleCmdArgs", func() {
-		serverHandleCmdArgs(ctx)
+		err := buildServerCtxt(ctx, &globalServerCtxt)
+		logger.FatalIf(err, "Unable to prepare the list of endpoints")
+
+		serverHandleCmdArgs(globalServerCtxt)
 	})
+
+	// DNS cache subsystem to reduce outgoing DNS requests
+	runDNSCache(ctx)
 
 	// Handle all server environment vars.
 	serverHandleEnvVars()
@@ -637,7 +700,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Check for updates in non-blocking manner.
 	go func() {
-		if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+		if !globalServerCtxt.Quiet && !globalInplaceUpdateDisabled {
 			// Check for new updates from dl.min.io.
 			bootstrapTrace("checkUpdate", func() {
 				checkUpdate(getMinioMode())
@@ -683,9 +746,9 @@ func serverMain(ctx *cli.Context) {
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 			UseTLSConfig(newTLSConfig(getCert)).
-			UseShutdownTimeout(ctx.Duration("shutdown-timeout")).
-			UseIdleTimeout(ctx.Duration("idle-timeout")).
-			UseReadHeaderTimeout(ctx.Duration("read-header-timeout")).
+			UseShutdownTimeout(globalServerCtxt.ShutdownTimeout).
+			UseIdleTimeout(globalServerCtxt.IdleTimeout).
+			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).
 			UseBaseContext(GlobalContext).
 			UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib
 			UseTCPOptions(globalTCPOptions)
@@ -779,7 +842,7 @@ func serverMain(ctx *cli.Context) {
 			logger.LogIf(GlobalContext, err)
 		}
 
-		if !globalCLIContext.StrictS3Compat {
+		if !globalServerCtxt.StrictS3Compat {
 			logger.Info(color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 		}
 	})
@@ -813,16 +876,16 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		// if we see FTP args, start FTP if possible
-		if len(ctx.StringSlice("ftp")) > 0 {
+		if len(globalServerCtxt.FTP) > 0 {
 			bootstrapTrace("go startFTPServer", func() {
-				go startFTPServer(ctx)
+				go startFTPServer(globalServerCtxt.FTP)
 			})
 		}
 
 		// If we see SFTP args, start SFTP if possible
-		if len(ctx.StringSlice("sftp")) > 0 {
-			bootstrapTrace("go startFTPServer", func() {
-				go startSFTPServer(ctx)
+		if len(globalServerCtxt.SFTP) > 0 {
+			bootstrapTrace("go startSFTPServer", func() {
+				go startSFTPServer(globalServerCtxt.SFTP)
 			})
 		}
 	}()

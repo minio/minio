@@ -18,12 +18,16 @@
 package cmd
 
 import (
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/ellipses"
@@ -335,13 +339,119 @@ const (
 
 var globalCustomErasureDriveCount = false
 
-// CreateServerEndpoints - validates and creates new endpoints from input args, supports
-// both ellipses and without ellipses transparently.
-func createServerEndpoints(serverAddr string, args ...string) (
-	endpointServerPools EndpointServerPools, setupType SetupType, err error,
-) {
+type node struct {
+	nodeName string
+	disks    []string
+}
+
+type endpointsList []node
+
+func (el *endpointsList) add(arg string) error {
+	u, err := url.Parse(arg)
+	if err != nil {
+		return err
+	}
+	found := false
+	list := *el
+	for i := range list {
+		if list[i].nodeName == u.Host {
+			list[i].disks = append(list[i].disks, u.String())
+			found = true
+			break
+		}
+	}
+	if !found {
+		list = append(list, node{nodeName: u.Host, disks: []string{u.String()}})
+	}
+	*el = list
+	return nil
+}
+
+// buildDisksLayoutFromConfFile supports with and without ellipses transparently.
+func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err error) {
+	if len(pools) == 0 {
+		return layout, errInvalidArgument
+	}
+
+	for _, list := range pools {
+		var endpointsList endpointsList
+
+		for _, arg := range list {
+			switch {
+			case ellipses.HasList(arg):
+				patterns, err := ellipses.FindListPatterns(arg)
+				if err != nil {
+					return layout, err
+				}
+				for _, exp := range patterns.Expand() {
+					for _, ep := range exp {
+						if err := endpointsList.add(ep); err != nil {
+							return layout, err
+						}
+					}
+				}
+			case ellipses.HasEllipses(arg):
+				patterns, err := ellipses.FindEllipsesPatterns(arg)
+				if err != nil {
+					return layout, err
+				}
+				for _, exp := range patterns.Expand() {
+					for _, ep := range exp {
+						if err := endpointsList.add(ep); err != nil {
+							return layout, err
+						}
+					}
+				}
+			default:
+				if err := endpointsList.add(arg); err != nil {
+					return layout, err
+				}
+			}
+		}
+
+		var stopping bool
+		var eps []string
+
+		for i := 0; ; i++ {
+			for _, node := range endpointsList {
+				if len(node.disks) <= i {
+					stopping = true
+					continue
+				}
+				if stopping {
+					return layout, errors.New("number of disks per node does not match")
+				}
+				eps = append(eps, node.disks[i])
+			}
+			if stopping {
+				break
+			}
+		}
+
+		setArgs, err := GetAllSets(eps...)
+		if err != nil {
+			return layout, err
+		}
+
+		h := xxhash.New()
+		for _, s := range setArgs {
+			for _, d := range s {
+				h.WriteString(d)
+			}
+		}
+
+		layout.pools = append(layout.pools, poolDisksLayout{
+			cmdline: fmt.Sprintf("hash:%s", hex.EncodeToString(h.Sum(nil))),
+			layout:  setArgs,
+		})
+	}
+	return
+}
+
+// mergeDisksLayoutFromArgs supports with and without ellipses transparently.
+func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 	if len(args) == 0 {
-		return nil, -1, errInvalidArgument
+		return errInvalidArgument
 	}
 
 	ok := true
@@ -349,44 +459,42 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		ok = ok && !ellipses.HasEllipses(arg)
 	}
 
+	var setArgs [][]string
+
 	// None of the args have ellipses use the old style.
 	if ok {
-		setArgs, err := GetAllSets(args...)
+		setArgs, err = GetAllSets(args...)
 		if err != nil {
-			return nil, -1, err
+			return err
 		}
-		endpointList, newSetupType, err := CreateEndpoints(serverAddr, setArgs...)
-		if err != nil {
-			return nil, -1, err
+		ctxt.Layout = disksLayout{
+			legacy: true,
+			pools:  []poolDisksLayout{{layout: setArgs}},
 		}
-		for i := range endpointList {
-			endpointList[i].SetPoolIndex(0)
-		}
-		endpointServerPools = append(endpointServerPools, PoolEndpoints{
-			Legacy:       true,
-			SetCount:     len(setArgs),
-			DrivesPerSet: len(setArgs[0]),
-			Endpoints:    endpointList,
-			CmdLine:      strings.Join(args, " "),
-			Platform:     fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
-		})
-		setupType = newSetupType
-		return endpointServerPools, setupType, nil
+		return
 	}
 
-	var poolArgs [][][]string
 	for _, arg := range args {
 		if !ellipses.HasEllipses(arg) && len(args) > 1 {
 			// TODO: support SNSD deployments to be decommissioned in future
-			return nil, -1, fmt.Errorf("all args must have ellipses for pool expansion (%w) args: %s", errInvalidArgument, args)
+			return fmt.Errorf("all args must have ellipses for pool expansion (%w) args: %s", errInvalidArgument, args)
 		}
-
-		setArgs, err := GetAllSets(arg)
+		setArgs, err = GetAllSets(arg)
 		if err != nil {
-			return nil, -1, err
+			return err
 		}
+		ctxt.Layout.pools = append(ctxt.Layout.pools, poolDisksLayout{cmdline: arg, layout: setArgs})
+	}
+	return
+}
 
-		poolArgs = append(poolArgs, setArgs)
+// CreateServerEndpoints - validates and creates new endpoints from input args, supports
+// both ellipses and without ellipses transparently.
+func createServerEndpoints(serverAddr string, poolArgs []poolDisksLayout, legacy bool) (
+	endpointServerPools EndpointServerPools, setupType SetupType, err error,
+) {
+	if len(poolArgs) == 0 {
+		return nil, -1, errInvalidArgument
 	}
 
 	poolEndpoints, setupType, err := CreatePoolEndpoints(serverAddr, poolArgs...)
@@ -396,11 +504,12 @@ func createServerEndpoints(serverAddr string, args ...string) (
 
 	for i, endpointList := range poolEndpoints {
 		if err = endpointServerPools.Add(PoolEndpoints{
-			SetCount:     len(poolArgs[i]),
-			DrivesPerSet: len(poolArgs[i][0]),
+			Legacy:       legacy,
+			SetCount:     len(poolArgs[i].layout),
+			DrivesPerSet: len(poolArgs[i].layout[0]),
 			Endpoints:    endpointList,
 			Platform:     fmt.Sprintf("OS: %s | Arch: %s", runtime.GOOS, runtime.GOARCH),
-			CmdLine:      args[i],
+			CmdLine:      poolArgs[i].cmdline,
 		}); err != nil {
 			return nil, -1, err
 		}

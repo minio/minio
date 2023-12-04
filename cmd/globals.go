@@ -127,11 +127,41 @@ const (
 	tlsClientSessionCacheSize = 100
 )
 
-var globalCLIContext = struct {
-	JSON, Quiet    bool
-	Anonymous      bool
-	StrictS3Compat bool
-}{}
+type poolDisksLayout struct {
+	cmdline string
+	layout  [][]string
+}
+
+type disksLayout struct {
+	legacy bool
+	pools  []poolDisksLayout
+}
+
+type serverCtxt struct {
+	JSON, Quiet               bool
+	Anonymous                 bool
+	StrictS3Compat            bool
+	Addr, ConsoleAddr         string
+	ConfigDir, CertsDir       string
+	configDirSet, certsDirSet bool
+	Interface                 string
+
+	FTP  []string
+	SFTP []string
+
+	UserTimeout       time.Duration
+	ConnReadDeadline  time.Duration
+	ConnWriteDeadline time.Duration
+
+	ShutdownTimeout   time.Duration
+	IdleTimeout       time.Duration
+	ReadHeaderTimeout time.Duration
+
+	// The layout of disks as interpreted
+	Layout disksLayout
+}
+
+var globalServerCtxt serverCtxt
 
 var (
 	// Indicates if the running minio server is distributed setup.

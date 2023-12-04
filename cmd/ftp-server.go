@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/cli"
 	"github.com/minio/minio/internal/logger"
 	ftp "goftp.io/server/v2"
 )
@@ -69,9 +68,7 @@ func (log *minioLogger) PrintResponse(sessionID string, code int, message string
 	}
 }
 
-func startFTPServer(c *cli.Context) {
-	args := c.StringSlice("ftp")
-
+func startFTPServer(args []string) {
 	var (
 		port          int
 		publicIP      string
