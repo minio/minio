@@ -1036,6 +1036,17 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	var versionsDisparity bool
 
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	if err != nil {
+		for index, nerr := range errs {
+			// When we are going to return error, attempt to delete success
+			// on some of the drives, if we cannot we do not have to notify
+			// caller this dangling object will be now scheduled to be removed
+			// via active healing.
+			if nerr == nil {
+				disks[index].DeleteVersion(ctx, dstBucket, dstEntry, metadata[index], false)
+			}
+		}
+	}
 	if err == nil {
 		versions := reduceCommonVersions(diskVersions, writeQuorum)
 		for index, dversions := range diskVersions {
