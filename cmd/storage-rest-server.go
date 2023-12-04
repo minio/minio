@@ -1348,6 +1348,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			if !endpoint.IsLocal {
 				continue
 			}
+
 			driveHandlers[pool][set] = &storageRESTServer{}
 			server := driveHandlers[pool][set]
 
@@ -1392,15 +1393,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Handle:      server.WalkDirHandler,
 				OutCapacity: 1,
 			}), "unable to register handler")
-		}
-	}
 
-	for pool, serverPool := range endpointServerPools {
-		for set, endpoint := range serverPool.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-			createStorage := func(pool, set int, endpoint Endpoint) bool {
+			createStorage := func(server *storageRESTServer) bool {
 				xl, err := newXLStorage(endpoint, false)
 				if err != nil {
 					// if supported errors don't fail, we proceed to
@@ -1410,21 +1404,22 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				}
 				storage := newXLStorageDiskIDCheck(xl, true)
 				storage.SetDiskID(xl.diskID)
-				driveHandlers[pool][set].setStorage(storage)
+				server.setStorage(storage)
 				return true
 			}
-			if createStorage(pool, set, endpoint) {
+			if createStorage(server) {
 				continue
 			}
 			// Start async goroutine to create storage.
-			go func(pool, set int, endpoint Endpoint) {
+			go func(server *storageRESTServer) {
 				for {
-					time.Sleep(time.Minute)
-					if createStorage(pool, set, endpoint) {
+					time.Sleep(5 * time.Second)
+					if createStorage(server) {
 						return
 					}
 				}
-			}(pool, set, endpoint)
+			}(server)
+
 		}
 	}
 }

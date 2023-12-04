@@ -78,8 +78,9 @@ const (
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
-	totalErrsAvailability uint64 // Captures all data availability errors such as permission denied, faulty disk and timeout errors.
-	totalErrsTimeout      uint64 // Captures all timeout only errors
+	totalErrsTimeout      atomic.Uint64 // Captures all timeout only errors
+	totalErrsAvailability atomic.Uint64 // Captures all data availability errors such as permission denied, faulty disk and timeout errors.
+
 	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
 	apiCalls     [storageMetricLast]uint64
 	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
@@ -102,7 +103,7 @@ type xlStorageDiskIDCheck struct {
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	p.metricsCache.Once.Do(func() {
-		p.metricsCache.TTL = 1 * time.Second
+		p.metricsCache.TTL = 5 * time.Second
 		p.metricsCache.Update = func() (interface{}, error) {
 			diskMetric := DiskMetrics{
 				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),
@@ -114,13 +115,19 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 			for i := range p.apiCalls {
 				diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
 			}
-			diskMetric.TotalErrorsAvailability = atomic.LoadUint64(&p.totalErrsAvailability)
-			diskMetric.TotalErrorsTimeout = atomic.LoadUint64(&p.totalErrsTimeout)
 			return diskMetric, nil
 		}
 	})
 	m, _ := p.metricsCache.Get()
-	return m.(DiskMetrics)
+	diskMetric := DiskMetrics{}
+	if m != nil {
+		diskMetric = m.(DiskMetrics)
+	}
+
+	// Do not need this value to be cached.
+	diskMetric.TotalErrorsTimeout = p.totalErrsTimeout.Load()
+	diskMetric.TotalErrorsAvailability = p.totalErrsAvailability.Load()
+	return diskMetric
 }
 
 // lockedLastMinuteLatency accumulates totals lockless for each second.
@@ -746,9 +753,9 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 			context.DeadlineExceeded,
 			context.Canceled,
 		}...) {
-			atomic.AddUint64(&p.totalErrsAvailability, 1)
+			p.totalErrsAvailability.Add(1)
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-				atomic.AddUint64(&p.totalErrsTimeout, 1)
+				p.totalErrsTimeout.Add(1)
 			}
 		}
 		p.apiLatencies[s].add(duration)
