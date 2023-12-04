@@ -2158,7 +2158,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case errKMSDefaultKeyAlreadyConfigured:
 		apiErr = ErrKMSDefaultKeyAlreadyConfigured
 	case context.Canceled:
-		apiErr = ErrClientDisconnected
+		// the ctx is not Canceled. But the error is Canceled. We should assume that this error is errInternalError
+		apiErr = ErrInternalError
 	case context.DeadlineExceeded:
 		apiErr = ErrRequestTimedout
 	case objectlock.ErrInvalidRetentionDate:
