@@ -803,12 +803,20 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 	return nil
 }
 
+func isEmptyLayout(poolsLayout ...poolDisksLayout) bool {
+	return len(poolsLayout) == 0 || len(poolsLayout[0].layout) == 0 || len(poolsLayout[0].layout[0]) == 0 || len(poolsLayout[0].layout[0][0]) == 0
+}
+
+func isSingleDriveLayout(poolsLayout ...poolDisksLayout) bool {
+	return len(poolsLayout) == 1 && len(poolsLayout[0].layout) == 1 && len(poolsLayout[0].layout[0]) == 1
+}
+
 // CreatePoolEndpoints creates a list of endpoints per pool, resolves their relevant hostnames and
 // discovers those are local or remote.
 func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]Endpoints, SetupType, error) {
 	var setupType SetupType
 
-	if len(poolsLayout) == 0 || len(poolsLayout[0].layout) == 0 || len(poolsLayout[0].layout[0]) == 0 || len(poolsLayout[0].layout[0][0]) == 0 {
+	if isEmptyLayout(poolsLayout...) {
 		return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
 	}
 
@@ -822,7 +830,7 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 	poolEndpoints := make(PoolEndpointList, len(poolsLayout))
 
 	// For single arg, return single drive EC setup.
-	if len(poolsLayout) == 1 && len(poolsLayout[0].layout) == 1 && len(poolsLayout[0].layout[0]) == 1 {
+	if isSingleDriveLayout(poolsLayout...) {
 		endpoint, err := NewEndpoint(poolsLayout[0].layout[0][0])
 		if err != nil {
 			return nil, setupType, err

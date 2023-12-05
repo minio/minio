@@ -268,6 +268,7 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 	}
 	if cf.CertsDir != nil {
 		ctxt.CertsDir = *cf.CertsDir
+		ctxt.certsDirSet = true
 	}
 	for k, v := range cf.Options.FTP {
 		ctxt.FTP = append(ctxt.FTP, fmt.Sprintf("%s=%s", k, v))
