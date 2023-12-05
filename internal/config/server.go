@@ -19,16 +19,22 @@ package config
 
 // Opts holds MinIO configuration options
 type Opts struct {
-	FTP  map[string]string `yaml:"ftp"`
-	SFTP map[string]string `yaml:"sftp"`
+	FTP struct {
+		Address          string `yaml:"address"`
+		PassivePortRange string `yaml:"passive-port-range"`
+	} `yaml:"ftp"`
+	SFTP struct {
+		Address       string `yaml:"address"`
+		SSHPrivateKey string `yaml:"ssh-private-key"`
+	} `yaml:"sftp"`
 }
 
 // ServerConfig represents a MinIO configuration file
 type ServerConfig struct {
 	Version     string     `yaml:"version"`
-	Addr        *string    `yaml:"address"`
-	ConsoleAddr *string    `yaml:"console-address"`
-	CertsDir    *string    `yaml:"certs-dir"`
+	Addr        string     `yaml:"address"`
+	ConsoleAddr string     `yaml:"console-address"`
+	CertsDir    string     `yaml:"certs-dir"`
 	Pools       [][]string `yaml:"pools"`
 	Options     Opts       `yaml:"options"`
 }

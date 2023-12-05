@@ -245,21 +245,29 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 	if cf.Version != "v1" {
 		return fmt.Errorf("unexpected version: %s", cf.Version)
 	}
-	if cf.Addr != nil {
-		ctxt.Addr = *cf.Addr
+	if cf.Addr != "" {
+		ctxt.Addr = cf.Addr
 	}
-	if cf.ConsoleAddr != nil {
-		ctxt.ConsoleAddr = *cf.ConsoleAddr
+	if cf.ConsoleAddr != "" {
+		ctxt.ConsoleAddr = cf.ConsoleAddr
 	}
-	if cf.CertsDir != nil {
-		ctxt.CertsDir = *cf.CertsDir
+	if cf.CertsDir != "" {
+		ctxt.CertsDir = cf.CertsDir
 		ctxt.certsDirSet = true
 	}
-	for k, v := range cf.Options.FTP {
-		ctxt.FTP = append(ctxt.FTP, fmt.Sprintf("%s=%s", k, v))
+
+	if cf.Options.FTP.Address != "" {
+		ctxt.FTP = append(ctxt.FTP, fmt.Sprintf("address=%s", cf.Options.FTP.Address))
 	}
-	for k, v := range cf.Options.SFTP {
-		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("%s=%s", k, v))
+	if cf.Options.FTP.PassivePortRange != "" {
+		ctxt.FTP = append(ctxt.FTP, fmt.Sprintf("passive-port-range=%s", cf.Options.FTP.PassivePortRange))
+	}
+
+	if cf.Options.SFTP.Address != "" {
+		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("address=%s", cf.Options.SFTP.Address))
+	}
+	if cf.Options.SFTP.SSHPrivateKey != "" {
+		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("ssh-private-key=%s", cf.Options.SFTP.SSHPrivateKey))
 	}
 
 	pools, err := buildDisksLayoutFromConfFile(cf.Pools)
