@@ -129,7 +129,11 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 		trace.HTTP.ReqInfo.Path = trace.Path
 	} else if v != nil {
 		// Print exported fields as single request to path.
-		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(fmt.Sprintf("%+v", v)))
+		obj := fmt.Sprintf("%+v", v)
+		if len(obj) > 1024 {
+			obj = obj[:1024] + "..."
+		}
+		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(obj))
 		trace.HTTP.ReqInfo.Path = trace.Path
 	}
 	t.Publisher.Publish(trace)
