@@ -249,7 +249,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 
 // FetchEnabledTargets - Returns a set of configured TargetList
 func FetchEnabledTargets(ctx context.Context, cfg config.Config, transport *http.Transport) (_ *event.TargetList, err error) {
-	targetList := event.NewTargetList()
+	targetList := event.NewTargetList(ctx)
 	for _, subSys := range config.NotifySubSystems.ToSlice() {
 		targets, err := fetchSubSysTargets(ctx, cfg, subSys, transport)
 		if err != nil {
