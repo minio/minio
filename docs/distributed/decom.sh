@@ -102,8 +102,13 @@ fi
 
 ./mc admin decom start myminio/ /tmp/xl/{1...10}/disk{0...1}
 
+count=0
 until $(./mc admin decom status myminio/ | grep -q Complete); do
 	echo "waiting for decom to finish..."
+	count=$((count + 1))
+	if [ ${count} -eq 120 ]; then
+		./mc cat /tmp/expanded.log
+	fi
 	sleep 1
 done
 

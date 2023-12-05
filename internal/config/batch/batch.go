@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Batch job environment variables
