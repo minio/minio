@@ -3724,6 +3724,10 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 
 			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
+				var updatedAt time.Time
+				if meta.lifecycleConfig.ExpiryUpdatedAt != nil {
+					updatedAt = *meta.lifecycleConfig.ExpiryUpdatedAt
+				}
 				for _, rule := range meta.lifecycleConfig.Rules {
 					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 						// copy the non transition details of the rule
@@ -3731,7 +3735,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 						if err != nil {
 							return info, errSRBackendIssue(err)
 						}
-						allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: *(meta.lifecycleConfig.ExpiryUpdatedAt)}
+						allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: updatedAt}
 					}
 				}
 			}
