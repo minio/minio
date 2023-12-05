@@ -57,10 +57,9 @@ import (
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{
 	cli.StringFlag{
-		Name:   "config-file",
-		Value:  "",
-		Usage:  "use an alternate configuration file",
-		EnvVar: "MINIO_CONFIG_FILE",
+		Name:   "config",
+		Usage:  "specify server configuration via YAML configuration",
+		EnvVar: "MINIO_CONFIG",
 	},
 	cli.StringFlag{
 		Name:   "address",
@@ -233,26 +232,12 @@ func serverCmdArgs(ctx *cli.Context) []string {
 	return strings.Fields(v)
 }
 
-type configFileOpts struct {
-	FTP  map[string]string `yaml:"ftp"`
-	SFTP map[string]string `yaml:"sftp"`
-}
-
-type configFileMain struct {
-	Version     string         `yaml:"version"`
-	Addr        *string        `yaml:"address"`
-	ConsoleAddr *string        `yaml:"console-address"`
-	CertsDir    *string        `yaml:"certs-dir"`
-	Pools       [][]string     `yaml:"pools"`
-	Options     configFileOpts `yaml:"options"`
-}
-
 func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 	buf, err := os.ReadFile(configFile)
 	if err != nil {
 		return err
 	}
-	cf := &configFileMain{}
+	cf := &config.ServerConfig{}
 	err = yaml.UnmarshalStrict(buf, cf)
 	if err != nil {
 		return err

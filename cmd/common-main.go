@@ -360,18 +360,22 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 		ctxt.StrictS3Compat = false
 	}
 
-	ctxt.ConfigDir = ctx.String("config-dir")
-	ctxt.configDirSet = ctx.IsSet("config-dir")
-	if ctxt.ConfigDir == "" {
+	switch {
+	case ctx.IsSet("config-dir"):
+		ctxt.ConfigDir = ctx.String("config-dir")
+		ctxt.configDirSet = true
+	case ctx.GlobalIsSet("config-dir"):
 		ctxt.ConfigDir = ctx.GlobalString("config-dir")
-		ctxt.configDirSet = ctx.GlobalIsSet("config-dir")
+		ctxt.configDirSet = true
 	}
 
-	ctxt.CertsDir = ctx.String("certs-dir")
-	ctxt.certsDirSet = ctx.IsSet("certs-dir")
-	if ctxt.CertsDir == "" {
+	switch {
+	case ctx.IsSet("certs-dir"):
+		ctxt.CertsDir = ctx.String("certs-dir")
+		ctxt.certsDirSet = true
+	case ctx.GlobalIsSet("certs-dir"):
 		ctxt.CertsDir = ctx.GlobalString("certs-dir")
-		ctxt.certsDirSet = ctx.GlobalIsSet("certs-dir")
+		ctxt.certsDirSet = true
 	}
 
 	ctxt.FTP = ctx.StringSlice("ftp")
@@ -386,7 +390,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
 	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
 
-	if conf := ctx.String("config-file"); len(conf) > 0 {
+	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)
 	} else {
 		err = mergeDisksLayoutFromArgs(serverCmdArgs(ctx), ctxt)
@@ -396,7 +400,15 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 }
 
 func handleCommonArgs(ctxt serverCtxt) {
-	var err error
+	if ctxt.JSON {
+		logger.EnableJSON()
+	}
+	if ctxt.Quiet {
+		logger.EnableQuiet()
+	}
+	if ctxt.Anonymous {
+		logger.EnableAnonymous()
+	}
 
 	consoleAddr := ctxt.ConsoleAddr
 	addr := ctxt.Addr
@@ -445,6 +457,7 @@ func handleCommonArgs(ctxt serverCtxt) {
 	globalMinioAddr = addr
 
 	// Set all config, certs and CAs directories.
+	var err error
 	globalConfigDir, err = newConfigDir(configDir, configSet, defaultConfigDir.Get)
 	logger.FatalIf(err, "Unable to initialize the (deprecated) config directory")
 	globalCertsDir, err = newConfigDir(certsDir, certsSet, defaultCertsDir.Get)

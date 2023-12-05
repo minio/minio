@@ -161,9 +161,10 @@ type serverCtxt struct {
 	Layout disksLayout
 }
 
-var globalServerCtxt serverCtxt
-
 var (
+	// Global user opts context
+	globalServerCtxt serverCtxt
+
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 
