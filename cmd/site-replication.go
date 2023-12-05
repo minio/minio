@@ -3191,7 +3191,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					isBucketMarkedDeleted = !bi.DeletedAt.IsZero() && (bi.CreatedAt.IsZero() || bi.DeletedAt.After(bi.CreatedAt))
 					hasBucket = !bi.CreatedAt.IsZero()
 				}
-				quotaCfgSet := hasBucket && quotaCfgs[i] != nil && (*quotaCfgs[i]).Quota > 0 && len(*&quotaCfgs[i].ThrottleRules) > 0
+				quotaCfgSet := hasBucket && quotaCfgs[i] != nil && quotaCfgs[i].Quota > 0 && len(quotaCfgs[i].ThrottleRules) > 0
 				ss := madmin.SRBucketStatsSummary{
 					DeploymentID:             s.DeploymentID,
 					HasBucket:                hasBucket,
