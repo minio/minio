@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -131,6 +133,10 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 		}
 	}
 
+	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -139,4 +145,34 @@ func enforceBucketQuotaHard(ctx context.Context, bucket string, size int64) erro
 		return nil
 	}
 	return globalBucketQuotaSys.enforceQuotaHard(ctx, bucket, size)
+}
+
+func enforceBucketThrottle(ctx context.Context, bucket string) error {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	// Check the breach of throttle rules
+	s3AllowedReqCountMap := make(map[string]uint64)
+	for _, rule := range q.ThrottleRules {
+		for _, api := range rule.APIs {
+			if count, ok := s3AllowedReqCountMap[api]; ok {
+				if count < rule.ConcurrentRequestsCount {
+					s3AllowedReqCountMap[api] = rule.ConcurrentRequestsCount
+				}
+			} else {
+				s3AllowedReqCountMap[api] = rule.ConcurrentRequestsCount
+			}
+		}
+	}
+	currS3ReqStats := globalHTTPStats.toServerHTTPStats().CurrentS3Requests.APIStats
+	for api, currReqCount := range currS3ReqStats {
+		for allowedAPI, allowedCount := range s3AllowedReqCountMap {
+			// rules can have exact API names or patterns like `Get*`
+			if matched, _ := regexp.MatchString(strings.ToLower(allowedAPI), strings.ToLower(api)); matched && uint64(currReqCount) > allowedCount {
+				return BucketQuotaExceeded{Bucket: bucket}
+			}
+		}
+	}
+	return nil
 }

@@ -3421,7 +3421,32 @@ func isBktQuotaCfgReplicated(total int, quotaCfgs []*madmin.BucketQuota) bool {
 			prev = q
 			continue
 		}
-		if prev.Quota != q.Quota || prev.Type != q.Type {
+		if prev.Quota != q.Quota || prev.Type != q.Type || len(prev.ThrottleRules) != len(q.ThrottleRules) {
+			return false
+		}
+		for _, rule := range prev.ThrottleRules {
+			sort.Slice(rule.APIs, func(i, j int) bool {
+				return rule.APIs[i] < rule.APIs[j]
+			})
+			for _, qRule := range q.ThrottleRules {
+				sort.Slice(qRule.APIs, func(i, j int) bool {
+					return qRule.APIs[i] < qRule.APIs[j]
+				})
+				if testEqual(rule.APIs, qRule.APIs) && rule.ConcurrentRequestsCount != qRule.ConcurrentRequestsCount {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func testEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
 			return false
 		}
 	}
