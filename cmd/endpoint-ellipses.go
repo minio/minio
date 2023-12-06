@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -396,10 +395,8 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 					return layout, err
 				}
 				for _, exp := range patterns.Expand() {
-					for _, ep := range exp {
-						if err := endpointsList.add(ep); err != nil {
-							return layout, err
-						}
+					if err := endpointsList.add(strings.Join(exp, "")); err != nil {
+						return layout, err
 					}
 				}
 			default:
@@ -410,10 +407,15 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 		}
 
 		var stopping bool
+		var singleNode bool
 		var eps []string
 
 		for i := 0; ; i++ {
 			for _, node := range endpointsList {
+				if node.nodeName == "" {
+					singleNode = true
+				}
+
 				if len(node.disks) <= i {
 					stopping = true
 					continue
@@ -425,6 +427,12 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 			}
 			if stopping {
 				break
+			}
+		}
+
+		for _, node := range endpointsList {
+			if node.nodeName != "" && singleNode {
+				return layout, errors.New("all arguments must but either single node or distributed")
 			}
 		}
 
@@ -441,7 +449,7 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 		}
 
 		layout.pools = append(layout.pools, poolDisksLayout{
-			cmdline: fmt.Sprintf("hash:%s", hex.EncodeToString(h.Sum(nil))),
+			cmdline: fmt.Sprintf("hash:%x", h.Sum(nil)),
 			layout:  setArgs,
 		})
 	}

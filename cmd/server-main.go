@@ -233,13 +233,16 @@ func serverCmdArgs(ctx *cli.Context) []string {
 }
 
 func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
-	buf, err := os.ReadFile(configFile)
+	rd, err := Open(configFile)
 	if err != nil {
 		return err
 	}
+	defer rd.Close()
+
 	cf := &config.ServerConfig{}
-	err = yaml.UnmarshalStrict(buf, cf)
-	if err != nil {
+	dec := yaml.NewDecoder(rd)
+	dec.SetStrict(true)
+	if err = dec.Decode(cf); err != nil {
 		return err
 	}
 	if cf.Version != "v1" {
@@ -270,11 +273,7 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("ssh-private-key=%s", cf.Options.SFTP.SSHPrivateKey))
 	}
 
-	pools, err := buildDisksLayoutFromConfFile(cf.Pools)
-	if err == nil {
-		ctxt.Layout = pools
-	}
-
+	ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.Pools)
 	return err
 }
 
