@@ -93,55 +93,66 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		return nil, errNoSuchUser
 	}
 	if !ok && globalIAMSys.LDAPConfig.Enabled() {
-		targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
-		if err != nil {
+		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), f.AccessKey())
+		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 			return nil, err
 		}
-		expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
-		if err != nil {
-			return nil, err
+		var mcreds *credentials.Credentials
+		if errors.Is(err, errNoSuchServiceAccount) {
+			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
+			if err != nil {
+				return nil, err
+			}
+			expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
+			if err != nil {
+				return nil, err
+			}
+			claims := make(map[string]interface{})
+			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
+			for k, v := range f.permissions.CriticalOptions {
+				claims[k] = v
+			}
+
+			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+			if err != nil {
+				return nil, err
+			}
+
+			// Set the parent of the temporary access key, this is useful
+			// in obtaining service accounts by this cred.
+			cred.ParentUser = targetUser
+
+			// Set this value to LDAP groups, LDAP user can be part
+			// of large number of groups
+			cred.Groups = targetGroups
+
+			// Set the newly generated credentials, policyName is empty on purpose
+			// LDAP policies are applied automatically using their ldapUser, ldapGroups
+			// mapping.
+			updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+			if err != nil {
+				return nil, err
+			}
+
+			// Call hook for site replication.
+			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+				Type: madmin.SRIAMItemSTSAcc,
+				STSCredential: &madmin.SRSTSCredential{
+					AccessKey:    cred.AccessKey,
+					SecretKey:    cred.SecretKey,
+					SessionToken: cred.SessionToken,
+					ParentUser:   cred.ParentUser,
+				},
+				UpdatedAt: updatedAt,
+			}))
+
+			mcreds = credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken)
+		} else {
+			mcreds = credentials.NewStaticV4(sa.Credentials.AccessKey, sa.Credentials.SecretKey, "")
 		}
-		claims := make(map[string]interface{})
-		claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-		for k, v := range f.permissions.CriticalOptions {
-			claims[k] = v
-		}
-
-		cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
-		if err != nil {
-			return nil, err
-		}
-
-		// Set the parent of the temporary access key, this is useful
-		// in obtaining service accounts by this cred.
-		cred.ParentUser = targetUser
-
-		// Set this value to LDAP groups, LDAP user can be part
-		// of large number of groups
-		cred.Groups = targetGroups
-
-		// Set the newly generated credentials, policyName is empty on purpose
-		// LDAP policies are applied automatically using their ldapUser, ldapGroups
-		// mapping.
-		updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
-		if err != nil {
-			return nil, err
-		}
-
-		// Call hook for site replication.
-		logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSTSAcc,
-			STSCredential: &madmin.SRSTSCredential{
-				AccessKey:    cred.AccessKey,
-				SecretKey:    cred.SecretKey,
-				SessionToken: cred.SessionToken,
-				ParentUser:   cred.ParentUser,
-			},
-			UpdatedAt: updatedAt,
-		}))
 
 		return minio.New(f.endpoint, &minio.Options{
-			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+			Creds:     mcreds,
 			Secure:    globalIsTLS,
 			Transport: globalRemoteFTPClientTransport,
 		})

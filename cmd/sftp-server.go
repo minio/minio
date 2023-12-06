@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -110,21 +111,36 @@ func startSFTPServer(c *cli.Context) {
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 			if globalIAMSys.LDAPConfig.Enabled() {
-				targetUser, targetGroups, err := globalIAMSys.LDAPConfig.Bind(c.User(), string(pass))
-				if err != nil {
+				sa, _, err := globalIAMSys.getServiceAccount(context.Background(), c.User())
+				if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 					return nil, err
 				}
-				ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
-				if len(ldapPolicies) == 0 {
-					return nil, errAuthentication
+				if errors.Is(err, errNoSuchServiceAccount) {
+					targetUser, targetGroups, err := globalIAMSys.LDAPConfig.Bind(c.User(), string(pass))
+					if err != nil {
+						return nil, err
+					}
+					ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+					if len(ldapPolicies) == 0 {
+						return nil, errAuthentication
+					}
+					return &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							ldapUser:  targetUser,
+							ldapUserN: c.User(),
+						},
+						Extensions: make(map[string]string),
+					}, nil
 				}
-				return &ssh.Permissions{
-					CriticalOptions: map[string]string{
-						ldapUser:  targetUser,
-						ldapUserN: c.User(),
-					},
-					Extensions: make(map[string]string),
-				}, nil
+				if subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), pass) == 1 {
+					return &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							"accessKey": c.User(),
+						},
+						Extensions: make(map[string]string),
+					}, nil
+				}
+				return nil, errAuthentication
 			}
 
 			ui, ok := globalIAMSys.GetUser(context.Background(), c.User())
