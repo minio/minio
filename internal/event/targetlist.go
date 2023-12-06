@@ -27,7 +27,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/store"
-	"github.com/minio/pkg/workers"
+	"github.com/minio/pkg/v2/workers"
 )
 
 const (
