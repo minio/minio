@@ -373,15 +373,14 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			if oi.DeleteMarker && (validReplStatus || replicate) {
 				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
 				continue
-			} else {
-				// can be the case that other cluster is down and duplicate `mc rm --vid`
-				// is issued - this still needs to be replicated back to the other target
-				if !oi.VersionPurgeStatus.Empty() {
-					replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
-					dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
-				}
-				continue
 			}
+			// can be the case that other cluster is down and duplicate `mc rm --vid`
+			// is issued - this still needs to be replicated back to the other target
+			if !oi.VersionPurgeStatus.Empty() {
+				replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
+				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
+			}
+			continue
 		}
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		// the target online status should not be used here while deciding
