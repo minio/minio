@@ -1311,9 +1311,8 @@ func (c Config) getTargetKVS(subSys, target string, redactSecrets bool) KVS {
 			// clonedKV := kv
 			// clonedKV.Value = redactedSecret
 			// resultKVS = append(resultKVS, clonedKV)
-		} else {
-			resultKVS = append(resultKVS, kv)
 		}
+		resultKVS = append(resultKVS, kv)
 	}
 
 	return resultKVS

@@ -1007,12 +1007,9 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			// None of the provided metadata filters match skip the object.
 			return false
 		}
-		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
-		if (r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest {
-			return false
-		}
 
-		return true
+		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
+		return !((r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest)
 	}
 
 	u, err := url.Parse(r.Target.Endpoint)
@@ -1123,8 +1120,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// one of source/target is s3, skip delete marker and all versions under the same object name.
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 
-		results := make(chan ObjectInfo, 100)
-		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, results, WalkOptions{
+		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, walkCh, WalkOptions{
 			Marker:   lastObject,
 			Filter:   selectObj,
 			AskDisks: walkQuorum,

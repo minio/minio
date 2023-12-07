@@ -148,12 +148,11 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 		return err
 	} else if inuse {
 		return errTierBackendNotEmpty
-	} else {
-		config.Lock()
-		delete(config.Tiers, tier)
-		delete(config.drivercache, tier)
-		config.Unlock()
 	}
+	config.Lock()
+	delete(config.Tiers, tier)
+	delete(config.drivercache, tier)
+	config.Unlock()
 	return nil
 }
 
