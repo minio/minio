@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/cli"
 	"github.com/minio/minio/internal/logger"
 	xsftp "github.com/minio/pkg/v2/sftp"
 	"github.com/pkg/sftp"
@@ -54,9 +53,7 @@ func (s *sftpLogger) Error(tag xsftp.LogType, err error) {
 	}
 }
 
-func startSFTPServer(c *cli.Context) {
-	args := c.StringSlice("sftp")
-
+func startSFTPServer(args []string) {
 	var (
 		port          int
 		publicIP      string
