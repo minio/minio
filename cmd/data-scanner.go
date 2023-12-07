@@ -581,12 +581,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						foundAny = true
 						break
 					}
-					if next := f.updateCache.searchParent(parent); next == nil {
+					next := f.updateCache.searchParent(parent)
+					if next == nil {
 						foundAny = true
 						break
-					} else {
-						parent = *next
 					}
+					parent = *next
 				}
 				if !foundAny {
 					// Add non-compacted empty entry.

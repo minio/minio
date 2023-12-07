@@ -72,14 +72,14 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			// Decrement offset.
 			offset -= int64(len(block))
 			continue
-		} else {
-			// Skip until offset.
-			block = block[offset:]
-
-			// Reset the offset for next iteration to read everything
-			// from subsequent blocks.
-			offset = 0
 		}
+
+		// Skip until offset.
+		block = block[offset:]
+
+		// Reset the offset for next iteration to read everything
+		// from subsequent blocks.
+		offset = 0
 
 		// We have written all the blocks, write the last remaining block.
 		if write < int64(len(block)) {
