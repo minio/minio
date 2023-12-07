@@ -144,6 +144,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 		Type:      madmin.HealItemBucket,
 		Bucket:    bucket,
 		DiskCount: len(globalLocalDrives),
+		SetCount:  -1, // explicitly set an invalid value -1, for bucket heal scenario
 	}
 
 	for i := range beforeState {
