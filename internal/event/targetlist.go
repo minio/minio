@@ -57,6 +57,7 @@ type TargetStats struct {
 	TotalEvents        int64
 	EventsSkipped      int64
 	CurrentQueuedCalls int64
+	EventsErrorsTotal  int64
 
 	TargetStats map[string]TargetStat
 }
@@ -70,9 +71,10 @@ type TargetStat struct {
 // TargetList - holds list of targets indexed by target ID.
 type TargetList struct {
 	// The number of concurrent async Send calls to all targets
-	currentSendCalls atomic.Int64
-	totalEvents      atomic.Int64
-	eventsSkipped    atomic.Int64
+	currentSendCalls  atomic.Int64
+	totalEvents       atomic.Int64
+	eventsSkipped     atomic.Int64
+	eventsErrorsTotal atomic.Int64
 
 	sync.RWMutex
 	targets map[TargetID]Target
@@ -205,6 +207,7 @@ func (list *TargetList) sendSync(event Event, targetIDset TargetIDSet) {
 			defer wg.Done()
 
 			if err := target.Save(event); err != nil {
+				list.eventsErrorsTotal.Add(1)
 				reqInfo := &logger.ReqInfo{}
 				reqInfo.AppendTags("targetID", id.String())
 				logger.LogOnceIf(logger.SetReqInfo(context.Background(), reqInfo), err, id.String())
@@ -246,6 +249,7 @@ func (list *TargetList) Stats() TargetStats {
 	t.EventsSkipped = list.eventsSkipped.Load()
 	t.TotalEvents = list.totalEvents.Load()
 	t.CurrentQueuedCalls = int64(len(list.queue))
+	t.EventsErrorsTotal = list.eventsErrorsTotal.Load()
 
 	list.RLock()
 	defer list.RUnlock()

@@ -2479,6 +2479,16 @@ func getNotificationMetrics() *MetricsGroup {
 				Description: MetricDescription{
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
+					Name:      "events_errors_total",
+					Help:      "Events that were error due to send to target",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsErrorsTotal),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
 					Name:      "events_sent_total",
 					Help:      "Total number of events sent since start",
 					Type:      counterMetric,
