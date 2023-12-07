@@ -532,6 +532,12 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Immediate")
 				return
 			}
+		case "u":
+			z.UndoWrite, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "UndoWrite")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -545,9 +551,9 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 4
 	// write "BaseOptions"
-	err = en.Append(0x83, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	err = en.Append(0x84, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
 	if err != nil {
 		return
 	}
@@ -582,15 +588,25 @@ func (z *DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Immediate")
 		return
 	}
+	// write "u"
+	err = en.Append(0xa1, 0x75)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.UndoWrite)
+	if err != nil {
+		err = msgp.WrapError(err, "UndoWrite")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
 	// string "BaseOptions"
-	o = append(o, 0x83, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	o = append(o, 0x84, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
 	// map header, size 1
 	// string "rm"
 	o = append(o, 0x81, 0xa2, 0x72, 0x6d)
@@ -601,6 +617,9 @@ func (z *DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "i"
 	o = append(o, 0xa1, 0x69)
 	o = msgp.AppendBool(o, z.Immediate)
+	// string "u"
+	o = append(o, 0xa1, 0x75)
+	o = msgp.AppendBool(o, z.UndoWrite)
 	return
 }
 
@@ -663,6 +682,12 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Immediate")
 				return
 			}
+		case "u":
+			z.UndoWrite, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UndoWrite")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -677,7 +702,7 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DeleteOptions) Msgsize() (s int) {
-	s = 1 + 12 + 1 + 3 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize
+	s = 1 + 12 + 1 + 3 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize
 	return
 }
 

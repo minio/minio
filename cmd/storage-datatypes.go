@@ -26,6 +26,7 @@ type DeleteOptions struct {
 	BaseOptions
 	Recursive bool `msg:"r"`
 	Immediate bool `msg:"i"`
+	UndoWrite bool `msg:"u"`
 }
 
 // BaseOptions represents common options for all Storage API calls

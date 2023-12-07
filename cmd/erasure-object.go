@@ -1059,7 +1059,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			// caller this dangling object will be now scheduled to be removed
 			// via active healing.
 			dg.Go(func() error {
-				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false, DeleteOptions{})
+				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false, DeleteOptions{UndoWrite: true})
 			}, index)
 		}
 		dg.Wait()

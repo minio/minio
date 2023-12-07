@@ -700,22 +700,16 @@ func (s *xlStorage) getWriteAttribute(remote bool) uint64 {
 	return binary.LittleEndian.Uint64(buf[:8])
 }
 
-func (s *xlStorage) setDeleteAttribute(remote bool, deleteCount uint64) error {
+func (s *xlStorage) setDeleteAttribute(deleteCount uint64) error {
 	attr := "user.total_deletes"
-	if remote {
-		attr = "user.total_deletes_remote"
-	}
 
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, deleteCount)
 	return xattr.LSet(s.formatFile, attr, data)
 }
 
-func (s *xlStorage) setWriteAttribute(remote bool, writeCount uint64) error {
+func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 	attr := "user.total_writes"
-	if remote {
-		attr = "user.total_writes_remote"
-	}
 
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, writeCount)

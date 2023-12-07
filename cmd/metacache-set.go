@@ -602,13 +602,14 @@ func getListQuorum(quorum string, driveCount int) int {
 	return driveCount
 }
 
-func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI) {
+func getQuorumDiskInfos(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI, newInfos []DiskInfo) {
 	calcCommonCounter := func() (commonMutations uint64) {
 		filter := func() (commonCount uint64) {
 			max := 0
 			signatureMap := map[uint64]int{}
 			for _, info := range infos {
-				signatureMap[info.Metrics.TotalDeletes+info.Metrics.TotalWrites]++
+				mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
+				signatureMap[mutations]++
 			}
 			for ops, count := range signatureMap {
 				if max < count && commonCount < ops {
@@ -627,11 +628,18 @@ func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDi
 
 	commonMutations := calcCommonCounter()
 	for i, info := range infos {
-		if (info.Metrics.TotalWrites + info.Metrics.TotalDeletes) >= commonMutations {
+		mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
+		if mutations >= commonMutations {
 			newDisks = append(newDisks, disks[i])
+			newInfos = append(newInfos, infos[i])
 		}
 	}
 
+	return newDisks, newInfos
+}
+
+func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI) {
+	newDisks, _ = getQuorumDiskInfos(disks, infos, readQuorum)
 	return newDisks
 }
 

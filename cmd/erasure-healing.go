@@ -370,10 +370,8 @@ func (fi *FileInfo) SetHealing() {
 // Healing returns true if object is being healed (i.e fi is being passed down
 // from healObject)
 func (fi FileInfo) Healing() bool {
-	if _, ok := fi.Metadata[xMinIOHealing]; ok {
-		return true
-	}
-	return false
+	_, ok := fi.Metadata[xMinIOHealing]
+	return ok
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.

@@ -8,6 +8,7 @@ require (
 )
 
 require (
-	github.com/mattn/go-runewidth v0.0.9 // indirect
-	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
+	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/rivo/uniseg v0.4.4 // indirect
+	golang.org/x/sys v0.15.0 // indirect
 )
