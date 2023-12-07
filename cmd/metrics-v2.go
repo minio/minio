@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/kes-go"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
