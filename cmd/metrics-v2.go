@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/minio/kes-go"
-	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -2480,7 +2479,7 @@ func getNotificationMetrics() *MetricsGroup {
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
 					Name:      "events_errors_total",
-					Help:      "Events that were error due to send to target",
+					Help:      "Events that were failed while sending to target",
 					Type:      counterMetric,
 				},
 				Value: float64(nstats.EventsErrorsTotal),
