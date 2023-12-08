@@ -413,6 +413,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 							queued:    time.Now(),
 							setIndex:  er.setIndex,
 							poolIndex: er.poolIndex,
+							scanMode:  scan,
 						})
 					})
 					// Healing is triggered and we have written
@@ -1217,7 +1218,7 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 }
 
 // Heal up to two versions of one object when there is disparity between disks
-func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
+func healObjectVersionsDisparity(bucket string, entry metaCacheEntry, scanMode madmin.HealScanMode) error {
 	if entry.isDir() {
 		return nil
 	}
@@ -1241,13 +1242,13 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry) error {
 
 	fivs, err := entry.fileInfoVersions(bucket)
 	if err != nil {
-		go healObject(bucket, entry.name, "", madmin.HealDeepScan)
+		healObject(bucket, entry.name, "", madmin.HealDeepScan)
 		return err
 	}
 
 	if len(fivs.Versions) <= 2 {
 		for _, version := range fivs.Versions {
-			go healObject(bucket, entry.name, version.VersionID, madmin.HealNormalScan)
+			healObject(bucket, entry.name, version.VersionID, scanMode)
 		}
 	}
 

@@ -68,7 +68,7 @@ func (fi FileInfo) DataShardFixed() bool {
 	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
 }
 
-func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(string, metaCacheEntry) error) error {
+func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -101,7 +101,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 		minDisks:       1,
 		reportNotFound: false,
 		agreed: func(entry metaCacheEntry) {
-			if err := healEntry(bucket, entry); err != nil {
+			if err := healEntry(bucket, entry, scanMode); err != nil {
 				cancel()
 			}
 		},
@@ -113,7 +113,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 				entry, _ = entries.firstFound()
 			}
 
-			if err := healEntry(bucket, *entry); err != nil {
+			if err := healEntry(bucket, *entry, scanMode); err != nil {
 				cancel()
 				return
 			}
