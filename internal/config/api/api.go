@@ -31,13 +31,15 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax                 = "requests_max"
-	apiRequestsDeadline            = "requests_deadline"
-	apiClusterDeadline             = "cluster_deadline"
-	apiCorsAllowOrigin             = "cors_allow_origin"
-	apiRemoteTransportDeadline     = "remote_transport_deadline"
-	apiListQuorum                  = "list_quorum"
-	apiReplicationPriority         = "replication_priority"
+	apiRequestsMax             = "requests_max"
+	apiRequestsDeadline        = "requests_deadline"
+	apiClusterDeadline         = "cluster_deadline"
+	apiCorsAllowOrigin         = "cors_allow_origin"
+	apiRemoteTransportDeadline = "remote_transport_deadline"
+	apiListQuorum              = "list_quorum"
+	apiReplicationPriority     = "replication_priority"
+	apiReplicationMaxWorkers   = "replication_max_workers"
+
 	apiTransitionWorkers           = "transition_workers"
 	apiStaleUploadsCleanupInterval = "stale_uploads_cleanup_interval"
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
@@ -48,16 +50,16 @@ const (
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
 
-	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
-	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
-	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
-	EnvAPITransitionWorkers       = "MINIO_API_TRANSITION_WORKERS"
-	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
-	EnvAPIReplicationPriority     = "MINIO_API_REPLICATION_PRIORITY"
-
+	EnvAPIRequestsMax                 = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline            = "MINIO_API_REQUESTS_DEADLINE"
+	EnvAPIClusterDeadline             = "MINIO_API_CLUSTER_DEADLINE"
+	EnvAPICorsAllowOrigin             = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPIRemoteTransportDeadline     = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPITransitionWorkers           = "MINIO_API_TRANSITION_WORKERS"
+	EnvAPIListQuorum                  = "MINIO_API_LIST_QUORUM"
+	EnvAPISecureCiphers               = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
+	EnvAPIReplicationPriority         = "MINIO_API_REPLICATION_PRIORITY"
+	EnvAPIReplicationMaxWorkers       = "MINIO_API_REPLICATION_MAX_WORKERS"
 	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
 	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
 	EnvAPIDeleteCleanupInterval       = "MINIO_API_DELETE_CLEANUP_INTERVAL"
@@ -108,6 +110,10 @@ var (
 			Value: "auto",
 		},
 		config.KV{
+			Key:   apiReplicationMaxWorkers,
+			Value: "500",
+		},
+		config.KV{
 			Key:   apiTransitionWorkers,
 			Value: "100",
 		},
@@ -156,6 +162,7 @@ type Config struct {
 	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
 	ListQuorum                  string        `json:"list_quorum"`
 	ReplicationPriority         string        `json:"replication_priority"`
+	ReplicationMaxWorkers       int           `json:"replication_max_workers"`
 	TransitionWorkers           int           `json:"transition_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
@@ -259,7 +266,15 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, fmt.Errorf("invalid value %v for replication_priority", replicationPriority)
 	}
 	cfg.ReplicationPriority = replicationPriority
+	replicationMaxWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationMaxWorkers, kvs.GetWithDefault(apiReplicationMaxWorkers, DefaultKVS)))
+	if err != nil {
+		return cfg, err
+	}
 
+	if replicationMaxWorkers <= 0 || replicationMaxWorkers > 500 {
+		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Number of replication workers should be between 1 and 500")
+	}
+	cfg.ReplicationMaxWorkers = replicationMaxWorkers
 	transitionWorkers, err := strconv.Atoi(env.Get(EnvAPITransitionWorkers, kvs.GetWithDefault(apiTransitionWorkers, DefaultKVS)))
 	if err != nil {
 		return cfg, err

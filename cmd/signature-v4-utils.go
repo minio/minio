@@ -79,7 +79,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 		// We return true only in situations when
 		// deployment has asked MinIO to allow for
 		// such broken clients and content-length > 0.
-		return r.ContentLength > 0 && !globalCLIContext.StrictS3Compat
+		return r.ContentLength > 0 && !globalServerCtxt.StrictS3Compat
 	}
 	return false
 }

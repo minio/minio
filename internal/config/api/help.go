@@ -69,6 +69,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         apiReplicationMaxWorkers,
+			Description: `set the maximum number of replication workers` + defaultHelpPostfix(apiReplicationMaxWorkers),
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
 			Key:         apiTransitionWorkers,
 			Description: `set the number of transition workers` + defaultHelpPostfix(apiTransitionWorkers),
 			Optional:    true,
