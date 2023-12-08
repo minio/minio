@@ -18,6 +18,8 @@ Following is an example YAML configuration structure.
 ```
 version: v1
 address: ':9000'
+rootUser: 'minioadmin'
+rootPassword: 'pBU94AGAY85e'
 console-address: ':9001'
 certs-dir: '/home/user/.minio/certs/'
 pools: # Specify the nodes and drives with pools
