@@ -1,0 +1,23 @@
+version: v1
+address: ':9000'
+console-address: ':9001'
+certs-dir: '/home/user/.minio/certs/'
+pools: # Specify the nodes and drives with pools
+  -
+        - '/mnt/disk{1...4}/'
+        - 'https://server1-pool1:9000/mnt/disk{1...4}/'
+        - 'https://server3-pool1:9000/mnt/disk{1...4}/'
+        - 'https://server4-pool1:9000/mnt/disk{1...4}/'
+  -
+        - 'https://server-example-pool2:9000/mnt/disk{1...4}/'
+        - 'https://server1-pool2:9000/mnt/disk{1...4}/'
+        - 'https://server3-pool2:9000/mnt/disk{1...4}/'
+        - 'https://server4-pool2:9000/mnt/disk{1...4}/'
+
+options:
+  ftp: # settings for MinIO to act as an ftp server
+        address: ':8021'
+        passive-port-range: '30000-40000'
+  sftp: # settings for MinIO to act as an sftp server
+        address: ':8022'
+        ssh-private-key: '/home/user/.ssh/id_rsa'

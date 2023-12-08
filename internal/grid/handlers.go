@@ -89,7 +89,7 @@ var handlerPrefixes = [handlerLast]string{
 }
 
 const (
-	lockPrefix    = "lock"
+	lockPrefix    = "lockR"
 	storagePrefix = "storageR"
 )
 

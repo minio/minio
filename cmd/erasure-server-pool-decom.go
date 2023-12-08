@@ -769,7 +769,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 
 			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 			switch {
-			case evt.Action.DeleteRestored(): // if restored copy has expired,delete it synchronously
+			case evt.Action.DeleteRestored(): // if restored copy has expired, delete it synchronously
 				applyExpiryOnTransitionedObject(ctx, z, objInfo, evt, lcEventSrc_Decom)
 				return false
 			case evt.Action.Delete():

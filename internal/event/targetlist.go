@@ -18,17 +18,21 @@
 package event
 
 import (
+	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/store"
+	"github.com/minio/pkg/v2/workers"
 )
 
 const (
 	// The maximum allowed number of concurrent Send() calls to all configured notifications targets
-	maxConcurrentTargetSendCalls = 20000
+	maxConcurrentAsyncSend = 50000
 )
 
 // Target - event target interface
@@ -49,9 +53,11 @@ type TargetStore interface {
 // TargetStats is a collection of stats for multiple targets.
 type TargetStats struct {
 	// CurrentSendCalls is the number of concurrent async Send calls to all targets
-	CurrentSendCalls int64
-	TotalEvents      int64
-	EventsSkipped    int64
+	CurrentSendCalls   int64
+	TotalEvents        int64
+	EventsSkipped      int64
+	CurrentQueuedCalls int64
+	EventsErrorsTotal  int64
 
 	TargetStats map[string]TargetStat
 }
@@ -65,12 +71,20 @@ type TargetStat struct {
 // TargetList - holds list of targets indexed by target ID.
 type TargetList struct {
 	// The number of concurrent async Send calls to all targets
-	currentSendCalls int64
-	totalEvents      int64
-	eventsSkipped    int64
+	currentSendCalls  atomic.Int64
+	totalEvents       atomic.Int64
+	eventsSkipped     atomic.Int64
+	eventsErrorsTotal atomic.Int64
 
 	sync.RWMutex
 	targets map[TargetID]Target
+	queue   chan asyncEvent
+	ctx     context.Context
+}
+
+type asyncEvent struct {
+	ev        Event
+	targetSet TargetIDSet
 }
 
 // Add - adds unique target to target list.
@@ -150,6 +164,14 @@ func (list *TargetList) List() []TargetID {
 	return keys
 }
 
+func (list *TargetList) get(id TargetID) (Target, bool) {
+	list.RLock()
+	defer list.RUnlock()
+
+	target, ok := list.targets[id]
+	return target, ok
+}
+
 // TargetMap - returns available targets.
 func (list *TargetList) TargetMap() map[TargetID]Target {
 	list.RLock()
@@ -163,46 +185,58 @@ func (list *TargetList) TargetMap() map[TargetID]Target {
 }
 
 // Send - sends events to targets identified by target IDs.
-func (list *TargetList) Send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult, synchronous bool) {
-	if atomic.LoadInt64(&list.currentSendCalls) > maxConcurrentTargetSendCalls {
-		atomic.AddInt64(&list.eventsSkipped, 1)
-		err := fmt.Errorf("concurrent target notifications exceeded %d", maxConcurrentTargetSendCalls)
-		for id := range targetIDset {
-			resCh <- TargetIDResult{ID: id, Err: err}
-		}
-		return
+func (list *TargetList) Send(event Event, targetIDset TargetIDSet, sync bool) {
+	if sync {
+		list.sendSync(event, targetIDset)
+	} else {
+		list.sendAsync(event, targetIDset)
 	}
-	if synchronous {
-		list.send(event, targetIDset, resCh)
-		return
-	}
-	go list.send(event, targetIDset, resCh)
 }
 
-func (list *TargetList) send(event Event, targetIDset TargetIDSet, resCh chan<- TargetIDResult) {
+func (list *TargetList) sendSync(event Event, targetIDset TargetIDSet) {
 	var wg sync.WaitGroup
 	for id := range targetIDset {
-		list.RLock()
-		target, ok := list.targets[id]
-		list.RUnlock()
-		if ok {
-			wg.Add(1)
-			go func(id TargetID, target Target) {
-				atomic.AddInt64(&list.currentSendCalls, 1)
-				defer atomic.AddInt64(&list.currentSendCalls, -1)
-				defer wg.Done()
-				tgtRes := TargetIDResult{ID: id}
-				if err := target.Save(event); err != nil {
-					tgtRes.Err = err
-				}
-				resCh <- tgtRes
-			}(id, target)
-		} else {
-			resCh <- TargetIDResult{ID: id}
+		target, ok := list.get(id)
+		if !ok {
+			continue
 		}
+		wg.Add(1)
+		go func(id TargetID, target Target) {
+			list.currentSendCalls.Add(1)
+			defer list.currentSendCalls.Add(-1)
+			defer wg.Done()
+
+			if err := target.Save(event); err != nil {
+				list.eventsErrorsTotal.Add(1)
+				reqInfo := &logger.ReqInfo{}
+				reqInfo.AppendTags("targetID", id.String())
+				logger.LogOnceIf(logger.SetReqInfo(context.Background(), reqInfo), err, id.String())
+			}
+		}(id, target)
 	}
 	wg.Wait()
-	atomic.AddInt64(&list.totalEvents, 1)
+	list.totalEvents.Add(1)
+}
+
+func (list *TargetList) sendAsync(event Event, targetIDset TargetIDSet) {
+	select {
+	case list.queue <- asyncEvent{
+		ev:        event,
+		targetSet: targetIDset.Clone(),
+	}:
+	case <-list.ctx.Done():
+		list.eventsSkipped.Add(int64(len(list.queue)))
+		return
+	default:
+		list.eventsSkipped.Add(1)
+		err := fmt.Errorf("concurrent target notifications exceeded %d, notification endpoint is too slow to accept events on incoming requests", maxConcurrentAsyncSend)
+		for id := range targetIDset {
+			reqInfo := &logger.ReqInfo{}
+			reqInfo.AppendTags("targetID", id.String())
+			logger.LogOnceIf(logger.SetReqInfo(context.Background(), reqInfo), err, id.String())
+		}
+		return
+	}
 }
 
 // Stats returns stats for targets.
@@ -211,9 +245,11 @@ func (list *TargetList) Stats() TargetStats {
 	if list == nil {
 		return t
 	}
-	t.CurrentSendCalls = atomic.LoadInt64(&list.currentSendCalls)
-	t.EventsSkipped = atomic.LoadInt64(&list.eventsSkipped)
-	t.TotalEvents = atomic.LoadInt64(&list.totalEvents)
+	t.CurrentSendCalls = list.currentSendCalls.Load()
+	t.EventsSkipped = list.eventsSkipped.Load()
+	t.TotalEvents = list.totalEvents.Load()
+	t.CurrentQueuedCalls = int64(len(list.queue))
+	t.EventsErrorsTotal = list.eventsErrorsTotal.Load()
 
 	list.RLock()
 	defer list.RUnlock()
@@ -228,7 +264,48 @@ func (list *TargetList) Stats() TargetStats {
 	return t
 }
 
+func (list *TargetList) startSendWorkers(workerCount int) {
+	if workerCount == 0 {
+		workerCount = runtime.GOMAXPROCS(0)
+	}
+	wk, err := workers.New(workerCount)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < workerCount; i++ {
+		wk.Take()
+		go func() {
+			defer wk.Give()
+
+			for {
+				select {
+				case av := <-list.queue:
+					list.sendSync(av.ev, av.targetSet)
+				case <-list.ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+	wk.Wait()
+}
+
+var startOnce sync.Once
+
+// Init initialize target send workers.
+func (list *TargetList) Init(workers int) *TargetList {
+	startOnce.Do(func() {
+		go list.startSendWorkers(workers)
+	})
+	return list
+}
+
 // NewTargetList - creates TargetList.
-func NewTargetList() *TargetList {
-	return &TargetList{targets: make(map[TargetID]Target)}
+func NewTargetList(ctx context.Context) *TargetList {
+	list := &TargetList{
+		targets: make(map[TargetID]Target),
+		queue:   make(chan asyncEvent, maxConcurrentAsyncSend),
+		ctx:     ctx,
+	}
+	return list
 }

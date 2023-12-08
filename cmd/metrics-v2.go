@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/kes-go"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -98,6 +99,7 @@ func init() {
 		getBucketUsageMetrics(),
 		getHTTPMetrics(true),
 		getBucketTTFBMetric(),
+		getBatchJobsMetrics(),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
@@ -254,6 +256,7 @@ const (
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
 	transitionPendingTasks MetricName = "transition_pending_tasks"
 	transitionActiveTasks  MetricName = "transition_active_tasks"
+	transitionMissedTasks  MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
@@ -1705,6 +1708,16 @@ func getTransitionActiveTasksMD() MetricDescription {
 	}
 }
 
+func getTransitionMissedTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionMissedTasks,
+		Help:      "Number of missed immediate ILM transition tasks",
+		Type:      gaugeMetric,
+	}
+}
+
 func getExpiryPendingTasksMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1779,17 +1792,22 @@ func getILMNodeMetrics() *MetricsGroup {
 		trActiveTasks := Metric{
 			Description: getTransitionActiveTasksMD(),
 		}
+		trMissedTasks := Metric{
+			Description: getTransitionMissedTasksMD(),
+		}
 		if globalExpiryState != nil {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
 		}
 		if globalTransitionState != nil {
 			trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
 			trActiveTasks.Value = float64(globalTransitionState.ActiveTasks())
+			trMissedTasks.Value = float64(globalTransitionState.MissedImmediateTasks())
 		}
 		return []Metric{
 			expPendingTasks,
 			trPendingTasks,
 			trActiveTasks,
+			trMissedTasks,
 		}
 	})
 	return mg
@@ -2456,6 +2474,16 @@ func getNotificationMetrics() *MetricsGroup {
 					Type:      counterMetric,
 				},
 				Value: float64(nstats.EventsSkipped),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_errors_total",
+					Help:      "Events that were failed while sending to target",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsErrorsTotal),
 			})
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
@@ -3244,6 +3272,77 @@ func getClusterHealthMetrics() *MetricsGroup {
 		return
 	})
 
+	return mg
+}
+
+func getBatchJobsMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil {
+			return
+		}
+
+		var m madmin.RealtimeMetrics
+		mLocal := collectLocalMetrics(madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mLocal)
+
+		mRemote := collectRemoteMetrics(ctx, madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mRemote)
+
+		if m.Aggregated.BatchJobs == nil {
+			return
+		}
+
+		for _, mj := range m.Aggregated.BatchJobs.Jobs {
+			jtype := toSnake(mj.JobType)
+			var objects, objectsFailed float64
+			var bucket string
+			switch madmin.BatchJobType(mj.JobType) {
+			case madmin.BatchJobReplicate:
+				objects = float64(mj.Replicate.Objects)
+				objectsFailed = float64(mj.Replicate.ObjectsFailed)
+				bucket = mj.Replicate.Bucket
+			case madmin.BatchJobKeyRotate:
+				objects = float64(mj.KeyRotate.Objects)
+				objectsFailed = float64(mj.KeyRotate.ObjectsFailed)
+				bucket = mj.KeyRotate.Bucket
+			case madmin.BatchJobExpire:
+				objects = float64(mj.Expired.Objects)
+				objectsFailed = float64(mj.Expired.ObjectsFailed)
+				bucket = mj.Expired.Bucket
+			}
+			metrics = append(metrics,
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects"),
+						Help:      "Get successfully completed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objects,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects_failed"),
+						Help:      "Get failed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objectsFailed,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+			)
+		}
+		return
+	})
 	return mg
 }
 

@@ -321,10 +321,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 	if c.State() != StateConnected {
 		return nil, ErrDisconnected
 	}
-	handler := c.handlers.single[h]
-	if handler == nil {
-		return nil, ErrUnknownHandler
-	}
+	// Create mux client and call.
 	client, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
@@ -349,10 +346,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 	if c.State() != StateConnected {
 		return nil, ErrDisconnected
 	}
-	handler := c.handlers.subSingle[makeZeroSubHandlerID(h)]
-	if handler == nil {
-		return nil, ErrUnknownHandler
-	}
+	// Create mux client and call.
 	client, err := c.newMuxClient(ctx)
 	if err != nil {
 		return nil, err
@@ -1159,6 +1153,8 @@ func (c *Connection) handleMsg(ctx context.Context, m message, subID *subHandler
 		c.handleAckMux(ctx, m)
 	case OpConnectMux:
 		c.handleConnectMux(ctx, m, subID)
+	case OpMuxConnectError:
+		c.handleConnectMuxError(ctx, m)
 	default:
 		logger.LogIf(ctx, fmt.Errorf("unknown message type: %v", m.Op))
 	}
@@ -1208,6 +1204,18 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 			return newMuxStream(ctx, m, c, *handler)
 		})
 	}
+}
+
+// handleConnectMuxError when mux connect was rejected.
+func (c *Connection) handleConnectMuxError(ctx context.Context, m message) {
+	if v, ok := c.outgoing.Load(m.MuxID); ok {
+		var cErr muxConnectError
+		_, err := cErr.UnmarshalMsg(m.Payload)
+		logger.LogIf(ctx, err)
+		v.error(RemoteErr(cErr.Error))
+		return
+	}
+	PutByteBuffer(m.Payload)
 }
 
 func (c *Connection) handleAckMux(ctx context.Context, m message) {

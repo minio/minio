@@ -337,13 +337,13 @@ type SMA struct {
 	filledBuf bool
 }
 
-func newSMA(len int) *SMA {
-	if len <= 0 {
-		len = defaultWindowSize
+func newSMA(ln int) *SMA {
+	if ln <= 0 {
+		ln = defaultWindowSize
 	}
 	return &SMA{
-		buf:    make([]float64, len),
-		window: len,
+		buf:    make([]float64, ln),
+		window: ln,
 		idx:    0,
 	}
 }

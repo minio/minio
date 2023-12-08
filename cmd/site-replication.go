@@ -2032,7 +2032,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
 					UserOrGroup: group,
-					UserType:    -1,
+					UserType:    int(unknownIAMUserType),
 					IsGroup:     true,
 					Policy:      mp.Policies,
 				},
@@ -3724,6 +3724,10 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 
 			if meta.lifecycleConfig != nil && meta.lifecycleConfig.HasExpiry() {
+				var updatedAt time.Time
+				if meta.lifecycleConfig.ExpiryUpdatedAt != nil {
+					updatedAt = *meta.lifecycleConfig.ExpiryUpdatedAt
+				}
 				for _, rule := range meta.lifecycleConfig.Rules {
 					if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 						// copy the non transition details of the rule
@@ -3731,7 +3735,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 						if err != nil {
 							return info, errSRBackendIssue(err)
 						}
-						allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: *(meta.lifecycleConfig.ExpiryUpdatedAt)}
+						allRules[rule.ID] = madmin.ILMExpiryRule{ILMRule: string(ruleData), Bucket: bucket, UpdatedAt: updatedAt}
 					}
 				}
 			}
@@ -3757,12 +3761,14 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 	if opts.Users || opts.Entity == madmin.SRUserEntity {
 		// Replicate policy mappings on local to all peers.
 		userPolicyMap := make(map[string]MappedPolicy)
+		stsPolicyMap := make(map[string]MappedPolicy)
+		svcPolicyMap := make(map[string]MappedPolicy)
 		if opts.Entity == madmin.SRUserEntity {
 			if mp, ok := globalIAMSys.store.GetMappedPolicy(opts.EntityValue, false); ok {
 				userPolicyMap[opts.EntityValue] = mp
 			}
 		} else {
-			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
+			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, stsPolicyMap)
 			if stsErr != nil {
 				return info, errSRBackendIssue(stsErr)
 			}
@@ -3770,7 +3776,7 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			if usrErr != nil {
 				return info, errSRBackendIssue(usrErr)
 			}
-			svcErr := globalIAMSys.store.loadMappedPolicies(ctx, svcUser, false, userPolicyMap)
+			svcErr := globalIAMSys.store.loadMappedPolicies(ctx, svcUser, false, svcPolicyMap)
 			if svcErr != nil {
 				return info, errSRBackendIssue(svcErr)
 			}
@@ -3780,6 +3786,25 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			info.UserPolicies[user] = madmin.SRPolicyMapping{
 				IsGroup:     false,
 				UserOrGroup: user,
+				UserType:    int(regUser),
+				Policy:      mp.Policies,
+				UpdatedAt:   mp.UpdatedAt,
+			}
+		}
+		for stsU, mp := range stsPolicyMap {
+			info.UserPolicies[stsU] = madmin.SRPolicyMapping{
+				IsGroup:     false,
+				UserOrGroup: stsU,
+				UserType:    int(stsUser),
+				Policy:      mp.Policies,
+				UpdatedAt:   mp.UpdatedAt,
+			}
+		}
+		for svcU, mp := range svcPolicyMap {
+			info.UserPolicies[svcU] = madmin.SRPolicyMapping{
+				IsGroup:     false,
+				UserOrGroup: svcU,
+				UserType:    int(svcUser),
 				Policy:      mp.Policies,
 				UpdatedAt:   mp.UpdatedAt,
 			}
@@ -5285,6 +5310,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 			PolicyMapping: &madmin.SRPolicyMapping{
 				UserOrGroup: user,
 				IsGroup:     false,
+				UserType:    latestUserStat.userPolicy.UserType,
 				Policy:      latestUserStat.userPolicy.Policy,
 			},
 			UpdatedAt: lastUpdate,
@@ -5347,6 +5373,7 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 			PolicyMapping: &madmin.SRPolicyMapping{
 				UserOrGroup: group,
 				IsGroup:     true,
+				UserType:    int(unknownIAMUserType),
 				Policy:      latestGroupStat.groupPolicy.Policy,
 			},
 			UpdatedAt: lastUpdate,

@@ -91,7 +91,7 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		}
 		cm, err := c.Times(false)
 		if err != nil {
-			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v  (cputimes)", globalMinioAddr, err.Error()))
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuTimes)", globalMinioAddr, err.Error()))
 		} else {
 			// not collecting per-cpu stats, so there will be only one element
 			if len(cm) == 1 {
@@ -100,6 +100,13 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 				m.Errors = append(m.Errors, fmt.Sprintf("%s: Expected one CPU stat, got %d", globalMinioAddr, len(cm)))
 			}
 		}
+		cpuCount, err := c.Counts(true)
+		if err != nil {
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuCount)", globalMinioAddr, err.Error()))
+		} else {
+			m.Aggregated.CPU.CPUCount = cpuCount
+		}
+
 		loadStat, err := load.Avg()
 		if err != nil {
 			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (loadStat)", globalMinioAddr, err.Error()))

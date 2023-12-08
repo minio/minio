@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.21
+go 1.19
 
 require (
 	cloud.google.com/go/storage v1.35.1
@@ -43,16 +43,16 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.57
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.41.0
+	github.com/minio/console v0.42.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.5.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
-	github.com/minio/madmin-go/v3 v3.0.34
+	github.com/minio/madmin-go/v3 v3.0.36
 	github.com/minio/minio-go/v7 v7.0.65-0.20231122233251-1f7dd6b7e3e1
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg/v2 v2.0.4
+	github.com/minio/pkg/v2 v2.0.5-0.20231205011044-ec6b8d58893a
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5

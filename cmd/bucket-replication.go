@@ -373,15 +373,14 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			if oi.DeleteMarker && (validReplStatus || replicate) {
 				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
 				continue
-			} else {
-				// can be the case that other cluster is down and duplicate `mc rm --vid`
-				// is issued - this still needs to be replicated back to the other target
-				if !oi.VersionPurgeStatus.Empty() {
-					replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
-					dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
-				}
-				continue
 			}
+			// can be the case that other cluster is down and duplicate `mc rm --vid`
+			// is issued - this still needs to be replicated back to the other target
+			if !oi.VersionPurgeStatus.Empty() {
+				replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
+				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
+			}
+			continue
 		}
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		// the target online status should not be used here while deciding
@@ -1698,12 +1697,13 @@ type ReplicationPool struct {
 	activeWorkers    int32
 	activeMRFWorkers int32
 
-	objLayer ObjectLayer
-	ctx      context.Context
-	priority string
-	mu       sync.RWMutex
-	mrfMU    sync.Mutex
-	resyncer *replicationResyncer
+	objLayer   ObjectLayer
+	ctx        context.Context
+	priority   string
+	maxWorkers int
+	mu         sync.RWMutex
+	mrfMU      sync.Mutex
+	resyncer   *replicationResyncer
 
 	// workers:
 	workers    []chan ReplicationWorkerOperation
@@ -1749,8 +1749,12 @@ const (
 func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts) *ReplicationPool {
 	var workers, failedWorkers int
 	priority := "auto"
+	maxWorkers := WorkerMaxLimit
 	if opts.Priority != "" {
 		priority = opts.Priority
+	}
+	if opts.MaxWorkers > 0 {
+		maxWorkers = opts.MaxWorkers
 	}
 	switch priority {
 	case "fast":
@@ -1763,7 +1767,13 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		workers = WorkerAutoDefault
 		failedWorkers = MRFWorkerAutoDefault
 	}
+	if maxWorkers > 0 && workers > maxWorkers {
+		workers = maxWorkers
+	}
 
+	if maxWorkers > 0 && failedWorkers > maxWorkers {
+		failedWorkers = maxWorkers
+	}
 	pool := &ReplicationPool{
 		workers:         make([]chan ReplicationWorkerOperation, 0, workers),
 		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, LargeWorkerCount),
@@ -1775,6 +1785,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		ctx:             ctx,
 		objLayer:        o,
 		priority:        priority,
+		maxWorkers:      maxWorkers,
 	}
 
 	pool.AddLargeWorkers()
@@ -1930,7 +1941,7 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 }
 
 // ResizeWorkerPriority sets replication failed workers pool size
-func (p *ReplicationPool) ResizeWorkerPriority(pri string) {
+func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers int) {
 	var workers, mrfWorkers int
 	p.mu.Lock()
 	switch pri {
@@ -1950,7 +1961,15 @@ func (p *ReplicationPool) ResizeWorkerPriority(pri string) {
 			mrfWorkers = int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerAutoDefault))
 		}
 	}
+	if maxWorkers > 0 && workers > maxWorkers {
+		workers = maxWorkers
+	}
+
+	if maxWorkers > 0 && mrfWorkers > maxWorkers {
+		mrfWorkers = maxWorkers
+	}
 	p.priority = pri
+	p.maxWorkers = maxWorkers
 	p.mu.Unlock()
 	p.ResizeWorkers(workers, 0)
 	p.ResizeFailedWorkers(mrfWorkers)
@@ -2024,6 +2043,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
+		maxWorkers := p.maxWorkers
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
@@ -2031,16 +2051,18 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			if p.ActiveWorkers() < WorkerMaxLimit {
+			maxWorkers = int(math.Min(float64(maxWorkers), WorkerMaxLimit))
+			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), WorkerMaxLimit))
+				workers := int(math.Min(float64(len(p.workers)+1), float64(maxWorkers)))
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)
 			}
-			if p.ActiveMRFWorkers() < MRFWorkerMaxLimit {
+			maxMRFWorkers := int(math.Min(float64(maxWorkers), MRFWorkerMaxLimit))
+			if p.ActiveMRFWorkers() < maxMRFWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerMaxLimit))
+				workers := int(math.Min(float64(p.mrfWorkerSize+1), float64(maxMRFWorkers)))
 				p.mu.RUnlock()
 				p.ResizeFailedWorkers(workers)
 			}
@@ -2078,6 +2100,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
+		maxWorkers := p.maxWorkers
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
@@ -2085,9 +2108,10 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			if p.ActiveWorkers() < WorkerMaxLimit {
+			maxWorkers = int(math.Min(float64(maxWorkers), WorkerMaxLimit))
+			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), WorkerMaxLimit))
+				workers := int(math.Min(float64(len(p.workers)+1), float64(maxWorkers)))
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)
@@ -2097,13 +2121,12 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 }
 
 type replicationPoolOpts struct {
-	Priority string
+	Priority   string
+	MaxWorkers int
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
-	globalReplicationPool = NewReplicationPool(ctx, objectAPI, replicationPoolOpts{
-		Priority: globalAPIConfig.getReplicationPriority(),
-	})
+	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts())
 	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 	go globalReplicationStats.trackEWMA()
 }
@@ -3163,10 +3186,11 @@ func (p *ReplicationPool) persistMRF() {
 			if !ok {
 				return
 			}
+			entries[e.versionID] = e
+
 			if len(entries) >= mrfMaxEntries {
 				saveMRFToDisk()
 			}
-			entries[e.versionID] = e
 		}
 	}
 }
@@ -3190,6 +3214,8 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 		select {
 		case p.mrfSaveCh <- entry:
 		default:
+			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedCount, 1)
+			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
 		}
 	}
 }
@@ -3255,8 +3281,8 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 		if !p.initialized() {
 			return re, nil
 		}
-		data := make([]byte, 4)
-		n, err := rc.Read(data)
+		var data [4]byte
+		n, err := rc.Read(data[:])
 		if err != nil {
 			return re, err
 		}
@@ -3370,7 +3396,7 @@ func (p *ReplicationPool) initialized() bool {
 }
 
 // getMRF returns MRF entries for this node.
-func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch chan madmin.ReplicationMRF, err error) {
+func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan madmin.ReplicationMRF, err error) {
 	mrfRec, err := p.loadMRF()
 	if err != nil {
 		return nil, err
@@ -3380,7 +3406,7 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch chan ma
 	go func() {
 		defer close(mrfCh)
 		for vID, e := range mrfRec.Entries {
-			if e.Bucket != bucket && bucket != "" {
+			if bucket != "" && e.Bucket != bucket {
 				continue
 			}
 			select {

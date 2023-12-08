@@ -428,7 +428,11 @@ func (s *storageRESTServer) WalkDirHandler(ctx context.Context, payload []byte, 
 		return grid.NewRemoteErr(err)
 	}
 
+	if !s.checkID(opts.DiskID) {
+		return grid.NewRemoteErr(errDiskNotFound)
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	return grid.NewRemoteErr(s.storage.WalkDir(ctx, opts, grid.WriterToChannel(ctx, out)))
+	return grid.NewRemoteErr(s.getStorage().WalkDir(ctx, opts, grid.WriterToChannel(ctx, out)))
 }

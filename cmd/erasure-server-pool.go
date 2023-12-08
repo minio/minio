@@ -1967,7 +1967,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				go func() {
 					defer wg.Done()
 
-					disks, _ := set.getOnlineDisksWithHealing()
+					disks, _ := set.getOnlineDisksWithHealing(true)
 					if len(disks) == 0 {
 						cancel()
 						return
@@ -2035,7 +2035,10 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 								return
 							}
 
-							versionsSorter(fivs.Versions).reverse()
+							// Note: entry.fileInfoVersions returns versions sorted in reverse chronological order based on ModTime
+							if opts.VersionsSort == WalkVersionsSortAsc {
+								versionsSorter(fivs.Versions).reverse()
+							}
 
 							for _, version := range fivs.Versions {
 								if opts.Filter != nil {
